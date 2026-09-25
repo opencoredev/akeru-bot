@@ -6,7 +6,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
-import { whatsAppWebhookRouteLayer } from "./channels/ChannelRuntime.ts";
+import { ChannelRuntime, whatsAppWebhookRouteLayer } from "./channels/ChannelRuntime.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as ServerConfig from "./config.ts";
 import {
@@ -245,6 +245,9 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(RuntimeReceiptBusLive),
+  // Channel transports live in this runtime's scope. Ingestion, startup, commands,
+  // and the webhook route all resolve the same instance.
+  Layer.provideMerge(ChannelRuntime.layer),
 );
 
 const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(

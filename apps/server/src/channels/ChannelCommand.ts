@@ -1,16 +1,7 @@
 import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 
-import {
-  connectChannel,
-  attachChannelConnection,
-  deleteChannelConnection,
-  detachChannelConnection,
-  disconnectChannel,
-  reconnectChannel,
-  saveChannelConnection,
-  sendChannelMessage,
-  type ChannelRuntimeDependencies,
-} from "./ChannelRuntime.ts";
+import type { ChannelOperationError, ChannelRuntimeShape } from "./ChannelRuntime.ts";
 
 export type ChannelCommand = Extract<
   ClientOrchestrationCommand,
@@ -21,31 +12,23 @@ export function isChannelCommand(command: ClientOrchestrationCommand): command i
   return command.type.startsWith("channel.");
 }
 
-export async function executeChannelCommand(
-  dependencies: ChannelRuntimeDependencies,
+export const executeChannelCommand = (
+  runtime: ChannelRuntimeShape,
   command: ChannelCommand,
-): Promise<{ readonly sequence: number }> {
-  const sequence =
-    command.type === "channel.connect"
-      ? await connectChannel(dependencies, command)
-      : command.type === "channel.connection.save"
-        ? await saveChannelConnection(dependencies, command)
-        : command.type === "channel.connection.delete"
-          ? await deleteChannelConnection(dependencies, command.connectionId)
-          : command.type === "channel.attach"
-            ? await attachChannelConnection(
-                dependencies,
-                command.botId,
-                command.connectionId,
-                command.projectId,
-                command.provider,
-              )
-            : command.type === "channel.disconnect"
-              ? await disconnectChannel(dependencies, command.botId, command.provider)
-              : command.type === "channel.detach"
-                ? await detachChannelConnection(dependencies, command.botId, command.provider)
-                : command.type === "channel.reconnect"
-                  ? await reconnectChannel(dependencies, command.botId, command.provider)
-                  : await sendChannelMessage(dependencies, command);
-  return { sequence };
-}
+): Effect.Effect<{ readonly sequence: number }, ChannelOperationError> =>
+  (command.type === "channel.connect"
+    ? runtime.connect(command)
+    : command.type === "channel.connection.save"
+      ? runtime.saveConnection(command)
+      : command.type === "channel.connection.delete"
+        ? runtime.deleteConnection(command.connectionId)
+        : command.type === "channel.attach"
+          ? runtime.attach(command.botId, command.connectionId, command.projectId, command.provider)
+          : command.type === "channel.disconnect"
+            ? runtime.disconnect(command.botId, command.provider)
+            : command.type === "channel.detach"
+              ? runtime.detach(command.botId, command.provider)
+              : command.type === "channel.reconnect"
+                ? runtime.reconnect(command.botId, command.provider)
+                : runtime.sendChannelMessage(command)
+  ).pipe(Effect.map((sequence) => ({ sequence })));

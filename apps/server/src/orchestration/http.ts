@@ -1,5 +1,3 @@
-import * as NodeCrypto from "node:crypto";
-
 import {
   AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
@@ -7,16 +5,14 @@ import {
   EnvironmentHttpApi,
   ProviderInstanceId,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Clock from "effect/Clock";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import * as ChannelCommand from "../channels/ChannelCommand.ts";
-import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
-import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
@@ -24,9 +20,9 @@ import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { resolveGroupResponderBotId } from "./groupResponder.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
@@ -61,12 +57,9 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const botUsageLedger = yield* BotUsageLedger;
     const config = yield* ServerConfig.ServerConfig;
     const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
-    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
-    const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
-    const channelDeliveryStore = yield* Effect.serviceOption(
-      ChannelDeliveryStore.ChannelDeliveryStore,
-    );
+    const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
     const startup = yield* Effect.serviceOption(ServerRuntimeStartup.ServerRuntimeStartup);
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
 
     return handlers
       .handle(
@@ -98,7 +91,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               ...snapshot,
               bots: snapshot.bots.map((bot) => ({
                 ...bot,
-                channelBindings: ChannelRuntime.channelBindingsForRuntime(bot.channelBindings),
+                channelBindings: Option.match(channelRuntime, {
+                  onNone: () =>
+                    ChannelRuntime.channelBindingsForRuntime(bot.channelBindings, () => false),
+                  onSome: (runtime) => runtime.channelBindingsForRuntime(bot.channelBindings),
+                }),
               })),
             })),
             Effect.catch((cause) =>
@@ -145,12 +142,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             if (!principal.scopes.has(AuthAccessWriteScope)) {
               yield* requireEnvironmentScope(AuthAccessWriteScope);
             }
-            const services = Option.all({
-              secretStore,
-              serverSettings,
-              channelDeliveryStore,
-              startup,
-            });
+            const services = Option.all({ channelRuntime, startup });
             if (Option.isNone(services)) {
               return yield* failEnvironmentInternal(
                 "orchestration_dispatch_failed",
@@ -159,32 +151,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             }
             return yield* services.value.startup
               .enqueueCommand(
-                Effect.tryPromise(() =>
-                  ChannelCommand.executeChannelCommand(
-                    {
-                      engine: orchestrationEngine,
-                      secretStore: services.value.secretStore,
-                      settings: services.value.serverSettings,
-                      deliveryStore: services.value.channelDeliveryStore,
-                      readModel: () =>
-                        Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-                      readThread: (threadId) =>
-                        Effect.runPromise(
-                          projectionSnapshotQuery
-                            .getThreadDetailById(threadId)
-                            .pipe(Effect.map(Option.getOrNull)),
-                        ),
-                      nowIso: () =>
-                        Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-                      randomUuid: async () => NodeCrypto.randomUUID(),
-                    },
-                    command,
-                  ),
-                ),
+                ChannelCommand.executeChannelCommand(services.value.channelRuntime, command),
               )
               .pipe(
-                Effect.catch((cause) =>
-                  failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                Effect.catchCause((cause) =>
+                  failEnvironmentInternal("orchestration_dispatch_failed", Cause.squash(cause)),
                 ),
               );
           }

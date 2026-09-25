@@ -71,13 +71,7 @@ import { BotInboxService } from "../../bot-inbox/service.ts";
 import { startSilenceWatchdog, type SilenceWatchdogHandle } from "../SilenceWatchdog.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import { resolveControllerBotId } from "./ProviderCommandReactor.ts";
-import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
-import * as ChannelDeliveryStore from "../../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
-
-type AutomaticChannelReplyTarget = NonNullable<
-  Awaited<ReturnType<typeof ChannelRuntime.resolveCompletedChannelReply>>
->;
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -949,28 +943,9 @@ const make = Effect.gen(function* () {
   const projectionThreadProposedPlans = yield* ProjectionThreadProposedPlanRepository;
   const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
-  const channelSecretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
-  const channelDeliveryStore = yield* Effect.serviceOption(
-    ChannelDeliveryStore.ChannelDeliveryStore,
+  const channelRuntime = Option.getOrNull(
+    yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime),
   );
-  const channelRuntimeDependencies =
-    Option.isSome(channelSecretStore) && Option.isSome(channelDeliveryStore)
-      ? {
-          engine: orchestrationEngine,
-          secretStore: channelSecretStore.value,
-          settings: serverSettingsService,
-          deliveryStore: channelDeliveryStore.value,
-          readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-          readThread: (threadId: ThreadId) =>
-            Effect.runPromise(
-              projectionSnapshotQuery
-                .getThreadDetailById(threadId, { activityKinds: [] })
-                .pipe(Effect.map(Option.getOrNull)),
-            ),
-          nowIso: () => Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
-        }
-      : null;
   const channelStatusWorker = yield* makeDrainableWorker(
     (input: {
       threadId: ThreadId;
@@ -978,26 +953,20 @@ const make = Effect.gen(function* () {
       requestMessageId?: MessageId;
       state: "completed" | "failed" | "cancelled";
     }) =>
-      channelRuntimeDependencies
-        ? Effect.promise(() =>
-            ChannelRuntime.finishChannelTurn(
-              channelRuntimeDependencies,
-              input.threadId,
-              input.turnId,
-              input.state,
-              input.requestMessageId,
-            ),
-          ).pipe(Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")))
+      channelRuntime
+        ? channelRuntime
+            .finishChannelTurn(input.threadId, input.turnId, input.state, input.requestMessageId)
+            .pipe(
+              Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")),
+            )
         : Effect.void,
   );
   const automaticChannelReplyWorker = yield* makeDrainableWorker(
-    (input: AutomaticChannelReplyTarget) => {
-      if (!channelRuntimeDependencies) {
+    (input: ChannelRuntime.ChannelReplyTarget) => {
+      if (!channelRuntime) {
         return Effect.void;
       }
-      return Effect.promise(() =>
-        ChannelRuntime.sendChannelMessage(channelRuntimeDependencies, input),
-      ).pipe(
+      return channelRuntime.sendChannelMessage(input).pipe(
         Effect.asVoid,
         Effect.catchCause((cause) =>
           Effect.logWarning("failed to send automatic channel reply", {
@@ -2660,15 +2629,11 @@ const make = Effect.gen(function* () {
         event.payload.state === "completed" &&
         shouldApplyThreadLifecycle &&
         eventTurnId &&
-        channelRuntimeDependencies
+        channelRuntime
       ) {
-        const target = yield* Effect.promise(() =>
-          ChannelRuntime.resolveCompletedChannelReply(
-            channelRuntimeDependencies,
-            thread.id,
-            eventTurnId,
-          ),
-        );
+        const target = yield* channelRuntime
+          .resolveCompletedChannelReply(thread.id, eventTurnId)
+          .pipe(Effect.orDie);
         if (target) yield* automaticChannelReplyWorker.enqueue(target);
       }
     });
@@ -2677,7 +2642,7 @@ const make = Effect.gen(function* () {
     event: ChannelSessionDomainEvent,
   ) {
     const { session, threadId } = event.payload;
-    if (!channelRuntimeDependencies || (session.status !== "error" && session.status !== "stopped"))
+    if (!channelRuntime || (session.status !== "error" && session.status !== "stopped"))
       return;
     const thread = yield* resolveThreadDetail(threadId);
     if (

@@ -25,6 +25,7 @@ import {
   AuthAccessWriteScope,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
+  type ChannelBinding,
   type AuthEnvironmentScope,
   AuthSessionId,
   BALANCED_BOT_PERSONALITY_TONE,
@@ -106,7 +107,6 @@ import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/uns
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
 import * as ChannelCommand from "./channels/ChannelCommand.ts";
-import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
@@ -805,10 +805,13 @@ const makeWsRpcLayer = (
       const secretStore = yield* ServerSecretStore.ServerSecretStore;
       const composioService = yield* Effect.serviceOption(Composio.ComposioService);
       const composio = Option.getOrElse(composioService, () => Composio.make(secretStore));
-      const channelDeliveryStore = yield* Effect.serviceOption(
-        ChannelDeliveryStore.ChannelDeliveryStore,
-      );
       const commandReceipts = yield* Effect.serviceOption(OrchestrationCommandReceiptRepository);
+      const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
+      const channelBindingsForRuntime = (bindings: ReadonlyArray<ChannelBinding>) =>
+        Option.match(channelRuntime, {
+          onNone: () => ChannelRuntime.channelBindingsForRuntime(bindings, () => false),
+          onSome: (runtime) => runtime.channelBindingsForRuntime(bindings),
+        });
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -1353,9 +1356,7 @@ const makeWsRpcLayer = (
                     imageProvider: nextBot.imageProvider,
                     personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
                     voiceEnabled: nextBot.voiceEnabled,
-                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
-                      nextBot.channelBindings ?? [],
-                    ),
+                    channelBindings: channelBindingsForRuntime(nextBot.channelBindings ?? []),
                     groupId: nextBot.groupId,
                     archivedAt: nextBot.archivedAt,
                     createdAt: nextBot.createdAt,
@@ -1934,39 +1935,24 @@ const makeWsRpcLayer = (
                     message: "Only the environment host can manage external channels.",
                   });
                 }
-                if (Option.isNone(channelDeliveryStore)) {
+                if (Option.isNone(channelRuntime)) {
                   return yield* new OrchestrationDispatchCommandError({
                     message: "Channel delivery storage is unavailable.",
                   });
                 }
                 return yield* startup.enqueueCommand(
-                  Effect.tryPromise({
-                    try: () =>
-                      ChannelCommand.executeChannelCommand(
-                        {
-                          engine: orchestrationEngine,
-                          secretStore,
-                          settings: serverSettings,
-                          deliveryStore: channelDeliveryStore.value,
-                          readModel: () =>
-                            Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-                          readThread: (threadId) =>
-                            Effect.runPromise(
-                              projectionSnapshotQuery
-                                .getThreadDetailById(threadId)
-                                .pipe(Effect.map(Option.getOrNull)),
-                            ),
-                          nowIso: () => Effect.runPromise(nowIso),
-                          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
-                        },
-                        command,
-                      ),
-                    catch: (cause) =>
-                      new OrchestrationDispatchCommandError({
-                        message: cause instanceof Error ? cause.message : "Channel command failed.",
-                        cause,
-                      }),
-                  }),
+                  ChannelCommand.executeChannelCommand(channelRuntime.value, command).pipe(
+                    Effect.catchCause((cause) => {
+                      const error = Cause.squash(cause);
+                      return Effect.fail(
+                        new OrchestrationDispatchCommandError({
+                          message:
+                            error instanceof Error ? error.message : "Channel command failed.",
+                          cause: error,
+                        }),
+                      );
+                    }),
+                  ),
                 );
               }
               const decodedCommand = yield* normalizeDispatchCommand(command);
@@ -2322,9 +2308,7 @@ const makeWsRpcLayer = (
                       }),
                   bots: snapshot.bots.map((bot) => ({
                     ...bot,
-                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
-                      bot.channelBindings ?? [],
-                    ),
+                    channelBindings: channelBindingsForRuntime(bot.channelBindings ?? []),
                   })),
                 })),
                 Effect.tapError((cause) =>
@@ -2425,9 +2409,7 @@ const makeWsRpcLayer = (
                 ...snapshot,
                 bots: snapshot.bots.map((bot) => ({
                   ...bot,
-                  channelBindings: ChannelRuntime.channelBindingsForRuntime(
-                    bot.channelBindings ?? [],
-                  ),
+                  channelBindings: channelBindingsForRuntime(bot.channelBindings ?? []),
                 })),
               })),
               Effect.tapError((cause) =>

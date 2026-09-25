@@ -25,7 +25,6 @@ import {
   type ProjectId,
   type ServerSettings,
 } from "@t3tools/contracts";
-import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
 import { ChannelDeliveryStoreLive } from "../../channels/ChannelDeliveryStore.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as Effect from "effect/Effect";
@@ -105,7 +104,6 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
   }
 
   afterEach(async () => {
-    await ChannelRuntime.shutdownAllChannels();
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
