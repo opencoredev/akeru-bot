@@ -168,7 +168,7 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).not.toContain("Allow akeru_create_routine?");
   });
 
-  it("shows the exact weekday and timezone in a weekly routine preview", () => {
+  it("shows the exact weekday in a weekly routine preview", () => {
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
         approval={{
@@ -180,13 +180,12 @@ describe("ComposerPendingApprovalPanel", () => {
             name: "Friday review",
             instructions: "Review the week.",
             schedule: { kind: "weekly", weekdays: ["friday"], time: "14:00" },
-            timezone: "America/New_York",
           },
         }}
         pendingCount={1}
       />,
     );
 
-    expect(markup).toContain("Friday at 14:00 (America/New_York)");
+    expect(markup).toContain("Friday at 14:00");
   });
 });

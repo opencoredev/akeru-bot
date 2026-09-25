@@ -92,6 +92,10 @@
       "types": "./src/durableMemory.ts",
       "default": "./src/durableMemory.ts"
     },
+    "./routines": {
+      "types": "./src/routines.ts",
+      "default": "./src/routines.ts"
+    },
     "./bot-inbox": {
       "types": "./src/botInbox.ts",
       "default": "./src/botInbox.ts"

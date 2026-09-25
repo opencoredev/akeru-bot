@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import {
   botInboxItemCopy,
+  botInboxRowAction,
   selectOpenBotInboxItems,
   type BotInboxItem,
 } from "@t3tools/client-runtime/bot-inbox";
@@ -23,22 +24,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-
-export type InboxRepairDestination = "providers" | "plugins";
-export type InboxRowAction = InboxRepairDestination | "resolve" | "memory-approval";
-
-export function inboxRepairDestination(item: BotInboxItem): InboxRepairDestination | null {
-  if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
-  if (item.incidentKey.startsWith("connector:") || item.incidentKey.startsWith("access:")) {
-    return "providers";
-  }
-  return null;
-}
-
-export function inboxRowAction(item: BotInboxItem): InboxRowAction {
-  if (item.memoryApproval) return "memory-approval";
-  return inboxRepairDestination(item) ?? "resolve";
-}
 
 export function InboxPanel() {
   const { t } = useI18n();
@@ -132,7 +117,7 @@ export function InboxIncidentRow({
   readonly onDecideMemory: ((intent: MemoryApprovalIntent) => Promise<string | null>) | null;
 }) {
   const { t } = useI18n();
-  const action = inboxRowAction(item);
+  const action = botInboxRowAction(item);
   const copy = botInboxItemCopy(item, t);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);

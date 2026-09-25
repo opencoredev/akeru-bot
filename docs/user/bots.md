@@ -114,9 +114,20 @@ The older notes remain readable without opening the Routines panel.
 The chat loads recent routine notes first. Select **Load older routine notes** above the conversation
 to bring earlier runs into view.
 
+On mobile, open a bot's chat, open chat settings, and select **Routines**. Each routine shows its
+schedule, status, next and last run, and recent runs. You can approve its procedure, test it, run it,
+pause, resume, or turn it back on, and delete it. Creating and editing routines needs the desktop or
+web app, or you can ask the bot in chat. When a bot asks to create a routine, the approval card shows
+the routine's name, schedule, and instructions before you allow it.
+
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
-adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. Fix the dependency,
-then resume the routine. Restoring an archived bot does not resume its routines.
+adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. The routine card
+says it was paused and points you to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived bot does not resume its routines.
+
+Every bot inbox item offers a way to clear it on desktop, web, and mobile. A disconnected provider or
+connector links to provider settings. A plugin access problem links to **Plugins**; on mobile the
+item tells you to fix it on the desktop or web app. Other items have **Resolve**. On mobile, provider
+and plugin items have **Resolve** too, so you can clear them once the problem is fixed.
 
 ## Tools
 

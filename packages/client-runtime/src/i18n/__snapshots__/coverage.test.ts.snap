@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1333,
+  "directMessageCount": 1322,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -15,7 +15,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "'No chats matching "{query}".', { query: props.searchQuery })}",
     ],
     "apps/mobile/src/features/settings/SettingsProviderHealthRouteScreen.tsx": [
-      "describeDurableFactFailure(squashAtomCommandFailure(result)).message),",
+      "describeDurableFactFailure(squashAtomCommandFailure(result)).message);",
     ],
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx": [
       "description) : \`\${t(description)} \${t(MEMORY_SETTING_DISABLED_HINT)}\`;",
@@ -38,6 +38,11 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "DURABLE_FACT_DELETE_CONFIRM.message),",
       "DURABLE_FACT_DELETE_CONFIRM.cancel), style: "cancel" },",
       "DURABLE_FACT_DELETE_CONFIRM.confirm),",
+    ],
+    "apps/mobile/src/features/threads/ThreadRoutinesScreen.tsx": [
+      "status.label)}",
+      "stateNote)}</Text> : null}",
+      "tone.label)}",
     ],
     "apps/web/src/components/auth/PairingRouteSurface.tsx": [
       "describeAuthGate(auth.bootstrapMethods))}",
@@ -84,12 +89,11 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "describeDurableFactFailure(squashAtomCommandFailure(result)).message),",
     ],
     "apps/web/src/components/roster/RoutinePanel.tsx": [
-      "WEEKDAYS[schedule.weekday ?? 1] ?? "Monday");",
-      "runStatusPresentation(run.status).label);",
       "title)}</DialogTitle>",
       "day)}",
       "submitLabel)}",
       "presentation.label)}</span>",
+      "stateNote)}</p>;",
       "status.label)}",
       "runStatusPresentation(latest.status).label)}",
       "status.label)}",
@@ -331,6 +335,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/threads/ThreadMemoryScreen.tsx",
     "apps/mobile/src/features/threads/ThreadNavigationSidebar.tsx",
     "apps/mobile/src/features/threads/ThreadRouteScreen.tsx",
+    "apps/mobile/src/features/threads/ThreadRoutinesScreen.tsx",
     "apps/mobile/src/features/threads/ThreadSettingsSheet.tsx",
     "apps/mobile/src/features/threads/new-task-flow-provider.tsx",
     "apps/mobile/src/features/threads/sidebar-header-actions.tsx",

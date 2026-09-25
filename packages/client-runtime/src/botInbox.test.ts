@@ -1,7 +1,13 @@
 import { AkeruMemoryCandidateId, BotId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { botInboxItemCopy, selectOpenBotInboxItems, type BotInboxItem } from "./botInbox.js";
+import {
+  botInboxItemCopy,
+  botInboxRepairDestination,
+  botInboxRowAction,
+  selectOpenBotInboxItems,
+  type BotInboxItem,
+} from "./botInbox.js";
 import { createTranslator } from "./i18n/index.ts";
 import { zhCNCatalog } from "./i18n/zh-CN.ts";
 
@@ -87,5 +93,82 @@ describe("botInboxItemCopy", () => {
       nextAction: "Reconnect the provider.",
       sensitive: null,
     });
+  });
+});
+
+describe("botInboxRepairDestination", () => {
+  it("opens Plugins for MCP incidents", () => {
+    expect(
+      botInboxRepairDestination(incident({ incidentKey: "access:mcp-builtin-exa:bot-1" })),
+    ).toBe("plugins");
+  });
+
+  it.each(["connector:anthropic:bot-1", "access:cursor-acp:bot-1"])(
+    "opens Providers for %s",
+    (incidentKey) => {
+      expect(botInboxRepairDestination(incident({ incidentKey }))).toBe("providers");
+    },
+  );
+
+  it("does not add a dead action for approval requests", () => {
+    expect(botInboxRepairDestination(incident({ incidentKey: "approval:req-1" }))).toBeNull();
+  });
+});
+
+describe("botInboxRowAction", () => {
+  it("resolves every incident without a repair destination", () => {
+    for (const [incidentKey, kind] of [
+      ["approval:req-1", "approval-request"],
+      ["user-action:bot-1:request_box_help:login", "approval-request"],
+      ["silence:bot-1", "silence-watchdog-failure"],
+      ["routine:routine-1", "routine-failure"],
+      ["browser:bot-1", "browser-dead"],
+    ] as const) {
+      expect(botInboxRowAction(incident({ incidentKey, kind }))).toBe("resolve");
+    }
+  });
+
+  it("links repairable incidents to their fix instead of resolving them", () => {
+    expect(botInboxRowAction(incident())).toBe("providers");
+    expect(botInboxRowAction(incident({ incidentKey: "access:mcp-builtin-exa:bot-1" }))).toBe(
+      "plugins",
+    );
+  });
+
+  it("decides memory approvals instead of resolving them", () => {
+    const item = incident({
+      kind: "approval-request",
+      incidentKey: "memory-approval:candidate-1",
+      memoryApproval: {
+        candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+        fact: "Deploys happen on Fridays.",
+        scope: "project",
+        sensitive: false,
+        sourceThreadId: ThreadId.make("thread-ada"),
+        authorBotId: BotId.make("bot-1"),
+        affectedBotIds: [BotId.make("bot-1")],
+      },
+    });
+    expect(botInboxRowAction(item)).toBe("memory-approval");
+  });
+
+  it("keeps the sensitive marker on memory approvals the row decides", () => {
+    const item = incident({
+      kind: "approval-request",
+      incidentKey: "memory-approval:candidate-2",
+      memoryApproval: {
+        candidateId: AkeruMemoryCandidateId.make("candidate-2"),
+        fact: "Ada's home address is on file.",
+        scope: "project",
+        sensitive: true,
+        sourceThreadId: ThreadId.make("thread-ada"),
+        authorBotId: BotId.make("bot-1"),
+        affectedBotIds: [BotId.make("bot-1")],
+      },
+    });
+    expect(botInboxRowAction(item)).toBe("memory-approval");
+    expect(botInboxItemCopy(item, createTranslator("en").t).sensitive).toBe(
+      "Sensitive, always needs approval",
+    );
   });
 });

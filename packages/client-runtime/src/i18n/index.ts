@@ -1025,6 +1025,11 @@ export const englishCatalog = {
   Open: "Open",
   "Open Plugins": "Open Plugins",
   "Open Providers": "Open Providers",
+  "Could not resolve this item": "Could not resolve this item",
+  "Paused. Fix the cause in Bot inbox, then resume it.":
+    "Paused. Fix the cause in Bot inbox, then resume it.",
+  "Fix this in Plugins on the desktop or web app.":
+    "Fix this in Plugins on the desktop or web app.",
   "Open chat": "Open chat",
   "Open the desktop app to view the browser.": "Open the desktop app to view the browser.",
   "Open {name} bot sidebar": "Open {name} bot sidebar",

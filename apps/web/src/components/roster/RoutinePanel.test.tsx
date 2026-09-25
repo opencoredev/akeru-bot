@@ -4,19 +4,22 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   boundedRunHistory,
-  focusTargetAfterRoutineDelete,
   relativeRunTime,
+  routineScheduleLabel,
+  routineStatus,
+  runSummaryLine,
+  toRoutineSchedule,
+  type RoutineAdapterItem,
+  type RoutineAdapterRun,
+} from "@t3tools/client-runtime/routines";
+
+import {
+  focusTargetAfterRoutineDelete,
   RoutineDetail,
   RoutinePanel,
   routineFormClosesOnOpenChange,
-  routineScheduleLabel,
-  routineStatus,
   runStatusPresentation,
-  runSummaryLine,
-  type RoutineAdapterItem,
-  type RoutineAdapterRun,
 } from "./RoutinePanel";
-import { toRoutineSchedule } from "./routineAdapter";
 
 const run: RoutineAdapterRun = {
   id: "run-1",
@@ -46,6 +49,7 @@ const routine: RoutineAdapterItem = {
   procedureApproved: true,
   enabled: true,
   paused: false,
+  pausedByAkeru: false,
   nextRunAt: "2026-09-01T13:00:00.000Z",
   lastRunAt: "2026-08-31T12:00:00.000Z",
   latestRun: run,

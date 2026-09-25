@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { routineApprovalSummary } from "@t3tools/client-runtime/routines";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
@@ -42,30 +43,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   const { resolvedTheme } = useTheme();
   const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
   const isRoutine = approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
-  const routineArgs =
-    isRoutine && approval.args && typeof approval.args === "object"
-      ? (approval.args as Record<string, unknown>)
-      : null;
-  const routineName = typeof routineArgs?.name === "string" ? routineArgs.name : t("New routine");
-  const routineInstructions =
-    typeof routineArgs?.instructions === "string" ? routineArgs.instructions : null;
-  const routineSchedule =
-    routineArgs?.schedule && typeof routineArgs.schedule === "object"
-      ? (routineArgs.schedule as Record<string, unknown>)
-      : null;
-  const scheduleTime = typeof routineSchedule?.time === "string" ? routineSchedule.time : null;
-  const scheduleTimezone = typeof routineArgs?.timezone === "string" ? routineArgs.timezone : null;
-  const weeklyDays = Array.isArray(routineSchedule?.weekdays)
-    ? routineSchedule.weekdays.filter((day): day is string => typeof day === "string")
-    : [];
-  const scheduleKind =
-    routineSchedule?.kind === "weekdays"
-      ? t("Weekdays")
-      : routineSchedule?.kind === "weekly"
-        ? weeklyDays.length > 0
-          ? weeklyDays.map((day) => `${day.slice(0, 1).toUpperCase()}${day.slice(1)}`).join(", ")
-          : t("Weekly")
-        : t("Daily");
+  const routine = isRoutine ? routineApprovalSummary(approval.args, t) : null;
   const fallbackLabel = isRoutine
     ? t("Routine approval")
     : isProductFeedback
@@ -108,7 +86,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   // of it. A one-line path behind "Expand" wastes a click.
   const detailFitsInline = detailLineCount <= 4 && detail.length <= 400;
 
-  if (isRoutine) {
+  if (routine) {
     return (
       <div
         aria-label={fallbackLabel}
@@ -125,17 +103,14 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         </div>
         <div aria-label={detailAriaLabel} className="rounded-lg bg-foreground/[0.04] px-3 py-2.5">
           <div className="flex min-w-0 items-center justify-between gap-3">
-            <span className="truncate text-sm font-medium text-foreground">{routineName}</span>
-            {scheduleTime ? (
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {t("{schedule} at {time}", { schedule: scheduleKind, time: scheduleTime })}
-                {scheduleTimezone ? ` (${scheduleTimezone})` : ""}
-              </span>
+            <span className="truncate text-sm font-medium text-foreground">{routine.name}</span>
+            {routine.schedule ? (
+              <span className="shrink-0 text-xs text-muted-foreground">{routine.schedule}</span>
             ) : null}
           </div>
-          {routineInstructions ? (
+          {routine.instructions ? (
             <p className="mt-1.5 line-clamp-3 text-xs leading-5 text-muted-foreground">
-              {routineInstructions}
+              {routine.instructions}
             </p>
           ) : null}
         </div>

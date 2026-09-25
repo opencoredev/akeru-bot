@@ -65,6 +65,7 @@ import {
 } from "./thread-settings-sheet-state";
 import { resolveBotUsageCapForProvider } from "./botStepUsage";
 import { ThreadMemoryScreen } from "./ThreadMemoryScreen";
+import { ThreadRoutinesScreen } from "./ThreadRoutinesScreen";
 
 /**
  * Everyday harnesses start expanded; every other provider (OpenRouter catalogs
@@ -296,7 +297,8 @@ function SwitchRow(props: {
 type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
   | { readonly kind: "runtime" }
-  | { readonly kind: "memory" };
+  | { readonly kind: "memory" }
+  | { readonly kind: "routines" };
 
 type ThreadSettingsSessionProps = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
@@ -312,6 +314,11 @@ type ThreadSettingsSessionProps = {
   readonly memoryThreadRef?: {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
+  };
+  readonly routinesRef?: {
+    readonly environmentId: EnvironmentId;
+    readonly botId: string;
+    readonly botName?: string;
   };
 };
 
@@ -383,6 +390,7 @@ type ThreadSettingsSessionValue = {
   readonly setBotUsageCapInput: (input: string) => void;
   readonly toggleProvider: (providerKey: string) => void;
   readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
+  readonly routinesRef: ThreadSettingsSessionProps["routinesRef"];
 };
 
 const ThreadSettingsSessionContext = createContext<ThreadSettingsSessionValue | null>(null);
@@ -527,6 +535,7 @@ function ThreadSettingsSessionProvider(
       setBotUsageCapInput,
       toggleProvider,
       memoryThreadRef: props.memoryThreadRef,
+      routinesRef: props.routinesRef,
     }),
     [
       applyOptionChange,
@@ -548,6 +557,7 @@ function ThreadSettingsSessionProvider(
       props.providerGroups,
       props.runtimeMode,
       props.memoryThreadRef,
+      props.routinesRef,
       searchQuery,
       showLegacyToggle,
       toggleProvider,
@@ -772,7 +782,11 @@ function ThreadSettingsOptionsItem(props: {
         })}
         <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
           <DisclosureRow
-            isLast={session.botUsageCapInput === undefined && !session.memoryThreadRef}
+            isLast={
+              session.botUsageCapInput === undefined &&
+              !session.memoryThreadRef &&
+              !session.routinesRef
+            }
             label={t("Runtime")}
             value={
               RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
@@ -783,10 +797,20 @@ function ThreadSettingsOptionsItem(props: {
         {session.memoryThreadRef ? (
           <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
             <DisclosureRow
-              isLast={session.botUsageCapInput === undefined}
+              isLast={session.botUsageCapInput === undefined && !session.routinesRef}
               label={t("Memory")}
               value={t("Markdown and observations")}
               onPress={() => props.onOpenSubmenu({ kind: "memory" })}
+            />
+          </Animated.View>
+        ) : null}
+        {session.routinesRef ? (
+          <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
+            <DisclosureRow
+              isLast={session.botUsageCapInput === undefined}
+              label={t("Routines")}
+              value={session.routinesRef.botName}
+              onPress={() => props.onOpenSubmenu({ kind: "routines" })}
             />
           </Animated.View>
         ) : null}
@@ -1027,6 +1051,7 @@ type ThreadSettingsPickerStackParams = {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
   };
+  ThreadSettingsRoutines: NonNullable<ThreadSettingsSessionProps["routinesRef"]>;
 };
 
 type ThreadSettingsPickerPresentation = {
@@ -1166,6 +1191,12 @@ function ThreadSettingsModelsScreen() {
             }
             return;
           }
+          if (submenu.kind === "routines") {
+            if (session.routinesRef) {
+              navigation.navigate("ThreadSettingsRoutines", session.routinesRef);
+            }
+            return;
+          }
           const title =
             submenu.kind === "runtime"
               ? "Runtime"
@@ -1292,6 +1323,11 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
           name="ThreadSettingsMemory"
           component={ThreadMemoryScreen}
           options={{ title: t("Memory") }}
+        />
+        <ThreadSettingsPickerStack.Screen
+          name="ThreadSettingsRoutines"
+          component={ThreadRoutinesScreen}
+          options={{ title: t("Routines") }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"

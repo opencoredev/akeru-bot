@@ -747,6 +747,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               environmentId: props.environmentId,
               threadId: props.selectedThread.id,
             },
+            routinesRef: {
+              environmentId: props.environmentId,
+              botId: bot.id,
+              botName: bot.name,
+            },
           }
         : {}),
       ...(bot

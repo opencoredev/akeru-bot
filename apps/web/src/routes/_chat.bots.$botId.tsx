@@ -9,14 +9,17 @@ import {
   SkillAssignmentId,
   SkillId,
 } from "@t3tools/contracts";
+import {
+  botRoutinesView,
+  toRoutineSchedule,
+  type RoutineAdapterDraft,
+} from "@t3tools/client-runtime/routines";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
-import type { RoutineAdapterDraft } from "../components/roster/RoutinePanel";
-import { toRoutinePanelItem, toRoutineSchedule } from "../components/roster/routineAdapter";
 import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
@@ -81,20 +84,8 @@ function BotThreadRouteView() {
       ].sort(),
     [botAssignments, providerSkills],
   );
-  const routines = useMemo(
-    () =>
-      (snapshot?.routines ?? [])
-        .filter((routine) => routine.botId === botId && routine.lifecycle !== "deleted")
-        .map((routine) =>
-          toRoutinePanelItem(
-            routine,
-            snapshot?.routineRuns ?? [],
-            snapshot?.skillAssignments ?? [],
-            snapshot?.mcpServers ?? [],
-          ),
-        ),
-    [botId, snapshot],
-  );
+  const routinesView = useMemo(() => botRoutinesView(snapshot, botId), [botId, snapshot]);
+  const routines = routinesView.kind === "ready" ? routinesView.routines : [];
 
   const requireSuccess = (result: { readonly _tag: string }, message: string) => {
     if (result._tag === "Success") return;
@@ -172,12 +163,7 @@ function BotThreadRouteView() {
           threadRef={threadRef}
           routinePanelRequest={routinePanelRequest}
           routinePanel={{
-            status:
-              snapshot === null
-                ? "loading"
-                : snapshot.routines === undefined
-                  ? "unavailable"
-                  : "ready",
+            status: routinesView.kind,
             routines,
             skillOptions,
             connectorOptions: (snapshot?.mcpServers ?? []).map((server) => server.name),

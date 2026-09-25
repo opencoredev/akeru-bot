@@ -1,5 +1,6 @@
-import { useMobileI18n } from "../../lib/i18n";
+import { routineApprovalSummary } from "@t3tools/client-runtime/routines";
 import {
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ApprovalRequestId,
   type ProviderApprovalDecision,
@@ -8,6 +9,7 @@ import {
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
+import { useMobileI18n } from "../../lib/i18n";
 import type { PendingApproval } from "../../lib/threadActivity";
 
 export interface PendingApprovalCardProps {
@@ -30,6 +32,11 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
     { decision: "decline", label: t("Cancel") },
   ] satisfies ReadonlyArray<ProviderApprovalOption>;
   const isProductFeedback = props.approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+  // A routine approval shows what the bot proposes, so it is never approved blind.
+  const routine =
+    props.approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
+      ? routineApprovalSummary(props.approval.args, t)
+      : null;
   const options = isProductFeedback ? feedbackOptions : (props.approval.options ?? defaultOptions);
   // Opaque for the same reason as PendingUserInputCard: nothing blurs the feed
   // behind this card, so a translucent surface bleeds messages through it.
@@ -41,9 +48,30 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
       <Text className="font-t3-bold text-lg text-neutral-950 dark:text-neutral-50">
         {isProductFeedback
           ? t("Product feedback")
-          : (props.approval.appName ?? props.approval.requestKind)}
+          : routine
+            ? t("Review routine")
+            : (props.approval.appName ?? props.approval.requestKind)}
       </Text>
-      {props.approval.detail ? (
+      {routine ? (
+        <View className="gap-1">
+          <Text className="font-t3-bold text-base text-neutral-950 dark:text-neutral-50">
+            {routine.name}
+          </Text>
+          {routine.schedule ? (
+            <Text className="font-sans text-sm text-neutral-600 dark:text-neutral-400">
+              {routine.schedule}
+            </Text>
+          ) : null}
+          {routine.instructions ? (
+            <Text
+              className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400"
+              numberOfLines={6}
+            >
+              {routine.instructions}
+            </Text>
+          ) : null}
+        </View>
+      ) : props.approval.detail ? (
         <Text className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400">
           {isProductFeedback
             ? t("Open Akeru Bot on web or desktop to review this feedback draft.")

@@ -4,7 +4,9 @@ import * as NodeFS from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { RoutineDetail, RoutinePanel, type RoutineAdapterItem } from "./RoutinePanel";
+import type { RoutineAdapterItem } from "@t3tools/client-runtime/routines";
+
+import { RoutineDetail, RoutinePanel } from "./RoutinePanel";
 
 /*
  * The unit project runs in node with no DOM, and neither jsdom nor happy-dom is
@@ -26,6 +28,7 @@ const routine: RoutineAdapterItem = {
   procedureApproved: true,
   enabled: true,
   paused: false,
+  pausedByAkeru: false,
   nextRunAt: null,
   lastRunAt: null,
   latestRun: null,

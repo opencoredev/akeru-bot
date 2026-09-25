@@ -6,7 +6,24 @@ import {
   Clock3Icon,
   PlusIcon,
 } from "lucide-react";
-import { createTranslator, type MessageKey } from "@t3tools/client-runtime/i18n";
+import {
+  absoluteRunTime,
+  boundedRunHistory,
+  relativeRunTime,
+  routineDateLabel,
+  routineScheduleLabel,
+  routineStateNote,
+  routineStatus,
+  runStatusTone,
+  runSummaryLine,
+  type RoutineAdapterDraft,
+  type RoutineAdapterFrequency,
+  type RoutineAdapterItem,
+  type RoutineAdapterProject,
+  type RoutineAdapterRun,
+  type RoutineAdapterRunStatus,
+} from "@t3tools/client-runtime/routines";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 
 import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
@@ -32,74 +49,6 @@ import {
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-
-export type RoutineAdapterFrequency = "daily" | "weekdays" | "weekly";
-export type RoutineAdapterApproval =
-  | "approval-required"
-  | "auto-accept-edits"
-  | "auto"
-  | "full-access";
-export type RoutineAdapterSandbox = "local" | "e2b" | "daytona" | "vercel-sandbox" | "upstash-box";
-export type RoutineAdapterRunStatus =
-  | "queued"
-  | "waiting-for-approval"
-  | "running"
-  | "blocked"
-  | "failed"
-  | "completed"
-  | "canceled";
-
-export interface RoutineAdapterProject {
-  readonly id: string;
-  readonly name: string;
-}
-
-export interface RoutineAdapterSchedule {
-  readonly frequency: RoutineAdapterFrequency;
-  readonly time: string;
-  readonly timezone: string;
-  readonly weekday: number | null;
-}
-
-export interface RoutineAdapterRun {
-  readonly id: string;
-  readonly status: RoutineAdapterRunStatus;
-  readonly startedAt: string;
-  readonly finishedAt: string | null;
-  readonly summary: string | null;
-  readonly error: string | null;
-  readonly usage: string | null;
-}
-
-export interface RoutineAdapterItem {
-  readonly id: string;
-  readonly name: string;
-  readonly prompt: string;
-  readonly projectId: string;
-  readonly sandbox: RoutineAdapterSandbox;
-  readonly schedule: RoutineAdapterSchedule;
-  readonly approval: RoutineAdapterApproval;
-  readonly skills: readonly string[];
-  readonly connectors: readonly string[];
-  readonly procedureApproved: boolean;
-  readonly enabled: boolean;
-  readonly paused: boolean;
-  readonly nextRunAt: string | null;
-  readonly lastRunAt: string | null;
-  readonly latestRun: RoutineAdapterRun | null;
-  readonly runHistory: readonly RoutineAdapterRun[];
-}
-
-export interface RoutineAdapterDraft {
-  readonly name: string;
-  readonly prompt: string;
-  readonly projectId: string;
-  readonly sandbox: RoutineAdapterSandbox;
-  readonly schedule: RoutineAdapterSchedule;
-  readonly approval: RoutineAdapterApproval;
-  readonly skills: readonly string[];
-  readonly connectors: readonly string[];
-}
 
 export interface RoutinePanelProps {
   readonly botName: string;
@@ -136,114 +85,18 @@ const WEEKDAYS: readonly MessageKey[] = [
   "Saturday",
 ];
 
-/** The translator slice routine labels need. Helpers default to English outside React. */
-export type RoutineTranslator = Pick<ReturnType<typeof createTranslator>, "t" | "formatDate">;
-
-const englishTranslator: RoutineTranslator = createTranslator("en");
-
-export function routineScheduleLabel(
-  schedule: RoutineAdapterSchedule,
-  i18n: RoutineTranslator = englishTranslator,
-) {
-  const frequency =
-    schedule.frequency === "daily"
-      ? i18n.t("Daily")
-      : schedule.frequency === "weekdays"
-        ? i18n.t("Weekdays")
-        : i18n.t(WEEKDAYS[schedule.weekday ?? 1] ?? "Monday");
-  return i18n.t("{frequency} at {time} ({timezone})", {
-    frequency,
-    time: schedule.time,
-    timezone: schedule.timezone,
-  });
-}
-
-export function boundedRunHistory(history: readonly RoutineAdapterRun[]) {
-  return history.slice(0, 5);
-}
-
-/**
- * The lifecycle state a routine is actually in, as the card and detail both label it.
- * A routine that was never approved is a Draft; one that was turned off is Off, and
- * the two take different routes back on.
- */
-export function routineStatus(routine: RoutineAdapterItem): {
-  readonly label: MessageKey & ("Active" | "Paused" | "Off" | "Draft");
-  readonly variant: "success" | "warning" | "secondary";
-} {
-  if (routine.paused) return { label: "Paused", variant: "warning" };
-  if (routine.enabled) return { label: "Active", variant: "success" };
-  if (routine.procedureApproved) return { label: "Off", variant: "secondary" };
-  return { label: "Draft", variant: "secondary" };
-}
-
-const RUN_STATUS_PRESENTATION = {
-  completed: { label: "Completed", variant: "success", dot: "bg-success" },
-  failed: { label: "Failed", variant: "error", dot: "bg-destructive" },
-  running: { label: "Running", variant: "info", dot: "bg-info" },
-  queued: { label: "Queued", variant: "secondary", dot: "bg-muted-foreground" },
-  "waiting-for-approval": { label: "Needs approval", variant: "warning", dot: "bg-warning" },
-  blocked: { label: "Blocked", variant: "warning", dot: "bg-warning" },
-  canceled: { label: "Canceled", variant: "secondary", dot: "bg-muted-foreground" },
-} as const satisfies Record<
-  RoutineAdapterRunStatus,
-  { readonly label: MessageKey; readonly variant: string; readonly dot: string }
->;
+const RUN_STATUS_DOT = {
+  success: "bg-success",
+  error: "bg-destructive",
+  info: "bg-info",
+  secondary: "bg-muted-foreground",
+  warning: "bg-warning",
+} as const;
 
 /** How one run reads at a glance: its chip wording, its badge colour, and its history dot. */
 export function runStatusPresentation(status: RoutineAdapterRunStatus) {
-  return RUN_STATUS_PRESENTATION[status];
-}
-
-/** The absolute wall-clock label a relative time is paired with in its tooltip. */
-export function absoluteRunTime(value: string, i18n: RoutineTranslator = englishTranslator) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return i18n.formatDate(date, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function shortDate(value: string | null, i18n: RoutineTranslator) {
-  if (!value) return i18n.t("Not scheduled");
-  return absoluteRunTime(value, i18n);
-}
-
-/**
- * "in 3h" ahead of an instant, "3h ago" behind it. Routine times land on both sides
- * of now — the next run is future, every run in the history is past.
- */
-export function relativeRunTime(
-  value: string,
-  nowMs: number = Date.now(),
-  i18n: RoutineTranslator = englishTranslator,
-) {
-  const target = new Date(value).getTime();
-  if (Number.isNaN(target)) return "";
-  const diffMs = target - nowMs;
-  const seconds = Math.floor(Math.abs(diffMs) / 1000);
-  if (seconds < 60) return i18n.t("now");
-  const minutes = Math.floor(seconds / 60);
-  const span =
-    minutes < 60
-      ? i18n.t("{count}m", { count: minutes })
-      : minutes < 1440
-        ? i18n.t("{count}h", { count: Math.floor(minutes / 60) })
-        : i18n.t("{count}d", { count: Math.floor(minutes / 1440) });
-  return diffMs >= 0 ? i18n.t("in {span}", { span }) : i18n.t("{span} ago", { span });
-}
-
-/** The single line a run gets in the history: its error, else its summary, else its status. */
-export function runSummaryLine(
-  run: RoutineAdapterRun,
-  i18n: RoutineTranslator = englishTranslator,
-) {
-  const detail = run.error ?? run.summary ?? "";
-  const line = detail.split("\n").find((part) => part.trim().length > 0);
-  return line?.trim() || i18n.t(runStatusPresentation(run.status).label);
+  const tone = runStatusTone(status);
+  return { ...tone, dot: RUN_STATUS_DOT[tone.variant] };
 }
 
 /**
@@ -561,17 +414,9 @@ function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun[] }) {
 /** When the routine next runs, or why it is not going to. */
 function NextRunLine({ routine }: { readonly routine: RoutineAdapterItem }) {
   const { t } = useI18n();
-  if (routine.paused) {
-    return <p className="text-xs text-muted-foreground">{t("Paused until you resume it.")}</p>;
-  }
-  if (!routine.enabled) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {routine.procedureApproved
-          ? t("Off until you turn it back on.")
-          : t("Draft. Approve its procedure to schedule it.")}
-      </p>
-    );
+  const stateNote = routineStateNote(routine);
+  if (stateNote) {
+    return <p className="text-xs text-muted-foreground">{t(stateNote)}</p>;
   }
   if (!routine.nextRunAt) {
     return <p className="text-xs text-muted-foreground">{t("No next run scheduled.")}</p>;
@@ -748,11 +593,11 @@ export function RoutineDetail({
           <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
             <div className="flex gap-2">
               <dt>{t("Next run")}</dt>
-              <dd className="text-foreground">{shortDate(routine.nextRunAt, i18n)}</dd>
+              <dd className="text-foreground">{routineDateLabel(routine.nextRunAt, i18n)}</dd>
             </div>
             <div className="flex gap-2">
               <dt>{t("Last run")}</dt>
-              <dd className="text-foreground">{shortDate(routine.lastRunAt, i18n)}</dd>
+              <dd className="text-foreground">{routineDateLabel(routine.lastRunAt, i18n)}</dd>
             </div>
             <div className="flex gap-2">
               <dt>{t("Workspace")}</dt>

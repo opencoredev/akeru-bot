@@ -14,6 +14,31 @@ export function selectOpenBotInboxItems(
     .toSorted((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
 }
 
+export type BotInboxRepairDestination = "providers" | "plugins";
+export type BotInboxRowAction = BotInboxRepairDestination | "resolve" | "memory-approval";
+
+/**
+ * Where a user repairs an incident whose dependency must recover before the server closes
+ * it. MCP access lives in Plugins; other connector and access failures live in Providers.
+ */
+export function botInboxRepairDestination(item: BotInboxItem): BotInboxRepairDestination | null {
+  if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
+  if (item.incidentKey.startsWith("connector:") || item.incidentKey.startsWith("access:")) {
+    return "providers";
+  }
+  return null;
+}
+
+/**
+ * The one control an open inbox row offers. Memory approvals are decided, not dismissed,
+ * because resolving one would drop the fact silently. Repairable incidents link to their
+ * fix; everything else can be resolved by hand.
+ */
+export function botInboxRowAction(item: BotInboxItem): BotInboxRowAction {
+  if (item.memoryApproval) return "memory-approval";
+  return botInboxRepairDestination(item) ?? "resolve";
+}
+
 export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
   switch (kind) {
     case "silence-watchdog-failure":
