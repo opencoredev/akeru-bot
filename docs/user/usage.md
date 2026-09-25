@@ -13,6 +13,9 @@ Disconnected accounts and limits that a provider does not report stay hidden.
 Each meter shows the percentage used or left and the next reset time. Provider plans expose different
 windows, such as five-hour, weekly, or plan-wide limits.
 
+Akeru asks each provider for fresh limits at most once every five minutes. If a provider does not
+answer, the meters keep their last reported values and Akeru tries again after one minute.
+
 ## Cost and tokens
 
 Use the **Cost** and **Tokens** tabs to review activity Akeru recorded through providers connected in

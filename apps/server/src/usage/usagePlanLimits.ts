@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off globalDate:off
 /**
  * Live plan windows from Settings → Providers logins.
  *
@@ -12,6 +11,11 @@ import type {
   UsagePlanWindow,
   UsageProviderPlanLimits,
 } from "@t3tools/contracts";
+import * as Cache from "effect/Cache";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
@@ -62,7 +66,7 @@ function isoFromUnknown(value: unknown): string | null {
   const text = asString(value);
   if (text !== null) {
     const parsed = Date.parse(text);
-    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+    if (!Number.isNaN(parsed)) return DateTime.formatIso(DateTime.makeUnsafe(parsed));
     const numeric = asNumber(text);
     if (numeric !== null) return isoFromEpoch(numeric);
     return null;
@@ -78,7 +82,7 @@ function isoFromUnknown(value: unknown): string | null {
 /** Codex often sends seconds; some providers send epoch milliseconds. */
 function isoFromEpoch(value: number): string {
   const millis = Math.abs(value) < 1e11 ? value * 1000 : value;
-  return new Date(millis).toISOString();
+  return DateTime.formatIso(DateTime.makeUnsafe(millis));
 }
 
 function cycleEndFromUsage(root: Record<string, unknown>): string | null {
@@ -254,7 +258,9 @@ function pickCodexWindow(
     isoFromUnknown(candidate.window.reset_at) ??
     (() => {
       const after = asNumber(candidate.window.reset_after_seconds);
-      return after === null ? null : new Date(Date.now() + after * 1000).toISOString();
+      return after === null
+        ? null
+        : DateTime.formatIso(DateTime.add(DateTime.nowUnsafe(), { seconds: after }));
     })();
   return {
     kind,
@@ -331,19 +337,41 @@ export function parseKimiUsage(body: unknown): {
 
 async function fetchJson(
   url: string,
-  init: RequestInit,
+  init: {
+    readonly method: "GET" | "POST";
+    readonly headers: Record<string, string>;
+    readonly body?: string;
+  },
 ): Promise<{ readonly status: number; readonly body: unknown; readonly headers: Headers }> {
-  const response = await fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  const request = HttpClientRequest.make(init.method)(url, {
+    headers: init.headers,
+  }).pipe(
+    init.body === undefined
+      ? (request) => request
+      : HttpClientRequest.bodyText(init.body, "application/json"),
+  );
+  const response = await Effect.runPromise(
+    HttpClient.execute(request).pipe(
+      Effect.timeout(Duration.millis(FETCH_TIMEOUT_MS)),
+      Effect.provide(FetchHttpClient.layer),
+    ),
+  );
   let body: unknown = null;
   try {
-    body = await response.json();
+    body = await Effect.runPromise(response.json);
   } catch {
     body = null;
   }
-  return { status: response.status, body, headers: response.headers };
+  return {
+    status: response.status,
+    body,
+    headers: new Headers(
+      Object.entries(response.headers).filter(([, value]) => typeof value === "string") as [
+        string,
+        string,
+      ][],
+    ),
+  };
 }
 
 async function fetchClaude(accessToken: string): Promise<UsageProviderPlanLimits | null> {
@@ -461,18 +489,44 @@ async function fetchProvider(
   }
 }
 
-const PLAN_LIMIT_TTL_MS = 5 * 60 * 1000;
-const PLAN_LIMIT_FAILURE_BACKOFF_MS = 60 * 1000;
+const PLAN_LIMIT_TTL = Duration.minutes(5);
+// Failure backoff is the cache TTL: a failed or unavailable read keeps serving
+// the last good windows and is not retried until this shorter expiry lapses.
+const PLAN_LIMIT_FAILURE_BACKOFF = Duration.minutes(1);
 
-const planLimitCache = new Map<
-  LiveSubscriptionProviderId,
-  { readonly limits: UsageProviderPlanLimits; readonly fetchedAt: number }
->();
-const planLimitFailedAt = new Map<LiveSubscriptionProviderId, number>();
+type CachedPlanLimits = {
+  readonly limits: UsageProviderPlanLimits;
+  readonly fresh: boolean;
+};
 
-export function resetPlanLimitCache(): void {
-  planLimitCache.clear();
-  planLimitFailedAt.clear();
+function makePlanLimitCache(getAccessToken: GetAccessToken) {
+  const lastGoodPlanLimits = new Map<string, UsageProviderPlanLimits>();
+  return Cache.makeWith<LiveSubscriptionProviderId, CachedPlanLimits | null>(
+    (key) =>
+      Effect.promise(async () => {
+        const provider = key;
+        try {
+          const resolvedToken = await getAccessToken(provider);
+          if (resolvedToken === undefined) return null;
+          const fresh = await fetchProvider(provider, resolvedToken);
+          if (fresh !== null) {
+            lastGoodPlanLimits.set(key, fresh);
+            return { limits: fresh, fresh: true };
+          }
+        } catch {
+          // Keep the last good windows during provider failures.
+        }
+        return {
+          limits: lastGoodPlanLimits.get(key) ?? emptyConnectedLimits(provider),
+          fresh: false,
+        };
+      }),
+    {
+      capacity: PLAN_PROVIDER_ORDER.length * 2,
+      timeToLive: (exit) =>
+        exit._tag === "Success" && exit.value?.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
+    },
+  );
 }
 
 function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProviderPlanLimits {
@@ -485,42 +539,37 @@ function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProvid
   };
 }
 
-export async function readProviderPlanLimits(
+function readProviderPlanLimits(
   provider: LiveSubscriptionProviderId,
-  getAccessToken: GetAccessToken,
-): Promise<UsageProviderPlanLimits | null> {
-  const token = await getAccessToken(provider);
-  if (token === undefined) return null;
-
-  const now = Date.now();
-  const cached = planLimitCache.get(provider);
-  if (cached !== undefined && now - cached.fetchedAt < PLAN_LIMIT_TTL_MS) {
-    return cached.limits;
-  }
-  const failedAt = planLimitFailedAt.get(provider);
-  if (failedAt !== undefined && now - failedAt < PLAN_LIMIT_FAILURE_BACKOFF_MS) {
-    return cached?.limits ?? emptyConnectedLimits(provider);
-  }
-
-  try {
-    const fresh = await fetchProvider(provider, token);
-    if (fresh !== null) {
-      planLimitCache.set(provider, { limits: fresh, fetchedAt: now });
-      planLimitFailedAt.delete(provider);
-      return fresh;
-    }
-  } catch {
-    // Keep the last good windows. Anthropic 429s this endpoint often.
-  }
-  planLimitFailedAt.set(provider, now);
-  return cached?.limits ?? emptyConnectedLimits(provider);
+  cache: Cache.Cache<LiveSubscriptionProviderId, CachedPlanLimits | null>,
+): Effect.Effect<UsageProviderPlanLimits | null> {
+  return Cache.get(cache, provider).pipe(Effect.map((result) => result?.limits ?? null));
 }
 
-export async function readPlanLimits(
-  getAccessToken: GetAccessToken,
-): Promise<readonly UsageProviderPlanLimits[]> {
-  const results = await Promise.all(
-    PLAN_PROVIDER_ORDER.map((provider) => readProviderPlanLimits(provider, getAccessToken)),
+export function makePlanLimitsReader(getAccessToken: GetAccessToken) {
+  return Effect.map(
+    makePlanLimitCache(getAccessToken),
+    (cache) => (provider?: SubscriptionProviderId) =>
+      Effect.all(
+        (provider === undefined
+          ? PLAN_PROVIDER_ORDER
+          : provider === "cursor"
+            ? []
+            : [provider]
+        ).map((selected) => readProviderPlanLimits(selected, cache)),
+        { concurrency: "unbounded" },
+      ).pipe(
+        Effect.map((results) =>
+          results.filter((entry): entry is UsageProviderPlanLimits => entry !== null),
+        ),
+      ),
   );
-  return results.filter((entry): entry is UsageProviderPlanLimits => entry !== null);
+}
+
+export function readPlanLimitsEffect(getAccessToken: GetAccessToken) {
+  return Effect.flatMap(makePlanLimitsReader(getAccessToken), (read) => read());
+}
+
+export async function readPlanLimits(getAccessToken: GetAccessToken) {
+  return Effect.runPromise(readPlanLimitsEffect(getAccessToken));
 }

@@ -186,7 +186,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
 import * as UsageService from "./usage/UsageService.ts";
-import { readProviderPlanLimits } from "./usage/usagePlanLimits.ts";
+
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -3668,18 +3668,19 @@ const makeWsRpcLayer = (
                     ?.driver ?? bot.value.engine.provider)
                 : undefined;
               const connection = driver === undefined ? undefined : driverConnection[driver];
-              const plan =
+              const planLimits =
                 connection === undefined
-                  ? undefined
-                  : yield* Effect.promise(() =>
-                      readProviderPlanLimits(connection, (provider) =>
-                        subscriptionAuth.getPlanAccessToken(provider),
-                      ),
-                    ).pipe(Effect.catchCause(() => Effect.succeed(null)));
+                  ? []
+                  : yield* usage
+                      .readPlanLimits(connection)
+                      .pipe(Effect.catchCause(() => Effect.succeed([])));
+
+              const plan = planLimits[0];
               const window =
                 plan?.status === "ok"
-                  ? (plan.windows.find((candidate) => candidate.kind === "session") ??
-                    plan.windows[0])
+                  ? (plan.windows.find(
+                      (candidate: { readonly kind: string }) => candidate.kind === "session",
+                    ) ?? plan.windows[0])
                   : undefined;
               const subscriptionPool = window
                 ? {

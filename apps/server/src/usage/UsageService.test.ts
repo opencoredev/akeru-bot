@@ -29,7 +29,21 @@ vi.mock("../subscription-auth/service.ts", () => ({
     }),
   },
 }));
-vi.mock("./usagePlanLimits.ts", () => ({ readPlanLimits: async () => [] }));
+const planLimits = vi.hoisted(() => ({ readerCreations: 0, reads: 0 }));
+vi.mock("./usagePlanLimits.ts", async () => {
+  const Effect = await import("effect/Effect");
+  return {
+    makePlanLimitsReader: () =>
+      Effect.sync(() => {
+        planLimits.readerCreations += 1;
+        return () =>
+          Effect.sync(() => {
+            planLimits.reads += 1;
+            return [];
+          });
+      }),
+  };
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -128,6 +142,18 @@ it.layer(NodeServices.layer)("UsageService pricing", (it) => {
       expect(yield* UsageService.readUsageStoreVolumeId(fs, `${directory}/missing.sqlite`)).toBe(
         "",
       );
+    }),
+  );
+
+  it.effect("builds one plan-limits reader per service and reads through it", () =>
+    Effect.gen(function* () {
+      const before = { ...planLimits };
+      const { service } = yield* makeFixture(Effect.succeed(Response.json(rateDocument)));
+      expect(planLimits.readerCreations).toBe(before.readerCreations + 1);
+      expect(yield* service.readPlanLimits()).toEqual([]);
+      expect(yield* service.readPlanLimits()).toEqual([]);
+      expect(planLimits.readerCreations).toBe(before.readerCreations + 1);
+      expect(planLimits.reads).toBe(before.reads + 2);
     }),
   );
 
