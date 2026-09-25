@@ -60,7 +60,7 @@ import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.t
 import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryRepository.ts";
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
-import { createAkeruMastraHarness } from "../AkeruMastraHarness.ts";
+import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
 import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
@@ -535,21 +535,19 @@ function makeMastraHarness() {
   } as unknown as Session<Record<string, unknown>>;
   const createSession = vi.fn(async (_input: unknown) => session as never);
   const deleteSession = vi.fn(async () => true);
-  const destroy = vi.fn(async () => undefined);
   const observeExternalTurn = vi.fn(async () => undefined);
-  const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (options) => {
-    harnessOptions.push(options);
-    return {
-      controller: {
-        init: vi.fn(async () => undefined),
-        createSession,
-        deleteSession,
-        destroy,
-      },
-      observeExternalTurn,
-      destroy: vi.fn(),
-    };
-  };
+  const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
+    Effect.sync(() => {
+      harnessOptions.push(options);
+      return {
+        controller: {
+          init: vi.fn(async () => undefined),
+          createSession,
+          deleteSession,
+        },
+        observeExternalTurn,
+      };
+    });
   const emit = (event: AgentControllerEvent) => {
     for (const listener of listeners) listener(event);
   };
@@ -5178,18 +5176,13 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const destroyStarted = Promise.withResolvers<void>();
     const destroyReleased = Promise.withResolvers<void>();
-    const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async (
-      options,
-    ) => {
-      const harness = await mastra.factory(options);
-      return {
-        ...harness,
-        destroy: async () => {
+    const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
+      Effect.acquireRelease(mastra.factory(options), () =>
+        Effect.promise(async () => {
           destroyStarted.resolve();
           await destroyReleased.promise;
-        },
-      };
-    };
+        }),
+      );
 
     return Effect.gen(function* () {
       const scope = yield* Scope.make("sequential");
@@ -6364,7 +6357,7 @@ describe("AgentControllerLive", () => {
       });
 
       const layer = makeAgentControllerLive({
-        makeMastraHarness: createAkeruMastraHarness,
+        makeMastraHarness: makeAkeruMastraHarness,
         makeBotBrowser: () => ({
           tools: {},
           attachment: async () => undefined,
@@ -7088,8 +7081,8 @@ describe("AgentControllerLive", () => {
           sendMessage: ReturnType<typeof vi.fn>;
         }
       >();
-      const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = async () => {
-        return {
+      const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = () =>
+        Effect.succeed({
           controller: {
             init: vi.fn(async () => undefined),
             createSession: vi.fn(async (input: { readonly id: string }) => {
@@ -7122,12 +7115,9 @@ describe("AgentControllerLive", () => {
               } as unknown as Session<Record<string, unknown>>;
             }),
             deleteSession: vi.fn(async () => true),
-            destroy: vi.fn(async () => undefined),
           },
           observeExternalTurn: vi.fn(async () => undefined),
-          destroy: vi.fn(),
-        };
-      };
+        });
       const codexWorkThread = ThreadId.make("thread-codex-work");
       const codexReviewThread = ThreadId.make("thread-codex-review");
 

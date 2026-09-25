@@ -171,9 +171,11 @@ The memory archive schema is version 3. It binds file paths, scope IDs, file che
 observational snapshot checksum, and a manifest checksum. Preview validates all files and produces a
 hash of the archive plus current destination state. Apply recomputes it and refuses stale previews.
 Import holds all affected file locks and captures original files before applying changes. A failed
-write or observation restore rolls back the attempted changes before releasing the locks. File
-locks renew their lease while held. Observation restores and clears share the per-thread background
-observation queue.
+write or observation restore rolls back the attempted changes before releasing the locks. A failed
+observation restore fails with `AkeruObservationRestoreError`, whose `cause` is the original
+failure; `rolledBack` says whether the original records came back, and `rollbackCause` carries the
+rollback failure when both fail. File locks renew their lease while held. Observation restores and
+clears share the per-thread observation lock.
 Observation records are cleared and reinserted through Mastra's storage adapter when restoration is
 required. Imports must target the archive's original thread. Flattened buffered observations are
 promoted into active observations on restore so Mastra's chunk-based storage retains their text.
@@ -233,6 +235,17 @@ user-visible `memory.observation.dropped` activity. Startup drains rows left by 
 so a restart does not silently lose queued work, and `busy_timeout` plus enqueue error handling keep
 queue contention off the reply path. Observer and Reflector calls use the same usage ledger hooks
 for every provider path, including legacy external turns.
+
+`makeAkeruMastraHarness` is a scoped Effect. It acquires the Mastra memory store and the queue store
+and releases both when its scope closes; the agent controller layer owns that scope. Observation,
+restore, clear, and drain work runs in fibers the harness scope owns, and each thread's memory work
+takes that thread's one-permit semaphore, so work on one thread runs in order while other threads
+run alongside. Closing the scope first stops admission, so later calls fail with
+`AkeruObservationQueueClosedError`, a completed turn writes no queue row, and the drain stops
+claiming rows. It then gives admitted work `observationCloseGrace` (five seconds by default) to
+finish, interrupts anything still running or waiting for a permit, and hands claimed rows back to the
+queue with their attempt count unchanged before it closes the stores. Rows left in the queue are
+drained by the next harness at startup.
 Observation records are cleared and reinserted through Mastra's storage adapter when restoration is
 required. Imports must target the archive's original thread. Flattened buffered observations are
 promoted into active observations on restore so Mastra's chunk-based storage retains their text.

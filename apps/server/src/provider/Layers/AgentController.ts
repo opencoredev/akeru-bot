@@ -54,6 +54,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
@@ -99,11 +100,12 @@ import {
 import {
   akeruActionNeedsApproval,
   akeruToolCategory,
-  createAkeruMastraHarness,
+  makeAkeruMastraHarness,
   criticalAkeruAction,
   mastraModelId,
   openCodeGoInlineConnection,
   type AkeruMastraHarness,
+  type AkeruMastraHarnessError,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
@@ -299,7 +301,10 @@ interface LegacyResourceIdentity {
 }
 
 export interface AgentControllerLiveOptions {
-  readonly makeMastraHarness?: (options: AkeruMastraHarnessOptions) => Promise<AkeruMastraHarness>;
+  /** Builds the harness in the layer scope; closing the scope shuts it down. */
+  readonly makeMastraHarness?: (
+    options: AkeruMastraHarnessOptions,
+  ) => Effect.Effect<AkeruMastraHarness, AkeruMastraHarnessError, Scope.Scope>;
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (
     input: CreateRemoteBotWorkspaceInput,
@@ -1230,234 +1235,240 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(stopAgent ? { stop: (request) => stopAgent(parent(), request) } : {}),
       };
     };
-    const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
-    const bundle = yield* runMastra("construct", () =>
-      makeMastraHarness({
-        authStorage,
-        getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-        getOpenCodeGoApiKey: async () =>
-          subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
-        getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
-        getModelConnection: (providerInstanceId) => modelConnections.get(providerInstanceId),
-        memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
-        syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
-          const active = sessions.get(threadId);
-          const activeTurn = active?.activeTurn;
-          if (
-            !active ||
-            !activeTurn ||
-            (!protectedAction && !active.connectorSessionApprovals.has(toolName))
-          ) {
-            return;
-          }
-          const update = await runPromise(
-            legacyProviderBridge.dispatchIfEnabled(
-              active.providerInstanceId,
-              "AgentController.syncThreadToolApproval",
-              () => {
-                if (sessions.get(threadId) !== active || active.activeTurn !== activeTurn) return;
-                return active.session.permissions.setForTool({
-                  toolName,
-                  policy: protectedAction ? "ask" : "allow",
-                });
+    const makeMastraHarness = options?.makeMastraHarness ?? makeAkeruMastraHarness;
+    const bundle = yield* makeMastraHarness({
+      authStorage,
+      getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
+      getOpenCodeGoApiKey: async () => subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
+      getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
+      getModelConnection: (providerInstanceId) => modelConnections.get(providerInstanceId),
+      memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
+      syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
+        const active = sessions.get(threadId);
+        const activeTurn = active?.activeTurn;
+        if (
+          !active ||
+          !activeTurn ||
+          (!protectedAction && !active.connectorSessionApprovals.has(toolName))
+        ) {
+          return;
+        }
+        const update = await runPromise(
+          legacyProviderBridge.dispatchIfEnabled(
+            active.providerInstanceId,
+            "AgentController.syncThreadToolApproval",
+            () => {
+              if (sessions.get(threadId) !== active || active.activeTurn !== activeTurn) return;
+              return active.session.permissions.setForTool({
+                toolName,
+                policy: protectedAction ? "ask" : "allow",
+              });
+            },
+          ),
+        );
+        await update;
+      },
+      getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+      // Durable queue rows can drain before any client opens the thread (for
+      // example right after a server restart), so the activity must not
+      // depend on an active provider session; the row's recorded turnId is
+      // the authority and the active turn is only a fallback.
+      onObservationDropped: async ({
+        observationId,
+        threadId,
+        turnId,
+        resourceId,
+        modelId,
+        attempts,
+        error,
+      }) => {
+        if (!Option.isSome(orchestrationEngine)) return;
+        const active = sessions.get(threadId);
+        const droppedAt = nowIso();
+        await runPromise(
+          orchestrationEngine.value.dispatch({
+            type: "thread.activity.append",
+            // Stable ids make a retried notice idempotent.
+            commandId: CommandId.make(`server:observation-dropped:${observationId}`),
+            threadId: ThreadIdBrand(threadId),
+            activity: {
+              id: EventId.make(`observation-dropped:${observationId}`),
+              tone: "error",
+              kind: "memory.observation.dropped",
+              summary: "Background memory observation dropped after repeated failures",
+              payload: {
+                resourceId,
+                modelId: modelId ?? null,
+                attempts,
+                detail: error.message,
               },
+              turnId: turnId ? TurnId.make(turnId) : (active?.activeTurn?.turnId ?? null),
+              createdAt: droppedAt,
+            },
+            createdAt: droppedAt,
+          }),
+        );
+      },
+      ...(routineDispatcher
+        ? {
+            listRoutines: (threadId: string) =>
+              runPromise(
+                routineDispatcher
+                  .listForThread(ThreadIdBrand(threadId))
+                  .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
+              ),
+            deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
+              runPromise(
+                routineDispatcher
+                  .deleteForThread(
+                    ThreadIdBrand(threadId),
+                    routineIds.map((routineId) => RoutineId.make(routineId)),
+                  )
+                  .pipe(
+                    Effect.map((result) => ({
+                      status: result.status,
+                      deletedRoutineIds: [...result.routineIds],
+                    })),
+                  ),
+              ),
+            createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
+              const active = sessions.get(threadId);
+              const timezone = active?.toolSession.timezone;
+              if (!timezone) {
+                return Promise.reject(new Error("Send a message before creating a routine."));
+              }
+              const requestId = `routine-${NodeCrypto.randomUUID()}`;
+              return new Promise((resolve, reject) => {
+                pendingRoutineRequests.set(requestId, {
+                  threadId,
+                  input,
+                  timezone,
+                  resolve,
+                  reject,
+                });
+                if (active.activeTurn) active.activeTurn.waiting = true;
+                publishSessionState(ThreadIdBrand(threadId), active, "waiting");
+                publish({
+                  ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
+                  requestId: RuntimeRequestId.make(requestId),
+                  type: "request.opened",
+                  payload: {
+                    requestType: "dynamic_tool_call",
+                    detail: "Review routine",
+                    toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                    args: { ...input, timezone },
+                    options: [
+                      { decision: "accept", label: "Create routine" },
+                      { decision: "decline", label: "Cancel" },
+                    ],
+                  },
+                });
+              });
+            },
+          }
+        : {}),
+      toolRuntime,
+      startMemoryCall: async ({ threadId, category }) => {
+        const context = memoryUsageByThread.get(threadId);
+        const active = sessions.get(threadId);
+        const callId = `${category}:${NodeCrypto.randomUUID()}`;
+        if (!context || !active) {
+          // A queued observation can drain after a restart before its chat
+          // reopens. Attribute it to the chat's bot and record what it used.
+          const botId = await runPromise(
+            readSessionStartContext(ThreadIdBrand(threadId), null).pipe(
+              Effect.map((started) => started.botId),
+              Effect.catchCause(() => Effect.succeed(null)),
             ),
           );
-          await update;
-        },
-        getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
-        // Durable queue rows can drain before any client opens the thread (for
-        // example right after a server restart), so the activity must not
-        // depend on an active provider session; the row's recorded turnId is
-        // the authority and the active turn is only a fallback.
-        onObservationDropped: async ({
-          observationId,
-          threadId,
-          turnId,
-          resourceId,
-          modelId,
-          attempts,
-          error,
-        }) => {
-          if (!Option.isSome(orchestrationEngine)) return;
-          const active = sessions.get(threadId);
-          const droppedAt = nowIso();
+          if (!botId) return undefined;
+          unreservedMemoryCalls.set(callId, {
+            botId,
+            threadId: ThreadIdBrand(threadId),
+            category,
+            provider: active?.provider ?? null,
+            model: active?.model ?? null,
+          });
+          return callId;
+        }
+        await runPromise(
+          botUsageLedger.reserve({
+            reservationId: AkeruUsageReservationId.make(callId),
+            sourceKey: callId,
+            botId: context.botId,
+            threadId: ThreadIdBrand(threadId),
+            turnId: context.turnId,
+            category,
+            maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
+            capLimit: context.capLimit,
+            provider: active.provider,
+            model: active.model,
+            createdAt: nowIso(),
+          }),
+        );
+        return callId;
+      },
+      finishMemoryCall: async ({ callId, usage, error }) => {
+        const outputTokens = usage?.outputTokens ?? 0;
+        const inputTokens =
+          usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+        const unreserved = unreservedMemoryCalls.get(callId);
+        if (unreserved) {
+          unreservedMemoryCalls.delete(callId);
+          if (!usage) return;
           await runPromise(
-            orchestrationEngine.value.dispatch({
-              type: "thread.activity.append",
-              // Stable ids make a retried notice idempotent.
-              commandId: CommandId.make(`server:observation-dropped:${observationId}`),
-              threadId: ThreadIdBrand(threadId),
-              activity: {
-                id: EventId.make(`observation-dropped:${observationId}`),
-                tone: "error",
-                kind: "memory.observation.dropped",
-                summary: "Background memory observation dropped after repeated failures",
-                payload: {
-                  resourceId,
-                  modelId: modelId ?? null,
-                  attempts,
-                  detail: error.message,
-                },
-                turnId: turnId ? TurnId.make(turnId) : (active?.activeTurn?.turnId ?? null),
-                createdAt: droppedAt,
-              },
-              createdAt: droppedAt,
-            }),
-          );
-        },
-        ...(routineDispatcher
-          ? {
-              listRoutines: (threadId: string) =>
-                runPromise(
-                  routineDispatcher
-                    .listForThread(ThreadIdBrand(threadId))
-                    .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
-                ),
-              deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
-                runPromise(
-                  routineDispatcher
-                    .deleteForThread(
-                      ThreadIdBrand(threadId),
-                      routineIds.map((routineId) => RoutineId.make(routineId)),
-                    )
-                    .pipe(
-                      Effect.map((result) => ({
-                        status: result.status,
-                        deletedRoutineIds: [...result.routineIds],
-                      })),
-                    ),
-                ),
-              createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
-                const active = sessions.get(threadId);
-                const timezone = active?.toolSession.timezone;
-                if (!timezone) {
-                  return Promise.reject(new Error("Send a message before creating a routine."));
-                }
-                const requestId = `routine-${NodeCrypto.randomUUID()}`;
-                return new Promise((resolve, reject) => {
-                  pendingRoutineRequests.set(requestId, {
-                    threadId,
-                    input,
-                    timezone,
-                    resolve,
-                    reject,
-                  });
-                  if (active.activeTurn) active.activeTurn.waiting = true;
-                  publishSessionState(ThreadIdBrand(threadId), active, "waiting");
-                  publish({
-                    ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
-                    requestId: RuntimeRequestId.make(requestId),
-                    type: "request.opened",
-                    payload: {
-                      requestType: "dynamic_tool_call",
-                      detail: "Review routine",
-                      toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
-                      args: { ...input, timezone },
-                      options: [
-                        { decision: "accept", label: "Create routine" },
-                        { decision: "decline", label: "Cancel" },
-                      ],
-                    },
-                  });
-                });
-              },
-            }
-          : {}),
-        toolRuntime,
-        startMemoryCall: async ({ threadId, category }) => {
-          const context = memoryUsageByThread.get(threadId);
-          const active = sessions.get(threadId);
-          const callId = `${category}:${NodeCrypto.randomUUID()}`;
-          if (!context || !active) {
-            // A queued observation can drain after a restart before its chat
-            // reopens. Attribute it to the chat's bot and record what it used.
-            const botId = await runPromise(
-              readSessionStartContext(ThreadIdBrand(threadId), null).pipe(
-                Effect.map((started) => started.botId),
-                Effect.catchCause(() => Effect.succeed(null)),
-              ),
-            );
-            if (!botId) return undefined;
-            unreservedMemoryCalls.set(callId, {
-              botId,
-              threadId: ThreadIdBrand(threadId),
-              category,
-              provider: active?.provider ?? null,
-              model: active?.model ?? null,
-            });
-            return callId;
-          }
-          await runPromise(
-            botUsageLedger.reserve({
+            botUsageLedger.recordMeasurement({
               reservationId: AkeruUsageReservationId.make(callId),
               sourceKey: callId,
-              botId: context.botId,
-              threadId: ThreadIdBrand(threadId),
-              turnId: context.turnId,
-              category,
-              maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
-              capLimit: context.capLimit,
-              provider: active.provider,
-              model: active.model,
+              botId: unreserved.botId,
+              threadId: unreserved.threadId,
+              turnId: null,
+              category: unreserved.category,
+              inputTokens,
+              outputTokens,
+              reasoningTokens: null,
+              provider: unreserved.provider,
+              model: unreserved.model,
               createdAt: nowIso(),
             }),
           );
-          return callId;
-        },
-        finishMemoryCall: async ({ callId, usage, error }) => {
-          const outputTokens = usage?.outputTokens ?? 0;
-          const inputTokens =
-            usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
-          const unreserved = unreservedMemoryCalls.get(callId);
-          if (unreserved) {
-            unreservedMemoryCalls.delete(callId);
-            if (!usage) return;
-            await runPromise(
-              botUsageLedger.recordMeasurement({
-                reservationId: AkeruUsageReservationId.make(callId),
-                sourceKey: callId,
-                botId: unreserved.botId,
-                threadId: unreserved.threadId,
-                turnId: null,
-                category: unreserved.category,
-                inputTokens,
-                outputTokens,
-                reasoningTokens: null,
-                provider: unreserved.provider,
-                model: unreserved.model,
-                createdAt: nowIso(),
-              }),
-            );
-            return;
-          }
-          await runPromise(
-            botUsageLedger.settle(
-              usage
+          return;
+        }
+        await runPromise(
+          botUsageLedger.settle(
+            usage
+              ? {
+                  reservationId: AkeruUsageReservationId.make(callId),
+                  state: "reported",
+                  inputTokens,
+                  outputTokens,
+                  reasoningTokens: null,
+                  settledAt: nowIso(),
+                }
+              : error
                 ? {
                     reservationId: AkeruUsageReservationId.make(callId),
-                    state: "reported",
-                    inputTokens,
-                    outputTokens,
-                    reasoningTokens: null,
+                    state: "unavailable",
+                    reason: error.message || "Observational Memory usage was unavailable.",
                     settledAt: nowIso(),
                   }
-                : error
-                  ? {
-                      reservationId: AkeruUsageReservationId.make(callId),
-                      state: "unavailable",
-                      reason: error.message || "Observational Memory usage was unavailable.",
-                      settledAt: nowIso(),
-                    }
-                  : {
-                      reservationId: AkeruUsageReservationId.make(callId),
-                      state: "released",
-                      settledAt: nowIso(),
-                    },
-            ),
-          );
-        },
-      }),
+                : {
+                    reservationId: AkeruUsageReservationId.make(callId),
+                    state: "released",
+                    settledAt: nowIso(),
+                  },
+          ),
+        );
+      },
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AgentControllerRuntimeError({
+            operation: "construct",
+            detail: failureDetail(cause),
+            cause,
+          }),
+      ),
     );
     yield* runMastra("init", () => bundle.controller.init());
 
@@ -3599,12 +3610,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         childWaiters.clear();
         yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
-          Effect.ignoreCause({ log: true }),
-        );
-        yield* runMastra("destroy", () => bundle.controller.destroy()).pipe(
-          Effect.ignoreCause({ log: true }),
-        );
-        yield* runMastra("bundle.destroy", async () => bundle.destroy()).pipe(
           Effect.ignoreCause({ log: true }),
         );
       }),
