@@ -45,11 +45,13 @@ case "$command_name" in
     exec "$server_command" service status
     ;;
   logs)
-    if command -v journalctl >/dev/null 2>&1; then
-      exec journalctl --user -u akeru.service -n "${AKERU_LOG_LINES:-200}" --no-pager
-    fi
+    # `akeru service install` names the unit t3code.service and appends the server output to this
+    # file, so journald only holds unit events.
     log="$userdata/logs/boot-service.log"
     [ -f "$log" ] && exec tail -n "${AKERU_LOG_LINES:-200}" "$log"
+    if command -v journalctl >/dev/null 2>&1; then
+      exec journalctl --user -u t3code.service -n "${AKERU_LOG_LINES:-200}" --no-pager
+    fi
     printf 'No service log was found.\n' >&2; exit 1
     ;;
   link|heartbeat|unlink)

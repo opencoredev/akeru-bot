@@ -829,6 +829,20 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.voiceProviders,
       staleTimeMs: 5_000,
     }),
+    // The doctor shells out to system tools for several seconds; keep a result until Re-run.
+    remoteDoctor: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:remote-doctor",
+      tag: WS_METHODS.serverGetRemoteDoctor,
+      staleTimeMs: 60_000,
+    }),
+    repairRemoteDoctor: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:repair-remote-doctor",
+      tag: WS_METHODS.serverRepairRemoteDoctor,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",

@@ -156,6 +156,9 @@ import * as AgentController from "./provider/Services/AgentController.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
+import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import { getRemoteDoctorStatus, repairRemoteDoctor } from "./remote/remoteDoctorRpc.ts";
+import { isRemoteInstall } from "./remote/remoteMode.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
@@ -736,6 +739,16 @@ const makeWsRpcLayer = (
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
+      const remoteDoctorTarget = {
+        baseDir: config.baseDir,
+        remote: isRemoteInstall({
+          launcherManaged: Option.match(
+            yield* Effect.serviceOption(ServiceLauncherClient.ServiceLauncherClient),
+            { onNone: () => false, onSome: (launcher) => launcher.managed },
+          ),
+          env: process.env,
+        }),
+      };
       const botMemoryStore = new BotMemoryStore(config.stateDir);
       const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir, {
         checkHealthOnConnect: true,
@@ -3168,6 +3181,18 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverGetRemoteDoctor]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.serverGetRemoteDoctor,
+            getRemoteDoctorStatus(remoteDoctorTarget),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverRepairRemoteDoctor]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRepairRemoteDoctor,
+            repairRemoteDoctor({ ...remoteDoctorTarget, request: input }),
+            { "rpc.aggregate": "server" },
+          ),
         [WS_METHODS.memoryExport]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryExport,

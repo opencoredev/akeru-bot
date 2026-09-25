@@ -198,6 +198,11 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import {
+  RemoteDoctorError,
+  RemoteDoctorRepairInput,
+  RemoteDoctorStatus,
+} from "./remoteDiagnostics.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsRpcPatch } from "./settings.ts";
 import {
   BotInboxItem,
@@ -402,6 +407,8 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetRemoteDoctor: "server.getRemoteDoctor",
+  serverRepairRemoteDoctor: "server.repairRemoteDoctor",
   memoryExport: "memory.documents.export",
   memoryImportPreview: "memory.documents.importPreview",
   memoryImportApply: "memory.documents.importApply",
@@ -725,6 +732,18 @@ export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSumm
   payload: UsageSummaryInput,
   success: UsageSummary,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
+});
+
+export const WsServerGetRemoteDoctorRpc = Rpc.make(WS_METHODS.serverGetRemoteDoctor, {
+  payload: Schema.Struct({}),
+  success: RemoteDoctorStatus,
+  error: Schema.Union([EnvironmentAuthorizationError, RemoteDoctorError]),
+});
+
+export const WsServerRepairRemoteDoctorRpc = Rpc.make(WS_METHODS.serverRepairRemoteDoctor, {
+  payload: RemoteDoctorRepairInput,
+  success: RemoteDoctorStatus,
+  error: Schema.Union([EnvironmentAuthorizationError, RemoteDoctorError]),
 });
 
 export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
@@ -1345,6 +1364,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetRemoteDoctorRpc,
+  WsServerRepairRemoteDoctorRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,

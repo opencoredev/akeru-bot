@@ -35,7 +35,7 @@ export const remoteDoctorCommand = Command.make(
     Effect.gen(function* () {
       const baseDir = yield* resolveBaseDir(remoteDoctorHome(flags.baseDir, process.env));
       const platform = yield* HostProcessPlatform;
-      const report = yield* Effect.sync(() =>
+      const report = yield* Effect.promise(() =>
         runRemoteDoctor({ baseDir, repair: flags.repair, platform }),
       );
       if (Option.isSome(flags.supportBundle)) {

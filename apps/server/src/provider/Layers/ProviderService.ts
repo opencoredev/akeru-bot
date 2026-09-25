@@ -382,9 +382,17 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     const currentIds = yield* registry.listInstances();
     const next = new Map<ProviderInstanceId, ProviderAdapterShape<ProviderAdapterError>>();
     for (const id of currentIds) {
-      const adapterOption = yield* registry
-        .getByInstance(id)
-        .pipe(Effect.tapError(Effect.logWarning), Effect.option);
+      const adapterOption = yield* registry.getByInstance(id).pipe(
+        // Mastra-native drivers (Kimi For Coding, OpenCode Go) have no legacy adapter by
+        // design; their events reach orchestration through the agent controller instead.
+        Effect.tapError((cause) =>
+          Effect.logDebug("Provider instance has no legacy adapter event stream", {
+            instanceId: id,
+            cause,
+          }),
+        ),
+        Effect.option,
+      );
       if (Option.isNone(adapterOption)) continue;
       const adapter = adapterOption.value;
       next.set(id, adapter);

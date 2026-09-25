@@ -57,6 +57,39 @@ describe("Akeru Remote administration", () => {
     expect(run({ T3CODE_HOME: "/legacy/.t3", AKERU_HOME: "/srv/akeru" })).toBe("/srv/akeru");
   });
 
+  it("shows the service log file, where the first-boot pairing link lands, before journald", () => {
+    const root = tempRoot();
+    NodeFS.copyFileSync(
+      new URL("./akeru-remote-admin.sh", import.meta.url),
+      NodePath.join(root, "remote-admin"),
+    );
+    const bin = NodePath.join(root, "bin");
+    NodeFS.mkdirSync(bin);
+    // journald only holds unit events because the service appends its output to the log file.
+    NodeFS.writeFileSync(
+      NodePath.join(bin, "journalctl"),
+      "#!/bin/sh\nprintf 'journal %s' \"$*\"\n",
+      {
+        mode: 0o755,
+      },
+    );
+    const logs = () =>
+      NodeChildProcess.spawnSync("sh", [NodePath.join(root, "remote-admin"), "logs"], {
+        env: {
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          HOME: root,
+          AKERU_HOME: NodePath.join(root, "home"),
+        },
+        encoding: "utf8",
+      }).stdout;
+
+    expect(logs()).toContain("-u t3code.service");
+    const logDir = NodePath.join(root, "home", "userdata", "logs");
+    NodeFS.mkdirSync(logDir, { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(logDir, "boot-service.log"), "Admin pairing link\n");
+    expect(logs()).toBe("Admin pairing link\n");
+  });
+
   it("hands the server the Akeru home from the Windows helper, never an ambient T3CODE_HOME", () => {
     const root = tempRoot();
     NodeFS.copyFileSync(

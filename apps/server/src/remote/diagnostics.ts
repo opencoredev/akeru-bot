@@ -11,13 +11,35 @@ import {
   type RemoteDoctorReport as RemoteDoctorReportValue,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-
 import { BOOT_SERVICE_LAUNCHD_LABEL, BOOT_SERVICE_UNIT_FILE } from "../cloud/bootService.ts";
 
 const decodeReport = Schema.decodeUnknownSync(RemoteDoctorReport);
 
-const commandOk = (command: string, args: ReadonlyArray<string>) =>
-  NodeChildProcess.spawnSync(command, args, { stdio: "ignore" }).status === 0;
+// Every probe is bounded so a hung systemctl, curl, or tailscale cannot stall the server that
+// runs this doctor for Settings > Connections.
+const COMMAND_TIMEOUT_MS = 10_000;
+
+const commandOutput = (command: string, args: ReadonlyArray<string>) =>
+  new Promise<{ readonly ok: boolean; readonly stdout: string }>((resolve) => {
+    NodeChildProcess.execFile(
+      command,
+      args,
+      { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+      (error, stdout) => resolve({ ok: error === null, stdout }),
+    );
+  });
+
+const commandOk = async (command: string, args: ReadonlyArray<string>) =>
+  (await commandOutput(command, args)).ok;
+
+const isMissingFile = (cause: unknown) =>
+  typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT";
+
+/**
+ * Provider CLIs the doctor looks for on PATH. Kimi For Coding and OpenCode Go run inside the
+ * server through Mastra over HTTPS, so they have no command to find.
+ */
+const PROVIDER_COMMANDS = ["codex", "claude", "grok", "opencode"] as const;
 
 const check = (
   id: string,
@@ -42,12 +64,18 @@ function redact(value: string): string {
     .replace(/("(?:credential|token|secret)"\s*:\s*")[^"]+/giu, "$1[REDACTED]");
 }
 
-export function runRemoteDoctor(input: {
+/**
+ * `repair: true` applies every available repair (the `akeru remote doctor --repair` CLI). A set of
+ * check ids limits repairs to those checks, which is how Settings repairs one check on request.
+ */
+export async function runRemoteDoctor(input: {
   readonly baseDir: string;
-  readonly repair: boolean;
-  readonly platform: NodeJS.Platform;
+  readonly repair: boolean | ReadonlySet<string>;
+  readonly platform?: NodeJS.Platform;
   readonly now?: Date;
-}): RemoteDoctorReportValue {
+}): Promise<RemoteDoctorReportValue> {
+  const shouldRepair = (checkId: string) =>
+    input.repair === true || (input.repair !== false && input.repair.has(checkId));
   const stateDir = NodePath.join(input.baseDir, "userdata");
   const bindingPath = NodePath.join(stateDir, "remote-directory.json");
   const dbPath = NodePath.join(stateDir, "state.sqlite");
@@ -60,16 +88,18 @@ export function runRemoteDoctor(input: {
   const container = process.env.AKERU_REMOTE_CONTAINER === "1";
 
   const serviceHealthy = container
-    ? commandOk("curl", [
+    ? await commandOk("curl", [
         "-fsS",
+        "--max-time",
+        "5",
         `http://127.0.0.1:${process.env.T3CODE_PORT?.trim() || "3773"}/.well-known/t3/environment`,
       ])
-    : input.platform === "darwin"
-      ? commandOk("launchctl", [
+    : (input.platform ?? process.platform) === "darwin"
+      ? await commandOk("launchctl", [
           "print",
           `gui/${process.getuid?.() ?? 0}/${BOOT_SERVICE_LAUNCHD_LABEL}`,
         ])
-      : commandOk("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]);
+      : await commandOk("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]);
   checks.push(
     check(
       "service",
@@ -83,13 +113,15 @@ export function runRemoteDoctor(input: {
           : "Background service is not active.",
     ),
   );
-  if (!container && commandOk("sh", ["-c", "command -v loginctl"])) {
-    const linger = NodeChildProcess.spawnSync(
-      "loginctl",
-      ["show-user", process.env.USER ?? "", "-p", "Linger", "--value"],
-      { encoding: "utf8" },
-    );
-    const persistent = linger.status === 0 && linger.stdout.trim() === "yes";
+  if (!container && (await commandOk("sh", ["-c", "command -v loginctl"]))) {
+    const linger = await commandOutput("loginctl", [
+      "show-user",
+      process.env.USER ?? "",
+      "-p",
+      "Linger",
+      "--value",
+    ]);
+    const persistent = linger.ok && linger.stdout.trim() === "yes";
     checks.push(
       check(
         "boot-persistence",
@@ -101,21 +133,30 @@ export function runRemoteDoctor(input: {
     );
   }
 
-  try {
-    const disk = NodeFS.statfsSync(stateDir);
-    const freeBytes = Number(disk.bavail) * Number(disk.bsize);
+  if (!NodeFS.existsSync(stateDir)) {
     checks.push(
       check(
         "disk",
-        freeBytes >= 512 * 1024 * 1024 ? "pass" : "fail",
-        `${String(Math.floor(freeBytes / 1024 / 1024))} MiB available.`,
-        false,
-        { freeBytes: String(freeBytes) },
+        "warning",
+        "Akeru storage has not been created yet. It appears after the server first starts.",
       ),
     );
-  } catch (cause) {
-    checks.push(check("disk", "fail", `Could not inspect Akeru storage: ${String(cause)}`));
-  }
+  } else
+    try {
+      const disk = NodeFS.statfsSync(stateDir);
+      const freeBytes = Number(disk.bavail) * Number(disk.bsize);
+      checks.push(
+        check(
+          "disk",
+          freeBytes >= 512 * 1024 * 1024 ? "pass" : "fail",
+          `${String(Math.floor(freeBytes / 1024 / 1024))} MiB available.`,
+          false,
+          { freeBytes: String(freeBytes) },
+        ),
+      );
+    } catch (cause) {
+      checks.push(check("disk", "fail", `Could not inspect Akeru storage: ${String(cause)}`));
+    }
 
   if (NodeFS.existsSync(dbPath)) {
     try {
@@ -140,7 +181,10 @@ export function runRemoteDoctor(input: {
   let binding: Record<string, unknown> | undefined;
   if (NodeFS.existsSync(bindingPath)) {
     try {
-      if (input.repair && (NodeFS.statSync(bindingPath).mode & 0o077) !== 0) {
+      if (
+        shouldRepair("binding-permissions") &&
+        (NodeFS.statSync(bindingPath).mode & 0o077) !== 0
+      ) {
         NodeFS.chmodSync(bindingPath, 0o600);
         repairsApplied.push("binding-permissions");
       }
@@ -164,7 +208,7 @@ export function runRemoteDoctor(input: {
           ageMs < 10 * 60_000
             ? "Directory binding is recent."
             : "Directory heartbeat may be stale.",
-          true,
+          false,
           { ageMs: String(Math.max(0, Math.floor(ageMs))) },
         ),
       );
@@ -177,7 +221,7 @@ export function runRemoteDoctor(input: {
     checks.push(check("account-binding", "warning", "Optional account link is not configured."));
   }
 
-  if (!container && input.repair && !NodeFS.existsSync(controlTokenPath)) {
+  if (!container && shouldRepair("update-credential") && !NodeFS.existsSync(controlTokenPath)) {
     NodeFS.writeFileSync(
       controlTokenPath,
       `${NodeCrypto.randomBytes(32).toString("base64url")}\n`,
@@ -188,7 +232,7 @@ export function runRemoteDoctor(input: {
     repairsApplied.push("update-credential");
   } else if (
     !container &&
-    input.repair &&
+    shouldRepair("update-credential") &&
     NodeFS.existsSync(controlTokenPath) &&
     (NodeFS.statSync(controlTokenPath).mode & 0o077) !== 0
   ) {
@@ -218,12 +262,15 @@ export function runRemoteDoctor(input: {
     typeof binding?.endpoint === "string" ? httpsOrigin(binding.endpoint) : undefined;
   if (typeof binding?.endpoint === "string") {
     const response = endpointOrigin
-      ? NodeChildProcess.spawnSync(
-          "curl",
-          ["-fsS", "--proto", "=https", `${endpointOrigin}/.well-known/t3/environment`],
-          { encoding: "utf8" },
-        )
-      : { status: 1, stdout: "" };
+      ? await commandOutput("curl", [
+          "-fsS",
+          "--proto",
+          "=https",
+          "--max-time",
+          "5",
+          `${endpointOrigin}/.well-known/t3/environment`,
+        ])
+      : { ok: false, stdout: "" };
     let servedId = "";
     try {
       servedId = String(
@@ -235,15 +282,15 @@ export function runRemoteDoctor(input: {
     checks.push(
       check(
         "endpoint-reachability",
-        response.status === 0 && servedId === environmentId ? "pass" : "fail",
-        response.status === 0 && servedId === environmentId
+        response.ok && servedId === environmentId ? "pass" : "fail",
+        response.ok && servedId === environmentId
           ? "The advertised endpoint reaches this environment."
           : "The advertised endpoint does not reach this environment.",
       ),
     );
   }
   if (binding?.endpointKind === "tailscale" && typeof binding.endpoint === "string") {
-    const tailscaleHealthy = commandOk("tailscale", ["status"]);
+    const tailscaleHealthy = await commandOk("tailscale", ["status"]);
     checks.push(
       check(
         "tailscale",
@@ -298,7 +345,13 @@ export function runRemoteDoctor(input: {
       );
     } catch (cause) {
       checks.push(
-        check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
+        isMissingFile(cause)
+          ? check(
+              "update-state",
+              "warning",
+              "Service runtime state has not been created yet. It appears after the background service first starts.",
+            )
+          : check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
       );
     }
   if (!container && NodeFS.existsSync(updateDeferredPath)) {
@@ -332,27 +385,29 @@ export function runRemoteDoctor(input: {
     );
   }
 
-  const providers = ["codex", "claude", "grok", "opencode", "kimi"].filter((name) =>
-    commandOk("sh", ["-c", `command -v ${name}`]),
+  const found = await Promise.all(
+    PROVIDER_COMMANDS.map((name) => commandOk("sh", ["-c", `command -v ${name}`])),
   );
+  const providers = PROVIDER_COMMANDS.filter((_, index) => found[index]);
+  const inServer = "Kimi For Coding and OpenCode Go need no command; connect them in Settings.";
   checks.push(
     check(
       "providers",
       providers.length > 0 ? "pass" : "warning",
       providers.length > 0
-        ? `Available providers: ${providers.join(", ")}.`
-        : "No provider command was found on PATH.",
+        ? `Provider commands on PATH: ${providers.join(", ")}. ${inServer}`
+        : `No provider command was found on PATH. ${inServer}`,
       false,
-      { available: providers.join(",") },
+      { available: providers.join(","), inServer: "kimi,opencodeGo" },
     ),
   );
 
-  if (input.repair) {
+  if (shouldRepair("logs")) {
     NodeFS.mkdirSync(NodePath.dirname(logPath), { recursive: true, mode: 0o700 });
     repairsApplied.push("log-directory");
   }
   let logBytes = NodeFS.existsSync(logPath) ? NodeFS.statSync(logPath).size : 0;
-  if (input.repair && logBytes >= 100 * 1024 * 1024) {
+  if (shouldRepair("logs") && logBytes >= 100 * 1024 * 1024) {
     NodeFS.renameSync(logPath, `${logPath}.previous`);
     NodeFS.writeFileSync(logPath, "", { mode: 0o600 });
     logBytes = 0;
@@ -363,7 +418,7 @@ export function runRemoteDoctor(input: {
       "logs",
       logBytes < 100 * 1024 * 1024 ? "pass" : "warning",
       `${String(logBytes)} bytes in the boot service log.`,
-      false,
+      logBytes >= 100 * 1024 * 1024,
       { bytes: String(logBytes) },
     ),
   );

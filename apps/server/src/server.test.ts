@@ -2264,6 +2264,47 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("serves the remote doctor only to administrative clients", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:read orchestration:operate terminal:operate review:write",
+      });
+      const ticketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
+        headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+      });
+      const ticketBody = (yield* ticketResponse.json) as { readonly ticket: string };
+      const standardWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
+
+      const deniedRead = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(standardWsUrl, (client) => client[WS_METHODS.serverGetRemoteDoctor]({})),
+        ),
+      );
+      assert.equal(deniedRead._tag, "EnvironmentAuthorizationError");
+      if (deniedRead._tag === "EnvironmentAuthorizationError") {
+        assert.equal(deniedRead.requiredScope, "access:read");
+      }
+      const deniedRepair = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(standardWsUrl, (client) =>
+            client[WS_METHODS.serverRepairRemoteDoctor]({ checkIds: ["logs"] }),
+          ),
+        ),
+      );
+      assert.equal(deniedRepair._tag, "EnvironmentAuthorizationError");
+
+      // The test server is not a remote install, so an admin sees an honest "not applicable".
+      const adminStatus = yield* Effect.scoped(
+        withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+          client[WS_METHODS.serverGetRemoteDoctor]({}),
+        ),
+      );
+      assert.deepEqual(adminStatus, { applicable: false, report: null });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("does not allow management-only access tokens to operate the environment", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();

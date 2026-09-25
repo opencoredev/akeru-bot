@@ -213,7 +213,7 @@ if [ -n "$remote_endpoint" ]; then
     attempts=$((attempts + 1))
     sleep 2
   done
-elif command -v systemctl >/dev/null 2>&1 && systemctl --user is-active akeru.service >/dev/null 2>&1; then
+elif command -v systemctl >/dev/null 2>&1 && systemctl --user is-active t3code.service >/dev/null 2>&1; then
   healthy=1
 fi
 if [ "$healthy" -ne 1 ]; then
@@ -283,5 +283,6 @@ EOF
   launchctl bootstrap "gui/$(id -u)" "$plist"
 fi
 printf '\nAkeru Remote %s is installed.\n' "$version"
-printf 'Run: akeru pair --tailscale\n'
+printf 'Pair your first admin device: akeru pair --admin --tailscale\n'
+printf 'Pair more devices later: akeru pair --tailscale\n'
 printf 'Diagnostics: akeru remote doctor\n'

@@ -42,7 +42,9 @@ import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDi
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import { isRemoteInstall } from "./remote/remoteMode.ts";
 import {
+  announceRemoteStartup,
   formatHeadlessServeOutput,
   formatHostForUrl,
   isWildcardHost,
@@ -532,7 +534,19 @@ export const make = (options?: StartupOptions) =>
 
       yield* forkParked(
         Effect.gen(function* () {
-          if (serverConfig.startupPresentation === "headless") {
+          if (isRemoteInstall({ launcherManaged: launcher.managed, env: process.env })) {
+            // Remote installs run headless under the boot service or in a container, so the
+            // first admin link goes to stdout, which `akeru remote logs` and `docker logs` show.
+            const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+            yield* runStartupPhase(
+              "remote.first-boot",
+              announceRemoteStartup({
+                listSessions: serverAuth.listSessions(),
+                issueAccessInfo: issueHeadlessServeAccessInfo(),
+                print: Console.log,
+              }),
+            );
+          } else if (serverConfig.startupPresentation === "headless") {
             const accessInfo = yield* issueHeadlessServeAccessInfo();
             yield* runStartupPhase(
               "headless.output",

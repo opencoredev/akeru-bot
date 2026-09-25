@@ -126,6 +126,7 @@ import { serverEnvironment } from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
+import { RemoteHealthSection } from "./RemoteHealthSection";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
@@ -2864,6 +2865,10 @@ export function ConnectionsSettings() {
               <>{renderDisabledNetworkAccessRow()}</>
             )}
           </SettingsSection>
+
+          {primaryEnvironmentId !== null ? (
+            <RemoteHealthSection environmentId={primaryEnvironmentId} />
+          ) : null}
 
           {isLocalBackendRemotelyReachable ? (
             <SettingsSection

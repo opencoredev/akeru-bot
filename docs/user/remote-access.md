@@ -22,7 +22,45 @@ npx akeru-bot pair --tailscale
 Akeru configures Tailscale Serve when needed and prints a link for the machine's HTTPS MagicDNS
 address.
 
+On a terminal, the command also prints a QR code of the full pairing URL. Scan it with the other
+device instead of copying the link. Pass `--no-qr` to print only the URL. The QR code is left out
+when the output goes to a file or another program.
+
+If a tunnel you manage publishes the server, pass the public origin so the link points at it
+instead of the server's own address:
+
+```bash
+npx akeru-bot pair --public-url https://akeru.example.com
+```
+
+The value must be an `http` or `https` origin without a path. It cannot be combined with
+`--tailscale`.
+
 Treat a pairing link like a password. The default command creates a link that expires and works once.
+
+### Pair the first admin device
+
+`akeru pair` links grant standard access: the device can use chats and bots, but it cannot manage
+**Settings > Connections**. The first device on a new Akeru Remote install needs admin access.
+
+When a remote install starts with no admin device paired, it prints one admin pairing link and QR
+code, and says that the link grants admin scope. For the background service, read it from the
+service log:
+
+```bash
+akeru remote logs
+```
+
+You can also create an admin link on the server machine:
+
+```bash
+akeru pair --admin --tailscale
+```
+
+An admin link lets that device pair and revoke other devices and change connection settings. It
+works once. `akeru pair --admin` stops working as soon as any admin device is paired. From then on,
+create links from **Settings > Connections** on that device, or use `akeru pair` for standard
+links.
 
 ## Create a link from the desktop app
 
@@ -57,6 +95,23 @@ Use `--tailscale-serve-port` to select another HTTPS port. Run this for all serv
 ```bash
 npx akeru-bot serve --help
 ```
+
+## Check remote health
+
+On an Akeru Remote install, admin clients on web and desktop see **Remote health** under
+**Settings > Connections**. It runs the same checks as `akeru remote doctor`: the background
+service, storage, database, updates, Tailscale, logs, and providers. Each check shows OK, Warning,
+or Failing with a short message.
+
+Select **Re-run** to check again. Some problems show a **Repair** button. Akeru changes nothing
+until you select it, and it repairs only that check.
+
+A new install reports storage and update state as not created yet until the server has written
+them. That warning clears on its own.
+
+The section does not appear on environments that are not Akeru Remote installs, or for devices
+paired with standard access. The mobile app does not show remote health yet. Run
+`akeru remote doctor` on the server machine instead.
 
 ## Connect through SSH
 

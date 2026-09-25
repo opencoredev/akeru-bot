@@ -194,6 +194,7 @@ try {
   }
   Write-Host "`nAkeru Remote $Version is installed."
   if ($RemoteEndpoint) { Write-Host "Direct URL: $RemoteEndpoint" }
+  Write-Host "Pair your first admin device: akeru pair --admin"
   Write-Host "Diagnostics: akeru remote doctor"
 } finally {
   Remove-Item -LiteralPath $Temporary -Recurse -Force -ErrorAction SilentlyContinue
