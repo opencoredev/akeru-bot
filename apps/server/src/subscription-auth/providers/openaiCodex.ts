@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off globalDate:off
 /**
  * OpenAI Codex OAuth (ChatGPT Plus/Pro subscriptions).
  *
@@ -11,6 +10,22 @@
  * headless flow is the only flow.
  */
 
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { type HttpClient, HttpClientRequest } from "effect/unstable/http";
+
+import {
+  decodeOAuthBody,
+  ensureOk,
+  responseJson,
+  runOAuthPromise,
+  sendOAuthRequest,
+  SubscriptionAuthResponseError,
+  type SubscriptionAuthRequestError,
+  withOAuthTimeout,
+} from "../oauthHttp.ts";
 import type { OAuthCredentials } from "../types.ts";
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -22,112 +37,97 @@ const DEVICE_AUTHORIZE_URL = `${ISSUER}/codex/device`;
 const DEVICE_REDIRECT_URI = `${ISSUER}/deviceauth/callback`;
 const DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
 const DEVICE_AUTH_TIMEOUT_MS = 15 * 60 * 1000;
+const REQUEST_TIMEOUT = "30 seconds";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 const USER_AGENT = "akeru";
 
-type JwtPayload = {
-  chatgpt_account_id?: string;
-  [JWT_CLAIM_PATH]?: {
-    chatgpt_account_id?: string;
-  };
-  [key: string]: unknown;
-};
+const AccountIdClaim = Schema.Struct({ chatgpt_account_id: Schema.NonEmptyString });
 
-function decodeJwt(token: string): JwtPayload | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = parts[1] ?? "";
-    const padded = payload
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
-    return JSON.parse(atob(padded)) as JwtPayload;
-  } catch {
-    return null;
+const JwtClaims = Schema.fromJsonString(
+  Schema.Struct({
+    chatgpt_account_id: Schema.optional(Schema.Unknown),
+    [JWT_CLAIM_PATH]: Schema.optional(Schema.Unknown),
+  }),
+);
+const decodeJwtClaims = Schema.decodeUnknownOption(JwtClaims);
+const isAccountId = Schema.is(Schema.NonEmptyString);
+const isAccountIdClaim = Schema.is(AccountIdClaim);
+
+function accountIdFromJwt(token: string | undefined): string | undefined {
+  const payload = token?.split(".");
+  if (payload?.length !== 3) return undefined;
+  return decodeJwtClaims(Buffer.from(payload[1] ?? "", "base64url").toString("utf8")).pipe(
+    Option.flatMap((claims) =>
+      Option.firstSomeOf([
+        isAccountId(claims.chatgpt_account_id)
+          ? Option.some(claims.chatgpt_account_id)
+          : Option.none(),
+        isAccountIdClaim(claims[JWT_CLAIM_PATH])
+          ? Option.some(claims[JWT_CLAIM_PATH].chatgpt_account_id)
+          : Option.none(),
+      ]),
+    ),
+    Option.getOrUndefined,
+  );
+}
+
+const TokenResponse = Schema.Struct({
+  id_token: Schema.optional(Schema.String),
+  access_token: Schema.NonEmptyString,
+  refresh_token: Schema.NonEmptyString,
+  expires_in: Schema.optional(Schema.Finite),
+});
+
+const DeviceUserCodeResponse = Schema.Struct({
+  device_auth_id: Schema.NonEmptyString,
+  user_code: Schema.optional(Schema.String),
+  usercode: Schema.optional(Schema.String),
+  interval: Schema.optional(Schema.Union([Schema.Finite, Schema.String])),
+});
+
+const DeviceTokenResponse = Schema.Struct({
+  authorization_code: Schema.NonEmptyString,
+  code_verifier: Schema.NonEmptyString,
+});
+
+/** Decode a token response into credentials, resolving the ChatGPT account id. */
+const credentialsFromTokenResponse = Effect.fn("codex.credentialsFromTokenResponse")(function* (
+  body: unknown,
+  missingFieldsMessage: string,
+  previousAccountId?: string,
+) {
+  const tokens = yield* decodeOAuthBody(TokenResponse, missingFieldsMessage)(body);
+  const accountId =
+    accountIdFromJwt(tokens.id_token) ?? accountIdFromJwt(tokens.access_token) ?? previousAccountId;
+  if (accountId === undefined) {
+    return yield* new SubscriptionAuthResponseError({
+      message: "Failed to extract ChatGPT account id from OpenAI Codex token",
+    });
   }
-}
-
-function extractAccountIdFromClaims(payload: JwtPayload | null): string | null {
-  if (!payload) return null;
-  const accountId = payload.chatgpt_account_id ?? payload[JWT_CLAIM_PATH]?.chatgpt_account_id;
-  return typeof accountId === "string" && accountId.length > 0 ? accountId : null;
-}
-
-function getAccountId(
-  tokens: { idToken?: string | undefined; access: string },
-  fallback?: string,
-): string | undefined {
-  const fromIdToken = tokens.idToken ? extractAccountIdFromClaims(decodeJwt(tokens.idToken)) : null;
-  if (fromIdToken) return fromIdToken;
-
-  const fromAccessToken = extractAccountIdFromClaims(decodeJwt(tokens.access));
-  if (fromAccessToken) return fromAccessToken;
-
-  return fallback;
-}
-
-function requireAccountId(
-  tokens: { idToken?: string | undefined; access: string },
-  fallback?: string,
-): string {
-  const accountId = getAccountId(tokens, fallback);
-  if (!accountId) {
-    throw new Error("Failed to extract ChatGPT account id from OpenAI Codex token");
-  }
-  return accountId;
-}
-
-type TokenResponseJson = {
-  id_token?: string;
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-};
-
-type TokenSuccess = {
-  access: string;
-  refresh: string;
-  expires: number;
-  idToken?: string | undefined;
-};
-
-function tokenResponseToResult(json: TokenResponseJson): TokenSuccess | null {
-  if (!json.access_token || !json.refresh_token) {
-    return null;
-  }
+  const now = yield* Clock.currentTimeMillis;
   return {
-    access: json.access_token,
-    refresh: json.refresh_token,
-    expires: Date.now() + (json.expires_in ?? DEFAULT_TOKEN_EXPIRES_IN_SECONDS) * 1000,
-    idToken: json.id_token,
-  };
-}
+    access: tokens.access_token,
+    refresh: tokens.refresh_token,
+    expires: now + (tokens.expires_in ?? DEFAULT_TOKEN_EXPIRES_IN_SECONDS) * 1000,
+    accountId,
+  } satisfies OAuthCredentials;
+});
 
-async function exchangeAuthorizationCode(
-  code: string,
-  verifier: string,
-  redirectUri: string,
-  signal?: AbortSignal,
-): Promise<TokenSuccess | null> {
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code,
-      code_verifier: verifier,
-      redirect_uri: redirectUri,
-    }),
-    ...(signal !== undefined ? { signal } : {}),
-  });
+const postJson = (label: string, url: string, body: Record<string, string>) =>
+  sendOAuthRequest(
+    label,
+    HttpClientRequest.post(url).pipe(
+      HttpClientRequest.setHeaders({ "User-Agent": USER_AGENT }),
+      HttpClientRequest.bodyJsonUnsafe(body),
+    ),
+  );
 
-  if (!response.ok) {
-    return null;
-  }
-  return tokenResponseToResult((await response.json()) as TokenResponseJson);
-}
+// Callers own the field order so the body bytes match the pre-migration requests.
+const postTokenForm = (label: string, params: Record<string, string>) =>
+  sendOAuthRequest(
+    label,
+    HttpClientRequest.post(TOKEN_URL).pipe(HttpClientRequest.bodyUrlParams(params)),
+  );
 
 /**
  * Serializable pending state for a Codex device-code login. The device token
@@ -150,167 +150,142 @@ export type CodexDevicePollResult =
   | { status: "pending"; nextPollMs: number }
   | { status: "failed"; error: string };
 
-/** Start a Codex device-code login: request a user code and return pending state. */
-export async function startCodexDeviceLogin(options?: {
-  signal?: AbortSignal;
-}): Promise<CodexDeviceLoginPending> {
-  const response = await fetch(DEVICE_USER_CODE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({ client_id: CLIENT_ID, originator: USER_AGENT }),
-    ...(options?.signal !== undefined ? { signal: options.signal } : {}),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to initiate OpenAI Codex device authorization: ${response.status}`);
+/** Request a user code and return the pending login state. */
+const startDeviceLogin = Effect.fn("codex.startDeviceLogin")(function* () {
+  const label = "Failed to initiate OpenAI Codex device authorization";
+  const data = yield* postJson(label, DEVICE_USER_CODE_URL, {
+    client_id: CLIENT_ID,
+    originator: USER_AGENT,
+  }).pipe(
+    Effect.flatMap(ensureOk(label)),
+    Effect.flatMap(responseJson),
+    Effect.flatMap(
+      decodeOAuthBody(
+        DeviceUserCodeResponse,
+        "OpenAI Codex device authorization response missing required fields",
+      ),
+    ),
+    withOAuthTimeout("OpenAI Codex device authorization", REQUEST_TIMEOUT),
+  );
+  const userCode = data.user_code || data.usercode;
+  if (!userCode) {
+    return yield* new SubscriptionAuthResponseError({
+      message: "OpenAI Codex device authorization response missing required fields",
+    });
   }
-
-  const deviceData = (await response.json()) as {
-    device_auth_id?: string;
-    user_code?: string;
-    usercode?: string;
-    interval?: string | number;
-  };
-
-  const userCode = deviceData.user_code ?? deviceData.usercode;
-
-  if (!deviceData.device_auth_id || !userCode) {
-    throw new Error("OpenAI Codex device authorization response missing required fields");
-  }
-
   const intervalSeconds =
-    typeof deviceData.interval === "number"
-      ? deviceData.interval
-      : Number.parseInt(deviceData.interval ?? "", 10) || 5;
-
+    typeof data.interval === "number"
+      ? data.interval
+      : Number.parseInt(data.interval ?? "", 10) || 5;
   return {
-    deviceAuthId: deviceData.device_auth_id,
+    deviceAuthId: data.device_auth_id,
     userCode,
     url: DEVICE_AUTHORIZE_URL,
     instructions: `Enter code: ${userCode}`,
     intervalMs: Math.max(intervalSeconds, 1) * 1000,
-    deadlineAt: Date.now() + DEVICE_AUTH_TIMEOUT_MS,
-  };
-}
+    deadlineAt: (yield* Clock.currentTimeMillis) + DEVICE_AUTH_TIMEOUT_MS,
+  } satisfies CodexDeviceLoginPending;
+});
 
 /**
  * Perform exactly one upstream poll for a pending Codex device login.
  * The Codex device endpoint signals "still pending" via HTTP 403/404 (it is
  * not an RFC 8628 error-JSON endpoint); on success it returns the
  * authorization code plus server-held PKCE verifier, which is exchanged
- * immediately for credentials. Never throws for flow-level conditions.
+ * immediately for credentials. Flow-level conditions are `failed` results;
+ * only transport failures and timeouts reach the error channel.
  */
-export async function pollCodexDeviceLogin(
+const pollDeviceLogin = Effect.fn("codex.pollDeviceLogin")(function* (
   pending: CodexDeviceLoginPending,
-  options?: { signal?: AbortSignal },
-): Promise<CodexDevicePollResult> {
-  if (Date.now() >= pending.deadlineAt) {
+): Effect.fn.Return<
+  CodexDevicePollResult,
+  SubscriptionAuthRequestError | SubscriptionAuthResponseError,
+  HttpClient.HttpClient
+> {
+  if ((yield* Clock.currentTimeMillis) >= pending.deadlineAt) {
     return {
       status: "failed",
       error: "OpenAI Codex device authorization timed out after 15 minutes",
     };
   }
 
-  const pollResponse = await fetch(DEVICE_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({
-      device_auth_id: pending.deviceAuthId,
-      user_code: pending.userCode,
-    }),
-    ...(options?.signal !== undefined ? { signal: options.signal } : {}),
+  const label = "OpenAI Codex device authorization failed";
+  const response = yield* postJson(label, DEVICE_TOKEN_URL, {
+    device_auth_id: pending.deviceAuthId,
+    user_code: pending.userCode,
   });
-
-  if (pollResponse.ok) {
-    const data = (await pollResponse.json()) as {
-      authorization_code?: string;
-      code_verifier?: string;
-    };
-
-    if (!data.authorization_code || !data.code_verifier) {
-      return {
-        status: "failed",
-        error: "OpenAI Codex device token response missing required fields",
-      };
-    }
-
-    const tokenResult = await exchangeAuthorizationCode(
-      data.authorization_code,
-      data.code_verifier,
-      DEVICE_REDIRECT_URI,
-      options?.signal,
-    );
-    if (!tokenResult) {
-      return { status: "failed", error: "Token exchange failed" };
-    }
-
-    let accountId: string;
-    try {
-      accountId = requireAccountId(tokenResult);
-    } catch (error) {
-      return { status: "failed", error: error instanceof Error ? error.message : String(error) };
-    }
-
-    return {
-      status: "complete",
-      credentials: {
-        access: tokenResult.access,
-        refresh: tokenResult.refresh,
-        expires: tokenResult.expires,
-        accountId,
-      },
-    };
+  if (response.status === 403 || response.status === 404) {
+    return { status: "pending", nextPollMs: pending.intervalMs };
   }
+  const device = yield* ensureOk(label)(response).pipe(
+    Effect.flatMap(responseJson),
+    Effect.flatMap(
+      decodeOAuthBody(
+        DeviceTokenResponse,
+        "OpenAI Codex device token response missing required fields",
+      ),
+    ),
+  );
 
-  if (pollResponse.status !== 403 && pollResponse.status !== 404) {
-    const text = await pollResponse.text().catch(() => "");
-    return {
-      status: "failed",
-      error: `OpenAI Codex device authorization failed: ${pollResponse.status}${text ? ` ${text}` : ""}`,
-    };
+  const tokenResponse = yield* postTokenForm("Token exchange failed", {
+    grant_type: "authorization_code",
+    client_id: CLIENT_ID,
+    code: device.authorization_code,
+    code_verifier: device.code_verifier,
+    redirect_uri: DEVICE_REDIRECT_URI,
+  });
+  if (tokenResponse.status < 200 || tokenResponse.status >= 300) {
+    return { status: "failed", error: "Token exchange failed" };
   }
-
-  return { status: "pending", nextPollMs: pending.intervalMs };
-}
+  const credentials = yield* responseJson(tokenResponse).pipe(
+    Effect.flatMap((body) => credentialsFromTokenResponse(body, "Token exchange failed")),
+  );
+  return { status: "complete", credentials };
+}, (effect) =>
+  effect.pipe(
+    Effect.catchTag("SubscriptionAuthResponseError", (error) =>
+      Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
+    ),
+    Effect.catchIf(
+      (error) => error.status !== undefined,
+      (error) => Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
+    ),
+    withOAuthTimeout("OpenAI Codex device authorization poll", REQUEST_TIMEOUT),
+  ),
+);
 
 /** Refresh an OpenAI Codex OAuth token, preserving the ChatGPT account id. */
-export async function refreshCodexToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: credentials.refresh,
-      client_id: CLIENT_ID,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
+const refreshToken = Effect.fn("codex.refreshToken")(function* (credentials: OAuthCredentials) {
+  const label = "OpenAI Codex token refresh failed";
+  const body = yield* postTokenForm(label, {
+    grant_type: "refresh_token",
+    refresh_token: credentials.refresh,
+    client_id: CLIENT_ID,
+  }).pipe(Effect.flatMap(ensureOk(label)), Effect.flatMap(responseJson));
+  return yield* credentialsFromTokenResponse(
+    body,
+    "OpenAI Codex token refresh response missing fields",
+    typeof credentials.accountId === "string" ? credentials.accountId : undefined,
+  );
+}, withOAuthTimeout("OpenAI Codex token refresh", REQUEST_TIMEOUT));
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `OpenAI Codex token refresh failed: ${response.status}${text ? ` ${text}` : ""}`,
-    );
-  }
+/** Effect API for the OpenAI Codex flow; requires an `HttpClient`. */
+export const CodexOAuth = { startDeviceLogin, pollDeviceLogin, refreshToken } as const;
 
-  const result = tokenResponseToResult((await response.json()) as TokenResponseJson);
-  if (!result) {
-    throw new Error("OpenAI Codex token refresh response missing fields");
-  }
+/** Start a Codex device-code login: request a user code and return pending state. */
+export function startCodexDeviceLogin(options?: {
+  signal?: AbortSignal;
+}): Promise<CodexDeviceLoginPending> {
+  return runOAuthPromise(startDeviceLogin(), options?.signal);
+}
 
-  const previousAccountId =
-    typeof credentials.accountId === "string" ? credentials.accountId : undefined;
+export function pollCodexDeviceLogin(
+  pending: CodexDeviceLoginPending,
+  options?: { signal?: AbortSignal },
+): Promise<CodexDevicePollResult> {
+  return runOAuthPromise(pollDeviceLogin(pending), options?.signal);
+}
 
-  return {
-    access: result.access,
-    refresh: result.refresh,
-    expires: result.expires,
-    accountId: requireAccountId(result, previousAccountId),
-  };
+export function refreshCodexToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
+  return runOAuthPromise(refreshToken(credentials));
 }

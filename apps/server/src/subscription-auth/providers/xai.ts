@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off globalDate:off
 /**
  * xAI OAuth flow (Grok).
  *
@@ -11,8 +10,25 @@
  * pending state JSON-serializable so polling can span RPC requests.
  */
 
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { type HttpClient, HttpClientRequest } from "effect/unstable/http";
+
 import { createDeviceCodePollState, stepDeviceCodePoll } from "../deviceCode.ts";
 import type { DeviceCodePollOutcome, DeviceCodePollState } from "../deviceCode.ts";
+import {
+  decodeOAuthBody,
+  ensureOk,
+  responseJson,
+  responseText,
+  runOAuthPromise,
+  sendOAuthRequest,
+  type SubscriptionAuthRequestError,
+  SubscriptionAuthResponseError,
+  withOAuthTimeout,
+} from "../oauthHttp.ts";
 import type { OAuthCredentials } from "../types.ts";
 
 const CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
@@ -21,65 +37,84 @@ const TOKEN_URL = "https://auth.x.ai/oauth2/token";
 const SCOPE = "openid profile email offline_access grok-cli:access api:access";
 const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
+const DEFAULT_DEVICE_CODE_EXPIRES_IN_SECONDS = 600;
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+const REQUEST_TIMEOUT = "30 seconds";
 
-async function postForm(
-  url: string,
-  params: Record<string, string>,
-  signal?: AbortSignal,
-): Promise<Response> {
-  return fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params).toString(),
-    ...(signal !== undefined ? { signal } : {}),
-  });
-}
+const DeviceAuthorizationResponse = Schema.Struct({
+  device_code: Schema.NonEmptyString,
+  user_code: Schema.NonEmptyString,
+  verification_uri: Schema.NonEmptyString,
+  verification_uri_complete: Schema.optional(Schema.String),
+  interval: Schema.optional(Schema.Number),
+  expires_in: Schema.optional(Schema.Number),
+});
+
+const TokenResponse = Schema.Struct({
+  access_token: Schema.NonEmptyString,
+  refresh_token: Schema.optional(Schema.String),
+  expires_in: Schema.optional(Schema.Number),
+});
+
+const TokenErrorBody = Schema.fromJsonString(
+  Schema.Struct({
+    error: Schema.optional(Schema.String),
+    interval: Schema.optional(Schema.Number),
+  }),
+);
+
+const decodeTokenErrorBody = Schema.decodeUnknownOption(TokenErrorBody);
+
+const postForm = (label: string, url: string, params: Record<string, string>) =>
+  sendOAuthRequest(label, HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUrlParams(params)));
 
 /** The verification URI is opened by the user; only accept https URLs. */
-function validateVerificationUri(raw: string): string {
+function validateVerificationUri(raw: string): Effect.Effect<string, SubscriptionAuthResponseError> {
   let parsed: URL;
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`xAI device authorization returned an invalid verification_uri: ${raw}`);
+    return Effect.fail(
+      new SubscriptionAuthResponseError({
+        message: `xAI device authorization returned an invalid verification_uri: ${raw}`,
+      }),
+    );
   }
   if (parsed.protocol !== "https:") {
-    throw new Error(`xAI device authorization returned a non-https verification_uri: ${raw}`);
+    return Effect.fail(
+      new SubscriptionAuthResponseError({
+        message: `xAI device authorization returned a non-https verification_uri: ${raw}`,
+      }),
+    );
   }
-  return parsed.toString();
+  return Effect.succeed(parsed.toString());
 }
 
-function credentialsFromTokenResponse(
-  data: unknown,
+const credentialsFromTokenResponse = Effect.fn("xai.credentialsFromTokenResponse")(function* (
+  body: unknown,
   previousRefreshToken?: string,
-): OAuthCredentials {
-  const record = (data ?? {}) as Record<string, unknown>;
-  const access = record.access_token;
-  if (typeof access !== "string" || access.length === 0) {
-    throw new Error("xAI token response missing access_token");
-  }
-
+) {
+  const tokens = yield* decodeOAuthBody(TokenResponse, "xAI token response missing access_token")(
+    body,
+  );
   // xAI may not rotate the refresh token on refresh; keep the previous one.
-  const refresh =
-    typeof record.refresh_token === "string" && record.refresh_token.length > 0
-      ? record.refresh_token
-      : previousRefreshToken;
+  const refresh = tokens.refresh_token || previousRefreshToken;
   if (!refresh) {
-    throw new Error("xAI token response missing refresh_token");
+    return yield* new SubscriptionAuthResponseError({
+      message: "xAI token response missing refresh_token",
+    });
   }
-
   const expiresIn =
-    typeof record.expires_in === "number" && record.expires_in > 0
-      ? record.expires_in
+    tokens.expires_in !== undefined && tokens.expires_in > 0
+      ? tokens.expires_in
       : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
-
+  const now = yield* Clock.currentTimeMillis;
   return {
-    access,
+    access: tokens.access_token,
     refresh,
-    expires: Date.now() + expiresIn * 1000 - REFRESH_SKEW_MS,
-  };
-}
+    expires: now + expiresIn * 1000 - REFRESH_SKEW_MS,
+  } satisfies OAuthCredentials;
+});
 
 /** Serializable pending state for an xAI device-code login. */
 export interface XAIDeviceLoginPending {
@@ -97,37 +132,22 @@ export type XAIDevicePollResult =
   | { status: "failed"; error: string };
 
 /** Start an xAI device-code login: request a user code and return pending state. */
-export async function startXAIDeviceLogin(options?: {
-  signal?: AbortSignal;
-}): Promise<XAIDeviceLoginPending> {
-  const response = await postForm(
-    DEVICE_CODE_URL,
-    { client_id: CLIENT_ID, scope: SCOPE },
-    options?.signal,
+const startDeviceLogin = Effect.fn("xai.startDeviceLogin")(function* () {
+  const label = "Failed to initiate xAI device authorization";
+  const data = yield* postForm(label, DEVICE_CODE_URL, { client_id: CLIENT_ID, scope: SCOPE }).pipe(
+    Effect.flatMap(ensureOk(label)),
+    Effect.flatMap(responseJson),
+    Effect.flatMap(
+      decodeOAuthBody(
+        DeviceAuthorizationResponse,
+        "xAI device authorization response missing required fields",
+      ),
+    ),
+    withOAuthTimeout("xAI device authorization", REQUEST_TIMEOUT),
   );
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Failed to initiate xAI device authorization: ${response.status}${text ? ` ${text}` : ""}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    verification_uri_complete?: string;
-    interval?: number;
-    expires_in?: number;
-  };
-
-  if (!data.device_code || !data.user_code || !data.verification_uri) {
-    throw new Error("xAI device authorization response missing required fields");
-  }
-
-  const url = validateVerificationUri(data.verification_uri_complete ?? data.verification_uri);
-
+  const url = yield* validateVerificationUri(
+    data.verification_uri_complete ?? data.verification_uri,
+  );
   return {
     deviceCode: data.device_code,
     userCode: data.user_code,
@@ -136,42 +156,48 @@ export async function startXAIDeviceLogin(options?: {
     state: createDeviceCodePollState({
       intervalSeconds: data.interval,
       expiresInSeconds:
-        typeof data.expires_in === "number" && data.expires_in > 0 ? data.expires_in : 600,
+        data.expires_in !== undefined && data.expires_in > 0
+          ? data.expires_in
+          : DEFAULT_DEVICE_CODE_EXPIRES_IN_SECONDS,
+      now: yield* Clock.currentTimeMillis,
     }),
-  };
-}
+  } satisfies XAIDeviceLoginPending;
+});
 
-async function pollXAITokenOnce(
+const pollTokenOnce = Effect.fn("xai.pollTokenOnce")(function* (
   pending: XAIDeviceLoginPending,
-  signal?: AbortSignal,
-): Promise<DeviceCodePollOutcome<OAuthCredentials>> {
-  const response = await postForm(
-    TOKEN_URL,
-    {
-      grant_type: DEVICE_CODE_GRANT_TYPE,
-      device_code: pending.deviceCode,
-      client_id: CLIENT_ID,
-    },
-    signal,
-  );
+): Effect.fn.Return<
+  DeviceCodePollOutcome<OAuthCredentials>,
+  SubscriptionAuthRequestError,
+  HttpClient.HttpClient
+> {
+  const response = yield* postForm("xAI device token poll", TOKEN_URL, {
+    grant_type: DEVICE_CODE_GRANT_TYPE,
+    device_code: pending.deviceCode,
+    client_id: CLIENT_ID,
+  });
 
-  if (response.ok) {
-    const data = (await response.json()) as unknown;
-    try {
-      return { status: "complete", result: credentialsFromTokenResponse(data) };
-    } catch (error) {
-      return { status: "failed", error: error instanceof Error ? error.message : String(error) };
-    }
+  if (response.status >= 200 && response.status < 300) {
+    return yield* responseJson(response).pipe(
+      Effect.flatMap((body) => credentialsFromTokenResponse(body)),
+      Effect.map((result): DeviceCodePollOutcome<OAuthCredentials> => ({
+        status: "complete",
+        result,
+      })),
+      Effect.catchTag("SubscriptionAuthResponseError", (error) =>
+        Effect.succeed<DeviceCodePollOutcome<OAuthCredentials>>({
+          status: "failed",
+          error: error.message,
+        }),
+      ),
+    );
   }
 
-  const text = await response.text().catch(() => "");
-  let body: { error?: string; interval?: number } = {};
-  try {
-    body = JSON.parse(text) as { error?: string; interval?: number };
-  } catch {
-    // Non-JSON error body — fail loudly below with the raw text.
-  }
-
+  const text = yield* responseText(response);
+  const body = Option.getOrElse(decodeTokenErrorBody(text), () => ({
+    error: undefined,
+    interval: undefined,
+  }));
   switch (body.error) {
     case "authorization_pending":
       return { status: "pending", intervalSeconds: body.interval };
@@ -188,55 +214,63 @@ async function pollXAITokenOnce(
         error: `xAI device authorization failed: ${response.status}${text ? ` ${text}` : ""}`,
       };
   }
-}
+}, withOAuthTimeout("xAI device token poll", REQUEST_TIMEOUT));
 
 /**
  * Perform exactly one upstream poll for a pending xAI device login.
  * Returns the updated pending state so callers can persist slow_down interval
- * growth between polls. Never throws for flow-level conditions.
+ * growth between polls. Flow-level conditions resolve as `failed`.
  */
-export async function pollXAIDeviceLogin(
+const pollDeviceLogin = Effect.fn("xai.pollDeviceLogin")(function* (
   pending: XAIDeviceLoginPending,
-  options?: { signal?: AbortSignal },
-): Promise<XAIDevicePollResult> {
-  const step = await stepDeviceCodePoll(pending.state, () =>
-    pollXAITokenOnce(pending, options?.signal),
-  );
-
+) {
+  const step = yield* stepDeviceCodePoll(pending.state, pollTokenOnce(pending));
   switch (step.status) {
     case "complete":
-      return { status: "complete", credentials: step.result };
+      return { status: "complete", credentials: step.result } satisfies XAIDevicePollResult;
     case "failed":
-      return { status: "failed", error: step.error };
+      return { status: "failed", error: step.error } satisfies XAIDevicePollResult;
     case "pending":
     case "slow_down":
       return {
         status: "pending",
         nextPollMs: step.nextPollMs,
         pending: { ...pending, state: step.state },
-      };
+      } satisfies XAIDevicePollResult;
   }
-}
+});
 
 /** Refresh an xAI OAuth token. */
-export async function refreshXAIToken(
-  refreshToken: string,
-  signal?: AbortSignal,
-): Promise<OAuthCredentials> {
-  const response = await postForm(
-    TOKEN_URL,
-    {
-      grant_type: "refresh_token",
-      client_id: CLIENT_ID,
-      refresh_token: refreshToken,
-    },
-    signal,
+const refreshToken = Effect.fn("xai.refreshToken")(function* (refresh: string) {
+  const label = "xAI token refresh failed";
+  return yield* postForm(label, TOKEN_URL, {
+    grant_type: "refresh_token",
+    client_id: CLIENT_ID,
+    refresh_token: refresh,
+  }).pipe(
+    Effect.flatMap(ensureOk(label)),
+    Effect.flatMap(responseJson),
+    Effect.flatMap((body) => credentialsFromTokenResponse(body, refresh)),
+    withOAuthTimeout("xAI token refresh", REQUEST_TIMEOUT),
   );
+});
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`xAI token refresh failed: ${response.status}${text ? ` ${text}` : ""}`);
-  }
+/** Effect API for the xAI flow; requires an `HttpClient`. */
+export const XAIOAuth = { startDeviceLogin, pollDeviceLogin, pollTokenOnce, refreshToken } as const;
 
-  return credentialsFromTokenResponse((await response.json()) as unknown, refreshToken);
+export function startXAIDeviceLogin(options?: {
+  signal?: AbortSignal;
+}): Promise<XAIDeviceLoginPending> {
+  return runOAuthPromise(startDeviceLogin(), options?.signal);
+}
+
+export function pollXAIDeviceLogin(
+  pending: XAIDeviceLoginPending,
+  options?: { signal?: AbortSignal },
+): Promise<XAIDevicePollResult> {
+  return runOAuthPromise(pollDeviceLogin(pending), options?.signal);
+}
+
+export function refreshXAIToken(refresh: string, signal?: AbortSignal): Promise<OAuthCredentials> {
+  return runOAuthPromise(refreshToken(refresh), signal);
 }
