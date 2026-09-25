@@ -30,6 +30,14 @@ export const VOICE_API_PROVIDER_LABELS: Readonly<Record<VoiceApiProvider, string
   fish: "Fish Audio",
 };
 
+/** The API product each key belongs to. Key labels read "{api} key", so "OpenAI API" never doubles up. */
+export const VOICE_API_NAMES: Readonly<Record<VoiceApiProvider, string>> = {
+  openai: "OpenAI API",
+  elevenlabs: "ElevenLabs API",
+  cartesia: "Cartesia API",
+  fish: "Fish Audio API",
+};
+
 export const VOICE_TRANSCRIPTION_PROVIDERS = VOICE_API_PROVIDERS.filter(
   (provider): provider is VoiceTranscriptionProvider =>
     VOICE_PROVIDER_CAPABILITIES[provider].transcription,
@@ -47,6 +55,26 @@ export function voiceCapabilityLabel(provider: VoiceApiProvider): string {
     capability.synthesis ? "Speech" : null,
   ].filter((part): part is string => part !== null);
   return parts.join(" · ");
+}
+
+/** True when a voice command failed because the provider refused the saved key. */
+export function voiceKeyWasRejected(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "reason" in error &&
+    error.reason === "provider-auth"
+  );
+}
+
+/**
+ * Whether a saved key should show as rejected after a connect, test, or disconnect.
+ * `failure` is null on success. Any success clears the verdict, including saving a
+ * replacement key; only a key rejection sets it, so a network error keeps the last verdict.
+ */
+export function nextVoiceKeyRejected(previous: boolean, failure: unknown): boolean {
+  if (failure === null) return false;
+  return voiceKeyWasRejected(failure) || previous;
 }
 
 /** Explains why a call cannot start with these settings, or null when it can. */

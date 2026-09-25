@@ -1,9 +1,10 @@
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, VoiceCallError } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   VOICE_SYNTHESIS_PROVIDERS,
   VOICE_TRANSCRIPTION_PROVIDERS,
+  nextVoiceKeyRejected,
   selectedSynthesisVoice,
   voiceCapabilityLabel,
   voiceSetupProblem,
@@ -54,5 +55,17 @@ describe("voice settings logic", () => {
       "Choose a voice for ElevenLabs before starting a call.",
     );
     expect(selectedSynthesisVoice({ ...composed, synthesisProvider: "openai" })).toBe("alloy");
+  });
+
+  it("marks a key rejected after a failed test and clears it when the key is replaced", () => {
+    const auth = new VoiceCallError({ reason: "provider-auth", message: "rejected" });
+    const network = new VoiceCallError({ reason: "network", message: "offline" });
+    const rejected = nextVoiceKeyRejected(false, auth);
+    expect(rejected).toBe(true);
+    // A network failure says nothing new about the key.
+    expect(nextVoiceKeyRejected(rejected, network)).toBe(true);
+    expect(nextVoiceKeyRejected(false, network)).toBe(false);
+    // Saving a replacement key, a passing test, or disconnecting all succeed.
+    expect(nextVoiceKeyRejected(rejected, null)).toBe(false);
   });
 });

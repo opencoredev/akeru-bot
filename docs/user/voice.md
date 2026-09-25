@@ -21,7 +21,7 @@ In **Transcribe, reply, speak** calls, the microphone pauses while the bot works
 In **Settings > Voice > API connections**:
 
 1. Paste the service's API key and select **Connect**. For an existing connection, select **Replace key**, paste the new key, and select **Save key**. Keys are stored on the selected environment server and are not returned to clients.
-2. Select **Test**. This checks API access, not whether every paid audio capability works for your account.
+2. Select **Test**. This checks API access, not whether every paid audio capability works for your account. If the service rejects the key, its status changes from **Key saved** to **Key rejected** until you save a replacement key.
 3. For **Transcribe, reply, speak**, choose a **Transcription provider** and a **Speech provider**, then choose a **Speech voice** from that service's list. Select **More voices** to load the next page.
 
 | Service    | Supported by Akeru                                                               |

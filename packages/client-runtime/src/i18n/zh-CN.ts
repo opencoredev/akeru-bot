@@ -1834,4 +1834,9 @@ export const zhCNCatalog: TranslationCatalog = {
   "General > Local execution": "通用 > 本地执行",
   "Not connected": "未连接",
   "OAuth connected": "已通过 OAuth 连接",
+  "{api} key": "{api} 密钥",
+  "Key saved": "密钥已保存",
+  "Key rejected": "密钥被拒绝",
+  "The voice provider rejected the API key. Replace the key and test it again.":
+    "语音提供商拒绝了此 API 密钥。请更换密钥后重新测试。",
 };

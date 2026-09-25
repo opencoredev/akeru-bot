@@ -35,11 +35,13 @@ function renderMode(
 function renderProvider(
   connected: boolean | undefined,
   message: null | { tone: "ok" | "error"; text: string } = null,
+  keyRejected = false,
 ) {
   return renderToStaticMarkup(
     <VoiceApiProviderRow
       provider="elevenlabs"
       connected={connected}
+      keyRejected={keyRejected}
       busyAction={null}
       disabled={false}
       message={message}
@@ -104,12 +106,29 @@ describe("voice API provider row", () => {
   it("reports provider errors as alerts and waits for status before offering actions", () => {
     const html = renderProvider(true, {
       tone: "error",
-      text: "The voice provider rejected the API key. Replace the key in Settings and test it.",
+      text: "Could not reach the voice provider. Check the network and try again.",
     });
     expect(html).toContain('role="alert"');
-    expect(html).toContain("rejected the API key");
+    expect(html).toContain("Could not reach the voice provider");
+    expect(html).toContain("Key saved");
     const loading = renderProvider(undefined);
     expect(loading).not.toContain("Not connected");
     expect(loading).not.toContain("Disconnect");
+  });
+
+  it("shows a rejected key in the danger tone instead of Key saved", () => {
+    const html = renderProvider(
+      true,
+      {
+        tone: "error",
+        text: "The voice provider rejected the API key. Replace the key and test it again.",
+      },
+      true,
+    );
+    expect(html).toContain("Key rejected");
+    expect(html).toContain("text-destructive-foreground");
+    expect(html).not.toContain("Key saved");
+    expect(html).not.toContain("in Settings");
+    expect(html).toContain("Replace ElevenLabs key");
   });
 });

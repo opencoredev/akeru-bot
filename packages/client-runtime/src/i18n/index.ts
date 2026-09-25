@@ -1908,6 +1908,11 @@ export const englishCatalog = {
   "General > Local execution": "General > Local execution",
   "Not connected": "Not connected",
   "OAuth connected": "OAuth connected",
+  "{api} key": "{api} key",
+  "Key saved": "Key saved",
+  "Key rejected": "Key rejected",
+  "The voice provider rejected the API key. Replace the key and test it again.":
+    "The voice provider rejected the API key. Replace the key and test it again.",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;

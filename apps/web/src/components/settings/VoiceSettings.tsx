@@ -36,11 +36,14 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
 import {
+  VOICE_API_NAMES,
   VOICE_API_PROVIDER_LABELS,
   VOICE_MODE_DESCRIPTIONS,
   VOICE_MODE_LABELS,
   VOICE_SYNTHESIS_PROVIDERS,
   VOICE_TRANSCRIPTION_PROVIDERS,
+  nextVoiceKeyRejected,
+  voiceKeyWasRejected,
   selectedSynthesisVoice,
   voiceCapabilityLabel,
   voiceSetupProblem,
@@ -466,6 +469,8 @@ function VoiceApiConnectionsSection({
   const test = useAtomCommand(serverEnvironment.testVoiceProvider, { reportFailure: false });
   const [busy, setBusy] = useState<{ provider: VoiceApiProvider; action: string } | null>(null);
   const [messages, setMessages] = useState<Partial<Record<VoiceApiProvider, ProviderMessage>>>({});
+  // The last Test verdict per saved key. Saving or removing a key clears it.
+  const [rejected, setRejected] = useState<Partial<Record<VoiceApiProvider, boolean>>>({});
 
   const run = async (
     provider: VoiceApiProvider,
@@ -478,11 +483,23 @@ function VoiceApiConnectionsSection({
     const result = await call();
     setBusy(null);
     const ok = result._tag === "Success";
+    const failure = result._tag === "Failure" ? squashAtomCommandFailure(result) : null;
+    const keyRejected = failure !== null && voiceKeyWasRejected(failure);
+    setRejected((current) => ({
+      ...current,
+      [provider]: nextVoiceKeyRejected(current[provider] ?? false, failure),
+    }));
     setMessages((current) => ({
       ...current,
       [provider]: ok
         ? { tone: "ok", text: success }
-        : { tone: "error", text: commandError(result) },
+        : {
+            tone: "error",
+            // The server's wording points to Settings for call errors; here the user is already there.
+            text: keyRejected
+              ? t("The voice provider rejected the API key. Replace the key and test it again.")
+              : commandError(result),
+          },
     }));
     onChanged();
     return ok;
@@ -504,6 +521,7 @@ function VoiceApiConnectionsSection({
           key={provider}
           provider={provider}
           connected={connected === null ? undefined : connected.includes(provider)}
+          keyRejected={rejected[provider] ?? false}
           busyAction={busy?.provider === provider ? busy.action : null}
           disabled={busy !== null}
           message={messages[provider] ?? null}
@@ -549,6 +567,7 @@ function VoiceApiConnectionsSection({
 export function VoiceApiProviderRow({
   provider,
   connected,
+  keyRejected = false,
   busyAction,
   disabled,
   message,
@@ -558,6 +577,8 @@ export function VoiceApiProviderRow({
 }: {
   readonly provider: VoiceApiProvider;
   readonly connected: boolean | undefined;
+  /** The last Test found the saved key invalid. */
+  readonly keyRejected?: boolean;
   readonly busyAction: string | null;
   readonly disabled: boolean;
   readonly message: ProviderMessage | null;
@@ -565,7 +586,9 @@ export function VoiceApiProviderRow({
   readonly onTest: () => void;
   readonly onDisconnect: () => void;
 }) {
+  const { t } = useI18n();
   const label = VOICE_API_PROVIDER_LABELS[provider];
+  const keyLabel = t("{api} key", { api: VOICE_API_NAMES[provider] });
   const [editing, setEditing] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const showInput = connected === false || editing;
@@ -587,8 +610,11 @@ export function VoiceApiProviderRow({
         <span className="flex items-center gap-2">
           {label}
           {connected === undefined ? null : (
-            <Badge variant={connected ? "success" : "outline"} className="h-4 px-1.5 text-[10px]">
-              {connected ? "Key saved" : "Not connected"}
+            <Badge
+              variant={connected ? (keyRejected ? "error" : "success") : "outline"}
+              className="h-4 px-1.5 text-[10px]"
+            >
+              {connected ? (keyRejected ? t("Key rejected") : t("Key saved")) : t("Not connected")}
             </Badge>
           )}
         </span>
@@ -622,8 +648,8 @@ export function VoiceApiProviderRow({
                 className="w-44"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.currentTarget.value)}
-                placeholder={`${label} API key`}
-                aria-label={`${label} API key`}
+                placeholder={keyLabel}
+                aria-label={keyLabel}
               />
               <Button size="xs" type="submit" disabled={disabled || apiKey.trim().length === 0}>
                 {spinner("connect")}
