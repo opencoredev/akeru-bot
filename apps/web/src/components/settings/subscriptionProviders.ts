@@ -1,3 +1,4 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { SubscriptionProviderId } from "@t3tools/contracts";
 
 import { ClaudeAI, OpenCodeIcon, type Icon } from "../Icons";
@@ -5,8 +6,9 @@ import { ClaudeAI, OpenCodeIcon, type Icon } from "../Icons";
 export interface SubscriptionProviderDefinition {
   readonly id: SubscriptionProviderId;
   readonly label: string;
-  readonly subscription: string;
-  readonly description: string;
+  /** Catalog copy: render through `t`. */
+  readonly subscription: MessageKey;
+  readonly description: MessageKey;
   readonly icon: Icon | string;
 }
 

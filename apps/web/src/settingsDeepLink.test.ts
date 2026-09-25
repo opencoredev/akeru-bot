@@ -25,7 +25,7 @@ describe("settings deep links", () => {
     expect(parseSettingsDeepLink(`grokbot://app/v1/settings?id=${id}`)).toEqual({
       section,
       targetId,
-      tooltip: `Open Settings > ${label}`,
+      label,
     });
   });
 

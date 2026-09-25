@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1323,
+  "directMessageCount": 1375,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -13,6 +13,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/home/HomeScreen.tsx": [
       "'No chats matching "{query}".', { query: props.searchQuery })}",
       "'No chats matching "{query}".', { query: props.searchQuery })}",
+    ],
+    "apps/mobile/src/features/settings/ProviderConnections.tsx": [
+      "providerConnectionLabel(status)) : t("Status unavailable")}",
     ],
     "apps/mobile/src/features/settings/SettingsProviderHealthRouteScreen.tsx": [
       "describeDurableFactFailure(squashAtomCommandFailure(result)).message);",
@@ -50,6 +53,12 @@ exports[`discovered interface message coverage > covers static calls and finite 
     ],
     "apps/web/src/components/chat/ComposerPrimaryActions.tsx": [
       "formatPendingPrimaryActionLabel({",
+    ],
+    "apps/web/src/components/chat/SettingsLinkChip.tsx": [
+      "destination.label) });",
+    ],
+    "apps/web/src/components/onboarding/DesktopOnboarding.tsx": [
+      "definition.subscription)}",
     ],
     "apps/web/src/components/roster/BotDurableMemory.tsx": [
       "failure.message)}",
@@ -107,6 +116,11 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "description)} \${t(MEMORY_SETTING_DISABLED_HINT)}\`;",
       "MEMORY_SETTING_DISABLED_HINT)}\`;",
       "SHARED_PROJECT_MEMORY_SETTING.label)}",
+    ],
+    "apps/web/src/components/settings/ProvidersPanel.tsx": [
+      "providerBadgeLabel(status))}",
+      "definition.description)}",
+      "definition.subscription)",
     ],
     "apps/web/src/components/settings/SettingsDialog.tsx": [
       "item.title)}</span>",
@@ -347,6 +361,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/state/use-remote-environment-registry.ts",
     "apps/mobile/src/state/use-thread-composer-state.ts",
     "apps/web/src/components/AppSidebarLayout.tsx",
+    "apps/web/src/components/ChatMarkdown.tsx",
     "apps/web/src/components/CommandPalette.logic.ts",
     "apps/web/src/components/CommandPalette.tsx",
     "apps/web/src/components/CommandPaletteContent.tsx",
@@ -373,6 +388,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/chat/ReplyPlaybackControls.tsx",
     "apps/web/src/components/chat/ResponseLoadingState.tsx",
     "apps/web/src/components/chat/SentMessageText.tsx",
+    "apps/web/src/components/chat/SettingsLinkChip.tsx",
     "apps/web/src/components/chat/ThreadErrorBanner.tsx",
     "apps/web/src/components/chat/TraitsPicker.tsx",
     "apps/web/src/components/chat/composerProviderMenuItems.ts",
@@ -436,6 +452,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/PortabilitySettings.tsx",
     "apps/web/src/components/settings/PrivacySettings.tsx",
     "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
+    "apps/web/src/components/settings/ProvidersPanel.tsx",
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx",
     "apps/web/src/components/settings/SettingsDialog.tsx",
     "apps/web/src/components/settings/SettingsPanels.logic.ts",
@@ -448,6 +465,8 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/sidebar/SidebarChrome.tsx",
     "apps/web/src/components/sidebar/SidebarProviderUpdatePill.tsx",
     "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
+    "apps/web/src/components/ui/sidebar.tsx",
+    "apps/web/src/components/ui/toast.tsx",
     "apps/web/src/routes/RootRouteErrorView.tsx",
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",

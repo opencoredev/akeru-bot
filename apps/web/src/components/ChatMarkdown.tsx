@@ -83,6 +83,7 @@ import {
   usePreferredEditor,
 } from "../editorPreferences";
 import { openInEditorMenuLabel } from "../editorLabels";
+import { useI18n } from "../i18n";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
@@ -542,8 +543,9 @@ function MarkdownTable({ children, ...props }: React.ComponentProps<"table">) {
   const [expanded, setExpanded] = useState(readInitialWordWrapSetting);
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expandLabel = expanded ? "Collapse table cells" : "Expand table cells";
-  const copyLabel = copied ? "Copied" : "Copy table";
+  const { t } = useI18n();
+  const expandLabel = expanded ? t("Collapse table cells") : t("Expand table cells");
+  const copyLabel = copied ? t("Copied") : t("Copy table");
 
   function toggleExpanded() {
     const table = tableRef.current;
@@ -662,8 +664,8 @@ function MarkdownTable({ children, ...props }: React.ComponentProps<"table">) {
             <TooltipPopup side="top">{copyLabel}</TooltipPopup>
           </Tooltip>
           <MenuPopup align="end">
-            <MenuItem onClick={() => handleCopy("markdown")}>Copy as Markdown</MenuItem>
-            <MenuItem onClick={() => handleCopy("csv")}>Copy as CSV</MenuItem>
+            <MenuItem onClick={() => handleCopy("markdown")}>{t("Copy as Markdown")}</MenuItem>
+            <MenuItem onClick={() => handleCopy("csv")}>{t("Copy as CSV")}</MenuItem>
           </MenuPopup>
         </Menu>
       </div>
@@ -675,6 +677,7 @@ function MarkdownDetails({
   children,
   open = false,
 }: Pick<React.ComponentProps<"details">, "children" | "open">) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(open);
   const childNodes = Children.toArray(children);
   const summaryIndex = childNodes.findIndex(
@@ -684,7 +687,7 @@ function MarkdownDetails({
   const summary =
     isValidElement<{ children?: ReactNode }>(summaryNode) && summaryNode.props.children
       ? summaryNode.props.children
-      : "Details";
+      : t("Details");
   const content = childNodes.filter((_, index) => index !== summaryIndex);
 
   return (
@@ -743,6 +746,7 @@ function MarkdownMermaidDiagram({
   readonly code: string;
   readonly theme: "light" | "dark";
 }) {
+  const { t } = useI18n();
   const reactId = useId();
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -778,13 +782,17 @@ function MarkdownMermaidDiagram({
       data-mermaid-diagram=""
     >
       {svg ? (
-        <div aria-label="Mermaid diagram" role="img" dangerouslySetInnerHTML={{ __html: svg }} />
+        <div
+          aria-label={t("Mermaid diagram")}
+          role="img"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
       ) : failed ? (
         <pre className="m-0">
           <code className="language-mermaid">{code}</code>
         </pre>
       ) : (
-        <p className="m-0 text-xs text-muted-foreground">Rendering diagram…</p>
+        <p className="m-0 text-xs text-muted-foreground">{t("Rendering diagram…")}</p>
       )}
     </div>
   );
@@ -804,6 +812,7 @@ function MarkdownCodeBlockTitleContent({
   language: string;
   theme: "light" | "dark";
 }) {
+  const { t } = useI18n();
   if (fenceTitle) {
     return (
       <>
@@ -821,7 +830,10 @@ function MarkdownCodeBlockTitleContent({
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="inline-flex shrink-0 rounded-sm" aria-label={`Language: ${language}`} />
+          <span
+            className="inline-flex shrink-0 rounded-sm"
+            aria-label={t("Language: {language}", { language })}
+          />
         }
       >
         <PierreEntryIcon pathValue={fileName} kind="file" theme={theme} className="size-3.5" />
@@ -850,8 +862,9 @@ function MarkdownCodeBlock({
   const [copied, setCopied] = useState(false);
   const [wrapped, setWrapped] = useState(readInitialWordWrapSetting);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
-  const copyLabel = copied ? "Copied" : "Copy code";
+  const { t } = useI18n();
+  const wrapLabel = wrapped ? t("Disable line wrap") : t("Wrap lines");
+  const copyLabel = copied ? t("Copied") : t("Copy code");
 
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
@@ -906,7 +919,11 @@ function MarkdownCodeBlock({
           />
           {headerDetail}
         </span>
-        <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
+        <span
+          className="flex items-center gap-0.5"
+          role="toolbar"
+          aria-label={t("Code block actions")}
+        >
           <Tooltip>
             <TooltipTrigger
               render={
@@ -1240,10 +1257,13 @@ const CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME = cn(
 );
 
 function ChatMarkdownImageFallback(props: { readonly alt: string }) {
+  const { t } = useI18n();
   return (
     <span className="my-1 inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
       <TriangleAlertIcon aria-hidden className="size-3.5 shrink-0" />
-      {props.alt.length > 0 ? `Image unavailable · ${props.alt}` : "Image unavailable"}
+      {props.alt.length > 0
+        ? t("Image unavailable · {alt}", { alt: props.alt })
+        : t("Image unavailable")}
     </span>
   );
 }
@@ -1254,6 +1274,7 @@ const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceImage(prop
   readonly path: string;
   readonly alt: string;
 }) {
+  const { t } = useI18n();
   const assetUrl = useAssetUrlState(props.threadRef.environmentId, {
     _tag: "workspace-file",
     threadId: props.threadRef.threadId,
@@ -1268,7 +1289,7 @@ const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceImage(prop
     return (
       <span
         role="status"
-        aria-label="Loading image"
+        aria-label={t("Loading image")}
         className="my-1 block aspect-video w-full max-w-[30rem] rounded-lg bg-muted/60"
       />
     );
@@ -1478,6 +1499,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
   revealLabel,
   className,
 }: MarkdownFileLinkProps) {
+  const { t } = useI18n();
   const handleOpenInEditor = useCallback(() => {
     if (!onOpen) {
       return;
@@ -1496,8 +1518,8 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: t("Unable to open file"),
+            description: error instanceof Error ? error.message : t("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -1508,13 +1530,13 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: t("Unable to open file"),
+            description: cause instanceof Error ? cause.message : t("An error occurred."),
           }),
         );
       }
     })();
-  }, [onOpen, targetPath]);
+  }, [onOpen, t, targetPath]);
 
   const handleOpenInFilePreview = useCallback(() => {
     if (!threadRef || !workspaceRelativePath) {
@@ -1542,8 +1564,8 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file in browser",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: t("Unable to open file in browser"),
+            description: error instanceof Error ? error.message : t("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -1554,13 +1576,13 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file in browser",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: t("Unable to open file in browser"),
+            description: cause instanceof Error ? cause.message : t("An error occurred."),
           }),
         );
       }
     })();
-  }, [onOpenInBrowser, targetPath]);
+  }, [onOpenInBrowser, t, targetPath]);
 
   const handleRevealInFileManager = useCallback(() => {
     if (!onReveal) {
@@ -1580,8 +1602,8 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to reveal file",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: t("Unable to reveal file"),
+            description: error instanceof Error ? error.message : t("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -1592,22 +1614,26 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to reveal file",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: t("Unable to reveal file"),
+            description: cause instanceof Error ? cause.message : t("An error occurred."),
           }),
         );
       }
     })();
-  }, [onReveal, targetPath]);
+  }, [onReveal, t, targetPath]);
 
   const handleCopy = useCallback(
-    (value: string, title: string) => {
+    (value: string, copyTarget: "Relative path" | "Full path") => {
+      const failedTitle =
+        copyTarget === "Relative path"
+          ? t("Failed to copy relative path")
+          : t("Failed to copy full path");
       if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: `Failed to copy ${title.toLowerCase()}`,
-            description: "Clipboard API unavailable.",
+            title: failedTitle,
+            description: t("Clipboard API unavailable."),
           }),
         );
         return;
@@ -1617,26 +1643,27 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         () => {
           toastManager.add({
             type: "success",
-            title: `${title} copied`,
+            title:
+              copyTarget === "Relative path" ? t("Relative path copied") : t("Full path copied"),
             description: value,
           });
         },
         (error) => {
           reportMarkdownActionFailure(
-            { operation: "copy-file-path", target: targetPath, copyTarget: title },
+            { operation: "copy-file-path", target: targetPath, copyTarget },
             error,
           );
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: `Failed to copy ${title.toLowerCase()}`,
-              description: error instanceof Error ? error.message : "An error occurred.",
+              title: failedTitle,
+              description: error instanceof Error ? error.message : t("An error occurred."),
             }),
           );
         },
       );
     },
-    [targetPath],
+    [t, targetPath],
   );
 
   const showFileContextMenu = useCallback(
@@ -1649,11 +1676,11 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
           [
             ...(onOpen ? ([{ id: "open", label: openInEditorMenuLabel }] as const) : []),
             ...(onOpenInBrowser
-              ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
+              ? ([{ id: "open-in-browser", label: t("Open in integrated browser") }] as const)
               : []),
             ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
-            { id: "copy-relative", label: "Copy relative path" },
-            { id: "copy-full", label: "Copy full path" },
+            { id: "copy-relative", label: t("Copy relative path") },
+            { id: "copy-full", label: t("Copy full path") },
           ] as const,
           position,
         );
@@ -1695,6 +1722,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
       onReveal,
       openInEditorMenuLabel,
       revealLabel,
+      t,
       targetPath,
     ],
   );
@@ -1763,7 +1791,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
           ) : (
             <button
               type="button"
-              aria-label={`File options for ${label}`}
+              aria-label={t("File options for {label}", { label })}
               aria-haspopup="menu"
               className={cn(
                 CHAT_FILE_TAG_CHIP_CLASS_NAME,
@@ -2204,12 +2232,13 @@ export function taskListProgress(
 const MarkdownListNestingContext = React.createContext(false);
 
 function MarkdownTaskListProgress({ done, total }: { done: number; total: number }) {
+  const { t } = useI18n();
   return (
     <div className="chat-markdown-task-progress" data-task-progress={`${done}/${total}`}>
       <span
         className="chat-markdown-task-progress-track"
         role="progressbar"
-        aria-label="Checklist progress"
+        aria-label={t("Checklist progress")}
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={done}
@@ -2219,9 +2248,7 @@ function MarkdownTaskListProgress({ done, total }: { done: number; total: number
           style={{ width: `${Math.round((done / total) * 100)}%` }}
         />
       </span>
-      <span>
-        {done} of {total} done
-      </span>
+      <span>{t("{done} of {total} done", { done, total })}</span>
     </div>
   );
 }
@@ -2304,6 +2331,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   },
   input: function MarkdownInput({ node: _node, type, checked, disabled: _disabled, ...props }) {
     const { onTaskListChange } = use(ChatMarkdownRendererContext);
+    const { t } = useI18n();
     if (type !== "checkbox" || !onTaskListChange) {
       return (
         <input
@@ -2320,7 +2348,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         {...props}
         type="checkbox"
         name="markdown-task"
-        aria-label="Toggle task"
+        aria-label={t("Toggle task")}
         checked={checked}
         onChange={(event) => {
           const markerOffset = Number(event.currentTarget.closest("li")?.dataset.taskMarkerOffset);
@@ -2342,6 +2370,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       updateThreadPullRequestLink,
       fileLinkChip,
     } = use(ChatMarkdownRendererContext);
+    const { t } = useI18n();
     const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
     const settingsDestination = parseSettingsDeepLink(normalizedHref);
     if (settingsDestination) {
@@ -2429,9 +2458,10 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
                       type: "error",
                       title:
                         operation === "link-pull-request-to-thread"
-                          ? "Unable to link pull request"
-                          : "Unable to unlink pull request",
-                      description: cause instanceof Error ? cause.message : "The request failed.",
+                          ? t("Unable to link pull request")
+                          : t("Unable to unlink pull request"),
+                      description:
+                        cause instanceof Error ? cause.message : t("The request failed."),
                     }),
                   );
                 }

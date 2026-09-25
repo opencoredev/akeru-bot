@@ -2,6 +2,7 @@ import { Settings02Icon } from "@hugeicons/core-free-icons";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { MouseEvent, ReactNode } from "react";
 
+import { useI18n } from "../../i18n";
 import { openSettings } from "../../settingsDialogStore";
 import type { SettingsDeepLinkDestination } from "../../settingsDeepLink";
 import { cn } from "../../lib/utils";
@@ -26,13 +27,15 @@ export function SettingsLinkChip({
   readonly children: ReactNode;
   readonly className?: string;
 }) {
+  const { t } = useI18n();
+  const tooltip = t("Open Settings > {destination}", { destination: t(destination.label) });
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <a
             href={href}
-            aria-label={destination.tooltip}
+            aria-label={tooltip}
             className={cn(
               CHAT_INLINE_CHIP_CLASS_NAME,
               "chat-markdown-settings-link cursor-pointer",
@@ -49,7 +52,7 @@ export function SettingsLinkChip({
           </a>
         }
       />
-      <TooltipPopup side="top">{destination.tooltip}</TooltipPopup>
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
     </Tooltip>
   );
 }

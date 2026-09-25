@@ -9,6 +9,7 @@ import {
   type SubscriptionProviderStatus,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import type { MessageKey } from "./i18n/index.ts";
 
 export const PROVIDER_CONNECTIONS = [
   { id: "openai-codex", label: "ChatGPT" },
@@ -49,7 +50,8 @@ export function apiKeyStartInput(
   };
 }
 
-export function providerConnectionLabel(status: SubscriptionProviderStatus): string {
+/** Catalog copy: render through `t`. */
+export function providerConnectionLabel(status: SubscriptionProviderStatus): MessageKey {
   if (!status.connected) return "Not connected";
   return providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
 }

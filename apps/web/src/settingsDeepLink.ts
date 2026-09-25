@@ -1,3 +1,4 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { SettingsSection } from "./settingsDialogStore";
 import {
   parseSettingsDeepLinkId,
@@ -8,7 +9,7 @@ import {
 const destinations: Readonly<
   Record<
     SettingsDeepLinkId,
-    { readonly section: SettingsSection; readonly label: string; readonly targetId?: string }
+    { readonly section: SettingsSection; readonly label: MessageKey; readonly targetId?: string }
   >
 > = {
   general: { section: "general", label: "General" },
@@ -36,7 +37,8 @@ const destinations: Readonly<
 export interface SettingsDeepLinkDestination {
   readonly section: SettingsSection;
   readonly targetId: string | null;
-  readonly tooltip: string;
+  /** Catalog label for the destination, shown as "Open Settings > {label}". */
+  readonly label: MessageKey;
 }
 
 export function parseSettingsDeepLink(
@@ -48,6 +50,6 @@ export function parseSettingsDeepLink(
   return {
     section: destination.section,
     targetId: destination.targetId ?? null,
-    tooltip: `Open Settings > ${destination.label}`,
+    label: destination.label,
   };
 }

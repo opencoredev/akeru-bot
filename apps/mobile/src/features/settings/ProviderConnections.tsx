@@ -235,7 +235,14 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const activeProvider = keyProvider ?? flow?.provider;
   const label = PROVIDER_CONNECTIONS.find((provider) => provider.id === activeProvider)?.label;
   return (
-    <SettingsSection title={activeProvider ? `Connect ${label}` : t("Provider connections")} card>
+    <SettingsSection
+      title={
+        activeProvider
+          ? t("Connect {provider}", { provider: label ?? "" })
+          : t("Provider connections")
+      }
+      card
+    >
       <View className="gap-3 p-4">
         {error || query.error ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
@@ -279,7 +286,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
               {providerSupportsBaseUrl(keyProvider)
                 ? t("The environment sends this key to the selected endpoint.")
                 : t("Grok uses its default endpoint.")}{" "}
-              API billing can be separate from your subscription.
+              {t("API billing can be separate from your subscription.")}
             </Text>
             <View className="flex-row gap-2">
               <Action
@@ -338,7 +345,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                 <View key={provider.id} className="gap-2 border-b border-border-subtle py-3">
                   <Text className="text-base font-t3-medium text-foreground">{provider.label}</Text>
                   <Text className="text-sm text-foreground-muted">
-                    {status ? providerConnectionLabel(status) : t("Status unavailable")}
+                    {status ? t(providerConnectionLabel(status)) : t("Status unavailable")}
                   </Text>
                   {status?.baseUrl ? (
                     <Text selectable className="text-sm text-foreground-muted">
