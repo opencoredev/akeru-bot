@@ -1,5 +1,8 @@
 # Akeru Remote operations
 
+> Maintainer runbook for releases, services, and diagnostics. Using Akeru Bot? See
+> [remote access](../user/remote-access.md).
+
 Akeru Remote runs an Akeru environment on a machine you control. The supported paths are the
 Linux/macOS installer, the Windows PowerShell installer, and the Docker Compose deployment.
 Tailscale Serve is the default endpoint; direct loopback plus a user-managed HTTPS proxy is the
