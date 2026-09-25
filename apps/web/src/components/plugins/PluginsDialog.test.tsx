@@ -15,6 +15,7 @@ import {
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  pluginBrokeredBlockerNotice,
   pluginRecoveryNotice,
   resolvePluginDialogServers,
   validateMcpServerDraft,
@@ -29,11 +30,18 @@ import { buildPluginSections } from "./pluginPresentation";
 import { planPluginToggle, pluginMcpServerId } from "./pluginRegistry";
 
 const catalog = loadDirectoryCatalog();
-const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
+const firecrawlEntry = catalog.find((plugin) => plugin.id === "firecrawl");
 const executor = catalog.find((plugin) => plugin.id === "executor");
-if (!firecrawl || !isInstallablePlugin(firecrawl) || firecrawl.kind !== "mcp-url" || !executor) {
+if (!firecrawlEntry || firecrawlEntry.kind !== "mcp-url" || !executor) {
   throw new TypeError("Required plugins are missing from the directory.");
 }
+// Firecrawl stays verification-pending until its lifecycle is verified; the
+// dialog tests model the recovered installable shape for installed-server flows.
+const firecrawl = {
+  ...firecrawlEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+};
 const { kind: _kind, transport: _transport, url: _url, ...pendingBase } = firecrawl;
 const pendingPlugin = {
   ...pendingBase,
@@ -96,6 +104,22 @@ describe("Plugins dialog content", () => {
         "MCP session for thread 'thread-secondary' did not reconnect: Secondary session failed. Restart the affected bot session to retry.",
     });
     expect(pluginRecoveryNotice("Hoplite", [])).toBeNull();
+  });
+
+  it("surfaces the named blocker when a pending brokered plugin is toggled on", () => {
+    const gmail = COMPOSIO_APPS[0];
+    if (gmail.connection.type !== "brokered") throw new TypeError("Gmail must be brokered.");
+    expect(pluginBrokeredBlockerNotice(gmail)).toEqual({
+      type: "warning",
+      title: "Gmail is not available yet",
+      description: gmail.connection.pendingBlocker,
+    });
+    expect(
+      pluginBrokeredBlockerNotice({
+        ...gmail,
+        connection: { type: "brokered", broker: { name: "Composio", url: "https://composio.dev" } },
+      }),
+    ).toBeNull();
   });
 
   it("lists Gmail as an app connected through Composio", () => {
@@ -163,7 +187,7 @@ describe("Plugins dialog content", () => {
     expect(markup).toContain("Provider");
     expect(markup).toContain("Composio");
     expect(markup).toContain("Sign-in");
-    expect(markup).toContain("Google OAuth");
+    expect(markup).toContain("Google Verification pending");
     expect(markup).toContain("Not connected");
     expect(markup).not.toContain("Authentication");
     expect(markup).not.toContain("Execution");

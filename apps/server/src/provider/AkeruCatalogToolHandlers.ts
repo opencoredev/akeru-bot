@@ -210,13 +210,19 @@ function recommendationForPlugin(
   );
   const composio =
     plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio";
+  const brokeredPending =
+    plugin.connection.type === "brokered" && plugin.connection.pendingBlocker !== undefined;
+  // A brokered plugin whose lifecycle is still pending cannot be connected;
+  // surface it as unavailable so the card renders a disabled action.
   const action = server?.enabled
     ? "open"
-    : composio
-      ? "connect"
-      : isInstallableManifest(plugin)
-        ? "install"
-        : "unavailable";
+    : brokeredPending
+      ? "unavailable"
+      : composio
+        ? "connect"
+        : isInstallableManifest(plugin)
+          ? "install"
+          : "unavailable";
   return {
     id: composio ? `composio:${plugin.id}` : plugin.id,
     source: composio ? "composio" : "directory",
@@ -259,8 +265,11 @@ function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
   return false;
 }
 
-export function createAkeruPluginRuntime(options: AkeruPluginRuntimeOptions) {
-  const catalog = loadManifestCatalog(catalogManifestModules);
+export function createAkeruPluginRuntime(
+  options: AkeruPluginRuntimeOptions,
+  catalogOverride?: readonly PluginManifest[],
+) {
+  const catalog = catalogOverride ?? loadManifestCatalog(catalogManifestModules);
   const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
   const now = options.now ?? (() => new Date().toISOString());
   const id = options.id ?? (() => NodeCrypto.randomUUID());

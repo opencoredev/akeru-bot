@@ -9,10 +9,29 @@ import {
   pluginMcpServerId,
 } from "./pluginRegistry";
 
-const catalog = loadCatalog();
-const exa = catalog.find((plugin) => plugin.id === "exa");
-const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
-if (!exa || !firecrawl) throw new TypeError("Required catalog plugins are missing.");
+const directory = loadDirectoryCatalog();
+const exaEntry = directory.find((plugin) => plugin.id === "exa");
+const firecrawlEntry = directory.find((plugin) => plugin.id === "firecrawl");
+if (
+  !exaEntry ||
+  exaEntry.kind !== "mcp-url" ||
+  !firecrawlEntry ||
+  firecrawlEntry.kind !== "mcp-url"
+) {
+  throw new TypeError("Required catalog plugins are missing.");
+}
+// The pending directory keeps verified URLs visible; the registry tests model
+// the recovered installable shape once each lifecycle passes.
+const exa = {
+  ...exaEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+} satisfies PluginDefinition;
+const firecrawl = {
+  ...firecrawlEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+} satisfies PluginDefinition;
 
 const executorDirectory = loadDirectoryCatalog().find((plugin) => plugin.id === "executor");
 if (!executorDirectory || executorDirectory.kind !== "mcp-stdio") {

@@ -90,7 +90,7 @@ export function buildPluginSections(input: {
 }
 
 export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null {
-  if (plugin.connection.type === "brokered") return null;
+  if (plugin.connection.type === "brokered") return plugin.connection.pendingBlocker ?? null;
   if (
     plugin.connection.type === "approval-pending" ||
     plugin.connection.type === "verification-pending"
@@ -123,7 +123,12 @@ export function pluginPrimaryAction(
 
 export function pluginConnectionLabel(plugin: PluginDirectoryDefinition): string {
   if (plugin.connection.type === "approval-pending") return "Approval pending";
-  if (plugin.connection.type === "verification-pending") return "Verification pending";
+  if (
+    plugin.connection.type === "verification-pending" ||
+    (plugin.connection.type === "brokered" && plugin.connection.pendingBlocker !== undefined)
+  ) {
+    return "Verification pending";
+  }
   if (plugin.connection.type === "local") return "Local";
   if (plugin.authentication === "api-key") return "API key";
   if (plugin.authentication === "oauth" || plugin.authentication === "optional-oauth") {

@@ -67,13 +67,7 @@ const EXPECTED_DIRECTORY_IDS = [
   "zernio",
 ] as const;
 
-const EXPECTED_INSTALLABLE_IDS = [
-  "context",
-  "hoplite",
-  "exa",
-  "firecrawl",
-  "parallel-search",
-] as const;
+const EXPECTED_INSTALLABLE_IDS = [] as const;
 
 function manifest(id: string) {
   return parsePluginManifestJson(
@@ -133,11 +127,11 @@ describe("plugin catalog loader", () => {
 
     const directory = loadDirectoryCatalog(modules, assets);
     expect(directory).toMatchObject([
-      { id: "context", kind: "mcp-url", catalogStatus: "available" },
+      { id: "context", kind: "mcp-url", catalogStatus: "verification-pending" },
       { id: "pending-vendor", kind: "mcp-url", catalogStatus: "approval-pending" },
     ]);
     const pendingPlugin = directory[1];
-    expect(isInstallablePlugin(directory[0]!)).toBe(true);
+    expect(isInstallablePlugin(directory[0]!)).toBe(false);
     expect(isInstallablePlugin(pendingPlugin!)).toBe(false);
     if (pendingPlugin?.catalogStatus !== "approval-pending") {
       throw new Error("Expected the pending vendor in the directory catalog.");
@@ -145,7 +139,7 @@ describe("plugin catalog loader", () => {
     expectTypeOf(pendingPlugin).not.toMatchTypeOf<PluginDefinition>();
 
     const installable = loadCatalog(modules, assets);
-    expect(installable.map((plugin) => plugin.id)).toEqual(["context"]);
+    expect(installable.map((plugin) => plugin.id)).toEqual([]);
     expect(
       resolveCatalogInstallations(
         [
@@ -201,33 +195,56 @@ describe("plugin catalog loader", () => {
     ).toBe(3);
     expect(catalog.every((plugin) => plugin.logo.src.length > 0)).toBe(true);
 
-    const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
+    const byId = new Map(directory.map((plugin) => [plugin.id, plugin]));
     expect(byId.get("context")).toMatchObject({
       kind: "mcp-url",
       url: "https://mcp.context.dev/mcp",
       authentication: "oauth",
+      connection: { type: "verification-pending", blocker: expect.stringContaining("Context.dev") },
     });
     expect(byId.get("exa")).toMatchObject({
       kind: "mcp-url",
       url: "https://mcp.exa.ai/mcp",
       authentication: "optional-oauth",
+      connection: { type: "verification-pending", blocker: expect.stringContaining("Exa") },
     });
     expect(byId.get("firecrawl")).toMatchObject({
       kind: "mcp-url",
       url: "https://mcp.firecrawl.dev/v2/mcp-oauth",
       authentication: "oauth",
+      connection: {
+        type: "verification-pending",
+        blocker: expect.stringContaining("Firecrawl"),
+      },
     });
     expect(byId.get("parallel-search")).toMatchObject({
       kind: "mcp-url",
       url: "https://search.parallel.ai/mcp-oauth",
       authentication: "oauth",
+      connection: {
+        type: "verification-pending",
+        blocker: expect.stringContaining("Parallel"),
+      },
     });
     expect(byId.get("hoplite")).toMatchObject({
       kind: "mcp-url",
       url: "https://api.hoplite.sh/mcp",
       authentication: "oauth",
       featuredRank: 3,
-      connection: { type: "ready" },
+      connection: {
+        type: "verification-pending",
+        blocker: expect.stringContaining("Hoplite"),
+      },
+    });
+    expect(byId.get("gmail")).toMatchObject({
+      kind: "mcp-unavailable",
+      authentication: "oauth",
+      featuredRank: 1,
+      connection: {
+        type: "brokered",
+        broker: { name: "Composio", url: "https://composio.dev" },
+        pendingBlocker: expect.stringContaining("Composio"),
+      },
     });
   });
 
@@ -237,19 +254,23 @@ describe("plugin catalog loader", () => {
         plugin.catalogStatus === "approval-pending" ||
         plugin.catalogStatus === "verification-pending",
     );
-    expect(pending).toHaveLength(48);
+    expect(pending).toHaveLength(54);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(32);
+    ).toHaveLength(38);
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
-      expect(plugin.connection).toMatchObject({
-        type: plugin.catalogStatus,
-        blocker: expect.stringMatching(/\S/),
-      });
+      if (plugin.connection.type === "brokered") {
+        expect(plugin.connection.pendingBlocker).toEqual(expect.stringMatching(/\S/));
+      } else {
+        expect(plugin.connection).toMatchObject({
+          type: plugin.catalogStatus,
+          blocker: expect.stringMatching(/\S/),
+        });
+      }
       expect(isInstallablePlugin(plugin)).toBe(false);
       expect(new Set(plugin.approvals)).toEqual(
         new Set(
@@ -334,7 +355,7 @@ describe("plugin catalog loader", () => {
   });
 
   it("keeps removed builtins visible and Custom MCP independent", () => {
-    const catalog = loadCatalog();
+    const catalog = loadDirectoryCatalog();
     const exa = catalog.find((plugin) => plugin.id === "exa");
     if (!exa) throw new TypeError("Exa is missing from the catalog.");
     expect(

@@ -12,7 +12,7 @@ const EXPECTED_IDS =
   "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github gmail help-scout hoplite hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
-const INSTALLABLE_IDS = ["context", "hoplite", "exa", "firecrawl", "parallel-search"];
+const INSTALLABLE_IDS: readonly string[] = [];
 
 describe("milestone 13 plugin lifecycle matrix", () => {
   it("keeps verified plugins installable and every unverified plugin blocked", () => {
@@ -38,18 +38,25 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         plugin.catalogStatus === "approval-pending" ||
         plugin.catalogStatus === "verification-pending",
     );
-    expect(pending).toHaveLength(48);
+    expect(pending).toHaveLength(54);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(32);
+    ).toHaveLength(38);
     for (const plugin of pending) {
-      expect(plugin.connection).toMatchObject({
-        type: plugin.catalogStatus,
-        blocker: expect.stringMatching(/\S/),
-      });
+      if (plugin.connection.type === "brokered") {
+        // Brokered entries keep their transport shape so the Connect surface can
+        // recover them once the lifecycle is verified; the named blocker still
+        // reports the missing credential proof.
+        expect(plugin.connection.pendingBlocker).toEqual(expect.stringMatching(/\S/));
+      } else {
+        expect(plugin.connection).toMatchObject({
+          type: plugin.catalogStatus,
+          blocker: expect.stringMatching(/\S/),
+        });
+      }
       expect(isInstallablePlugin(plugin)).toBe(false);
     }
 
@@ -75,9 +82,28 @@ describe("milestone 13 plugin lifecycle matrix", () => {
       transport: { type: "url", url: "https://api.hoplite.sh/mcp" },
       authentication: "oauth",
       featuredRank: 3,
-      connection: { type: "ready" },
+      connection: {
+        type: "verification-pending",
+        blocker: expect.stringContaining("Hoplite"),
+      },
       approvals: ["production", "account-wide"],
     });
+    expect(byId.get("gmail")).toMatchObject({
+      transport: { type: "unavailable" },
+      connection: {
+        type: "brokered",
+        broker: { name: "Composio" },
+        pendingBlocker: expect.stringContaining("Composio"),
+      },
+    });
+    for (const id of ["context", "exa", "firecrawl", "parallel-search"]) {
+      expect(byId.get(id)).toMatchObject({
+        connection: {
+          type: "verification-pending",
+          blocker: expect.stringMatching(/\S/),
+        },
+      });
+    }
     expect(byId.get("computer-use")).toMatchObject({
       platforms: ["macos"],
       connection: {

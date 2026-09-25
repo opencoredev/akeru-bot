@@ -12,6 +12,10 @@ platforms, permissions, approval classes, setup, documentation, source, and depe
 Health stays **Not checked** until a real request succeeds. An enabled plugin is not proof that its
 connection works. A routine can require an enabled connector.
 
+Entries marked **Verification pending** cannot be connected yet. The directory shows the vendor's
+official recipe and the named blocker so the entry can be re-verified; plugins only become available
+after a real install, connect, use, disable, reconnect, and remove lifecycle passes.
+
 ## Plugin actions
 
 - **Add** installs a public or local plugin.
@@ -36,8 +40,9 @@ for that bot. Changing the bot's provider starts a fresh provider session with t
 
 ## Composio integrations
 
-Gmail appears as a normal plugin with a **Composio** provider badge. Select **Connect**, then enter a
-Composio API key. Akeru opens Composio's hosted sign-in page for the Gmail account.
+Gmail appears as a normal plugin with a **Composio** provider badge. Its connection lifecycle is
+still verification-pending: the entry names the required Composio API key and connected Gmail
+account, and **Connect** stays unavailable until that lifecycle is verified.
 
 Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys). You can also save or
 replace the key under **Settings > Plugins**. Akeru stores the key on the environment server, not in

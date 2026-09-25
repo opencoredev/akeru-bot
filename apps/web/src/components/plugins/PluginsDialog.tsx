@@ -63,6 +63,7 @@ import {
   buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
+  pluginBlocker,
   type PluginFilter,
 } from "./pluginPresentation";
 
@@ -100,6 +101,16 @@ export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: read
     type: "warning" as const,
     title: `${pluginTitle} connected with a session issue`,
     description: `${recoveryFailures.join(" ")} Restart the affected bot session to retry.`,
+  };
+}
+
+export function pluginBrokeredBlockerNotice(plugin: PluginDirectoryDefinition) {
+  const blocker = pluginBlocker(plugin);
+  if (plugin.connection.type !== "brokered" || blocker === null) return null;
+  return {
+    type: "warning" as const,
+    title: `${plugin.title} is not available yet`,
+    description: blocker,
   };
 }
 
@@ -292,6 +303,15 @@ function PluginsDialogForEnvironment({
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
     if (plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio") {
+      // The catalog already disables this toggle; a direct caller still gets
+      // the named blocker instead of a dead click.
+      if (enabled) {
+        const notice = pluginBrokeredBlockerNotice(plugin);
+        if (notice) {
+          toastManager.add(notice);
+          return;
+        }
+      }
       const mcpServerId = pluginMcpServerId(plugin);
       if (enabled && composioStatus.data?.configured !== true) {
         setComposioSetupPlugin(plugin);
