@@ -10,6 +10,9 @@ import { assert, describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Cause from "effect/Cause";
+import * as Runtime from "effect/Runtime";
+import * as Exit from "effect/Exit";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
 
@@ -186,6 +189,17 @@ describe("pair tailscale local target", () => {
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
 
+const runCliCaptured = (args: ReadonlyArray<string>) =>
+  provideCliTestLayers(
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(runCli(args));
+      const errorLines = (yield* TestConsole.errorLines).filter(
+        (line): line is string => typeof line === "string",
+      );
+      return { exit, errorLines };
+    }),
+  );
+
 const provideCliTestLayers = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.provide(effect, Layer.mergeAll(CliRuntimeLayer, TestConsole.layer));
 
@@ -334,29 +348,30 @@ describe("akeru pair", () => {
   it.effect("refuses a non-http --public-url and --public-url with --tailscale", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-bad-"));
-      const render = (error: unknown) =>
-        String(
-          typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
-        );
+      const badScheme = yield* runCliCaptured([
+        "pair",
+        "--base-dir",
+        baseDir,
+        "--public-url",
+        "ftp://example.com",
+      ]);
+      const both = yield* runCliCaptured([
+        "pair",
+        "--base-dir",
+        baseDir,
+        "--public-url",
+        "https://example.com",
+        "--tailscale",
+      ]);
 
-      const badScheme = yield* provideCliTestLayers(
-        runCli(["pair", "--base-dir", baseDir, "--public-url", "ftp://example.com"]).pipe(
-          Effect.flip,
-        ),
-      );
-      const both = yield* provideCliTestLayers(
-        runCli([
-          "pair",
-          "--base-dir",
-          baseDir,
-          "--public-url",
-          "https://example.com",
-          "--tailscale",
-        ]).pipe(Effect.flip),
-      );
-
-      assert.include(render(badScheme), "must use http or https");
-      assert.include(render(both), "not both");
+      for (const { exit, errorLines } of [badScheme, both]) {
+        if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+        assert.equal(exit.cause.reasons.filter(Cause.isFailReason).length, 1);
+        assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+        assert.isAbove(errorLines.length, 0);
+      }
+      assert.include(badScheme.errorLines.at(-1) ?? "", "must use http or https");
+      assert.include(both.errorLines.at(-1) ?? "", "not both");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -416,13 +431,12 @@ describe("akeru pair", () => {
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-none-test-"));
 
-      const error = yield* provideCliTestLayers(
-        runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
-      );
+      const { exit, errorLines } = yield* runCliCaptured(["pair", "--base-dir", baseDir]);
 
-      const rendered = String(
-        typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
-      );
+      if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+      assert.equal(exit.cause.reasons.filter(Cause.isFailReason).length, 1);
+      assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+      const rendered = errorLines.at(-1) ?? "";
       assert.include(rendered, "No running Akeru Bot server found.");
       assert.include(rendered, "npx akeru-bot serve");
     }).pipe(Effect.provide(NodeServices.layer)),
@@ -446,14 +460,14 @@ describe("akeru pair", () => {
           state: { ...state, pid: 4_194_305 },
         });
 
-        const error = yield* provideCliTestLayers(
-          runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
-        );
-
-        const rendered = String(
-          typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
-        );
+        const { exit, errorLines } = yield* runCliCaptured(["pair", "--base-dir", baseDir]);
+        if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+        assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+        assert.isAbove(errorLines.length, 0);
+        // Expected errors print their message only; stack frames belong to defects.
+        const rendered = errorLines.at(-1) ?? "";
         assert.include(rendered, "No running Akeru Bot server found.");
+        assert.notMatch(rendered, /\n\s+at /);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -476,6 +490,7 @@ describe("akeru pair", () => {
         runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
       );
 
+      assert.isFalse(Runtime.getErrorReported(error));
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );

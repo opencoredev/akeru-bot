@@ -58,6 +58,18 @@ function httpsOrigin(endpoint: string): string | undefined {
   }
 }
 
+export function formatBytes(value: number): string {
+  if (value < 1_024) return `${String(Math.round(value))} B`;
+  const units = ["KB", "MB", "GB", "TB"] as const;
+  let next = value;
+  let unitIndex = -1;
+  do {
+    next /= 1_024;
+    unitIndex += 1;
+  } while (next >= 1_024 && unitIndex < units.length - 1);
+  return `${next.toFixed(next >= 100 ? 0 : next >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+}
+
 function redact(value: string): string {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~-]+/giu, "Bearer [REDACTED]")
@@ -168,7 +180,7 @@ export async function runRemoteDoctor(input: {
         check(
           "disk",
           freeBytes >= 512 * 1024 * 1024 ? "pass" : "fail",
-          `${String(Math.floor(freeBytes / 1024 / 1024))} MiB available.`,
+          `${formatBytes(freeBytes)} available.`,
           false,
           { freeBytes: String(freeBytes) },
         ),
@@ -237,7 +249,7 @@ export async function runRemoteDoctor(input: {
       );
     }
   } else {
-    checks.push(check("account-binding", "warning", "Optional account link is not configured."));
+    checks.push(check("account-binding", "pass", "Optional account link is not configured."));
   }
 
   if (!container && shouldRepair("update-credential") && !NodeFS.existsSync(controlTokenPath)) {
@@ -436,7 +448,7 @@ export async function runRemoteDoctor(input: {
     check(
       "logs",
       logBytes < 100 * 1024 * 1024 ? "pass" : "warning",
-      `${String(logBytes)} bytes in the boot service log.`,
+      `${formatBytes(logBytes)} in the boot service log.`,
       logBytes >= 100 * 1024 * 1024,
       { bytes: String(logBytes) },
     ),

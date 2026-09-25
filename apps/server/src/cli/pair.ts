@@ -42,6 +42,7 @@ import {
 
 import { hasPairedAdminClient } from "../auth/adminClients.ts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import { reportExpectedCliError } from "./errors.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import {
@@ -182,6 +183,24 @@ export const parsePublicPairingBaseUrl = (raw: string): string | InvalidPublicUr
   }
   return url.origin;
 };
+
+/**
+ * Errors whose message already tells the user what to do, printed without a
+ * stack trace. Anything else in the channel — auth-store failures, config
+ * errors, defects — falls through to `runMain` with its cause intact.
+ */
+const PAIR_USER_FACING_ERROR_TAGS = [
+  "NoRunningServerError",
+  "InvalidPublicUrlError",
+  "PublicUrlWithTailscaleError",
+  "AdminAlreadyPairedError",
+  "MagicDnsNameMissingError",
+  "ServesOtherEnvironmentError",
+  "ServePortOccupiedError",
+  "TailscaleServeFailedError",
+  "DevServerNotProxiableError",
+  "TailscaleUnavailableError",
+] as const;
 
 const resolvePublicPairingBaseUrl = Effect.fn("pair.resolvePublicPairingBaseUrl")(
   function* (input: { readonly publicUrl: Option.Option<string>; readonly tailscale: boolean }) {
@@ -684,6 +703,9 @@ export const pairCommand = Command.make("pair", {
           qrCode: flags.qr && (yield* PairStdoutIsTerminal),
         }),
       );
-    }).pipe(Effect.provide(FetchHttpClient.layer)),
+    }).pipe(
+      reportExpectedCliError(PAIR_USER_FACING_ERROR_TAGS),
+      Effect.provide(FetchHttpClient.layer),
+    ),
   ),
 );

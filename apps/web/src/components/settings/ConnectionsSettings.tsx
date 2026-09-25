@@ -2780,9 +2780,16 @@ export function ConnectionsSettings() {
     <SettingsRow
       title="Network access"
       description={
-        currentAuthPolicy === "remote-reachable"
-          ? "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
-          : "This backend is only reachable on this machine. Restart it with a non-loopback host to enable remote pairing."
+        currentAuthPolicy === "remote-reachable" ? (
+          "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
+        ) : (
+          <>
+            This server listens only on localhost. Other devices can reach it through Tailscale
+            Serve (<code className="font-mono text-foreground/85">akeru pair --tailscale</code>) or
+            after a restart with a reachable{" "}
+            <code className="font-mono text-foreground/85">--host</code>.
+          </>
+        )
       }
       control={
         <Tooltip>
