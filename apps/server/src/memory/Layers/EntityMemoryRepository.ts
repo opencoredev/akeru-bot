@@ -33,6 +33,7 @@ import {
 } from "../Services/EntityMemoryRepository.ts";
 import { encodeMemoryArchiveJson } from "../MemoryArchiveJson.ts";
 import { MemoryRevisionWriteLock } from "../Services/MemoryRevisionWriteLock.ts";
+import { invalidateEntityMemoryObservations } from "../EntityMemoryInvalidation.ts";
 
 const EntityMemoryDbRow = Schema.Struct({
   id: AkeruMemoryId,
@@ -293,6 +294,41 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateDerivedCopies")),
     );
 
+  const invalidateObservations = (tenantId: string, rootId: string) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<{ readonly thread_id: string }>`
+        SELECT thread_id FROM akeru_memory_derived_copies
+        WHERE tenant_id = ${tenantId} AND root_id = ${rootId}
+      `;
+      // A failed clear must abort the enclosing transaction. Otherwise the
+      // tombstone would commit while stale observations stay injectable.
+      yield* Effect.tryPromise({
+        try: () =>
+          invalidateEntityMemoryObservations(
+            rows.map((row) => [row.thread_id, row.thread_id] as const),
+          ),
+        catch: toPersistenceSqlError("EntityMemoryRepository.invalidateObservations:clear"),
+      });
+    }).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateObservations")));
+
+  const recordDerivedCopies: NonNullable<EntityMemoryRepositoryShape["recordDerivedCopies"]> = (
+    input,
+  ) =>
+    sql.withTransaction(
+      Effect.forEach(
+        input.revisions,
+        (revision) => sql`
+          INSERT INTO akeru_memory_derived_copies
+            (tenant_id, root_id, revision_id, thread_id, created_at)
+          VALUES (${input.tenantId}, ${revision.rootId}, ${revision.id}, ${input.threadId}, datetime('now'))
+          ON CONFLICT (tenant_id, root_id, thread_id) DO UPDATE SET
+            revision_id = excluded.revision_id,
+            created_at = excluded.created_at
+        `,
+        { discard: true },
+      ).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies"))),
+    ).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies:transaction")));
+
   const insert: EntityMemoryRepositoryShape["insert"] = (input) =>
     writeLock.withPermit(
       Effect.gen(function* () {
@@ -440,10 +476,11 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                   actualRevision: null,
                 });
               }
-              yield* sql`
-                DELETE FROM akeru_memory_derived_copies
-                WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
-              `;
+              // A tombstone invalidates every packet/observation copy. The
+              // next provider turn rebuilds from the current (tombstoned)
+              // revision, so forgotten facts cannot reappear from a cache.
+              yield* invalidateObservations(input.access.tenantId, input.rootId);
+              yield* invalidateDerivedCopies(input.access.tenantId, input.rootId);
               yield* insertRow(next);
             }),
           )
@@ -1335,6 +1372,9 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                   actualRevision: null,
                 });
               }
+              if (next.deletionState === "tombstoned") {
+                yield* invalidateObservations(input.access.tenantId, next.rootId);
+              }
               yield* invalidateDerivedCopies(input.access.tenantId, next.rootId);
               yield* insertRow(next);
             }),
@@ -1351,6 +1391,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     );
 
   return {
+    recordDerivedCopies,
     insert,
     revise,
     tombstone,

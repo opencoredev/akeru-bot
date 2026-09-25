@@ -28,6 +28,13 @@ and OpenCode Go use this unified path, including instance-specific model transpo
 OpenCode is the compatibility runtime and receives memory through its native per-prompt system
 field. Memory refresh does not require restarting a chat.
 
+Entity memory packets are built by `ProviderMemoryPacket` from authorized current revisions. The
+builder applies the same ordering and fact, character, and token bounds for every provider, so
+Mastra providers and the OpenCode compatibility bridge receive equivalent memory input. A
+tombstone is excluded on the next packet or recall read. Tombstoning also removes derived-copy
+rows; the Mastra invalidation call clears that thread's observational memory before a later turn
+can rebuild it.
+
 ## Automatic curation
 
 `AkeruMemoryTurnHarness` is the single provider-neutral memory lifecycle. Every provider enters the

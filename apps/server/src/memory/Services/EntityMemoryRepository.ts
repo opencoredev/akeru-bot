@@ -132,6 +132,11 @@ export type EntityMemoryRepositoryError =
   | EntityMemoryImportError;
 
 export interface EntityMemoryRepositoryShape {
+  readonly recordDerivedCopies?: (input: {
+    readonly tenantId: string;
+    readonly threadId: string;
+    readonly revisions: ReadonlyArray<AkeruMemoryRevision>;
+  }) => Effect.Effect<void, EntityMemoryRepositoryError>;
   readonly insert: (
     input: InsertEntityMemoryInput,
   ) => Effect.Effect<AkeruMemoryRevision, EntityMemoryRepositoryError>;

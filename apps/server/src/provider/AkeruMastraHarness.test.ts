@@ -44,6 +44,7 @@ import {
 import { AKERU_RECENT_TURN_LIMIT } from "./RecentConversation.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { invalidateEntityMemoryObservations } from "../memory/EntityMemoryInvalidation.ts";
 
 describe("Akeru action classifier", () => {
   it.each([
@@ -565,6 +566,69 @@ describe("AkeruMastraHarness", () => {
       db.close();
     }
   };
+
+  it("scopes entity invalidation to the owning harness and thread resources", async () => {
+    const firstDirectory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-a-"));
+    const secondDirectory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-b-"));
+    const first = await makeObservationHarness(firstDirectory);
+    const second = await makeObservationHarness(secondDirectory);
+    const snapshot = {
+      current: {
+        id: "owned-observation",
+        generationCount: 1,
+        originType: "initial",
+        activeObservations: "Shared fact.",
+        bufferedObservations: "",
+        bufferedReflection: null,
+        totalTokensObserved: 1,
+        observationTokenCount: 1,
+        createdAt: "2026-09-13T12:00:00.000Z",
+        updatedAt: "2026-09-13T12:01:00.000Z",
+      },
+      history: [],
+    } as const;
+    try {
+      await first.restoreObservationalMemory!("thread-a", snapshot);
+      await second.restoreObservationalMemory!("thread-b", snapshot);
+      await invalidateEntityMemoryObservations([["thread-a", "thread-a"]]);
+      assert.isNull((await first.readObservationalMemory!("thread-a")).current);
+      assert.isNotNull((await second.readObservationalMemory!("thread-b")).current);
+    } finally {
+      await first.destroy();
+      await second.destroy();
+      NodeFS.rmSync(firstDirectory, { recursive: true, force: true });
+      NodeFS.rmSync(secondDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("clears observational memory used by a tombstone invalidation", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-tombstone-"));
+    const harness = await makeObservationHarness(directory);
+    try {
+      await harness.restoreObservationalMemory!("thread-tombstone", {
+        current: {
+          id: "observation-before-forget",
+          generationCount: 1,
+          originType: "initial",
+          activeObservations: "A forgotten fact.",
+          bufferedObservations: "",
+          bufferedReflection: null,
+          totalTokensObserved: 3,
+          observationTokenCount: 1,
+          createdAt: "2026-09-13T12:00:00.000Z",
+          updatedAt: "2026-09-13T12:01:00.000Z",
+        },
+        history: [],
+      });
+      await harness.clearObservationalMemory!("thread-tombstone");
+      const cleared = await harness.readObservationalMemory!("thread-tombstone");
+      assert.isNull(cleared.current);
+      assert.deepEqual(cleared.history, []);
+    } finally {
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
 
   it("keeps the reply path clear when an observation fails and retries it", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-failure-"));

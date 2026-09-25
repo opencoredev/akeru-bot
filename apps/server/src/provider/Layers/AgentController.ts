@@ -82,6 +82,7 @@ import {
   EntityMemoryRepository,
   type EntityMemoryRepositoryShape,
 } from "../../memory/Services/EntityMemoryRepository.ts";
+import { buildProviderMemoryPacket } from "../../memory/ProviderMemoryPacket.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
@@ -229,6 +230,7 @@ interface PendingTurn {
   readonly botUsage: AgentControllerSendTurnInput["botUsage"];
   readonly toolSession: AkeruToolSession;
   readonly memoryAccess: BotMemoryAccess | undefined;
+  readonly entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   readonly reviewInput: string;
   readonly hiddenWake: boolean;
 }
@@ -252,8 +254,10 @@ interface ActiveSession {
   readonly connectorSessionApprovals: Set<string>;
   toolSession: AkeruToolSession;
   memoryAccess: BotMemoryAccess | undefined;
+  entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   configuredToolSession: AkeruToolSession;
   configuredMemoryAccess: BotMemoryAccess | undefined;
+  configuredEntityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   privateBotMemory: boolean;
   readonly workspaceResourceKey: string;
   readonly pendingApprovals: Map<string, PendingApproval>;
@@ -287,6 +291,7 @@ interface LegacyResourceIdentity {
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
   memoryAccess: BotMemoryAccess | undefined;
+  entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   readonly botName: string | undefined;
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
@@ -930,6 +935,38 @@ const make = (options?: AgentControllerLiveOptions) =>
             groupMemberBotIds: access.groupMemberBotIds,
           }
         : undefined;
+    };
+    const refreshEntityMemoryAccess = async (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): Promise<AkeruMemoryThreadAccess | undefined> => {
+      if (!access || access.groupId === null || Option.isNone(projectionSnapshotQuery)) {
+        return access;
+      }
+      const snapshot = await runPromise(projectionSnapshotQuery.value.getSnapshot());
+      const group = snapshot.groups.find((candidate) => candidate.id === access.groupId);
+      if (!group) return undefined;
+      const groupMemberBotIds = group.members
+        .filter((member) => member.kind === "bot")
+        .map((member) => member.botId);
+      const respondingBotId = access.respondingBotId ?? access.botId;
+      if (respondingBotId === null || !groupMemberBotIds.includes(respondingBotId)) return undefined;
+      return { ...access, groupMemberBotIds };
+    };
+    const entityMemoryContext = async (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): Promise<string> => {
+      const current = await refreshEntityMemoryAccess(access);
+      if (!current || !options?.entityMemoryRepository) return "";
+      const revisions = await runPromise(options.entityMemoryRepository.listCurrent({ access: current }));
+      await runPromise(
+        options.entityMemoryRepository.recordDerivedCopies?.({
+          tenantId: current.tenantId,
+          threadId: String(current.threadId),
+          revisions,
+        }) ?? Effect.void,
+      );
+      const packet = buildProviderMemoryPacket(current.threadId, revisions);
+      return packet.rendered ? `<entity-memory>\n${packet.rendered}\n</entity-memory>` : "";
     };
     const memoryHandlers = (
       access: AkeruMemoryThreadAccess | undefined,
@@ -1678,6 +1715,18 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (active.admittingTurn?.turnId !== turnId) return;
         const memoryAccess =
           pending.memoryAccess && settings?.enabled ? pending.memoryAccess : undefined;
+        // Entity memory rides on durable memory access. With Memory off (or a
+        // delegated turn without memory) the turn runs without memory, so group
+        // membership is only checked when memory is actually in play.
+        const entityMemoryAccess = memoryAccess
+          ? await refreshEntityMemoryAccess(pending.entityMemoryAccess)
+          : undefined;
+        if (memoryAccess && pending.entityMemoryAccess && !entityMemoryAccess) {
+          active.admittingTurn = null;
+          beginPendingTurn(active, pending);
+          await failActiveTurn(active, pending.threadId, pending.turnId, new Error("The bot is no longer a member of this group."));
+          return;
+        }
         if (settings) active.privateBotMemory = settings.privateBotMemory;
         active.memoryAccess = memoryAccess;
         if (!memoryAccess) {
@@ -1727,7 +1776,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             const currentState = active.session.state.get();
             const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
               currentState;
-            const persistentMemoryContext = memoryTurn.context;
+            const entityPacket = await entityMemoryContext(entityMemoryAccess);
+            const persistentMemoryContext = [memoryTurn.context, entityPacket].filter(Boolean).join("\n\n");
             await active.session.state.set({
               ...stateWithoutMemory,
               ...(persistentMemoryContext ? { persistentMemoryContext } : {}),
@@ -2626,18 +2676,28 @@ const make = (options?: AgentControllerLiveOptions) =>
                 yield* Effect.promise(() =>
                   settings.privateBotMemory
                     ? botMemoryStore.readPromptSnapshot(nextMemoryAccess)
-                    : botMemoryStore.readPromptSnapshot(nextMemoryAccess).then((snapshot) => ({
-                        ...snapshot,
-                        memory: { ...snapshot.memory, content: "", charCount: 0 },
-                      })),
-                ),
+                    : botMemoryStore
+                        .readPromptSnapshot(nextMemoryAccess)
+                        .then((snapshot) => ({
+                          ...snapshot,
+                          memory: { ...snapshot.memory, content: "", charCount: 0 },
+                        })),
+              ),
               )
             : "";
+        const entityPacket = nextMemoryAccess
+          ? yield* runMastra("memory.packet", () => entityMemoryContext(input.memoryAccess))
+          : "";
+        const combinedMemoryContext = [frozenMemoryContext, entityPacket]
+          .filter(Boolean)
+          .join("\n\n");
         return yield* legacyProviderBridge
           .startSession(threadId, {
             ...input,
             personalityTone,
-            ...(frozenMemoryContext ? { persistentMemoryContext: frozenMemoryContext } : {}),
+            ...(combinedMemoryContext
+              ? { persistentMemoryContext: combinedMemoryContext }
+              : {}),
           })
           .pipe(
             Effect.tap((session) =>
@@ -2650,6 +2710,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   botName: input.botName,
                   personalityTone,
                   memoryAccess: nextMemoryAccess,
+                  entityMemoryAccess: input.memoryAccess,
                   memoryAccessKey: memoryAccessKey(nextMemoryAccess),
                   privateBotMemory: settings.privateBotMemory,
                 });
@@ -2868,8 +2929,10 @@ const make = (options?: AgentControllerLiveOptions) =>
           connectorSessionApprovals: new Set<string>(),
           toolSession,
           memoryAccess: nextMemoryAccess,
+          entityMemoryAccess: input.memoryAccess,
           configuredToolSession: toolSession,
           configuredMemoryAccess: nextMemoryAccess,
+          configuredEntityMemoryAccess: input.memoryAccess,
           privateBotMemory: settings.privateBotMemory,
           workspaceResourceKey,
           pendingApprovals: new Map<string, PendingApproval>(),
@@ -2917,6 +2980,24 @@ const make = (options?: AgentControllerLiveOptions) =>
           const memoryAccess = settings.enabled
             ? legacyResourceIdentity.get(key)?.memoryAccess
             : undefined;
+          const entityMemoryAccess = settings.enabled
+            ? yield* runMastra("memory.access", () =>
+                refreshEntityMemoryAccess(legacyResourceIdentity.get(key)?.entityMemoryAccess),
+              )
+            : undefined;
+          if (
+            settings.enabled &&
+            legacyResourceIdentity.get(key)?.entityMemoryAccess &&
+            !entityMemoryAccess
+          ) {
+            return yield* new AgentControllerRuntimeError({
+              operation: "sendTurn.memory",
+              detail: "The bot is no longer a member of this group.",
+            });
+          }
+          const entityPacket = entityMemoryAccess
+            ? yield* runMastra("memory.packet", () => entityMemoryContext(entityMemoryAccess))
+            : "";
           const conversation = bundle.readObservationalMemory
             ? yield* runMastra("memory.read", () => bundle.readObservationalMemory!(key, key))
             : undefined;
@@ -2976,6 +3057,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           const providerContext = [
             resolved?.provider === "opencode" ? turnInstructions : "",
             memoryTurn?.context,
+            entityPacket,
             observationContext,
           ]
             .filter(Boolean)
@@ -2993,8 +3075,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 Effect.gen(function* () {
                   if (!hasLegacyPending(key, pendingMemory)) return;
                   pendingMemory.turnId = String(result.turnId);
-                  if (input.hiddenWake === true)
-                    legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
+                  if (input.hiddenWake === true) legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                   pendingMemory.dispatchReturned = true;
                   for (const event of pendingMemory.earlyEvents) {
                     if (String(event.turnId) !== pendingMemory.turnId) continue;
@@ -3075,6 +3156,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           botUsage: input.botUsage,
           toolSession: active.configuredToolSession,
           memoryAccess: active.configuredMemoryAccess,
+          entityMemoryAccess: active.configuredEntityMemoryAccess,
           reviewInput: input.input ?? "",
           hiddenWake: input.hiddenWake === true,
         });
@@ -3622,16 +3704,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           Stream.map((event) => {
             if (event.type !== "turn.started") return event;
             const key = String(event.threadId);
-            const hiddenWake =
-              event.turnId === undefined
-                ? false
-                : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
-                  legacyPending(key).some(
-                    (pending) => !pending.dispatchReturned && pending.hiddenWake,
-                  );
-            return hiddenWake
-              ? { ...event, payload: { ...event.payload, hiddenWake: true } }
-              : event;
+            const hiddenWake = event.turnId === undefined
+              ? false
+              : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
+                legacyPending(key).some((pending) => !pending.dispatchReturned && pending.hiddenWake);
+            return hiddenWake ? { ...event, payload: { ...event.payload, hiddenWake: true } } : event;
           }),
           Stream.tap((event) =>
             Effect.gen(function* () {

@@ -36,6 +36,7 @@ import {
 import { MemoryRevisionWriteLockLive } from "../Services/MemoryRevisionWriteLock.ts";
 import { EntityMemoryRepositoryLive } from "./EntityMemoryRepository.ts";
 import { deriveAkeruWorkspaceId, resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
+import { registerEntityMemoryResource } from "../EntityMemoryInvalidation.ts";
 import { exportAkeruMemory } from "../MemoryExport.ts";
 import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "../MemoryImport.ts";
 
@@ -520,6 +521,45 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       if (resurrection._tag === "Failure") {
         assert.instanceOf(Cause.squash(resurrection.cause), EntityMemoryConflictError);
       }
+    }),
+  );
+
+  it.effect("does not commit a tombstone when observational memory cannot be cleared", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("forget-clear-fails-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("clear-fails-active", "bot:user", {
+          rootId,
+          fact: "stale-observation-value",
+        }),
+      });
+      const sql = yield* SqlClient.SqlClient;
+      const observedThreadId = "clear-fails-thread";
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("clear-fails-active")}, ${observedThreadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const unregister = registerEntityMemoryResource(observedThreadId, observedThreadId, async () => {
+        throw new Error("observational memory store unavailable");
+      });
+      const exit = yield* repository
+        .tombstone({
+          access: botAccess,
+          rootId,
+          expectedRevision: 1,
+          memoryId: AkeruMemoryId.make("clear-fails-tombstone"),
+          updatedAt: "2026-08-30T22:00:00.000Z",
+        })
+        .pipe(Effect.ensuring(Effect.sync(unregister)), Effect.exit);
+
+      assert.isTrue(exit._tag === "Failure");
+      const current = yield* repository.getCurrent({ access: botAccess, rootId });
+      assert.equal(current.deletionState, "active");
+      assert.equal(current.revision, 1);
+      assert.deepEqual(
+        yield* sql`SELECT thread_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [{ thread_id: observedThreadId }],
+      );
     }),
   );
 

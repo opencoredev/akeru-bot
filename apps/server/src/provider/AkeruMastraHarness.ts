@@ -64,6 +64,7 @@ import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 import { selectRecentConversation } from "./RecentConversation.ts";
+import { registerEntityMemoryResource } from "../memory/EntityMemoryInvalidation.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -1458,6 +1459,7 @@ export async function createAkeruMastraHarness(
   };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
+    registerResource(input.threadId);
     const resourceId = input.resourceId ?? input.threadId;
     const id = `${input.threadId}:${resourceId}:${input.modelId}:${NodeCrypto.randomUUID()}`;
     const now = DateTime.formatIso(DateTime.nowUnsafe());
@@ -1470,6 +1472,7 @@ export async function createAkeruMastraHarness(
   const observeExternalTurn: NonNullable<AkeruMastraHarness["observeExternalTurn"]> = async (
     input,
   ) => {
+    registerResource(input.threadId);
     const existingThread = await observationalMemory.memory.getThreadById({
       threadId: input.threadId,
       resourceId: input.threadId,
@@ -1510,6 +1513,7 @@ export async function createAkeruMastraHarness(
   void drainObservationQueue().catch(() => undefined);
 
   const readObservationalMemory = async (threadId: string, resourceId?: string) => {
+    registerResource(threadId, resourceId ?? threadId);
     const normalize = (
       record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
     ) => {
@@ -1537,18 +1541,35 @@ export async function createAkeruMastraHarness(
     return { current: normalize(current), history: history.map((record) => normalize(record)!) };
   };
 
+  // Clear and restore discard pending observations for the chat, so a retry
+  // cannot write observations back over the user's change.
+  const clearObservationalMemory = (threadId: string, resourceId = threadId) =>
+    queueObservation(threadId, resourceId, () => {
+      discardQueuedObservations.run(threadId, resourceId);
+      return observationalMemory.engine.clear(threadId, resourceId);
+    });
+  const registeredResources = new Map<string, () => void>();
+  const registerResource = (threadId: string, resourceId = threadId) => {
+    const key = `${threadId}\u0000${resourceId}`;
+    registeredResources.get(key)?.();
+    registeredResources.set(
+      key,
+      registerEntityMemoryResource(threadId, resourceId, clearObservationalMemory),
+    );
+  };
+
   return {
     controller,
-    // Clear and restore discard pending observations for the chat, so a retry
-    // cannot write observations back over the user's change.
-    clearObservationalMemory: (threadId, resourceId = threadId) =>
-      queueObservation(threadId, resourceId, () => {
-        discardQueuedObservations.run(threadId, resourceId);
-        return observationalMemory.engine.clear(threadId, resourceId);
-      }),
+    clearObservationalMemory,
     readObservationalMemory,
-    restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) =>
-      queueObservation(threadId, resourceId, async () => {
+    restoreObservationalMemory: async (
+      threadId,
+      snapshot,
+      resourceId = threadId,
+      expectedSnapshot,
+    ) => {
+      registerResource(threadId, resourceId);
+      return queueObservation(threadId, resourceId, async () => {
         const store = observationalMemory.engine.getStorage();
         if (
           expectedSnapshot &&
@@ -1617,13 +1638,16 @@ export async function createAkeruMastraHarness(
           }
           throw cause;
         }
-      }),
+      });
+    },
     observeAfterTurn,
     observeExternalTurn,
     drainObservationQueue,
     destroy: async () => {
       if (observationRetryTimer) await Effect.runPromise(Fiber.interrupt(observationRetryTimer));
       observationRetryTimer = undefined;
+      for (const unregister of registeredResources.values()) unregister();
+      registeredResources.clear();
       await observationDrain;
       await Promise.allSettled(observationTails.values());
       closing = true;
