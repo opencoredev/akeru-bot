@@ -3,12 +3,17 @@ import {
   ChannelConnectionId,
   type ChannelProvider,
   type EnvironmentId,
+  type ProjectId,
 } from "@t3tools/contracts";
+import { channelPickerProjectId } from "@t3tools/client-runtime/channel-presentation";
+import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
 
 import { cn } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -17,6 +22,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { parsePhotonHostedCredentials } from "./BotChannelsSettings";
+import { ChannelProjectSelect } from "./ChannelProjectSelect";
 import { channelProviderMeta, discordInviteUrl, slackPasteTarget } from "./channelProviderMeta";
 
 const STEPS = ["Set up", "Credentials", "Connect"] as const;
@@ -102,7 +108,19 @@ export function ChannelSetupDialog({
     reportFailure: false,
   });
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
+  const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
   const [botId, setBotId] = useState<string>(() => bots[0]?.id ?? CONNECT_LATER);
+  const [pickedProjectId, setPickedProjectId] = useState<ProjectId | null>(null);
+  const liveProjects = snapshot?.projects ?? [];
+  const projectId = channelPickerProjectId({
+    selected: pickedProjectId,
+    binding: undefined,
+    hint: snapshot
+      ? defaultProjectIdForBot(snapshot, botId === CONNECT_LATER ? null : BotId.make(botId))
+      : null,
+    liveProjects,
+  });
+  const projectMissing = botId !== CONNECT_LATER && projectId === null;
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<"hosted" | "self-hosted">("hosted");
   const [name, setName] = useState("");
@@ -132,12 +150,13 @@ export function ChannelSetupDialog({
     setPhotonCredentials("");
     setValues({});
     setBotId(bots[0]?.id ?? CONNECT_LATER);
+    setPickedProjectId(null);
     setConnectError(null);
     setBusy(false);
   };
 
   const save = async () => {
-    if (busy || !name.trim() || !credentialsComplete) return;
+    if (busy || !name.trim() || !credentialsComplete || projectMissing) return;
     setBusy(true);
     setConnectError(null);
     const saved = savedConnection.current;
@@ -164,10 +183,10 @@ export function ChannelSetupDialog({
       }
       savedConnection.current = { connectionId, name: name.trim(), mode, values };
     }
-    if (botId !== CONNECT_LATER) {
+    if (botId !== CONNECT_LATER && projectId !== null) {
       const attached = await attach({
         environmentId,
-        input: { botId: BotId.make(botId), connectionId, provider },
+        input: { botId: BotId.make(botId), connectionId, provider, projectId },
       });
       if (attached._tag === "Failure") {
         setBusy(false);
@@ -337,6 +356,15 @@ export function ChannelSetupDialog({
                   </SelectPopup>
                 </Select>
               </div>
+              {botId !== CONNECT_LATER ? (
+                <ChannelProjectSelect
+                  projects={liveProjects}
+                  value={projectId}
+                  onChange={setPickedProjectId}
+                  label="Project for channel turns"
+                  disabled={busy}
+                />
+              ) : null}
             </div>
           ) : null}
 
@@ -357,7 +385,7 @@ export function ChannelSetupDialog({
               </Button>
             ) : (
               <Button
-                disabled={busy || !name.trim() || !credentialsComplete}
+                disabled={busy || !name.trim() || !credentialsComplete || projectMissing}
                 onClick={() => void save()}
               >
                 {botId === CONNECT_LATER ? "Save connection" : "Connect"}

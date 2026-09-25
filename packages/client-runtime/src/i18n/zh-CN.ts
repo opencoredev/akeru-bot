@@ -1145,6 +1145,18 @@ export const zhCNCatalog: TranslationCatalog = {
   "{name} overview": "{name} 概览",
   "Close bot sidebar": "关闭机器人侧边栏",
   "Could not update channel": "无法更新频道",
+  "Add a project before connecting a channel.": "请先添加项目，再连接频道。",
+  "Choose a project": "选择项目",
+  "Choose another project": "选择其他项目",
+  "The project for this channel is unavailable. Choose another project to reconnect it.":
+    "此频道的项目不可用。请选择其他项目以重新连接。",
+  "Could not move channel to this project": "无法将频道移到此项目",
+  "Project for {name}": "{name} 的项目",
+  "Reconnect in this project": "在此项目中重新连接",
+  "Move to this project": "移到此项目",
+  "Reconnect in {project}": "在 {project} 中重新连接",
+  "Repair this channel from Settings > Bot channels on the host.":
+    "请在主机的“设置”>“机器人频道”中修复此频道。",
   "Could not unassign channel": "无法取消分配频道",
   "{name} channels": "{name} 的频道",
   "Connect an environment first.": "请先连接一个环境。",

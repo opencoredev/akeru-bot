@@ -36,6 +36,7 @@ import {
   detachChannel,
   disconnectChannel,
   reconnectChannel,
+  changeChannelProject,
   resumeThreadTurn,
   sendChannelMessage,
   setThreadMessageReaction,
@@ -223,6 +224,11 @@ describe("environment commands", () => {
       yield* detachChannel({ botId, provider: "telegram" }).pipe(
         Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
       );
+      yield* changeChannelProject({
+        botId,
+        provider: "telegram",
+        projectId: ProjectId.make("project-2"),
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
       expect(dispatched.map((command) => command.type)).toEqual([
         "channel.connect",
@@ -230,7 +236,9 @@ describe("environment commands", () => {
         "channel.send",
         "channel.disconnect",
         "channel.detach",
+        "channel.change-project",
       ]);
+      expect(dispatched.at(-1)).toMatchObject({ projectId: "project-2", provider: "telegram" });
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 

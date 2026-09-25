@@ -10,11 +10,13 @@ Open **Settings > Bot channels** with an environment administrator connection.
 
 1. Select a service and open its setup form.
 2. Enter the credentials and a connection name.
-3. Select the bot that answers and click **Connect**.
+3. Select the bot that answers, choose a project, and click **Connect**.
 
 Select **Connect later** to save a connection without assigning a bot. You can assign it from the saved connection card.
 
-Akeru chooses the workspace when you connect the bot. It prefers the bot's most recently active conversation in an available workspace. If the bot has none, Akeru uses the workspace with the most recent activity. The environment needs at least one workspace.
+Choose the project that should receive this channel's turns when you connect the bot. Akeru suggests the project the bot used most recently, but you can pick any project. It keeps replies in that project, so messages cannot silently move between workspaces. **Connect** stays unavailable until a project is selected. If the environment has no projects yet, the form asks you to add one first.
+
+To move a working channel, pick another project on its card in **Settings > Bot channels** or in the bot's Channels panel, then click **Move to this project**. Akeru restarts the channel in the new project. If the move fails, the channel keeps running in its earlier project.
 
 You can reconnect, disconnect, unassign, or delete a connection. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails during server restart shows a repair state instead of appearing connected.
 
@@ -28,7 +30,7 @@ Akeru records confirmed replies and prevents normal retries from posting them ag
 
 A network failure can leave delivery unknown. Akeru keeps that attempt and does not post it again automatically. Settings and the bot's Channels panel show a warning. Check the external conversation before taking further action. Reconnecting does not prove whether the earlier reply arrived.
 
-Mobile shows channel health, the selected project, recent confirmed deliveries, and a warning when a channel needs attention. Recent delivery counts cover retained confirmations, not the channel's full history.
+Mobile shows channel health, the selected project, recent confirmed deliveries, and a warning when a channel needs attention. When a channel needs a new project, mobile tells you to repair it from Settings > Bot channels on the host; only an administrator session can reconnect a channel. Recent delivery counts cover retained confirmations, not the channel's full history.
 
 ## Status signals
 
@@ -96,3 +98,5 @@ Enter the credentials in Akeru, select a bot, and click **Connect**. Direct mess
 Anyone who can reach a connected bot can ask it to use the selected project and its enabled tools. The bot's permission mode still controls sensitive work, but channel membership is part of the access boundary.
 
 Keep Slack bots out of channels that should not reach the workspace. Limit Discord server and channel access. Use a private phone or messaging identity for Telegram, iMessage, and WhatsApp when the selected project contains sensitive data.
+
+If the selected project is removed, the channel pauses and shows **Choose another project**. To repair it, pick a project on the channel card in Settings or in the bot's Channels panel and click **Reconnect in this project**. On mobile, the chat's Channels section points you to Settings > Bot channels on the host. Messages resume once the channel reconnects.

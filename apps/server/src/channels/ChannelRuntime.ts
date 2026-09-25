@@ -44,6 +44,8 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
+export { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+
 import { ServerSecretStore, type SecretStoreError } from "../auth/ServerSecretStore.ts";
 import type { OrchestrationDispatchError } from "../orchestration/Errors.ts";
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
@@ -790,7 +792,7 @@ const dispatchInboundChannelMessage = (ctx: ChannelRuntimeContext, input: Inboun
           yield* Effect.gen(function* () {
             yield* replaceBinding(ctx, {
               ...binding,
-              status: "failed",
+              status: "blocked",
               lastAttemptAt: yield* deps.nowIso,
               lastError: "The selected project is unavailable. Choose another project.",
             });
@@ -1755,44 +1757,11 @@ const deleteChannelConnection = (ctx: ChannelRuntimeContext, connectionId: Chann
     ),
   );
 
-/**
- * The project a bot works in when a channel does not name one. Matches the in-app chat
- * default: the project with the most recent live activity, then the most recently updated.
- */
-export function defaultProjectIdForBot(
-  model: Pick<OrchestrationReadModel, "projects" | "threads">,
-  botId: BotId,
-): ProjectId | null {
-  const live = model.projects.filter((project) => project.deletedAt === null);
-  if (live.length === 0) return null;
-  const latestActivity = new Map<ProjectId, string>();
-  for (const thread of model.threads) {
-    if (thread.archivedAt !== null) continue;
-    const previous = latestActivity.get(thread.projectId);
-    if (!previous || thread.updatedAt > previous)
-      latestActivity.set(thread.projectId, thread.updatedAt);
-  }
-  const botThreads = model.threads.filter(
-    (thread) => thread.botId === botId && thread.archivedAt === null,
-  );
-  const botProject = botThreads
-    .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-    .map((thread) => live.find((project) => project.id === thread.projectId))
-    .find((project) => project !== undefined);
-  if (botProject) return botProject.id;
-  return live.toSorted(
-    (left, right) =>
-      (latestActivity.get(right.id) ?? right.updatedAt).localeCompare(
-        latestActivity.get(left.id) ?? left.updatedAt,
-      ) || left.title.localeCompare(right.title),
-  )[0]!.id;
-}
-
 const attachChannelConnection = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   connectionId: ChannelConnectionId,
-  requestedProjectId: ProjectId | undefined,
+  projectId: ProjectId,
   provider: ChannelProvider,
 ) =>
   withConnectionOperation(
@@ -1805,8 +1774,17 @@ const attachChannelConnection = (
     )(
       Effect.gen(function* () {
         const model = yield* ctx.deps.readModel;
-        const projectId = requestedProjectId ?? defaultProjectIdForBot(model, botId);
-        if (!projectId) return yield* failWith("Add a project before connecting a channel.");
+        const bot = model.bots.find(
+          (candidate) => candidate.id === botId && candidate.archivedAt === null,
+        );
+        if (!bot) return yield* failWith(`Bot '${botId}' is unavailable.`);
+        const project = model.projects.find(
+          (candidate) => candidate.id === projectId && candidate.deletedAt === null,
+        );
+        if (!project)
+          return yield* failWith(
+            "The selected project is unavailable. Choose another project.",
+          );
         const inUse = model.bots.some(
           (bot) =>
             bot.id !== botId &&
@@ -1889,6 +1867,79 @@ const detachChannelConnection = (
       );
       yield* stopRuntime(ctx, botId, provider);
       return sequence;
+    }),
+  );
+
+/**
+ * Moves a bot's channel to another live project. The old runtime stops before the new one
+ * starts because most transports cannot poll with the same credentials twice. If the new
+ * runtime cannot start, the binding keeps its previous project and records the failure, and
+ * a previously connected channel is restarted on its old project when possible.
+ */
+const changeChannelProject = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: LiveProvider,
+  projectId: ProjectId,
+) =>
+  withChannelOperation(
+    ctx,
+    provider,
+  )(
+    Effect.gen(function* () {
+      const model = yield* ctx.deps.readModel;
+      const bot = model.bots.find(
+        (candidate) => candidate.id === botId && candidate.archivedAt === null,
+      );
+      if (!bot) return yield* failWith(`Bot '${botId}' is unavailable.`);
+      const project = model.projects.find(
+        (candidate) => candidate.id === projectId && candidate.deletedAt === null,
+      );
+      if (!project)
+        return yield* failWith("The selected project is unavailable. Choose another project.");
+      const binding = bot.channelBindings?.find((candidate) => candidate.provider === provider);
+      if (!binding) return yield* failWith(`No ${provider} channel is assigned to this bot.`);
+      const secret = binding.connectionId
+        ? yield* loadConnectionSecret(ctx, binding.connectionId)
+        : yield* loadSecret(ctx, botId, provider);
+      if (!secret || secret.provider !== provider)
+        return yield* failWith(`No saved ${provider} credentials.`);
+      yield* assertChannelIdentityAvailable(ctx, botId, secret);
+      yield* stopRuntime(ctx, botId, provider);
+      const startOn = (target: ProjectId) =>
+        Effect.gen(function* () {
+          const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
+          const input = yield* connectInputFromSecret(botId, target, commandId, secret);
+          const started = yield* startChannel(ctx, input, binding.connectionId);
+          return yield* commitStartedChannel(ctx, started);
+        });
+      return yield* startOn(projectId).pipe(
+        Effect.catch((cause) => {
+          const restore =
+            binding.status === "connected" && binding.projectId && binding.projectId !== projectId
+              ? startOn(binding.projectId).pipe(
+                  Effect.as(true),
+                  Effect.catch(() => Effect.succeed(false)),
+                )
+              : Effect.succeed(false);
+          return restore.pipe(
+            Effect.flatMap((restored) =>
+              restored
+                ? Effect.fail(cause)
+                : Effect.gen(function* () {
+                    yield* replaceBinding(ctx, {
+                      ...binding,
+                      status: binding.status === "blocked" ? "blocked" : "failed",
+                      connectedAt: null,
+                      lastAttemptAt: yield* ctx.deps.nowIso,
+                      lastError: "Could not start the channel in the selected project. Try again.",
+                    }).pipe(Effect.ignoreCause);
+                    return yield* Effect.fail(cause);
+                  }),
+            ),
+          );
+        }),
+      );
     }),
   );
 
@@ -2124,12 +2175,17 @@ export interface ChannelRuntimeShape {
   readonly attach: (
     botId: BotId,
     connectionId: ChannelConnectionId,
-    projectId: ProjectId | undefined,
+    projectId: ProjectId,
     provider: ChannelProvider,
   ) => Effect.Effect<number, ChannelOperationError>;
   readonly disconnect: (
     botId: BotId,
     provider: ChannelProvider,
+  ) => Effect.Effect<number, ChannelOperationError>;
+  readonly changeProject: (
+    botId: BotId,
+    provider: ChannelProvider,
+    projectId: ProjectId,
   ) => Effect.Effect<number, ChannelOperationError>;
   readonly detach: (
     botId: BotId,
@@ -2205,6 +2261,8 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       deleteConnection: (connectionId) => deleteChannelConnection(ctx, connectionId),
       attach: (botId, connectionId, projectId, provider) =>
         attachChannelConnection(ctx, botId, connectionId, projectId, provider),
+      changeProject: (botId, provider, projectId) =>
+        changeChannelProject(ctx, botId, provider, projectId),
       disconnect: (botId, provider) => disconnectChannel(ctx, botId, provider),
       detach: (botId, provider) => detachChannelConnection(ctx, botId, provider),
       reconnect: (botId, provider) => reconnectChannel(ctx, botId, provider),

@@ -486,6 +486,7 @@ export const ChannelBindingStatus = Schema.Literals([
   "connected",
   "needs-reconnect",
   "failed",
+  "blocked",
   "not-live",
 ]);
 export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
@@ -1373,8 +1374,8 @@ const ChannelAttachCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   connectionId: ChannelConnectionId,
-  // Absent means the server uses the bot's default project, matching in-app chat.
-  projectId: Schema.optional(ProjectId),
+  // Every new attachment names its project explicitly. Legacy persisted bindings remain readable.
+  projectId: ProjectId,
   provider: ChannelProvider,
 });
 
@@ -1397,6 +1398,14 @@ const ChannelReconnectCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   provider: ChannelProvider,
+});
+
+const ChannelChangeProjectCommand = Schema.Struct({
+  type: Schema.Literal("channel.change-project"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+  projectId: ProjectId,
 });
 
 const ChannelSendCommand = Schema.Struct({
@@ -1924,6 +1933,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ChannelDisconnectCommand,
   ChannelDetachCommand,
   ChannelReconnectCommand,
+  ChannelChangeProjectCommand,
   ChannelSendCommand,
   GroupCreateCommand,
   GroupRenameCommand,

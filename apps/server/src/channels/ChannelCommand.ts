@@ -24,11 +24,13 @@ export const executeChannelCommand = (
         ? runtime.deleteConnection(command.connectionId)
         : command.type === "channel.attach"
           ? runtime.attach(command.botId, command.connectionId, command.projectId, command.provider)
-          : command.type === "channel.disconnect"
-            ? runtime.disconnect(command.botId, command.provider)
-            : command.type === "channel.detach"
-              ? runtime.detach(command.botId, command.provider)
-              : command.type === "channel.reconnect"
-                ? runtime.reconnect(command.botId, command.provider)
-                : runtime.sendChannelMessage(command)
+          : command.type === "channel.change-project"
+            ? runtime.changeProject(command.botId, command.provider, command.projectId)
+            : command.type === "channel.disconnect"
+              ? runtime.disconnect(command.botId, command.provider)
+              : command.type === "channel.detach"
+                ? runtime.detach(command.botId, command.provider)
+                : command.type === "channel.reconnect"
+                  ? runtime.reconnect(command.botId, command.provider)
+                  : runtime.sendChannelMessage(command)
   ).pipe(Effect.map((sequence) => ({ sequence })));

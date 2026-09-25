@@ -1196,6 +1196,18 @@ export const englishCatalog = {
   "{name} overview": "{name} overview",
   "Close bot sidebar": "Close bot sidebar",
   "Could not update channel": "Could not update channel",
+  "Add a project before connecting a channel.": "Add a project before connecting a channel.",
+  "Choose a project": "Choose a project",
+  "Choose another project": "Choose another project",
+  "The project for this channel is unavailable. Choose another project to reconnect it.":
+    "The project for this channel is unavailable. Choose another project to reconnect it.",
+  "Could not move channel to this project": "Could not move channel to this project",
+  "Project for {name}": "Project for {name}",
+  "Reconnect in this project": "Reconnect in this project",
+  "Move to this project": "Move to this project",
+  "Reconnect in {project}": "Reconnect in {project}",
+  "Repair this channel from Settings > Bot channels on the host.":
+    "Repair this channel from Settings > Bot channels on the host.",
   "Could not unassign channel": "Could not unassign channel",
   "{name} channels": "{name} channels",
   "Connect an environment first.": "Connect an environment first.",

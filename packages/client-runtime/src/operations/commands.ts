@@ -42,6 +42,7 @@ export type AttachChannelInput = CommandInput<"channel.attach">;
 export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
 export type DetachChannelInput = CommandInput<"channel.detach">;
 export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
+export type ChangeChannelProjectInput = CommandInput<"channel.change-project">;
 export type SendChannelMessageInput = CommandInput<"channel.send">;
 export type CreateGroupInput = CommandInput<"group.create">;
 export type RenameGroupInput = CommandInput<"group.rename">;
@@ -413,6 +414,16 @@ export const reconnectChannel: (input: ReconnectChannelInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "channel.reconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const changeChannelProject: (input: ChangeChannelProjectInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.changeChannelProject",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.change-project",
     commandId: yield* commandId(input),
   });
 });

@@ -12,6 +12,10 @@
       "types": "./src/themePreview.ts",
       "import": "./src/themePreview.ts"
     },
+    "./channelProject": {
+      "types": "./src/channelProject.ts",
+      "import": "./src/channelProject.ts"
+    },
     "./projectFavicon": {
       "types": "./src/projectFavicon.ts",
       "import": "./src/projectFavicon.ts"

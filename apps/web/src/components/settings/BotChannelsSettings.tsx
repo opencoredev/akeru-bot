@@ -6,7 +6,14 @@ import {
   type ChannelProvider,
   type EnvironmentId,
   type OrchestrationBot,
+  type ProjectId,
 } from "@t3tools/contracts";
+import {
+  canChangeChannelProject,
+  channelBindingNeedsProject,
+  channelPickerProjectId,
+} from "@t3tools/client-runtime/channel-presentation";
+import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -14,6 +21,7 @@ import { resolveChannelSettingsAccess } from "../../channelAccess";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -22,6 +30,7 @@ import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
+import { ChannelProjectSelect } from "./ChannelProjectSelect";
 import { ChannelSetupDialog } from "./ChannelSetupDialog";
 import { CHANNEL_PROVIDER_META, channelProviderMeta } from "./channelProviderMeta";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
@@ -89,6 +98,8 @@ export function BotChannelsSettingsPanel() {
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
   const bots = useAtomValue(environmentBotsAtom(targetEnvironmentId));
+  const snapshot = useAtomValue(environmentSnapshotAtom(targetEnvironmentId));
+  const liveProjects = snapshot?.projects ?? [];
   const activeBots = useMemo(() => bots.filter((bot) => bot.archivedAt === null), [bots]);
   const connections = useEnvironmentSettings(
     targetEnvironmentId,
@@ -105,6 +116,10 @@ export function BotChannelsSettingsPanel() {
   const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
     reportFailure: false,
   });
+  const changeProject = useAtomCommand(botEnvironment.channels.changeProject, {
+    reportFailure: false,
+  });
+  const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
   const [provider, setProvider] = useState<ChannelProvider>("imessage");
   const [setupOpen, setSetupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,8 +161,13 @@ export function BotChannelsSettingsPanel() {
     setPendingProfile({ id: connection.id, present: false });
   };
 
-  const updateAssignment = async (connection: ChannelConnectionProfile, nextBotId: string) => {
+  const updateAssignment = async (
+    connection: ChannelConnectionProfile,
+    nextBotId: string,
+    projectId: ProjectId | null,
+  ) => {
     if (!environmentId || busyConnectionId) return;
+    if (nextBotId !== UNASSIGNED && projectId === null) return;
     const assignedBot = assignedBotForConnection(connection.id, bots);
     const assignedBinding = assignedBot?.channelBindings.find(
       (binding) => binding.connectionId === connection.id,
@@ -167,13 +187,14 @@ export function BotChannelsSettingsPanel() {
       }
     }
 
-    if (nextBotId !== UNASSIGNED) {
+    if (nextBotId !== UNASSIGNED && projectId !== null) {
       const result = await attach({
         environmentId,
         input: {
           botId: BotId.make(nextBotId),
           connectionId: connection.id,
           provider: connection.provider,
+          projectId,
         },
       });
       if (result._tag === "Failure") {
@@ -183,7 +204,7 @@ export function BotChannelsSettingsPanel() {
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
-                ...(assignedBinding?.projectId ? { projectId: assignedBinding.projectId } : {}),
+                projectId: assignedBinding?.projectId ?? projectId,
                 provider: connection.provider,
               },
             })
@@ -198,6 +219,23 @@ export function BotChannelsSettingsPanel() {
       }
     }
     setBusyConnectionId(null);
+  };
+
+  const moveToProject = async (
+    connection: ChannelConnectionProfile,
+    botId: BotId,
+    projectId: ProjectId,
+  ) => {
+    if (!environmentId || busyConnectionId) return;
+    setBusyConnectionId(connection.id);
+    const result = await changeProject({
+      environmentId,
+      input: { botId, provider: connection.provider, projectId },
+    });
+    setBusyConnectionId(null);
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: t("Could not move channel to this project") });
+    }
   };
 
   if (environmentId === null) {
@@ -283,6 +321,19 @@ export function BotChannelsSettingsPanel() {
             );
             const externalIdentity = binding?.externalIdentity ?? connection.externalIdentity;
             const connectionBusy = busyConnectionId === connection.id;
+            const needsProject = binding
+              ? channelBindingNeedsProject(binding, liveProjects)
+              : false;
+            const pickedProjectId = channelPickerProjectId({
+              selected: pickedProjects[connection.id],
+              binding,
+              hint: snapshot ? defaultProjectIdForBot(snapshot, assignedBot?.id ?? null) : null,
+              liveProjects,
+            });
+            const canMove =
+              assignedBot !== undefined &&
+              binding !== undefined &&
+              canChangeChannelProject(binding, pickedProjectId, liveProjects);
             return (
               <div
                 key={connection.id}
@@ -301,7 +352,9 @@ export function BotChannelsSettingsPanel() {
                   </div>
                   <Badge
                     variant={
-                      binding?.status === "failed" || binding?.status === "needs-reconnect"
+                      needsProject ||
+                      binding?.status === "failed" ||
+                      binding?.status === "needs-reconnect"
                         ? "warning"
                         : binding?.status === "disconnected"
                           ? "secondary"
@@ -311,18 +364,29 @@ export function BotChannelsSettingsPanel() {
                     }
                     size="sm"
                   >
-                    {binding?.status === "failed"
-                      ? "Connection failed"
-                      : binding?.status === "needs-reconnect"
-                        ? "Needs reconnect"
-                        : binding?.status === "disconnected"
-                          ? `Disconnected · ${assignedBot?.name ?? "Assigned"}`
-                          : assignedBot
-                            ? `Assigned to ${assignedBot.name}`
-                            : "Unassigned"}
+                    {needsProject
+                      ? t("Choose another project")
+                      : binding?.status === "failed"
+                        ? "Connection failed"
+                        : binding?.status === "needs-reconnect"
+                          ? "Needs reconnect"
+                          : binding?.status === "disconnected"
+                            ? `Disconnected · ${assignedBot?.name ?? "Assigned"}`
+                            : assignedBot
+                              ? `Assigned to ${assignedBot.name}`
+                              : "Unassigned"}
                   </Badge>
                 </div>
-                {binding?.lastError ? (
+                {needsProject ? (
+                  <p
+                    role="status"
+                    className="break-words text-xs text-amber-600 dark:text-amber-400"
+                  >
+                    {t(
+                      "The project for this channel is unavailable. Choose another project to reconnect it.",
+                    )}
+                  </p>
+                ) : binding?.lastError ? (
                   <p
                     role="status"
                     className="break-words text-xs text-amber-600 dark:text-amber-400"
@@ -342,12 +406,15 @@ export function BotChannelsSettingsPanel() {
                     </span>
                     <Select
                       value={assignedBot?.id ?? UNASSIGNED}
-                      onValueChange={(next) => next && void updateAssignment(connection, next)}
+                      onValueChange={(next) =>
+                        next && void updateAssignment(connection, next, pickedProjectId)
+                      }
                     >
                       <SelectTrigger
                         aria-label={`Assign ${connection.name}`}
                         className="w-48"
-                        disabled={connectionBusy}
+                        // "No bot" needs no project, so an assigned channel can always be unassigned.
+                        disabled={connectionBusy || (!assignedBot && pickedProjectId === null)}
                       >
                         <SelectValue>{assignedBot?.name ?? "Choose a bot"}</SelectValue>
                       </SelectTrigger>
@@ -359,13 +426,36 @@ export function BotChannelsSettingsPanel() {
                           </SelectItem>
                         ) : null}
                         {activeBots.map((bot) => (
-                          <SelectItem key={bot.id} value={bot.id}>
+                          <SelectItem
+                            key={bot.id}
+                            value={bot.id}
+                            disabled={pickedProjectId === null}
+                          >
                             {bot.name}
                           </SelectItem>
                         ))}
                       </SelectPopup>
                     </Select>
                   </div>
+                  <ChannelProjectSelect
+                    projects={liveProjects}
+                    value={pickedProjectId}
+                    onChange={(projectId) =>
+                      setPickedProjects((current) => ({ ...current, [connection.id]: projectId }))
+                    }
+                    label={t("Project for {name}", { name: connection.name })}
+                    disabled={connectionBusy}
+                  />
+                  {canMove ? (
+                    <Button
+                      disabled={busy || connectionBusy}
+                      onClick={() =>
+                        void moveToProject(connection, assignedBot.id, pickedProjectId)
+                      }
+                    >
+                      {needsProject ? t("Reconnect in this project") : t("Move to this project")}
+                    </Button>
+                  ) : null}
                   {connection.managementUrl ? (
                     <Button
                       variant="outline"
@@ -400,6 +490,7 @@ export function BotChannelsSettingsPanel() {
                     </Button>
                   ) : null}
                   {assignedBot &&
+                  !needsProject &&
                   (binding?.status === "failed" ||
                     binding?.status === "needs-reconnect" ||
                     binding?.status === "disconnected") ? (

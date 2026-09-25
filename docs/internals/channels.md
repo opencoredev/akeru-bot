@@ -61,7 +61,7 @@ Replies must match the current binding's project. Reassigning a channel to anoth
 
 The server requires the environment administrator scope, `access:write`, for every credential and assignment command. UI checks are presentation only. Secrets must not enter settings responses, orchestration events, logs, analytics, diagnostics, URLs, or client state.
 
-`channel.attach` accepts an optional project ID. The bot-only setup omits it, so the server selects an available project from the bot's most recently updated unarchived thread. If none exists, it selects the project with the most recent environment activity. Attachment fails when no live project exists. Direct `channel.connect` requests still require an explicit project ID.
+`channel.attach` requires a project ID for new assignments. The shared `defaultProjectIdForBot` helper remains available to clients as a preselection hint only; the server validates the submitted project and never silently falls back. Legacy bindings without a project remain readable, are flagged as needing confirmation, and must be assigned a live project before reconnecting. Direct `channel.connect` requests still require an explicit project ID.
 
 The resolved project is persisted on the binding. Inbound work uses that assignment instead of resolving a new default for each message. If the assigned project becomes unavailable, the channel blocks and reports a repair state.
 
@@ -76,3 +76,10 @@ Running transports live in the runtime's transport map, and the service scope ha
 Gateway renewal is a scoped Effect `Schedule`. `startRenewingGateway` launches the first listener before it returns, and fails if that launch fails, so the channel is never saved as connected without a listener. It then watches each listener for `CHANNEL_GATEWAY_RENEWAL_INTERVAL` (one hour) and relaunches at the deadline. Each relaunch aborts and awaits the previous listener first, so two listeners never run at once. A listener that exits early or fails to relaunch leaves the gateway unhealthy and stops renewal. Shutdown closes the renewal scope, aborts the listener, and waits for the listener task. Tests drive renewal with `TestClock`.
 
 Per-provider channel work, per-connection operations, connection settings, and per-bot binding updates are serialized by `makeKeyedLock`. It is a FIFO lock per key that releases the key after completion or interruption. An interrupted caller that is still waiting leaves the queue without blocking the callers behind it.
+
+### Explicit project bindings
+
+Every new `channel.attach` command names a live project explicitly. The server validates that the project is live before starting the provider runtime, so channel turns cannot silently move between workspaces. Existing bindings without a project remain readable and are shown as needing confirmation; operators can use `channel.change-project` to select a replacement. If a selected project is deleted or unavailable, the binding becomes `blocked` with the repair message “Choose another project” and inbound replies remain blocked until reassigned.
+
+`channel.change-project` validates the target project, the binding, saved credentials, and identity availability before it stops the running runtime. If the new project fails to start, the server restarts the previous project when that binding was connected. If neither starts, the binding stays on its previous project with a failed or blocked status, so it is never half-switched. Clients share the picker rules in `@t3tools/client-runtime/channel-presentation`: `channelBindingNeedsProject`, `channelPickerProjectId` (explicit choice, then the running project, then the `defaultProjectIdForBot` hint), and `canChangeChannelProject`. Web Settings, the bot Channels sheet, and the mobile chat Channels section all repair through `botEnvironment.channels.changeProject`.
+
