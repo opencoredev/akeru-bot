@@ -21,6 +21,7 @@ import {
 import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import { websocketRpcRouteLayer } from "./ws.ts";
+import { remoteMachineUpdateRouteLayer } from "./remote/updateRoute.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -475,6 +476,7 @@ const makeRoutesLayerWithSharedMcpRegistry = Layer.mergeAll(
     attachmentUploadRouteLayer,
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
+    remoteMachineUpdateRouteLayer,
   ),
   McpHttpServer.layer,
 ).pipe(

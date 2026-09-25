@@ -237,4 +237,40 @@ describe("CI workflow budget", () => {
       steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
     ).toContain("grep -Fqx 'Identifier=dev.leodoes.akeru'");
   });
+
+  it("publishes the Akeru Remote archives and signed manifest the installers download", () => {
+    const release = workflow(".github/workflows/release.yml");
+    const remote = release.jobs.remote as Job & {
+      readonly strategy: {
+        readonly matrix: { readonly include: ReadonlyArray<Record<string, string>> };
+      };
+    };
+    expect(
+      remote.strategy.matrix.include.map((entry) => [entry.runner, entry.platform, entry.arch]),
+    ).toEqual([
+      ["tenki-standard-medium-4c-8g", "linux", "x64"],
+      ["macos-26", "darwin", "arm64"],
+      ["windows-2025", "win32", "x64"],
+    ]);
+    const commands = remote.steps.flatMap((step) => (step.run ? [step.run] : []));
+    expect(commands.join("\n")).not.toMatch(/docker/i);
+    expect(commands).toContain(
+      'node scripts/package-remote.ts archive "$RUNNER_TEMP/akeru-runtime" release "$RELEASE_VERSION" ${{ matrix.platform }} ${{ matrix.arch }}',
+    );
+    const upload = remote.steps.find((step) => step.uses === "actions/upload-artifact@v7");
+    expect(upload?.with?.name).toBe(
+      "${{ needs.preflight.outputs.channel }}-remote-${{ matrix.platform }}-${{ matrix.arch }}",
+    );
+    expect(upload?.with?.path).toBe("release/Akeru-Remote-*");
+
+    const publish = release.jobs.release?.steps ?? [];
+    const names = publish.map((step) => step.name);
+    expect(names.indexOf("Sign the Akeru Remote manifest")).toBeGreaterThan(-1);
+    expect(names.indexOf("Sign the Akeru Remote manifest")).toBeLessThan(
+      names.indexOf("Verify names and hashes"),
+    );
+    expect(publish.find((step) => step.name === "Sign the Akeru Remote manifest")?.run).toBe(
+      'node scripts/package-remote.ts manifest release "$RELEASE_VERSION"',
+    );
+  });
 });

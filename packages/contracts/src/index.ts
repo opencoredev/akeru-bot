@@ -44,3 +44,4 @@ export * from "./usage.ts";
 export * from "./voiceCall.ts";
 export * from "./portability.ts";
 export * from "./rpc.ts";
+export * from "./remoteDiagnostics.ts";

@@ -181,6 +181,7 @@ function canonicalInput(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
   if (typeof value === "object" && value !== null) {
     return `{${Object.keys(value)
+      .filter((key) => field(value, key) !== undefined)
       .sort()
       .map((key) => `${JSON.stringify(key)}:${canonicalInput(field(value, key))}`)
       .join(",")}}`;

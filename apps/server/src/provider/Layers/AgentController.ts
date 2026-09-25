@@ -174,6 +174,11 @@ const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
 const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"]);
 type MastraSession = AkeruMastraSession;
 
+function omitNullToolFields(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
+}
+
 interface ResolvedEngine {
   readonly modelSelection: ModelSelection;
   readonly provider: ProviderDriverKind;
@@ -2000,9 +2005,10 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
             return;
           }
-          const action = criticalAkeruAction(event.toolName, event.args);
+          const toolInput = omitNullToolFields(event.args);
+          const action = criticalAkeruAction(event.toolName, toolInput);
           const oneUseApproval =
-            akeruActionNeedsApproval(event.toolName, event.args) ||
+            akeruActionNeedsApproval(event.toolName, toolInput) ||
             mcpToolNeedsApproval(mcpManager, event.toolName);
           if (
             event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
@@ -2029,7 +2035,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           }
           active.approvalRequests.set(event.toolCallId, {
             name: event.toolName,
-            input: event.args,
+            input: toolInput,
           });
           active.pendingApprovals.set(event.toolCallId, {
             toolName: event.toolName,
@@ -2054,7 +2060,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                     : approvalDetail(event.toolName, action, oneUseApproval),
               toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
               ...(action ? { action } : {}),
-              args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
+              args: isCodexComputerUseTool(event.toolName) ? undefined : toolInput,
               options: isCodexComputerUseTool(event.toolName)
                 ? [
                     { decision: "accept", label: "Allow" },
