@@ -44,6 +44,7 @@ export function ProviderAccessSummary({
         <Text className="font-t3-medium">{guide.stateLabel}.</Text> {guide.nextStep}
       </Text>
       {guide.failure ? <Text className="text-sm text-danger">{guide.failure}</Text> : null}
+      {guide.warning ? <Text className="text-sm text-warning">{guide.warning}</Text> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded }}

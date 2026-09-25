@@ -77,6 +77,7 @@ const makeTest = (
     Layer.provideMerge(
       ServerSettingsService.layerTest({ voice: { provider: "composed", ...voice } }),
     ),
+    Layer.provide(NodeServices.layer),
     Layer.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "voice-providers-test-" }).pipe(
         Layer.provide(NodeServices.layer),

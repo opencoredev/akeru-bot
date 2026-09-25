@@ -167,7 +167,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
 
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
       const requestEnvironment = secretsDir
-        ? subscriptionRuntimeEnvironment(secretsDir, "anthropic", claudeEnvironment)
+        ? yield* subscriptionRuntimeEnvironment(secretsDir, "anthropic", claudeEnvironment)
         : claudeEnvironment;
       // Titles need only the supplied prompt, not configuration from the checkout.
       const workingDirectory =

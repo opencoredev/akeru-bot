@@ -33,7 +33,7 @@ export type ProviderAccessState =
  */
 export type ProviderAccessStatusInput = Pick<
   SubscriptionProviderStatus,
-  "connected" | "authMode" | "health" | "lastFailedRequest"
+  "connected" | "authMode" | "health" | "lastFailedRequest" | "credentialWarning"
 > & { readonly healthChecking?: boolean | undefined };
 
 export interface ProviderAccessGuide {
@@ -52,6 +52,8 @@ export interface ProviderAccessGuide {
   readonly nextStep: string;
   /** Provider-reported failure text. Not translated. */
   readonly failure: string | null;
+  /** Server text about a damaged credential file it is working around. Not translated. */
+  readonly warning: string | null;
 }
 
 type GuidedProvider = Exclude<SubscriptionProviderId, "cursor">;
@@ -253,5 +255,6 @@ export function providerAccessGuide(
       state === "failed" || state === "expired" || state === "revoked"
         ? (status?.lastFailedRequest?.message ?? null)
         : null,
+    warning: status?.credentialWarning?.message ?? null,
   };
 }

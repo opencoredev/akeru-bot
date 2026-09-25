@@ -4530,10 +4530,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         canUseTool,
         onUserDialog,
         supportedDialogKinds: ["resume_return"],
-        env: subscriptionRuntimeEnvironment(
+        env: yield* subscriptionRuntimeEnvironment(
           serverConfig.secretsDir,
           "anthropic",
           claudeEnvironment,
+        ).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
         ),
         additionalDirectories,
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),

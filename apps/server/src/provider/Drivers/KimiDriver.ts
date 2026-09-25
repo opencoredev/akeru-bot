@@ -6,6 +6,8 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -37,7 +39,7 @@ function models(customModels: readonly string[]): ServerProviderModel[] {
     }));
 }
 
-export type KimiDriverEnv = ServerConfig;
+export type KimiDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
 
 export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -47,7 +49,7 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
-      const auth = SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+      const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
         PubSub.shutdown,
@@ -58,8 +60,8 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
         driverKind: DRIVER_KIND,
         instanceId,
       });
-      const readSnapshot = Effect.sync(() => {
-        auth.reload();
+      const readSnapshot = Effect.gen(function* () {
+        yield* auth.reload();
         const connected = auth.isConnected("kimi-for-coding");
         return {
           instanceId,

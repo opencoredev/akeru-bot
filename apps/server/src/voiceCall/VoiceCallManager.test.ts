@@ -110,6 +110,7 @@ const TestLayer = layer({
 }).pipe(
   Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
   Layer.provide(ServerSettingsService.layerTest()),
+  Layer.provide(NodeServices.layer),
   Layer.provide(
     ServerConfig.layerTest(process.cwd(), { prefix: "akeru-voice-call-test-" }).pipe(
       Layer.provide(NodeServices.layer),
@@ -123,6 +124,7 @@ const VoiceDisabledTestLayer = layer({
 }).pipe(
   Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
   Layer.provide(ServerSettingsService.layerTest({ voice: { enabled: false } })),
+  Layer.provide(NodeServices.layer),
   Layer.provide(
     ServerConfig.layerTest(process.cwd(), { prefix: "akeru-voice-call-disabled-test-" }).pipe(
       Layer.provide(NodeServices.layer),
@@ -142,6 +144,7 @@ const SelectedVoiceTestLayer = layer({
 }).pipe(
   Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
   Layer.provide(ServerSettingsService.layerTest({ voice: { voice: "cedar" } })),
+  Layer.provide(NodeServices.layer),
   Layer.provide(
     ServerConfig.layerTest(process.cwd(), { prefix: "akeru-voice-call-selection-test-" }).pipe(
       Layer.provide(NodeServices.layer),
@@ -189,6 +192,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
       }).pipe(
         Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
         Layer.provide(ServerSettingsService.layerTest()),
+        Layer.provide(NodeServices.layer),
         Layer.provide(
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-voice-call-constructor-test-",
@@ -302,6 +306,7 @@ const CodexCliCredentialTestLayer = layer({
 }).pipe(
   Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
   Layer.provide(ServerSettingsService.layerTest()),
+  Layer.provide(NodeServices.layer),
   Layer.provide(
     ServerConfig.layerTest(process.cwd(), { prefix: "akeru-voice-call-codex-auth-test-" }).pipe(
       Layer.provide(NodeServices.layer),
@@ -334,6 +339,7 @@ const PendingTestLayer = layer({
 }).pipe(
   Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
   Layer.provide(ServerSettingsService.layerTest()),
+  Layer.provide(NodeServices.layer),
   Layer.provide(
     ServerConfig.layerTest(process.cwd(), { prefix: "akeru-voice-call-pending-test-" }).pipe(
       Layer.provide(NodeServices.layer),

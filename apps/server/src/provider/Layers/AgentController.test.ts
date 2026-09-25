@@ -48,8 +48,10 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -83,6 +85,7 @@ import {
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import { makeTestSubscriptionAuthService } from "../../subscription-auth/testUtils/subscriptionAuthService.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -677,13 +680,18 @@ function makeLayer(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
         ).pipe(Layer.provide(NodeServices.layer)),
+        NodeServices.layer,
       ),
     ),
   );
 }
 
 function provideController<A, E>(
-  effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
+  effect: Effect.Effect<
+    A,
+    E,
+    AgentController | ServerSettingsService | FileSystem.FileSystem | Path.Path
+  >,
   bridge: ProviderServiceShape,
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
@@ -847,7 +855,7 @@ describe("provider access health", () => {
     ["claudeAgent", "anthropic"],
     ["grok", "xai"],
     ["kimi", "kimi-for-coding"],
-  ] as const)("maps %s runtime requests to %s access health", (driver, provider) => {
+  ] as const)("maps %s runtime requests to %s access health", async (driver, provider) => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
     try {
@@ -857,7 +865,7 @@ describe("provider access health", () => {
           [provider]: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
         }),
       );
-      const service = new SubscriptionAuthService(authPath);
+      const service = await makeTestSubscriptionAuthService(authPath);
       const providerInstanceId = ProviderInstanceId.make(`instance-${driver}`);
       const base = {
         provider: ProviderDriverKind.make(driver),
@@ -893,7 +901,7 @@ describe("provider access health", () => {
     }
   });
 
-  it("records a failed first request and recovery at the runtime event boundary", () => {
+  it("records a failed first request and recovery at the runtime event boundary", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-health-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
     try {
@@ -903,7 +911,7 @@ describe("provider access health", () => {
           xai: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
         }),
       );
-      const service = new SubscriptionAuthService(authPath);
+      const service = await makeTestSubscriptionAuthService(authPath);
       const base = {
         provider: ProviderDriverKind.make("grok"),
         providerInstanceId: ProviderInstanceId.make("grok"),
@@ -971,11 +979,11 @@ describe("provider access health", () => {
 
   it.each(["interrupted", "cancelled"] as const)(
     "does not call a %s turn a successful provider request",
-    (state) => {
+    async (state) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-stop-"));
       const authPath = NodePath.join(directory, "subscription-auth.json");
       try {
-        const service = new SubscriptionAuthService(authPath);
+        const service = await makeTestSubscriptionAuthService(authPath);
         recordProviderAccessHealth(service, {
           provider: ProviderDriverKind.make("grok"),
           providerInstanceId: ProviderInstanceId.make("grok"),
@@ -1146,7 +1154,7 @@ describe("AgentControllerLive", () => {
         turnId: expect.any(String),
         failed: false,
       });
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("reads Akeru subscription credentials through Mastra AuthStorage", () =>
@@ -2930,7 +2938,7 @@ describe("AgentControllerLive", () => {
       assert.equal(session.model, "gpt-5.6-sol");
       yield* controller.stopSession({ threadId: codexThreadId });
       expect(bridge.startSession).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("runs Codex turns through Mastra Session.sendMessage and normalizes events", () => {
@@ -4976,9 +4984,9 @@ describe("AgentControllerLive", () => {
           denied: false,
         } as AgentControllerEvent);
         expect(
-          SubscriptionAuthService.forSecretsDir(
+          (yield* SubscriptionAuthService.forSecretsDir(
             NodePath.join(baseDir, "userdata", "secrets"),
-          ).mcpRequestHealth(exaServer.id)?.health,
+          )).mcpRequestHealth(exaServer.id)?.health,
         ).toBe("failed-first-request");
 
         mastra.emit({
@@ -4995,9 +5003,9 @@ describe("AgentControllerLive", () => {
           denied: false,
         } as AgentControllerEvent);
         expect(
-          SubscriptionAuthService.forSecretsDir(
+          (yield* SubscriptionAuthService.forSecretsDir(
             NodePath.join(baseDir, "userdata", "secrets"),
-          ).mcpRequestHealth(exaServer.id)?.health,
+          )).mcpRequestHealth(exaServer.id)?.health,
         ).toBe("recovered");
         mastra.finishSend();
 
@@ -5451,7 +5459,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.harnessOptions[0]?.toolRuntime.toolsForThread(String(codexThreadId))).toEqual(
         [],
       );
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("creates a credentialed remote workspace for a delegated sandbox grant", () => {
@@ -5540,7 +5548,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
       expect(makeBotBrowser).toHaveBeenCalledOnce();
       yield* controller.stopSession({ threadId: codexThreadId });
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
@@ -5592,7 +5600,7 @@ describe("AgentControllerLive", () => {
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
         expect(firstDestroy).toHaveBeenCalledOnce();
-      }).pipe(Effect.provide(layer), Effect.orDie);
+      }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
 
       expect(secondStop).toHaveBeenCalledOnce();
       expect(secondDestroy).not.toHaveBeenCalled();
@@ -5684,7 +5692,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.createSession.mock.calls[1]?.[0]).toMatchObject({ workspace: remote });
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
@@ -5736,7 +5744,7 @@ describe("AgentControllerLive", () => {
         NodeFS.rmSync(firstCwd, { recursive: true, force: true });
         NodeFS.rmSync(secondCwd, { recursive: true, force: true });
       }
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
   });
 
   it.effect("runs Claude through the Akeru Mastra harness", () => {
@@ -7148,6 +7156,7 @@ describe("AgentControllerLive", () => {
             Layer.mock(EntityMemoryRepository)({}),
             serverSettingsLayerTest({}),
             ServerConfig.layerTest(process.cwd(), baseDir).pipe(Layer.provide(NodeServices.layer)),
+            NodeServices.layer,
           ),
         ),
       );

@@ -750,7 +750,7 @@ const makeWsRpcLayer = (
         }),
       };
       const botMemoryStore = new BotMemoryStore(config.stateDir);
-      const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir, {
+      const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir, {
         checkHealthOnConnect: true,
       });
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
@@ -951,7 +951,7 @@ const makeWsRpcLayer = (
           requiredScope,
         });
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
-        subscriptionAuth.reload();
+        yield* subscriptionAuth.reload();
         botInbox.reload();
         yield* syncSubscriptionProviderSettings;
         const [providers, bots, snapshot] = yield* Effect.all([
@@ -992,7 +992,7 @@ const makeWsRpcLayer = (
         };
       });
       const getImageProviderSnapshot = Effect.fn("getImageProviderSnapshot")(function* () {
-        subscriptionAuth.reload();
+        yield* subscriptionAuth.reload();
         const settings = yield* serverSettings.getSettings.pipe(
           Effect.mapError((cause) => new ImageGenerationError({ reason: cause.message })),
         );
@@ -3068,8 +3068,12 @@ const makeWsRpcLayer = (
         [WS_METHODS.subscriptionAuthLogout]: ({ provider }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthLogout,
-            Effect.sync(() => {
-              subscriptionAuth.logout(provider);
+            Effect.tryPromise({
+              try: () => subscriptionAuth.logout(provider),
+              catch: (cause) =>
+                new SubscriptionAuthError({
+                  reason: cause instanceof Error ? cause.message : String(cause),
+                }),
             }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),

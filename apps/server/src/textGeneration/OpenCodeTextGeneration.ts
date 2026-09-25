@@ -1,6 +1,8 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
@@ -195,6 +197,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   environment?: NodeJS.ProcessEnv,
 ) {
   const serverConfig = yield* ServerConfig.ServerConfig;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const openCodeRuntime = yield* OpenCodeRuntime.OpenCodeRuntime;
   const resolvedEnvironment = environment ?? process.env;
   const idleFiberScope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
@@ -302,10 +306,13 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                 openCodeRuntime
                   .startOpenCodeServerProcess({
                     binaryPath: input.binaryPath,
-                    environment: subscriptionRuntimeEnvironment(
+                    environment: yield* subscriptionRuntimeEnvironment(
                       serverConfig.secretsDir,
                       "opencode-go",
                       resolvedEnvironment,
+                    ).pipe(
+                      Effect.provideService(FileSystem.FileSystem, fileSystem),
+                      Effect.provideService(Path.Path, path),
                     ),
                   })
                   .pipe(

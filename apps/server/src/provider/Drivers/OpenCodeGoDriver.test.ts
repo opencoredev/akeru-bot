@@ -34,6 +34,7 @@ describe("OpenCodeGoDriver", () => {
           Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.provide(NodeServices.layer),
       Effect.tap(({ instance, snapshot }) =>
         Effect.sync(() => {
           expect(instance.adapter).toBeUndefined();
@@ -79,6 +80,7 @@ describe("OpenCodeGoDriver", () => {
           Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.provide(NodeServices.layer),
       Effect.tap((snapshot) =>
         Effect.sync(() => {
           expect(snapshot.status).toBe("ready");

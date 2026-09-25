@@ -14,6 +14,7 @@ import {
 import * as Schema from "effect/Schema";
 
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
+import { makeTestSubscriptionAuthService } from "../subscription-auth/testUtils/subscriptionAuthService.ts";
 
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
@@ -71,9 +72,9 @@ function rows(service: SubscriptionAuthService, settings: ImageGenerationSetting
 }
 
 describe("image provider rows", () => {
-  it("reports missing when no subscription is connected", () => {
+  it("reports missing when no subscription is connected", async () => {
     const { authPath } = fixture();
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const chatgpt = rows(service, baseSettings).find((row) => row.provider === "chatgpt");
     expect(chatgpt).toMatchObject({
       connected: false,
@@ -86,10 +87,10 @@ describe("image provider rows", () => {
     expect(chatgpt?.healthTest).toEqual({ status: "not-run" });
   });
 
-  it("requires a ChatGPT account instead of an OpenAI API key", () => {
+  it("requires a ChatGPT account instead of an OpenAI API key", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
@@ -102,7 +103,7 @@ describe("image provider rows", () => {
   it("keeps an expired but refreshable OAuth credential connected", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
@@ -136,7 +137,7 @@ describe("image provider rows", () => {
   it("offers reconnect after an OAuth refresh grant is rejected", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -157,21 +158,21 @@ describe("image provider rows", () => {
     }
   });
 
-  it("reports disabled for a connected-but-disabled provider", () => {
+  it("reports disabled for a connected-but-disabled provider", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const grok = rows(service, baseSettings).find((row) => row.provider === "grok");
     expect(grok).toMatchObject({ connected: true, enabled: false, health: "disabled" });
   });
 
-  it("survives a service restart (health + failure persist in the health file)", () => {
+  it("survives a service restart (health + failure persist in the health file)", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const first = new SubscriptionAuthService(authPath);
+    const first = await makeTestSubscriptionAuthService(authPath);
     first.recordImageRequestSuccess("grok");
     first.recordImageRequestFailure("grok", "provider 500");
-    const second = new SubscriptionAuthService(authPath);
+    const second = await makeTestSubscriptionAuthService(authPath);
     const grok = rows(second, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
@@ -325,7 +326,7 @@ describe("image provider health test", () => {
   it("keeps generation unverified after an account probe succeeds", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
     await runImageProviderHealthTest({ provider: "grok", subscriptionAuth: service, fetchFn });
     expect(fetchFn).toHaveBeenCalledWith(
@@ -355,7 +356,7 @@ describe("image provider health test", () => {
         },
       }),
     );
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
     await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
     expect(fetchFn).toHaveBeenCalledWith(
@@ -384,7 +385,7 @@ describe("image provider health test", () => {
         },
       }),
     );
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
     await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
@@ -458,7 +459,7 @@ describe("image provider health test", () => {
   it("records the real refresh failure (not 'not connected') when refresh rejects", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     // Drive the real getAccessToken -> refreshCredential -> runRefresh path:
     // the provider's token endpoint rejects the refresh grant.
     const fetchFn = vi.fn(async (_input: unknown, _init?: unknown) =>
@@ -474,7 +475,7 @@ describe("image provider health test", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(String(fetchFn.mock.calls[0]?.[0])).toContain("x.ai");
 
-    const reloaded = new SubscriptionAuthService(authPath);
+    const reloaded = await makeTestSubscriptionAuthService(authPath);
     const grok = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
@@ -490,7 +491,7 @@ describe("image provider health test", () => {
     // Seed an expired OAuth credential whose refresh rejects: getAccessToken
     // throws inside the guarded path.
     seedOAuth(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const refresh = vi
       .spyOn(
         service as unknown as { refreshCredential: (p: string, c: unknown) => Promise<unknown> },
@@ -508,7 +509,7 @@ describe("image provider health test", () => {
     expect(grok?.lastFailure?.message).toContain("revoked");
 
     // The failure is durable: a fresh service instance reads the same health.
-    const reloaded = new SubscriptionAuthService(authPath);
+    const reloaded = await makeTestSubscriptionAuthService(authPath);
     const reloadedRow = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
@@ -518,13 +519,13 @@ describe("image provider health test", () => {
   it("redacts the access token when fetch throws an error containing it", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai", "super-secret-xai-token");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => {
       throw new Error("connect failed for bearer super-secret-xai-token");
     });
     await runImageProviderHealthTest({ provider: "grok", subscriptionAuth: service, fetchFn });
 
-    const reloaded = new SubscriptionAuthService(authPath);
+    const reloaded = await makeTestSubscriptionAuthService(authPath);
     const grok = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
@@ -538,7 +539,7 @@ describe("image provider health test", () => {
 
   it("records a failure without a connected credential", async () => {
     const { authPath } = fixture();
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     await runImageProviderHealthTest({ provider: "grok", subscriptionAuth: service });
     const grok = rows(service, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
@@ -576,7 +577,7 @@ describe("image generation", () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async (url: string | URL) =>
       String(url).includes("openai")
         ? new Response("busy", { status: 503 })
@@ -672,7 +673,7 @@ describe("image generation", () => {
   it("rejects a response that is not an image", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () =>
       Response.json({ data: [{ b64_json: Buffer.from("<html>").toString("base64") }] }),
     );

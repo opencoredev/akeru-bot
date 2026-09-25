@@ -35,6 +35,7 @@ describe("KimiDriver", () => {
           Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.provide(NodeServices.layer),
       Effect.tap((result) =>
         Effect.sync(() => {
           expect(result.instance.adapter).toBeUndefined();
@@ -93,6 +94,7 @@ describe("KimiDriver", () => {
           Layer.provide(NodeServices.layer),
         ),
       ),
+      Effect.provide(NodeServices.layer),
       Effect.tap((result) =>
         Effect.sync(() => {
           expect(result.before.auth.status).toBe("unauthenticated");

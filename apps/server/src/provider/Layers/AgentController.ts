@@ -853,7 +853,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
-    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,

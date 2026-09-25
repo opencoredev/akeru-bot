@@ -299,7 +299,7 @@ describe("ClaudeAdapterLive", () => {
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const config = yield* ServerConfig;
-      const auth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const auth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
       const login = yield* Effect.promise(() =>
         auth.startLogin("anthropic", { authMode: "api-key", baseUrl: "https://proxy.example/v1" }),
       );

@@ -714,10 +714,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           ];
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
-            environment: subscriptionRuntimeEnvironment(
+            environment: yield* subscriptionRuntimeEnvironment(
               serverConfig.secretsDir,
               "xai",
               options?.environment,
+            ).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
             ),
             childProcessSpawner,
             cwd,

@@ -7,6 +7,7 @@ import {
   type ServerSettingsPatch,
   type SubscriptionProviderStatus,
 } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { mergeProviderInstanceEnvironment } from "../provider/ProviderInstanceEnvironment.ts";
@@ -15,6 +16,7 @@ import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
 } from "./service.ts";
+import type { ApiKeyCredential } from "./types.ts";
 
 export { instanceUsesSavedCredential } from "@t3tools/contracts";
 
@@ -86,16 +88,26 @@ const ConfigRecord = Schema.Record(Schema.String, Schema.Unknown);
 const decodeConfig = Schema.decodeUnknownSync(Schema.fromJsonString(ConfigRecord));
 const decodeRecord = Schema.decodeUnknownSync(ConfigRecord);
 
-/** Read saved API keys at process start, not when the provider registry starts. */
-export function subscriptionRuntimeEnvironment(
-  secretsDir: string,
+/** Read saved API keys when a provider process starts, not when the provider registry starts. */
+export const subscriptionRuntimeEnvironment = Effect.fn("subscriptionRuntimeEnvironment")(
+  function* (
+    secretsDir: string,
+    provider: SubscriptionProviderId,
+    environment: SubscriptionEnvironment = process.env,
+  ) {
+    const connectionKeys = SUBSCRIPTION_CONNECTION_ENV_KEYS[provider] ?? [];
+    if (connectionKeys.some((key) => hasExplicitEnvironmentKey(environment, key)))
+      return environment;
+    const auth = yield* SubscriptionAuthService.forSecretsDir(secretsDir);
+    return withApiKeyCredential(provider, environment, auth.getApiKeyCredential(provider));
+  },
+);
+
+function withApiKeyCredential(
   provider: SubscriptionProviderId,
-  environment: SubscriptionEnvironment = process.env,
+  environment: SubscriptionEnvironment,
+  credential: ApiKeyCredential | undefined,
 ): NodeJS.ProcessEnv {
-  const connectionKeys = SUBSCRIPTION_CONNECTION_ENV_KEYS[provider] ?? [];
-  if (connectionKeys.some((key) => hasExplicitEnvironmentKey(environment, key))) return environment;
-  const credential =
-    SubscriptionAuthService.forSecretsDir(secretsDir).getApiKeyCredential(provider);
   if (!credential) return environment;
   const { [explicitEnvironmentKeys]: _explicitKeys, ...env } = environment;
   switch (provider) {

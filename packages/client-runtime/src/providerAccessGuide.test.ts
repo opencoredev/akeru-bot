@@ -99,6 +99,20 @@ describe("providerAccessGuide", () => {
     ).toBe("No action needed. A provider request succeeded.");
   });
 
+  it("keeps a healthy row healthy and adds the damaged-file warning beside it", () => {
+    const warning = "Saved subscription credentials changed on disk and are damaged.";
+    expect(
+      providerAccessGuide("openai-codex", {
+        connected: true,
+        health: "healthy",
+        credentialWarning: { at: "2026-09-25T00:00:00.000Z", message: warning },
+      }),
+    ).toMatchObject({ state: "ready", failure: null, warning });
+    expect(
+      providerAccessGuide("openai-codex", { connected: true, health: "healthy" })?.warning,
+    ).toBeNull();
+  });
+
   it("lists live model names and caps the list", () => {
     expect(providerAccessGuide("xai", undefined, { models: ["Grok 4"] })?.models).toBe("Grok 4.");
     expect(

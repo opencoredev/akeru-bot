@@ -66,7 +66,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       const runtime = yield* makeGrokAcpRuntime({
         grokSettings,
         environment: secretsDir
-          ? subscriptionRuntimeEnvironment(secretsDir, "xai", environment)
+          ? yield* subscriptionRuntimeEnvironment(secretsDir, "xai", environment)
           : environment,
         childProcessSpawner: commandSpawner,
         cwd,
