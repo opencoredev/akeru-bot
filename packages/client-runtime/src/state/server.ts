@@ -935,16 +935,20 @@ export function createServerEnvironmentAtoms<R, E>(
     connectVoiceProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:connect",
       tag: WS_METHODS.voiceConnect,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
     }),
     disconnectVoiceProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:disconnect",
       tag: WS_METHODS.voiceDisconnect,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
     }),
     testVoiceProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:test",
       tag: WS_METHODS.voiceTest,
     }),
-    listVoices: createEnvironmentRpcCommand(runtime, {
+    listVoiceVoices: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:list-voices",
       tag: WS_METHODS.voiceListVoices,
     }),

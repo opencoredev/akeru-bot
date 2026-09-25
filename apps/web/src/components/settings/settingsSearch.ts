@@ -221,14 +221,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/voice",
   },
   {
-    id: "voice-transcription-service",
-    title: "Transcription service",
+    id: "voice-openai-voice",
+    title: "OpenAI API voice",
+    to: "/settings/voice",
+    keywords: ["realtime", "interrupt"],
+  },
+  {
+    id: "voice-transcription-provider",
+    title: "Transcription provider",
     to: "/settings/voice",
     keywords: ["speech to text", "OpenAI", "ElevenLabs", "Cartesia"],
   },
   {
-    id: "voice-synthesis-service",
-    title: "Speech service",
+    id: "voice-synthesis-provider",
+    title: "Speech provider",
     to: "/settings/voice",
     keywords: ["text to speech", "OpenAI", "ElevenLabs", "Cartesia", "Fish Audio"],
   },
@@ -239,9 +245,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "voice-api-connections",
-    title: "API connections",
+    title: "Voice API connections",
     to: "/settings/voice",
-    keywords: ["API key", "OpenAI", "ElevenLabs", "Cartesia", "Fish Audio", "voice"],
+    keywords: ["API key", "OpenAI", "ElevenLabs", "Cartesia", "Fish Audio", "billing"],
   },
   {
     id: "image-generation",

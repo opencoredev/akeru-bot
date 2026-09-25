@@ -8,6 +8,9 @@ import {
   VoiceSynthesizeInput,
   VoiceConnectInput,
   VOICE_AUDIO_MAX_BYTES,
+  VOICE_PROVIDER_CAPABILITIES,
+  voiceMissingApiProviders,
+  voiceRequiredApiProviders,
 } from "./voiceCall.ts";
 import { ServerSettingsPatch } from "./settings.ts";
 
@@ -89,5 +92,26 @@ describe("voice provider contracts", () => {
     expect(isSynthesize({ operationId: "operation", text: "x".repeat(4001) })).toBe(false);
     expect(isConnect({ provider: "openai", apiKey: "x".repeat(4097) })).toBe(false);
     expect(isStart({ botId: "bot", sdp: "x".repeat(65537) })).toBe(false);
+  });
+  it("derives capabilities and required keys without switching billing source", () => {
+    expect(
+      Object.entries(VOICE_PROVIDER_CAPABILITIES)
+        .filter(([, capability]) => capability.realtime)
+        .map(([provider]) => provider),
+    ).toEqual(["openai"]);
+    expect(VOICE_PROVIDER_CAPABILITIES.fish.transcription).toBe(false);
+    const legacy = decodeSettings({});
+    expect(voiceRequiredApiProviders(legacy)).toEqual([]);
+    expect(voiceRequiredApiProviders({ ...legacy, provider: "openai" })).toEqual(["openai"]);
+    const composed = {
+      ...legacy,
+      provider: "composed" as const,
+      transcriptionProvider: "cartesia" as const,
+      synthesisProvider: "fish" as const,
+    };
+    expect(voiceRequiredApiProviders(composed)).toEqual(["cartesia", "fish"]);
+    expect(voiceRequiredApiProviders({ ...legacy, provider: "composed" })).toEqual(["openai"]);
+    expect(voiceMissingApiProviders(composed, ["fish", "openai"])).toEqual(["cartesia"]);
+    expect(voiceMissingApiProviders(composed, ["cartesia", "fish"])).toEqual([]);
   });
 });

@@ -23,6 +23,7 @@ export const VOICE_API_PROVIDERS = ["openai", "elevenlabs", "cartesia", "fish"] 
 export const VoiceApiProvider = Schema.Literals(VOICE_API_PROVIDERS);
 export type VoiceApiProvider = typeof VoiceApiProvider.Type;
 export const VoiceTranscriptionProvider = Schema.Literals(["openai", "elevenlabs", "cartesia"]);
+export type VoiceTranscriptionProvider = typeof VoiceTranscriptionProvider.Type;
 export const VoiceId = TrimmedNonEmptyString.check(Schema.isMaxLength(256));
 export const VoiceSynthesisVoices = Schema.Struct({
   openai: Schema.optionalKey(VoiceId),
@@ -43,6 +44,38 @@ export const VoiceSettings = Schema.Struct({
   synthesisVoices: Schema.optionalKey(VoiceSynthesisVoices),
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type VoiceSettings = typeof VoiceSettings.Type;
+
+export interface VoiceCapabilities {
+  readonly realtime: boolean;
+  readonly transcription: boolean;
+  readonly synthesis: boolean;
+}
+
+/** What each bring-your-own-key provider can do. Only realtime providers support interruption. */
+export const VOICE_PROVIDER_CAPABILITIES: Record<VoiceApiProvider, VoiceCapabilities> = {
+  openai: { realtime: true, transcription: true, synthesis: true },
+  elevenlabs: { realtime: false, transcription: true, synthesis: true },
+  cartesia: { realtime: false, transcription: true, synthesis: true },
+  fish: { realtime: false, transcription: false, synthesis: true },
+};
+
+/** API keys a call needs under these settings. ChatGPT calls use the subscription and need none. */
+export const voiceRequiredApiProviders = (
+  settings: VoiceSettings,
+): ReadonlyArray<VoiceApiProvider> => {
+  if (settings.provider === "chatgpt") return [];
+  if (settings.provider === "openai") return ["openai"];
+  const transcription = settings.transcriptionProvider ?? "openai";
+  const synthesis = settings.synthesisProvider ?? "openai";
+  return transcription === synthesis ? [transcription] : [transcription, synthesis];
+};
+
+/** Providers these settings need that have no connected key. Empty means a call can start. */
+export const voiceMissingApiProviders = (
+  settings: VoiceSettings,
+  connected: ReadonlyArray<VoiceApiProvider>,
+): ReadonlyArray<VoiceApiProvider> =>
+  voiceRequiredApiProviders(settings).filter((provider) => !connected.includes(provider));
 
 export const VoiceCallIdle = Schema.Struct({ status: Schema.Literal("idle") });
 
@@ -147,6 +180,9 @@ export class VoiceCallError extends Schema.TaggedErrorClass<VoiceCallError>()("V
     "invalid-voice",
     "cancelled",
     "busy",
+    "provider-auth",
+    "provider-quota",
+    "network",
   ]),
   message: TrimmedNonEmptyString,
 }) {}

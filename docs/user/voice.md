@@ -4,26 +4,25 @@ Call a bot from its chat using the microphone and speaker on your current client
 
 ## Choose how the call works
 
-Open **Settings > Voice** and enable voice. Enable **Voice calls** for the bot, then use its phone button.
+Open **Settings > Voice**, enable voice, and pick a mode under **Voice provider**. Enable **Voice calls** for the bot, then use its phone button.
 
-| Call mode                    | What it does                                                                                                              | Access and billing                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| ChatGPT subscription         | Direct realtime conversation. Requests needing files, tools, workspace access, or permissions continue in the bot's chat. | Uses the ChatGPT subscription connected to the environment.                                                   |
-| OpenAI API realtime          | Direct realtime conversation with chat handoff for workspace work.                                                        | Requires an OpenAI API key and uses separate API billing. Your ChatGPT subscription does not cover this path. |
-| Transcription + bot + speech | Records an utterance, transcribes it, runs the bot's normal chat turn, then speaks the completed reply.                   | Uses the explicitly selected transcription and synthesis services, plus the bot's existing agent access.      |
+| Call mode                | What it does                                                                                                              | Access and billing                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| ChatGPT subscription     | Direct realtime conversation. Requests needing files, tools, workspace access, or permissions continue in the bot's chat. | Uses the ChatGPT subscription connected to the environment.                                                   |
+| OpenAI API realtime      | Direct realtime conversation with chat handoff for workspace work.                                                        | Requires an OpenAI API key and uses separate API billing. Your ChatGPT subscription does not cover this path. |
+| Transcribe, reply, speak | Records an utterance, transcribes it, runs the bot's normal chat turn, then speaks the completed reply.                   | Uses the explicitly selected transcription and synthesis services, plus the bot's existing agent access.      |
 
 Selecting a voice service never changes the bot's agent provider, model, or permissions. A failed service does not silently switch to another service or billing source.
 
-For composed calls, the microphone pauses while the bot works and while its reply plays. These calls do not support interruption. Approvals and questions requiring explicit input remain in chat. A long agent turn takes longer to speak than a direct realtime answer.
+In **Transcribe, reply, speak** calls, the microphone pauses while the bot works and while its reply plays. These calls do not support interruption. Approvals and questions requiring explicit input remain in chat. If the bot is waiting for an answer, the call ends and the chat shows "Answer the bot's question in chat, then keep talking." Answer in chat, then start a new call. A long agent turn takes longer to speak than a direct realtime answer.
 
 ## Connect API services
 
 In **Settings > Voice > API connections**:
 
-1. Choose the service and paste its API key.
-2. Select **Connect**, or **Replace key** for an existing connection. Keys are stored on the selected environment server and are not returned to clients.
-3. Select **Test API access**. This checks API access, not whether every paid audio capability works for your account.
-4. Choose your transcription and synthesis services. Refresh the synthesis voice list, then choose a voice provided by that service.
+1. Paste the service's API key and select **Connect**. For an existing connection, select **Replace key**, paste the new key, and select **Save key**. Keys are stored on the selected environment server and are not returned to clients.
+2. Select **Test**. This checks API access, not whether every paid audio capability works for your account.
+3. For **Transcribe, reply, speak**, choose a **Transcription provider** and a **Speech provider**, then choose a **Speech voice** from that service's list. Select **More voices** to load the next page.
 
 | Service    | Supported by Akeru                                                               |
 | ---------- | -------------------------------------------------------------------------------- |
@@ -34,7 +33,7 @@ In **Settings > Voice > API connections**:
 
 Speech synthesis alone is not a complete realtime conversation service. ElevenLabs, Cartesia, and Fish Audio calls use the composed mode rather than replacing the bot with a separate hosted conversation agent.
 
-To remove a key, choose the service and select **Disconnect**. This does not remove the ChatGPT subscription or select a fallback. Existing ChatGPT settings and voice choices remain separate from API settings.
+To remove a key, select **Disconnect** next to the service. This does not remove the ChatGPT subscription or select a fallback. Existing ChatGPT settings and voice choices remain separate from API settings.
 
 Settings changes apply to new calls. An active call keeps the services, voices, and credentials it started with. Hang up before replacing or disconnecting a credential used by that call.
 
@@ -46,7 +45,13 @@ Hangup stops microphone capture, playback, and pending speech operations. Work a
 
 If microphone access is denied, allow it in the browser or operating-system settings and try again. If the device disconnects, reconnect it and start a new call. For a remote browser, use a secure HTTPS connection or an established local secure connection; plain HTTP on another machine does not provide browser microphone access.
 
-If authentication fails, replace the selected service's key and test it. For quota or billing errors, check that service's account. For network failure or environment disconnection, restore the connection and start a new call. Akeru does not resume a disconnected call by billing a different provider.
+Provider errors name the problem without switching services:
+
+- "The voice provider rejected the API key" means the key is wrong, revoked, or lacks access. Replace the key and test it.
+- "The voice provider reported a quota, billing, or rate limit" means the service refused the request for quota, billing, or rate limits. Check that service's account.
+- "Could not reach the voice provider" means a network failure. Restore the connection and start a new call.
+
+If the environment disconnects, reconnect and start a new call. Akeru does not resume a disconnected call by billing a different provider.
 
 ## Audio and transcript privacy
 

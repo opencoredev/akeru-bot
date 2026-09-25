@@ -337,3 +337,61 @@ for (const cancellation of [
     );
   });
 }
+
+it.effect("replaces an idle key and reports auth and quota failures without fallback", () => {
+  const used: string[] = [];
+  return Effect.gen(function* () {
+    const manager = yield* VoiceCallManager;
+    yield* manager.connect("openai", "openai-key");
+    yield* manager.connect("elevenlabs", "first-key");
+    yield* manager.connect("elevenlabs", "rejected-key");
+    const test = yield* Effect.result(manager.test("elevenlabs"));
+    assert.equal(test._tag, "Failure");
+    if (test._tag === "Failure") assert.equal(test.failure.reason, "provider-auth");
+    const listed = yield* Effect.result(manager.listVoices("elevenlabs"));
+    assert.equal(listed._tag, "Failure");
+    if (listed._tag === "Failure") assert.equal(listed.failure.reason, "provider-quota");
+    const start = yield* Effect.result(manager.start({ botId }, "owner"));
+    assert.equal(start._tag, "Failure");
+    if (start._tag === "Failure") {
+      assert.equal(start.failure.reason, "provider-auth");
+      assert.notInclude(start.failure.message, "rejected-key");
+    }
+    assert.deepEqual(yield* manager.get, { status: "idle" });
+    const standalone = yield* Effect.result(
+      manager.synthesize({ operationId: "speak", text: "Hello" }, "owner"),
+    );
+    assert.equal(standalone._tag, "Failure");
+    if (standalone._tag === "Failure") assert.equal(standalone.failure.reason, "provider-auth");
+    assert.deepEqual(used, [
+      "test:elevenlabs:rejected-key",
+      "list:elevenlabs:rejected-key",
+      "validate:elevenlabs:rejected-key",
+      "validate:elevenlabs:rejected-key",
+    ]);
+  }).pipe(
+    Effect.provide(
+      makeTest(
+        {
+          test: async (provider, key) => {
+            used.push(`test:${provider}:${key}`);
+            throw voiceFailure("provider-auth");
+          },
+          listVoices: async (provider, key) => {
+            used.push(`list:${provider}:${key}`);
+            throw voiceFailure("provider-quota");
+          },
+          validateVoice: async (provider, key) => {
+            used.push(`validate:${provider}:${key}`);
+            throw voiceFailure("provider-auth");
+          },
+          synthesize: async (provider, key) => {
+            used.push(`synthesize:${provider}:${key}`);
+            return { audioBase64: "bXAz", mimeType: "audio/mpeg" };
+          },
+        },
+        { synthesisProvider: "elevenlabs", synthesisVoices: { elevenlabs: "voice-id" } },
+      ),
+    ),
+  );
+});

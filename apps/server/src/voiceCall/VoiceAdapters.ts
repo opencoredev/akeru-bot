@@ -60,6 +60,23 @@ const decodeCartesiaVoice = Schema.decodeUnknownSync(
 );
 const decodeTranscript = Schema.decodeUnknownSync(VoiceTranscribeResult);
 const isVoiceId = Schema.is(VoiceId);
+const isVoiceCallError = Schema.is(VoiceCallError);
+
+/** Keeps a classified adapter failure, otherwise reports `fallback`. Never copies upstream detail. */
+export function classifyVoiceFailure(
+  cause: unknown,
+  signal?: AbortSignal,
+  fallback: VoiceCallError["reason"] = "upstream-failed",
+): VoiceCallError {
+  if (signal?.aborted) return voiceFailure("cancelled");
+  return voiceFailure(isVoiceCallError(cause) ? cause.reason : fallback);
+}
+
+function statusFailure(status: number): VoiceCallError {
+  if (status === 401 || status === 403) return voiceFailure("provider-auth");
+  if (status === 402 || status === 429) return voiceFailure("provider-quota");
+  return voiceFailure();
+}
 
 export function voiceFailure(reason: VoiceCallError["reason"] = "upstream-failed"): VoiceCallError {
   const messages = {
@@ -70,6 +87,10 @@ export function voiceFailure(reason: VoiceCallError["reason"] = "upstream-failed
     "provider-in-use": "Hang up the active call before changing this provider's key.",
     cancelled: "The voice operation was cancelled.",
     busy: "Too many voice operations are in progress.",
+    "provider-auth": "The voice provider rejected the API key. Replace the key in Settings and test it.",
+    "provider-quota":
+      "The voice provider reported a quota, billing, or rate limit. Check that provider account.",
+    network: "Could not reach the voice provider. Check the network and try again.",
   };
   return new VoiceCallError({
     reason,
@@ -83,7 +104,7 @@ export function voiceFailure(reason: VoiceCallError["reason"] = "upstream-failed
 export async function readVoiceResponse(response: Response, maxBytes: number): Promise<Uint8Array> {
   if (!response.ok || !response.body) {
     await response.body?.cancel();
-    throw voiceFailure();
+    throw response.ok ? voiceFailure() : statusFailure(response.status);
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -131,12 +152,14 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
         ...(body === undefined ? {} : { body }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
         redirect: "error",
+      }).catch(() => {
+        throw voiceFailure("network");
       });
       const bytes = await readVoiceResponse(response, maxBytes);
       signal.throwIfAborted();
       return bytes;
-    } catch {
-      throw voiceFailure(signal.aborted ? "cancelled" : "upstream-failed");
+    } catch (cause) {
+      throw classifyVoiceFailure(cause, signal);
     }
   }
   async function json(
@@ -148,8 +171,8 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
   ): Promise<unknown> {
     try {
       return JSON.parse(new TextDecoder().decode(await request(provider, key, path, signal, body)));
-    } catch {
-      throw voiceFailure(signal.aborted ? "cancelled" : "upstream-failed");
+    } catch (cause) {
+      throw classifyVoiceFailure(cause, signal);
     }
   }
   async function listVoices(
@@ -201,8 +224,8 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
           ? { nextCursor: String(pageNumber + 1) }
           : {}),
       };
-    } catch {
-      throw voiceFailure(signal.aborted ? "cancelled" : "upstream-failed");
+    } catch (cause) {
+      throw classifyVoiceFailure(cause, signal);
     }
   }
   async function validateVoice(
@@ -234,8 +257,9 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
         if (result._id !== voice || result.type !== "tts" || result.state !== "trained")
           throw voiceFailure("invalid-voice");
       }
-    } catch {
-      throw voiceFailure(signal.aborted ? "cancelled" : "invalid-voice");
+    } catch (cause) {
+      const failure = classifyVoiceFailure(cause, signal, "invalid-voice");
+      throw failure.reason === "upstream-failed" ? voiceFailure("invalid-voice") : failure;
     }
   }
   async function transcribe(
@@ -286,8 +310,8 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
           form,
         ),
       );
-    } catch {
-      throw voiceFailure(signal.aborted ? "cancelled" : "upstream-failed");
+    } catch (cause) {
+      throw classifyVoiceFailure(cause, signal);
     }
   }
   async function synthesize(

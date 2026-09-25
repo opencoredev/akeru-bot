@@ -286,9 +286,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     async (
       prompt: string,
       files: readonly File[],
-      messageId: MessageId = newMessageId(),
+      voiceMessageId?: MessageId,
     ): Promise<boolean> => {
       const pendingUserInput = pendingUserInputs[0];
+      if (pendingUserInput && linkedThreadRef && voiceMessageId !== undefined) {
+        setError(localFailure("Answer the bot's question in chat, then keep talking."));
+        return false;
+      }
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
         if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
         const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
@@ -377,7 +381,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               projectId: activeProject.id,
               title,
               message: {
-                messageId,
+                messageId: voiceMessageId ?? newMessageId(),
                 role: "user",
                 text: prompt,
                 attachments,
@@ -437,6 +441,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       submitPendingUserInput,
       startTurn,
     ],
+  );
+
+  /** Sends a call utterance as a chat turn and returns its message id for reply correlation. */
+  const sendVoiceMessage = useCallback(
+    async (text: string): Promise<MessageId | null> => {
+      const messageId = newMessageId();
+      return (await send(text, [], messageId)) ? messageId : null;
+    },
+    [send],
   );
 
   const appendTranscript = useCallback(
@@ -569,6 +582,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     selectPendingUserInputOption,
     advancePendingUserInput,
     send,
+    sendVoiceMessage,
     sending,
   };
 }

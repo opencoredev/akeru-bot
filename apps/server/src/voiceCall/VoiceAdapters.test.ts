@@ -192,7 +192,7 @@ describe("voice capability adapters", () => {
 
   it("never returns upstream bodies or malformed transcription details in errors", async () => {
     for (const response of [
-      new Response("API-KEY private transcript", { status: 401 }),
+      new Response("API-KEY private transcript", { status: 500 }),
       Response.json({ text: "private".repeat(16000) }),
       new Response("malformed private data"),
     ]) {
@@ -233,12 +233,64 @@ describe("voice capability adapters", () => {
       expect(timeout).toHaveBeenCalledWith(60_000);
       deadline.abort();
       await expect(pending).rejects.toMatchObject({
-        reason: "upstream-failed",
-        message: "The voice provider request failed. Check the connection and try again.",
+        reason: "network",
+        message: "Could not reach the voice provider. Check the network and try again.",
       });
     } finally {
       timeout.mockRestore();
     }
+  });
+
+  it.each(["openai", "elevenlabs", "cartesia", "fish"] as const)(
+    "classifies %s auth, quota, and network failures without upstream detail",
+    async (provider) => {
+      const cases = [
+        [401, "provider-auth"],
+        [403, "provider-auth"],
+        [402, "provider-quota"],
+        [429, "provider-quota"],
+        [503, "upstream-failed"],
+      ] as const;
+      for (const [status, reason] of cases) {
+        const fetcher = vi.fn<VoiceFetch>(
+          async () => new Response(`private key sk-secret ${status}`, { status }),
+        );
+        const adapters = makeVoiceAdapters(fetcher);
+        const failures = [
+          adapters.synthesize(provider, "secret", "alloy", "Hello", signal()),
+          adapters.test(provider, "secret", signal()),
+          ...(provider === "fish" ? [] : [adapters.transcribe(provider, "secret", audio, signal())]),
+        ];
+        for (const failure of failures) {
+          const error = await failure.then(
+            () => expect.unreachable(),
+            (cause: unknown) => cause,
+          );
+          expect(error).toMatchObject({ reason });
+          expect(JSON.stringify(error)).not.toContain("sk-secret");
+        }
+      }
+      const offline = makeVoiceAdapters(async () => {
+        throw new TypeError("fetch failed: private DNS detail");
+      });
+      await expect(
+        offline.synthesize(provider, "secret", "alloy", "Hello", signal()),
+      ).rejects.toMatchObject({ reason: "network" });
+      await expect(offline.test(provider, "secret", signal())).rejects.toMatchObject({
+        reason: "network",
+      });
+    },
+  );
+
+  it("keeps auth failures distinct from an unknown voice during validation", async () => {
+    const unauthorized = makeVoiceAdapters(async () => new Response("", { status: 401 }));
+    await expect(
+      unauthorized.validateVoice("elevenlabs", "secret", "voice", signal()),
+    ).rejects.toMatchObject({ reason: "provider-auth" });
+    const missing = makeVoiceAdapters(async () => new Response("", { status: 404 }));
+    await expect(
+      missing.validateVoice("cartesia", "secret", "voice", signal()),
+    ).rejects.toMatchObject({ reason: "invalid-voice" });
   });
 
   it("honors cancellation before making a request", async () => {

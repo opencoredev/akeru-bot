@@ -33,6 +33,7 @@ import * as Schema from "effect/Schema";
 import * as ServerConfig from "../config.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import {
+  classifyVoiceFailure,
   makeVoiceAdapters,
   voiceFailure,
   readVoiceResponse,
@@ -348,7 +349,7 @@ const make = (options?: VoiceCallManagerOptions) =>
       const key = yield* getKey(provider);
       yield* Effect.tryPromise({
         try: (signal) => adapters.test(provider, key, signal),
-        catch: () => voiceFailure(),
+        catch: (cause) => classifyVoiceFailure(cause),
       });
       return { provider, connected: true };
     });
@@ -359,7 +360,7 @@ const make = (options?: VoiceCallManagerOptions) =>
       const key = yield* getKey(provider);
       return yield* Effect.tryPromise({
         try: (signal) => adapters.listVoices(provider, key, signal, cursor),
-        catch: () => voiceFailure(),
+        catch: (cause) => classifyVoiceFailure(cause),
       });
     });
     const cancel = (id: string, ownerId: string) =>

@@ -31,17 +31,8 @@ const mocks = vi.hoisted(() => ({
   hangupAtom: {},
   startVoiceCall: vi.fn(),
   toast: vi.fn(),
-  voiceProvider: "chatgpt",
-  transcribeAtom: {},
-  synthesizeAtom: {},
-  cancelAtom: {},
-  transcribeVoice: vi.fn(),
-  synthesizeVoice: vi.fn(),
-  cancelVoice: vi.fn(async () => ({ _tag: "Success", value: { cancelled: true } })),
-  captureVoiceUtterance: vi.fn(),
-  playVoiceAudio: vi.fn(async () => undefined),
-  latestTurn: null as unknown,
-  messages: [] as unknown[],
+  voiceProvider: "chatgpt" as "chatgpt" | "composed",
+  captureSignals: [] as AbortSignal[],
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
@@ -72,26 +63,11 @@ vi.mock("../../state/server", () => ({
   serverEnvironment: {
     startVoiceCall: mocks.startAtom,
     hangupVoiceCall: mocks.hangupAtom,
-    transcribeVoice: mocks.transcribeAtom,
-    synthesizeVoice: mocks.synthesizeAtom,
-    cancelVoice: mocks.cancelAtom,
   },
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: unknown) =>
-    atom === mocks.startAtom
-      ? mocks.startVoiceCall
-      : atom === mocks.transcribeAtom
-        ? mocks.transcribeVoice
-        : atom === mocks.synthesizeAtom
-          ? mocks.synthesizeVoice
-          : atom === mocks.cancelAtom
-            ? mocks.cancelVoice
-            : mocks.hangupVoiceCall,
-}));
-vi.mock("./browserVoiceAudio", () => ({
-  captureVoiceUtterance: mocks.captureVoiceUtterance,
-  playVoiceAudio: mocks.playVoiceAudio,
+    atom === mocks.startAtom ? mocks.startVoiceCall : mocks.hangupVoiceCall,
 }));
 vi.mock("../roster/botEngineSelection", () => ({
   resolveStickyBotEngine: () => ({ instanceId: "codex", model: "gpt-5.6" }),
@@ -103,13 +79,8 @@ vi.mock("../roster/useBotThreadRuntime", () => ({
     botReady: true,
     defaultProject: mocks.activeProject,
     error: null,
-    get latestTurn() {
-      return mocks.latestTurn;
-    },
-    get messages() {
-      return mocks.messages;
-    },
-    pendingUserInputs: [],
+    latestTurn: null,
+    messages: [],
     send: mocks.send,
     sending: false,
   }),
@@ -123,6 +94,16 @@ vi.mock("../roster/rosterStore", () => {
   };
 });
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+vi.mock("./browserVoiceAudio", () => ({
+  // A silent microphone: capture waits until the call scope is cancelled.
+  captureVoiceUtterance: (_microphone: unknown, signal: AbortSignal) => {
+    mocks.captureSignals.push(signal);
+    return new Promise((_, reject) =>
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+    );
+  },
+  playVoiceAudio: vi.fn(async () => undefined),
+}));
 
 import { VoiceCallProvider, useVoiceCall } from "./VoiceCall";
 
@@ -197,8 +178,7 @@ describe("voice call provider", () => {
     vi.clearAllMocks();
     latestPeer = null;
     mocks.voiceProvider = "chatgpt";
-    mocks.latestTurn = null;
-    mocks.messages = [];
+    mocks.captureSignals = [];
     vi.stubGlobal("RTCPeerConnection", TestPeer);
     vi.stubGlobal(
       "Audio",
@@ -220,6 +200,7 @@ describe("voice call provider", () => {
           startedAt: "2026-08-27T00:00:00.000Z",
         },
         answerSdp: "answer-sdp",
+        transport: "webrtc",
       },
     });
   });
@@ -326,79 +307,85 @@ describe("voice call provider", () => {
     expect(mocks.send).toHaveBeenCalledOnce();
   });
 
-  it("runs a composed call through capture, the bot turn, and speech", async () => {
-    mocks.voiceProvider = "composed";
+  it("drops a replayed realtime event instead of saving its transcript twice", async () => {
     vi.stubGlobal("navigator", {
       mediaDevices: { getUserMedia: vi.fn(async () => microphone) },
     });
+    const controls = renderControls();
+    controls.startOrReturn(mocks.bot as never);
+    await flushVoiceStart();
+    const replayed = new MessageEvent("message", {
+      data: JSON.stringify({
+        event_id: "event-1",
+        type: "conversation.item.input_audio_transcription.completed",
+        transcript: "Hello",
+      }),
+    });
+    latestPeer?.events.onmessage?.(replayed);
+    latestPeer?.events.onmessage?.(replayed);
+    expect(mocks.appendTranscript).toHaveBeenCalledOnce();
+  });
+
+  it("starts a composed call without WebRTC and releases the microphone on hangup", async () => {
+    mocks.voiceProvider = "composed";
     mocks.startVoiceCall.mockResolvedValue({
       _tag: "Success",
       value: {
         call: {
-          callId: "call-composed",
+          callId: "call-2",
           status: "live",
           botId: mocks.bot.id,
           botName: mocks.bot.name,
-          startedAt: "2026-08-27T00:00:00.000Z",
+          startedAt: "2026-09-25T00:00:00.000Z",
         },
         transport: "composed",
       },
     });
-    const utterance = { audioBase64: "AAAA", mimeType: "audio/webm" };
-    mocks.captureVoiceUtterance
-      .mockResolvedValueOnce(utterance)
-      .mockImplementationOnce(
-        (_microphone: unknown, signal: AbortSignal) =>
-          new Promise((_resolve, reject) =>
-            signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
-          ),
-      );
-    mocks.transcribeVoice.mockResolvedValue({ _tag: "Success", value: { text: "Run the tests" } });
-    mocks.send.mockImplementationOnce(async (...args: unknown[]) => {
-      mocks.latestTurn = {
-        requestMessageId: args[2],
-        state: "completed",
-        assistantMessageId: "assistant-1",
-      };
-      mocks.messages = [{ id: "assistant-1", role: "assistant", text: "Done.", streaming: false }];
-      return true;
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => microphone) },
     });
-    const speech = { audioBase64: "BBBB", mimeType: "audio/mpeg" };
-    mocks.synthesizeVoice.mockResolvedValue({ _tag: "Success", value: speech });
     const controls = renderControls();
 
     controls.startOrReturn(mocks.bot as never);
-    for (let index = 0; index < 6; index += 1) await flushVoiceStart();
+    await flushVoiceStart();
 
-    expect(latestPeer).toBeNull();
     expect(mocks.startVoiceCall).toHaveBeenCalledWith({
       environmentId: "env-1",
       input: { botId: mocks.bot.id },
     });
-    expect(mocks.transcribeVoice).toHaveBeenCalledWith({
-      environmentId: "env-1",
-      input: expect.objectContaining({ callId: "call-composed", ...utterance }),
-    });
-    expect(mocks.send).toHaveBeenCalledWith("Run the tests", [], expect.any(String));
-    expect(mocks.synthesizeVoice).toHaveBeenCalledWith({
-      environmentId: "env-1",
-      input: expect.objectContaining({ callId: "call-composed", text: "Done." }),
-    });
-    expect(mocks.playVoiceAudio).toHaveBeenCalledWith(
-      expect.anything(),
-      speech,
-      expect.any(AbortSignal),
-    );
-    expect(mocks.captureVoiceUtterance).toHaveBeenCalledTimes(2);
-    expect(mocks.hangupVoiceCall).not.toHaveBeenCalled();
-    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(latestPeer).toBeNull();
+    expect(mocks.captureSignals).toHaveLength(1);
 
     controls.hangup();
-    await flushVoiceStart();
+    expect(mocks.captureSignals[0]?.aborted).toBe(true);
+    expect(track.stop).toHaveBeenCalled();
     expect(mocks.hangupVoiceCall).toHaveBeenCalledWith({
       environmentId: "env-1",
-      input: { callId: "call-composed" },
+      input: { callId: "call-2" },
     });
-    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call when the server pinned a different voice mode", async () => {
+    mocks.voiceProvider = "composed";
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => microphone) },
+    });
+    const controls = renderControls();
+
+    controls.startOrReturn(mocks.bot as never);
+    await flushVoiceStart();
+
+    expect(mocks.captureSignals).toHaveLength(0);
+    expect(track.stop).toHaveBeenCalled();
+    expect(mocks.hangupVoiceCall).toHaveBeenCalledWith({
+      environmentId: "env-1",
+      input: { callId: "call-1" },
+    });
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Could not start call",
+        description: "Voice settings changed while the call was starting. Start the call again.",
+      }),
+    );
   });
 });

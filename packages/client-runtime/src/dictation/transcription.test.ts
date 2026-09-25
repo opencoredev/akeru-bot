@@ -103,6 +103,24 @@ describe("createVoiceDictationTranscriber", () => {
       transcriber({ audio, signal: new AbortController().signal, identity }),
     ).rejects.toThrow(DICTATION_TRANSCRIPTION_UNAVAILABLE.disabled);
   });
+
+  it.each([
+    ["provider-auth", "rejected its API key"],
+    ["provider-quota", "quota, billing, or rate limit"],
+    ["network", "Could not reach the transcription provider"],
+  ])("names a %s provider failure instead of a generic retry", async (reason, message) => {
+    const transcriber = createVoiceDictationTranscriber({
+      transcribe: async () => ({
+        _tag: "Failure" as const,
+        cause: Cause.fail({ _tag: "VoiceCallError", reason }),
+      }),
+      cancel: async () => undefined,
+      nextOperationId: () => "op-4",
+    });
+    await expect(
+      transcriber({ audio, signal: new AbortController().signal, identity }),
+    ).rejects.toThrow(message);
+  });
 });
 
 describe("switching chats mid-transcription", () => {

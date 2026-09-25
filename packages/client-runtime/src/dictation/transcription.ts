@@ -81,6 +81,11 @@ const FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   "provider-unavailable": DICTATION_TRANSCRIPTION_UNAVAILABLE.noProvider,
   busy: "Too many voice requests are running. Try again in a moment.",
   "invalid-input": "The recording could not be transcribed. Try a shorter recording.",
+  "provider-auth":
+    "The transcription provider rejected its API key. Replace it in Settings, Voice.",
+  "provider-quota":
+    "The transcription provider reported a quota, billing, or rate limit. Check that account.",
+  network: "Could not reach the transcription provider. Check the network and try again.",
 };
 
 type TranscribeResult =
