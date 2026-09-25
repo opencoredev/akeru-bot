@@ -1,3 +1,4 @@
+import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
 import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@t3tools/client-runtime/errors";
@@ -181,11 +182,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     inboxQuery.data?.inbox ?? [],
     new Set(members.map((bot) => bot.id)),
   );
-  const delegations = runtime.linkedThreadRef
-    ? (snapshot?.delegations.filter(
-        (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
-      ) ?? [])
-    : [];
+  const { delegations, waitingOnChildren } =
+    runtime.linkedThreadRef && snapshot
+      ? threadDelegations(snapshot.delegations, runtime.linkedThreadRef.threadId)
+      : { delegations: [], waitingOnChildren: false };
   return (
     <SidebarInset
       aria-label={t("{name} group chat", { name: group.name })}
@@ -286,8 +286,19 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     candidate.id === delegation.childBotId && candidate.archivedAt === null,
                 ) ?? null
               }
+              parentBot={
+                bots.find(
+                  (candidate) =>
+                    candidate.id === delegation.parentBotId && candidate.archivedAt === null,
+                ) ?? null
+              }
             />
           ))}
+          {waitingOnChildren && !working ? (
+            <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
+              {t("Waiting on delegated work")}
+            </p>
+          ) : null}
         </BotConversationScrollArea>
         <BotInboxAlertStack
           items={inboxItems}

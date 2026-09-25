@@ -157,10 +157,24 @@ export const AkeruToolApprovalClass = Schema.Literals([
 ]);
 export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 
+/**
+ * Maximum characters of parent context a bot may hand to a child. Longer
+ * input is rejected, never truncated, so the child never works from a silently
+ * clipped brief.
+ */
+export const AKERU_DELEGATION_CONTEXT_MAX_CHARS = 8_000;
+
 const AgentMessageInput = Schema.Struct({
   botId: BotId,
   task: TrimmedNonEmptyString,
   expectedResult: TrimmedNonEmptyString,
+  context: Schema.optional(
+    Schema.String.check(
+      Schema.isMaxLength(AKERU_DELEGATION_CONTEXT_MAX_CHARS, {
+        message: `Delegation context must be at most ${AKERU_DELEGATION_CONTEXT_MAX_CHARS} characters.`,
+      }),
+    ),
+  ),
   deadline: Schema.optional(IsoDateTime),
   allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
   memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
@@ -369,16 +383,30 @@ export const AKERU_TOOL_CATALOG = [
     requiresUserComputer: true,
   }),
   define("CreateAgent", "bot-workspace", "Create a durable named bot."),
-  define("CheckAgent", "bot-workspace", "Inspect a durable named bot and its delegated work."),
-  define("MessageAgent", "bot-workspace", "Send bounded work to a durable named bot.", {
-    approval: "send",
-  }),
+  define(
+    "CheckAgent",
+    "bot-workspace",
+    "Inspect a durable named bot and its delegated work. A finished result returned here counts as delivered and is not repeated in your next turn.",
+  ),
+  define(
+    "MessageAgent",
+    "bot-workspace",
+    "Send bounded work to a durable named bot. Returns a handle at once; the result arrives in your next turn.",
+    {
+      approval: "send",
+    },
+  ),
   define("StopAgent", "bot-workspace", "Cancel a durable bot's delegated work.", {
     approval: "delete",
   }),
-  define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
-    approval: "send",
-  }),
+  define(
+    "SendToAgent",
+    "bot-workspace",
+    "Delegate a task to another bot. Returns a handle at once; the result arrives in your next turn.",
+    {
+      approval: "send",
+    },
+  ),
   define("CreateChannel", "bot-workspace", "Create a bot channel."),
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {

@@ -244,6 +244,7 @@ interface PendingTurn {
   readonly entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   readonly reviewInput: string;
   readonly hiddenWake: boolean;
+  readonly delegationResults: string | undefined;
 }
 
 interface ActiveSession {
@@ -1196,6 +1197,19 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (!hasLegacyPending(key, pending)) return;
         const foregroundSucceeded =
           event.type === "turn.completed" && event.payload.state === "completed";
+        // Delegated children on legacy providers report back through the same waiter as Mastra.
+        const assistantText = pending.assistant.trim();
+        resolveChildWaiter(ThreadId.make(key), {
+          state: foregroundSucceeded ? "completed" : "failed",
+          turnId: event.turnId ?? null,
+          ...(foregroundSucceeded && assistantText
+            ? { summary: assistantText }
+            : {
+                error:
+                  (event.type === "turn.completed" ? event.payload.errorMessage : undefined) ??
+                  "The delegated turn did not finish.",
+              }),
+        });
         if (!foregroundSucceeded) {
           restoreLegacyMemoryHandler(key, pending);
           removeLegacyPending(key, pending);
@@ -1575,6 +1589,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           const active = sessions.get(String(usage.threadId));
           if (active) publish(delegatedUsageReceipt(usage, active));
         },
+        onWatchError: (delegationId, cause) =>
+          Effect.runFork(
+            Effect.logWarning("Akeru delegated work could not record its outcome.", {
+              delegationId,
+              detail: failureDetail(cause),
+            }),
+          ),
       });
     delegationRuntime ??=
       Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
@@ -1828,7 +1849,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.toolSession = toolSession;
           toolRuntime.registerSession(String(threadId), active.toolSession);
           const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
-          if (persistentMemoryContext) {
+          if (pending.delegationResults) {
+            await active.session.state.set({
+              ...stateWithoutMemory,
+              persistentMemoryContext: pending.delegationResults,
+            });
+          } else if (persistentMemoryContext) {
             await active.session.state.set(stateWithoutMemory);
           }
           if (active.admittingTurn?.turnId !== turnId) return;
@@ -1868,7 +1894,11 @@ const make = (options?: AgentControllerLiveOptions) =>
             const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
               currentState;
             const entityPacket = await entityMemoryContext(entityMemoryAccess);
-            const persistentMemoryContext = [memoryTurn.context, entityPacket]
+            const persistentMemoryContext = [
+              memoryTurn.context,
+              entityPacket,
+              pending.delegationResults,
+            ]
               .filter(Boolean)
               .join("\n\n");
             await active.session.state.set({
@@ -1956,7 +1986,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       });
       if (state !== "completed") {
         void delegationRuntime
-          ?.parentFinished({ threadId, failed: state === "failed" })
+          ?.parentFinished({ threadId, turnId: turn.turnId, failed: state === "failed" })
           .catch((cause) => {
             publish({
               ...baseEvent(threadId, active, turn.turnId),
@@ -3167,7 +3197,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          const { botUsage: _, ...providerInput } = input;
+          const { botUsage: _, delegationResults, ...providerInput } = input;
           // memory.enabled is authoritative per turn: while it is off the turn
           // must not read the durable snapshot or reserve review cadence. The
           // identity keeps its stored access so re-enabling restores memory.
@@ -3249,19 +3279,24 @@ const make = (options?: AgentControllerLiveOptions) =>
                   : {}),
               })
             : "";
+          // OpenCode reads per-turn context as its system prompt. Claude and Grok
+          // only read context at session start, so this turn's text carries it.
+          const contextInSystem = resolved?.provider === "opencode";
           const providerContext = [
-            resolved?.provider === "opencode" ? turnInstructions : "",
+            contextInSystem ? turnInstructions : "",
             memoryTurn?.context,
             entityPacket,
             observationContext,
+            contextInSystem ? delegationResults : "",
           ]
             .filter(Boolean)
             .join("\n\n");
+          const inputPrefix = contextInSystem ? [] : [turnInstructions, delegationResults];
           return yield* legacyProviderBridge
             .sendTurn({
               ...providerInput,
-              ...(turnInstructions && resolved?.provider !== "opencode"
-                ? { input: [turnInstructions, providerInput.input].filter(Boolean).join("\n\n") }
+              ...(inputPrefix.some(Boolean)
+                ? { input: [...inputPrefix, providerInput.input].filter(Boolean).join("\n\n") }
                 : {}),
               ...(providerContext ? { persistentMemoryContext: providerContext } : {}),
             })
@@ -3355,6 +3390,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           entityMemoryAccess: active.configuredEntityMemoryAccess,
           reviewInput: input.input ?? "",
           hiddenWake: input.hiddenWake === true,
+          delegationResults: input.delegationResults,
         });
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();

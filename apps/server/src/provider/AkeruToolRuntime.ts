@@ -16,6 +16,7 @@ import {
   akeruToolRequiresApproval,
   decodeAkeruToolInput,
   filterAkeruTools,
+  AkeruDelegationContextTooLongError,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
@@ -545,6 +546,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           try {
             result = await session.delegation.send(delegationInput);
           } catch (cause) {
+            if (Schema.is(AkeruDelegationContextTooLongError)(cause)) failureCode = "validation";
             const summary = cause instanceof Error ? cause.message : String(cause);
             result = {
               receiptId: input.toolCallId,

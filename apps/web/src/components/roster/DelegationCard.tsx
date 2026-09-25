@@ -5,6 +5,7 @@ import {
   type AkeruDelegationState,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
+import { presentDelegation } from "@t3tools/client-runtime/delegation-presentation";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MessageKey, TranslationParams } from "@t3tools/client-runtime/i18n";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
@@ -134,9 +135,11 @@ function DelegationElapsed({ delegation }: { readonly delegation: AkeruDelegatio
 export function DelegationCard({
   delegation,
   childBot,
+  parentBot,
 }: {
   readonly delegation: AkeruDelegationRecord;
   readonly childBot: Bot | null;
+  readonly parentBot: Bot | null;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -152,19 +155,20 @@ export function DelegationCard({
   const childThread = useThreadShell(childThreadRef);
   const childActivities = useThreadActivities(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
-  const state = akeruDelegationStateOf(delegation.phase);
+  const presentation = presentDelegation(delegation);
+  const state = presentation.state;
   const childName = activeChildBot?.name ?? t("Unknown bot");
   const usageTokens = childThread ? delegationUsageTokens(delegation, childActivities) : null;
-  const canCancel = !TERMINAL_STATES.has(state) && environmentId !== null;
+  const canCancel = !presentation.terminal && environmentId !== null;
   const canOpen = activeChildBot !== null && childThread !== null && environmentId !== null;
-  const outcome =
-    delegation.phase._tag === "Failed"
-      ? (delegation.phase.failure?.message ?? t("Failure details unavailable"))
-      : delegation.phase._tag === "Completed"
-        ? (delegation.phase.result?.summary ?? t("Result unavailable"))
-        : delegation.phase._tag === "Blocked"
-          ? delegation.phase.reason
-          : null;
+  const outcome = presentation.outcome
+    ? presentation.outcome.text ||
+      (presentation.outcome.kind === "failure"
+        ? t("Failure details unavailable")
+        : presentation.outcome.kind === "result"
+          ? t("Result unavailable")
+          : null)
+    : null;
 
   return (
     <article
@@ -211,6 +215,15 @@ export function DelegationCard({
           className={`mt-1 text-sm leading-5 ${delegation.phase._tag === "Failed" ? "text-destructive-foreground" : "text-muted-foreground"}`}
         >
           {outcome}
+        </p>
+      ) : null}
+      {presentation.delivery ? (
+        <p className="mt-1 text-xs text-muted-foreground" data-delivery={presentation.delivery}>
+          {presentation.delivery === "pending"
+            ? t("Result waiting for the next reply")
+            : t("Result delivered to {name}", {
+                name: parentBot?.name ?? t("Unknown bot"),
+              })}
         </p>
       ) : null}
       <div className="mt-1.5 flex items-center gap-1">

@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AKERU_DELEGATION_CONTEXT_MAX_CHARS,
   AKERU_TOOL_CATALOG,
   AkeruToolReceipt,
   akeruToolApprovalForInput,
@@ -124,6 +125,22 @@ describe("Akeru tool contracts", () => {
       }),
     ).toThrow();
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
+  });
+
+  it("bounds the context a bot hands to a child and rejects oversized context", () => {
+    const input = {
+      botId: "bot-research",
+      task: "Compare three flights.",
+      expectedResult: "A short comparison with sources.",
+    };
+    const context = "x".repeat(AKERU_DELEGATION_CONTEXT_MAX_CHARS);
+    expect(decodeAkeruToolInput("SendToAgent", { ...input, context })).toMatchObject({ context });
+    expect(
+      decodeAkeruToolInput("MessageAgent", { ...input, context: "Prefers morning flights." }),
+    ).toMatchObject({ context: "Prefers morning flights." });
+    expect(() => decodeAkeruToolInput("SendToAgent", { ...input, context: `${context}x` })).toThrow(
+      `at most ${AKERU_DELEGATION_CONTEXT_MAX_CHARS} characters`,
+    );
   });
 
   it("types durable bot management without bypassing send or cancellation approval", () => {

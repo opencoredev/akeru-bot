@@ -43,6 +43,25 @@ apart, so it holds the message and asks you to rename one of them. Mentions of p
 
 Groups hold bots only. You cannot add people to a group yet.
 
+## Work sent to other bots
+
+A bot can hand part of a request to another bot. The bot does not wait for that work. It replies
+first, and a work card in the chat shows the other bot, the task, and its state: queued, running,
+blocked, completed, failed, or canceled. On web and desktop the card has a link to the full work
+history. Mobile lists the same work in the chat.
+
+While work is still running, the chat shows **Waiting on delegated work**. When the work finishes,
+the card shows the result or what went wrong, and one of these lines:
+
+- **Result waiting for the next reply** means your bot has not seen the result yet. Send another
+  message and the bot uses the result in that reply. If you send nothing, the result stays on the
+  card.
+- **Result delivered to {name}** means your bot has received the result, with {name} naming your
+  bot that received it. It does not receive it again.
+
+A bot runs at most three pieces of work at a time from one chat. Asking the same bot twice starts
+two separate pieces of work, each with its own card.
+
 ## Tables, checklists, and other rich replies
 
 Bot replies render richer Markdown directly in the chat. There is no separate dashboard.

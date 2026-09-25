@@ -3,6 +3,8 @@ import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_DELEGATION_MAX_DEPTH,
   AKERU_DELEGATION_TRANSITIONS,
+  acknowledgeAkeruDelegation,
+  isAkeruDelegationResultPending,
   type AkeruDelegationPhase,
   type AkeruDelegationRecord,
   BALANCED_BOT_PERSONALITY_TONE,
@@ -1417,8 +1419,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
                 },
           updatedAt: current.updatedAt,
         });
+        // CheckAgent delivers a finished result by stamping acknowledgedAt.
+        // That stamp is the only other same-phase change allowed.
+        const acknowledgesOnly =
+          isAkeruDelegationResultPending(current) &&
+          (next.phase._tag === "Completed" || next.phase._tag === "Failed") &&
+          next.phase.acknowledgedAt !== null &&
+          NodeUtil.isDeepStrictEqual(
+            acknowledgeAkeruDelegation(current, next.phase.acknowledgedAt),
+            next,
+          );
         if (
           !NodeUtil.isDeepStrictEqual(current, next) &&
+          !acknowledgesOnly &&
           (!assignsChildOwnership || !changesOnlyChildOwnership)
         ) {
           return yield* new OrchestrationCommandInvariantError({
@@ -2734,6 +2747,31 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         );
       }
 
+      // Finished child work this bot has not seen yet rides into this turn as
+      // context. Stamping acknowledgedAt in the same command makes delivery
+      // exactly once: the next turn start finds nothing pending.
+      const acknowledgedDelegations = readModel.delegations
+        .filter(
+          (delegation) =>
+            delegation.parentThreadId === command.threadId &&
+            (respondingBotId === null || delegation.parentBotId === respondingBotId) &&
+            isAkeruDelegationResultPending(delegation),
+        )
+        .map((delegation) => acknowledgeAkeruDelegation(delegation, command.createdAt));
+      const acknowledgementEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      for (const delegation of acknowledgedDelegations) {
+        acknowledgementEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "delegation",
+            aggregateId: delegation.delegationId,
+            occurredAt: delegation.updatedAt,
+            commandId: command.commandId,
+          })),
+          type: "delegation.updated",
+          payload: { delegation },
+        });
+      }
+
       const userMessageEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -2789,6 +2827,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           respondingBotId,
           ...(command.timezone !== undefined ? { timezone: command.timezone } : {}),
+          ...(acknowledgedDelegations.length > 0
+            ? {
+                acknowledgedDelegationIds: acknowledgedDelegations.map(
+                  (delegation) => delegation.delegationId,
+                ),
+              }
+            : {}),
           createdAt: command.createdAt,
         },
       };
@@ -2832,6 +2877,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       return [
         ...(personAssignedEvent === null ? [] : [personAssignedEvent]),
         ...lifecycleResetEvents,
+        ...acknowledgementEvents,
         userMessageEvent,
         turnStartRequestedEvent,
       ];

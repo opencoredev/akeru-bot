@@ -4,8 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
+  AkeruDelegationContextTooLongError,
   AkeruDelegationRecord,
   AkeruDelegationPhase,
+  acknowledgeAkeruDelegation,
+  isAkeruDelegationResultPending,
+  isThreadWaitingOnChildren,
 } from "./akeruDelegation.ts";
 import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
@@ -239,5 +243,100 @@ describe("Akeru delegation contracts", () => {
       type: "delegation.updated",
       payload: { delegation: { state: "completed", childThreadId: "thread-child" } },
     });
+  });
+
+  it("defaults acknowledgedAt on failed records written before acknowledgment existed", () => {
+    const decoded = decodeDelegationRecord({
+      ...record,
+      phase: {
+        _tag: "Failed",
+        childThreadId: "thread-child",
+        childTurnId: "turn-child",
+        startedAt: "2026-08-31T00:00:10.000Z",
+        completedAt: "2026-08-31T00:01:00.000Z",
+        failure: { failureCode: "child_failed", message: "The bot stopped." },
+      },
+    });
+    expect(decoded.phase).toMatchObject({ _tag: "Failed", acknowledgedAt: null });
+  });
+
+  it("tracks pending results and acknowledges them once", () => {
+    const decoded = decodeDelegationRecord(record);
+    expect(isAkeruDelegationResultPending(decoded)).toBe(true);
+    const acknowledged = acknowledgeAkeruDelegation(decoded, "2026-08-31T00:02:00.000Z");
+    expect(acknowledged.phase).toMatchObject({
+      _tag: "Completed",
+      acknowledgedAt: "2026-08-31T00:02:00.000Z",
+    });
+    expect(acknowledged.updatedAt).toBe("2026-08-31T00:02:00.000Z");
+    expect(isAkeruDelegationResultPending(acknowledged)).toBe(false);
+    expect(acknowledgeAkeruDelegation(acknowledged, "2026-08-31T00:03:00.000Z")).toBe(acknowledged);
+
+    const canceled = decodeDelegationRecord({
+      ...record,
+      phase: {
+        _tag: "Canceled",
+        childThreadId: "thread-child",
+        childTurnId: "turn-child",
+        startedAt: "2026-08-31T00:00:10.000Z",
+        completedAt: "2026-08-31T00:01:00.000Z",
+        canceledBy: "user",
+      },
+    });
+    expect(isAkeruDelegationResultPending(canceled)).toBe(false);
+  });
+
+  it("derives the waiting-on-children flag from non-terminal children", () => {
+    const completed = decodeDelegationRecord(record);
+    const running = decodeDelegationRecord({
+      ...record,
+      delegationId: "delegation-2",
+      phase: {
+        _tag: "Running",
+        childThreadId: "thread-child-2",
+        childTurnId: null,
+        startedAt: "2026-08-31T00:00:10.000Z",
+        progress: null,
+      },
+    });
+    const parent = completed.parentThreadId;
+    expect(isThreadWaitingOnChildren([completed], parent)).toBe(false);
+    expect(isThreadWaitingOnChildren([completed, running], parent)).toBe(true);
+    expect(
+      isThreadWaitingOnChildren(
+        [running],
+        running.phase._tag === "Running" ? running.phase.childThreadId : parent,
+      ),
+    ).toBe(false);
+  });
+
+  it("names the context cap in its typed error", () => {
+    const error = new AkeruDelegationContextTooLongError({ length: 9_000, maxLength: 8_000 });
+    expect(error._tag).toBe("AkeruDelegationContextTooLongError");
+    expect(error.message).toContain("8000");
+  });
+
+  it("decodes acknowledged delegation ids on turn start requests", () => {
+    const event = decodeOrchestrationEvent({
+      sequence: 2,
+      eventId: "event-turn",
+      aggregateKind: "thread",
+      aggregateId: "thread-parent",
+      occurredAt: "2026-08-31T00:02:00.000Z",
+      commandId: "command-turn",
+      causationEventId: null,
+      correlationId: "command-turn",
+      metadata: {},
+      type: "thread.turn-start-requested",
+      payload: {
+        threadId: "thread-parent",
+        messageId: "message-1",
+        acknowledgedDelegationIds: ["delegation-1"],
+        createdAt: "2026-08-31T00:02:00.000Z",
+      },
+    });
+    expect(
+      event.type === "thread.turn-start-requested" && event.payload.acknowledgedDelegationIds,
+    ).toEqual(["delegation-1"]);
   });
 });

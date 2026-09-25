@@ -2510,6 +2510,14 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   timezone: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Finished child delegations acknowledged by this turn start. The same
+   * durable step stamps their acknowledgedAt, and the provider turn receives
+   * their results as context, so each result reaches the parent exactly once.
+   */
+  acknowledgedDelegationIds: Schema.optional(
+    Schema.Array(Schema.suspend(() => DelegationIdSchema)),
+  ),
   createdAt: IsoDateTime,
 });
 

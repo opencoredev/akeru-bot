@@ -80,6 +80,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./delegation-presentation": {
+      "types": "./src/delegationPresentation.ts",
+      "default": "./src/delegationPresentation.ts"
+    },
     "./channel-presentation": {
       "types": "./src/channelPresentation.ts",
       "default": "./src/channelPresentation.ts"

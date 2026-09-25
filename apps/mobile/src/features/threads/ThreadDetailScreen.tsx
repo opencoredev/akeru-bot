@@ -86,6 +86,7 @@ import {
   ThreadComposer,
   type ThreadComposerProps,
 } from "./ThreadComposer";
+import { ThreadDelegations } from "./ThreadDelegations";
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
@@ -762,6 +763,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               </Animated.View>
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+              <ThreadDelegations
+                environmentId={props.environmentId}
+                threadId={props.selectedThread.id}
+              />
               {props.canResumeThread ? (
                 <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
                   <ResumeErrorSummary

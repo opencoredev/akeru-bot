@@ -55,6 +55,26 @@ import type { Bot } from "./types";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
 
+const parentBot: Bot = {
+  id: "bot-parent",
+  name: "Mira",
+  title: "Lead",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither", seed: "mira" },
+  engine: null,
+  sandbox: "local",
+  runtimeMode: "approval-required",
+  usageCap: null,
+  voiceEnabled: false,
+  groupId: null,
+  pinned: false,
+  archivedAt: null,
+  createdAt: "2026-08-31T00:00:00.000Z",
+  updatedAt: "2026-08-31T00:00:00.000Z",
+};
+
 const childBot: Bot = {
   id: "bot-child",
   name: "Mori",
@@ -132,6 +152,7 @@ function phaseFor(state: AkeruDelegationState) {
         _tag: "Failed",
         ...CHILD_RUN,
         completedAt: FINISHED_AT,
+        acknowledgedAt: null,
         failure: { failureCode: "child_failed", message: "The provider stopped." },
       };
     case "canceled":
@@ -182,14 +203,22 @@ function usage(turnId: string, totalProcessedTokens: number): OrchestrationThrea
   };
 }
 
-function renderCard(state: AkeruDelegationState, bot: Bot | null = childBot) {
-  return renderToStaticMarkup(<DelegationCard delegation={delegation(state)} childBot={bot} />);
+function renderCard(
+  state: AkeruDelegationState,
+  bot: Bot | null = childBot,
+  parent: Bot | null = parentBot,
+) {
+  return renderToStaticMarkup(
+    <DelegationCard delegation={delegation(state)} childBot={bot} parentBot={parent} />,
+  );
 }
 
 function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
-  return DelegationCard({ delegation: delegation(state), childBot: bot }) as ReactElement<
-    Record<string, unknown>
-  >;
+  return DelegationCard({
+    delegation: delegation(state),
+    childBot: bot,
+    parentBot,
+  }) as ReactElement<Record<string, unknown>>;
 }
 
 describe("DelegationCard", () => {
@@ -223,6 +252,28 @@ describe("DelegationCard", () => {
     expect(renderCard("blocked")).toContain("The provider is blocked.");
   });
 
+  it("shows whether the parent bot has received a finished result", () => {
+    expect(renderCard("completed")).toContain("Result waiting for the next reply");
+    expect(renderCard("failed")).toContain("Result waiting for the next reply");
+    expect(renderCard("running")).not.toContain("Result waiting");
+    expect(renderCard("canceled")).not.toContain("Result");
+
+    const completed = delegation("completed");
+    if (completed.phase._tag !== "Completed") throw new Error("Expected a completed delegation");
+    expect(
+      renderToStaticMarkup(
+        <DelegationCard
+          delegation={{
+            ...completed,
+            phase: { ...completed.phase, acknowledgedAt: "2026-08-31T00:02:00.000Z" },
+          }}
+          childBot={childBot}
+          parentBot={parentBot}
+        />,
+      ),
+    ).toContain("Result delivered to Mira");
+  });
+
   it("shows fallback text when terminal details are missing", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
@@ -234,6 +285,7 @@ describe("DelegationCard", () => {
         <DelegationCard
           delegation={{ ...completed, phase: { ...completed.phase, result: null as never } }}
           childBot={childBot}
+          parentBot={parentBot}
         />,
       ),
     ).toContain("Result unavailable");
@@ -242,6 +294,7 @@ describe("DelegationCard", () => {
         <DelegationCard
           delegation={{ ...failed, phase: { ...failed.phase, failure: null as never } }}
           childBot={childBot}
+          parentBot={parentBot}
         />,
       ),
     ).toContain("Failure details unavailable");

@@ -119,6 +119,14 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 
 "Quiesced" means a turn has gone quiet and stable: follow-up work such as [CheckpointReactor.ts][6] has settled. It appears in [the receipt schema][13], so in practice it is something tests wait on rather than a production signal.
 
+#### Delegation
+
+Work one bot sends to another with `SendToAgent`. It runs in a child thread and returns a handle at once. Its finished result is acknowledged exactly once, when the parent's next turn starts or when `CheckAgent` reads it. See [delegation.md](delegation.md).
+
+#### Waiting on children
+
+A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
+
 ### Dictation
 
 Hold-to-talk capture on the active client that transcribes into the current composer draft. The

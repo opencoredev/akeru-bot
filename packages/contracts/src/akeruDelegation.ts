@@ -125,6 +125,9 @@ export const AkeruDelegationPhase = Schema.TaggedUnion({
     startedAt: Schema.NullOr(IsoDateTime),
     completedAt: IsoDateTime,
     failure: AkeruDelegationFailure,
+    acknowledgedAt: Schema.NullOr(IsoDateTime).pipe(
+      Schema.withDecodingDefault(Effect.succeed(null)),
+    ),
   },
   Canceled: {
     childThreadId: Schema.NullOr(ThreadId),
@@ -204,6 +207,7 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
         startedAt: legacy.startedAt,
         completedAt,
         failure: { failureCode: "child_failed", message: "The bot did not return a result." },
+        acknowledgedAt: null,
       };
     case "failed":
       return {
@@ -216,6 +220,7 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
           failureCode: "child_failed",
           message: "The bot did not return a result.",
         },
+        acknowledgedAt: null,
       };
     case "canceled":
       return {
@@ -294,3 +299,67 @@ export const AKERU_DELEGATION_TRANSITIONS = {
   Running: new Set(["Blocked", "Completed", "Failed", "Canceled"]),
   Blocked: new Set(["Running", "Failed", "Canceled"]),
 } as const;
+
+export const AKERU_DELEGATION_TERMINAL_PHASES: ReadonlySet<AkeruDelegationPhase["_tag"]> = new Set([
+  "Completed",
+  "Failed",
+  "Canceled",
+]);
+
+export const isAkeruDelegationTerminal = (phase: AkeruDelegationPhase): boolean =>
+  AKERU_DELEGATION_TERMINAL_PHASES.has(phase._tag);
+
+/**
+ * A finished child result the parent bot has not received yet. Completed and
+ * failed work is delivered to the parent's next turn; user cancels are not,
+ * because the user already knows about them.
+ */
+export const isAkeruDelegationResultPending = (
+  record: AkeruDelegationRecord,
+): record is AkeruDelegationRecord & {
+  readonly phase: Extract<AkeruDelegationPhase, { _tag: "Completed" | "Failed" }>;
+} =>
+  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  record.phase.acknowledgedAt === null;
+
+/** Stamps a pending result as delivered to the parent bot. */
+export const acknowledgeAkeruDelegation = (
+  record: AkeruDelegationRecord,
+  acknowledgedAt: string,
+): AkeruDelegationRecord =>
+  isAkeruDelegationResultPending(record)
+    ? {
+        ...record,
+        phase: { ...record.phase, acknowledgedAt },
+        updatedAt:
+          Date.parse(acknowledgedAt) >= Date.parse(record.updatedAt)
+            ? acknowledgedAt
+            : record.updatedAt,
+      }
+    : record;
+
+/**
+ * True while any child delegation started from this parent thread is still
+ * working. Derived from the delegation records so every client and the server
+ * agree without a second persisted flag.
+ */
+export const isThreadWaitingOnChildren = (
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+  parentThreadId: ThreadId,
+): boolean =>
+  delegations.some(
+    (delegation) =>
+      delegation.parentThreadId === parentThreadId && !isAkeruDelegationTerminal(delegation.phase),
+  );
+
+export class AkeruDelegationContextTooLongError extends Schema.TaggedErrorClass<AkeruDelegationContextTooLongError>()(
+  "AkeruDelegationContextTooLongError",
+  {
+    length: Schema.Number,
+    maxLength: Schema.Number,
+  },
+) {
+  override get message(): string {
+    return `Delegation context is ${this.length} characters; the limit is ${this.maxLength}. Shorten it or put the details in the task.`;
+  }
+}

@@ -46,6 +46,11 @@ export type AgentControllerSendTurnInput = ProviderSendTurnInput & {
     readonly botId: BotId;
     readonly capLimit: number;
   };
+  /**
+   * Finished child work acknowledged for this turn, formatted as context. Each
+   * provider path adds it to this turn only; it is never queued as a message.
+   */
+  readonly delegationResults?: string;
 };
 
 export interface AgentControllerShape {

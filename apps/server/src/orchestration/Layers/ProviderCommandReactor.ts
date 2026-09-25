@@ -3,6 +3,7 @@ import {
   AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
+  type DelegationId,
   ComposioOperationError,
   CommandId,
   EventId,
@@ -74,6 +75,7 @@ import {
   BotUsageLedger,
 } from "../../usage/BotUsageLedger.ts";
 import { AgentController } from "../../provider/Services/AgentController.ts";
+import { delegationResultsContext } from "../../provider/delegationResultsContext.ts";
 import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { ProjectionBotRepository } from "../../persistence/Services/ProjectionBots.ts";
@@ -1574,6 +1576,27 @@ const make = Effect.gen(function* () {
     processThreadTitleRegenerationSafely,
   );
 
+  // The decider acknowledged these results when it admitted the turn. If this
+  // read fails the turn still runs; the results stay visible on their cards.
+  const readDelegationResults = (delegationIds: ReadonlyArray<DelegationId>) =>
+    delegationIds.length === 0
+      ? Effect.succeed("")
+      : projectionSnapshotQuery.getCommandReadModel().pipe(
+          Effect.map((readModel) =>
+            delegationResultsContext(
+              readModel.delegations.filter((delegation) =>
+                delegationIds.includes(delegation.delegationId),
+              ),
+              readModel.bots,
+            ),
+          ),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("failed to read delegated work results for turn start", {
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.as("")),
+          ),
+        );
+
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
@@ -1738,43 +1761,51 @@ const make = Effect.gen(function* () {
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
-
-    yield* agentController.sendTurn(sendTurnRequest.value).pipe(
-      Effect.tap((result) =>
-        respondingBotId === null
-          ? Effect.void
-          : botUsageLedger.bindTurn({ reservationId, turnId: result.turnId }).pipe(
-              Effect.catchCause(() =>
-                botUsageLedger
-                  .settle({
-                    reservationId,
-                    state: "unavailable",
-                    reason: "Usage reservation could not bind to the provider turn.",
-                    settledAt: event.payload.createdAt,
-                  })
-                  .pipe(
-                    Effect.catchCause((settleCause) =>
-                      Effect.logWarning("failed to charge an unbound bot usage reservation", {
-                        reservationId,
-                        cause: Cause.pretty(settleCause),
-                      }),
-                    ),
-                  ),
-              ),
-            ),
-      ),
-      Effect.catchCause((cause) =>
-        (respondingBotId === null
-          ? Effect.void
-          : botUsageLedger.settle({
-              reservationId,
-              state: "released",
-              settledAt: event.payload.createdAt,
-            })
-        ).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
-      ),
-      Effect.forkScoped,
+    const delegationResults = yield* readDelegationResults(
+      event.payload.acknowledgedDelegationIds ?? [],
     );
+
+    yield* agentController
+      .sendTurn({
+        ...sendTurnRequest.value,
+        ...(delegationResults ? { delegationResults } : {}),
+      })
+      .pipe(
+        Effect.tap((result) =>
+          respondingBotId === null
+            ? Effect.void
+            : botUsageLedger.bindTurn({ reservationId, turnId: result.turnId }).pipe(
+                Effect.catchCause(() =>
+                  botUsageLedger
+                    .settle({
+                      reservationId,
+                      state: "unavailable",
+                      reason: "Usage reservation could not bind to the provider turn.",
+                      settledAt: event.payload.createdAt,
+                    })
+                    .pipe(
+                      Effect.catchCause((settleCause) =>
+                        Effect.logWarning("failed to charge an unbound bot usage reservation", {
+                          reservationId,
+                          cause: Cause.pretty(settleCause),
+                        }),
+                      ),
+                    ),
+                ),
+              ),
+        ),
+        Effect.catchCause((cause) =>
+          (respondingBotId === null
+            ? Effect.void
+            : botUsageLedger.settle({
+                reservationId,
+                state: "released",
+                settledAt: event.payload.createdAt,
+              })
+          ).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
+        ),
+        Effect.forkScoped,
+      );
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (

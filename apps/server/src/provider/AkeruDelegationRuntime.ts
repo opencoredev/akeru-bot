@@ -2,6 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import {
+  AKERU_DELEGATION_CONTEXT_MAX_CHARS,
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
   AKERU_TOOL_CATALOG,
@@ -19,6 +20,9 @@ import {
   akeruDelegationStateOf,
   type AkeruToolInputSchemas,
   type AkeruToolReceipt,
+  AkeruDelegationContextTooLongError,
+  acknowledgeAkeruDelegation,
+  isAkeruDelegationResultPending,
   type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
@@ -73,17 +77,31 @@ export interface AkeruDelegationRuntimeOptions {
     readonly inputTokens: number;
     readonly outputTokens: number;
   }) => Promise<void>;
+  /** Reports a background child watch that could not record its outcome. */
+  readonly onWatchError?: (delegationId: DelegationId, cause: unknown) => void;
   readonly now?: () => string;
   readonly id?: () => string;
 }
 
+/** Returned by SendToAgent and MessageAgent as soon as the child turn is dispatched. */
+export interface AkeruDelegationHandle {
+  readonly delegationId: DelegationId;
+  readonly childThreadId: ThreadId;
+  readonly childBotId: BotId;
+  readonly name: string;
+  readonly phase: "running";
+}
+
+// The child offers every memory scope; intersectDelegationAccess narrows it to
+// what the parent holds and the request names, so an omitted request grants none.
 function childAccess(
   bot: OrchestrationBot,
   parentMcpServerIds: ReadonlyArray<AkeruDelegationAccessGrant["enabledMcpServerIds"][number]>,
+  requestedMemoryScopes: AkeruDelegationAccessGrant["memoryScopes"] | undefined,
 ): AkeruDelegationAccessGrant {
   return {
     allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
-    memoryScopes: [],
+    memoryScopes: requestedMemoryScopes ?? [],
     sandbox: bot.sandbox,
     runtimeMode: bot.runtimeMode,
     hasUserComputer: bot.sandbox === "local",
@@ -99,12 +117,14 @@ function childInstructions(input: {
   readonly task: string;
   readonly expectedResult: string;
   readonly deadline: string | null;
+  readonly context: string | undefined;
 }): string {
   return [
     "This work was delegated from another bot chat.",
     `Task: ${input.task}`,
     `Expected result: ${input.expectedResult}`,
     ...(input.deadline ? [`Deadline: ${input.deadline}`] : []),
+    ...(input.context?.trim() ? ["Context from the parent bot:", input.context.trim()] : []),
     "Return a concise final result to the parent chat. Report a concrete blocker or failure.",
   ].join("\n");
 }
@@ -113,6 +133,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   const now = options.now ?? (() => new Date().toISOString());
   const id = options.id ?? (() => NodeCrypto.randomUUID());
   const accessByThread = new Map<ThreadId, AkeruDelegationAccessGrant>();
+  const watchers = new Set<Promise<void>>();
   const activeByParent = new Map<
     ThreadId,
     Map<DelegationId, { threadId: ThreadId; turnId: TurnId | null }>
@@ -270,22 +291,34 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   ) => {
     const snapshot = await options.readSnapshot();
     const { bot } = availableBot(snapshot, parent, request.botId);
+    const delegations = snapshot.delegations.filter(
+      (delegation) =>
+        delegation.parentThreadId === parent.threadId && delegation.childBotId === bot.id,
+    );
+    // Reading a finished result here is its delivery, so the next parent turn
+    // does not receive it again.
+    for (const delegation of delegations) {
+      if (isAkeruDelegationResultPending(delegation)) {
+        await setState(acknowledgeAkeruDelegation(delegation, now()));
+      }
+    }
     return {
       botId: bot.id,
       name: bot.name,
       title: bot.title,
-      delegations: snapshot.delegations
-        .filter(
-          (delegation) =>
-            delegation.parentThreadId === parent.threadId && delegation.childBotId === bot.id,
-        )
-        .map((delegation) => ({
-          delegationId: delegation.delegationId,
-          state: akeruDelegationStateOf(delegation.phase),
-          childThreadId: phaseChildThreadId(delegation),
-          result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
-          failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
-        })),
+      delegations: delegations.map((delegation) => ({
+        delegationId: delegation.delegationId,
+        state: akeruDelegationStateOf(delegation.phase),
+        childThreadId: phaseChildThreadId(delegation),
+        summary:
+          delegation.phase._tag === "Completed"
+            ? delegation.phase.result.summary
+            : delegation.phase._tag === "Failed"
+              ? delegation.phase.failure.message
+              : null,
+        result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
+        failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
+      })),
     };
   };
 
@@ -329,6 +362,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         startedAt: phaseStartedAt(delegation),
         completedAt,
         failure: { failureCode, message },
+        acknowledgedAt: null,
       },
       updatedAt: completedAt,
     };
@@ -363,8 +397,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         `A turn cannot run more than ${AKERU_DELEGATION_MAX_CONCURRENCY} bot work items.`,
       );
     }
-    if (request.memoryScopes && request.memoryScopes.length > 0) {
-      throw new Error("Bot work memory is unavailable until the child memory packet is bounded.");
+    if (
+      request.context !== undefined &&
+      request.context.length > AKERU_DELEGATION_CONTEXT_MAX_CHARS
+    ) {
+      throw new AkeruDelegationContextTooLongError({
+        length: request.context.length,
+        maxLength: AKERU_DELEGATION_CONTEXT_MAX_CHARS,
+      });
     }
 
     const group = bot.groupId
@@ -381,7 +421,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 
     const grant = intersectDelegationAccess({
       parent: parent.access,
-      child: childAccess(bot, parent.access.enabledMcpServerIds),
+      child: childAccess(bot, parent.access.enabledMcpServerIds, request.memoryScopes),
       requested: request,
     });
     const delegationId = DelegationId.make(`delegation-${id()}`);
@@ -470,6 +510,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           task: request.task,
           expectedResult: request.expectedResult,
           deadline: request.deadline ?? null,
+          context: request.context,
         }),
         attachments: [],
       },
@@ -479,113 +520,145 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       createdAt: now(),
     });
 
-    try {
-      const outcome = await options.awaitChild(childThreadId, request.deadline ?? null);
-      const current = activeByParent.get(parent.threadId)?.get(delegationId);
-      if (!current) {
-        return { canceled: true, childThreadId, childTurnId: outcome.turnId };
-      }
-      current.turnId = outcome.turnId;
-      if (outcome.state !== "completed" || !outcome.summary?.trim()) {
-        if (outcome.state === "blocked") {
-          const blocked: AkeruDelegationRecord = {
-            ...delegation,
-            phase: {
-              _tag: "Blocked",
-              childThreadId,
-              childTurnId: outcome.turnId,
-              startedAt,
-              reason: outcome.error ?? "The bot is blocked.",
-            },
-            updatedAt: now(),
-          };
-          await setState(blocked);
-          await deliver(blocked, outcome.error ?? "The bot is blocked.");
-          return { blocked: true, childThreadId, childTurnId: outcome.turnId };
-        }
-        return await fail(
-          {
-            ...delegation,
-            phase: {
-              _tag: "Running",
-              childThreadId,
-              childTurnId: outcome.turnId,
-              startedAt,
-              progress: null,
-            },
-          },
-          "child_failed",
-          outcome.error ?? "The bot did not return a result.",
+    const watch = async () => {
+      // StopAgent or a parent interrupt may have settled the record while the
+      // child ran, and a keep-cancel may have stamped the record meanwhile.
+      // Completion writes must build on the latest stored record: rebuilding
+      // from `delegation` would reset keep/ownership fields and trip the
+      // decider's immutability invariant.
+      const latestRecord = async () => {
+        const latest = (await options.readSnapshot()).delegations.find(
+          (entry) => entry.delegationId === delegationId,
         );
-      }
-      const completedAt = now();
-      const result = {
-        summary: outcome.summary.trim(),
-        childThreadId,
-        childTurnId: outcome.turnId,
+        return latest !== undefined && !TERMINAL_PHASES.has(latest.phase._tag) ? latest : undefined;
       };
-      const completed: AkeruDelegationRecord = {
-        ...delegation,
-        phase: {
-          _tag: "Completed",
+      try {
+        const outcome = await options.awaitChild(childThreadId, request.deadline ?? null);
+        const current = activeByParent.get(parent.threadId)?.get(delegationId);
+        const latest = await latestRecord();
+        if (!current || latest === undefined) return;
+        const record = latest;
+        current.turnId = outcome.turnId;
+        if (outcome.state !== "completed" || !outcome.summary?.trim()) {
+          if (outcome.state === "blocked") {
+            const blocked: AkeruDelegationRecord = {
+              ...record,
+              phase: {
+                _tag: "Blocked",
+                childThreadId,
+                childTurnId: outcome.turnId,
+                startedAt,
+                reason: outcome.error ?? "The bot is blocked.",
+              },
+              updatedAt: now(),
+            };
+            await setState(blocked);
+            await deliver(blocked, outcome.error ?? "The bot is blocked.");
+            return;
+          }
+          await fail(
+            {
+              ...record,
+              phase: {
+                _tag: "Running",
+                childThreadId,
+                childTurnId: outcome.turnId,
+                startedAt,
+                progress: null,
+              },
+            },
+            "child_failed",
+            outcome.error ?? "The bot did not return a result.",
+          );
+          return;
+        }
+        const completedAt = now();
+        const result = {
+          summary: outcome.summary.trim(),
           childThreadId,
           childTurnId: outcome.turnId,
-          startedAt,
-          completedAt,
-          result,
-          acknowledgedAt: null,
-        },
-        updatedAt: completedAt,
-      };
-      await setState(completed);
-      // The child's work is durably complete, so bookkeeping failures cannot turn it into a
-      // failed delegation. The caller still receives the result directly.
-      await Promise.resolve()
-        .then(() =>
-          options.recordUsage?.({
-            botId: bot.id,
-            threadId: childThreadId,
-            turnId: outcome.turnId,
-            category: "delegated",
-            inputTokens: outcome.usage?.inputTokens ?? 0,
-            outputTokens: outcome.usage?.outputTokens ?? 0,
-          }),
-        )
-        .catch(() => undefined);
-      await deliver(completed, result.summary).catch(() => undefined);
-      return result;
-    } catch (cause) {
-      const timeout =
-        request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now());
-      if (timeout) await options.interruptChild(childThreadId, null);
-      return await fail(
-        delegation,
-        timeout ? "timeout" : "internal",
-        cause instanceof Error ? cause.message : String(cause),
-      );
-    } finally {
-      accessByThread.delete(childThreadId);
-      byParent.delete(delegationId);
-      if (byParent.size === 0) activeByParent.delete(parent.threadId);
-    }
+        };
+        const completed: AkeruDelegationRecord = {
+          ...record,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId: outcome.turnId,
+            startedAt,
+            completedAt,
+            result,
+            acknowledgedAt: null,
+          },
+          updatedAt: completedAt,
+        };
+        await setState(completed);
+        await options.recordUsage?.({
+          botId: bot.id,
+          threadId: childThreadId,
+          turnId: outcome.turnId,
+          category: "delegated",
+          inputTokens: outcome.usage?.inputTokens ?? 0,
+          outputTokens: outcome.usage?.outputTokens ?? 0,
+        });
+        await deliver(completed, result.summary);
+      } catch (cause) {
+        const latest = await latestRecord();
+        if (latest === undefined) return;
+        const timeout =
+          request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now());
+        if (timeout) await options.interruptChild(childThreadId, null);
+        await fail(
+          latest,
+          timeout ? "timeout" : "internal",
+          cause instanceof Error ? cause.message : String(cause),
+        );
+      } finally {
+        accessByThread.delete(childThreadId);
+        byParent.delete(delegationId);
+        if (byParent.size === 0) activeByParent.delete(parent.threadId);
+      }
+    };
+    const watching = watch()
+      .catch((cause) => options.onWatchError?.(delegationId, cause))
+      .finally(() => watchers.delete(watching));
+    watchers.add(watching);
+
+    const handle: AkeruDelegationHandle = {
+      delegationId,
+      childThreadId,
+      childBotId: bot.id,
+      name: bot.name,
+      phase: "running",
+    };
+    return handle;
   };
 
+  // Settles only the children the ended turn started. Children from earlier,
+  // completed turns keep running and report to the chat when they finish.
   const parentFinished = async (input: {
     readonly threadId: ThreadId;
+    readonly turnId: TurnId;
     readonly failed: boolean;
     readonly keep?: ReadonlySet<DelegationId>;
   }) => {
     const snapshot = await options.readSnapshot();
     const records = snapshot.delegations.filter(
       (delegation) =>
-        delegation.parentThreadId === input.threadId && !TERMINAL_PHASES.has(delegation.phase._tag),
+        delegation.parentThreadId === input.threadId &&
+        delegation.parentTurnId === input.turnId &&
+        !TERMINAL_PHASES.has(delegation.phase._tag),
     );
     const children = activeByParent.get(input.threadId);
     for (const record of records) {
       const keep = record.keep || input.keep?.has(record.delegationId) === true;
       const child = children?.get(record.delegationId);
       const childThreadId = child?.threadId ?? phaseChildThreadId(record);
-      if (keep || !input.failed) {
+      // A failed parent turn must record Failed straight from the open phase:
+      // canceling first would land the record in the terminal Canceled phase
+      // and the follow-up state.set would hit the rejected Canceled -> Failed
+      // transition. The cancel command stays for interrupted turns and for
+      // marking kept children.
+      if (input.failed ? keep : true) {
         await dispatch({
           type: "delegation.cancel",
           commandId: commandId("cancel"),
@@ -598,9 +671,24 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       children?.delete(record.delegationId);
       if (childThreadId) accessByThread.delete(childThreadId);
       if (input.failed) {
-        await fail(record, "parent_failed", "The parent turn failed.");
-        if (childThreadId) {
-          await options.interruptChild(childThreadId, child?.turnId ?? phaseChildTurnId(record));
+        // A child that finished between the snapshot read and this write must
+        // not be sent back to Failed, and a rejected write must not stop the
+        // remaining children from being failed and interrupted.
+        try {
+          const latest = (await options.readSnapshot()).delegations.find(
+            (entry) => entry.delegationId === record.delegationId,
+          );
+          if (latest === undefined || TERMINAL_PHASES.has(latest.phase._tag)) continue;
+          await fail(latest, "parent_failed", "The parent turn failed.");
+          const latestChildThreadId = phaseChildThreadId(latest) ?? childThreadId;
+          if (latestChildThreadId) {
+            await options.interruptChild(
+              latestChildThreadId,
+              child?.turnId ?? phaseChildTurnId(latest),
+            );
+          }
+        } catch (cause) {
+          options.onWatchError?.(record.delegationId, cause);
         }
       }
     }
@@ -615,6 +703,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     sendToUser,
     parentFinished,
     readSnapshot: options.readSnapshot,
+    /** Resolves once every background child watch has recorded its outcome. */
+    drain: async () => {
+      while (watchers.size > 0) await Promise.all(watchers);
+    },
     accessForThread: (threadId: ThreadId) => accessByThread.get(threadId),
   };
 }

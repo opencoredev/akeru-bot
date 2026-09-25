@@ -21,6 +21,7 @@ import {
   AkeruMemoryUserId,
   ApprovalRequestId,
   BotId,
+  DelegationId,
   EnvironmentId,
   EventId,
   GroupId,
@@ -1071,9 +1072,11 @@ describe("AgentControllerLive", () => {
       undefined,
       {
         send: vi.fn(async () => ({
-          canceled: true,
+          delegationId: DelegationId.make("delegation-child"),
           childThreadId: ThreadId.make("thread-child"),
-          childTurnId: null,
+          childBotId: BotId.make("bot-child"),
+          name: "Child",
+          phase: "running" as const,
         })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
@@ -1098,7 +1101,11 @@ describe("AgentControllerLive", () => {
       yield* controller.interruptTurn({ threadId: codexThreadId });
       yield* Effect.yieldNow;
 
-      expect(parentFinished).toHaveBeenCalledWith({ threadId: codexThreadId, failed: false });
+      expect(parentFinished).toHaveBeenCalledWith({
+        threadId: codexThreadId,
+        turnId: expect.any(String),
+        failed: false,
+      });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
@@ -5187,9 +5194,11 @@ describe("AgentControllerLive", () => {
     };
     const runtime = {
       send: vi.fn(async () => ({
-        canceled: true,
+        delegationId: DelegationId.make("delegation-child"),
         childThreadId: ThreadId.make("thread-child"),
-        childTurnId: null,
+        childBotId: BotId.make("bot-child"),
+        name: "Child",
+        phase: "running" as const,
       })),
       sendToUser: vi.fn(async () => {
         throw new Error("not used");
@@ -5286,9 +5295,11 @@ describe("AgentControllerLive", () => {
       undefined,
       {
         send: vi.fn(async () => ({
-          canceled: true,
+          delegationId: DelegationId.make("delegation-child"),
           childThreadId: ThreadId.make("thread-child"),
-          childTurnId: null,
+          childBotId: BotId.make("bot-child"),
+          name: "Child",
+          phase: "running" as const,
         })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
@@ -5348,9 +5359,11 @@ describe("AgentControllerLive", () => {
       makeBotBrowser: makeBotBrowser as never,
       delegationRuntime: {
         send: vi.fn(async () => ({
-          canceled: true,
+          delegationId: DelegationId.make("delegation-child"),
           childThreadId: ThreadId.make("thread-child"),
-          childTurnId: null,
+          childBotId: BotId.make("bot-child"),
+          name: "Child",
+          phase: "running" as const,
         })),
         sendToUser: vi.fn(async () => {
           throw new Error("not used");
@@ -5621,6 +5634,111 @@ describe("AgentControllerLive", () => {
           modelId: "xai/grok-code-fast-1",
         });
         expect(mastra.sendMessage).toHaveBeenCalledOnce();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("adds finished child work to only the next Mastra turn", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const results =
+      "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "What did the researcher find?",
+          delegationResults: results,
+        });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+        expect(mastra.session.state.get().persistentMemoryContext).toBe(results);
+        expect(mastra.sendMessage).toHaveBeenCalledWith({
+          content: "What did the researcher find?",
+        });
+
+        // The next turn queues behind the first and starts once it settles.
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Anything else?" });
+        mastra.finishSend();
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(2));
+        expect(mastra.session.state.get()).not.toHaveProperty("persistentMemoryContext");
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("adds finished child work to legacy turns for every legacy provider", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const results =
+      "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        // Claude and Grok on the legacy bridge read context only at session
+        // start, so the turn text carries it.
+        const threadId = ThreadId.make("thread-legacy-delegation");
+        const instanceId = ProviderInstanceId.make("legacyCustom");
+        const selection = { instanceId, model: "legacy-model" };
+        yield* controller.resolveEngine({
+          threadId,
+          engine: null,
+          fallback: selection,
+          mode: "default",
+          botConversation: false,
+        });
+        yield* controller.startSession(threadId, {
+          threadId,
+          provider: ProviderDriverKind.make("legacyCustom"),
+          providerInstanceId: instanceId,
+          modelSelection: selection,
+          runtimeMode: "full-access",
+        });
+        yield* controller.sendTurn({
+          threadId,
+          input: "Summarize it.",
+          delegationResults: results,
+        });
+        const legacyInput = bridge.sendTurn.mock.calls[0]?.[0];
+        expect(legacyInput?.input).toBe(`${results}\n\nSummarize it.`);
+        expect(legacyInput).not.toHaveProperty("delegationResults");
+
+        // OpenCode reads per-turn context as its system prompt.
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: false,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({
+          threadId: claudeThreadId,
+          input: "Summarize it.",
+          delegationResults: results,
+        });
+        const openCodeInput = bridge.sendTurn.mock.calls[1]?.[0];
+        expect(openCodeInput?.input).toBe("Summarize it.");
+        expect(openCodeInput?.persistentMemoryContext).toContain(results);
+        expect(openCodeInput).not.toHaveProperty("delegationResults");
       }),
       bridge.service,
       mastra.factory,
