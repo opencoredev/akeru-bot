@@ -27,7 +27,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
-import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
+import { McpServer, McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
 import { AkeruDelegationRecord } from "./akeruDelegation.ts";
 import { ImageProviderId } from "./imageGeneration.ts";
 import {
@@ -1523,6 +1523,14 @@ const McpServerUpdateCommand = Schema.Union([
   }),
 ]);
 
+const McpServerInstructionsSetCommand = Schema.Struct({
+  type: Schema.Literal("mcp-server.instructions.set"),
+  commandId: CommandId,
+  mcpServerId: McpServerId,
+  // An empty string clears the instructions.
+  instructions: McpServerInstructions,
+});
+
 const McpServerDeleteCommand = Schema.Struct({
   type: Schema.Literal("mcp-server.delete"),
   commandId: CommandId,
@@ -1868,6 +1876,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
+  McpServerInstructionsSetCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
@@ -1927,6 +1936,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
+  McpServerInstructionsSetCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,

@@ -1159,6 +1159,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               transport: command.transport,
               command: command.command,
               ...(command.args !== undefined ? { args: command.args } : {}),
+              ...(existing.instructions !== undefined
+                ? { instructions: existing.instructions }
+                : {}),
               enabled: existing.enabled,
               createdAt: existing.createdAt,
               updatedAt: occurredAt,
@@ -1168,6 +1171,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               name: command.name,
               transport: command.transport,
               url: command.url,
+              ...(existing.instructions !== undefined
+                ? { instructions: existing.instructions }
+                : {}),
               enabled: existing.enabled,
               createdAt: existing.createdAt,
               updatedAt: occurredAt,
@@ -1182,6 +1188,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         })),
         type: "mcp-server.updated",
         payload: { mcpServer },
+      };
+    }
+
+    case "mcp-server.instructions.set": {
+      const existing = yield* requireMcpServer({
+        readModel,
+        command,
+        mcpServerId: command.mcpServerId,
+      });
+      const occurredAt = yield* nowIso;
+      const { instructions: _previous, ...rest } = existing;
+      const instructions = command.instructions.trim();
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "mcp-server",
+          aggregateId: command.mcpServerId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "mcp-server.updated",
+        payload: {
+          mcpServer: {
+            ...rest,
+            ...(instructions ? { instructions } : {}),
+            updatedAt: occurredAt,
+          },
+        },
       };
     }
 

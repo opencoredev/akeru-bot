@@ -136,6 +136,10 @@ start enabled for every bot. A workspace-disabled tool stays unavailable to ever
 
 Changing the provider starts a fresh provider session with the same enabled tool set.
 
+Codex and Kimi For Coding bots can read a public web page when you give them its address. They
+refuse local and private network addresses and read at most 2 MB of a page, noting when a page was
+cut short. Web search isn't available yet, so the bot says so and asks for a link instead.
+
 ## Organize the roster
 
 The sidebar shows pinned bots and groups as launcher cards at the top, followed by the rest as detailed rows under **Bots**. Drag a bot or group to reorder it, pin it, or unpin it. Dragging into **Pinned** pins it at that spot, and dragging a pinned item back into **Bots** unpins it.

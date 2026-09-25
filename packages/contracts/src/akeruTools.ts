@@ -14,7 +14,7 @@ import {
 } from "./baseSchemas.ts";
 import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
-import { McpServerId } from "./mcpServer.ts";
+import { McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
 import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
@@ -59,6 +59,34 @@ const CommandInput = Schema.Struct({
 const PathInput = Schema.Struct({ path: PathText });
 const CopyInput = Schema.Struct({ sourcePath: PathText, destinationPath: PathText });
 const McpServerIdInput = Schema.Struct({ serverId: TrimmedNonEmptyString });
+const WebSearchInput = Schema.Struct({
+  query: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
+  domains: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+});
+const WebFetchInput = Schema.Struct({ url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)) });
+const GenerateImageInput = Schema.Struct({
+  prompt: TrimmedNonEmptyString.check(Schema.isMaxLength(4_000)),
+  provider: Schema.optional(Schema.Literals(["chatgpt", "grok"])),
+});
+const AddMcpServerInput = Schema.Union([
+  Schema.Struct({
+    serverId: McpServerId,
+    name: TrimmedNonEmptyString,
+    transport: Schema.Literal("stdio"),
+    command: TrimmedNonEmptyString,
+    args: Schema.optional(Schema.Array(Schema.String)),
+  }),
+  Schema.Struct({
+    serverId: McpServerId,
+    name: TrimmedNonEmptyString,
+    transport: Schema.Literal("url"),
+    url: McpServerUrl,
+  }),
+]);
+const RenameMcpAccountInput = Schema.Struct({
+  serverId: McpServerId,
+  name: TrimmedNonEmptyString,
+});
 const UpdateBotProfileInput = Schema.Struct({
   name: Schema.optional(TrimmedNonEmptyString),
   title: Schema.optional(TrimmedNonEmptyString),
@@ -106,6 +134,15 @@ export const AkeruToolId = Schema.Literals([
   "UpdateBotProfile",
   "AuthenticateMcpServer",
   "RestartMcpServers",
+  "WebSearch",
+  "WebFetch",
+  "GenerateImage",
+  "generate_image",
+  "AddMcpServer",
+  "UninstallMcpServer",
+  "RemoveMcpAccount",
+  "RenameMcpAccount",
+  "SetMcpInstructions",
 ]);
 export type AkeruToolId = typeof AkeruToolId.Type;
 
@@ -189,6 +226,15 @@ export const AkeruToolInputSchemas = {
   RestartMcpServers: Schema.Struct({
     serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   }),
+  WebSearch: WebSearchInput,
+  WebFetch: WebFetchInput,
+  GenerateImage: GenerateImageInput,
+  generate_image: GenerateImageInput,
+  AddMcpServer: AddMcpServerInput,
+  UninstallMcpServer: Schema.Struct({ serverId: McpServerId }),
+  RemoveMcpAccount: Schema.Struct({ serverId: McpServerId }),
+  RenameMcpAccount: RenameMcpAccountInput,
+  SetMcpInstructions: Schema.Struct({ serverId: McpServerId, instructions: McpServerInstructions }),
 } as const satisfies Record<AkeruToolId, Schema.Top>;
 
 export const AkeruMessageReactionResult = Schema.Union([
@@ -374,6 +420,19 @@ export const AKERU_TOOL_CATALOG = [
   define("RestartMcpServers", "bot-workspace", "Restart MCP servers.", {
     approval: "production",
   }),
+  define("WebSearch", "bot-workspace", "Search the public web."),
+  define("WebFetch", "bot-workspace", "Fetch and extract a public URL."),
+  define("GenerateImage", "bot-workspace", "Generate an image with the configured provider.", {
+    approval: "production",
+  }),
+  define("generate_image", "bot-workspace", "Generate an image with Codex Imagegen.", {
+    approval: "production",
+  }),
+  define("AddMcpServer", "bot-workspace", "Add an MCP server account.", { approval: "secrets" }),
+  define("UninstallMcpServer", "bot-workspace", "Remove an MCP server.", { approval: "delete" }),
+  define("RemoveMcpAccount", "bot-workspace", "Remove an MCP account.", { approval: "delete" }),
+  define("RenameMcpAccount", "bot-workspace", "Rename an MCP account.", { approval: "secrets" }),
+  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", { approval: "secrets" }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {

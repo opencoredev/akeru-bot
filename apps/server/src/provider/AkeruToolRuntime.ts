@@ -152,6 +152,15 @@ const BACKEND_NAMES: Record<
     | "ReconnectMcpServer"
     | "AuthenticateMcpServer"
     | "RestartMcpServers"
+    | "WebSearch"
+    | "WebFetch"
+    | "GenerateImage"
+    | "generate_image"
+    | "AddMcpServer"
+    | "UninstallMcpServer"
+    | "RemoveMcpAccount"
+    | "RenameMcpAccount"
+    | "SetMcpInstructions"
   >,
   ReadonlyArray<string>
 > = {

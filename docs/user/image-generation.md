@@ -48,6 +48,14 @@ bot's chat model remains the one selected under **Model**.
 
 Image settings are not in the chat composer.
 
+## Images in chat
+
+Codex and Kimi For Coding bots can create an image when you ask for one in
+chat. The bot asks for your approval first, then uses its own image provider,
+the default, or the fallback order. Only providers that are turned on are
+tried. If every provider fails, the bot reports each failure. Finished images
+are saved on the environment, and the bot replies with where it saved them.
+
 ## Mobile
 
 Mobile shows the saved setup under **Settings > Image generation**, including

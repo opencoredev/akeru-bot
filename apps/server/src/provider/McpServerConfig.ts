@@ -71,6 +71,19 @@ export function sameMcpServerConfigurations(
   });
 }
 
+/**
+ * Prompt section with the user-set guidance for each attached MCP server, or an
+ * empty string when no server has instructions.
+ */
+export function formatMcpServerInstructions(servers: readonly McpServer[]): string {
+  const lines = servers.flatMap((server) =>
+    server.instructions?.trim()
+      ? [`- ${server.name} (${server.id}): ${server.instructions.trim()}`]
+      : [],
+  );
+  return lines.length > 0 ? ["MCP server guidance:", ...lines].join("\n") : "";
+}
+
 export function toAcpMcpServers(
   servers: readonly McpServer[],
 ): ReadonlyArray<EffectAcpSchema.McpServer> {

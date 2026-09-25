@@ -51,6 +51,47 @@ All active provider paths receive bot-owned Markdown memory and participate in s
 review accounting. Mastra refreshes the files before turn admission; standard OpenCode carries
 them in its per-prompt system context. See [Memory architecture](memory.md).
 
+## Catalog tool parity
+
+The typed Akeru catalog is advertised only by the Mastra controller. Codex and Kimi receive the
+same catalog and approval semantics through that controller. Claude and Grok also use the Mastra
+controller when configured, while standard OpenCode remains on the legacy bridge and does not
+advertise catalog-only tools. Legacy providers must not claim WebSearch, WebFetch, image generation,
+or MCP account mutations unless they are routed through the shared Mastra runtime.
+
+Mastra sessions wire four network and media catalog backends. `AkeruWebFetch.ts` owns WebFetch.
+Each hop is resolved once and rejected if any address is loopback, private, link-local, CGNAT,
+multicast, or IPv4-mapped. The socket is then pinned to the validated address through a custom
+`lookup`, so the connection never asks DNS again and a rebinding resolver cannot swap the target.
+Redirects are followed up to five times, and every hop is parsed and resolved again. Bodies stream
+with a 2 MB cap and end with a truncation marker when cut. Each request has an idle timeout and an
+overall deadline.
+
+WebSearch is advertised but reports `status: "unavailable"` with no results. The Mastra providers
+expose no native search call that Akeru can invoke, and Akeru has no search index of its own, so the
+tool says so and suggests WebFetch instead of inventing results.
+
+GenerateImage and its `generate_image` alias call `generateImageWithProviders` in the image
+generation service. It tries the requested provider, then the bot's image provider, the default, and
+the fallback order, using only providers turned on in Settings. Each attempt records success or
+failure in image provider health. Images are written under the environment's attachments directory in
+`generated-images/`, and the tool returns their path. Both tools need production approval.
+
+SetMcpInstructions dispatches `mcp-server.instructions.set`. The guidance is stored on the MCP
+server record, is limited to 4,000 characters, and an empty string clears it. Mastra appends every
+saved guidance line to the system prompt from the next turn on. MCP mutations exist only after the
+plugin runtime is configured with a snapshot reader and dispatcher. AddMcpServer and RenameMcpAccount
+decode their input with the contract schema, so a stdio add without a command fails as a schema
+error before anything is dispatched. UninstallMcpServer and RemoveMcpAccount read the snapshot
+first, return `dependentBots` (active bots that had the server on, the same rule as MCP health
+dependencies), and follow `mcp-server.delete` with a `bot.update` for every bot, archived or not,
+whose `disabledMcpServerIds` still names the deleted server. Legacy bridge sessions don't
+receive the guidance, and portability exports don't carry it yet.
+
+`CloudAgent` was dropped from the catalog specification after Cursor was removed as a supported
+provider. A Cursor account would have introduced a separate credential boundary and no longer fits
+Akeru's provider-neutral catalog.
+
 Mastra keeps approval callbacks enabled in every runtime mode. `AgentController` auto-approves
 `ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
 only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action

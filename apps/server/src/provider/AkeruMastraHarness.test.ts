@@ -1869,6 +1869,22 @@ describe("AkeruMastraHarness", () => {
     assert.include(resolveAkeruInstructions(bot, now), "automatic continuation");
   });
 
+  it("appends saved MCP server guidance to the system prompt", () => {
+    const now = DateTime.makeUnsafe("2026-09-02T12:00:00.000Z");
+    const context = new RequestContext();
+    context.setRaw("controller", {
+      state: {
+        botConversation: false,
+        mcpInstructions: "MCP server guidance:\n- Docs (docs): Search first.",
+      },
+    });
+
+    assert.equal(
+      resolveAkeruInstructions(context, now),
+      `${createAkeruAgentInstructions({ now })}\n\nMCP server guidance:\n- Docs (docs): Search first.`,
+    );
+  });
+
   it("selects implemented runtime tools without dropping approval-aware plugins", async () => {
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", {

@@ -10,9 +10,12 @@
  *
  * The connection test performs one cheap request against the provider's account
  * API. It does not prove image access; a connected credential remains
- * `detected` until an image is generated. There is no
- * generation producer yet (milestone decision D5), so `lastGenerationAt` is
- * always absent and surfaces as "never generated" to clients.
+ * `detected` until an image is generated.
+ *
+ * `generateImageWithProviders` is the generation producer behind the
+ * GenerateImage catalog tool. It records request health on the same
+ * `image:<provider>` keys. `lastGenerationAt` is not persisted yet, so it
+ * stays absent.
  */
 import {
   type ImageGenerationSettings,
@@ -31,22 +34,36 @@ import {
 } from "../subscription-auth/service.ts";
 
 const IMAGE_PROVIDER_META: Readonly<
-  Record<ImageProviderId, { label: string; subscription: SubscriptionProviderId; probeUrl: string }>
+  Record<
+    ImageProviderId,
+    {
+      label: string;
+      subscription: SubscriptionProviderId;
+      probeUrl: string;
+      generationsUrl: string;
+      generationModel: string;
+    }
+  >
 > = {
   chatgpt: {
     label: "ChatGPT",
     subscription: "openai-codex",
     probeUrl: "https://chatgpt.com/backend-api/wham/usage",
+    generationsUrl: "https://api.openai.com/v1/images/generations",
+    generationModel: "gpt-image-1",
   },
   grok: {
     label: "Grok",
     subscription: "xai",
     probeUrl: "https://api.x.ai/v1/models",
+    generationsUrl: "https://api.x.ai/v1/images/generations",
+    generationModel: "grok-imagine-image-2.0",
   },
 };
 
 const IMAGE_PROVIDER_IDS: ReadonlyArray<ImageProviderId> = ["chatgpt", "grok"];
 const HEALTH_TEST_TIMEOUT_MS = 15_000;
+const GENERATION_TIMEOUT_MS = 120_000;
 
 function oauthFailureKind(cause: unknown): "request" | "revoked" {
   const message = cause instanceof Error ? cause.message : String(cause);
@@ -302,6 +319,145 @@ export async function runImageProviderHealthTest(input: {
         : `The ${meta.label} image health check failed.`,
     );
   }
+}
+
+export interface GeneratedImage {
+  readonly provider: ImageProviderId;
+  readonly model: string;
+  readonly mimeType: "image/png" | "image/jpeg" | "image/webp";
+  readonly bytes: Uint8Array;
+  readonly revisedPrompt?: string;
+}
+
+/**
+ * Provider order for one generation. An explicit provider is the only
+ * candidate. Otherwise the bot's provider, the global default, and the
+ * fallback order are tried in that order. Disabled providers never run.
+ */
+export function imageProviderCandidates(input: {
+  readonly settings: ImageGenerationSettings;
+  readonly requested?: ImageProviderId | undefined;
+  readonly botProvider?: ImageProviderId | null | undefined;
+}): ImageProviderId[] {
+  const enabled = (id: ImageProviderId) =>
+    id === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
+  if (input.requested) {
+    if (!enabled(input.requested)) {
+      throw new Error(
+        `${IMAGE_PROVIDER_META[input.requested].label} image generation is turned off in Settings.`,
+      );
+    }
+    return [input.requested];
+  }
+  const ordered = [
+    input.botProvider,
+    input.settings.defaultProvider,
+    ...input.settings.fallbackOrder,
+  ].filter((id): id is ImageProviderId => id != null && enabled(id));
+  const candidates = [...new Set(ordered)];
+  if (candidates.length === 0) {
+    throw new Error("No image provider is turned on. Turn one on in Settings, Image generation.");
+  }
+  return candidates;
+}
+
+function imageMimeType(bytes: Uint8Array): GeneratedImage["mimeType"] | undefined {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return "image/png";
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  const header = new TextDecoder().decode(bytes.subarray(0, 12));
+  if (header.startsWith("RIFF") && header.endsWith("WEBP")) return "image/webp";
+  return undefined;
+}
+
+async function generateWithProvider(input: {
+  readonly provider: ImageProviderId;
+  readonly prompt: string;
+  readonly subscriptionAuth: SubscriptionAuthService;
+  readonly fetchFn: (input: string | URL, init?: RequestInit) => Promise<Response>;
+}): Promise<GeneratedImage> {
+  const meta = IMAGE_PROVIDER_META[input.provider];
+  const token = await input.subscriptionAuth.getAccessToken(meta.subscription);
+  if (!token) throw new Error(`No ${meta.label} subscription is connected.`);
+  const response = await input.fetchFn(meta.generationsUrl, {
+    method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "akeru-bot/0.0.37",
+    },
+    body: JSON.stringify({
+      model: meta.generationModel,
+      prompt: input.prompt,
+      n: 1,
+      ...(input.provider === "grok" ? { response_format: "b64_json" } : {}),
+    }),
+  });
+  if (!response.ok) {
+    const error = new Error(`${meta.label} image generation was rejected (${response.status}).`);
+    (error as Error & { revoked?: boolean }).revoked =
+      response.status === 401 || response.status === 403;
+    throw error;
+  }
+  const body = (await response.json()) as {
+    readonly data?: ReadonlyArray<{ readonly b64_json?: string; readonly revised_prompt?: string }>;
+  };
+  const image = body.data?.[0];
+  if (!image?.b64_json) throw new Error(`${meta.label} returned no image data.`);
+  const bytes = Uint8Array.from(Buffer.from(image.b64_json, "base64"));
+  const mimeType = imageMimeType(bytes);
+  if (!mimeType) throw new Error(`${meta.label} returned an unrecognized image format.`);
+  return {
+    provider: input.provider,
+    model: meta.generationModel,
+    mimeType,
+    bytes,
+    ...(image.revised_prompt ? { revisedPrompt: image.revised_prompt } : {}),
+  };
+}
+
+/**
+ * Generate one image with the first candidate provider that succeeds. Every
+ * attempt records image request health, so a failed generation shows up on
+ * the provider row the same way a failed health test does.
+ */
+export async function generateImageWithProviders(input: {
+  readonly prompt: string;
+  readonly settings: ImageGenerationSettings;
+  readonly subscriptionAuth: SubscriptionAuthService;
+  readonly requested?: ImageProviderId | undefined;
+  readonly botProvider?: ImageProviderId | null | undefined;
+  readonly fetchFn?: (input: string | URL, init?: RequestInit) => Promise<Response>;
+}): Promise<GeneratedImage> {
+  const candidates = imageProviderCandidates(input);
+  const failures: string[] = [];
+  for (const provider of candidates) {
+    try {
+      const image = await generateWithProvider({
+        provider,
+        prompt: input.prompt,
+        subscriptionAuth: input.subscriptionAuth,
+        fetchFn: input.fetchFn ?? fetch,
+      });
+      input.subscriptionAuth.recordImageRequestSuccess(provider);
+      return image;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      const revoked =
+        cause instanceof Error && (cause as Error & { revoked?: boolean }).revoked === true;
+      input.subscriptionAuth.recordImageRequestFailure(
+        provider,
+        message,
+        undefined,
+        revoked ? "revoked" : oauthFailureKind(cause),
+      );
+      failures.push(message);
+    }
+  }
+  throw new Error(failures.join(" "));
 }
 
 const decodePatch = Schema.decodeUnknownSync(ImageGenerationSettingsPatch);

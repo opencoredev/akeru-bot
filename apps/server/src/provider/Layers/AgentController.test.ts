@@ -1,6 +1,8 @@
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
+import * as NodeHttp from "node:http";
+import type * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
@@ -31,6 +33,9 @@ import {
   TurnId,
   type AkeruDelegationAccessGrant,
   type AkeruMemoryRevision,
+  type McpServer,
+  type OrchestrationCommand,
+  type OrchestrationReadModel,
   type ProviderRuntimeEvent,
   type ProviderSession,
   type ServerSettings,
@@ -45,6 +50,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { assert, describe, expect, vi } from "vite-plus/test";
@@ -61,6 +67,7 @@ import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryReposi
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
+import type { AkeruRuntimeToolId } from "../AkeruToolRuntime.ts";
 import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
@@ -598,6 +605,8 @@ function makeLayer(
     | "revokeMcpCredential"
     | "makeBotBrowser"
     | "botMemoryStore"
+    | "webFetch"
+    | "imageFetch"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
   settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
@@ -647,6 +656,8 @@ function provideController<A, E>(
     | "revokeMcpCredential"
     | "makeBotBrowser"
     | "botMemoryStore"
+    | "webFetch"
+    | "imageFetch"
   >,
   settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
   settingsLayer?: Layer.Layer<ServerSettingsService>,
@@ -1358,6 +1369,285 @@ describe("AgentControllerLive", () => {
       undefined,
       undefined,
       usage.service,
+    );
+  });
+
+  it.effect("exposes and runs the web, image, and MCP catalog tools in a live session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-tools-"));
+    const secretsDir = NodePath.join(baseDir, "userdata", "secrets");
+    NodeFS.mkdirSync(secretsDir, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(secretsDir, "subscription-auth.json"),
+      JSON.stringify({ "openai-codex": { type: "api-key", access: "openai-key" } }),
+    );
+    const page = NodeHttp.createServer((_request, response) => response.end("catalog page"));
+    const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString(
+      "base64",
+    );
+    const imageFetch = vi.fn(async () => Response.json({ data: [{ b64_json: pngBase64 }] }));
+    const dispatched: OrchestrationCommand[] = [];
+    const docsServer: McpServer = {
+      id: McpServerId.make("docs"),
+      name: "Docs",
+      transport: "url",
+      url: "https://mcp.example.com/docs",
+      enabled: true,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      instructions: "Search the docs first.",
+    };
+    const localServer: McpServer = {
+      id: McpServerId.make("local"),
+      name: "Local",
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "local-mcp"],
+      enabled: true,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    // Ada uses both servers, Grace turned docs off, and archived Linus turned local off.
+    const snapshotBots = [
+      { id: BotId.make("ada"), name: "Ada", archivedAt: null, disabledMcpServerIds: [] },
+      {
+        id: BotId.make("grace"),
+        name: "Grace",
+        archivedAt: null,
+        disabledMcpServerIds: [McpServerId.make("docs"), McpServerId.make("other")],
+      },
+      {
+        id: BotId.make("linus"),
+        name: "Linus",
+        archivedAt: "2026-09-02T00:00:00.000Z",
+        disabledMcpServerIds: [McpServerId.make("local")],
+      },
+    ];
+
+    return provideController(
+      Effect.gen(function* () {
+        yield* Effect.promise(
+          () => new Promise<void>((resolve) => page.listen(0, "127.0.0.1", resolve)),
+        );
+        const port = (page.address() as NodeNet.AddressInfo).port;
+        const controller = yield* AgentController;
+        yield* controller.configurePluginRuntime!({
+          readSnapshot: async () =>
+            ({
+              bots: snapshotBots,
+              mcpServers: [docsServer, localServer],
+            }) as unknown as OrchestrationReadModel,
+          dispatch: async (command) => {
+            dispatched.push(command);
+            return { sequence: dispatched.length };
+          },
+        });
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
+          expect.arrayContaining([
+            "WebSearch",
+            "WebFetch",
+            "GenerateImage",
+            "generate_image",
+            "AddMcpServer",
+            "UninstallMcpServer",
+            "RemoveMcpAccount",
+            "RenameMcpAccount",
+            "SetMcpInstructions",
+          ]),
+        );
+        const run = (toolId: AkeruRuntimeToolId, toolCallId: string, input: unknown) =>
+          Effect.promise(() => {
+            const execution = { threadId: String(codexThreadId), toolId, toolCallId, input };
+            runtime.grantApproval(execution);
+            return runtime.execute({ ...execution, approvalMode: "require-grant" });
+          });
+
+        expect(yield* run("WebSearch", "search", { query: "akeru bot" })).toMatchObject({
+          status: "unavailable",
+          query: "akeru bot",
+          results: [],
+        });
+        expect(
+          yield* run("WebFetch", "fetch", { url: `http://catalog.example:${port}/` }),
+        ).toMatchObject({ status: 200, text: "catalog page", truncated: false });
+
+        for (const toolId of ["GenerateImage", "generate_image"] as const) {
+          const image = (yield* run(toolId, `image-${toolId}`, { prompt: "a fox" })) as {
+            readonly path: string;
+          };
+          expect(image).toMatchObject({ provider: "chatgpt", mimeType: "image/png" });
+          expect(NodeFS.readFileSync(image.path).toString("base64")).toBe(pngBase64);
+        }
+        expect(imageFetch).toHaveBeenCalledWith(
+          "https://api.openai.com/v1/images/generations",
+          expect.objectContaining({ method: "POST" }),
+        );
+
+        expect(
+          yield* run("SetMcpInstructions", "instructions", {
+            serverId: "docs",
+            instructions: " Search the docs first. ",
+          }),
+        ).toMatchObject({ serverId: "docs", instructions: "Search the docs first." });
+        expect(dispatched).toEqual([
+          expect.objectContaining({
+            type: "mcp-server.instructions.set",
+            mcpServerId: "docs",
+            instructions: " Search the docs first. ",
+          }),
+        ]);
+
+        const takeDispatched = () => dispatched.splice(0);
+        takeDispatched();
+        const anyCommandId = expect.stringMatching(/^catalog:/);
+
+        expect(
+          yield* run("AddMcpServer", "add-stdio", {
+            serverId: "tools",
+            name: "Tools",
+            transport: "stdio",
+            command: "uvx",
+            args: ["tools-mcp", "--verbose"],
+          }),
+        ).toEqual({ serverId: "tools", added: true });
+        expect(takeDispatched()).toEqual([
+          {
+            type: "mcp-server.create",
+            commandId: anyCommandId,
+            mcpServerId: "tools",
+            name: "Tools",
+            transport: "stdio",
+            command: "uvx",
+            args: ["tools-mcp", "--verbose"],
+            enabled: true,
+            createdAt: expect.any(String),
+          },
+        ]);
+
+        expect(
+          yield* run("AddMcpServer", "add-url", {
+            serverId: "search",
+            name: "Search",
+            transport: "url",
+            url: "https://mcp.example.com/search?region=eu",
+          }),
+        ).toEqual({ serverId: "search", added: true });
+        expect(takeDispatched()).toEqual([
+          {
+            type: "mcp-server.create",
+            commandId: anyCommandId,
+            mcpServerId: "search",
+            name: "Search",
+            transport: "url",
+            url: "https://mcp.example.com/search?region=eu",
+            enabled: true,
+            createdAt: expect.any(String),
+          },
+        ]);
+
+        // A stdio add without a command fails schema validation before any dispatch.
+        const invalidAdd = yield* Effect.promise(() =>
+          runtime
+            .execute({
+              threadId: String(codexThreadId),
+              toolId: "AddMcpServer",
+              toolCallId: "add-invalid",
+              input: { serverId: "broken", name: "Broken", transport: "stdio" },
+              approvalMode: "require-grant",
+            })
+            .then(
+              () => undefined,
+              (error: unknown) => error,
+            ),
+        );
+        expect(Schema.isSchemaError(invalidAdd)).toBe(true);
+        expect(takeDispatched()).toEqual([]);
+
+        expect(
+          yield* run("RenameMcpAccount", "rename-url", { serverId: "docs", name: "Docs (EU)" }),
+        ).toEqual({ serverId: "docs", name: "Docs (EU)", renamed: true });
+        expect(
+          yield* run("RenameMcpAccount", "rename-stdio", { serverId: "local", name: "Local 2" }),
+        ).toEqual({ serverId: "local", name: "Local 2", renamed: true });
+        expect(takeDispatched()).toEqual([
+          {
+            type: "mcp-server.update",
+            commandId: anyCommandId,
+            mcpServerId: "docs",
+            name: "Docs (EU)",
+            transport: "url",
+            url: "https://mcp.example.com/docs",
+          },
+          {
+            type: "mcp-server.update",
+            commandId: anyCommandId,
+            mcpServerId: "local",
+            name: "Local 2",
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "local-mcp"],
+          },
+        ]);
+
+        expect(yield* run("UninstallMcpServer", "uninstall", { serverId: "docs" })).toEqual({
+          serverId: "docs",
+          removed: true,
+          dependentBots: [{ id: "ada", name: "Ada" }],
+          clearedDisabledFor: [{ id: "grace", name: "Grace" }],
+        });
+        expect(takeDispatched()).toEqual([
+          { type: "mcp-server.delete", commandId: anyCommandId, mcpServerId: "docs" },
+          {
+            type: "bot.update",
+            commandId: anyCommandId,
+            botId: "grace",
+            disabledMcpServerIds: ["other"],
+          },
+        ]);
+
+        expect(yield* run("RemoveMcpAccount", "remove", { serverId: "local" })).toEqual({
+          serverId: "local",
+          removed: true,
+          dependentBots: [
+            { id: "ada", name: "Ada" },
+            { id: "grace", name: "Grace" },
+          ],
+          clearedDisabledFor: [{ id: "linus", name: "Linus" }],
+        });
+        expect(takeDispatched()).toEqual([
+          { type: "mcp-server.delete", commandId: anyCommandId, mcpServerId: "local" },
+          { type: "bot.update", commandId: anyCommandId, botId: "linus", disabledMcpServerIds: [] },
+        ]);
+      }).pipe(
+        Effect.ensuring(
+          Effect.promise(() => new Promise<void>((resolve) => page.close(() => resolve()))),
+        ),
+      ),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      baseDir,
+      undefined,
+      {
+        webFetch: {
+          lookup: async () => [{ address: "127.0.0.1", family: 4 }],
+          allowAddress: (address) => address === "127.0.0.1",
+        },
+        imageFetch,
+      },
+      { imageGeneration: { chatgptEnabled: true } },
     );
   });
 

@@ -19,6 +19,8 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeImagePatch = Schema.decodeUnknownExit(ImageGenerationSettingsPatch);
 import {
+  generateImageWithProviders,
+  imageProviderCandidates,
   imageProviderStatuses,
   normalizeImageGenerationPatch,
   runImageProviderHealthTest,
@@ -543,5 +545,76 @@ describe("image provider health test", () => {
     );
     expect(grok?.health).toBe("missing");
     expect(grok?.lastFailure?.message).toContain("subscription is connected");
+  });
+});
+
+const PNG_BASE64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
+
+describe("image generation", () => {
+  it("orders candidates by request, bot, default, then fallback and skips disabled providers", () => {
+    const settings = { ...baseSettings, chatgptEnabled: true, grokEnabled: true };
+    expect(imageProviderCandidates({ settings, botProvider: "grok" })).toEqual(["grok", "chatgpt"]);
+    expect(imageProviderCandidates({ settings, requested: "chatgpt", botProvider: "grok" })).toEqual([
+      "chatgpt",
+    ]);
+    expect(
+      imageProviderCandidates({ settings: { ...settings, grokEnabled: false }, botProvider: "grok" }),
+    ).toEqual(["chatgpt"]);
+    expect(() => imageProviderCandidates({ settings: baseSettings })).toThrow("No image provider");
+    expect(() =>
+      imageProviderCandidates({ settings: { ...baseSettings, chatgptEnabled: true }, requested: "grok" }),
+    ).toThrow("turned off");
+  });
+
+  it("falls back to the next provider and records health for both attempts", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "openai-codex");
+    seedApiKey(authPath, "xai");
+    const service = new SubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async (url: string | URL) =>
+      String(url).includes("openai")
+        ? new Response("busy", { status: 503 })
+        : Response.json({ data: [{ b64_json: PNG_BASE64, revised_prompt: "a red fox" }] }),
+    );
+
+    const image = await generateImageWithProviders({
+      prompt: "a fox",
+      settings: { ...baseSettings, chatgptEnabled: true, grokEnabled: true },
+      subscriptionAuth: service,
+      fetchFn,
+    });
+
+    expect(image).toMatchObject({
+      provider: "grok",
+      model: "grok-imagine-image-2.0",
+      mimeType: "image/png",
+      revisedPrompt: "a red fox",
+    });
+    expect(fetchFn).toHaveBeenLastCalledWith(
+      "https://api.x.ai/v1/images/generations",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer xai-key" }),
+      }),
+    );
+    expect(service.imageRequestHealth("chatgpt")?.health).not.toBe("healthy");
+    expect(service.imageRequestHealth("grok")?.health).toBe("healthy");
+  });
+
+  it("rejects a response that is not an image", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "openai-codex");
+    const service = new SubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () =>
+      Response.json({ data: [{ b64_json: Buffer.from("<html>").toString("base64") }] }),
+    );
+    await expect(
+      generateImageWithProviders({
+        prompt: "a fox",
+        settings: { ...baseSettings, chatgptEnabled: true },
+        subscriptionAuth: service,
+        fetchFn,
+      }),
+    ).rejects.toThrow("unrecognized image format");
   });
 });

@@ -451,6 +451,25 @@ describe("AkeruToolRuntime", () => {
     expect(testConnection).toHaveBeenCalledOnce();
   });
 
+  it("advertises and executes a wired Mastra catalog backend", async () => {
+    const fetch = vi.fn(async (_input: unknown) => ({ text: "ok" }));
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-webfetch", {
+      runtimeMode: "full-access",
+      workspaceType: "none",
+      catalogHandlers: { WebFetch: async ({ input }) => fetch(input) },
+    });
+    expect(runtime.toolsForThread("thread-webfetch").map((tool) => tool.id)).toContain("WebFetch");
+    await expect(runtime.execute({
+      threadId: "thread-webfetch",
+      toolId: "WebFetch",
+      toolCallId: "tool-webfetch",
+      input: { url: "https://example.com" },
+      approvalMode: "require-grant",
+    })).resolves.toEqual({ text: "ok" });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("rejects shell working directories outside both workspace boundaries", async () => {
     const runtime = createAkeruToolRuntime();
     const bot = workspace("cwd-bot");

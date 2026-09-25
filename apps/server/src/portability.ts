@@ -1308,6 +1308,7 @@ function itemForCommand(
         return `group:${command.groupId}`;
       case "mcp-server.create":
       case "mcp-server.update":
+      case "mcp-server.instructions.set":
       case "mcp-server.delete":
       case "mcp-server.enable":
       case "mcp-server.disable":

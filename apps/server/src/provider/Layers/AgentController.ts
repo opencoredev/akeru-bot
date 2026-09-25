@@ -1,4 +1,4 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off
+// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -22,6 +22,7 @@ import {
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
+  McpServerId,
   RuntimeItemId,
   RuntimeRequestId,
   RoutineId,
@@ -47,6 +48,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationReadModel,
   AKERU_CREATE_ROUTINE_TOOL_NAME,
+  decodeAkeruToolInput,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
@@ -126,6 +128,13 @@ import {
   type AkeruPluginRuntimeOptions,
 } from "../AkeruCatalogToolHandlers.ts";
 import {
+  akeruWebSearchUnavailable,
+  createAkeruWebFetch,
+  type AkeruWebFetchOptions,
+} from "../AkeruWebFetch.ts";
+import { generateImageWithProviders } from "../../image-generation/service.ts";
+import {
+  formatMcpServerInstructions,
   getMcpRuntimeHeaders,
   mcpServerNeedsBrowserAttachment,
   sameMcpServerConfigurations,
@@ -320,6 +329,10 @@ export interface AgentControllerLiveOptions {
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
+  /** Overrides the WebFetch resolver and address policy in tests. */
+  readonly webFetch?: AkeruWebFetchOptions;
+  /** Overrides the HTTP client for image generation requests in tests. */
+  readonly imageFetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -348,6 +361,51 @@ function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Active bots that lose an MCP server when it goes away: every one that has not turned it off. */
+function mcpServerDependentBots(snapshot: OrchestrationReadModel, serverId: string) {
+  return snapshot.bots
+    .filter(
+      (bot) =>
+        bot.archivedAt === null && !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+    )
+    .map((bot) => ({ id: bot.id, name: bot.name }));
+}
+
+/**
+ * Deletes an MCP server for the Uninstall and Remove catalog tools. The result names the bots that
+ * lose access, and the id is swept from every bot's disabled list so no dead id is left behind.
+ */
+async function deleteCatalogMcpServer(
+  runtime: Pick<AkeruPluginRuntimeOptions, "readSnapshot" | "dispatch">,
+  serverId: string,
+  commandPrefix: "mcp-delete" | "mcp-remove",
+) {
+  const snapshot = await runtime.readSnapshot();
+  const dependentBots = mcpServerDependentBots(snapshot, serverId);
+  await runtime.dispatch({
+    type: "mcp-server.delete",
+    commandId: CommandId.make(`catalog:${commandPrefix}:${NodeCrypto.randomUUID()}`),
+    mcpServerId: McpServerId.make(serverId),
+  });
+  const sweptBots = snapshot.bots.filter((bot) =>
+    bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+  );
+  for (const bot of sweptBots) {
+    await runtime.dispatch({
+      type: "bot.update",
+      commandId: CommandId.make(`catalog:mcp-sweep:${NodeCrypto.randomUUID()}`),
+      botId: bot.id,
+      disabledMcpServerIds: bot.disabledMcpServerIds.filter((id) => String(id) !== serverId),
+    });
+  }
+  return {
+    serverId,
+    removed: true,
+    dependentBots,
+    clearedDisabledFor: sweptBots.map((bot) => ({ id: bot.id, name: bot.name })),
+  };
 }
 
 function eventId(): EventId {
@@ -645,6 +703,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
     const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
     const resolvedByThread = new Map<string, ResolvedEngine>();
+    const webFetch = createAkeruWebFetch(options?.webFetch);
     const modelConnections = new Map<
       string,
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
@@ -2575,6 +2634,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             botConversation: resolved.botConversation,
             botName: input.botName || "",
             personalityTone,
+            mcpInstructions: formatMcpServerInstructions(mcpServers),
           }),
         );
         const toolSession = { ...existing.configuredToolSession };
@@ -2792,13 +2852,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   const snapshot = await pluginRuntimeOptions?.readSnapshot();
                   return snapshot
                     ? {
-                        dependentBots: snapshot.bots
-                          .filter(
-                            (bot) =>
-                              bot.archivedAt === null &&
-                              !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
-                          )
-                          .map((bot) => ({ id: bot.id, name: bot.name })),
+                        dependentBots: mcpServerDependentBots(snapshot, serverId),
                         dependentRoutines: [],
                       }
                     : mcpDependencies;
@@ -2823,6 +2877,112 @@ const make = (options?: AgentControllerLiveOptions) =>
                 },
               }
             : undefined,
+          {
+            webSearch: akeruWebSearchUnavailable,
+            webFetch,
+            ...(Option.isSome(serverSettings)
+              ? {
+                  generateImage: async (request: {
+                    readonly prompt: string;
+                    readonly provider?: "chatgpt" | "grok";
+                  }) => {
+                    const settings = await runPromise(serverSettings.value.getSettings);
+                    const image = await generateImageWithProviders({
+                      prompt: request.prompt,
+                      settings: settings.imageGeneration,
+                      subscriptionAuth,
+                      requested: request.provider,
+                      botProvider: bot?.imageProvider ?? null,
+                      ...(options?.imageFetch ? { fetchFn: options.imageFetch } : {}),
+                    });
+                    const directory = NodePath.join(config.attachmentsDir, "generated-images");
+                    NodeFS.mkdirSync(directory, { recursive: true });
+                    const extension = image.mimeType.slice("image/".length);
+                    const path = NodePath.join(directory, `${NodeCrypto.randomUUID()}.${extension}`);
+                    NodeFS.writeFileSync(path, image.bytes);
+                    return {
+                      provider: image.provider,
+                      model: image.model,
+                      mimeType: image.mimeType,
+                      path,
+                      ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
+                    };
+                  },
+                }
+              : {}),
+            ...(pluginRuntimeOptions
+              ? {
+                  addMcpServer: async (input: unknown) => {
+                    const value = decodeAkeruToolInput("AddMcpServer", input);
+                    const base = {
+                      type: "mcp-server.create" as const,
+                      commandId: CommandId.make(`catalog:mcp-add:${NodeCrypto.randomUUID()}`),
+                      mcpServerId: value.serverId,
+                      name: value.name,
+                      enabled: true,
+                      createdAt: nowIso(),
+                    };
+                    await pluginRuntimeOptions!.dispatch(
+                      value.transport === "stdio"
+                        ? {
+                            ...base,
+                            transport: "stdio",
+                            command: value.command,
+                            ...(value.args ? { args: [...value.args] } : {}),
+                          }
+                        : { ...base, transport: "url", url: value.url },
+                    );
+                    return { serverId: value.serverId, added: true };
+                  },
+                  uninstallMcpServer: (serverId: string) =>
+                    deleteCatalogMcpServer(pluginRuntimeOptions!, serverId, "mcp-delete"),
+                  removeMcpAccount: (serverId: string) =>
+                    deleteCatalogMcpServer(pluginRuntimeOptions!, serverId, "mcp-remove"),
+                  renameMcpAccount: async (input: unknown) => {
+                    const value = decodeAkeruToolInput("RenameMcpAccount", input);
+                    const server = (await pluginRuntimeOptions!.readSnapshot()).mcpServers?.find(
+                      (candidate) => candidate.id === value.serverId,
+                    );
+                    if (!server) throw new Error(`MCP server '${value.serverId}' was not found.`);
+                    const base = {
+                      type: "mcp-server.update" as const,
+                      commandId: CommandId.make(`catalog:mcp-rename:${NodeCrypto.randomUUID()}`),
+                      mcpServerId: server.id,
+                      name: value.name,
+                    };
+                    await pluginRuntimeOptions!.dispatch(
+                      server.transport === "stdio"
+                        ? {
+                            ...base,
+                            transport: "stdio",
+                            command: server.command,
+                            ...(server.args ? { args: [...server.args] } : {}),
+                          }
+                        : { ...base, transport: "url", url: server.url },
+                    );
+                    return { serverId: value.serverId, name: value.name, renamed: true };
+                  },
+                  setMcpInstructions: async (value: {
+                    readonly serverId: string;
+                    readonly instructions: string;
+                  }) => {
+                    await pluginRuntimeOptions!.dispatch({
+                      type: "mcp-server.instructions.set",
+                      commandId: CommandId.make(
+                        `catalog:mcp-instructions:${NodeCrypto.randomUUID()}`,
+                      ),
+                      mcpServerId: McpServerId.make(value.serverId),
+                      instructions: value.instructions,
+                    });
+                    return {
+                      serverId: value.serverId,
+                      instructions: value.instructions.trim(),
+                      appliesFrom: "next-turn",
+                    };
+                  },
+                }
+              : {}),
+          },
         ),
         ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
         ...(delegationRuntime && botId
@@ -2906,6 +3066,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             botConversation: resolved.botConversation,
             ...(input.botName ? { botName: input.botName } : {}),
             personalityTone,
+            mcpInstructions: formatMcpServerInstructions(mcpServers),
             ...(modelOptions ? { modelOptions } : {}),
           }),
         );

@@ -2,6 +2,7 @@ import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  formatMcpServerInstructions,
   mcpServerNeedsBrowserAttachment,
   sameMcpServerConfigurations,
   toAcpMcpServers,
@@ -100,5 +101,15 @@ describe("provider MCP configuration", () => {
     expect(sameMcpServerConfigurations([original], [{ ...original }])).toBe(false);
     expect(sameMcpServerConfigurations([original], [changedUrl])).toBe(false);
     expect(sameMcpServerConfigurations([original], [changedHeader])).toBe(false);
+  });
+
+  it("formats saved MCP server instructions for the bot prompt", () => {
+    expect(formatMcpServerInstructions(servers)).toBe("");
+    expect(
+      formatMcpServerInstructions([
+        { ...servers[0]!, instructions: "  Search before answering.  " },
+        { ...servers[1]!, instructions: "   " },
+      ]),
+    ).toBe("MCP server guidance:\n- Search (search): Search before answering.");
   });
 });

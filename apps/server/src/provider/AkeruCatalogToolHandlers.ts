@@ -1,4 +1,4 @@
-// @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off
+// @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 
@@ -24,6 +24,7 @@ import {
   type CatalogManifestModules,
 } from "../../../../plugins/manifestCatalog.ts";
 import type { PluginManifest } from "../../../../plugins/schema.ts";
+import { parseAkeruPublicUrl } from "./AkeruWebFetch.ts";
 
 declare global {
   interface ImportMeta {
@@ -127,6 +128,17 @@ export interface AkeruPluginRuntimeOptions {
   }>;
   readonly now?: () => string;
   readonly id?: () => string;
+}
+
+export interface AkeruCatalogBackendOptions {
+  readonly webSearch?: (input: { readonly query: string; readonly domains?: readonly string[] }) => Promise<unknown>;
+  readonly webFetch?: (input: { readonly url: string }) => Promise<unknown>;
+  readonly generateImage?: (input: { readonly prompt: string; readonly provider?: "chatgpt" | "grok" }) => Promise<unknown>;
+  readonly addMcpServer?: (input: unknown) => Promise<unknown>;
+  readonly uninstallMcpServer?: (serverId: string) => Promise<unknown>;
+  readonly removeMcpAccount?: (serverId: string) => Promise<unknown>;
+  readonly renameMcpAccount?: (input: unknown) => Promise<unknown>;
+  readonly setMcpInstructions?: (input: { readonly serverId: string; readonly instructions: string }) => Promise<unknown>;
 }
 
 function pluginServerId(pluginId: string) {
@@ -522,9 +534,36 @@ export function createAkeruCatalogToolHandlers(
   mcpManager?: McpManager,
   pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>,
   health?: AkeruMcpHealthHandlerOptions,
+  backends: AkeruCatalogBackendOptions = {},
 ): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
   const statuses = () => mcpManager?.getServerStatuses() ?? [];
   return {
+    ...(backends.webSearch ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) } : {}),
+    ...(backends.webFetch
+      ? {
+          WebFetch: async ({ input }) => {
+            const url = parseAkeruPublicUrl(requiredString(input, "url"));
+            return backends.webFetch!({ url: url.toString() });
+          },
+        }
+      : {}),
+    ...(backends.generateImage
+      ? {
+          GenerateImage: async ({ input }) => backends.generateImage!(input as never),
+          generate_image: async ({ input }) => backends.generateImage!(input as never),
+        }
+      : {}),
+    ...(backends.addMcpServer ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) } : {}),
+    ...(backends.uninstallMcpServer
+      ? { UninstallMcpServer: async ({ input }) => backends.uninstallMcpServer!(requiredString(input, "serverId")) }
+      : {}),
+    ...(backends.removeMcpAccount
+      ? { RemoveMcpAccount: async ({ input }) => backends.removeMcpAccount!(requiredString(input, "serverId")) }
+      : {}),
+    ...(backends.renameMcpAccount ? { RenameMcpAccount: async ({ input }) => backends.renameMcpAccount!(input) } : {}),
+    ...(backends.setMcpInstructions
+      ? { SetMcpInstructions: async ({ input }) => backends.setMcpInstructions!(input as never) }
+      : {}),
     ...(pluginRuntime
       ? {
           SearchPlugins: async ({ input }) =>

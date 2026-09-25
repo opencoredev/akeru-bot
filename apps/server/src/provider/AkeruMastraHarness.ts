@@ -169,6 +169,7 @@ export interface AkeruMastraState {
   readonly botName?: string;
   readonly personalityTone?: BotPersonalityTone;
   readonly persistentMemoryContext?: string;
+  readonly mcpInstructions?: string;
   readonly modelOptions?: {
     readonly reasoningEffort?: string;
     readonly serviceTier?: string;
@@ -721,7 +722,14 @@ export function resolveAkeruInstructions(
     typeof state.persistentMemoryContext === "string"
       ? state.persistentMemoryContext
       : "";
-  return [instructions, persistentMemoryContext].filter(Boolean).join("\n\n");
+  const mcpInstructions =
+    typeof state === "object" &&
+    state !== null &&
+    "mcpInstructions" in state &&
+    typeof state.mcpInstructions === "string"
+      ? state.mcpInstructions
+      : "";
+  return [instructions, mcpInstructions, persistentMemoryContext].filter(Boolean).join("\n\n");
 }
 
 export async function resolveAkeruTools(
