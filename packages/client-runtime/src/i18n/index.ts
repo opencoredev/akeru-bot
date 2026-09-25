@@ -1228,6 +1228,28 @@ export const englishCatalog = {
   "Open provider": "Open provider",
   Unassign: "Unassign",
   "Manage connections": "Manage connections",
+  "Not live": "Not live",
+  "Needs attention · {name}": "Needs attention · {name}",
+  "WhatsApp needs a public HTTPS address to receive messages. Give this environment a public URL, then reconnect.":
+    "WhatsApp needs a public HTTPS address to receive messages. Give this environment a public URL, then reconnect.",
+  "Webhook URL": "Webhook URL",
+  "Check the channel": "Check the channel",
+  "Update credentials": "Update credentials",
+  "Another bot already uses this account. Unassign it there, then connect again.":
+    "Another bot already uses this account. Unassign it there, then connect again.",
+  "the bot": "the bot",
+  "Could not update the credentials. The old connection is unchanged.":
+    "Could not update the credentials. The old connection is unchanged.",
+  "Could not connect with the new credentials or restore the old connection.":
+    "Could not connect with the new credentials or restore the old connection.",
+  "Could not connect with the new credentials. The old connection is unchanged.":
+    "Could not connect with the new credentials. The old connection is unchanged.",
+  "Connection saved. Could not connect {name}. Try again or check the connection settings.":
+    "Connection saved. Could not connect {name}. Try again or check the connection settings.",
+  "Update {name} credentials": "Update {name} credentials",
+  "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
+    "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
+  "Save and reconnect": "Save and reconnect",
   "Disabled for the workspace": "Disabled for the workspace",
   "Disable {name} for this bot": "Disable {name} for this bot",
   "Enable {name} for this bot": "Enable {name} for this bot",

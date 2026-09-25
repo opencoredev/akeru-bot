@@ -11,6 +11,8 @@ import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 
+import { isChannelIdentityConflict } from "../../channelAccess";
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
 import { environmentSnapshotAtom } from "../../state/shell";
@@ -27,6 +29,21 @@ import { channelProviderMeta, discordInviteUrl, slackPasteTarget } from "./chann
 
 const STEPS = ["Set up", "Credentials", "Connect"] as const;
 const CONNECT_LATER = "connect-later";
+
+/**
+ * An assigned connection whose credentials the dialog replaces. The dialog saves the new
+ * credentials as a new connection and only removes the old one after the bot connects, so a bad
+ * token never takes a working channel down.
+ */
+export interface ChannelReplacement {
+  readonly connectionId: ChannelConnectionId;
+  readonly name: string;
+  readonly botId: BotId;
+  readonly projectId: ProjectId | undefined;
+}
+
+const newConnectionId = () =>
+  ChannelConnectionId.make(`channel-${[...crypto.getRandomValues(new Uint32Array(4))].join("-")}`);
 
 export function buildChannelConnectionSaveInput(input: {
   readonly connectionId: ChannelConnectionId;
@@ -95,6 +112,7 @@ export function ChannelSetupDialog({
   open,
   onOpenChange,
   onSaved,
+  replacing = null,
 }: {
   readonly environmentId: EnvironmentId;
   readonly provider: ChannelProvider;
@@ -102,15 +120,24 @@ export function ChannelSetupDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onSaved: (connectionId: ChannelConnectionId) => void;
+  readonly replacing?: ChannelReplacement | null;
 }) {
+  const { t } = useI18n();
   const meta = channelProviderMeta(provider);
   const saveConnection = useAtomCommand(botEnvironment.channels.saveConnection, {
     reportFailure: false,
   });
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
+  const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
+  const deleteConnection = useAtomCommand(botEnvironment.channels.deleteConnection, {
+    reportFailure: false,
+  });
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
-  const [botId, setBotId] = useState<string>(() => bots[0]?.id ?? CONNECT_LATER);
-  const [pickedProjectId, setPickedProjectId] = useState<ProjectId | null>(null);
+  const initialBotId = replacing?.botId ?? bots[0]?.id ?? CONNECT_LATER;
+  const [botId, setBotId] = useState<string>(initialBotId);
+  const [pickedProjectId, setPickedProjectId] = useState<ProjectId | null>(
+    replacing?.projectId ?? null,
+  );
   const liveProjects = snapshot?.projects ?? [];
   const projectId = channelPickerProjectId({
     selected: pickedProjectId,
@@ -123,7 +150,7 @@ export function ChannelSetupDialog({
   const projectMissing = botId !== CONNECT_LATER && projectId === null;
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<"hosted" | "self-hosted">("hosted");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(replacing?.name ?? "");
   const [photonCredentials, setPhotonCredentials] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -146,25 +173,99 @@ export function ChannelSetupDialog({
     savedConnection.current = null;
     setStep(0);
     setMode("hosted");
-    setName("");
+    setName(replacing?.name ?? "");
     setPhotonCredentials("");
     setValues({});
-    setBotId(bots[0]?.id ?? CONNECT_LATER);
-    setPickedProjectId(null);
+    setBotId(initialBotId);
+    setPickedProjectId(replacing?.projectId ?? null);
     setConnectError(null);
     setBusy(false);
   };
 
+  const botName = bots.find((bot) => bot.id === botId)?.name ?? t("the bot");
+  const conflictCopy = t(
+    "Another bot already uses this account. Unassign it there, then connect again.",
+  );
+
+  const finish = (connectionId: ChannelConnectionId) => {
+    setBusy(false);
+    onSaved(connectionId);
+    onOpenChange(false);
+    reset();
+  };
+
+  // Detaches the old connection, connects the new one, and puts the old one back on failure.
+  const replace = async (current: ChannelReplacement) => {
+    if (projectId === null) return;
+    const connectionId = newConnectionId();
+    const saved = await saveConnection({
+      environmentId,
+      input: buildChannelConnectionSaveInput({
+        connectionId,
+        name: name.trim(),
+        provider,
+        mode,
+        values,
+      }),
+    });
+    if (saved._tag === "Failure") {
+      setBusy(false);
+      toastManager.add({ type: "error", title: "Could not save channel" });
+      return;
+    }
+    const discardNew = () =>
+      deleteConnection({ environmentId, input: { connectionId } }).then(() => undefined);
+    const detached = await detach({
+      environmentId,
+      input: { botId: current.botId, provider },
+    });
+    if (detached._tag === "Failure") {
+      await discardNew();
+      setBusy(false);
+      setConnectError(t("Could not update the credentials. The old connection is unchanged."));
+      return;
+    }
+    const attached = await attach({
+      environmentId,
+      input: { botId: current.botId, connectionId, provider, projectId },
+    });
+    if (attached._tag === "Failure") {
+      const restored = await attach({
+        environmentId,
+        input: {
+          botId: current.botId,
+          connectionId: current.connectionId,
+          provider,
+          projectId: current.projectId ?? projectId,
+        },
+      });
+      await discardNew();
+      setBusy(false);
+      setConnectError(
+        isChannelIdentityConflict(attached)
+          ? conflictCopy
+          : restored._tag === "Failure"
+            ? t("Could not connect with the new credentials or restore the old connection.")
+            : t("Could not connect with the new credentials. The old connection is unchanged."),
+      );
+      return;
+    }
+    await deleteConnection({ environmentId, input: { connectionId: current.connectionId } });
+    finish(connectionId);
+  };
+
   const save = async () => {
     if (busy || !name.trim() || !credentialsComplete || projectMissing) return;
+    if (replacing) {
+      setBusy(true);
+      setConnectError(null);
+      await replace(replacing);
+      return;
+    }
     setBusy(true);
     setConnectError(null);
     const saved = savedConnection.current;
-    const connectionId =
-      saved?.connectionId ??
-      ChannelConnectionId.make(
-        `channel-${[...crypto.getRandomValues(new Uint32Array(4))].join("-")}`,
-      );
+    const connectionId = saved?.connectionId ?? newConnectionId();
     if (!saved || saved.name !== name.trim() || saved.mode !== mode || saved.values !== values) {
       const result = await saveConnection({
         environmentId,
@@ -192,15 +293,17 @@ export function ChannelSetupDialog({
         setBusy(false);
         onSaved(connectionId);
         setConnectError(
-          `Connection saved. Could not connect ${bots.find((bot) => bot.id === botId)?.name ?? "the bot"}. Try again or check the connection settings.`,
+          isChannelIdentityConflict(attached)
+            ? conflictCopy
+            : t(
+                "Connection saved. Could not connect {name}. Try again or check the connection settings.",
+                { name: botName },
+              ),
         );
         return;
       }
     }
-    setBusy(false);
-    onSaved(connectionId);
-    onOpenChange(false);
-    reset();
+    finish(connectionId);
   };
 
   return (
@@ -216,7 +319,9 @@ export function ChannelSetupDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <meta.icon className="size-5 shrink-0" aria-hidden />
-            Connect {meta.label}
+            {replacing
+              ? t("Update {name} credentials", { name: meta.label })
+              : `Connect ${meta.label}`}
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4 px-6 pb-6">
@@ -338,32 +443,46 @@ export function ChannelSetupDialog({
                   {connectError}
                 </p>
               ) : null}
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Bot that answers</span>
-                <Select value={botId} onValueChange={(next) => next && setBotId(next)}>
-                  <SelectTrigger aria-label="Bot that answers">
-                    <SelectValue>
-                      {bots.find((bot) => bot.id === botId)?.name ?? "Connect later"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value={CONNECT_LATER}>Connect later</SelectItem>
-                    {bots.map((bot) => (
-                      <SelectItem key={bot.id} value={bot.id}>
-                        {bot.name}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </div>
+              {replacing ? null : (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Bot that answers
+                  </span>
+                  <Select value={botId} onValueChange={(next) => next && setBotId(next)}>
+                    <SelectTrigger aria-label="Bot that answers">
+                      <SelectValue>
+                        {bots.find((bot) => bot.id === botId)?.name ?? "Connect later"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value={CONNECT_LATER}>Connect later</SelectItem>
+                      {bots.map((bot) => (
+                        <SelectItem key={bot.id} value={bot.id}>
+                          {bot.name}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+              )}
               {botId !== CONNECT_LATER ? (
-                <ChannelProjectSelect
-                  projects={liveProjects}
-                  value={projectId}
-                  onChange={setPickedProjectId}
-                  label="Project for channel turns"
-                  disabled={busy}
-                />
+                <>
+                  <ChannelProjectSelect
+                    projects={liveProjects}
+                    value={projectId}
+                    onChange={setPickedProjectId}
+                    label="Project for channel turns"
+                    disabled={busy}
+                  />
+                  <p
+                    role="note"
+                    className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+                  >
+                    {t(
+                      "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
+                    )}
+                  </p>
+                </>
               ) : null}
             </div>
           ) : null}
@@ -388,7 +507,11 @@ export function ChannelSetupDialog({
                 disabled={busy || !name.trim() || !credentialsComplete || projectMissing}
                 onClick={() => void save()}
               >
-                {botId === CONNECT_LATER ? "Save connection" : "Connect"}
+                {replacing
+                  ? t("Save and reconnect")
+                  : botId === CONNECT_LATER
+                    ? "Save connection"
+                    : "Connect"}
               </Button>
             )}
           </div>

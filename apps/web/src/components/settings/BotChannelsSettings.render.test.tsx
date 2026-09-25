@@ -1,4 +1,5 @@
-import { AuthAccessWriteScope } from "@t3tools/contracts";
+import { AuthAccessWriteScope, type ChannelBinding } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,8 +14,9 @@ const fixtures = vi.hoisted(() => ({
       connectionId: string;
       provider: "imessage";
       projectId: string;
-      status: "disconnected" | "blocked" | "connected";
+      status: ChannelBinding["status"];
       lastError?: string;
+      failureCategory?: ChannelBinding["failureCategory"];
       externalIdentity: null;
       connectedAt: null;
       sentMessageIds: string[];
@@ -30,9 +32,11 @@ const fixtures = vi.hoisted(() => ({
   ] as Array<{ id: string; title: string; workspaceRoot: string; updatedAt: string }>,
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
-  ],
+  ] as Array<Record<string, unknown>>,
+  scopes: [] as string[],
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
   command: vi.fn(),
+  toast: vi.fn(),
 }));
 
 vi.mock("@effect/atom-react", () => ({
@@ -46,11 +50,12 @@ vi.mock("../../state/bots", () => ({
 }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => fixtures.command }));
 vi.mock("../../hooks/useSettings", () => ({ useEnvironmentSettings: () => fixtures.connections }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
 vi.mock("../../settingsDialogStore", () => ({ useSettingsEnvironmentId: () => "environment-1" }));
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({
     isPending: false,
-    data: { authenticated: true, scopes: [AuthAccessWriteScope] },
+    data: { authenticated: true, scopes: fixtures.scopes },
   }),
 }));
 
@@ -74,7 +79,11 @@ import { BotChannelsSettingsPanel } from "./BotChannelsSettings";
 
 const liveProject = fixtures.projects[0]!;
 
-function boundBot(status: "disconnected" | "blocked" | "connected", lastError?: string) {
+function boundBot(
+  status: ChannelBinding["status"],
+  lastError?: string,
+  failureCategory?: ChannelBinding["failureCategory"],
+) {
   return {
     id: "bot-uuid",
     name: "Akeru",
@@ -87,6 +96,7 @@ function boundBot(status: "disconnected" | "blocked" | "connected", lastError?: 
         projectId: "project-uuid",
         status,
         ...(lastError ? { lastError } : {}),
+        ...(failureCategory ? { failureCategory } : {}),
         externalIdentity: null,
         connectedAt: null,
         sentMessageIds: [],
@@ -104,6 +114,7 @@ describe("channel project selection", () => {
     fixtures.bots = [];
     fixtures.projects = [liveProject];
     fixtures.selects = [];
+    fixtures.scopes = [AuthAccessWriteScope];
     fixtures.command.mockReset().mockResolvedValue({ _tag: "Success" });
   });
 
@@ -189,5 +200,142 @@ describe("channel project selection", () => {
     expect(html).toContain(
       "Delivery could not be confirmed. Check the external conversation before retrying.",
     );
+  });
+});
+
+const fixtureConnection = {
+  id: "profile-1",
+  name: "Fixture line",
+  provider: "imessage",
+  externalIdentity: null,
+};
+
+function button(html: string, label: string) {
+  return html.match(new RegExp(`<(?:button|a)[^>]*>${label}</(?:button|a)>`))?.[0];
+}
+
+describe("channel health and repair", () => {
+  beforeEach(() => {
+    fixtures.bots = [];
+    fixtures.projects = [liveProject];
+    fixtures.connections = [fixtureConnection];
+    fixtures.selects = [];
+    fixtures.scopes = [AuthAccessWriteScope];
+  });
+
+  it("shows a still connecting channel without a repair action", () => {
+    fixtures.bots = [boundBot("connecting")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Connecting…<");
+    expect(button(html, "Connecting…")).toMatch(/\sdisabled(=|\s|>)/);
+    expect(button(html, "Reconnect")).toBeUndefined();
+    expect(button(html, "Disconnect")).toBeUndefined();
+  });
+
+  it("explains a not live channel and shows the webhook URL from the profile", () => {
+    fixtures.connections = [
+      { ...fixtureConnection, webhookUrl: "https://akeru.example.com/channels/whatsapp/hook" },
+    ];
+    fixtures.bots = [boundBot("not-live")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Not live<");
+    expect(html).toContain("WhatsApp needs a public HTTPS address to receive messages.");
+    expect(html).toContain("https://akeru.example.com/channels/whatsapp/hook");
+    expect(button(html, "Reconnect")).toBeUndefined();
+    expect(button(html, "Connect")).toBeUndefined();
+  });
+
+  it("omits the webhook line when the profile has no webhook URL", () => {
+    fixtures.bots = [boundBot("not-live")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Not live<");
+    expect(html).not.toContain("Webhook URL");
+  });
+
+  it.each([
+    ["failed", "credentials", "Connection failed", "Update credentials"],
+    ["failed", "network", "Connection failed", "Reconnect"],
+    ["needs-reconnect", undefined, "Needs reconnect", "Reconnect"],
+    ["disconnected", undefined, "Disconnected · Akeru", "Connect"],
+    ["connected", "credentials", "Needs attention · Akeru", "Update credentials"],
+    ["connected", "network", "Needs attention · Akeru", "Reconnect"],
+    ["connected", "restore", "Needs attention · Akeru", "Reconnect"],
+  ] as const)("%s with %s failure shows one %s repair", (status, category, badge, repair) => {
+    fixtures.bots = [boundBot(status, category ? "Fixed server copy." : undefined, category)];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(`>${badge}<`);
+    expect(button(html, repair)).toBeDefined();
+    expect(button(html, repair)).not.toMatch(/\sdisabled(=|\s|>)/);
+    const repairs = ["Connect", "Reconnect", "Update credentials", "Reconnect in this project"];
+    expect(repairs.filter((label) => button(html, label))).toEqual([repair]);
+    if (category) expect(html).toContain("Fixed server copy.");
+  });
+
+  it("links a connected channel with unknown delivery to the provider console", () => {
+    fixtures.connections = [
+      { ...fixtureConnection, managementUrl: "https://provider.example.com/console" },
+    ];
+    fixtures.bots = [
+      boundBot(
+        "connected",
+        "Delivery could not be confirmed. Check the external conversation before retrying.",
+        "delivery-unknown",
+      ),
+    ];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Needs attention · Akeru<");
+    expect(button(html, "Check the channel")).toContain(
+      'href="https://provider.example.com/console"',
+    );
+    expect(button(html, "Open provider")).toBeUndefined();
+    expect(button(html, "Reconnect")).toBeUndefined();
+    expect(button(html, "Disconnect")).toBeDefined();
+  });
+
+  it("shows no repair for a healthy connected channel", () => {
+    fixtures.bots = [boundBot("connected")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Assigned to Akeru<");
+    expect(html).not.toContain('role="status"');
+    expect(button(html, "Disconnect")).toBeDefined();
+    for (const label of ["Connect", "Reconnect", "Update credentials", "Check the channel"]) {
+      expect(button(html, label)).toBeUndefined();
+    }
+  });
+
+  it("hides channel management from a client without write access", () => {
+    fixtures.scopes = [];
+    fixtures.bots = [boundBot("failed", "Fixed server copy.", "credentials")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain("This client does not have permission to manage channels.");
+    expect(html).not.toContain("Fixture line");
+    expect(html).not.toContain("Update credentials");
+  });
+});
+
+describe("channel identity conflicts", () => {
+  beforeEach(() => {
+    fixtures.bots = [];
+    fixtures.projects = [liveProject];
+    fixtures.connections = [fixtureConnection];
+    fixtures.selects = [];
+    fixtures.scopes = [AuthAccessWriteScope];
+    fixtures.toast.mockReset();
+  });
+
+  it("explains that another bot already uses the account", async () => {
+    fixtures.command.mockReset().mockResolvedValue({
+      _tag: "Failure",
+      cause: Cause.fail(new Error("This channel connection is attached to another bot.")),
+    });
+    renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    fixtures.selects[0]!.onValueChange?.("bot-uuid");
+    await fixtures.command.mock.results[0]!.value;
+    await Promise.resolve();
+    expect(fixtures.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Could not assign channel",
+      description: "Another bot already uses this account. Unassign it there, then connect again.",
+    });
   });
 });

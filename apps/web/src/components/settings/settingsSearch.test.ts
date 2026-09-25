@@ -82,6 +82,12 @@ describe("searchSettings", () => {
     }
   });
 
+  it("finds bot channels by channel repair words", () => {
+    for (const query of ["Channels", "channel", "webhook", "credentials", "messaging"]) {
+      expect(searchSettings(query).map((item) => item.id)).toContain("bot-channels");
+    }
+  });
+
   it("keeps catalog order for multiple title matches", () => {
     expect(searchSettings("update", ITEMS).map((item) => item.id)).toEqual([
       "provider-updates",

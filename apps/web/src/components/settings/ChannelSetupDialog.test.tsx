@@ -1,4 +1,5 @@
-import { BotId, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { BotId, ChannelConnectionId, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { act, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -12,8 +13,18 @@ const mocks = vi.hoisted(() => ({
     vi.fn<
       (value: {
         input: { connectionId: string; botId: string; projectId: string };
-      }) => Promise<{ _tag: "Success" | "Failure" }>
+      }) => Promise<{ _tag: "Success" | "Failure"; cause?: Cause.Cause<unknown> }>
     >(),
+  detach: vi.fn<
+    (value: { input: { botId: string; provider: string } }) => Promise<{
+      _tag: "Success" | "Failure";
+    }>
+  >(),
+  deleteConnection:
+    vi.fn<
+      (value: { input: { connectionId: string } }) => Promise<{ _tag: "Success" | "Failure" }>
+    >(),
+  calls: [] as string[],
   toast: vi.fn(),
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   inputs: new Map<string, { onChange: (event: { currentTarget: { value: string } }) => void }>(),
@@ -36,10 +47,17 @@ vi.mock("./ChannelProjectSelect", () => ({
 }));
 
 vi.mock("../../state/bots", () => ({
-  botEnvironment: { channels: { saveConnection: "save", attach: "attach" } },
+  botEnvironment: {
+    channels: {
+      saveConnection: "save",
+      attach: "attach",
+      detach: "detach",
+      deleteConnection: "deleteConnection",
+    },
+  },
 }));
 vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: (command: string) => (command === "save" ? mocks.save : mocks.attach),
+  useAtomCommand: (command: "save" | "attach" | "detach" | "deleteConnection") => mocks[command],
 }));
 vi.mock("./BotChannelsSettings", () => ({ parsePhotonHostedCredentials: vi.fn() }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
@@ -69,7 +87,7 @@ vi.mock("../ui/dialog", () => ({
   },
   DialogPopup: ({ children }: { children: ReactNode }) => children,
   DialogHeader: ({ children }: { children: ReactNode }) => children,
-  DialogTitle: () => null,
+  DialogTitle: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("../ui/select", () => ({
   Select: () => null,
@@ -122,6 +140,9 @@ class TestNode {
     return child;
   }
   createElement(name: string) {
+    return new TestNode(name, this);
+  }
+  createElementNS(_namespace: string, name: string) {
     return new TestNode(name, this);
   }
   createTextNode(text: string) {
@@ -191,6 +212,8 @@ beforeEach(async () => {
   mocks.projectSelect = null;
   mocks.save.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.attach.mockReset().mockResolvedValue({ _tag: "Success" });
+  mocks.detach.mockReset().mockResolvedValue({ _tag: "Success" });
+  mocks.deleteConnection.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.toast.mockReset();
   mocks.buttons.clear();
   mocks.inputs.clear();
@@ -318,5 +341,127 @@ describe("ChannelSetupDialog project selection", () => {
     expect(mocks.projectSelect?.value).toBeNull();
     expect(mocks.buttons.get("Connect")?.disabled).toBe(true);
     expect(mocks.attach).not.toHaveBeenCalled();
+  });
+});
+
+const conflict = {
+  _tag: "Failure" as const,
+  cause: Cause.fail(new Error("This channel connection is already connected to another bot.")),
+};
+
+describe("ChannelSetupDialog access and conflicts", () => {
+  it("warns who can reach the project before Connect", async () => {
+    await click("Continue");
+    expect(container.textContent).not.toContain("Anyone who can message this bot");
+    await fill("Telegram Bot token", "test-token");
+    await click("Continue");
+    expect(container.textContent).toContain(
+      "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
+    );
+    expect(mocks.buttons.has("Connect")).toBe(true);
+  });
+
+  it("explains an identity conflict in plain words", async () => {
+    mocks.attach.mockResolvedValueOnce(conflict);
+    await completeSetup();
+    await click("Connect");
+    expect(container.textContent).toContain(
+      "Another bot already uses this account. Unassign it there, then connect again.",
+    );
+    expect(container.textContent).not.toContain("channel connection is already connected");
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChannelSetupDialog credential update", () => {
+  const oldConnection = ChannelConnectionId.make("channel-old");
+  const replacing = {
+    connectionId: oldConnection,
+    name: "Support line",
+    botId: BotId.make("test-bot"),
+    projectId: botProject,
+  };
+
+  beforeEach(async () => {
+    await act(() =>
+      root.render(<ChannelSetupDialog key="replace" {...props} replacing={replacing} />),
+    );
+  });
+
+  async function enterNewToken() {
+    await click("Continue");
+    await fill("Telegram Bot token", "new-token");
+    await click("Continue");
+  }
+
+  it("connects the new credentials before removing the old connection", async () => {
+    expect(container.textContent).toContain("Update Telegram credentials");
+    await enterNewToken();
+    await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(newConnection).not.toBe(oldConnection);
+    expect(mocks.save.mock.calls[0]![0].input).toMatchObject({
+      name: "Support line",
+      token: "new-token",
+    });
+    expect(mocks.detach).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { botId: "test-bot", provider: "telegram" } }),
+    );
+    expect(mocks.attach.mock.calls.map(([value]) => value.input)).toEqual([
+      {
+        botId: "test-bot",
+        connectionId: newConnection,
+        provider: "telegram",
+        projectId: botProject,
+      },
+    ]);
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      oldConnection,
+    ]);
+    expect(onSaved).toHaveBeenCalledWith(newConnection);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("puts the old connection back when the new credentials fail", async () => {
+    mocks.attach.mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(mocks.attach.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+      oldConnection,
+    ]);
+    expect(mocks.attach.mock.calls[1]![0].input.projectId).toBe(botProject);
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+    ]);
+    expect(container.textContent).toContain(
+      "Could not connect with the new credentials. The old connection is unchanged.",
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("says so when the old connection cannot be restored either", async () => {
+    mocks.attach.mockResolvedValue({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    expect(container.textContent).toContain(
+      "Could not connect with the new credentials or restore the old connection.",
+    );
+  });
+
+  it("leaves the old connection attached when it cannot be detached", async () => {
+    mocks.detach.mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(mocks.attach).not.toHaveBeenCalled();
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+    ]);
+    expect(container.textContent).toContain(
+      "Could not update the credentials. The old connection is unchanged.",
+    );
   });
 });

@@ -70,6 +70,12 @@ A `ChannelBinding` reports health through `status`, `lastError`, `failureCategor
 
 `channelRepairAction` in `@t3tools/client-runtime/channel-presentation` maps status plus category to one repair: wait, connect, reconnect, update credentials, choose a project, check delivery, or set a public URL. For a `connected` binding it offers update credentials for `credentials`, reconnect for `network` or `restore`, and check delivery for `delivery-unknown`. Clients should render that action instead of interpreting `lastError`.
 
+Web renders health through `apps/web/src/components/settings/ChannelStatus.tsx`, shared by Settings > Bot channels and the bot Channels sheet. `ChannelStatusBadge` names the state, `ChannelStatusNotice` shows the fixed `lastError` text or the WhatsApp public URL explanation, and `ChannelRepairButton` renders the one action from `channelRepairAction`. Check delivery links to the connection's `managementUrl`, so the card hides its separate provider link for that action. Setting a public URL has no button because the client cannot fix it. The notice shows the webhook URL only when the connection profile carries a server-built `webhookUrl`; the web reads that field optionally and never derives it from the browser origin, which may be a private address.
+
+Update credentials in Settings saves the new credentials as a new connection, detaches the old one, and attaches the new one to the same bot and project. The old profile is deleted only after the attach succeeds. If the attach fails, the dialog reattaches the old connection and deletes the new profile. The bot Channels sheet sends this action to Settings because it has no credential form. Mobile stays status-only and points to Settings on the host.
+
+`isChannelIdentityConflict` in `apps/web/src/channelAccess.ts` recognizes the server's two fixed identity conflict messages in a command failure cause by exact match, so clients can show plain conflict copy without parsing other errors.
+
 A failed connect or attach rolls back what it started. The transport stops, a `connecting` binding for a new assignment is removed, and a previously saved credential stays saved. If the bot is archived or deleted while its channel connects, the start is refused at commit, the transport stops, and the `connecting` binding is removed or put back as it was, so restore never starts it. When another bot already uses the same external identity, the command fails before it replaces the live transport.
 
 ### Error text

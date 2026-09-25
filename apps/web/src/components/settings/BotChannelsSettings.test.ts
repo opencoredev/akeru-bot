@@ -1,9 +1,11 @@
 import { AuthAccessWriteScope, BotId, ChannelConnectionId, ProjectId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   canManageChannels,
   connectedChannelBinding,
+  isChannelIdentityConflict,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
 import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
@@ -187,5 +189,34 @@ describe("bot channel settings", () => {
     expect(
       parsePhotonHostedCredentials("OTHER_PROJECT_ID=project-1\nSPECTRUM_PROJECT_SECRET=secret"),
     ).toBeNull();
+  });
+});
+
+describe("isChannelIdentityConflict", () => {
+  const failure = (message: string) => ({ cause: Cause.fail(new Error(message)) });
+
+  it("matches the server's fixed identity conflict messages", () => {
+    expect(
+      isChannelIdentityConflict(
+        failure("This channel connection is already connected to another bot."),
+      ),
+    ).toBe(true);
+    expect(
+      isChannelIdentityConflict(failure("This channel connection is attached to another bot.")),
+    ).toBe(true);
+  });
+
+  it("ignores look-alike errors and missing causes", () => {
+    expect(
+      isChannelIdentityConflict(
+        failure("This phone number is already attached to another bot account"),
+      ),
+    ).toBe(false);
+    expect(
+      isChannelIdentityConflict(
+        failure("Request failed: This channel connection is attached to another bot."),
+      ),
+    ).toBe(false);
+    expect(isChannelIdentityConflict({})).toBe(false);
   });
 });

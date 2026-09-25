@@ -1176,6 +1176,28 @@ export const zhCNCatalog: TranslationCatalog = {
   "Open provider": "打开提供商",
   Unassign: "取消分配",
   "Manage connections": "管理连接",
+  "Not live": "未上线",
+  "Needs attention · {name}": "需要处理 · {name}",
+  "WhatsApp needs a public HTTPS address to receive messages. Give this environment a public URL, then reconnect.":
+    "WhatsApp 需要公开的 HTTPS 地址才能接收消息。请为此环境设置公开 URL，然后重新连接。",
+  "Webhook URL": "Webhook URL",
+  "Check the channel": "检查频道",
+  "Update credentials": "更新凭据",
+  "Another bot already uses this account. Unassign it there, then connect again.":
+    "另一个机器人已在使用此账号。请先在那里取消分配，然后再连接。",
+  "the bot": "机器人",
+  "Could not update the credentials. The old connection is unchanged.":
+    "无法更新凭据。原连接保持不变。",
+  "Could not connect with the new credentials or restore the old connection.":
+    "无法使用新凭据连接，也无法恢复原连接。",
+  "Could not connect with the new credentials. The old connection is unchanged.":
+    "无法使用新凭据连接。原连接保持不变。",
+  "Connection saved. Could not connect {name}. Try again or check the connection settings.":
+    "连接已保存。无法连接 {name}。请重试或检查连接设置。",
+  "Update {name} credentials": "更新 {name} 凭据",
+  "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
+    "任何能给此机器人发消息的人，都能让它使用已启用的工具在所选项目中工作。",
+  "Save and reconnect": "保存并重新连接",
   "Disabled for the workspace": "已在工作区中停用",
   "Disable {name} for this bot": "为此机器人停用 {name}",
   "Enable {name} for this bot": "为此机器人启用 {name}",

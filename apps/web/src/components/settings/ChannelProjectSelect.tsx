@@ -30,7 +30,7 @@ export function ChannelProjectSelect({
   }
   const selected = projects.find((project) => project.id === value);
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
       <span className="text-xs font-medium text-muted-foreground">{t("Project")}</span>
       <Select
         value={selected?.id ?? null}
@@ -39,7 +39,7 @@ export function ChannelProjectSelect({
           if (project) onChange(project.id);
         }}
       >
-        <SelectTrigger aria-label={label} className="w-48" disabled={disabled}>
+        <SelectTrigger aria-label={label} className="w-full sm:w-48" disabled={disabled}>
           <SelectValue>{selected?.title ?? t("Choose a project")}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
