@@ -62,6 +62,9 @@ the card shows the result or what went wrong, and one of these lines:
 A bot runs at most three pieces of work at a time from one chat. Asking the same bot twice starts
 two separate pieces of work, each with its own card.
 
+Work that has a deadline stops at the deadline. Work without one stops after 4 hours if the other
+bot has not reported back. Either way the card shows it as failed because it timed out.
+
 ## Tables, checklists, and other rich replies
 
 Bot replies render richer Markdown directly in the chat. There is no separate dashboard.

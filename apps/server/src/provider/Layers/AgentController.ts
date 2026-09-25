@@ -52,6 +52,8 @@ import {
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -122,6 +124,11 @@ import {
   type AkeruDelegationRuntime,
   type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
+import {
+  AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
+  AKERU_ROUTINE_REVIEW_TIMEOUT,
+  makePendingWaiters,
+} from "../PendingWaiters.ts";
 import {
   createAkeruCatalogToolHandlers,
   createAkeruPluginRuntime,
@@ -811,31 +818,21 @@ const make = (options?: AgentControllerLiveOptions) =>
     let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
     let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
     let botStateRuntime: AkeruBotStateRuntime | undefined;
-    const childWaiters = new Map<
-      string,
-      {
-        readonly resolve: (outcome: AkeruDelegationChildOutcome) => void;
-        readonly reject: (cause: Error) => void;
-        readonly timer: ReturnType<typeof setTimeout> | undefined;
-      }
-    >();
+    const childWaiters = yield* makePendingWaiters<null, AkeruDelegationChildOutcome>(
+      "The agent controller stopped.",
+    );
     const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
-      const waiter = childWaiters.get(String(threadId));
-      if (!waiter) return;
-      if (waiter.timer) clearTimeout(waiter.timer);
-      childWaiters.delete(String(threadId));
-      waiter.resolve(outcome);
+      childWaiters.resolve(String(threadId), outcome);
     };
-    const pendingRoutineRequests = new Map<
-      string,
+    const pendingRoutineRequests = yield* makePendingWaiters<
       {
         readonly threadId: string;
         readonly input: AkeruCreateRoutineInput;
         readonly timezone: string;
-        readonly resolve: (result: unknown) => void;
-        readonly reject: (cause: unknown) => void;
-      }
-    >();
+      },
+      unknown,
+      Error
+    >("The agent controller stopped before the routine review finished.");
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -1419,32 +1416,60 @@ const make = (options?: AgentControllerLiveOptions) =>
                 return Promise.reject(new Error("Send a message before creating a routine."));
               }
               const requestId = `routine-${NodeCrypto.randomUUID()}`;
-              return new Promise((resolve, reject) => {
-                pendingRoutineRequests.set(requestId, {
-                  threadId,
-                  input,
-                  timezone,
-                  resolve,
-                  reject,
-                });
-                if (active.activeTurn) active.activeTurn.waiting = true;
-                publishSessionState(ThreadIdBrand(threadId), active, "waiting");
-                publish({
-                  ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
-                  requestId: RuntimeRequestId.make(requestId),
-                  type: "request.opened",
-                  payload: {
-                    requestType: "dynamic_tool_call",
-                    detail: "Review routine",
-                    toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
-                    args: { ...input, timezone },
-                    options: [
-                      { decision: "accept", label: "Create routine" },
-                      { decision: "decline", label: "Cancel" },
-                    ],
-                  },
-                });
-              });
+              return runPromise(
+                pendingRoutineRequests
+                  .wait(
+                    requestId,
+                    { threadId, input, timezone },
+                    {
+                      timeout: AKERU_ROUTINE_REVIEW_TIMEOUT,
+                      timeoutMessage:
+                        "The routine review expired without a response. Ask again to create the routine.",
+                      onOpen: () => {
+                        if (active.activeTurn) active.activeTurn.waiting = true;
+                        publishSessionState(ThreadIdBrand(threadId), active, "waiting");
+                        publish({
+                          ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
+                          requestId: RuntimeRequestId.make(requestId),
+                          type: "request.opened",
+                          payload: {
+                            requestType: "dynamic_tool_call",
+                            detail: "Review routine",
+                            toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                            args: { ...input, timezone },
+                            options: [
+                              { decision: "accept", label: "Create routine" },
+                              { decision: "decline", label: "Cancel" },
+                            ],
+                          },
+                        });
+                      },
+                    },
+                  )
+                  .pipe(
+                    Effect.tapErrorTag("PendingWaiterTimeoutError", () =>
+                      Effect.sync(() => {
+                        // Close the review card so the chat no longer waits on the user.
+                        const current = sessions.get(threadId);
+                        if (!current?.activeTurn) return;
+                        current.activeTurn.waiting = false;
+                        publish({
+                          ...baseEvent(ThreadIdBrand(threadId), current, current.activeTurn.turnId),
+                          requestId: RuntimeRequestId.make(requestId),
+                          type: "request.resolved",
+                          payload: {
+                            requestType: "dynamic_tool_call" as const,
+                            decision: "cancel",
+                            actor: "system",
+                            target: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                            outcome: "cancelled",
+                          },
+                        });
+                        publishSessionState(ThreadIdBrand(threadId), current, "running");
+                      }),
+                    ),
+                  ),
+              );
             },
           }
         : {}),
@@ -1563,26 +1588,26 @@ const make = (options?: AgentControllerLiveOptions) =>
       createAkeruDelegationRuntime({
         ...input,
         awaitChild: (threadId, deadline) =>
-          new Promise((resolve, reject) => {
-            const key = String(threadId);
-            if (childWaiters.has(key)) {
-              reject(new Error(`Delegation waiter already exists for '${threadId}'.`));
-              return;
-            }
-            const delay = deadline === null ? undefined : Date.parse(deadline) - Date.now();
-            if (delay !== undefined && delay <= 0) {
-              reject(new Error("The delegation deadline expired."));
-              return;
-            }
-            const timer =
-              delay === undefined
-                ? undefined
-                : setTimeout(() => {
-                    childWaiters.delete(key);
-                    reject(new Error("The delegation deadline expired."));
-                  }, delay);
-            childWaiters.set(key, { resolve, reject, timer });
-          }),
+          runPromise(
+            Effect.gen(function* () {
+              const now = yield* Clock.currentTimeMillis;
+              return yield* childWaiters.wait(
+                String(threadId),
+                null,
+                deadline === null
+                  ? {
+                      timeout: AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
+                      timeoutMessage: `The bot did not report back within ${Duration.toHours(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT)} hours.`,
+                      existsMessage: `Delegation waiter already exists for '${threadId}'.`,
+                    }
+                  : {
+                      timeout: Duration.millis(Date.parse(deadline) - now),
+                      timeoutMessage: "The delegation deadline expired.",
+                      existsMessage: `Delegation waiter already exists for '${threadId}'.`,
+                    },
+              );
+            }),
+          ),
         interruptChild: (threadId, turnId) =>
           input
             .dispatch({
@@ -2005,10 +2030,12 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           });
       }
-      for (const [requestId, request] of pendingRoutineRequests) {
+      for (const [requestId, request] of pendingRoutineRequests.entries()) {
         if (request.threadId !== String(threadId)) continue;
-        pendingRoutineRequests.delete(requestId);
-        request.reject(new Error("The routine review ended before it received a response."));
+        pendingRoutineRequests.reject(
+          requestId,
+          new Error("The routine review ended before it received a response."),
+        );
       }
       active.activeTurn = null;
       const nextTurn = active.pendingTurns.shift();
@@ -3516,9 +3543,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const toolCallId = String(input.requestId);
-      const routineRequest = pendingRoutineRequests.get(toolCallId);
+      // Claiming the review first stops its timeout, so an answer that arrives
+      // in time always decides the outcome even if creation outlasts the limit.
+      const routineRequest = pendingRoutineRequests.claim(toolCallId);
       if (routineRequest) {
-        pendingRoutineRequests.delete(toolCallId);
         if (active.activeTurn) active.activeTurn.waiting = false;
         publish({
           ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
@@ -3528,10 +3556,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
         publishSessionState(input.threadId, active, "running");
         if (input.decision === "decline" || input.decision === "cancel") {
-          routineRequest.resolve({ status: "cancelled" });
+          pendingRoutineRequests.resolve(toolCallId, { status: "cancelled" });
           return;
         }
-        const result = yield* routineDispatcher!
+        yield* routineDispatcher!
           .createApprovedForThread(
             ThreadIdBrand(routineRequest.threadId),
             routineRequest.timezone,
@@ -3546,13 +3574,25 @@ const make = (options?: AgentControllerLiveOptions) =>
                   cause,
                 }),
             ),
+            Effect.tap((result) =>
+              Effect.sync(() => {
+                pendingRoutineRequests.resolve(toolCallId, result);
+              }),
+            ),
             Effect.tapError((cause) =>
               Effect.sync(() => {
-                routineRequest.reject(cause);
+                pendingRoutineRequests.reject(toolCallId, cause);
+              }),
+            ),
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                pendingRoutineRequests.reject(
+                  toolCallId,
+                  new Error("The routine review was interrupted before the routine was created."),
+                );
               }),
             ),
           );
-        routineRequest.resolve(result);
         return;
       }
       const toolRequest = active.approvalRequests.get(toolCallId);
@@ -3842,11 +3882,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         legacyBufferedTerminals.clear();
         legacyResourceIdentity.clear();
         sessions.clear();
-        for (const waiter of childWaiters.values()) {
-          if (waiter.timer) clearTimeout(waiter.timer);
-          waiter.reject(new Error("The agent controller stopped."));
-        }
-        childWaiters.clear();
         yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
           Effect.ignoreCause({ log: true }),
         );

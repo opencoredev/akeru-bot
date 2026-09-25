@@ -34,6 +34,41 @@ turns. Children marked `keep` survive both. Only children whose `parentTurnId`
 matches the ended turn are settled, so work started by earlier turns is never
 touched.
 
+## Child waiters and timeouts
+
+`AgentController` keeps one waiter per running child thread in a
+`PendingWaiters` registry (`apps/server/src/provider/PendingWaiters.ts`). Each
+waiter is an Effect `Deferred` awaited under `Effect.timeoutOrElse`, so no wait
+is unbounded:
+
+- A delegation with a `deadline` times out at the deadline with the message
+  "The delegation deadline expired." A deadline already in the past fails at
+  once.
+- A delegation with no deadline times out after
+  `AKERU_CHILD_WAIT_DEFAULT_TIMEOUT` (4 hours). Coding work can run for hours,
+  so the bound catches a child that never reports back rather than a slow one.
+
+Both cases reject `awaitChild` with `PendingWaiterTimeoutError`. The runtime
+records that as a `Failed` phase with failure code `timeout` and interrupts
+the child turn, so the card shows a timeout instead of running forever.
+
+The registry lives in the controller layer's scope. When the layer shuts down,
+its finalizer fails every outstanding waiter with `PendingWaiterClosedError`
+("The agent controller stopped.").
+
+Routine reviews use the same registry type. `createRoutine` opens a
+`dynamic_tool_call` request and waits up to `AKERU_ROUTINE_REVIEW_TIMEOUT`
+(1 hour) for the user's answer. An answer claims the review before the routine
+is created, which stops the timeout, so an answer that arrives in time decides
+the outcome even when creation finishes after the limit. The tool call then
+returns the created routine or the creation error. On timeout the controller
+resolves the request as a system cancellation (`actor: "system"`,
+`outcome: "cancelled"`), returns the session to `running`, and the tool call
+fails with a message the bot relays. An answer that arrives after the timeout
+is rejected as stale and creates nothing. A turn that ends first rejects its
+open reviews, and layer shutdown fails any that remain. Routine reviews run only on the Mastra
+path (Codex, Kimi For Coding).
+
 ## Waiting on children
 
 `isThreadWaitingOnChildren` in `@t3tools/contracts` is true while any

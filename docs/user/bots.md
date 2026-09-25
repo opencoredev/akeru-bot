@@ -123,7 +123,8 @@ On mobile, open a bot's chat, open chat settings, and select **Routines**. Each 
 schedule, status, next and last run, and recent runs. You can approve its procedure, test it, run it,
 pause, resume, or turn it back on, and delete it. Creating and editing routines needs the desktop or
 web app, or you can ask the bot in chat. When a bot asks to create a routine, the approval card shows
-the routine's name, schedule, and instructions before you allow it.
+the routine's name, schedule, and instructions before you allow it. If you do not answer within an
+hour, the card closes, no routine is created, and the bot learns that the review expired.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
 adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. The routine card

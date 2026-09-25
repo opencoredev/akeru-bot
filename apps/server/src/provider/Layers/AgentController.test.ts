@@ -29,6 +29,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProjectId,
+  RoutineId,
   RuntimeItemId,
   ThreadId,
   TurnId,
@@ -56,6 +57,7 @@ import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
@@ -88,6 +90,10 @@ import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { makeTestSubscriptionAuthService } from "../../subscription-auth/testUtils/subscriptionAuthService.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  RoutineDraftDispatcher,
+  type RoutineDraftDispatcherShape,
+} from "../../routines/RoutineDraftDispatcher.ts";
 import {
   BotUsageCapExceeded,
   BotUsageLedger,
@@ -4053,6 +4059,165 @@ describe("AgentControllerLive", () => {
       bridge.service,
       mastra.factory,
     );
+  });
+
+  describe("routine review", () => {
+    const routineInput = {
+      name: "Morning summary",
+      instructions: "Summarize overnight changes.",
+      schedule: { kind: "daily", time: "09:00" },
+    } as const;
+
+    // Opens a routine review on a running Codex turn and returns the pending tool call.
+    const openRoutineReview = (
+      mastra: ReturnType<typeof makeMastraHarness>,
+      events: Array<ProviderRuntimeEvent>,
+    ) =>
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const opened = yield* Deferred.make<string>();
+        yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event);
+              if (event.type === "request.opened" && event.requestId) {
+                Deferred.doneUnsafe(opened, Exit.succeed(String(event.requestId)));
+              }
+            }),
+          ),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Make a routine.",
+          timezone: "UTC",
+        });
+        const createRoutine = mastra.harnessOptions[0]?.createRoutine;
+        assert.isDefined(createRoutine);
+        const toolCall = yield* Effect.promise(() =>
+          createRoutine(String(codexThreadId), routineInput).then(
+            (value) => Exit.succeed(value),
+            (cause: unknown) => Exit.fail(cause),
+          ),
+        ).pipe(Effect.forkChild({ startImmediately: true }));
+        const requestId = yield* Deferred.await(opened);
+        return { controller, toolCall, requestId };
+      });
+
+    const provideRoutineController = <A, E>(
+      effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
+      mastra: ReturnType<typeof makeMastraHarness>,
+      dispatcher: Partial<RoutineDraftDispatcherShape>,
+    ) =>
+      effect.pipe(
+        Effect.provide(
+          makeLayer(makeBridge().service, mastra.factory).pipe(
+            Layer.provide(Layer.mock(RoutineDraftDispatcher)(dispatcher)),
+          ),
+        ),
+        Effect.orDie,
+      );
+
+    it.effect("creates the routine when the answer lands before the limit", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      const created = {
+        routineId: RoutineId.make("routine-created"),
+        sequence: 1,
+        status: "approved" as const,
+      };
+      let dispatched = 0;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(60 * 60_000 - 1_000);
+          // Creation is slow enough to cross the one-hour review limit.
+          const answer = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.forkChild({ startImmediately: true }));
+          yield* TestClock.adjust(5 * 60_000);
+          yield* Fiber.join(answer);
+          const result = yield* Fiber.join(toolCall);
+          assert.deepStrictEqual(result, Exit.succeed(created));
+          assert.strictEqual(dispatched, 1);
+          const resolved = events.filter((event) => event.type === "request.resolved");
+          assert.deepStrictEqual(
+            resolved.map((event) => event.payload),
+            [{ requestType: "dynamic_tool_call", decision: "accept" }],
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sync(() => dispatched++).pipe(
+              Effect.andThen(Effect.sleep("2 minutes")),
+              Effect.as(created),
+            ),
+        },
+      );
+    });
+
+    it.effect("closes an unanswered review as a system cancellation", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      let dispatched = 0;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(60 * 60_000);
+          const result = yield* Fiber.join(toolCall);
+          assert.isTrue(Exit.isFailure(result));
+          const resolved = events.filter((event) => event.type === "request.resolved");
+          assert.deepStrictEqual(
+            resolved.map((event) => event.payload),
+            [
+              {
+                requestType: "dynamic_tool_call",
+                decision: "cancel",
+                actor: "system",
+                target: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                outcome: "cancelled",
+              },
+            ],
+          );
+          const late = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip);
+          assert.instanceOf(late, AgentControllerRuntimeError);
+          assert.strictEqual(dispatched, 0);
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sync(() => dispatched++).pipe(
+              Effect.as({
+                routineId: RoutineId.make("routine-late"),
+                sequence: 1,
+                status: "approved" as const,
+              }),
+            ),
+        },
+      );
+    });
   });
 
   it.effect("keeps product feedback approval-gated in full-access mode", () => {

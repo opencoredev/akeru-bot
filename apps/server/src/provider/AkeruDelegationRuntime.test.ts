@@ -30,6 +30,7 @@ import {
   type AkeruDelegationChildOutcome,
   type AkeruDelegationParent,
 } from "./AkeruDelegationRuntime.ts";
+import { PendingWaiterTimeoutError } from "./PendingWaiters.ts";
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
 
 const NOW = "2026-08-31T12:00:00.000Z";
@@ -629,6 +630,41 @@ describe("AkeruDelegationRuntime", () => {
     await runtime.drain();
     expect(test.state.delegations.at(-1)).toMatchObject({
       phase: { _tag: "Failed", failure: { failureCode: "timeout" } },
+    });
+    expect(test.interrupts).toHaveLength(1);
+  });
+
+  it("treats a waiter timeout without a deadline as a timeout and interrupts the child", async () => {
+    const test = harness();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: async (command) => test.dispatch(command),
+      awaitChild: async (childThreadId) => {
+        throw new PendingWaiterTimeoutError({
+          key: String(childThreadId),
+          message: "The bot did not report back within 4 hours.",
+        });
+      },
+      interruptChild: async (threadId, turnId) => {
+        test.interrupts.push({ threadId, turnId });
+      },
+      now: () => NOW,
+      id: (() => {
+        let value = 0;
+        return () => String(++value);
+      })(),
+    });
+    await runtime.send(parent(), request() as never);
+    await runtime.drain();
+    expect(test.state.delegations.at(-1)).toMatchObject({
+      deadline: null,
+      phase: {
+        _tag: "Failed",
+        failure: {
+          failureCode: "timeout",
+          message: "The bot did not report back within 4 hours.",
+        },
+      },
     });
     expect(test.interrupts).toHaveLength(1);
   });
