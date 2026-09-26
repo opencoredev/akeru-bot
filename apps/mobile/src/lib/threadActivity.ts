@@ -1537,18 +1537,20 @@ function toActivityFeedEntry(entry: DerivedWorkLogEntry): ActivityFeedEntry {
 }
 
 /**
- * Length of the prefix `next` shares with `previous`, assuming appends. Any
- * other change (removal, replacement) reports 0 so the caller rescans.
+ * Length of the leading run of `previous` that `next` still holds by identity.
+ * Appends keep the whole previous length; a removal or replacement stops at the
+ * first changed item so the caller rescans from there.
  */
 export function unchangedPrefixLength(
   previous: ReadonlyArray<unknown>,
   next: ReadonlyArray<unknown>,
 ): number {
-  const length = previous.length;
-  if (length === 0 || next.length < length) {
-    return 0;
+  const length = Math.min(previous.length, next.length);
+  let index = 0;
+  while (index < length && previous[index] === next[index]) {
+    index += 1;
   }
-  return previous[0] === next[0] && previous[length - 1] === next[length - 1] ? length : 0;
+  return index;
 }
 
 /**

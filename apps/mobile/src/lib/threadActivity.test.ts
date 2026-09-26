@@ -987,15 +987,23 @@ describe("quiet timeline: nested agents", () => {
 });
 
 describe("unchangedPrefixLength", () => {
-  it("reports the shared prefix for appends and zero for anything else", () => {
+  it("reports the whole previous length for appends", () => {
     const a = { id: "a" };
     const b = { id: "b" };
     const c = { id: "c" };
     expect(unchangedPrefixLength([], [a])).toBe(0);
     expect(unchangedPrefixLength([a, b], [a, b, c])).toBe(2);
     expect(unchangedPrefixLength([a, b], [a, b])).toBe(2);
-    expect(unchangedPrefixLength([a, b, c], [a, c])).toBe(0);
-    expect(unchangedPrefixLength([a, b], [a, c, b])).toBe(0);
+  });
+
+  it("stops at the first removed, inserted, or replaced item", () => {
+    const a = { id: "a" };
+    const b = { id: "b" };
+    const c = { id: "c" };
+    expect(unchangedPrefixLength([a, b, c], [a, c])).toBe(1);
+    expect(unchangedPrefixLength([a, b], [a, c, b])).toBe(1);
     expect(unchangedPrefixLength([a, b], [{ id: "a" }, b])).toBe(0);
+    // Interior replacement by id keeps both endpoints but must still rescan it.
+    expect(unchangedPrefixLength([a, b, c], [a, { id: "b" }, c])).toBe(1);
   });
 });
