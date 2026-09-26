@@ -152,7 +152,8 @@ export function summarizeDurableFacts(
         supersededFact: previous && previous.fact !== revision.fact ? previous.fact : null,
       };
     })
-    .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export function durableFactsFromArchive(archive: AkeruMemoryArchiveV2) {

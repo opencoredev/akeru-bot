@@ -1695,7 +1695,8 @@ function mergeDelegationCards(
   // Delegation cards keep the same anchor placement as web. The shared
   // timeline runs over the thread's messages; each card lands just after the
   // feed row for the message the timeline placed it under.
-  const rawMessages = messages.toSorted((left, right) =>
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  const rawMessages = [...messages].sort((left, right) =>
     left.createdAt.localeCompare(right.createdAt),
   );
   // Positions are indexes into `grouped`, the array the merge below walks.

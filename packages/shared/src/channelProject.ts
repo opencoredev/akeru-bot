@@ -35,12 +35,13 @@ export function defaultProjectIdForBot(
   const botThreads = model.threads.filter(
     (thread) => botId !== null && thread.botId === botId && thread.archivedAt === null,
   );
-  const botProject = botThreads
-    .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  const botProject = [...botThreads]
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .map((thread) => live.find((project) => project.id === thread.projectId))
     .find((project) => project !== undefined);
   if (botProject) return botProject.id;
-  return live.toSorted(
+  return [...live].sort(
     (left, right) =>
       (latestActivity.get(right.id) ?? right.updatedAt).localeCompare(
         latestActivity.get(left.id) ?? left.updatedAt,

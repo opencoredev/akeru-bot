@@ -145,9 +145,10 @@ export function toRoutinePanelItem(
   assignments: readonly RoutineSkillAssignment[],
   mcpServers: readonly McpServer[],
 ): RoutineAdapterItem {
-  const history = runs
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  const history = [...runs]
     .filter((run) => run.routineId === routine.id)
-    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .map(toAdapterRun);
   const assignmentNames = new Map(
     assignments.map((assignment) => [assignment.id, assignment.name]),
