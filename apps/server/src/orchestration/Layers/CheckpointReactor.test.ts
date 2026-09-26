@@ -64,6 +64,11 @@ import {
   type AgentControllerShape,
 } from "../../provider/Services/AgentController.ts";
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
+import {
+  type AgentControllerError,
+  AgentControllerRollbackUnsupportedError,
+  ProviderAdapterRequestError,
+} from "../../provider/Errors.ts";
 import { ServerConfig } from "../../config.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../../workspace/WorkspacePaths.ts";
@@ -93,7 +98,10 @@ function createAgentControllerHarness(
   const now = "2026-01-01T00:00:00.000Z";
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
   const rollbackConversation = vi.fn(
-    (_input: { readonly threadId: ThreadId; readonly numTurns: number }) => Effect.void,
+    (_input: {
+      readonly threadId: ThreadId;
+      readonly numTurns: number;
+    }): Effect.Effect<void, AgentControllerError> => Effect.void,
   );
 
   const unsupported = <A>() =>
@@ -1821,6 +1829,99 @@ describe("CheckpointReactor", () => {
       threadId: ThreadId.make("thread-1"),
       numTurns: 1,
     });
+  });
+
+  async function seedTwoTurnsAndRevertToFirst(harness: Awaited<ReturnType<typeof createHarness>>) {
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    const threadId = ThreadId.make("thread-1");
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      }),
+    );
+    for (const turnCount of [1, 2]) {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.diff.complete",
+          commandId: CommandId.make(`cmd-diff-${turnCount}`),
+          threadId,
+          turnId: asTurnId(`turn-${turnCount}`),
+          completedAt: createdAt,
+          checkpointRef: checkpointRefForThreadTurn(threadId, turnCount),
+          status: "ready",
+          files: [],
+          checkpointTurnCount: turnCount,
+          createdAt,
+        }),
+      );
+    }
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.checkpoint.revert",
+        commandId: CommandId.make("cmd-revert-request"),
+        threadId,
+        turnCount: 1,
+        createdAt,
+      }),
+    );
+  }
+
+  it("completes the revert when the provider cannot rewind its conversation", async () => {
+    const harness = await createHarness();
+    harness.provider.rollbackConversation.mockImplementationOnce((input) =>
+      Effect.fail(
+        new AgentControllerRollbackUnsupportedError({
+          threadId: input.threadId,
+          detail: "Mastra conversation rollback is not available.",
+        }),
+      ),
+    );
+
+    await seedTwoTurnsAndRevertToFirst(harness);
+
+    await waitForEvent(harness.engine, (event) => event.type === "thread.reverted");
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.checkpoints.length === 1,
+    );
+    expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
+    expect(thread.activities.some((activity) => activity.kind === "checkpoint.revert.failed")).toBe(
+      false,
+    );
+    expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the revert when the provider rollback itself fails", async () => {
+    const harness = await createHarness({ providerName: ProviderDriverKind.make("claudeAgent") });
+    harness.provider.rollbackConversation.mockImplementationOnce((input) =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: "claudeAgent",
+          method: "rollbackThread",
+          detail: `Unknown session for thread '${input.threadId}'.`,
+        }),
+      ),
+    );
+
+    await seedTwoTurnsAndRevertToFirst(harness);
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+    );
+    expect(thread.checkpoints).toHaveLength(2);
+    expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
   });
 
   it("appends an error activity when revert is requested without an active session", async () => {

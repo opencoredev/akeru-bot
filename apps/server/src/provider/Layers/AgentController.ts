@@ -186,6 +186,7 @@ import {
 } from "../botWorkspacePool.ts";
 import {
   AgentControllerRuntimeError,
+  AgentControllerRollbackUnsupportedError,
   AgentControllerUnsupportedEngineError,
   ProviderValidationError,
 } from "../Errors.ts";
@@ -2282,6 +2283,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       const nextTurn = active.pendingTurns.shift();
       if (nextTurn) {
         startPendingTurn(active, nextTurn);
+      } else if (state === "failed") {
+        // Keep the failure visible until the next turn; publishing ready here
+        // would overwrite the error state that turn.completed just recorded.
+        publishSessionState(threadId, active, "error", errorMessage);
       } else {
         publishSessionState(threadId, active, "ready");
       }
@@ -4200,9 +4205,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         return legacyProviderBridge.rollbackConversation(input);
       }
       return Effect.fail(
-        new AgentControllerRuntimeError({
-          operation: "rollbackConversation",
-          detail: `Mastra conversation rollback is not available for thread '${input.threadId}'.`,
+        new AgentControllerRollbackUnsupportedError({
+          threadId: input.threadId,
+          detail: "Mastra conversation rollback is not available.",
         }),
       );
     };

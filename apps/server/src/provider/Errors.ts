@@ -218,6 +218,23 @@ export class AgentControllerRuntimeError extends Schema.TaggedErrorClass<AgentCo
   }
 }
 
+/**
+ * The session's runtime cannot rewind its own conversation. Mastra-backed
+ * sessions raise this from `rollbackConversation`; checkpoint revert treats it
+ * as expected and still completes the workspace revert.
+ */
+export class AgentControllerRollbackUnsupportedError extends Schema.TaggedErrorClass<AgentControllerRollbackUnsupportedError>()(
+  "AgentControllerRollbackUnsupportedError",
+  {
+    threadId: Schema.String,
+    detail: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `AgentController cannot roll back thread '${this.threadId}': ${this.detail}`;
+  }
+}
+
 export type ProviderAdapterError =
   | ProviderAdapterValidationError
   | ProviderAdapterSessionNotFoundError
@@ -237,6 +254,7 @@ export type ProviderServiceError =
 export type AgentControllerError =
   | AgentControllerUnsupportedEngineError
   | AgentControllerRuntimeError
+  | AgentControllerRollbackUnsupportedError
   | ProviderServiceError;
 
 const hasReadableIssue = Schema.is(
@@ -250,6 +268,7 @@ const hasReadableDetail = Schema.is(
     ProviderSessionDirectoryPersistenceError,
     AgentControllerUnsupportedEngineError,
     AgentControllerRuntimeError,
+    AgentControllerRollbackUnsupportedError,
   ]),
 );
 

@@ -39,7 +39,10 @@ import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapte
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
-import { AgentControllerLive } from "../src/provider/Layers/AgentController.ts";
+import { makeAgentControllerLive, usesMastraCode } from "../src/provider/Layers/AgentController.ts";
+import { AgentController } from "../src/provider/Services/AgentController.ts";
+import { EntityMemoryRepository } from "../src/memory/Services/EntityMemoryRepository.ts";
+import { makeTestMastraHarness } from "./TestMastraHarness.integration.ts";
 import { EntityMemoryRepositoryLive } from "../src/memory/Layers/EntityMemoryRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../src/provider/Layers/LegacyProviderBridge.ts";
@@ -79,6 +82,7 @@ import {
   makeTestProviderAdapterHarness,
   type TestProviderAdapterHarness,
 } from "./TestProviderAdapter.integration.ts";
+import { ProviderAdapterSessionNotFoundError } from "../src/provider/Errors.ts";
 import { deriveServerPaths, ServerConfig } from "../src/config.ts";
 import * as WorkspaceEntries from "../src/workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../src/workspace/WorkspacePaths.ts";
@@ -249,6 +253,11 @@ export const makeOrchestrationIntegrationHarness = (
       : yield* makeTestProviderAdapterHarness({
           provider,
         });
+    // Mastra-backed drivers run through AgentController's session seam rather
+    // than the adapter's `sendTurn`, so fake the Mastra harness too; otherwise
+    // the controller boots the real Mastra stack and makes live model calls.
+    const mastraHarness =
+      useRealCodex || !usesMastraCode(provider) ? null : makeTestMastraHarness();
     const fakeRegistry = adapterHarness
       ? Layer.succeed(
           ProviderAdapterRegistry,
@@ -308,7 +317,14 @@ export const makeOrchestrationIntegrationHarness = (
           Layer.provide(providerEventLoggersLayer),
         );
     const legacyProviderLayer = LegacyProviderBridgeLive.pipe(Layer.provide(providerLayer));
-    const agentControllerLayer = AgentControllerLive.pipe(
+    const agentControllerLayer = Layer.unwrap(
+      Effect.map(Effect.service(EntityMemoryRepository), (entityMemoryRepository) =>
+        makeAgentControllerLive({
+          entityMemoryRepository,
+          ...(mastraHarness ? { makeMastraHarness: mastraHarness.factory } : {}),
+        }),
+      ),
+    ).pipe(
       Layer.provide(memoryRepositoriesLayer),
       Layer.provide(legacyProviderLayer),
       Layer.provide(BotUsageLedgerLive),
@@ -539,6 +555,44 @@ export const makeOrchestrationIntegrationHarness = (
       );
     }
 
+    const agentController = yield* tryRuntimePromise("load AgentController service", () =>
+      runtime.runPromise(Effect.service(AgentController)),
+    ).pipe(Effect.orDie);
+    // Turn fixtures and spies keep the adapter harness surface, but a
+    // Mastra-backed provider's sessions live in the Mastra stub, so read and
+    // queue through it. `stopAll` stops every controller session, the Mastra
+    // equivalent of the provider process going away.
+    const providerHarness: TestProviderAdapterHarness | null =
+      adapterHarness && mastraHarness
+        ? {
+            ...adapterHarness,
+            adapter: {
+              ...adapterHarness.adapter,
+              stopAll: () =>
+                Effect.forEach(
+                  mastraHarness.listActiveSessionIds(),
+                  (threadId) => agentController.stopSession({ threadId }),
+                  { discard: true },
+                ).pipe(Effect.orDie),
+            },
+            queueTurnResponse: (threadId, response) =>
+              mastraHarness.hasSession(threadId)
+                ? Effect.sync(() => mastraHarness.queueTurnResponse(threadId, response))
+                : Effect.fail(
+                    new ProviderAdapterSessionNotFoundError({
+                      provider,
+                      threadId: String(threadId),
+                    }),
+                  ),
+            queueTurnResponseForNextSession: (response) =>
+              Effect.sync(() => mastraHarness.queueTurnResponseForNextSession(response)),
+            getStartCount: mastraHarness.getStartCount,
+            getInterruptCalls: mastraHarness.getInterruptCalls,
+            listActiveSessionIds: mastraHarness.listActiveSessionIds,
+            getApprovalResponses: mastraHarness.getApprovalResponses,
+          }
+        : adapterHarness;
+
     let disposed = false;
     const dispose = Effect.gen(function* () {
       if (disposed) {
@@ -568,7 +622,7 @@ export const makeOrchestrationIntegrationHarness = (
       rootDir,
       workspaceDir,
       dbPath,
-      adapterHarness,
+      adapterHarness: providerHarness,
       engine,
       snapshotQuery,
       checkpointStore,
