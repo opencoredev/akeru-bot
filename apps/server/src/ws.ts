@@ -1949,8 +1949,8 @@ const makeWsRpcLayer = (
                   ChannelCommand.executeChannelCommand(channelRuntime.value, command).pipe(
                     Effect.catchCause((cause) =>
                       ChannelCommand.channelCommandFailure(command, cause).pipe(
-                        Effect.flatMap(({ message }) =>
-                          Effect.fail(new OrchestrationDispatchCommandError({ message })),
+                        Effect.flatMap((failure) =>
+                          Effect.fail(ChannelCommand.channelDispatchError(failure)),
                         ),
                       ),
                     ),

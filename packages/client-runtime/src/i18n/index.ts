@@ -1252,7 +1252,6 @@ export const englishCatalog = {
   "Update credentials": "Update credentials",
   "Another bot already uses this account. Unassign it there, then connect again.":
     "Another bot already uses this account. Unassign it there, then connect again.",
-  "the bot": "the bot",
   "Could not update the credentials. The old connection is unchanged.":
     "Could not update the credentials. The old connection is unchanged.",
   "Could not connect with the new credentials or restore the old connection.":
@@ -1263,9 +1262,22 @@ export const englishCatalog = {
   "New credentials connected": "New credentials connected",
   "The old connection could not be removed. Delete it from the channel list.":
     "The old connection could not be removed. Delete it from the channel list.",
-  "Connection saved. Could not connect {name}. Try again or check the connection settings.":
-    "Connection saved. Could not connect {name}. Try again or check the connection settings.",
+  "{name} is saved but could not connect. {reason}":
+    "{name} is saved but could not connect. {reason}",
+  "{name} is saved but could not connect. Try again or check the connection settings.":
+    "{name} is saved but could not connect. Try again or check the connection settings.",
+  "Delete {name}? Its saved credentials are removed from this environment.":
+    "Delete {name}? Its saved credentials are removed from this environment.",
   "Update {name} credentials": "Update {name} credentials",
+  "Telegram rejected the bot token.": "Telegram rejected the bot token.",
+  "Slack rejected the bot token or app token.": "Slack rejected the bot token or app token.",
+  "Discord rejected the bot token.": "Discord rejected the bot token.",
+  "WhatsApp rejected the access token.": "WhatsApp rejected the access token.",
+  "Photon rejected the connection credentials.": "Photon rejected the connection credentials.",
+  "Could not reach {provider}. Check the network and try again.": "Could not reach {provider}. Check the network and try again.",
+  "The project for this channel is unavailable. Choose another project.": "The project for this channel is unavailable. Choose another project.",
+  "A reply may not have reached {provider}. Check the chat before replying again.": "A reply may not have reached {provider}. Check the chat before replying again.",
+  "{provider} did not reconnect after a restart. Reconnect to resume.": "{provider} did not reconnect after a restart. Reconnect to resume.",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
   "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":

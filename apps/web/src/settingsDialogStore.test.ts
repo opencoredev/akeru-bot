@@ -28,6 +28,14 @@ describe("settings dialog store", () => {
     expect(useSettingsDialogStore.getState().targetId).toBeNull();
   });
 
+  it("keeps the Bot channels tab across closing and reopening", () => {
+    openSettings("channels");
+    useSettingsDialogStore.getState().setChannelProvider("telegram");
+    closeSettings();
+    openSettings("channels");
+    expect(useSettingsDialogStore.getState().channelProvider).toBe("telegram");
+  });
+
   it("clears a handled target without closing its Settings section", () => {
     openSettings("general", "local-execution");
     clearSettingsTarget();

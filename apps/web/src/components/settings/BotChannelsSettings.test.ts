@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   canManageChannels,
+  channelFailureCategoryOf,
   connectedChannelBinding,
   isChannelIdentityConflict,
   resolveChannelSettingsAccess,
@@ -218,5 +219,27 @@ describe("isChannelIdentityConflict", () => {
       ),
     ).toBe(false);
     expect(isChannelIdentityConflict({})).toBe(false);
+  });
+});
+
+describe("channelFailureCategoryOf", () => {
+  it("reads the category the server sent with a channel failure", () => {
+    const failure = (error: object) => ({ cause: Cause.fail(error) });
+    expect(
+      channelFailureCategoryOf(
+        failure({ message: "Rejected.", channelFailureCategory: "credentials" }),
+      ),
+    ).toBe("credentials");
+    expect(channelFailureCategoryOf(failure({ channelFailureCategory: "network" }))).toBe(
+      "network",
+    );
+  });
+
+  it("ignores unknown categories and failures without one", () => {
+    expect(
+      channelFailureCategoryOf({ cause: Cause.fail({ channelFailureCategory: "billing" }) }),
+    ).toBeUndefined();
+    expect(channelFailureCategoryOf({ cause: Cause.fail(new Error("Rejected.")) })).toBeUndefined();
+    expect(channelFailureCategoryOf({})).toBeUndefined();
   });
 });

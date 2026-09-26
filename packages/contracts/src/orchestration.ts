@@ -3238,6 +3238,8 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<O
       ]),
     ),
     repairAction: Schema.optional(TrimmedNonEmptyString),
+    /** Why a channel command failed, when the failure has a channel repair. */
+    channelFailureCategory: Schema.optional(ChannelFailureCategory),
   },
 ) {}
 

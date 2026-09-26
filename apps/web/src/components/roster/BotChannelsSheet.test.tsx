@@ -192,7 +192,8 @@ describe("BotChannelsSheet health and repair", () => {
     own("connected", "credentials");
     const html = render();
     expect(html).toContain("Needs attention · Akeru");
-    expect(html).toContain("Fixed server copy.");
+    expect(html).toContain("Telegram rejected the bot token.");
+    expect(html).not.toContain("Fixed server copy.");
     expect(fixtures.buttons.has("Disconnect")).toBe(true);
     fixtures.buttons.get("Update credentials")?.onClick?.();
     expect(fixtures.openSettings).toHaveBeenCalledWith(

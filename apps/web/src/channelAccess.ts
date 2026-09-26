@@ -1,9 +1,11 @@
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 
 import {
   AuthAccessWriteScope,
   type AuthSessionState,
   type ChannelBinding,
+  ChannelFailureCategory,
   type ChannelProvider,
 } from "@t3tools/contracts";
 
@@ -45,4 +47,19 @@ export function isChannelIdentityConflict(result: {
   const message =
     typeof error === "object" && error !== null && "message" in error ? error.message : error;
   return typeof message === "string" && CHANNEL_IDENTITY_CONFLICT.test(message);
+}
+
+const isChannelFailureCategory = Schema.is(ChannelFailureCategory);
+
+/** Why a failed channel command failed, when the server sent a category for it. */
+export function channelFailureCategoryOf(result: {
+  readonly cause?: Cause.Cause<unknown>;
+}): ChannelFailureCategory | undefined {
+  if (!result.cause) return undefined;
+  const error = Cause.squash(result.cause);
+  const category =
+    typeof error === "object" && error !== null && "channelFailureCategory" in error
+      ? error.channelFailureCategory
+      : undefined;
+  return isChannelFailureCategory(category) ? category : undefined;
 }

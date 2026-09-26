@@ -1,4 +1,7 @@
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import {
+  type ClientOrchestrationCommand,
+  OrchestrationDispatchCommandError,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
@@ -69,3 +72,10 @@ export const channelCommandFailure = (
     category: failure.category ?? "internal",
   }).pipe(Effect.as(failure));
 };
+
+/** The client error for a channel failure. The category lets clients explain it and offer a repair. */
+export const channelDispatchError = (failure: ChannelFailurePresentation) =>
+  new OrchestrationDispatchCommandError({
+    message: failure.message,
+    ...(failure.category ? { channelFailureCategory: failure.category } : {}),
+  });

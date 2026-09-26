@@ -14,11 +14,13 @@ Open **Settings > Bot channels** with an environment administrator connection.
 
 Select **Connect later** to save a connection without assigning a bot. You can assign it from the saved connection card.
 
+If the connection saves but cannot connect, the form names the connection and says why, for example "Telegram rejected the bot token." The saved card keeps the bot and project you chose, so you can fix the problem and click **Reconnect** without choosing them again. Settings remembers the service tab you last opened.
+
 Choose the project that should receive this channel's turns when you connect the bot. Akeru suggests the project the bot used most recently, but you can pick any project. It keeps replies in that project, so messages cannot silently move between workspaces. **Connect** stays unavailable until a project is selected. If the environment has no projects yet, the form asks you to add one first.
 
 To move a working channel, pick another project on its card in **Settings > Bot channels** or in the bot's Channels panel, then click **Move to this project**. Akeru restarts the channel in the new project. If the move fails, the channel keeps running in its earlier project.
 
-You can reconnect, disconnect, unassign, or delete a connection. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails while the server restores it after a restart shows a repair state instead of appearing connected; the server still starts, and the card offers the right repair for the failure.
+You can reconnect, disconnect, unassign, or delete a connection. Akeru asks you to confirm before it deletes a connection and its saved credentials. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails while the server restores it after a restart shows a repair state instead of appearing connected; the server still starts, and the card offers the right repair for the failure.
 
 If reassignment changes the workspace, replies from the earlier workspace cannot use the new assignment.
 
@@ -26,7 +28,7 @@ Credentials stay on the environment server. Web, desktop, and mobile receive saf
 
 ## Channel health
 
-Each channel card shows whether the channel is working. When something is wrong, the card explains it and offers one repair button.
+Each channel card shows whether the channel is working. When something is wrong, the card states the reason in plain words and offers one repair button. The chat's Channels section on mobile shows the same reason.
 
 - **Connecting…** appears while Akeru starts the channel. It changes to connected or to an error when the start finishes.
 - **Needs reconnect** means the channel stopped after it was working, for example after a server restart or a dropped Discord or iMessage connection. Click **Reconnect** to resume.

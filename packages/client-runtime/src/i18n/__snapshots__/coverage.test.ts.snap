@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1486,
+  "directMessageCount": 1498,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -356,7 +356,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/threads/PendingUserInputCard.tsx",
     "apps/mobile/src/features/threads/ThreadChannels.tsx",
     "apps/mobile/src/features/threads/ThreadComposer.tsx",
-    "apps/mobile/src/features/threads/ThreadDelegations.tsx",
+    "apps/mobile/src/features/threads/ThreadDelegationCard.tsx",
     "apps/mobile/src/features/threads/ThreadDetailScreen.tsx",
     "apps/mobile/src/features/threads/ThreadFeed.tsx",
     "apps/mobile/src/features/threads/ThreadGitControls.tsx",
@@ -495,6 +495,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/routes/_chat.bots.$botId.tsx",
     "apps/web/src/routes/_chat.index.tsx",
     "packages/client-runtime/src/botInbox.ts",
+    "packages/client-runtime/src/channelPresentation.ts",
     "packages/client-runtime/src/durableMemory.ts",
     "packages/client-runtime/src/errors/threadErrorPresentation.ts",
     "packages/client-runtime/src/imageGeneration.ts",

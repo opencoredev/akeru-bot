@@ -1,4 +1,10 @@
-import { BotId, ChannelConnectionId, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  BotId,
+  ChannelConnectionId,
+  EnvironmentId,
+  OrchestrationDispatchCommandError,
+  ProjectId,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { act, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -245,7 +251,7 @@ describe("ChannelSetupDialog recovery", () => {
     await completeSetup();
     await click("Connect");
     expect(onOpenChange).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Connection saved. Could not connect Test bot.");
+    expect(container.textContent).toContain("Test line is saved but could not connect.");
     expect(container.textContent).not.toMatch(/rejected|tokens|credentials/i);
     const connectionId = mocks.save.mock.calls[0]![0].input.connectionId;
 
@@ -257,6 +263,24 @@ describe("ChannelSetupDialog recovery", () => {
       connectionId,
     ]);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("names the connection and explains a categorized failure", async () => {
+    mocks.attach.mockResolvedValueOnce({
+      _tag: "Failure",
+      cause: Cause.fail(
+        new OrchestrationDispatchCommandError({
+          message: "The channel credentials were rejected.",
+          channelFailureCategory: "credentials",
+        }),
+      ),
+    });
+    await completeSetup();
+    await click("Connect");
+    expect(container.textContent).toContain(
+      "Test line is saved but could not connect. Telegram rejected the bot token.",
+    );
+    expect(container.textContent).not.toContain("Test bot");
   });
 
   it("updates the same saved profile when credentials are corrected before retry", async () => {

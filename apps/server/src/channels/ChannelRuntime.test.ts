@@ -4322,11 +4322,80 @@ describe("channel runtime", () => {
 
         expect(stops).toBe(1);
         expect([...harness.secrets.entries()]).toEqual(saved);
-        expect(harness.readModel().bots[0]?.channelBindings).toEqual([]);
+        // The chosen bot stays on the saved connection so the user can retry from the row.
+        expect(harness.readModel().bots[0]?.channelBindings).toEqual([
+          expect.objectContaining({ connectionId, status: "failed", projectId: PROJECT_ID }),
+        ]);
+        yield* detachChannelConnection(harness.dependencies, BOT_ID, "telegram");
         yield* deleteChannelConnection(harness.dependencies, connectionId);
         expect(harness.secrets.size).toBe(0);
       }),
     );
+
+    const rejectedAttachSaves = [
+      { provider: "telegram", token: "telegram-token" },
+      { provider: "slack", botToken: "xoxb-token", appToken: "xapp-token" },
+      {
+        provider: "discord",
+        applicationId: "123456789012345678",
+        publicKey: "a".repeat(64),
+        botToken: "discord-token",
+      },
+    ] as const;
+    for (const credentials of rejectedAttachSaves) {
+      it.effect(`keeps the chosen bot on a ${credentials.provider} connection it could not attach`, () =>
+        Effect.gen(function* () {
+          const connectionId = ChannelConnectionId.make(`${credentials.provider}-rejected`);
+          let rejected = true;
+          const harness = makeHarness({
+            startTransport: async () => {
+              if (rejected) throw new Error("401 Unauthorized");
+              return {
+                externalIdentity: "@akeru",
+                runtime: { post: async () => undefined, shutdown: async () => undefined },
+              };
+            },
+          });
+          yield* saveChannelConnection(harness.dependencies, {
+            type: "channel.connection.save",
+            commandId: CommandId.make(`save-${credentials.provider}-rejected`),
+            connectionId,
+            name: "Rejected line",
+            ...credentials,
+          });
+
+          yield* expectProviderFailure(
+            attachChannelConnection(
+              harness.dependencies,
+              BOT_ID,
+              connectionId,
+              PROJECT_ID,
+              credentials.provider,
+            ),
+            "401 Unauthorized",
+          );
+
+          expect(harness.readModel().bots[0]?.channelBindings).toEqual([
+            expect.objectContaining({
+              connectionId,
+              projectId: PROJECT_ID,
+              status: "failed",
+              connectedAt: null,
+              failureCategory: "credentials",
+            }),
+          ]);
+
+          rejected = false;
+          yield* reconnectChannel(harness.dependencies, BOT_ID, credentials.provider);
+          expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+            connectionId,
+            status: "connected",
+          });
+          expect(harness.readModel().bots[0]?.channelBindings[0]?.failureCategory).toBeUndefined();
+          yield* stopChannelsForBot(BOT_ID);
+        }),
+      );
+    }
 
     it.effect("keeps the live transport when a second bot claims its identity", () =>
       Effect.gen(function* () {
