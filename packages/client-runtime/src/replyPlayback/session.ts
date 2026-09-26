@@ -24,7 +24,8 @@ export interface ReplyPlaybackMessage {
 
 type SpokenReply = NonNullable<ReturnType<typeof replyReadoutMessageAction>>;
 
-const SPOKEN_CACHE_LIMIT = 500;
+// Large enough that a full pass over a long chat fits, so revisits reuse cached speech.
+export const SPOKEN_CACHE_LIMIT = 2_000;
 
 export interface ReplyPlaybackAction {
   readonly request: ReplyPlaybackRequest;
@@ -63,8 +64,13 @@ export function createReplyPlaybackSession(options: {
     if (cached && cached.text === message.text) return cached.spoken;
     const spoken = replyReadoutMessageAction(message);
     if (!spoken) return null;
-    if (spokenCache.size >= SPOKEN_CACHE_LIMIT) spokenCache.clear();
+    // Re-insert so the map stays in write order, then evict the oldest entry past the limit.
+    spokenCache.delete(message.id);
     spokenCache.set(message.id, { text: message.text, spoken });
+    if (spokenCache.size > SPOKEN_CACHE_LIMIT) {
+      const oldest = spokenCache.keys().next();
+      if (!oldest.done) spokenCache.delete(oldest.value);
+    }
     return spoken;
   };
   const identityBase = () =>
