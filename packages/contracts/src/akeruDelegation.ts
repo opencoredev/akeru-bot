@@ -30,6 +30,16 @@ export const AkeruDelegationState = Schema.Literals([
 ]);
 export type AkeruDelegationState = typeof AkeruDelegationState.Type;
 
+/** Whether a delegation has finished and can no longer change state. */
+export const isTerminalDelegationState = (state: AkeruDelegationState): boolean =>
+  state === "completed" || state === "failed" || state === "canceled";
+
+/**
+ * Finished delegations a shell snapshot keeps per parent thread, newest first.
+ * Open delegations are always kept.
+ */
+export const SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD = 20;
+
 export const AkeruDelegationAccessGrant = Schema.Struct({
   allowedToolIds: Schema.Array(Schema.suspend(() => AkeruToolId)),
   memoryScopes: Schema.Array(AkeruMemoryTargetScope),

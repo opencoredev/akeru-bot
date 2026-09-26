@@ -1,5 +1,11 @@
 import * as Arr from "effect/Array";
-import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
+import {
+  isTerminalDelegationState,
+  SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
+  type AkeruDelegationRecord,
+  type OrchestrationShellSnapshot,
+  type OrchestrationShellStreamEvent,
+} from "@t3tools/contracts";
 
 /**
  * Reduce a single shell stream event into an existing snapshot, returning a new
@@ -74,7 +80,13 @@ export function applyShellStreamEvent(
               : delegation,
           )
         : Arr.append(snapshot.delegations, event.delegation);
-      return { ...snapshot, delegations, snapshotSequence: event.sequence };
+      return {
+        ...snapshot,
+        delegations: isTerminalDelegationState(event.delegation.state)
+          ? capTerminalDelegations(delegations, event.delegation.parentThreadId)
+          : delegations,
+        snapshotSequence: event.sequence,
+      };
     }
     case "routine-upserted": {
       const routines = snapshot.routines ?? [];
@@ -146,4 +158,35 @@ export function applyShellStreamEvent(
     default:
       return snapshot;
   }
+}
+
+/**
+ * Keeps the newest finished delegations for one parent thread, matching the
+ * limit the server applies to shell snapshots.
+ */
+// Binary order, matching SQLite's default collation in the shell snapshot query.
+const compareText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+// Keeps the same finished delegations as the shell snapshot, which ranks them
+// by updatedAt DESC, createdAt ASC, delegation_id ASC.
+function capTerminalDelegations(
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+  parentThreadId: AkeruDelegationRecord["parentThreadId"],
+): ReadonlyArray<AkeruDelegationRecord> {
+  const terminal = delegations.filter(
+    (delegation) =>
+      delegation.parentThreadId === parentThreadId && isTerminalDelegationState(delegation.state),
+  );
+  if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
+  const dropped = new Set(
+    terminal
+      .toSorted(
+        (left, right) =>
+          compareText(right.updatedAt, left.updatedAt) ||
+          compareText(left.createdAt, right.createdAt) ||
+          compareText(left.delegationId, right.delegationId),
+      )
+      .slice(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD),
+  );
+  return delegations.filter((delegation) => !dropped.has(delegation));
 }

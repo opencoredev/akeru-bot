@@ -77,6 +77,7 @@ import {
 
 type ThreadPatch = Partial<Omit<OrchestrationThread, "id" | "projectId">>;
 const MAX_THREAD_MESSAGES = 2_000;
+const MAX_THREAD_ACTIVITIES = 500;
 const MAX_THREAD_CHECKPOINTS = 500;
 
 function checkpointStatusToLatestTurnState(status: "ready" | "missing" | "error") {
@@ -1044,31 +1045,29 @@ export function projectEvent(
           "message",
         );
 
-        const existingMessage = thread.messages.find((entry) => entry.id === message.id);
-        const messages = existingMessage
-          ? thread.messages.map((entry) =>
-              entry.id === message.id
-                ? {
-                    ...entry,
-                    text: message.streaming
-                      ? `${entry.text}${message.text}`
-                      : message.text.length > 0
-                        ? message.text
-                        : entry.text,
-                    streaming: message.streaming,
-                    updatedAt: message.updatedAt,
-                    turnId: message.turnId,
-                    ...(message.respondingBotId !== undefined
-                      ? { respondingBotId: message.respondingBotId }
-                      : {}),
-                    ...(message.attachments !== undefined
-                      ? { attachments: message.attachments }
-                      : {}),
-                  }
-                : entry,
-            )
+        // Streaming updates target the newest messages, so search from the end
+        // and replace the one entry instead of mapping the whole history.
+        const existingIndex = thread.messages.findLastIndex((entry) => entry.id === message.id);
+        const entry = existingIndex >= 0 ? thread.messages[existingIndex] : undefined;
+        const messages = entry
+          ? thread.messages.with(existingIndex, {
+              ...entry,
+              text: message.streaming
+                ? `${entry.text}${message.text}`
+                : message.text.length > 0
+                  ? message.text
+                  : entry.text,
+              streaming: message.streaming,
+              updatedAt: message.updatedAt,
+              turnId: message.turnId,
+              ...(message.respondingBotId !== undefined
+                ? { respondingBotId: message.respondingBotId }
+                : {}),
+              ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+            })
           : [...thread.messages, message];
-        const cappedMessages = messages.slice(-MAX_THREAD_MESSAGES);
+        const cappedMessages =
+          messages.length > MAX_THREAD_MESSAGES ? messages.slice(-MAX_THREAD_MESSAGES) : messages;
 
         return {
           ...nextBase,
@@ -1404,12 +1403,22 @@ export function projectEvent(
             return nextBase;
           }
 
-          const activities = [
-            ...thread.activities.filter((entry) => entry.id !== payload.activity.id),
-            payload.activity,
-          ]
-            .toSorted(compareThreadActivities)
-            .slice(-500);
+          // Activities stay sorted, so an in-order new activity is a plain append.
+          const lastActivity = thread.activities.at(-1);
+          const appendsInOrder =
+            (lastActivity === undefined ||
+              compareThreadActivities(lastActivity, payload.activity) <= 0) &&
+            !thread.activities.some((entry) => entry.id === payload.activity.id);
+          const sortedActivities = appendsInOrder
+            ? [...thread.activities, payload.activity]
+            : [
+                ...thread.activities.filter((entry) => entry.id !== payload.activity.id),
+                payload.activity,
+              ].toSorted(compareThreadActivities);
+          const activities =
+            sortedActivities.length > MAX_THREAD_ACTIVITIES
+              ? sortedActivities.slice(-MAX_THREAD_ACTIVITIES)
+              : sortedActivities;
 
           return {
             ...nextBase,

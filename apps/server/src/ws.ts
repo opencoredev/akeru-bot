@@ -118,6 +118,7 @@ import {
 import { decideCommandSequence } from "./orchestration/decider.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
@@ -986,7 +987,7 @@ const makeWsRpcLayer = (
               Option.some({
                 kind: "delegation-upserted" as const,
                 sequence: event.sequence,
-                delegation: event.payload.delegation,
+                delegation: toShellDelegation(event.payload.delegation),
               }),
             );
           case "routine.drafted":

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   AkeruDelegationRecord,
   BotId,
+  DelegationId,
   GroupId,
   McpServerId,
   ProjectId,
@@ -10,6 +11,7 @@ import {
   RoutineId,
   RoutineRunId,
   SkillAssignmentId,
+  SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
   SkillId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -403,6 +405,72 @@ describe("applyShellStreamEvent", () => {
       expect(updated.delegations).toHaveLength(1);
       expect(updated.delegations[0]?.state).toBe("running");
       expect(updated.snapshotSequence).toBe(10);
+    });
+
+    it("keeps only the newest finished delegations per parent thread", () => {
+      const finished = (index: number) => ({
+        ...stubDelegation,
+        delegationId: DelegationId.make(`delegation-finished-${index}`),
+        state: "completed" as const,
+        updatedAt: `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
+      });
+      const open = { ...stubDelegation, state: "running" as const };
+      const otherThread = {
+        ...finished(0),
+        delegationId: DelegationId.make("delegation-other-thread"),
+        parentThreadId: ThreadId.make("thread-other"),
+      };
+      let snapshot = applyShellStreamEvent(baseSnapshot, {
+        kind: "delegation-upserted",
+        sequence: 1,
+        delegation: open,
+      });
+      snapshot = applyShellStreamEvent(snapshot, {
+        kind: "delegation-upserted",
+        sequence: 2,
+        delegation: otherThread,
+      });
+      const finishedCount = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 5;
+      for (let index = 0; index < finishedCount; index++) {
+        snapshot = applyShellStreamEvent(snapshot, {
+          kind: "delegation-upserted",
+          sequence: index + 3,
+          delegation: finished(index),
+        });
+      }
+
+      const ids = snapshot.delegations.map((delegation) => delegation.delegationId);
+      expect(ids).toContain(open.delegationId);
+      expect(ids).toContain(otherThread.delegationId);
+      expect(ids).not.toContain("delegation-finished-4");
+      expect(ids).toContain("delegation-finished-5");
+      expect(ids).toHaveLength(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 2);
+    });
+
+    it("breaks finished delegation ties the same way as the shell snapshot", () => {
+      const tied = (index: number) => ({
+        ...stubDelegation,
+        delegationId: DelegationId.make(`delegation-tied-${String(index).padStart(2, "0")}`),
+        state: "completed" as const,
+        createdAt: `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+        updatedAt: "2026-04-02T00:00:00.000Z",
+      });
+      let snapshot = baseSnapshot;
+      // Arrive newest-created first, so arrival order disagrees with the ranking.
+      for (let index = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD; index >= 0; index--) {
+        snapshot = applyShellStreamEvent(snapshot, {
+          kind: "delegation-upserted",
+          sequence: SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD - index + 1,
+          delegation: tied(index),
+        });
+      }
+
+      const ids = snapshot.delegations.map((delegation) => delegation.delegationId);
+      expect(ids).toHaveLength(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD);
+      expect(ids).toContain("delegation-tied-00");
+      expect(ids).not.toContain(
+        `delegation-tied-${String(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD).padStart(2, "0")}`,
+      );
     });
   });
 

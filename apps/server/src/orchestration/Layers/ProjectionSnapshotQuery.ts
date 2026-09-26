@@ -78,6 +78,10 @@ import {
   encodeThreadDetailPageCursor,
 } from "../threadDetailCursor.ts";
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
+import {
+  SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
+  toShellDelegation,
+} from "../ShellDelegations.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import {
@@ -624,6 +628,92 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       SELECT record_json AS delegation
       FROM projection_delegations
       ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
+    `,
+  });
+
+  // Open delegations plus the newest terminal ones per parent thread, so the
+  // shell snapshot never hydrates a thread's whole delegation history.
+  const listShellDelegationRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: () => sql`
+      SELECT delegation
+      FROM (
+        SELECT
+          record_json AS delegation,
+          delegation_id,
+          json_extract(record_json, '$.createdAt') AS created_at,
+          json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled') AS terminal,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              json_extract(record_json, '$.parentThreadId'),
+              json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled')
+            ORDER BY
+              json_extract(record_json, '$.updatedAt') DESC,
+              json_extract(record_json, '$.createdAt') ASC,
+              delegation_id ASC
+          ) AS recency
+        FROM projection_delegations
+      )
+      WHERE terminal = 0 OR recency <= ${SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD}
+      ORDER BY created_at ASC, delegation_id ASC
+    `,
+  });
+
+  const getBotRowById = SqlSchema.findOneOption({
+    Request: Schema.Struct({ botId: BotId }),
+    Result: ProjectionBotDbRowSchema,
+    execute: ({ botId }) => sql`
+      SELECT
+        bot_id AS "botId", name, title, label, description,
+        disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
+        engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
+        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled",
+        personality_tone AS "personalityTone",
+        channel_bindings_json AS "channelBindings", group_id AS "groupId",
+        archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM projection_bots
+      WHERE bot_id = ${botId}
+      LIMIT 1
+    `,
+  });
+
+  const getGroupRowById = SqlSchema.findOneOption({
+    Request: Schema.Struct({ groupId: GroupId }),
+    Result: ProjectionGroupDbRowSchema,
+    execute: ({ groupId }) => sql`
+      SELECT
+        group_id AS "groupId", name, boss_bot_id AS "bossBotId", members_json AS "members",
+        created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM projection_groups
+      WHERE group_id = ${groupId}
+      LIMIT 1
+    `,
+  });
+
+  const listDelegationRowsByThread = SqlSchema.findAll({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: ({ threadId }) => sql`
+      SELECT record_json AS delegation
+      FROM projection_delegations
+      WHERE json_extract(record_json, '$.childThreadId') = ${threadId}
+        OR json_extract(record_json, '$.parentThreadId') = ${threadId}
+      ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
+    `,
+  });
+
+  const getLatestAssistantMessageRowForTurn = SqlSchema.findOneOption({
+    Request: Schema.Struct({ threadId: ThreadId, turnId: TurnId }),
+    Result: Schema.Struct({ messageId: MessageId }),
+    execute: ({ threadId, turnId }) => sql`
+      SELECT message_id AS "messageId"
+      FROM projection_thread_messages
+      WHERE thread_id = ${threadId}
+        AND turn_id = ${turnId}
+        AND role = 'assistant'
+      ORDER BY created_at DESC, message_id DESC
+      LIMIT 1
     `,
   });
 
@@ -2609,7 +2699,7 @@ pending_approval_requests AS (
               ),
             ),
           ),
-          listDelegationRows(undefined).pipe(
+          listShellDelegationRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
                 "ProjectionSnapshotQuery.getShellSnapshot:listDelegations:query",
@@ -2727,7 +2817,7 @@ pending_approval_requests AS (
                 ),
                 bots: botRows.map(mapBotRow),
                 groups: groupRows.map(mapGroupRow),
-                delegations: delegationRows.map((row) => row.delegation),
+                delegations: delegationRows.map((row) => toShellDelegation(row.delegation)),
                 mcpServers,
                 routines: routines.filter((routine) => routine.deletedAt === null),
                 routineRuns,
@@ -3286,6 +3376,54 @@ pending_approval_requests AS (
       }));
     });
 
+  const getBotById: NonNullable<ProjectionSnapshotQueryShape["getBotById"]> = (botId) =>
+    getBotRowById({ botId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getBotById:query",
+          "ProjectionSnapshotQuery.getBotById:decodeRow",
+        ),
+      ),
+      Effect.map(Option.map(mapBotRow)),
+    );
+
+  const getGroupById: NonNullable<ProjectionSnapshotQueryShape["getGroupById"]> = (groupId) =>
+    getGroupRowById({ groupId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getGroupById:query",
+          "ProjectionSnapshotQuery.getGroupById:decodeRow",
+        ),
+      ),
+      Effect.map(Option.map(mapGroupRow)),
+    );
+
+  const listThreadDelegations: NonNullable<
+    ProjectionSnapshotQueryShape["listThreadDelegations"]
+  > = (threadId) =>
+    listDelegationRowsByThread({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listThreadDelegations:query",
+          "ProjectionSnapshotQuery.listThreadDelegations:decodeRows",
+        ),
+      ),
+      Effect.map((rows) => rows.map((row) => row.delegation)),
+    );
+
+  const getLatestAssistantMessageIdForTurn: NonNullable<
+    ProjectionSnapshotQueryShape["getLatestAssistantMessageIdForTurn"]
+  > = (threadId, turnId) =>
+    getLatestAssistantMessageRowForTurn({ threadId, turnId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getLatestAssistantMessageIdForTurn:query",
+          "ProjectionSnapshotQuery.getLatestAssistantMessageIdForTurn:decodeRow",
+        ),
+      ),
+      Effect.map(Option.map((row) => row.messageId)),
+    );
+
   const getTurnStartMessage: ProjectionSnapshotQueryShape["getTurnStartMessage"] = Effect.fn(
     "ProjectionSnapshotQuery.getTurnStartMessage",
   )(function* (input) {
@@ -3751,6 +3889,10 @@ pending_approval_requests AS (
     getFullThreadDiffContext,
     getThreadShellById,
     getThreadRuntimeContext,
+    getBotById,
+    getGroupById,
+    listThreadDelegations,
+    getLatestAssistantMessageIdForTurn,
     getTurnStartMessage,
     listPendingTurnStarts,
     getThreadDetailById,
