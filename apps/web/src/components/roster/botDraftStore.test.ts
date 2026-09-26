@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { clearBotDraft, flushBotDrafts, readBotDraft, writeBotDraft } from "./botDraftStore";
+import {
+  clearBotDraft,
+  flushBotDrafts,
+  onBotDraftsStorageChange,
+  readBotDraft,
+  writeBotDraft,
+} from "./botDraftStore";
 
 const memory = new Map<string, string>();
 
@@ -65,5 +71,19 @@ describe("botDraftStore", () => {
       "bot-1": "mine",
       "bot-2": "from another tab",
     });
+  });
+
+  it("does not restore a draft another tab cleared while an edit was pending", () => {
+    vi.useFakeTimers();
+    const key = "akeru:bot-drafts:v1";
+    memory.set(key, JSON.stringify({ "bot-1": "hello", "bot-2": "other" }));
+    writeBotDraft("bot-1", "hello there");
+    writeBotDraft("bot-2", "other bot edit");
+    const oldValue = memory.get(key) ?? null;
+    const newValue = JSON.stringify({ "bot-2": "other" });
+    memory.set(key, newValue);
+    onBotDraftsStorageChange({ key, oldValue, newValue });
+    vi.advanceTimersByTime(500);
+    expect(JSON.parse(memory.get(key) ?? "{}")).toEqual({ "bot-2": "other bot edit" });
   });
 });
