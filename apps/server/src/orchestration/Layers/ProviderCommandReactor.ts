@@ -34,6 +34,8 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -2387,7 +2389,10 @@ const make = Effect.gen(function* () {
   // Subscribes before returning and yields every event after the baseline once.
   // Events committed between the first sequence read and the subscription may
   // have been published before it existed, so that gap is replayed from the
-  // store and the live stream skips anything the replay already covered.
+  // store and the live stream skips anything the replay already delivered. A
+  // replay that keeps failing hands the rest of the gap to the live buffer,
+  // which still holds every gap event published after the subscription opened;
+  // gap events published before it are logged as lost with the failure.
   const subscribeWithBaseline = Effect.fn("subscribeWithBaseline")(function* () {
     const baselineSequence = yield* orchestrationEngine.latestSequence;
     const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
@@ -2395,24 +2400,35 @@ const make = Effect.gen(function* () {
     if (replayThrough === baselineSequence) {
       return { domainEvents: liveEvents, baselineSequence };
     }
-    const gapEvents = orchestrationEngine
-      .readEvents(baselineSequence, undefined, replayThrough)
-      .pipe(
-        Stream.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Stream.failCause(cause)
-            : Stream.fromEffect(
-                Effect.logWarning("provider command reactor failed to replay startup events", {
-                  cause: Cause.pretty(cause),
-                }),
-              ).pipe(Stream.drain),
+    const replayedThrough = yield* Ref.make(baselineSequence);
+    const gapEvents = Stream.unwrap(
+      Ref.get(replayedThrough).pipe(
+        Effect.map((from) =>
+          orchestrationEngine.readEvents(from, replayThrough - from, replayThrough),
         ),
-      );
+      ),
+    ).pipe(
+      Stream.tap((event) => Ref.set(replayedThrough, event.sequence)),
+      Stream.retry(Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])),
+      Stream.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.failCause(cause)
+          : Stream.fromEffect(
+              Effect.logError("provider command reactor failed to replay startup events", {
+                cause: Cause.pretty(cause),
+              }),
+            ).pipe(Stream.drain),
+      ),
+    );
     return {
       domainEvents: gapEvents.pipe(
-        // A failed replay must not leave drain waiting on the gap.
-        Stream.concat(Stream.fromEffect(noteSeen(replayThrough)).pipe(Stream.drain)),
-        Stream.concat(liveEvents.pipe(Stream.filter((event) => event.sequence > replayThrough))),
+        Stream.concat(
+          liveEvents.pipe(
+            Stream.filterEffect((event) =>
+              Ref.get(replayedThrough).pipe(Effect.map((through) => event.sequence > through)),
+            ),
+          ),
+        ),
       ),
       baselineSequence,
     };

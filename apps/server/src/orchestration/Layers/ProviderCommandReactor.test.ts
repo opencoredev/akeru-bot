@@ -194,6 +194,8 @@ describe("ProviderCommandReactor", () => {
     readonly resumeBeforeReactor?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
     readonly commitDuringSequenceRead?: 1 | 2;
+    readonly titleUpdatesBeforeStartupCommit?: number;
+    readonly failStartupReplay?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -485,7 +487,10 @@ describe("ProviderCommandReactor", () => {
       Effect.gen(function* () {
         const engine = yield* OrchestrationEngineService;
         return {
-          readEvents: engine.readEvents,
+          readEvents:
+            input?.failStartupReplay === true
+              ? () => Stream.die(new Error("Injected startup replay failure"))
+              : engine.readEvents,
           readThreadEvents: engine.readThreadEvents,
           getThreadReplayStats: engine.getThreadReplayStats,
           dispatch: (command) => {
@@ -548,9 +553,25 @@ describe("ProviderCommandReactor", () => {
                       regenerateTitle: true,
                     })
                     .pipe(Effect.orDie);
+                  const titleUpdates = Effect.forEach(
+                    Array.from(
+                      { length: input.titleUpdatesBeforeStartupCommit ?? 0 },
+                      (_, index) => index,
+                    ),
+                    (index) =>
+                      engine
+                        .dispatch({
+                          type: "thread.meta.update",
+                          commandId: CommandId.make(`cmd-startup-title-${index}`),
+                          threadId: ThreadId.make("thread-1"),
+                          title: `Startup title ${index}`,
+                        })
+                        .pipe(Effect.orDie),
+                    { discard: true },
+                  ).pipe(Effect.andThen(commit));
                   return sequenceReads === 1
-                    ? engine.latestSequence.pipe(Effect.tap(() => commit))
-                    : commit.pipe(Effect.andThen(engine.latestSequence));
+                    ? engine.latestSequence.pipe(Effect.tap(() => titleUpdates))
+                    : titleUpdates.pipe(Effect.andThen(engine.latestSequence));
                 }),
         } satisfies OrchestrationEngineService["Service"];
       }),
@@ -909,6 +930,29 @@ describe("ProviderCommandReactor", () => {
       expect(thread?.titleRegeneration).toBeNull();
     },
   );
+
+  it("replays a startup gap longer than one event store page", async () => {
+    const harness = await createHarness({
+      commitDuringSequenceRead: 1,
+      titleUpdatesBeforeStartupCommit: 1_000,
+    });
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.titleRegeneration).toBeNull();
+  });
+
+  it("keeps buffered startup intents when the gap replay fails", async () => {
+    const harness = await createHarness({ commitDuringSequenceRead: 2, failStartupReplay: true });
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.titleRegeneration).toBeNull();
+  });
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {
     const harness = await createHarness({ turnStartBeforeReactor: true });
