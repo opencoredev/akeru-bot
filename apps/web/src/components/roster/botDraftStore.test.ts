@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { clearBotDraft, flushBotDrafts, readBotDraft, writeBotDraft } from "./botDraftStore";
 
 const DRAFTS = "akeru:bot-drafts:v1";
-const EDITED_AT = "akeru:bot-drafts:v1:edited-at";
+const VERSIONS = "akeru:bot-drafts:v1:versions";
 const memory = new Map<string, string>();
 
 beforeEach(() => {
@@ -71,26 +71,33 @@ describe("botDraftStore", () => {
 
   it("does not restore a draft another tab cleared after a pending edit", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(1_000);
     memory.set(DRAFTS, JSON.stringify({ "bot-1": "hello", "bot-2": "other" }));
+    memory.set(VERSIONS, JSON.stringify({ seq: 2, versions: { "bot-1": 1, "bot-2": 2 } }));
     writeBotDraft("bot-1", "hello there");
     writeBotDraft("bot-2", "other bot edit");
-    // Another tab sends bot-1's draft and clears it after this tab's edit.
+    // Another tab sends bot-1's draft and clears it before this tab flushes.
     memory.set(DRAFTS, JSON.stringify({ "bot-2": "other" }));
-    memory.set(EDITED_AT, JSON.stringify({ "bot-1": 1_200 }));
+    memory.set(VERSIONS, JSON.stringify({ seq: 2, versions: { "bot-2": 2 } }));
     vi.advanceTimersByTime(500);
     expect(JSON.parse(memory.get(DRAFTS) ?? "{}")).toEqual({ "bot-2": "other bot edit" });
   });
 
-  it("keeps a local edit made after another tab's write", () => {
+  it("keeps a local edit typed after another tab's write", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(2_000);
-    // Another tab wrote an older draft; its storage event may arrive after local typing.
+    // Another tab already wrote; its storage event may not have arrived yet.
     memory.set(DRAFTS, JSON.stringify({ "bot-1": "remote older draft" }));
-    memory.set(EDITED_AT, JSON.stringify({ "bot-1": 1_500 }));
+    memory.set(VERSIONS, JSON.stringify({ seq: 7, versions: { "bot-1": 7 } }));
     writeBotDraft("bot-1", "my newer local edit");
     vi.advanceTimersByTime(500);
     expect(JSON.parse(memory.get(DRAFTS) ?? "{}")).toEqual({ "bot-1": "my newer local edit" });
-    expect(JSON.parse(memory.get(EDITED_AT) ?? "{}")).toEqual({ "bot-1": 2_000 });
+    expect(JSON.parse(memory.get(VERSIONS) ?? "{}")).toEqual({ seq: 8, versions: { "bot-1": 8 } });
+  });
+
+  it("clears a draft this tab saved earlier", () => {
+    writeBotDraft("bot-1", "sent prompt");
+    flushBotDrafts();
+    clearBotDraft("bot-1");
+    expect(JSON.parse(memory.get(DRAFTS) ?? "{}")).toEqual({});
+    expect(readBotDraft("bot-1")).toBe("");
   });
 });
