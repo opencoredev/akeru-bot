@@ -46,6 +46,7 @@ import {
   AgentControllerRuntimeError,
   AgentControllerUnsupportedEngineError,
   ProviderAdapterRequestError,
+  ProviderValidationError,
 } from "../../provider/Errors.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -239,6 +240,7 @@ describe("ProviderCommandReactor", () => {
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
+    readonly disabledEngine?: boolean;
     readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
     readonly enableAgentBrowserAccess?: boolean;
     readonly startReactor?: boolean;
@@ -467,6 +469,14 @@ describe("ProviderCommandReactor", () => {
             }),
           );
         }
+        if (input?.disabledEngine === true && engine !== null) {
+          return Effect.fail(
+            new ProviderValidationError({
+              operation: "AgentController.inspectEngine",
+              issue: `Provider instance '${engine.provider}' is disabled in Akeru Bot settings.`,
+            }),
+          );
+        }
         const selected =
           engine === null
             ? fallback
@@ -476,6 +486,9 @@ describe("ProviderCommandReactor", () => {
               };
         return inspectEngine(selected).pipe(Effect.map((result) => ({ ...result, mode })));
       },
+    );
+    const failDelegation = vi.fn<NonNullable<AgentControllerShape["failDelegation"]>>(
+      () => Effect.void,
     );
     const service: AgentControllerShape = {
       authenticateMcpServer: () => Effect.die("unused"),
@@ -489,6 +502,7 @@ describe("ProviderCommandReactor", () => {
       stopSession: stopSession as AgentControllerShape["stopSession"],
       listSessions: () => Effect.succeed(runtimeSessions),
       ...(input?.dispatchDelegation ? { dispatchDelegation: input.dispatchDelegation } : {}),
+      failDelegation,
       rollbackConversation: () => Effect.die("unused"),
       uploadFeedback: () => Effect.die("unused"),
       get streamEvents() {
@@ -940,6 +954,7 @@ describe("ProviderCommandReactor", () => {
       engine,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       resolveEngine,
+      failDelegation,
       startSession,
       sendTurn,
       interruptTurn,
@@ -1567,6 +1582,46 @@ describe("ProviderCommandReactor", () => {
     );
     expect(harness.startSession).not.toHaveBeenCalled();
     expect(harness.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("reports a disabled engine as one readable line and names the bot on its bot work", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+      disabledEngine: true,
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-disabled-bot-engine"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-disabled-bot-engine"),
+          role: "user",
+          text: "use disabled engine",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.failDelegation.mock.calls.length === 1);
+    await harness.drain();
+    const detail = "Provider instance 'codex' is disabled in Akeru Bot settings.";
+    expect(harness.failDelegation).toHaveBeenCalledWith({
+      threadId: ThreadId.make("thread-1"),
+      error: `Configured bot could not start: ${detail}`,
+    });
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed")
+        ?.payload,
+    ).toMatchObject({ detail });
+    expect(thread?.session?.lastError).toBe(detail);
   });
 
   it("fails the turn before provider dispatch when Composio runtime preparation fails", async () => {

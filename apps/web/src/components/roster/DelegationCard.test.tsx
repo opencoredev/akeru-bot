@@ -373,11 +373,54 @@ describe("DelegationCard", () => {
     ).toContain("Failure details unavailable");
   });
 
+  it("shows a start failure as the bot-named readable line", () => {
+    const failed = delegation("failed");
+    if (failed.phase._tag !== "Failed") throw new Error("Expected a failed delegation");
+    const message =
+      "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.";
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={{
+          ...failed,
+          phase: { ...failed.phase, failure: { failureCode: "child_failed", message } },
+        }}
+        delegations={[]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+
+    expect(markup).toContain(
+      "Ren could not start: Provider instance &#x27;codex&#x27; is disabled",
+    );
+    expect(markup).not.toContain("ProviderValidationError");
+    expect(markup).not.toContain("file://");
+  });
+
   it("shows elapsed time and the access grant", () => {
     const markup = renderCard("completed");
     expect(markup).toContain(">50s</span>");
     expect(markup).toContain("approval required · local sandbox · tools: Read");
     expect(markup).toContain("memory: project · MCP servers: 0 · no user computer · no approvals");
+  });
+
+  it("shows hours for work that ran an hour or more", () => {
+    const completed = delegation("completed");
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={{
+          ...completed,
+          phase: {
+            ...completed.phase,
+            startedAt: "2026-08-30T16:12:17.000Z",
+          } as typeof completed.phase,
+        }}
+        delegations={[]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    expect(markup).toContain(">7h 48m</span>");
   });
 
   it("uses only the delegated child turn usage", () => {

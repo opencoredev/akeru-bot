@@ -47,7 +47,9 @@ describe("ResponseLoadingState", () => {
     expect(formatLoadingElapsed(0)).toBe("0s");
     expect(formatLoadingElapsed(-50)).toBe("0s");
     expect(formatLoadingElapsed(64_000)).toBe("1m 04s");
-    expect(formatLoadingElapsed(3_600_000)).toBe("60m 00s");
+    expect(formatLoadingElapsed(3_599_999)).toBe("59m 59s");
+    expect(formatLoadingElapsed(3_600_000)).toBe("1h 00m");
+    expect(formatLoadingElapsed(28_123_000)).toBe("7h 48m");
   });
 
   it("renders the meter, shimmer label, and exact elapsed time on one line", () => {

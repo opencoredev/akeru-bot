@@ -238,3 +238,34 @@ export type AgentControllerError =
   | AgentControllerUnsupportedEngineError
   | AgentControllerRuntimeError
   | ProviderServiceError;
+
+const hasReadableIssue = Schema.is(
+  Schema.Union([ProviderValidationError, ProviderAdapterValidationError]),
+);
+const hasReadableDetail = Schema.is(
+  Schema.Union([
+    ProviderAdapterRequestError,
+    ProviderAdapterProcessError,
+    ProviderDriverError,
+    ProviderSessionDirectoryPersistenceError,
+    AgentControllerUnsupportedEngineError,
+    AgentControllerRuntimeError,
+  ]),
+);
+
+/**
+ * The part of a provider or controller error a user can act on. Drops the
+ * class name, operation prefix, and stack so chats and bot work cards never
+ * show server paths. Log the full cause separately.
+ */
+export function readableErrorDetail(error: unknown): string {
+  if (hasReadableIssue(error)) return error.issue;
+  if (hasReadableDetail(error)) return error.detail;
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+  const firstLine = message
+    ?.split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !line.startsWith("at "));
+  return firstLine ?? "Something went wrong.";
+}

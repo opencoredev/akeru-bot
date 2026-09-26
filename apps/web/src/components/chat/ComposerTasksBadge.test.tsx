@@ -114,6 +114,20 @@ describe("ComposerTasksBadge", () => {
     expect(markup).not.toContain("bg-muted-foreground/25");
   });
 
+  it("shows hours for a step that ran an hour or more", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerTasksDrawer
+        onCollapse={() => undefined}
+        onDismiss={() => undefined}
+        progress={progress}
+        steps={[{ durationMs: 28_123_000, step: "Run the suite", status: "completed" as const }]}
+      />,
+    );
+
+    expect(markup).toContain("7h 48m");
+    expect(markup).not.toContain("468m");
+  });
+
   it("does not render an empty task count", () => {
     const markup = renderToStaticMarkup(
       <ComposerTasksBadge
