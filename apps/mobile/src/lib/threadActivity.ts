@@ -232,7 +232,7 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
 
 function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
-): DerivedWorkLogEntry[] {
+): CollapsedWorkLogEntry[] {
   const ordered = Arr.sort(activities, activityOrder);
   const entries: DerivedWorkLogEntry[] = [];
   for (const activity of ordered) {
@@ -247,9 +247,22 @@ function deriveWorkLogEntries(
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
-    entries.push(toDerivedWorkLogEntry(activity));
+    entries.push(cachedDerivedWorkLogEntry(activity));
   }
   return collapseDerivedWorkLogEntries(entries);
+}
+
+// Activities are immutable and keep their identity across stream updates, so
+// each one is parsed into a work-log entry once instead of on every delta.
+const derivedWorkLogEntryCache = new WeakMap<OrchestrationThreadActivity, DerivedWorkLogEntry>();
+
+function cachedDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
+  let entry = derivedWorkLogEntryCache.get(activity);
+  if (entry === undefined) {
+    entry = toDerivedWorkLogEntry(activity);
+    derivedWorkLogEntryCache.set(activity, entry);
+  }
+  return entry;
 }
 
 function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): boolean {
@@ -360,10 +373,20 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   return entry;
 }
 
+/**
+ * A collapsed row plus the per-activity entries it was merged from. The sources
+ * are identity-stable, so they tell whether a row's inputs changed.
+ */
+interface CollapsedWorkLogEntry {
+  readonly entry: DerivedWorkLogEntry;
+  readonly sources: ReadonlyArray<DerivedWorkLogEntry>;
+}
+
 function collapseDerivedWorkLogEntries(
   entries: ReadonlyArray<DerivedWorkLogEntry>,
-): DerivedWorkLogEntry[] {
+): CollapsedWorkLogEntry[] {
   const collapsed: DerivedWorkLogEntry[] = [];
+  const sources: DerivedWorkLogEntry[][] = [];
   // Subagent rows collapse by identity, not adjacency (quiet-timeline
   // guarantee; mirrors web's session-logic).
   const taskRowIndex = new Map<string, number>();
@@ -377,20 +400,24 @@ function collapseDerivedWorkLogEntries(
       const existingIndex = taskRowIndex.get(entry.taskId);
       if (existingIndex !== undefined) {
         collapsed[existingIndex] = mergeDerivedWorkLogEntries(collapsed[existingIndex]!, entry);
+        sources[existingIndex]!.push(entry);
         continue;
       }
       taskRowIndex.set(entry.taskId, collapsed.length);
       collapsed.push(entry);
+      sources.push([entry]);
       continue;
     }
     const previous = collapsed.at(-1);
     if (previous && shouldCollapseToolLifecycleEntries(previous, entry)) {
       collapsed[collapsed.length - 1] = mergeDerivedWorkLogEntries(previous, entry);
+      sources[sources.length - 1]!.push(entry);
       continue;
     }
     collapsed.push(entry);
+    sources.push([entry]);
   }
-  return collapsed;
+  return collapsed.map((entry, index) => ({ entry, sources: sources[index]! }));
 }
 
 function shouldCollapseToolLifecycleEntries(
@@ -1368,59 +1395,203 @@ export function buildThreadFeed(
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
   const botStepMeters = buildBotStepMeters(thread.activities);
   const workLogEntries = deriveWorkLogEntries(thread.activities);
-  const entries = Arr.sortWith(
-    [
-      ...messages.map<RawThreadFeedEntry>((message) => ({
-        type: "message",
-        id: message.id,
-        createdAt: message.createdAt,
-        message,
-        ...(message.turnId === null ? {} : { botStepMeter: botStepMeters.get(message.turnId) }),
-      })),
-      ...workLogEntries
-        .filter((entry) => {
-          if (options?.loadedMessages === undefined) {
-            return true;
-          }
-          return (
-            oldestLoadedMessageCreatedAt === null || entry.createdAt >= oldestLoadedMessageCreatedAt
-          );
-        })
-        .map<RawThreadFeedEntry>((entry) => {
-          const summary = workEntryHeading(entry);
-          const detail = workEntryPreview(entry);
-          const getFullDetail = memoizeValue(() => buildWorkEntryExpandedBody(entry));
-          const getCopyText = memoizeValue(() =>
-            [summary, detail, getFullDetail()]
-              .filter((value, index, values): value is string => {
-                return Boolean(value) && values.indexOf(value) === index;
-              })
-              .join("\n"),
-          );
-          return {
-            type: "activity",
-            id: entry.id,
-            createdAt: entry.createdAt,
-            turnId: entry.turnId,
-            activity: {
-              id: entry.id,
-              createdAt: entry.createdAt,
-              turnId: entry.turnId,
-              summary,
-              detail,
-              canExpand: workEntryHasExpandedBody(entry),
-              getFullDetail,
-              getCopyText,
-              icon: workEntryIcon(entry),
-              toolLike: workLogEntryIsToolLike(entry),
-              status: workEntryStatus(entry),
-            },
-          };
-        }),
-    ],
-    (s) => new Date(s.createdAt),
-    Order.Date,
-  );
+  const timed: Array<{ readonly at: number; readonly entry: RawThreadFeedEntry }> = [];
+  for (const message of messages) {
+    const entry = messageFeedEntry(
+      message,
+      message.turnId === null ? undefined : botStepMeters.get(message.turnId),
+    );
+    timed.push({ at: Date.parse(entry.createdAt), entry });
+  }
+  for (const collapsed of workLogEntries) {
+    if (
+      options?.loadedMessages !== undefined &&
+      oldestLoadedMessageCreatedAt !== null &&
+      collapsed.entry.createdAt < oldestLoadedMessageCreatedAt
+    ) {
+      continue;
+    }
+    const entry = activityFeedEntry(collapsed);
+    timed.push({ at: Date.parse(entry.createdAt), entry });
+  }
+  // Timestamps are parsed once above; sorting on numbers avoids allocating a
+  // Date per comparison.
+  timed.sort((left, right) => compareFeedTimes(left.at, right.at));
 
-  return groupAdjacentActivities(entries);
+  return groupAdjacentActivities(timed.map((item) => item.entry));
+}
+
+/** Same ordering as `Order.Date`: stable ties, unparsable times first. */
+function compareFeedTimes(left: number, right: number): number {
+  if (left === right) return 0;
+  const leftInvalid = Number.isNaN(left);
+  const rightInvalid = Number.isNaN(right);
+  if (leftInvalid && rightInvalid) return 0;
+  if (leftInvalid) return -1;
+  if (rightInvalid) return 1;
+  return left < right ? -1 : 1;
+}
+
+type MessageFeedEntry = Extract<RawThreadFeedEntry, { type: "message" }>;
+
+// Feed entries are cached on their source objects so unchanged rows keep their
+// identity while a turn streams, letting the list skip re-rendering them.
+const messageFeedEntryCache = new WeakMap<
+  OrchestrationThread["messages"][number],
+  MessageFeedEntry
+>();
+
+function messageFeedEntry(
+  message: OrchestrationThread["messages"][number],
+  botStepMeter: BotStepMeterData | undefined,
+): MessageFeedEntry {
+  const cached = messageFeedEntryCache.get(message);
+  if (cached !== undefined && botStepMetersEqual(cached.botStepMeter, botStepMeter)) {
+    return cached;
+  }
+  const entry: MessageFeedEntry = {
+    type: "message",
+    id: message.id,
+    createdAt: message.createdAt,
+    message,
+    ...(message.turnId === null ? {} : { botStepMeter }),
+  };
+  messageFeedEntryCache.set(message, entry);
+  return entry;
+}
+
+function botStepMetersEqual(
+  left: BotStepMeterData | undefined,
+  right: BotStepMeterData | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined) return false;
+  return (
+    left.tokens === right.tokens &&
+    left.costUsd === right.costUsd &&
+    left.hardStopReached === right.hardStopReached &&
+    (left.engine === right.engine ||
+      (left.engine.provider === right.engine.provider &&
+        left.engine.model === right.engine.model &&
+        left.engine.options === right.engine.options))
+  );
+}
+
+type ActivityFeedEntry = Extract<RawThreadFeedEntry, { type: "activity" }>;
+
+// Keyed on the newest source entry; reused only when every source matches.
+const activityFeedEntryCache = new WeakMap<
+  DerivedWorkLogEntry,
+  { readonly sources: ReadonlyArray<DerivedWorkLogEntry>; readonly entry: ActivityFeedEntry }
+>();
+
+function activityFeedEntry(collapsed: CollapsedWorkLogEntry): ActivityFeedEntry {
+  const key = collapsed.sources[collapsed.sources.length - 1]!;
+  const cached = activityFeedEntryCache.get(key);
+  if (cached !== undefined && sameEntries(cached.sources, collapsed.sources)) {
+    return cached.entry;
+  }
+  const entry = toActivityFeedEntry(collapsed.entry);
+  activityFeedEntryCache.set(key, { sources: collapsed.sources, entry });
+  return entry;
+}
+
+function sameEntries<T>(left: ReadonlyArray<T>, right: ReadonlyArray<T>): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function toActivityFeedEntry(entry: DerivedWorkLogEntry): ActivityFeedEntry {
+  const summary = workEntryHeading(entry);
+  const detail = workEntryPreview(entry);
+  const getFullDetail = memoizeValue(() => buildWorkEntryExpandedBody(entry));
+  const getCopyText = memoizeValue(() =>
+    [summary, detail, getFullDetail()]
+      .filter((value, index, values): value is string => {
+        return Boolean(value) && values.indexOf(value) === index;
+      })
+      .join("\n"),
+  );
+  return {
+    type: "activity",
+    id: entry.id,
+    createdAt: entry.createdAt,
+    turnId: entry.turnId,
+    activity: {
+      id: entry.id,
+      createdAt: entry.createdAt,
+      turnId: entry.turnId,
+      summary,
+      detail,
+      canExpand: workEntryHasExpandedBody(entry),
+      getFullDetail,
+      getCopyText,
+      icon: workEntryIcon(entry),
+      toolLike: workLogEntryIsToolLike(entry),
+      status: workEntryStatus(entry),
+    },
+  };
+}
+
+/**
+ * Length of the leading run of `previous` that `next` still holds by identity.
+ * Appends keep the whole previous length; a removal or replacement stops at the
+ * first changed item so the caller rescans from there.
+ */
+export function unchangedPrefixLength(
+  previous: ReadonlyArray<unknown>,
+  next: ReadonlyArray<unknown>,
+): number {
+  const length = Math.min(previous.length, next.length);
+  let index = 0;
+  while (index < length && previous[index] === next[index]) {
+    index += 1;
+  }
+  return index;
+}
+
+/**
+ * Row equality for the thread feed list. Presentation rebuilds wrapper rows on
+ * every feed change, so the list compares their rendered fields instead of
+ * identity and keeps unchanged rows mounted without re-rendering them.
+ */
+export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFeedEntry): boolean {
+  if (previous === next) return true;
+  if (previous.id !== next.id || previous.createdAt !== next.createdAt) return false;
+  switch (previous.type) {
+    case "message":
+      return (
+        next.type === "message" &&
+        previous.message === next.message &&
+        botStepMetersEqual(previous.botStepMeter, next.botStepMeter)
+      );
+    case "working":
+      return next.type === "working";
+    case "activity-group":
+      return (
+        next.type === "activity-group" &&
+        previous.turnId === next.turnId &&
+        previous.activities.length === next.activities.length &&
+        previous.activities.every((activity, index) => activity === next.activities[index])
+      );
+    case "work-toggle":
+      return (
+        next.type === "work-toggle" &&
+        previous.turnId === next.turnId &&
+        previous.groupId === next.groupId &&
+        previous.hiddenCount === next.hiddenCount &&
+        previous.expanded === next.expanded &&
+        previous.onlyToolActivities === next.onlyToolActivities
+      );
+    case "turn-fold":
+      return (
+        next.type === "turn-fold" &&
+        previous.turnId === next.turnId &&
+        previous.label === next.label &&
+        previous.expanded === next.expanded
+      );
+  }
 }

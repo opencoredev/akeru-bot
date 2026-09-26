@@ -10,7 +10,7 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Atom } from "effect/unstable/reactivity";
 
 import { writeFileAtomically } from "../lib/atomic-file";
@@ -101,6 +101,25 @@ export const composerDraftsAtom = Atom.make<Record<string, ComposerDraft>>({}).p
   Atom.keepAlive,
   Atom.withLabel("mobile:composer-drafts"),
 );
+
+// Per-key view of the draft map. The derived atom only notifies when this
+// key's draft object changes, so typing in one chat does not re-render
+// components that read another chat's draft.
+const composerDraftAtom = Atom.family((draftKey: string) =>
+  Atom.make((get): ComposerDraft | undefined => get(composerDraftsAtom)[draftKey]),
+);
+
+function composerDraftFieldAtomFamily<K extends keyof ComposerDraft>(field: K) {
+  return Atom.family((draftKey: string) =>
+    Atom.make((get): ComposerDraft[K] | undefined => get(composerDraftsAtom)[draftKey]?.[field]),
+  );
+}
+
+// Draft edits spread the previous draft, so these references only change when
+// the setting itself changes, not on every keystroke.
+const composerDraftModelSelectionAtom = composerDraftFieldAtomFamily("modelSelection");
+const composerDraftRuntimeModeAtom = composerDraftFieldAtomFamily("runtimeMode");
+const composerDraftInteractionModeAtom = composerDraftFieldAtomFamily("interactionMode");
 
 let loadPromise: Promise<void> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -685,9 +704,22 @@ export async function clearComposerDraftsEnvironment(environmentId: EnvironmentI
 }
 
 export function useComposerDraft(draftKey: string | null): ComposerDraft {
-  const drafts = useAtomValue(composerDraftsAtom);
+  const draft = useAtomValue(composerDraftAtom(draftKey ?? ""));
   useEffect(() => {
     ensureComposerDraftsLoaded();
   }, []);
-  return draftKey ? normalizeDraft(drafts[draftKey]) : EMPTY_DRAFT;
+  return useMemo(() => (draftKey ? normalizeDraft(draft) : EMPTY_DRAFT), [draft, draftKey]);
+}
+
+/** Reads a draft's settings without subscribing to its text or attachments. */
+export function useComposerDraftSettings(draftKey: string | null): {
+  readonly modelSelection: ModelSelection | undefined;
+  readonly runtimeMode: RuntimeMode | undefined;
+  readonly interactionMode: ProviderInteractionMode | undefined;
+} {
+  const key = draftKey ?? "";
+  const modelSelection = useAtomValue(composerDraftModelSelectionAtom(key));
+  const runtimeMode = useAtomValue(composerDraftRuntimeModeAtom(key));
+  const interactionMode = useAtomValue(composerDraftInteractionModeAtom(key));
+  return { modelSelection, runtimeMode, interactionMode };
 }
