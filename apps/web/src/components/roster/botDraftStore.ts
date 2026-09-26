@@ -37,21 +37,53 @@ function writeAll(drafts: Record<string, string>): void {
   }
 }
 
-export function readBotDraft(draftKey: string): string {
-  return readAll()[draftKey] ?? "";
+// Keystrokes land here first and reach localStorage after a short pause, on blur, or when
+// the page hides. Flushing merges into the stored map so drafts from other tabs survive.
+const pendingDrafts = new Map<string, string>();
+const FLUSH_DELAY_MS = 400;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let unloadListenersInstalled = false;
+
+function installUnloadListeners(): void {
+  if (unloadListenersInstalled || typeof window === "undefined") return;
+  unloadListenersInstalled = true;
+  window.addEventListener("pagehide", flushBotDrafts);
+  window.addEventListener("beforeunload", flushBotDrafts);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushBotDrafts();
+  });
 }
 
-export function writeBotDraft(draftKey: string, text: string): void {
-  const drafts = readAll();
-  const clipped = text.slice(0, MAX_DRAFT_CHARS);
-  if (clipped.length === 0) {
-    delete drafts[draftKey];
-  } else {
-    drafts[draftKey] = clipped;
+/** Writes pending drafts to storage now. Safe to call when nothing is pending. */
+export function flushBotDrafts(): void {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
   }
+  if (pendingDrafts.size === 0) return;
+  const drafts = readAll();
+  for (const [draftKey, text] of pendingDrafts) {
+    if (text.length === 0) delete drafts[draftKey];
+    else drafts[draftKey] = text;
+  }
+  pendingDrafts.clear();
   writeAll(drafts);
 }
 
+export function readBotDraft(draftKey: string): string {
+  return pendingDrafts.get(draftKey) ?? readAll()[draftKey] ?? "";
+}
+
+/** Records a draft in memory and persists it after typing pauses. */
+export function writeBotDraft(draftKey: string, text: string): void {
+  pendingDrafts.set(draftKey, text.slice(0, MAX_DRAFT_CHARS));
+  installUnloadListeners();
+  if (flushTimer !== null) clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushBotDrafts, FLUSH_DELAY_MS);
+}
+
+/** Clears a draft and persists the removal immediately. */
 export function clearBotDraft(draftKey: string): void {
-  writeBotDraft(draftKey, "");
+  pendingDrafts.set(draftKey, "");
+  flushBotDrafts();
 }

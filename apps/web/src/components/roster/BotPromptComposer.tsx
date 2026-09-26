@@ -25,7 +25,7 @@ import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
+import { clearBotDraft, flushBotDrafts, readBotDraft, writeBotDraft } from "./botDraftStore";
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -589,6 +589,7 @@ export function BotPromptComposer({
             expanded ? "min-h-16 px-4 pb-2 pt-3" : "min-h-13 px-14 py-[0.9rem]",
           )}
           onChange={(event) => persistDraft(event.currentTarget.value)}
+          onBlur={flushBotDrafts}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();

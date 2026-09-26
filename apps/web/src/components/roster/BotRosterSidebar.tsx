@@ -10,8 +10,7 @@ import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { BotId, EnvironmentId, GroupId, ThreadId } from "@t3tools/contracts";
+import { BotId, GroupId } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
@@ -45,7 +44,7 @@ import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages, useThreadShells } from "../../state/entities";
+import { useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -61,7 +60,6 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
-import { findLatestBotThreadTarget } from "./botThreadRuntime.logic";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
@@ -71,7 +69,6 @@ import {
   filterRosterGroups,
   formatRosterTimestamp,
   isRecordableChatPath,
-  parseChatPath,
   planRosterDrop,
   resolveLatestRosterMessage,
   resolveRosterDropTarget,
@@ -100,7 +97,7 @@ import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
-import { useBotThreadRef } from "./useBotThreadRef";
+import { useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
 /** Avatar with a yellow needs-you light and a green working light. */
 function RosterAvatar({
@@ -200,18 +197,7 @@ function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
 ): RosterLastMessage | null {
-  const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
-  const environmentId = usePrimaryEnvironmentId();
-  const threadShells = useThreadShells();
-  const threadRef = useMemo(() => {
-    const durableTarget = environmentId
-      ? findLatestBotThreadTarget(botId, environmentId, threadShells)
-      : null;
-    const target = durableTarget ?? (rememberedPath ? parseChatPath(rememberedPath) : null);
-    return target
-      ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
-      : null;
-  }, [botId, environmentId, rememberedPath, threadShells]);
+  const threadRef = useBotThreadCandidate(botId);
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
   return useMemo(
@@ -257,6 +243,12 @@ function sortableRootProps(sortable: SortableRosterRowBag) {
 
 const ROSTER_DRAG_LABEL_HEIGHT = 24;
 
+/** Stable row actions, so memoized rows skip re-rendering when the sidebar does. */
+const setRosterItemPinned = (item: RosterItemRef, pinned: boolean) =>
+  useRosterStore.getState().setItemPinned(item, pinned);
+const nudgeRosterItem = (item: RosterItemRef, delta: -1 | 1) =>
+  useRosterStore.getState().nudgeRosterItem(item, delta);
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
@@ -276,13 +268,14 @@ const BotRosterRow = memo(function BotRosterRow({
   onSelect: (bot: Bot) => void;
   onOpenSettings: (bot: Bot) => void;
   pinned: boolean;
-  onPin: (pinned: boolean) => void;
+  onPin: (item: RosterItemRef, pinned: boolean) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  onNudge: (delta: -1 | 1) => void;
+  onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
   const latestMessage = useLatestBotMessage(bot.id, lastMessage);
@@ -365,15 +358,15 @@ const BotRosterRow = memo(function BotRosterRow({
               <SettingsIcon />
               Bot settings
             </MenuItem>
-            <MenuItem onClick={() => onPin(!pinned)}>
+            <MenuItem onClick={() => onPin(item, !pinned)}>
               <PinIcon />
               {pinned ? "Unpin" : "Pin"}
             </MenuItem>
-            <MenuItem disabled={!canMoveUp} onClick={() => onNudge(-1)}>
+            <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
               <ArrowUpIcon />
               Move up
             </MenuItem>
-            <MenuItem disabled={!canMoveDown} onClick={() => onNudge(1)}>
+            <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
               <ArrowDownIcon />
               Move down
             </MenuItem>
@@ -423,7 +416,7 @@ function RailBotButton({
   );
 }
 
-function GroupRosterRow({
+const GroupRosterRow = memo(function GroupRosterRow({
   group,
   bots,
   isActive,
@@ -438,15 +431,16 @@ function GroupRosterRow({
   group: Group;
   bots: readonly Bot[];
   isActive: boolean;
-  onSelect: () => void;
+  onSelect: (group: Group) => void;
   pinned: boolean;
-  onPin: (pinned: boolean) => void;
+  onPin: (item: RosterItemRef, pinned: boolean) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  onNudge: (delta: -1 | 1) => void;
+  onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
 }) {
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const item = useMemo(() => ({ kind: "group" as const, id: group.id }), [group.id]);
   const members = group.members.filter(
     (member) =>
       member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
@@ -474,7 +468,7 @@ function GroupRosterRow({
       <button
         type="button"
         aria-current={isActive || undefined}
-        onClick={onSelect}
+        onClick={() => onSelect(group)}
         className={cn(
           "flex min-w-0 flex-1 cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
           pinned
@@ -509,15 +503,15 @@ function GroupRosterRow({
           }
         />
         <MenuPopup align="end">
-          <MenuItem onClick={() => onPin(!pinned)}>
+          <MenuItem onClick={() => onPin(item, !pinned)}>
             <PinIcon />
             {pinned ? "Unpin" : "Pin"}
           </MenuItem>
-          <MenuItem disabled={!canMoveUp} onClick={() => onNudge(-1)}>
+          <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
             <ArrowUpIcon />
             Move up
           </MenuItem>
-          <MenuItem disabled={!canMoveDown} onClick={() => onNudge(1)}>
+          <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
             <ArrowDownIcon />
             Move down
           </MenuItem>
@@ -525,7 +519,7 @@ function GroupRosterRow({
       </Menu>
     </li>
   );
-}
+});
 
 function SortableRosterMarker(props: {
   marker: RosterListMarker;
@@ -897,16 +891,22 @@ export default function BotRosterSidebar() {
     useRosterStore.getState().recordChatPath(selectedBotId, pathname);
   }, [pathname, selectedBotId]);
 
-  const handleSelect = (bot: Bot) => {
-    pendingClickedBotIdRef.current = bot.id;
-    useRosterStore.getState().selectBot(bot.id);
-    void navigate({ to: "/bots/$botId", params: { botId: bot.id } });
-  };
+  const handleSelect = useCallback(
+    (bot: Bot) => {
+      pendingClickedBotIdRef.current = bot.id;
+      useRosterStore.getState().selectBot(bot.id);
+      void navigate({ to: "/bots/$botId", params: { botId: bot.id } });
+    },
+    [navigate],
+  );
 
-  const handleOpenBotSettings = (bot: Bot) => {
-    useRosterStore.getState().selectBot(bot.id);
-    void navigate({ to: "/bots/$botId/settings", params: { botId: bot.id } });
-  };
+  const handleOpenBotSettings = useCallback(
+    (bot: Bot) => {
+      useRosterStore.getState().selectBot(bot.id);
+      void navigate({ to: "/bots/$botId/settings", params: { botId: bot.id } });
+    },
+    [navigate],
+  );
 
   const shortcutBots = useMemo(
     () => orderRosterBotsForShortcuts(bots, pinnedItems, []),
@@ -1002,9 +1002,12 @@ export default function BotRosterSidebar() {
     void navigate({ to: "/groups/$groupId", params: { groupId } });
   };
 
-  const handleSelectGroup = (group: Group) => {
-    void navigate({ to: "/groups/$groupId", params: { groupId: group.id } });
-  };
+  const handleSelectGroup = useCallback(
+    (group: Group) => {
+      void navigate({ to: "/groups/$groupId", params: { groupId: group.id } });
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     if (pendingCreatedBotId === null) return;
@@ -1127,8 +1130,6 @@ export default function BotRosterSidebar() {
                         const canMoveUp = !searching && zoneIndex > 0;
                         const canMoveDown =
                           !searching && zoneIndex >= 0 && zoneIndex < zoneOrder.length - 1;
-                        const onNudge = (delta: -1 | 1) =>
-                          useRosterStore.getState().nudgeRosterItem(item.item, delta);
                         return (
                           <SortableRosterRow
                             key={rosterListItemId(item)}
@@ -1150,14 +1151,10 @@ export default function BotRosterSidebar() {
                                         onSelect={handleSelect}
                                         onOpenSettings={handleOpenBotSettings}
                                         pinned={pinned}
-                                        onPin={(nextPinned) =>
-                                          useRosterStore
-                                            .getState()
-                                            .setItemPinned({ kind: "bot", id: bot.id }, nextPinned)
-                                        }
+                                        onPin={setRosterItemPinned}
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
-                                        onNudge={onNudge}
+                                        onNudge={nudgeRosterItem}
                                         sortable={bag}
                                       />
                                     );
@@ -1172,19 +1169,12 @@ export default function BotRosterSidebar() {
                                         group={group}
                                         bots={bots}
                                         isActive={pathname === `/groups/${group.id}`}
-                                        onSelect={() => handleSelectGroup(group)}
+                                        onSelect={handleSelectGroup}
                                         pinned={pinned}
-                                        onPin={(nextPinned) =>
-                                          useRosterStore
-                                            .getState()
-                                            .setItemPinned(
-                                              { kind: "group", id: group.id },
-                                              nextPinned,
-                                            )
-                                        }
+                                        onPin={setRosterItemPinned}
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
-                                        onNudge={onNudge}
+                                        onNudge={nudgeRosterItem}
                                         sortable={bag}
                                       />
                                     );

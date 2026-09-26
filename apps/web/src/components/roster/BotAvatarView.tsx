@@ -54,6 +54,9 @@ const EYES = [
   { x: 13, y: -1, rotate: -20 },
 ] as const;
 
+/** Minimum frame spacing for the working pose, about 30fps with rAF jitter headroom. */
+const WORKING_FRAME_MS = 1000 / 30 - 2;
+
 /** Radius the face travels on when it spins around the body. */
 const BELT_RADIUS = 44;
 
@@ -189,19 +192,50 @@ function BlobAvatar({
     let visible = true;
     let frameId: number | null = null;
     let last = 0;
+    // Last values written to the DOM, so settled or repeated poses cost no style work.
+    let lastBody = "";
+    const lastEyes: Array<{ transform: string | null; visible: boolean | null }> = [
+      { transform: null, visible: null },
+      { transform: null, visible: null },
+    ];
 
     const render = (frame: MotionFrame) => {
-      body.style.transform = bodyTransform(frame);
+      const nextBody = bodyTransform(frame);
+      if (nextBody !== lastBody) {
+        body.style.transform = nextBody;
+        lastBody = nextBody;
+      }
       for (const index of [0, 1] as const) {
         const eye = eyeRefs.current[index];
-        if (!eye) continue;
+        const written = lastEyes[index];
+        if (!eye || !written) continue;
         const transform = eyeTransform(shape, frame, index);
-        eye.setAttribute("visibility", transform ? "visible" : "hidden");
-        if (transform) eye.setAttribute("transform", transform);
+        const visible = transform !== null;
+        if (visible !== written.visible) {
+          eye.setAttribute("visibility", visible ? "visible" : "hidden");
+          written.visible = visible;
+        }
+        if (transform && transform !== written.transform) {
+          eye.setAttribute("transform", transform);
+          written.transform = transform;
+        }
       }
     };
 
     const tick = (time: number) => {
+      // The continuous working bob reads fine at 30fps. Hover tracking and the spin keep
+      // the full display rate.
+      if (
+        last !== 0 &&
+        workingRef.current &&
+        !hovered &&
+        !motion.spinning &&
+        time - last < WORKING_FRAME_MS
+      ) {
+        frameId = visible ? requestAnimationFrame(tick) : null;
+        if (frameId === null) last = 0;
+        return;
+      }
       const dt = last === 0 ? 1 / 60 : (time - last) / 1000;
       last = time;
       const { frame, active } = motion.tick(dt, {

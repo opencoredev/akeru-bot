@@ -22,6 +22,10 @@ export interface ReplyPlaybackMessage {
   readonly updatedAt: string;
 }
 
+type SpokenReply = NonNullable<ReturnType<typeof replyReadoutMessageAction>>;
+
+const SPOKEN_CACHE_LIMIT = 500;
+
 export interface ReplyPlaybackAction {
   readonly request: ReplyPlaybackRequest;
   readonly disclosure?: string;
@@ -50,6 +54,19 @@ export function createReplyPlaybackSession(options: {
   let seen = new Set<string>();
   let sequence = 0;
   let baseline: string | null = null;
+  // Rows and the observer ask for the same reply on every render, so spoken text is cached per
+  // message and reused while its stored text is unchanged.
+  const spokenCache = new Map<string, { text: string; spoken: SpokenReply }>();
+  const spokenFor = (message: ReplyPlaybackMessage): SpokenReply | null => {
+    if (message.role !== "assistant" || message.streaming) return null;
+    const cached = spokenCache.get(message.id);
+    if (cached && cached.text === message.text) return cached.spoken;
+    const spoken = replyReadoutMessageAction(message);
+    if (!spoken) return null;
+    if (spokenCache.size >= SPOKEN_CACHE_LIMIT) spokenCache.clear();
+    spokenCache.set(message.id, { text: message.text, spoken });
+    return spoken;
+  };
   const identityBase = () =>
     context
       ? {
@@ -60,7 +77,7 @@ export function createReplyPlaybackSession(options: {
         }
       : null;
   const actionFor = (message: ReplyPlaybackMessage): ReplyPlaybackAction | null => {
-    const spoken = replyReadoutMessageAction(message);
+    const spoken = spokenFor(message);
     const base = identityBase();
     if (!spoken || !base) return null;
     const request: ReplyPlaybackRequest = {
@@ -124,8 +141,9 @@ export function createReplyPlaybackSession(options: {
       for (const message of messages) {
         if (message.role !== "assistant") continue;
         versions.set(message.id, message.updatedAt);
-        const spoken = replyReadoutMessageAction(message);
-        if (!spoken?.speakable || seen.has(message.id)) continue;
+        if (seen.has(message.id)) continue;
+        const spoken = spokenFor(message);
+        if (!spoken?.speakable) continue;
         live.push({
           messageId: message.id,
           contentVersion: message.updatedAt,

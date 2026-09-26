@@ -100,11 +100,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const target = primaryEnvironmentId
     ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
     : null;
-  const rememberedThreadRef = useMemo<ScopedThreadRef | null>(() => {
-    return target
-      ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
-      : null;
-  }, [target]);
+  const targetEnvironmentId = target?.environmentId;
+  const targetThreadId = target?.threadId;
+  const rememberedThreadRef = useMemo<ScopedThreadRef | null>(
+    () =>
+      targetEnvironmentId && targetThreadId
+        ? scopeThreadRef(EnvironmentId.make(targetEnvironmentId), ThreadId.make(targetThreadId))
+        : null,
+    [targetEnvironmentId, targetThreadId],
+  );
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
   const retainedThreadRef = useRef<{ botId: string; threadRef: ScopedThreadRef | null }>({

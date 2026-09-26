@@ -3,18 +3,15 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-function messageBlocks(source: string, testId: string): string[] {
-  const marker = `data-testid="${testId}"`;
-  const blocks: string[] = [];
-  let from = 0;
-  while (true) {
-    const start = source.indexOf(marker, from);
-    if (start < 0) break;
-    const nextTestId = source.indexOf('data-testid="', start + marker.length);
-    blocks.push(source.slice(start, nextTestId < 0 ? source.length : nextTestId));
-    from = start + marker.length;
-  }
-  return blocks;
+function readSibling(file: string) {
+  return NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+}
+
+/** Returns the source of one exported memo row component. */
+function rowComponent(source: string, name: string) {
+  const start = source.indexOf(`export const ${name} = memo(`);
+  const end = source.indexOf("\nexport ", start + 1);
+  return start < 0 ? "" : source.slice(start, end < 0 ? source.length : end);
 }
 
 describe("BotThreadLanding message formatting", () => {
@@ -25,28 +22,33 @@ describe("BotThreadLanding message formatting", () => {
     ] as const;
 
     for (const [file, assistantTestId, userTestId] of entries) {
-      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
-      const assistantStart = source.indexOf(`data-testid="${assistantTestId}"`);
-      const userStart = source.indexOf(`data-testid="${userTestId}"`, assistantStart);
+      const source = readSibling(file);
+      const assistantStart = source.indexOf(`testId="${assistantTestId}"`);
+      const userStart = source.indexOf(`testId="${userTestId}"`, assistantStart);
       const assistantSource = source.slice(assistantStart, userStart);
 
       expect(assistantStart).toBeGreaterThan(-1);
       expect(userStart).toBeGreaterThan(assistantStart);
-      expect(assistantSource).toContain("<ChatMarkdown");
+      expect(source.lastIndexOf("<AssistantMessageRow", assistantStart)).toBeGreaterThan(-1);
       expect(assistantSource).toContain("cwd={runtime.defaultProject?.workspaceRoot}");
       expect(assistantSource).toContain("threadRef={runtime.linkedThreadRef ?? undefined}");
-      expect(assistantSource).toContain('className="min-w-0 flex-1"');
-      expect(assistantSource).not.toContain("onTaskListChange");
-      expect(source.slice(userStart)).toContain('className="whitespace-pre-wrap"');
+      expect(source.lastIndexOf("<UserMessageRow", userStart)).toBeGreaterThan(assistantStart);
     }
+
+    const assistantRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "AssistantMessageRow");
+    expect(assistantRow).toContain("<ChatMarkdown");
+    expect(assistantRow).toContain('className="min-w-0 flex-1"');
+    expect(assistantRow).not.toContain("onTaskListChange");
+    const userRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "UserMessageRow");
+    expect(userRow).toContain('className="whitespace-pre-wrap"');
   });
 
   it("renders step meters for bot and group replies", () => {
     for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
-      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
-      expect(source).toContain("<BotStepMeter");
-      expect(source).toContain("stepMeters.get(message.turnId)");
+      expect(readSibling(file)).toContain("stepMeters.get(message.turnId)");
     }
+    const assistantRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "AssistantMessageRow");
+    expect(assistantRow).toContain("<BotStepMeter meter={stepMeter} />");
   });
 
   it("uses the free-scrolling conversation area instead of end-justified overflow", () => {
@@ -78,30 +80,24 @@ describe("BotThreadLanding message formatting", () => {
   });
 
   it("keeps message actions visible for coarse pointers without dropping reply controls", () => {
-    const cases = [
-      ["BotThreadLanding.tsx", "bot-provider-message"],
-      ["BotThreadLanding.tsx", "bot-user-message"],
-      ["GroupThreadLanding.tsx", "group-provider-message"],
-      ["GroupThreadLanding.tsx", "group-user-message"],
-    ] as const;
+    const source = readSibling("BotChatMessageRows.tsx");
+    expect(source).toContain("pointer-coarse:opacity-100");
 
-    for (const [file, testId] of cases) {
-      const source = NodeFS.readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
-      const blocks = messageBlocks(source, testId);
-      expect(blocks.length).toBeGreaterThan(0);
-
-      for (const block of blocks) {
-        expect(block).toContain("<MessageControls");
-        expect(block).toContain("pointer-coarse:opacity-100");
-        expect(block).toContain("onReply=");
-        if (testId.endsWith("-provider-message")) {
-          expect(block).toContain("readAloud");
-        }
-        if (!block.includes("Unavailable bot")) {
-          expect(block).toContain("onReactionChange=");
-        }
+    for (const name of ["AssistantMessageRow", "UserMessageRow"]) {
+      const row = rowComponent(source, name);
+      const controls = row.split("<MessageControls").slice(1);
+      expect(controls.length).toBeGreaterThan(0);
+      expect(row).toContain("HOVER_CONTROLS_CLASS");
+      for (const block of controls) {
+        const props = block.slice(0, block.indexOf("/>"));
+        expect(props).toContain("onReply=");
+        if (name === "AssistantMessageRow") expect(props).toContain("readAloud");
       }
     }
+    // Only the "Unavailable bot" layout omits reactions.
+    const assistantControls = rowComponent(source, "AssistantMessageRow").split("<MessageControls");
+    expect(assistantControls[2]).toContain("onReactionChange=");
+    expect(rowComponent(source, "UserMessageRow")).toContain("onReactionChange=");
   });
 
   it("mounts the voice action in the live bot chat header", () => {
