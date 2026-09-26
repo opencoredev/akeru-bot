@@ -57,7 +57,7 @@ import { ControlPill } from "../../components/ControlPill";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
-import type { DraftComposerImageAttachment } from "../../lib/composerImages";
+import { useThreadDraftForThread } from "../../state/use-thread-composer-state";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { scopedThreadKey } from "../../lib/scopedEntities";
@@ -78,6 +78,7 @@ import {
   COMPOSER_COLLAPSED_CHROME,
   COMPOSER_EXPANDED_CHROME,
   ThreadComposer,
+  type ThreadComposerProps,
 } from "./ThreadComposer";
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
@@ -97,8 +98,6 @@ export interface ThreadDetailScreenProps {
   readonly activePendingUserInputDrafts: Record<string, PendingUserInputDraftAnswer>;
   readonly activePendingUserInputAnswers: Record<string, string | ReadonlyArray<string>> | null;
   readonly respondingUserInputId: ApprovalRequestId | null;
-  readonly draftMessage: string;
-  readonly draftAttachments: ReadonlyArray<DraftComposerImageAttachment>;
   readonly connectionStateLabel: EnvironmentConnectionPhase;
   /** Message sync status for the selected thread (drives the composer status pill). */
   readonly threadSyncStatus?: EnvironmentThreadStatus;
@@ -149,11 +148,13 @@ function latestStreamingAssistantMessage(
 ): { readonly id: string; readonly textLength: number } | null {
   for (let index = feed.length - 1; index >= 0; index -= 1) {
     const entry = feed[index];
-    if (entry?.type !== "message") {
+    if (entry?.type !== "message" || entry.message.role !== "assistant") {
       continue;
     }
-    if (entry.message.role !== "assistant" || !entry.message.streaming) {
-      continue;
+    // Only the newest assistant message can be streaming, so stop there
+    // instead of walking the whole history after a turn settles.
+    if (!entry.message.streaming) {
+      return null;
     }
     return {
       id: entry.message.id,
@@ -162,6 +163,20 @@ function latestStreamingAssistantMessage(
   }
 
   return null;
+}
+
+/** Submitted messages land at the tail, so search newest-first. */
+function feedHasMessageNearEnd(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+  messageId: MessageId,
+): boolean {
+  for (let index = feed.length - 1; index >= 0; index -= 1) {
+    const entry = feed[index];
+    if (entry?.type === "message" && entry.id === messageId) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedEntry>) {
@@ -218,6 +233,29 @@ const USER_INPUT_TOGGLE_TIMING = {
   duration: USER_INPUT_TOGGLE_DURATION_MS,
   easing: Easing.out(Easing.cubic),
 };
+
+/**
+ * Reads the chat's draft next to the composer so a keystroke re-renders the
+ * composer only, not the thread screen and its feed.
+ */
+const ThreadDraftComposer = memo(function ThreadDraftComposer(
+  props: Omit<ThreadComposerProps, "draftMessage" | "draftAttachments"> & {
+    readonly threadId: ThreadId;
+  },
+) {
+  const { threadId, ...composerProps } = props;
+  const { draftMessage, draftAttachments } = useThreadDraftForThread({
+    environmentId: props.environmentId,
+    threadId,
+  });
+  return (
+    <ThreadComposer
+      {...composerProps}
+      draftMessage={draftMessage}
+      draftAttachments={draftAttachments}
+    />
+  );
+});
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const insets = useSafeAreaInsets();
@@ -476,9 +514,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       submittedMessageId === null ||
       lastScrolledSubmittedMessageIdRef.current === submittedMessageId ||
       contentPresentationKind !== "ready" ||
-      !selectedThreadFeed.some(
-        (entry) => entry.type === "message" && entry.id === submittedMessageId,
-      )
+      !feedHasMessageNearEnd(selectedThreadFeed, submittedMessageId)
     ) {
       return;
     }
@@ -525,9 +561,16 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     selectedThreadKey,
   ]);
 
+  // Read through a ref so streaming feed updates do not change the send
+  // callback and re-render the memoized composer on every delta.
+  const selectedThreadFeedRef = useRef(selectedThreadFeed);
+  useLayoutEffect(() => {
+    selectedThreadFeedRef.current = selectedThreadFeed;
+  }, [selectedThreadFeed]);
+
   const handleSendMessage = useCallback(async () => {
     const targetThreadKey = selectedThreadKey;
-    const hasUserMessage = selectedThreadFeed.some(
+    const hasUserMessage = selectedThreadFeedRef.current.some(
       (entry) => entry.type === "message" && entry.message.role === "user",
     );
     const messageId = await props.onSendMessage();
@@ -552,7 +595,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     props.onSendMessage,
     props.selectedThread.latestTurn,
     props.selectedThreadQueueCount,
-    selectedThreadFeed,
     selectedThreadKey,
   ]);
 
@@ -764,10 +806,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             {/* Hidden (not unmounted) while a user-input request owns the
                 composer slot, so composer drafts and editor state survive. */}
             <View style={activeUserInputRequestId !== null ? { display: "none" } : undefined}>
-              <ThreadComposer
+              <ThreadDraftComposer
+                threadId={props.selectedThread.id}
                 editorRef={composerEditorRef}
-                draftMessage={props.draftMessage}
-                draftAttachments={props.draftAttachments}
                 placeholder="Ask the bot, or run a command…"
                 contentMaxWidth={contentMaxWidth}
                 connectionState={props.connectionStateLabel}

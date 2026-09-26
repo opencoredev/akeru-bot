@@ -1190,6 +1190,82 @@ describe("applyThreadDetailEvent", () => {
       }
     });
 
+    it("supersedes context-window updates on the in-order append path", () => {
+      const activity = (
+        id: string,
+        sequence: number,
+        kind: string,
+        turn: string,
+        usedTokens?: number,
+      ) => ({
+        id: EventId.make(id),
+        tone: "info" as const,
+        kind,
+        summary: id,
+        payload: usedTokens === undefined ? {} : { usedTokens },
+        turnId: TurnId.make(turn),
+        sequence,
+        createdAt: "2026-04-01T11:00:00.000Z",
+      });
+      const append = (
+        thread: OrchestrationThread,
+        sequence: number,
+        next: ReturnType<typeof activity>,
+      ) => {
+        const result = applyThreadDetailEvent(thread, {
+          ...baseEventFields,
+          sequence,
+          occurredAt: "2026-04-01T11:02:00.000Z",
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-1"),
+          type: "thread.activity-appended",
+          payload: { threadId: ThreadId.make("thread-1"), activity: next },
+        });
+        assert(result.kind === "updated");
+        return result.thread;
+      };
+
+      // The first append sorts the snapshot array and indexes it; the later
+      // ones take the in-order path.
+      let thread = append(
+        {
+          ...baseThread,
+          activities: [
+            activity("cw-turn-0", 1, "context-window.updated", "turn-0", 100),
+            activity("cw-1", 2, "context-window.updated", "turn-1", 1_000),
+          ],
+        },
+        30,
+        activity("tool-1", 3, "command", "turn-1"),
+      );
+      const beforeSupersede = thread;
+      thread = append(thread, 31, activity("cw-2", 4, "context-window.updated", "turn-1", 2_000));
+      thread = append(thread, 32, activity("tool-2", 5, "command", "turn-1"));
+      thread = append(thread, 33, activity("cw-3", 6, "context-window.updated", "turn-1", 3_000));
+
+      expect(thread.activities.map((entry) => entry.id)).toEqual([
+        "cw-turn-0",
+        "tool-1",
+        "tool-2",
+        "cw-3",
+      ]);
+      // The input thread is not mutated.
+      expect(beforeSupersede.activities.map((entry) => entry.id)).toEqual([
+        "cw-turn-0",
+        "cw-1",
+        "tool-1",
+      ]);
+      // A re-delivered current row still dedupes rather than duplicating.
+      thread = append(thread, 34, activity("cw-3", 7, "context-window.updated", "turn-1", 3_500));
+      expect(thread.activities.map((entry) => entry.id)).toEqual([
+        "cw-turn-0",
+        "tool-1",
+        "tool-2",
+        "cw-3",
+      ]);
+      expect(thread.activities.at(-1)?.payload).toEqual({ usedTokens: 3_500 });
+    });
+
     it("does not collapse context-window history for a malformed update", () => {
       const resolvable = {
         id: EventId.make("activity-cw-resolvable"),

@@ -1,4 +1,3 @@
-import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
@@ -31,7 +30,7 @@ import {
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
-import { buildThreadFeed } from "../lib/threadActivity";
+import { buildThreadFeed, unchangedPrefixLength } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import { appAtomRegistry } from "../state/atom-registry";
 import {
@@ -46,6 +45,7 @@ import {
   setComposerDraftText,
   updateComposerDraftSettings,
   useComposerDraft,
+  useComposerDraftSettings,
 } from "./use-composer-drafts";
 import { setPendingConnectionError } from "../state/use-remote-environment-registry";
 import { useSelectedThreadDetail } from "../state/use-thread-detail";
@@ -90,7 +90,6 @@ export function useThreadComposerState() {
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
-  const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
   const [feedbackSubmissionsByThreadKey, setFeedbackSubmissionsByThreadKey] = useState<
     Record<string, ReadonlyArray<CodexFeedbackSubmission>>
@@ -103,9 +102,15 @@ export function useThreadComposerState() {
     ensureComposerDraftsLoaded();
   }, []);
 
+  const scannedAuthorizationActivitiesRef = useRef<ReadonlyArray<unknown>>([]);
   useEffect(() => {
-    for (const activity of selectedThreadDetail?.activities ?? []) {
-      if (activity.kind !== "mcp.oauth.authorization-required") continue;
+    const activities = selectedThreadDetail?.activities ?? [];
+    // Activity updates usually append, so only the unseen tail is scanned.
+    const start = unchangedPrefixLength(scannedAuthorizationActivitiesRef.current, activities);
+    scannedAuthorizationActivitiesRef.current = activities;
+    for (let index = start; index < activities.length; index += 1) {
+      const activity = activities[index];
+      if (activity?.kind !== "mcp.oauth.authorization-required") continue;
       if (openedAuthorizationActivitiesRef.current.has(activity.id)) continue;
       if (!activity.payload || typeof activity.payload !== "object") continue;
       const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
@@ -117,6 +122,8 @@ export function useThreadComposerState() {
       }
       openedAuthorizationActivitiesRef.current.add(activity.id);
       void tryOpenExternalUrl(authorizationUrl, "mcp-oauth");
+      // Leave later rows unscanned so the next update can open them.
+      scannedAuthorizationActivitiesRef.current = activities.slice(0, index + 1);
       break;
     }
   }, [selectedThreadDetail?.activities]);
@@ -144,14 +151,14 @@ export function useThreadComposerState() {
     });
   }, [feedbackSubmissionsByThreadKey, selectedThreadDetail, selectedThreadKey]);
 
-  const selectedDraft = selectedThreadKey ? composerDrafts[selectedThreadKey] : null;
-  const draftMessage = selectedDraft?.text ?? "";
-  const draftAttachments = selectedDraft?.attachments ?? [];
+  // Draft text and attachments are read by the composer itself, so typing
+  // re-renders the composer rather than the whole thread route.
+  const selectedDraft = useComposerDraftSettings(selectedThreadKey);
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadDetail ?? selectedThreadShell;
-  const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
-  const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
-  const interactionMode = selectedDraft?.interactionMode ?? selectedThread?.interactionMode ?? null;
+  const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
+  const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
+  const interactionMode = selectedDraft.interactionMode ?? selectedThread?.interactionMode ?? null;
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
@@ -314,7 +321,7 @@ export function useThreadComposerState() {
 
     const threadKey = scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id);
     const result = await pickComposerImages({
-      existingCount: composerDrafts[threadKey]?.attachments.length ?? 0,
+      existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
     });
     if (result.images.length > 0) {
       appendComposerDraftAttachments(threadKey, result.images);
@@ -322,7 +329,7 @@ export function useThreadComposerState() {
     if (result.error) {
       setPendingConnectionError(result.error);
     }
-  }, [composerDrafts, selectedThreadShell]);
+  }, [selectedThreadShell]);
 
   const onPasteIntoDraft = useCallback(async () => {
     if (!selectedThreadShell) {
@@ -331,7 +338,7 @@ export function useThreadComposerState() {
 
     const threadKey = scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id);
     const result = await pasteComposerClipboard({
-      existingCount: composerDrafts[threadKey]?.attachments.length ?? 0,
+      existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
     });
     if (result.images.length > 0) {
       appendComposerDraftAttachments(threadKey, result.images);
@@ -342,7 +349,7 @@ export function useThreadComposerState() {
     if (result.error) {
       setPendingConnectionError(result.error);
     }
-  }, [composerDrafts, selectedThreadShell]);
+  }, [selectedThreadShell]);
 
   const onNativePasteImages = useCallback(
     async (uris: ReadonlyArray<string>) => {
@@ -354,7 +361,7 @@ export function useThreadComposerState() {
       try {
         const images = await convertPastedImagesToAttachments({
           uris,
-          existingCount: composerDrafts[threadKey]?.attachments.length ?? 0,
+          existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
         });
         if (images.length > 0) {
           appendComposerDraftAttachments(threadKey, images);
@@ -368,7 +375,7 @@ export function useThreadComposerState() {
         });
       }
     },
-    [composerDrafts, selectedThreadShell],
+    [selectedThreadShell],
   );
 
   const onRemoveDraftImage = useCallback(
@@ -417,8 +424,6 @@ export function useThreadComposerState() {
     selectedThreadFeed,
     selectedThreadQueueCount,
     activeWorkStartedAt,
-    draftMessage,
-    draftAttachments,
     modelSelection,
     runtimeMode,
     interactionMode,

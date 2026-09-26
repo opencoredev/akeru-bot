@@ -73,6 +73,7 @@ import {
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  threadListV2TimeLabel,
   ThreadListV2SettledShelfHeader,
   ThreadListV2SnoozedShelfHeader,
 } from "./thread-list-v2-items";
@@ -850,7 +851,12 @@ function ThreadNavigationSidebarPane(
               variant={item.item.variant}
               snoozed={item.item.snoozed}
               pinned={item.item.pinned}
-              snoozePresetMinute={nowMinute}
+              timeLabel={threadListV2TimeLabel(thread)}
+              snoozePresetMinute={
+                !item.item.snoozed && snoozeEnvironmentIds.has(thread.environmentId)
+                  ? nowMinute
+                  : null
+              }
               snoozeWakeLabelText={item.snoozeWakeLabelText}
               project={projectByKey.get(scopeKey) ?? null}
               projectTitle={projectTitleByProjectKey.get(scopeKey)}

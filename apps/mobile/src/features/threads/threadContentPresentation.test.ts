@@ -70,3 +70,16 @@ describe("thread content presentation", () => {
     });
   });
 });
+
+describe("projectThreadContentPresentation identity", () => {
+  it("returns the same object for equal inputs so memoized consumers skip renders", () => {
+    const ready = { hasDetail: true, detailError: null, detailDeleted: false } as const;
+    expect(projectThreadContentPresentation({ ...ready, connectionState: "connected" })).toBe(
+      projectThreadContentPresentation({ ...ready, connectionState: "connected" }),
+    );
+    const failed = { hasDetail: false, detailError: "boom", detailDeleted: false } as const;
+    expect(projectThreadContentPresentation({ ...failed, connectionState: "connected" })).toBe(
+      projectThreadContentPresentation({ ...failed, connectionState: "connected" }),
+    );
+  });
+});

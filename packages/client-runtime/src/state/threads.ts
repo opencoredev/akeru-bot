@@ -313,62 +313,93 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     );
   });
 
-  // Body of applyItem, running under applyLock.
-  const applyItemLocked = Effect.fn("EnvironmentThreadState.applyItemLocked")(function* (
-    item: OrchestrationThreadStreamItem,
+  // Body of applyItems, running under applyLock. Event items reduce into a
+  // local thread that is published once per batch: a burst of streaming
+  // deltas delivered together costs one state change (and one UI render)
+  // instead of one per delta. The sequence cursor is committed together with
+  // the thread so a resubscribe never resumes past unpublished events.
+  const applyItemsLocked = Effect.fn("EnvironmentThreadState.applyItemsLocked")(function* (
+    items: ReadonlyArray<OrchestrationThreadStreamItem>,
   ) {
-    if (item.kind === "synchronized") {
-      yield* Ref.set(awaitingCompletion, false);
-      yield* SubscriptionRef.update(state, (current) =>
-        Option.isSome(current.data) && current.status !== "deleted"
-          ? { ...current, status: "live" as const, error: Option.none() }
-          : current,
-      );
-      return;
-    }
+    let unpublishedThread: OrchestrationThread | null = null;
+    let unpublishedSequence: number | null = null;
+    const publish = Effect.gen(function* () {
+      if (unpublishedSequence !== null) {
+        yield* SubscriptionRef.set(lastSequence, unpublishedSequence);
+        unpublishedSequence = null;
+      }
+      if (unpublishedThread !== null) {
+        const thread = unpublishedThread;
+        unpublishedThread = null;
+        yield* setThread(thread, "keep");
+      }
+    });
 
-    if (item.kind === "snapshot") {
-      // A fresh snapshot replaces all loaded history, including older
-      // pages: a turn reverted while disconnected would otherwise survive
-      // in the preserved history with no event left to remove it. The
-      // epoch bump discards any older-page fetch racing this snapshot.
-      yield* Ref.update(historyEpoch, (epoch) => epoch + 1);
-      yield* SubscriptionRef.set(lastSequence, item.snapshot.snapshotSequence);
-      yield* setThread(item.snapshot.thread, pageStateFromSnapshot(item.snapshot.page));
-      return;
-    }
+    for (const item of items) {
+      if (item.kind === "synchronized") {
+        yield* publish;
+        yield* Ref.set(awaitingCompletion, false);
+        yield* SubscriptionRef.update(state, (current) =>
+          Option.isSome(current.data) && current.status !== "deleted"
+            ? { ...current, status: "live" as const, error: Option.none() }
+            : current,
+        );
+        continue;
+      }
 
-    const sequence = yield* SubscriptionRef.get(lastSequence);
-    if (item.event.sequence <= sequence) {
-      return;
-    }
-    yield* SubscriptionRef.set(lastSequence, item.event.sequence);
+      if (item.kind === "snapshot") {
+        // A fresh snapshot replaces all loaded history, including older
+        // pages: a turn reverted while disconnected would otherwise survive
+        // in the preserved history with no event left to remove it. The
+        // epoch bump discards any older-page fetch racing this snapshot.
+        unpublishedThread = null;
+        unpublishedSequence = null;
+        yield* Ref.update(historyEpoch, (epoch) => epoch + 1);
+        yield* SubscriptionRef.set(lastSequence, item.snapshot.snapshotSequence);
+        yield* setThread(item.snapshot.thread, pageStateFromSnapshot(item.snapshot.page));
+        continue;
+      }
 
-    const current = yield* SubscriptionRef.get(state);
-    if (Option.isNone(current.data)) {
-      if (item.event.type === "thread.deleted") {
+      const sequence = unpublishedSequence ?? (yield* SubscriptionRef.get(lastSequence));
+      if (item.event.sequence <= sequence) {
+        continue;
+      }
+      unpublishedSequence = item.event.sequence;
+
+      const base = unpublishedThread ?? Option.getOrNull((yield* SubscriptionRef.get(state)).data);
+      if (base === null) {
+        if (item.event.type === "thread.deleted") {
+          yield* publish;
+          yield* setDeleted();
+        }
+        continue;
+      }
+      if (item.event.type === "thread.reverted") {
+        // A revert rewrites loaded history (whole turns disappear), so an
+        // older-page fetch in flight may straddle the removed range; the epoch
+        // bump discards it. The stored page cursor stays valid: cursors are an
+        // (anchor, turnId) keyset derived from event content, which survives
+        // the revert projector's row rewrite, so no refresh is needed — the
+        // revert reducer's turn filtering fully handles loaded history.
+        yield* Ref.update(historyEpoch, (epoch) => epoch + 1);
+      }
+      const result = applyThreadDetailEvent(base, item.event);
+      if (result.kind === "updated") {
+        unpublishedThread = result.thread;
+      } else if (result.kind === "deleted") {
+        unpublishedThread = null;
+        yield* publish;
         yield* setDeleted();
       }
-      return;
+      // The event may have advanced the live state past a parked page's
+      // watermark; merge it as soon as that happens, before a later event
+      // in the batch could touch the rows the page carries.
+      if ((yield* Ref.get(pendingOlderPage)) !== null) {
+        yield* publish;
+        yield* tryMergePendingOlderPage();
+      }
     }
-    if (item.event.type === "thread.reverted") {
-      // A revert rewrites loaded history (whole turns disappear), so an
-      // older-page fetch in flight may straddle the removed range; the epoch
-      // bump discards it. The stored page cursor stays valid: cursors are an
-      // (anchor, turnId) keyset derived from event content, which survives
-      // the revert projector's row rewrite, so no refresh is needed — the
-      // revert reducer's turn filtering fully handles loaded history.
-      yield* Ref.update(historyEpoch, (epoch) => epoch + 1);
-    }
-    const result = applyThreadDetailEvent(current.data.value, item.event);
-    if (result.kind === "updated") {
-      yield* setThread(result.thread, "keep");
-    } else if (result.kind === "deleted") {
-      yield* setDeleted();
-    }
-    // The event may have advanced the live state past a parked page's
-    // watermark; merge it as soon as that happens.
-    yield* tryMergePendingOlderPage();
+    yield* publish;
   });
 
   // Merges a parked older page once the live state has caught up to the
@@ -399,11 +430,9 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     },
   );
 
-  const applyItem = Effect.fn("EnvironmentThreadState.applyItem")(function* (
-    item: OrchestrationThreadStreamItem,
-  ) {
-    yield* applyLock.withPermits(1)(applyItemLocked(item));
-  });
+  const applyItems = (items: ReadonlyArray<OrchestrationThreadStreamItem>) =>
+    applyLock.withPermits(1)(applyItemsLocked(items));
+  const applyItem = (item: OrchestrationThreadStreamItem) => applyItems([item]);
 
   // Merges an older disjoint page below the currently loaded window. All four
   // windowed collections prepend; identity dedupe guards the (server-bug or
@@ -641,7 +670,12 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         retryExpectedFailureAfter: "250 millis",
         resubscribe: foregroundResubscriptions,
       },
-    ).pipe(Stream.runForEach(applyItem)),
+    ).pipe(
+      // Items the transport delivered together (one socket read, or a backlog
+      // queued while the previous batch applied) arrive as one array and
+      // publish once.
+      Stream.runForEachArray(applyItems),
+    ),
   );
 
   // Expose loadOlderTurns to UI actions through the request registry.

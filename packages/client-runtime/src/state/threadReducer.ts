@@ -650,12 +650,27 @@ export function applyThreadDetailEvent(
       const ids = activityIdIndex.get(thread.activities);
       const lastActivity = thread.activities.at(-1);
       if (
-        !supersedesContextWindow &&
         ids !== undefined &&
         (lastActivity === undefined || activityOrder(lastActivity, activity) <= 0) &&
         !ids.has(activity.id)
       ) {
-        const activities = Arr.append(thread.activities, activity);
+        let activities: ReadonlyArray<OrchestrationThreadActivity>;
+        if (supersedesContextWindow) {
+          // Dropping rows from a sorted array keeps it sorted, so a superseding
+          // update copies once and appends instead of re-sorting the history.
+          const retained: Array<OrchestrationThreadActivity> = [];
+          for (const entry of thread.activities) {
+            if (entry.turnId === activity.turnId && isResolvableContextWindowActivity(entry)) {
+              ids.delete(entry.id);
+            } else {
+              retained.push(entry);
+            }
+          }
+          retained.push(activity);
+          activities = retained;
+        } else {
+          activities = Arr.append(thread.activities, activity);
+        }
         activityIdIndex.delete(thread.activities);
         ids.add(activity.id);
         activityIdIndex.set(activities, ids);
