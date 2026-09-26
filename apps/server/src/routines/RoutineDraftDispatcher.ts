@@ -147,6 +147,7 @@ const make = Effect.gen(function* () {
         projectId: thread.projectId,
         sandbox: "local",
         approvalPolicy: thread.runtimeMode,
+        delegateToBotId: null,
         createdAt: now,
       });
       return { routineId, sequence: result.sequence, status: "approved" as const };

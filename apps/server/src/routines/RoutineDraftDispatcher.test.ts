@@ -73,6 +73,7 @@ function routine(id: string, overrides: Partial<Routine> = {}): Routine {
     projectId: ProjectId.make("project-1"),
     sandbox: "local",
     approvalPolicy: "approval-required",
+    delegateToBotId: null,
     procedureVersion: PositiveInt.make(1),
     approvalVersion: PositiveInt.make(1),
     enabled: false,

@@ -11,6 +11,34 @@ Navigation selectors, roster message derivation, the web sidebar, and mobile
 thread lists therefore omit them. Work cards retain the child thread id and
 remain the supported path to open that detail.
 
+## Record fields for placement, retry, and triggers
+
+Three fields on `AkeruDelegationRecord` support work cards in the chat and
+scheduled delegation. Each has a decoding default, so records written before
+the fields existed decode unchanged. Records are stored as JSON, so no
+migration was needed.
+
+- `anchorMessageId` is the user message that started the parent turn. `send()`
+  reads it from the parent thread's `latestTurn.requestMessageId` when that
+  turn matches the delegation's `parentTurnId`, and leaves it `null`
+  otherwise. Old records default to `null`.
+- `retryOfDelegationId` points at the delegation a retry replaces. A retry is
+  always a new record; the original is never mutated. Defaults to `null`.
+- `trigger` is `"bot"` for work a bot started with `SendToAgent` and
+  `"scheduled"` for work a routine started. Defaults to `"bot"`.
+
+`botChatTimeline` in `@t3tools/client-runtime/state/bot-chat-timeline` merges a
+chat's messages, receipts, and delegations into one ordered list for web and
+mobile. A card goes after its turn: after the anchor message and any later
+message in the same `parentTurnId`. Without a known anchor it goes after the
+turn's last message, and without either it goes at the end of the chat. Cards
+at the same spot keep creation order.
+
+Routines carry `delegateToBotId`, the bot a scheduled run hands its work to.
+It defaults to `null`, meaning the routine's own bot does the work, and is
+stored in the `delegate_to_bot_id` column of `projection_routines` (migration
+70).
+
 ## Lifecycle
 
 `SendToAgent` returns a handle as soon as the child thread and its first turn

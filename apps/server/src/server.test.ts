@@ -5708,6 +5708,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         phase: { _tag: "Queued" },
         billedBotId: BotId.make("bot-child"),
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       });

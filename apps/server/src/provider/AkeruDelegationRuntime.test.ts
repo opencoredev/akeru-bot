@@ -7,6 +7,7 @@ import {
   DelegationId,
   GroupId,
   McpServerId,
+  MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -131,6 +132,9 @@ function delegation(
     phase: { _tag: "Queued" },
     billedBotId: CHILD_BOT_ID,
     keep: false,
+    anchorMessageId: null,
+    retryOfDelegationId: null,
+    trigger: "bot" as const,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -485,6 +489,43 @@ describe("AkeruDelegationRuntime", () => {
       childTurnId: CHILD_TURN_ID,
       result: { summary: "The delegated answer.", childTurnId: CHILD_TURN_ID },
     });
+  });
+
+  it("anchors the record on the parent turn's user message", async () => {
+    const latestTurn = (turnId: TurnId) => ({
+      turnId,
+      state: "running" as const,
+      requestedAt: NOW,
+      startedAt: NOW,
+      completedAt: null,
+      assistantMessageId: null,
+      requestMessageId: MessageId.make("message-user"),
+    });
+    const anchored = harness(
+      snapshot({
+        threads: [
+          thread(PARENT_THREAD_ID, PARENT_BOT_ID, { latestTurn: latestTurn(PARENT_TURN_ID) }),
+        ],
+      }),
+    );
+    await anchored.runtime.send(parent(), request() as never);
+    expect(anchored.state.delegations.at(-1)).toMatchObject({
+      anchorMessageId: "message-user",
+      retryOfDelegationId: null,
+      trigger: "bot",
+    });
+
+    const otherTurn = harness(
+      snapshot({
+        threads: [
+          thread(PARENT_THREAD_ID, PARENT_BOT_ID, {
+            latestTurn: latestTurn(TurnId.make("turn-other")),
+          }),
+        ],
+      }),
+    );
+    await otherTurn.runtime.send(parent(), request() as never);
+    expect(otherTurn.state.delegations.at(-1)?.anchorMessageId).toBeNull();
   });
 
   it("keeps lowercase activity kinds and states for delivered phases", async () => {

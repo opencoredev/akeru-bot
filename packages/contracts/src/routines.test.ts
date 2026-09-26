@@ -102,6 +102,24 @@ describe("routine contracts", () => {
     expect(() => decode({ ...command, trigger: "scheduled" })).toThrow();
   });
 
+  it("defaults delegateToBotId to null and decodes a delegation target", () => {
+    expect(Schema.decodeUnknownSync(Routine)(routine).delegateToBotId).toBeNull();
+    expect(
+      Schema.decodeUnknownSync(Routine)({ ...routine, delegateToBotId: "bot-research" })
+        .delegateToBotId,
+    ).toBe("bot-research");
+    expect(
+      Schema.decodeUnknownSync(ClientRoutineCommand)({
+        type: "routine.draft",
+        commandId: "command-draft-1",
+        routineId: routine.id,
+        ...definition,
+        delegateToBotId: "bot-research",
+        createdAt: now,
+      }),
+    ).toMatchObject({ type: "routine.draft", delegateToBotId: "bot-research" });
+  });
+
   it("keeps atomic approved creation internal", () => {
     const command = {
       type: "routine.create-approved",

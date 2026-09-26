@@ -175,6 +175,7 @@ const stubRoutine = {
   projectId: stubProject.id,
   sandbox: "local" as const,
   approvalPolicy: "approval-required" as const,
+  delegateToBotId: null,
   procedureVersion: 1,
   approvalVersion: 1,
   enabled: true,

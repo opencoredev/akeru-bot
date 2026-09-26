@@ -27,6 +27,7 @@ const routine = {
   connectorDependencies: ["mcp-1"],
   sandbox: "local",
   approvalPolicy: "auto",
+  delegateToBotId: null,
   enabled: true,
   lifecycle: "enabled",
   nextRunAt: "2026-09-20T13:00:00.000Z",

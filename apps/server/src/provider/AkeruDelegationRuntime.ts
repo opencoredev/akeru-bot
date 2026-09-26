@@ -43,6 +43,17 @@ const phaseChildTurnId = (delegation: AkeruDelegationRecord): TurnId | null =>
 const phaseStartedAt = (delegation: AkeruDelegationRecord): string | null =>
   delegation.phase._tag === "Queued" ? null : delegation.phase.startedAt;
 
+/**
+ * The user message that started the parent turn, so clients can place the work
+ * card under it. Null when the turn has no recorded request message; clients
+ * then fall back to parentTurnId.
+ */
+const parentTurnRequestMessageId = (
+  thread: OrchestrationReadModel["threads"][number],
+  turnId: TurnId,
+): MessageId | null =>
+  thread.latestTurn?.turnId === turnId ? (thread.latestTurn.requestMessageId ?? null) : null;
+
 export interface AkeruDelegationParent {
   readonly threadId: ThreadId;
   readonly turnId: TurnId;
@@ -479,6 +490,9 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       access: grant,
       billedBotId: bot.id,
       keep: false,
+      anchorMessageId: parentTurnRequestMessageId(parentThread, parent.turnId),
+      retryOfDelegationId: null,
+      trigger: "bot",
       createdAt,
       updatedAt: createdAt,
       phase: { _tag: "Queued" },
