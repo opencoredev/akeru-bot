@@ -1663,6 +1663,7 @@ const make = Effect.gen(function* () {
   // them. A release that cannot be confirmed fails the turn start instead.
   const readDelegationResults = (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+    options: { readonly channel: boolean },
   ) => {
     const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
     if (delegationIds.length === 0) return Effect.succeed("");
@@ -1674,6 +1675,7 @@ const make = Effect.gen(function* () {
             delegationIds.includes(delegation.delegationId),
           ),
           readModel.bots,
+          options,
         ),
       ),
       Effect.catchCause((cause) =>
@@ -1855,7 +1857,10 @@ const make = Effect.gen(function* () {
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
-    const delegationResults = yield* readDelegationResults(event).pipe(
+    // A channel turn's reply goes to an external sender who sees no work cards.
+    const delegationResults = yield* readDelegationResults(event, {
+      channel: message.channelOrigin != null,
+    }).pipe(
       Effect.map(Option.some),
       Effect.catchCause((cause) =>
         (respondingBotId === null

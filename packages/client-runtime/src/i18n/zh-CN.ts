@@ -1224,6 +1224,10 @@ export const zhCNCatalog: TranslationCatalog = {
   "Enable {name} for this bot": "为此机器人启用 {name}",
   "Close bot tools": "关闭机器人工具",
   "Choose which workspace tools this bot can use.": "选择此机器人可以使用哪些工作区工具。",
+  "This bot's provider cannot hand off work.": "此机器人的提供方无法移交工作。",
+  "It cannot send work to other bots or receive work from them.":
+    "它无法把工作交给其他机器人，也无法接收其他机器人交来的工作。",
+  "Cannot take handed-off work": "无法接收移交的工作",
   "Search tools": "搜索工具",
   "Search bot tools": "搜索机器人工具",
   "Enable all": "全部启用",

@@ -48,7 +48,7 @@ import {
 } from "./BotChatMessageRows";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
-import { botEngineFailureContext } from "./botEngineSelection";
+import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngineSelection";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
@@ -398,7 +398,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             runtime.defaultProject === null ||
             (!waitingForUserInput && !runtime.providerAvailable)
           }
-          mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name, title: bot.title }))}
+          mentionBots={members.map((bot) => ({
+            id: bot.id,
+            name: bot.name,
+            title: bot.title,
+            canTakeWork: botEngineTakesDelegatedWork(bot.engine, respondingEngine.instanceEntries),
+          }))}
           replyPreview={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
           sendBlockedDescriptionId={

@@ -13,6 +13,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -875,6 +876,64 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         [ThreadId.make("thread-archived")],
       );
       assert.equal(archivedShellSnapshot.threads[0]?.archivedAt, "2026-04-06T00:00:06.000Z");
+    }),
+  );
+
+  it.effect("reads the channel origin of a turn start message", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id,
+          thread_id,
+          turn_id,
+          role,
+          text,
+          channel_origin_json,
+          is_streaming,
+          created_at,
+          updated_at
+        )
+        VALUES
+          (
+            'message-channel',
+            'thread-channel',
+            NULL,
+            'user',
+            'From Telegram',
+            '{"provider":"telegram","externalThreadId":"chat-1"}',
+            0,
+            '2026-04-06T00:00:01.000Z',
+            '2026-04-06T00:00:01.000Z'
+          ),
+          (
+            'message-local',
+            'thread-channel',
+            NULL,
+            'user',
+            'From the app',
+            NULL,
+            0,
+            '2026-04-06T00:00:02.000Z',
+            '2026-04-06T00:00:02.000Z'
+          )
+      `;
+
+      const read = (messageId: string) =>
+        snapshotQuery
+          .getTurnStartMessage({
+            threadId: ThreadId.make("thread-channel"),
+            messageId: MessageId.make(messageId),
+          })
+          .pipe(Effect.map(Option.getOrThrow));
+      assert.deepEqual((yield* read("message-channel")).message.channelOrigin, {
+        provider: "telegram",
+        externalThreadId: "chat-1",
+      });
+      assert.equal((yield* read("message-local")).message.channelOrigin, undefined);
     }),
   );
 

@@ -50,6 +50,19 @@ describe("BotPromptMentionMenu", () => {
   });
 });
 
+describe("BotPromptMentionMenu handed-off work", () => {
+  it("marks only the bot whose provider cannot take handed-off work", () => {
+    const markup = renderMenu(null, [
+      { id: "bot-1", name: "Mika", title: "Designer", canTakeWork: false },
+      { id: "bot-2", name: "Mika", title: "Reviewer" },
+    ]);
+
+    expect(markup).toContain("Designer, Cannot take handed-off work");
+    expect(markup).toContain("Reviewer");
+    expect(markup.match(/Cannot take handed-off work/g)).toHaveLength(1);
+  });
+});
+
 describe("BotPromptMentionMenu namesakes", () => {
   it("shows both bots named Mika with the role that tells them apart", () => {
     const markup = renderMenu(null, [

@@ -256,6 +256,34 @@ function requireActiveResponder(input: {
     : Effect.asVoid(requireActiveGroupMember({ ...input, groupId: input.groupId, botId }));
 }
 
+// The bot an assistant message is attributed to. A server-authored message may
+// name a bot explicitly: an active member of a group chat, or the chat's own bot
+// in a direct chat. Otherwise the thread's current responder answers.
+const resolveAssistantMessageBot = Effect.fn("resolveAssistantMessageBot")(function* (input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: Extract<
+    OrchestrationCommand,
+    { type: "thread.message.assistant.delta" | "thread.message.assistant.complete" }
+  >;
+  readonly thread: OrchestrationReadModel["threads"][number];
+}) {
+  const botId = input.command.respondingBotId;
+  if (botId === undefined) return input.thread.respondingBotId ?? null;
+  if (input.thread.groupId === null && input.thread.botId !== botId) {
+    return yield* new OrchestrationCommandInvariantError({
+      commandType: input.command.type,
+      detail: `Bot '${botId}' cannot post in thread '${input.thread.id}'.`,
+    });
+  }
+  yield* requireActiveResponder({
+    readModel: input.readModel,
+    command: input.command,
+    groupId: input.thread.groupId,
+    botId,
+  });
+  return botId;
+});
+
 function botGroupUpdatedEvent(input: {
   readonly botId: BotId;
   readonly groupId: GroupId | null;
@@ -3196,6 +3224,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3211,7 +3240,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           text: command.delta,
           ...(command.attachments !== undefined ? { attachments: command.attachments } : {}),
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: true,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -3225,6 +3254,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3239,7 +3269,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "assistant",
           text: "",
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: false,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,

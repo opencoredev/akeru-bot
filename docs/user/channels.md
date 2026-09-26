@@ -85,7 +85,7 @@ For Slack and Discord, a direct mention starts a linked Akeru thread. Later repl
 
 The connected bot remains the external conversation owner. It can send work to another Akeru bot or group. Delegated work follows the existing access, memory, usage, depth, concurrency, and approval limits.
 
-Delegated bots do not send separate external replies. The connected bot replies first. When delegated work finishes, the connected bot uses the result in its reply to the next message. See [Work sent to other bots](chats.md#work-sent-to-other-bots).
+Delegated bots do not send separate external replies. The connected bot replies first. Akeru does not send a separate message when delegated work finishes. The connected bot uses the result in its reply to the next message you send. A bot whose provider cannot hand off work, such as OpenCode, answers everything itself. See [Work sent to other bots](chats.md#work-sent-to-other-bots).
 
 ## Telegram
 

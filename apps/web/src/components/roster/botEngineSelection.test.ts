@@ -7,6 +7,7 @@ import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import {
   botEngineFailureContext,
+  botEngineTakesDelegatedWork,
   botEngineUnavailability,
   resolveStickyBotEngine,
 } from "./botEngineSelection";
@@ -260,5 +261,40 @@ describe("botEngineFailureContext", () => {
       providerName: null,
       modelName: null,
     });
+  });
+});
+
+describe("botEngineTakesDelegatedWork", () => {
+  const instanceEntries = deriveProviderInstanceEntries([
+    makeComposerTestProvider(),
+    {
+      ...makeComposerTestProvider(),
+      instanceId: ProviderInstanceId.make("opencode"),
+      driver: ProviderDriverKind.make("opencode"),
+    },
+    {
+      ...makeComposerTestProvider(),
+      instanceId: ProviderInstanceId.make("opencode_go"),
+      driver: ProviderDriverKind.make("opencodeGo"),
+    },
+  ]);
+
+  it("marks only a saved engine on standard OpenCode", () => {
+    expect(
+      botEngineTakesDelegatedWork({ provider: "opencode", model: "model" }, instanceEntries),
+    ).toBe(false);
+    expect(
+      botEngineTakesDelegatedWork({ provider: "opencode_go", model: "model" }, instanceEntries),
+    ).toBe(true);
+    expect(
+      botEngineTakesDelegatedWork({ provider: "codex", model: "model" }, instanceEntries),
+    ).toBe(true);
+  });
+
+  it("does not mark a bot without an engine or on an unknown instance", () => {
+    expect(botEngineTakesDelegatedWork(null, instanceEntries)).toBe(true);
+    expect(
+      botEngineTakesDelegatedWork({ provider: "missing", model: "model" }, instanceEntries),
+    ).toBe(true);
   });
 });

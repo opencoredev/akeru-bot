@@ -50,9 +50,8 @@ and usually replies before the child finishes.
 turn ends it records the outcome as a `delegation.updated` event with a
 `Completed` or `Failed` phase and `acknowledgedAt: null`, then appends an
 activity to the parent chat. Mastra child turns report through the controller's
-turn result. Legacy child turns (Claude, Grok, OpenCode) report through the
-delegation waiter that `settleLegacyTurnMemory` resolves when the child's
-`turn.completed` arrives. `drain()` resolves once every background watch has
+turn result. Every provider that can receive delegated work runs on the
+controller, so no child turn reports through the legacy bridge. `drain()` resolves once every background watch has
 recorded its outcome, so tests wait on it instead of sleeping.
 
 A child started by a parent turn that later completes keeps running. When a
@@ -136,17 +135,80 @@ Canceled delegations have no result to deliver.
 
 ## Provider injection
 
-| Provider        | Path          | Where `delegationResults` goes                          |
-| --------------- | ------------- | ------------------------------------------------------- |
-| Codex           | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Claude          | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Grok            | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Kimi For Coding | Mastra        | Per-turn `persistentMemoryContext`                      |
-| OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext`                      |
-| OpenCode        | Legacy bridge | Per-turn context, which OpenCode reads as system prompt |
+| Provider        | Path          | Where `delegationResults` goes     |
+| --------------- | ------------- | ---------------------------------- |
+| Codex           | Mastra        | Per-turn `persistentMemoryContext` |
+| Kimi For Coding | Mastra        | Per-turn `persistentMemoryContext` |
+| Claude          | Mastra        | Per-turn `persistentMemoryContext` |
+| Grok            | Mastra        | Per-turn `persistentMemoryContext` |
+| OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext` |
+| OpenCode        | Legacy bridge | Cannot delegate                    |
 
-On the legacy bridge the results ride the turn's `persistentMemoryContext`,
-which OpenCode reads as its system prompt.
+`driverSupportsDelegation` in `@t3tools/shared/delegationProviders` names the
+drivers in the Mastra rows. `AgentController` uses the same predicate to route
+a turn to the controller, so a driver that gets the Akeru tool catalog is
+exactly a driver that can delegate. `delegationProviderMatrix.test.ts` runs
+send, access grant, result, usage, cancel, and the depth cap against each of
+the five.
+
+## Legacy bridge providers
+
+Standard OpenCode runs on the legacy bridge, which registers no tool session.
+Its bots never see `SendToAgent` or the other delegation tools. A bot on
+another provider that sends work to an OpenCode bot is refused before any child
+thread exists: `send` resolves the target's driver through the
+`providerDriverKind` option and throws
+`AkeruDelegationProviderUnsupportedError`, which the tool runtime reports with
+failure code `denied`. The message names the target bot and tells the sender
+to do the work itself or pick a bot on another provider. When
+`providerDriverKind` returns `null` because the target's provider instance no
+longer exists, `send` refuses with "The target bot is not available in this
+workspace." and also creates nothing.
+
+Clients show the same limit before anyone asks. On web, the bot Tools sheet
+shows a note for a bot whose provider cannot hand off work, and the group
+`@` picker marks such a bot with "Cannot take handed-off work"
+(`botEngineTakesDelegatedWork` in `botEngineSelection.ts`). On mobile, the
+group `@` picker adds the same marker (`groupMentionBots` in
+`composerMentionItems.ts`), and chat settings show the Tools note under
+Options. Both use `driverSupportsDelegation`. A bot without an engine, or
+whose provider instance the client cannot find, is not marked. MCP bot tools
+for the legacy bridge are tracked separately.
+
+## Groups
+
+A bot in a group chat can send work only to bots that are members of that
+group. `send` checks membership before it creates anything and fails with
+"The target bot is not available in the current group." A direct chat can
+send work to any available bot.
+
+The child always runs in a direct thread with the target's `botId` and
+`groupId: null`, even when the parent is a group chat. When the child
+completes, the runtime records the result as usual and then posts a
+server-authored assistant message to the group:
+`Finished work for {parent bot}: {task}` followed by the summary. The message
+has ID `delegation-result-{id}` and `respondingBotId` set to the child bot, so
+the group shows it from the bot that did the work. It starts no turn. The
+runtime reads the parent bot's name when the child completes, so a rename
+during the work shows the current name.
+
+The delegation stays completed even when the group cannot take the result.
+If the child bot left the group, was archived, or the group is gone, the
+runtime skips the post and calls `onGroupResultSkipped` with
+`bot_left_group` or `group_unavailable`. `AgentController` logs that at info
+level. The runtime checks before it posts and again when the decider refuses
+the message, so a member removed mid-post is reported the same way. Any other
+delivery error goes to `onWatchError`.
+
+## Channel turns
+
+When the parent turn started from an external channel message, the turn start
+message carries a `channelOrigin`. `ProviderCommandReactor` then formats
+pending results with `delegationResultsContext(..., { channel: true })`, which
+uses `delegationSummaryText` from `@t3tools/shared` to write plain-text lines
+without Markdown. Akeru never starts a follow-up turn when delegated work
+finishes, so the external sender sees the result in the reply to their next
+message.
 
 ## Request limits
 

@@ -1,5 +1,5 @@
 import type { McpServer, McpServerId } from "@t3tools/contracts";
-import { PuzzleIcon, SearchIcon, ServerIcon, XIcon } from "lucide-react";
+import { InfoIcon, PuzzleIcon, SearchIcon, ServerIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -142,12 +142,15 @@ export function BotToolsSheet({
   servers,
   disabledIds,
   onDisabledIdsChange,
+  canDelegate = true,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly servers: readonly McpServer[];
   readonly disabledIds: readonly McpServerId[];
   readonly onDisabledIdsChange: (ids: readonly McpServerId[]) => void;
+  /** False when the bot's provider can neither hand off work nor receive it. */
+  readonly canDelegate?: boolean;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -237,6 +240,18 @@ export function BotToolsSheet({
           <p className="mt-1 text-sm text-muted-foreground">
             {t("Choose which workspace tools this bot can use.")}
           </p>
+          {canDelegate ? null : (
+            <p
+              role="note"
+              className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            >
+              <InfoIcon className="mt-px size-3.5 shrink-0" />
+              <span>
+                {t("This bot's provider cannot hand off work.")}{" "}
+                {t("It cannot send work to other bots or receive work from them.")}
+              </span>
+            </p>
+          )}
           <div className="mt-4 flex items-center gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-2.5 focus-within:ring-2 focus-within:ring-ring">
               <SearchIcon className="size-4 shrink-0 text-muted-foreground" />

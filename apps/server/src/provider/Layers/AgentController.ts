@@ -51,6 +51,7 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   decodeAkeruToolInput,
 } from "@t3tools/contracts";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Clock from "effect/Clock";
@@ -581,15 +582,11 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
  * Providers whose bots run through Akeru's Mastra controller and receive the
  * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
  * registers a tool session, so it gets no catalog tools, workers included.
+ * These are exactly the drivers that can delegate, so the delegation gate and
+ * this routing never disagree.
  */
 export function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return (
-    provider === "codex" ||
-    provider === "claudeAgent" ||
-    provider === "grok" ||
-    provider === "kimi" ||
-    provider === "opencodeGo"
-  );
+  return driverSupportsDelegation(provider);
 }
 
 function disabledProviderError(
@@ -1694,6 +1691,13 @@ const make = (options?: AgentControllerLiveOptions) =>
               createdAt: nowIso(),
             })
             .then(() => undefined),
+        providerDriverKind: (instanceId) =>
+          runPromise(
+            legacyProviderBridge.getInstanceInfo(instanceId).pipe(
+              Effect.map((routing): string | null => routing.driverKind),
+              Effect.orElseSucceed(() => null),
+            ),
+          ),
         recordUsage: async (usage) => {
           const active = sessions.get(String(usage.threadId));
           if (active) publish(delegatedUsageReceipt(usage, active));
@@ -1703,6 +1707,14 @@ const make = (options?: AgentControllerLiveOptions) =>
             "Akeru delegated work could not record its outcome.",
             Effect.fail(failureDetail(cause)),
             { delegationId },
+          ),
+        onGroupResultSkipped: (delegationId, reason) =>
+          fork(
+            "Akeru could not log a skipped group result.",
+            Effect.logInfo("delegated result not posted to the group chat", {
+              delegationId,
+              reason,
+            }),
           ),
       });
     if (Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)) {

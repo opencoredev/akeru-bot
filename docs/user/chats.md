@@ -72,6 +72,17 @@ the card shows the result or what went wrong, and one of these lines:
 A bot runs at most three pieces of work at a time from one chat. Asking the same bot twice starts
 two separate pieces of work, each with its own card.
 
+In a group chat, a bot can hand work only to bots in that group. The other bot does the work in
+its own chat. When it finishes, it posts the result in the group as **Finished work for {name}**.
+
+Bots on standard OpenCode cannot hand off work or take it from other bots. OpenCode Go bots can.
+The bot's Tools sheet says so, the `@` menu in a group chat marks the bot with **Cannot take
+handed-off work**, and on mobile the chat settings show the same note under Options. A bot that
+tries to hand them work is told to pick a bot on another provider.
+
+If the bot that did the work leaves the group before it finishes, its result stays on its card but
+is not posted in the group.
+
 Work that has a deadline stops at the deadline. Work without one stops after 4 hours if the other
 bot has not reported back. Either way the card shows it as failed because it timed out.
 

@@ -2015,6 +2015,8 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   delta: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
+  /** Attributes a server-authored message to this bot instead of the thread's responder. */
+  respondingBotId: Schema.optional(BotId),
   createdAt: IsoDateTime,
 });
 
@@ -2024,6 +2026,7 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   turnId: Schema.optional(TurnId),
+  respondingBotId: Schema.optional(BotId),
   createdAt: IsoDateTime,
 });
 

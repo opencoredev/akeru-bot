@@ -21,6 +21,7 @@ import {
   type AkeruToolInputSchemas,
   type AkeruToolReceipt,
   AkeruDelegationContextTooLongError,
+  AkeruDelegationProviderUnsupportedError,
   acknowledgeAkeruDelegation,
   isAkeruDelegationResultPending,
   type OrchestrationBot,
@@ -29,6 +30,7 @@ import {
   type TurnId,
   isGroupBotMember,
 } from "@t3tools/contracts";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import * as Schema from "effect/Schema";
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
@@ -96,11 +98,29 @@ export interface AkeruDelegationRuntimeOptions {
     readonly inputTokens: number;
     readonly outputTokens: number;
   }) => Promise<void>;
+  /**
+   * Driver kind behind a provider instance, or null when the instance is
+   * unknown. SendToAgent refuses a target whose instance is unknown or whose
+   * driver cannot run delegated work before it creates the child thread.
+   */
+  readonly providerDriverKind?: (instanceId: ProviderInstanceId) => Promise<string | null>;
   /** Reports a background child watch that could not record its outcome. */
   readonly onWatchError?: (delegationId: DelegationId, cause: unknown) => void;
+  /**
+   * Reports a completed result the group chat did not show because the child
+   * bot is no longer an active member or the group is gone. The result stays
+   * recorded and reaches the parent on its next turn.
+   */
+  readonly onGroupResultSkipped?: (
+    delegationId: DelegationId,
+    reason: AkeruGroupResultSkipReason,
+  ) => void;
   readonly now?: () => string;
   readonly id?: () => string;
 }
+
+/** Why a group chat did not receive a finished delegation's result message. */
+export type AkeruGroupResultSkipReason = "bot_left_group" | "group_unavailable";
 
 /** Returned by SendToAgent and MessageAgent as soon as the child turn is dispatched. */
 export interface AkeruDelegationHandle {
@@ -130,6 +150,24 @@ function childAccess(
     disabledMcpServerIds: bot.disabledMcpServerIds,
     approvalCeiling: "secrets",
   };
+}
+
+/**
+ * A bot can take work from a group chat only when it is a member of that
+ * group. A bot may belong to several groups, so membership is read from the
+ * group, not from the bot's legacy `groupId`. A direct chat can reach any bot.
+ */
+function isReachableFromThread(
+  snapshot: OrchestrationReadModel,
+  parentThread: OrchestrationReadModel["threads"][number],
+  bot: OrchestrationBot,
+): boolean {
+  if (parentThread.groupId === null) return true;
+  const group = snapshot.groups.find((candidate) => candidate.id === parentThread.groupId);
+  return (
+    group !== undefined &&
+    group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)
+  );
 }
 
 function childInstructions(input: {
@@ -242,6 +280,76 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     });
   };
 
+  // Why the group chat cannot show a message from this bot right now, or null
+  // when it can. Mirrors the decider's active-member check for attribution.
+  const groupResultSkipReason = (
+    snapshot: OrchestrationReadModel,
+    threadId: ThreadId,
+    botId: BotId,
+  ): AkeruGroupResultSkipReason | null => {
+    const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
+    if (thread === undefined || thread.groupId === null) return "group_unavailable";
+    const group = snapshot.groups.find((candidate) => candidate.id === thread.groupId);
+    if (group === undefined) return "group_unavailable";
+    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+    const member = group.members.some((entry) => isGroupBotMember(entry) && entry.botId === botId);
+    return bot === undefined || bot.archivedAt !== null || !member ? "bot_left_group" : null;
+  };
+
+  // Shows a group the finished work as a message from the bot that did it.
+  // Server-authored, so it starts no turn; the parent still receives the result
+  // on its next turn. Reads the group fresh so a renamed parent shows its
+  // current name and a bot removed mid-task is reported as skipped rather
+  // than as a dispatch failure.
+  const postGroupResult = async (input: {
+    readonly delegationId: DelegationId;
+    readonly threadId: ThreadId;
+    readonly botId: BotId;
+    readonly parentBotId: BotId;
+    readonly task: string;
+    readonly summary: string;
+  }) => {
+    const snapshot = await options.readSnapshot();
+    const skipped = groupResultSkipReason(snapshot, input.threadId, input.botId);
+    if (skipped !== null) {
+      options.onGroupResultSkipped?.(input.delegationId, skipped);
+      return;
+    }
+    const parentBotName =
+      snapshot.bots.find((candidate) => candidate.id === input.parentBotId)?.name ?? "the group";
+    const messageId = MessageId.make(`delegation-result-${id()}`);
+    const createdAt = now();
+    try {
+      await dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: commandId("group-result"),
+        threadId: input.threadId,
+        messageId,
+        delta: `Finished work for ${parentBotName}: ${input.task}\n\n${input.summary}`,
+        respondingBotId: input.botId,
+        createdAt,
+      });
+      await dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: commandId("group-result-complete"),
+        threadId: input.threadId,
+        messageId,
+        respondingBotId: input.botId,
+        createdAt,
+      });
+    } catch (cause) {
+      // The bot can leave between the read and the dispatch; the decider then
+      // refuses the attribution. Report that as a skip, anything else as an error.
+      const raced = groupResultSkipReason(
+        await options.readSnapshot(),
+        input.threadId,
+        input.botId,
+      );
+      if (raced === null) throw cause;
+      options.onGroupResultSkipped?.(input.delegationId, raced);
+    }
+  };
+
   const setState = async (delegation: AkeruDelegationRecord) => {
     await dispatch({
       type: "delegation.state.set",
@@ -260,7 +368,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     if (!parentThread || !bot || bot.archivedAt !== null) {
       throw new Error("The target bot is not available in this workspace.");
     }
-    if (parentThread.groupId !== null && bot.groupId !== parentThread.groupId) {
+    if (!isReachableFromThread(snapshot, parentThread, bot)) {
       throw new Error("The target bot is not available in the current group.");
     }
     return { parentThread, bot };
@@ -430,16 +538,25 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       });
     }
 
-    const group = bot.groupId
-      ? snapshot.groups.find((candidate) => candidate.id === bot.groupId)
-      : undefined;
-    if (
-      bot.groupId !== null &&
-      (!group ||
-        parentThread.groupId !== group.id ||
-        !group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id))
-    ) {
+    if (!isReachableFromThread(snapshot, parentThread, bot)) {
       throw new Error("The target bot is not available in the current group.");
+    }
+    const modelSelection =
+      bot.engine === null
+        ? parentThread.modelSelection
+        : {
+            instanceId: ProviderInstanceId.make(bot.engine.provider),
+            model: bot.engine.model,
+            ...(bot.engine.options ? { options: bot.engine.options } : {}),
+          };
+    if (options.providerDriverKind) {
+      const driverKind = await options.providerDriverKind(modelSelection.instanceId);
+      if (driverKind === null) {
+        throw new Error("The target bot is not available in this workspace.");
+      }
+      if (!driverSupportsDelegation(driverKind)) {
+        throw new AkeruDelegationProviderUnsupportedError({ botName: bot.name, driverKind });
+      }
     }
 
     const grant = intersectDelegationAccess({
@@ -455,19 +572,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       commandId: commandId("thread"),
       threadId: childThreadId,
       projectId: parentThread.projectId,
-      botId: group ? null : bot.id,
-      groupId: group?.id ?? null,
+      // A child is a direct thread of the target bot, even when a group chat
+      // sent the work; the group sees the result as an attributed message.
+      botId: bot.id,
+      groupId: null,
       parentThreadId: parent.threadId,
       parentDelegationId: delegationId,
       title: `Bot work for ${bot.name}`,
-      modelSelection:
-        bot.engine === null
-          ? parentThread.modelSelection
-          : {
-              instanceId: ProviderInstanceId.make(bot.engine.provider),
-              model: bot.engine.model,
-              ...(bot.engine.options ? { options: bot.engine.options } : {}),
-            },
+      modelSelection,
       runtimeMode: grant.runtimeMode,
       interactionMode: "default",
       branch: null,
@@ -546,7 +658,6 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       },
       runtimeMode: grant.runtimeMode,
       interactionMode: "default",
-      ...(group ? { respondingBotId: bot.id } : {}),
       createdAt: now(),
     });
 
@@ -637,6 +748,18 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           )
           .catch((cause) => options.onWatchError?.(delegationId, cause));
         await deliver(completed, result.summary);
+        if (parentThread.groupId !== null) {
+          // The result is already recorded; a group that cannot take the
+          // message (deleted, bot removed) must not turn it into a failure.
+          await postGroupResult({
+            delegationId,
+            threadId: parent.threadId,
+            botId: bot.id,
+            parentBotId: parent.botId,
+            task: request.task,
+            summary: result.summary,
+          }).catch((cause) => options.onWatchError?.(delegationId, cause));
+        }
       } catch (cause) {
         const latest = await latestRecord();
         if (latest === undefined) return;

@@ -1277,6 +1277,10 @@ export const englishCatalog = {
   "Close bot tools": "Close bot tools",
   "Choose which workspace tools this bot can use.":
     "Choose which workspace tools this bot can use.",
+  "This bot's provider cannot hand off work.": "This bot's provider cannot hand off work.",
+  "It cannot send work to other bots or receive work from them.":
+    "It cannot send work to other bots or receive work from them.",
+  "Cannot take handed-off work": "Cannot take handed-off work",
   "Search tools": "Search tools",
   "Search bot tools": "Search bot tools",
   "Enable all": "Enable all",

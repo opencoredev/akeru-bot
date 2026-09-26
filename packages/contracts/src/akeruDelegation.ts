@@ -387,3 +387,16 @@ export class AkeruDelegationContextTooLongError extends Schema.TaggedErrorClass<
     return `Delegation context is ${this.length} characters; the limit is ${this.maxLength}. Shorten it or put the details in the task.`;
   }
 }
+
+/** SendToAgent names a bot whose provider runs on the legacy bridge. */
+export class AkeruDelegationProviderUnsupportedError extends Schema.TaggedErrorClass<AkeruDelegationProviderUnsupportedError>()(
+  "AkeruDelegationProviderUnsupportedError",
+  {
+    botName: Schema.String,
+    driverKind: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `${this.botName} runs on the ${this.driverKind} provider, which cannot receive handed-off work. Do the work yourself or pick a bot on another provider.`;
+  }
+}

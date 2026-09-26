@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ServerProvider } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { memo, useMemo } from "react";
 import { View } from "react-native";
@@ -26,6 +26,8 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
   /** The group of a group chat, whose bots can be mentioned; null for a direct chat. */
   readonly groupId: string | null;
   readonly browserAvailable: boolean;
+  /** The environment's providers, used to mark bots that cannot take handed-off work. */
+  readonly providers: ReadonlyArray<ServerProvider>;
   readonly query: string;
   readonly fileItems: ReadonlyArray<ComposerCommandItem>;
   readonly isLoading: boolean;
@@ -39,8 +41,9 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
       groupMentionBots(
         groups.find((group) => group.id === props.groupId),
         environmentBots,
+        props.providers,
       ),
-    [environmentBots, groups, props.groupId],
+    [environmentBots, groups, props.groupId, props.providers],
   );
   const environmentIds = useMemo(() => [props.environmentId], [props.environmentId]);
   const search = useThreadSearch(environmentIds, threadMentionQuery(props.query));
