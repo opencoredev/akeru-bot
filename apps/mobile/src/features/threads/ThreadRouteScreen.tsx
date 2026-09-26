@@ -272,6 +272,11 @@ function ThreadRouteContent(
       ? environmentBotsAtom(environmentId)
       : environmentBotsAtom(EnvironmentId.make("")),
   );
+  const botsById = useMemo(() => {
+    const map = new Map<string, (typeof environmentBots)[number]>();
+    for (const bot of environmentBots) map.set(bot.id, bot);
+    return map;
+  }, [environmentBots]);
   const threadId = firstRouteParam(params.threadId);
   const routeThreadIdentity =
     environmentIdRaw !== null && threadId !== null ? `${environmentIdRaw}:${threadId}` : null;
@@ -887,6 +892,8 @@ function ThreadRouteContent(
           connectionError={routeConnectionError}
           environmentLabel={selectedEnvironmentConnection?.environmentLabel ?? null}
           selectedThreadFeed={composer.selectedThreadFeed}
+          botsById={botsById}
+          waitingOnChildren={composer.selectedThreadWaitingOnChildren}
           activeWorkStartedAt={composer.activeWorkStartedAt}
           silentRun={silentRun}
           activePendingApproval={requests.activePendingApproval}

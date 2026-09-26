@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
+import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
 import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
 
 import {
+  BotId,
+  DelegationId,
   EventId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   TurnId,
+  type AkeruDelegationRecord,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
@@ -1063,5 +1067,259 @@ describe("unchangedPrefixLength", () => {
     expect(unchangedPrefixLength([a, b], [{ id: "a" }, b])).toBe(0);
     // Interior replacement by id keeps both endpoints but must still rescan it.
     expect(unchangedPrefixLength([a, b, c], [a, { id: "b" }, c])).toBe(1);
+  });
+});
+
+describe("delegation cards in the feed", () => {
+  const at = (second: number) => `2026-09-25T10:00:${String(second).padStart(2, "0")}.000Z`;
+
+  const feedDelegation = (
+    id: string,
+    second: number,
+    parentTurnId: string,
+    anchorMessageId: string | null,
+  ): AkeruDelegationRecord => ({
+    delegationId: DelegationId.make(id),
+    parentDelegationId: null,
+    parentBotId: BotId.make("bot-parent"),
+    childBotId: BotId.make("bot-child"),
+    parentThreadId: ThreadId.make("thread-parent"),
+    parentTurnId: TurnId.make(parentTurnId),
+    ancestorBotIds: [BotId.make("bot-parent")],
+    depth: 1,
+    task: "Compare three flights.",
+    expectedResult: "A short comparison.",
+    deadline: null,
+    access: {
+      allowedToolIds: [],
+      memoryScopes: [],
+      sandbox: null,
+      runtimeMode: "approval-required",
+      hasUserComputer: false,
+      enabledMcpServerIds: [],
+      disabledMcpServerIds: [],
+      approvalCeiling: "none",
+    },
+    billedBotId: BotId.make("bot-child"),
+    keep: false,
+    anchorMessageId: anchorMessageId === null ? null : MessageId.make(anchorMessageId),
+    retryOfDelegationId: null,
+    trigger: "bot",
+    createdAt: at(second),
+    updatedAt: at(second),
+    phase: { _tag: "Queued" },
+  });
+
+  const userMessage = (id: string, second: number) => ({
+    id: MessageId.make(id),
+    role: "user" as const,
+    text: id,
+    turnId: null,
+    createdAt: at(second),
+    updatedAt: at(second),
+    streaming: false,
+  });
+
+  const assistantMessage = (id: string, second: number, turnId: string) => ({
+    id: MessageId.make(id),
+    role: "assistant" as const,
+    text: id,
+    turnId: TurnId.make(turnId),
+    createdAt: at(second),
+    updatedAt: at(second),
+    streaming: false,
+  });
+
+  const feedThread = (messages: OrchestrationThread["messages"]) =>
+    makeThread({
+      id: ThreadId.make("thread-parent"),
+      projectId: ProjectId.make("project-1"),
+      title: "Parent chat",
+      messages,
+    });
+
+  const messages = [
+    userMessage("user-1", 1),
+    assistantMessage("bot-1", 3, "turn-1"),
+    userMessage("user-2", 10),
+    assistantMessage("bot-2", 12, "turn-2"),
+    userMessage("user-3", 20),
+    assistantMessage("bot-3", 22, "turn-3"),
+  ];
+
+  it("matches botChatTimeline order for three turns", () => {
+    const feed = buildThreadFeed(feedThread(messages), {
+      delegations: [
+        feedDelegation("d-3", 21, "turn-3", "user-3"),
+        feedDelegation("d-1", 2, "turn-1", "user-1"),
+        feedDelegation("d-2", 11, "turn-2", "user-2"),
+      ],
+    });
+
+    expect(feed.map((entry) => entry.id)).toEqual([
+      "user-1",
+      "bot-1",
+      "delegation:d-1",
+      "user-2",
+      "bot-2",
+      "delegation:d-2",
+      "user-3",
+      "bot-3",
+      "delegation:d-3",
+    ]);
+  });
+
+  it("lands the card under its anchor before the turn has a reply", () => {
+    const feed = buildThreadFeed(feedThread(messages.slice(0, 3)), {
+      delegations: [feedDelegation("d-2", 11, "turn-2", "user-2")],
+    });
+
+    expect(feed.map((entry) => entry.id)).toEqual(["user-1", "bot-1", "user-2", "delegation:d-2"]);
+  });
+
+  it("keeps work-log collapse behavior: a card inside a settled turn folds with it", () => {
+    const feed = buildThreadFeed(feedThread(messages), {
+      delegations: [feedDelegation("d-1", 2, "turn-1", "user-1")],
+    });
+    const presented = deriveThreadFeedPresentation(
+      feed,
+      { turnId: TurnId.make("turn-3"), state: "running", startedAt: at(30), completedAt: null },
+      new Set(),
+    );
+
+    // The card sits inside turn 1's collapsible span: hidden until the fold
+    // opens, while the turn's terminal reply stays pinned under the fold row.
+    expect(presented.map((entry) => entry.id)).toEqual([
+      "user-1",
+      "bot-1",
+      "turn-fold:turn-1",
+      "user-2",
+      "bot-2",
+      "user-3",
+      "bot-3",
+    ]);
+
+    const expanded = deriveThreadFeedPresentation(
+      feed,
+      { turnId: TurnId.make("turn-3"), state: "running", startedAt: at(30), completedAt: null },
+      new Set([TurnId.make("turn-1")]),
+    );
+    const expandedIds = expanded.map((entry) => entry.id);
+    expect(expandedIds.indexOf("delegation:d-1")).toBeGreaterThan(
+      expandedIds.indexOf("turn-fold:turn-1"),
+    );
+    expect(expandedIds.indexOf("delegation:d-1")).toBeLessThan(expandedIds.indexOf("user-2"));
+  });
+
+  it("keeps cards when a work-log group holds several activities (P1-2 regression)", () => {
+    // Four warnings between bot-1 and user-2 collapse into ONE activity-group
+    // row. The merge must still land both cards in the right place instead of
+    // counting the group's activities against the grouped index space.
+    const thread = {
+      ...feedThread(messages.slice(0, 4)),
+      activities: [4, 5, 6, 7].map((second, index) =>
+        makeActivity({
+          id: EventId.make(`warn-${index}`),
+          kind: "runtime.warning",
+          summary: `Warning ${index}`,
+          createdAt: at(second),
+          turnId: TurnId.make("turn-1"),
+        }),
+      ),
+    };
+
+    const feed = buildThreadFeed(thread, {
+      delegations: [
+        feedDelegation("d-1", 2, "turn-1", "user-1"),
+        feedDelegation("d-2", 11, "turn-2", "user-2"),
+      ],
+    });
+
+    expect(feed.map((entry) => entry.id)).toEqual([
+      "user-1",
+      "bot-1",
+      "delegation:d-1",
+      "warn-0",
+      "user-2",
+      "bot-2",
+      "delegation:d-2",
+    ]);
+  });
+
+  it("places every card after the same message as botChatTimeline (ordering parity)", () => {
+    // Spec LEO-608: web renders botChatTimeline rows directly; mobile re-maps
+    // them onto feed rows. One fixture with a multi-activity group and a
+    // dropped empty message exercises both index-space hazards.
+    const parityMessages = [
+      userMessage("user-1", 1),
+      assistantMessage("bot-1", 3, "turn-1"),
+      userMessage("user-2", 10),
+      // An empty assistant row the grouping pass drops: cards anchored on it
+      // slide back to the nearest rendered message, like web's anchor fallback.
+      { ...assistantMessage("bot-2-empty", 11, "turn-2"), text: "" },
+      assistantMessage("bot-2", 12, "turn-2"),
+      userMessage("user-3", 20),
+      assistantMessage("bot-3", 22, "turn-3"),
+    ];
+    const thread = {
+      ...feedThread(parityMessages),
+      activities: [4, 5, 6].map((second, index) =>
+        makeActivity({
+          id: EventId.make(`parity-warn-${index}`),
+          kind: "runtime.warning",
+          summary: `Warning ${index}`,
+          createdAt: at(second),
+          turnId: TurnId.make("turn-1"),
+        }),
+      ),
+    };
+    const delegations = [
+      feedDelegation("d-1", 2, "turn-1", "user-1"),
+      feedDelegation("d-2", 13, "turn-2", "user-2"),
+      feedDelegation("d-3", 21, "turn-3", "user-3"),
+    ];
+
+    const timeline = botChatTimeline({
+      messages: parityMessages.map((message) => ({
+        id: message.id,
+        turnId: message.turnId,
+        createdAt: message.createdAt,
+      })),
+      delegations,
+    });
+    const feed = buildThreadFeed(thread, { delegations });
+    const feedIds = feed.map((entry) => entry.id);
+    const feedIdSet = new Set(feedIds);
+    // The message rows in feed order, so "next rendered message" is O(1).
+    const feedMessageIds = feed.flatMap((entry) => (entry.type === "message" ? [entry.id] : []));
+
+    let previousMessageId: string | null = null;
+    for (const entry of timeline) {
+      if (entry._tag === "Message") {
+        if (feedIdSet.has(entry.message.id)) {
+          previousMessageId = entry.message.id;
+        }
+        continue;
+      }
+      if (entry._tag !== "Delegation") continue;
+      const cardId = `delegation:${entry.delegation.delegationId}`;
+      expect(feedIds).toContain(cardId);
+      const cardIndex = feedIds.indexOf(cardId);
+      if (previousMessageId !== null) {
+        expect(cardIndex).toBeGreaterThan(feedIds.indexOf(previousMessageId));
+      }
+      // The card must appear before the next message row that survived
+      // grouping — no message may leap ahead of its turn's card.
+      const nextMessageId = feedMessageIds.find(
+        (id) =>
+          previousMessageId !== null &&
+          feedIds.indexOf(id) > feedIds.indexOf(previousMessageId) &&
+          id !== previousMessageId,
+      );
+      if (nextMessageId !== undefined) {
+        expect(cardIndex).toBeLessThan(feedIds.indexOf(nextMessageId));
+      }
+      previousMessageId = null;
+    }
   });
 });
