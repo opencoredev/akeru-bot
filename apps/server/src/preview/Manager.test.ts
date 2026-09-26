@@ -1,7 +1,7 @@
 import { it } from "@effect/vitest";
 import { type PreviewEvent, ThreadId } from "@t3tools/contracts";
 import { PreviewUrlNormalizationError } from "@t3tools/shared/preview";
-import { Effect, PubSub } from "effect";
+import { Effect, Fiber, PubSub, Stream } from "effect";
 import { expect } from "vite-plus/test";
 
 import * as PreviewManager from "./Manager.ts";
@@ -383,5 +383,45 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       expect(aEvents.map((e) => e.type)).toEqual(["opened", "opened"]);
       expect(bEvents.map((e) => e.type)).toEqual(["opened", "opened"]);
     }),
+  );
+
+  it.effect("scopes streamed events and frames to the subscribed chat", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const threadA = freshThreadId();
+        const threadB = freshThreadId();
+        const manager = yield* PreviewManager.PreviewManager;
+        // startImmediately runs each consumer up to its PubSub subscription
+        // before anything below publishes.
+        const scopedFiber = yield* manager
+          .streamEvents({ threadId: threadA })
+          .pipe(Stream.take(3), Stream.runCollect, Effect.forkScoped({ startImmediately: true }));
+        const unscopedFiber = yield* manager
+          .streamEvents({})
+          .pipe(Stream.take(5), Stream.runCollect, Effect.forkScoped({ startImmediately: true }));
+
+        const tabA = yield* manager.open({ threadId: threadA });
+        const tabB = yield* manager.open({ threadId: threadB });
+        const frame = { mimeType: "image/png" as const, data: "AAAA", width: 1, height: 1 };
+        yield* manager.reportFrame({ threadId: threadB, tabId: tabB.tabId, frame });
+        yield* manager.reportFrame({ threadId: threadA, tabId: tabA.tabId, frame });
+        yield* manager.close({ threadId: threadA });
+
+        const scoped = yield* Fiber.join(scopedFiber);
+        expect(scoped.map((event) => [event.threadId, event.type])).toEqual([
+          [threadA, "opened"],
+          [threadA, "frame"],
+          [threadA, "closed"],
+        ]);
+        const unscoped = yield* Fiber.join(unscopedFiber);
+        expect(unscoped.map((event) => event.threadId)).toEqual([
+          threadA,
+          threadB,
+          threadB,
+          threadA,
+          threadA,
+        ]);
+      }),
+    ),
   );
 });

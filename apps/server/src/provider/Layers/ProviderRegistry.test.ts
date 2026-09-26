@@ -563,6 +563,29 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         assert.strictEqual(haveProvidersChanged(providers, [...providers]), false);
       });
 
+      it("ignores checkedAt when deciding whether providers changed", () => {
+        const provider = {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          driver: ProviderDriverKind.make("claudeAgent"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-03-25T00:00:00.000Z",
+          version: "1.0.0",
+          models: [],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const rechecked = { ...provider, checkedAt: "2026-03-25T00:05:00.000Z" };
+
+        assert.strictEqual(haveProvidersChanged([provider], [rechecked]), false);
+        assert.strictEqual(
+          haveProvidersChanged([provider], [{ ...rechecked, status: "warning" }]),
+          true,
+        );
+      });
+
       it("preserves previously discovered provider models when a refresh returns none", () => {
         const previousProvider = {
           instanceId: ProviderInstanceId.make("cursor"),

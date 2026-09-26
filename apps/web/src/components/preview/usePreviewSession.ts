@@ -34,7 +34,7 @@ const previewSessionSyncAtom = Atom.family((threadKey: string) => {
   });
   const eventsAtom = previewEnvironment.events({
     environmentId: threadRef.environmentId,
-    input: {},
+    input: { threadId: threadRef.threadId },
   });
 
   return Atom.make((get) => {

@@ -158,10 +158,20 @@ export const selectProvidersByKind = (
 ): ReadonlyArray<ServerProvider> =>
   providers.filter((provider) => providerKinds.has(provider.driver));
 
+const withoutCheckedAt = (providers: ReadonlyArray<ServerProvider>) =>
+  providers.map(({ checkedAt: _checkedAt, ...provider }) => provider);
+
+/**
+ * Every probe stamps a fresh `checkedAt`, so comparing it would make each
+ * background re-probe look like a change. Only the remaining fields decide
+ * whether clients need a new provider list.
+ */
 export const haveProvidersChanged = (
   previousProviders: ReadonlyArray<ServerProvider>,
   nextProviders: ReadonlyArray<ServerProvider>,
-): boolean => !Equal.equals(previousProviders, nextProviders);
+): boolean =>
+  previousProviders.length !== nextProviders.length ||
+  !Equal.equals(withoutCheckedAt(previousProviders), withoutCheckedAt(nextProviders));
 
 const correlateSnapshotWithSource = (
   source: ProviderSnapshotSource,
@@ -350,6 +360,8 @@ export const ProviderRegistryLive = Layer.effect(
         readonly publish?: boolean;
         readonly persist?: boolean;
         readonly replace?: boolean;
+        /** Publish even when only `checkedAt` moved. */
+        readonly publishUnchanged?: boolean;
       },
     ) {
       const nextProvidersWithUpdateState = yield* Effect.forEach(
@@ -386,16 +398,19 @@ export const ProviderRegistryLive = Layer.effect(
         },
       );
 
-      if (haveProvidersChanged(previousProviders, providers)) {
-        if (options?.persist !== false) {
-          yield* Effect.forEach(providersToPersist, persistProvider, {
-            concurrency: "unbounded",
-            discard: true,
-          });
-        }
-        if (options?.publish !== false) {
-          yield* PubSub.publish(changesPubSub, providers);
-        }
+      // Persist a fresh `checkedAt` so a restart does not treat the cache as
+      // stale, but only broadcast when a client-visible field changed.
+      if (!Equal.equals(previousProviders, providers) && options?.persist !== false) {
+        yield* Effect.forEach(providersToPersist, persistProvider, {
+          concurrency: "unbounded",
+          discard: true,
+        });
+      }
+      if (
+        options?.publish !== false &&
+        (options?.publishUnchanged === true || haveProvidersChanged(previousProviders, providers))
+      ) {
+        yield* PubSub.publish(changesPubSub, providers);
       }
 
       return providers;
@@ -405,6 +420,7 @@ export const ProviderRegistryLive = Layer.effect(
       provider: ServerProvider,
       options?: {
         readonly publish?: boolean;
+        readonly publishUnchanged?: boolean;
       },
     ) {
       return yield* upsertProviders([provider], options);
@@ -452,10 +468,12 @@ export const ProviderRegistryLive = Layer.effect(
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
+      // An explicit refresh publishes even when nothing but `checkedAt`
+      // moved, so clients can show when the provider was last checked.
       return yield* providerSource.refresh.pipe(
         Effect.flatMap((nextProvider) =>
           correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap(syncProvider),
+            Effect.flatMap((provider) => syncProvider(provider, { publishUnchanged: true })),
           ),
         ),
       );
