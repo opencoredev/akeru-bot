@@ -194,9 +194,14 @@ function BlobAvatar({
     let last = 0;
     // Last values written to the DOM, so settled or repeated poses cost no style work.
     let lastBody = "";
-    const lastEyes: Array<{ transform: string | null; visible: boolean | null }> = [
-      { transform: null, visible: null },
-      { transform: null, visible: null },
+    // Switching between ink and cutout eyes replaces the eye nodes, so the cache is per node.
+    const lastEyes: Array<{
+      node: SVGRectElement | null;
+      transform: string | null;
+      visible: boolean | null;
+    }> = [
+      { node: null, transform: null, visible: null },
+      { node: null, transform: null, visible: null },
     ];
 
     const render = (frame: MotionFrame) => {
@@ -209,6 +214,11 @@ function BlobAvatar({
         const eye = eyeRefs.current[index];
         const written = lastEyes[index];
         if (!eye || !written) continue;
+        if (written.node !== eye) {
+          written.node = eye;
+          written.transform = null;
+          written.visible = null;
+        }
         const transform = eyeTransform(shape, frame, index);
         const visible = transform !== null;
         if (visible !== written.visible) {

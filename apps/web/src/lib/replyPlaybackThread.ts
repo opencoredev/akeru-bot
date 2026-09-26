@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type {
   ReplyPlaybackMessage,
@@ -39,9 +39,13 @@ export function useReplyPlaybackThread(options: {
   const [contextKey, setContextKey] = useState<string | null>(null);
   const messagesRef = useRef(options.messages);
   messagesRef.current = options.messages;
-  const signature = options.messages
-    .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
-    .join("|");
+  const signature = useMemo(
+    () =>
+      options.messages
+        .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
+        .join("|"),
+    [options.messages],
+  );
   useEffect(() => {
     if (!session) return;
     if (!options.environmentId || !options.threadId) {
@@ -59,6 +63,9 @@ export function useReplyPlaybackThread(options: {
       connected: !voiceEnvironmentConnectionLost(connection.data),
       mediaBlocked: options.mediaBlocked,
     });
+    // A fresh context has no baseline, and the signature effect below may not re-run when the
+    // visible messages look the same, so establish the baseline here.
+    session.observe(messagesRef.current);
     setContextKey(
       `${environmentId}/${threadId}/${session.synthesis.provider}/${session.synthesis.voice}`,
     );

@@ -9,11 +9,8 @@ function storage(): Storage | null {
   }
 }
 
-function readAll(): Record<string, string> {
-  const localStorage = storage();
-  if (!localStorage) return {};
+function parseDrafts(raw: string | null): Record<string, string> {
   try {
-    const raw = localStorage.getItem(DRAFTS_KEY);
     if (raw === null) return {};
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
@@ -22,6 +19,16 @@ function readAll(): Record<string, string> {
         (entry): entry is [string, string] => typeof entry[1] === "string",
       ),
     );
+  } catch {
+    return {};
+  }
+}
+
+function readAll(): Record<string, string> {
+  const localStorage = storage();
+  if (!localStorage) return {};
+  try {
+    return parseDrafts(localStorage.getItem(DRAFTS_KEY));
   } catch {
     return {};
   }
@@ -44,9 +51,31 @@ const FLUSH_DELAY_MS = 400;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let unloadListenersInstalled = false;
 
+/**
+ * Another tab wrote drafts. A pending edit older than that write must not overwrite it, so
+ * drop pending entries for every key the other tab changed. This keeps last-write-wins, as
+ * when every keystroke was written straight to storage.
+ */
+export function onBotDraftsStorageChange(
+  event: Pick<StorageEvent, "key" | "oldValue" | "newValue">,
+): void {
+  if (event.key !== DRAFTS_KEY && event.key !== null) return;
+  if (pendingDrafts.size === 0) return;
+  const before = parseDrafts(event.oldValue);
+  const after = parseDrafts(event.newValue);
+  for (const draftKey of pendingDrafts.keys()) {
+    if (before[draftKey] !== after[draftKey] || event.key === null) pendingDrafts.delete(draftKey);
+  }
+  if (pendingDrafts.size === 0 && flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+}
+
 function installUnloadListeners(): void {
   if (unloadListenersInstalled || typeof window === "undefined") return;
   unloadListenersInstalled = true;
+  window.addEventListener("storage", onBotDraftsStorageChange);
   window.addEventListener("pagehide", flushBotDrafts);
   window.addEventListener("beforeunload", flushBotDrafts);
   document.addEventListener("visibilitychange", () => {
