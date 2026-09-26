@@ -14,13 +14,14 @@ import { useAtomValue } from "@effect/atom-react";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
+import { GroupAvatarStack } from "../../components/GroupAvatarStack";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
-import { environmentBotsAtom } from "../../state/bots";
+import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -32,6 +33,7 @@ import {
   resolveThreadListV2SwipeActions,
   type ThreadListV2Status,
 } from "./threadListV2";
+import { resolveThreadIdentity } from "./threadIdentity";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 
 /**
@@ -408,6 +410,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const pinnedRow = props.pinned === true;
 
   const environmentBots = useAtomValue(environmentBotsAtom(thread.environmentId));
+  const environmentGroups = useAtomValue(environmentGroupsAtom(thread.environmentId));
   const screenColor = useThemeColor("--color-screen");
   const drawerColor = useThemeColor("--color-drawer");
   const pressedBackgroundColor = useThemeColor("--color-subtle");
@@ -672,12 +675,17 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // every piece of row text must use that surface's paired foreground.
   const projectTitleText = props.projectTitle ?? props.project?.title ?? "";
   const metaMutedClass = selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted";
-  const bot =
-    thread.botId != null
-      ? (environmentBots.find((candidate) => candidate.id === thread.botId) ?? null)
-      : null;
-  const botName = bot?.name ?? providerBotName(props.providerDriver) ?? "Bot";
-  const botAvatar = bot?.avatar ?? seededBlobAvatar(props.providerDriver ?? `${thread.id}`);
+  const identity = resolveThreadIdentity({
+    thread,
+    bots: environmentBots,
+    groups: environmentGroups,
+    providerDriver: props.providerDriver,
+    providerName: providerBotName,
+  });
+  const botName = identity.title;
+  const botAvatar = identity.isGroup
+    ? null
+    : (identity.bots[0]?.avatar ?? seededBlobAvatar(identity.avatarSeed));
   const avatarState =
     status === "working"
       ? "working"
@@ -701,7 +709,16 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const cardContent = (
     <View className="flex-row items-center gap-3">
       <View>
-        <BotAvatarView avatar={botAvatar} size={46} state={avatarState} />
+        {identity.isGroup ? (
+          <GroupAvatarStack
+            bots={identity.bots}
+            seed={identity.avatarSeed}
+            size={46}
+            state={avatarState}
+          />
+        ) : (
+          <BotAvatarView avatar={botAvatar} size={46} state={avatarState} />
+        )}
         {online ? (
           <View className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-screen bg-green-500" />
         ) : null}

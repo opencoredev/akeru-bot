@@ -35,7 +35,9 @@ import { vcsEnvironment } from "../../state/vcs";
 import { AppText } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
 import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
+import { GroupAvatarStack } from "../../components/GroupAvatarStack";
 import { providerBotName } from "./thread-list-v2-items";
+import { resolveThreadIdentity } from "./threadIdentity";
 import { ControlPillMenu } from "../../components/ControlPill";
 import {
   buildThreadWorkspaceActions,
@@ -77,7 +79,7 @@ import {
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useAtomValue } from "@effect/atom-react";
-import { environmentBotsAtom } from "../../state/bots";
+import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
 import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-state";
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
@@ -272,6 +274,11 @@ function ThreadRouteContent(
       ? environmentBotsAtom(environmentId)
       : environmentBotsAtom(EnvironmentId.make("")),
   );
+  const environmentGroups = useAtomValue(
+    environmentId
+      ? environmentGroupsAtom(environmentId)
+      : environmentGroupsAtom(EnvironmentId.make("")),
+  );
   const botsById = useMemo(() => {
     const map = new Map<string, (typeof environmentBots)[number]>();
     for (const bot of environmentBots) map.set(bot.id, bot);
@@ -357,26 +364,31 @@ function ThreadRouteContent(
 
   /* ─── Native header theming ──────────────────────────────────────── */
   const usesNativeHeaderGlass = NATIVE_LIQUID_GLASS_SUPPORTED;
-  const threadBot = selectedThread?.botId
-    ? (environmentBots.find((bot) => bot.id === selectedThread.botId) ?? null)
-    : null;
-  // Threads without a configured bot still read as a named teammate: the
-  // provider identity supplies the name and avatar seed, and the chat title
-  // demotes to the subtitle.
+  // Group chats take the group's name and member stack; direct bot chats the
+  // bot, plain chats the provider identity — the same rule as the roster row.
   const headerProviderDriver =
     routeEnvironmentRuntime?.serverConfig?.providers.find(
       (candidate) =>
         candidate.instanceId ===
         (selectedThread?.session?.providerInstanceId ?? selectedThread?.modelSelection.instanceId),
     )?.driver ?? null;
-  const headerBotName = threadBot?.name ?? providerBotName(headerProviderDriver) ?? "Bot";
+  const headerIdentity = selectedThread
+    ? resolveThreadIdentity({
+        thread: selectedThread,
+        bots: environmentBots,
+        groups: environmentGroups,
+        providerDriver: headerProviderDriver,
+        providerName: providerBotName,
+      })
+    : null;
+  const headerBotName = headerIdentity?.title ?? "Bot";
   const headerTitle =
     !usesNativeHeaderGlass &&
     selectedThread !== null &&
     selectedThread.title !== PLACEHOLDER_THREAD_TITLE
       ? selectedThread.title
       : headerBotName;
-  const headerAvatarSeed = headerProviderDriver ?? headerBotName;
+  const headerAvatarSeed = headerIdentity?.avatarSeed ?? headerProviderDriver ?? headerBotName;
   const headerSubtitle = [
     selectedThread !== null && selectedThread.title !== PLACEHOLDER_THREAD_TITLE
       ? selectedThread.title
@@ -950,8 +962,9 @@ function ThreadRouteContent(
       {Platform.OS === "android" ? (
         <ThreadBotHeader
           avatarSeed={headerAvatarSeed}
-          botAvatar={threadBot?.avatar ?? null}
+          botAvatar={headerIdentity?.isGroup ? null : (headerIdentity?.bots[0]?.avatar ?? null)}
           botName={headerBotName}
+          headerIdentity={headerIdentity}
           subtitle={headerSubtitle}
           onBack={
             layout.usesSplitView
@@ -984,6 +997,7 @@ function ThreadBotHeader(props: {
   readonly avatarSeed: string;
   readonly botAvatar: BotAvatar | null;
   readonly botName: string;
+  readonly headerIdentity: ReturnType<typeof resolveThreadIdentity> | null;
   readonly subtitle: string;
   readonly onBack?: (() => void) | undefined;
   readonly workspaceActions: ReadonlyArray<ThreadWorkspaceAction>;
@@ -1028,10 +1042,18 @@ function ThreadBotHeader(props: {
               shadowRadius: 8,
             }}
           >
-            <BotAvatarView
-              avatar={props.botAvatar ?? seededBlobAvatar(props.avatarSeed)}
-              size={26}
-            />
+            {props.headerIdentity?.isGroup ? (
+              <GroupAvatarStack
+                bots={props.headerIdentity.bots}
+                seed={props.avatarSeed}
+                size={26}
+              />
+            ) : (
+              <BotAvatarView
+                avatar={props.botAvatar ?? seededBlobAvatar(props.avatarSeed)}
+                size={26}
+              />
+            )}
             <View className="min-w-0 shrink">
               <AppText className="text-[16px] font-t3-bold text-foreground" numberOfLines={1}>
                 {props.botName}

@@ -143,7 +143,7 @@ function SettingsNavigationLayout({
   readonly routeName: string;
 }) {
   const { t } = useMobileI18n();
-  const titles: Readonly<Record<string, string>> = {
+  const titles: Readonly<Record<string, string | undefined>> = {
     Settings: t("Settings"),
     SettingsEnvironments: t("Environments"),
     SettingsEnvironmentNew: t("Add Environment"),
@@ -153,7 +153,7 @@ function SettingsNavigationLayout({
     SettingsClientStorage: t("Client Storage"),
     SettingsUsage: t("Usage"),
     SettingsBotUsage: t("Bot usage"),
-    SettingsProviderHealth: t("Settings"),
+    SettingsProviderHealth: undefined,
   };
   const title = titles[routeName];
   return (

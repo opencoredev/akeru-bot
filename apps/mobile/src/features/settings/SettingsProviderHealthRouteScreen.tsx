@@ -267,6 +267,14 @@ export function SettingsProviderHealthRouteScreen({
           input: {},
         }),
   );
+  const title =
+    route.params.target === "bot-inbox"
+      ? t("Bot inbox")
+      : route.params.target === "providers"
+        ? t("Provider connections")
+        : route.params.target === "image-generation"
+          ? t("Image generation")
+          : t("Local execution");
   const inboxView =
     route.params.target === "bot-inbox"
       ? settingsInboxView({ error: query.error, data: query.data })
@@ -284,11 +292,12 @@ export function SettingsProviderHealthRouteScreen({
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
+      <NativeStackScreenOptions options={{ title }} />
       {Platform.OS === "android" ? (
         <NativeStackScreenOptions options={{ headerShown: false }} />
       ) : null}
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader title={t("Settings")} onBack={() => navigation.goBack()} />
+        <AndroidScreenHeader title={title} onBack={() => navigation.goBack()} />
       ) : null}
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"

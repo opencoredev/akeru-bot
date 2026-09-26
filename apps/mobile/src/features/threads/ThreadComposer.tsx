@@ -71,8 +71,9 @@ import {
 } from "@t3tools/shared/searchRanking";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
-import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { botEnvironment, environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { providerBotName } from "./thread-list-v2-items";
+import { resolveThreadIdentity } from "./threadIdentity";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -307,19 +308,30 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   );
   const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
-  // Threads without a configured bot still read as a named teammate: fall
-  // back to the provider identity. Until either is known the caller's neutral
-  // placeholder stands in, so the composer never asks a bot called "Bot".
+  const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+  // Group chats address the group, direct chats the bot. Threads without a
+  // configured bot still read as a named teammate: fall back to the provider
+  // identity. Until either is known the caller's neutral placeholder stands
+  // in, so the composer never asks a bot called "Bot".
+  const composerProviderDriver =
+    props.serverConfig?.providers.find(
+      (candidate) =>
+        candidate.instanceId ===
+        (props.selectedThread.session?.providerInstanceId ??
+          props.selectedThread.modelSelection.instanceId),
+    )?.driver ?? null;
+  const composerIdentity = resolveThreadIdentity({
+    thread: props.selectedThread,
+    bots,
+    groups,
+    providerDriver: composerProviderDriver,
+    providerName: providerBotName,
+  });
+  // Plain chats without a bot or group get no name prompt — the composer
+  // placeholder stays neutral rather than echoing the chat title.
   const composerBotName =
     bot?.name ??
-    providerBotName(
-      props.serverConfig?.providers.find(
-        (candidate) =>
-          candidate.instanceId ===
-          (props.selectedThread.session?.providerInstanceId ??
-            props.selectedThread.modelSelection.instanceId),
-      )?.driver ?? null,
-    );
+    (composerIdentity.isGroup ? composerIdentity.title : providerBotName(composerProviderDriver));
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
@@ -976,7 +988,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               onChangeText={props.onChangeDraftMessage}
               onSelectionChange={handleSelectionChange}
               onPasteImages={(uris) => void props.onNativePasteImages(uris)}
-              placeholder={composerBotName ? `Ask ${composerBotName}` : props.placeholder}
+              placeholder={
+                composerBotName ? t("Message {name}", { name: composerBotName }) : props.placeholder
+              }
               onFocus={handleFocus}
               onBlur={handleBlur}
               onSubmit={handleSend}
