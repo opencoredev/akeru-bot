@@ -7,11 +7,14 @@
  * @module ProjectionSnapshotQuery
  */
 import type {
+  AkeruDelegationRecord,
   BotId,
   CheckpointRef,
   GroupId,
   MessageId,
+  OrchestrationBot,
   OrchestrationCheckpointSummary,
+  OrchestrationGroup,
   OrchestrationMessage,
   OrchestrationProject,
   OrchestrationProjectShell,
@@ -27,6 +30,7 @@ import type {
   ProjectId,
   RuntimeMode,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
@@ -221,6 +225,38 @@ export interface ProjectionSnapshotQueryShape {
   readonly getThreadRuntimeContext: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<ProjectionThreadRuntimeContext>, ProjectionRepositoryError>;
+
+  /**
+   * Read one bot by id, including archived bots. Optional so lightweight test
+   * doubles can omit it; callers fall back to a full read model.
+   */
+  readonly getBotById?: (
+    botId: BotId,
+  ) => Effect.Effect<Option.Option<OrchestrationBot>, ProjectionRepositoryError>;
+
+  /**
+   * Read one group by id. Optional for the same reason as `getBotById`.
+   */
+  readonly getGroupById?: (
+    groupId: GroupId,
+  ) => Effect.Effect<Option.Option<OrchestrationGroup>, ProjectionRepositoryError>;
+
+  /**
+   * List delegations where the thread is the parent or the child, oldest
+   * first. Optional for the same reason as `getBotById`.
+   */
+  readonly listThreadDelegations?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<AkeruDelegationRecord>, ProjectionRepositoryError>;
+
+  /**
+   * Read the id of the newest assistant message for a turn. Optional for the
+   * same reason as `getBotById`; callers fall back to thread detail.
+   */
+  readonly getLatestAssistantMessageIdForTurn?: (
+    threadId: ThreadId,
+    turnId: TurnId,
+  ) => Effect.Effect<Option.Option<MessageId>, ProjectionRepositoryError>;
 
   /**
    * Read the user prompt that starts a turn and whether the thread has any

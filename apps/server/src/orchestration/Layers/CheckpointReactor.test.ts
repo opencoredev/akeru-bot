@@ -549,6 +549,90 @@ describe("CheckpointReactor", () => {
     ).toBe("v2\n");
   });
 
+  it("links a completion checkpoint to the newest assistant message of its turn", async () => {
+    const harness = await createHarness({ seedFilesystemCheckpoints: false });
+    const threadId = ThreadId.make("thread-1");
+    const createdAt = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-assistant-link"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      }),
+    );
+    harness.provider.emit({
+      type: "turn.started",
+      eventId: EventId.make("evt-turn-started-assistant-link"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt,
+      threadId,
+      turnId: asTurnId("turn-1"),
+    });
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn(threadId, 0));
+
+    const assistantMessages = [
+      { id: "assistant-turn-1-first", turnId: "turn-1", at: "2026-01-01T00:00:01.000Z" },
+      { id: "assistant-turn-1-latest", turnId: "turn-1", at: "2026-01-01T00:00:02.000Z" },
+      { id: "assistant-other-turn", turnId: "turn-other", at: "2026-01-01T00:00:03.000Z" },
+    ] as const;
+    for (const message of assistantMessages) {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.message.assistant.delta",
+          commandId: CommandId.make(`cmd-delta-${message.id}`),
+          threadId,
+          messageId: MessageId.make(message.id),
+          delta: message.id,
+          turnId: asTurnId(message.turnId),
+          createdAt: message.at,
+        }),
+      );
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.message.assistant.complete",
+          commandId: CommandId.make(`cmd-complete-${message.id}`),
+          threadId,
+          messageId: MessageId.make(message.id),
+          turnId: asTurnId(message.turnId),
+          createdAt: message.at,
+        }),
+      );
+    }
+
+    NodeFS.writeFileSync(NodePath.join(harness.cwd, "README.md"), "v2\n", "utf8");
+    harness.provider.emit({
+      type: "turn.completed",
+      eventId: EventId.make("evt-turn-completed-assistant-link"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:04.000Z",
+      threadId,
+      turnId: asTurnId("turn-1"),
+      payload: { state: "completed" },
+    });
+
+    const events = await waitForEvent(
+      harness.engine,
+      (event) => event.type === "thread.turn-diff-completed",
+    );
+    const diffCompleted = events.find((event) => event.type === "thread.turn-diff-completed");
+    expect(
+      diffCompleted?.type === "thread.turn-diff-completed"
+        ? diffCompleted.payload.assistantMessageId
+        : undefined,
+    ).toBe("assistant-turn-1-latest");
+  });
+
   it("refreshes local git status state on turn completion using the session cwd", async () => {
     const gitStatusRefreshCalls: string[] = [];
     const harness = await createHarness({

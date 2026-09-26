@@ -163,19 +163,48 @@ const make = Effect.gen(function* () {
       : Option.none();
   });
 
-  const resolveThreadDetail = Effect.fn("resolveThreadDetail")(function* (threadId: ThreadId) {
-    return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId, { activityKinds: [] })
+  // Reads only what checkpointing needs for an active thread: its session,
+  // workspace location, and checkpoint summaries. Message history stays in SQLite.
+  const resolveThreadCheckpointState = Effect.fn("resolveThreadCheckpointState")(function* (
+    threadId: ThreadId,
+  ) {
+    const runtime = yield* projectionSnapshotQuery
+      .getThreadRuntimeContext(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
+    if (!runtime) {
+      return undefined;
+    }
+    const context = yield* projectionSnapshotQuery
+      .getThreadCheckpointContext(threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
+    if (!context) {
+      return undefined;
+    }
+    return {
+      id: context.threadId,
+      projectId: context.projectId,
+      worktreePath: context.worktreePath,
+      checkpoints: context.checkpoints,
+      session: runtime.session,
+      projects: [{ id: context.projectId, workspaceRoot: context.workspaceRoot }],
+    };
   });
 
-  const resolveThreadProjects = Effect.fn("resolveThreadProjects")(function* (
-    projectId: ProjectId,
+  const resolveTurnAssistantMessageId = Effect.fn("resolveTurnAssistantMessageId")(function* (
+    threadId: ThreadId,
+    turnId: TurnId,
   ) {
-    const project = yield* projectionSnapshotQuery
-      .getProjectShellById(projectId)
+    if (projectionSnapshotQuery.getLatestAssistantMessageIdForTurn) {
+      return Option.getOrUndefined(
+        yield* projectionSnapshotQuery.getLatestAssistantMessageIdForTurn(threadId, turnId),
+      );
+    }
+    const thread = yield* projectionSnapshotQuery
+      .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
-    return project ? [project] : [];
+    return thread?.messages
+      .toReversed()
+      .find((entry) => entry.role === "assistant" && entry.turnId === turnId)?.id;
   });
 
   // Resolves the workspace CWD for checkpoint operations, preferring the
@@ -220,13 +249,6 @@ const make = Effect.gen(function* () {
   const captureAndDispatchCheckpoint = Effect.fn("captureAndDispatchCheckpoint")(function* (input: {
     readonly threadId: ThreadId;
     readonly turnId: TurnId;
-    readonly thread: {
-      readonly messages: ReadonlyArray<{
-        readonly id: MessageId;
-        readonly role: string;
-        readonly turnId: TurnId | null;
-      }>;
-    };
     readonly cwd: string;
     readonly turnCount: number;
     readonly status: "ready" | "missing" | "error";
@@ -301,9 +323,7 @@ const make = Effect.gen(function* () {
 
     const assistantMessageId =
       input.assistantMessageId ??
-      input.thread.messages
-        .toReversed()
-        .find((entry) => entry.role === "assistant" && entry.turnId === input.turnId)?.id ??
+      (yield* resolveTurnAssistantMessageId(input.threadId, input.turnId)) ??
       MessageId.make(`assistant:${input.turnId}`);
 
     yield* orchestrationEngine.dispatch({
@@ -364,7 +384,7 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* resolveThreadCheckpointState(event.threadId);
       if (!thread) {
         return;
       }
@@ -385,7 +405,7 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const projects = yield* resolveThreadProjects(thread.projectId);
+      const projects = thread.projects;
       const checkpointCwd = yield* resolveCheckpointCwd({
         threadId: thread.id,
         thread,
@@ -412,7 +432,6 @@ const make = Effect.gen(function* () {
       yield* captureAndDispatchCheckpoint({
         threadId: thread.id,
         turnId,
-        thread,
         cwd: checkpointCwd,
         turnCount: nextTurnCount,
         status:
@@ -432,12 +451,12 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* resolveThreadCheckpointState(event.threadId);
       if (!thread) {
         return;
       }
 
-      const projects = yield* resolveThreadProjects(thread.projectId);
+      const projects = thread.projects;
       const checkpointCwd = yield* resolveCheckpointCwd({
         threadId: thread.id,
         thread,
@@ -609,12 +628,12 @@ const make = Effect.gen(function* () {
     }
 
     const threadId = event.payload.threadId;
-    const thread = yield* resolveThreadDetail(threadId);
+    const thread = yield* resolveThreadCheckpointState(threadId);
     if (!thread) {
       return;
     }
 
-    const projects = yield* resolveThreadProjects(thread.projectId);
+    const projects = thread.projects;
     const checkpointCwd = yield* resolveCheckpointCwd({
       threadId,
       thread,
@@ -656,7 +675,7 @@ const make = Effect.gen(function* () {
   ) {
     const now = DateTime.formatIso(yield* DateTime.now);
 
-    const thread = yield* resolveThreadDetail(event.payload.threadId);
+    const thread = yield* resolveThreadCheckpointState(event.payload.threadId);
     if (!thread) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
@@ -829,7 +848,9 @@ const make = Effect.gen(function* () {
 
     if (event.type === "turn.completed" || event.type === "turn.aborted") {
       const turnId = toTurnId(event.turnId);
-      const thread = yield* resolveThreadDetail(event.threadId);
+      const thread = yield* projectionSnapshotQuery
+        .getThreadRuntimeContext(event.threadId)
+        .pipe(Effect.map(Option.getOrUndefined));
       const startedTurnId = startedTurns.get(event.threadId);
       const isTrackedTurn = sameId(startedTurnId, turnId);
       if (isTrackedTurn) startedTurns.delete(event.threadId);

@@ -1180,4 +1180,84 @@ describe("orchestration projector", () => {
       expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
     }),
   );
+
+  it.effect("keeps activities sorted and updates messages in place", () =>
+    Effect.gen(function* () {
+      const createdAt = "2026-03-02T10:00:00.000Z";
+      let sequence = 0;
+      const event = (type: OrchestrationEvent["type"], payload: unknown) =>
+        makeEvent({
+          sequence: ++sequence,
+          type,
+          aggregateKind: "thread",
+          aggregateId: "thread-order",
+          occurredAt: createdAt,
+          commandId: null,
+          payload,
+        });
+      const activity = (id: string, at: string, summary = id) =>
+        event("thread.activity-appended", {
+          threadId: "thread-order",
+          activity: {
+            id,
+            tone: "info",
+            kind: "note",
+            summary,
+            payload: {},
+            turnId: null,
+            createdAt: at,
+          },
+        });
+      const message = (id: string, text: string, streaming: boolean) =>
+        event("thread.message-sent", {
+          threadId: "thread-order",
+          messageId: id,
+          role: "assistant",
+          text,
+          turnId: null,
+          streaming,
+          createdAt,
+          updatedAt: createdAt,
+        });
+
+      const events: ReadonlyArray<OrchestrationEvent> = [
+        event("thread.created", {
+          threadId: "thread-order",
+          projectId: "project-1",
+          title: "order",
+          modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5-codex" },
+          runtimeMode: "full-access",
+          branch: null,
+          worktreePath: null,
+          createdAt,
+          updatedAt: createdAt,
+        }),
+        activity("activity-b", "2026-03-02T10:00:02.000Z"),
+        activity("activity-d", "2026-03-02T10:00:04.000Z"),
+        activity("activity-a", "2026-03-02T10:00:01.000Z"),
+        activity("activity-c", "2026-03-02T10:00:03.000Z"),
+        activity("activity-d", "2026-03-02T10:00:04.000Z", "activity-d replaced"),
+        message("message-1", "first ", true),
+        message("message-2", "second", false),
+        message("message-1", "part", true),
+      ];
+      const state = yield* Effect.reduce(
+        events,
+        () => createEmptyReadModel(createdAt),
+        projectEvent,
+      );
+
+      const thread = state.threads[0];
+      expect(thread?.activities.map((entry) => [entry.id, entry.summary])).toEqual([
+        ["activity-a", "activity-a"],
+        ["activity-b", "activity-b"],
+        ["activity-c", "activity-c"],
+        ["activity-d", "activity-d replaced"],
+      ]);
+      expect(thread?.messages.map((entry) => [entry.id, entry.text])).toEqual([
+        ["message-1", "first part"],
+        ["message-2", "second"],
+      ]);
+    }),
+  );
 });

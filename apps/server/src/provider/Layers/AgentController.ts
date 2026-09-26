@@ -949,7 +949,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       readonly botId: BotId;
       readonly parentDelegation: AkeruDelegationRecord | undefined;
       readonly access: AkeruDelegationAccessGrant;
-      readonly snapshot: OrchestrationReadModel | undefined;
+      readonly activeChildDelegations: number;
     }): NonNullable<AkeruToolSession["delegation"]> => {
       const parent = () => {
         const turnId = sessions.get(String(input.threadId))?.activeTurn?.turnId;
@@ -971,14 +971,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       const stopAgent = delegationRuntime?.stop;
       return {
         depth: input.parentDelegation?.depth ?? 0,
-        activeDelegations:
-          input.snapshot?.delegations.filter(
-            (candidate) =>
-              candidate.parentThreadId === input.threadId &&
-              candidate.state !== "completed" &&
-              candidate.state !== "failed" &&
-              candidate.state !== "canceled",
-          ).length ?? 0,
+        activeDelegations: input.activeChildDelegations,
         access: input.access,
         ...(createAgent ? { create: (request) => createAgent(parent(), request) } : {}),
         ...(checkAgent ? { check: (request) => checkAgent(parent(), request) } : {}),
@@ -1185,7 +1178,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     delegationRuntime ??=
       Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
         ? makeDelegationRuntime({
-            readSnapshot: () => Effect.runPromise(projectionSnapshotQuery.value.getSnapshot()),
+            readSnapshot: () =>
+              Effect.runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
             dispatch: (command) => Effect.runPromise(orchestrationEngine.value.dispatch(command)),
           })
         : undefined;
@@ -2001,27 +1995,71 @@ const make = (options?: AgentControllerLiveOptions) =>
         }),
       );
 
+    const isOpenDelegation = (delegation: AkeruDelegationRecord) =>
+      delegation.state !== "completed" &&
+      delegation.state !== "failed" &&
+      delegation.state !== "canceled";
+
+    // Resolves the thread's bot, group boss, and delegation links with by-id
+    // reads. Falls back to the command read model for query doubles that do
+    // not implement the narrow lookups.
+    const readSessionStartContext = Effect.fn("AgentController.readSessionStartContext")(function* (
+      threadId: ThreadId,
+      fallbackBotId: BotId | null,
+    ) {
+      if (Option.isNone(projectionSnapshotQuery)) {
+        return {
+          parentDelegation: undefined,
+          bot: undefined,
+          botId: fallbackBotId,
+          activeChildDelegations: 0,
+        };
+      }
+      const query = projectionSnapshotQuery.value;
+      const { getBotById, getGroupById, listThreadDelegations } = query;
+      if (getBotById && getGroupById && listThreadDelegations) {
+        const thread = Option.getOrUndefined(yield* query.getThreadRuntimeContext(threadId));
+        const delegations = (yield* listThreadDelegations(threadId)).filter(isOpenDelegation);
+        const group = thread?.groupId
+          ? Option.getOrUndefined(yield* getGroupById(thread.groupId))
+          : undefined;
+        const botId =
+          thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
+        const bot = botId ? Option.getOrUndefined(yield* getBotById(botId)) : undefined;
+        return {
+          parentDelegation: delegations.find((candidate) => candidate.childThreadId === threadId),
+          bot,
+          botId,
+          activeChildDelegations: delegations.filter(
+            (candidate) => candidate.parentThreadId === threadId,
+          ).length,
+        };
+      }
+      const snapshot = yield* query.getCommandReadModel();
+      const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
+      const group = thread?.groupId
+        ? snapshot.groups.find((candidate) => candidate.id === thread.groupId)
+        : undefined;
+      const botId =
+        thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
+      return {
+        parentDelegation: snapshot.delegations.find(
+          (candidate) => candidate.childThreadId === threadId && isOpenDelegation(candidate),
+        ),
+        bot: snapshot.bots.find((candidate) => candidate.id === botId),
+        botId,
+        activeChildDelegations: snapshot.delegations.filter(
+          (candidate) => candidate.parentThreadId === threadId && isOpenDelegation(candidate),
+        ).length,
+      };
+    });
+
     const startSession: AgentControllerShape["startSession"] = Effect.fn(
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const snapshot = Option.isSome(projectionSnapshotQuery)
-        ? yield* projectionSnapshotQuery.value.getSnapshot()
-        : undefined;
-      const thread = snapshot?.threads.find((candidate) => candidate.id === threadId);
-      const parentDelegation = snapshot?.delegations.find(
-        (candidate) =>
-          candidate.childThreadId === threadId &&
-          candidate.state !== "completed" &&
-          candidate.state !== "failed" &&
-          candidate.state !== "canceled",
-      );
-      const respondingBotId = thread?.respondingBotId ?? thread?.botId ?? input.botId ?? null;
-      const group = thread?.groupId
-        ? snapshot?.groups.find((candidate) => candidate.id === thread.groupId)
-        : undefined;
-      const botId = respondingBotId ?? group?.bossBotId ?? null;
-      const bot = snapshot?.bots.find((candidate) => candidate.id === botId);
+      const { parentDelegation, bot, botId, activeChildDelegations } =
+        yield* readSessionStartContext(threadId, input.botId ?? null);
       const delegatedAccess =
         delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
       const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
@@ -2182,7 +2220,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                   botId,
                   parentDelegation,
                   access,
-                  snapshot,
+                  activeChildDelegations,
                 }),
               }
             : {}),
@@ -2396,7 +2434,13 @@ const make = (options?: AgentControllerLiveOptions) =>
                   request,
                 );
               },
-              delegation: delegationFor({ threadId, botId, parentDelegation, access, snapshot }),
+              delegation: delegationFor({
+                threadId,
+                botId,
+                parentDelegation,
+                access,
+                activeChildDelegations,
+              }),
             }
           : {}),
         ...(input.botId && channelRuntime

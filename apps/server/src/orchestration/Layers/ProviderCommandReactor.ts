@@ -36,6 +36,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
@@ -927,9 +928,11 @@ const make = Effect.gen(function* () {
     const respondingGroup =
       thread.groupId == null
         ? undefined
-        : (yield* projectionSnapshotQuery.getCommandReadModel()).groups.find(
-            (group) => group.id === thread.groupId,
-          );
+        : projectionSnapshotQuery.getGroupById
+          ? Option.getOrUndefined(yield* projectionSnapshotQuery.getGroupById(thread.groupId))
+          : (yield* projectionSnapshotQuery.getCommandReadModel()).groups.find(
+              (group) => group.id === thread.groupId,
+            );
     const effectiveSandbox = respondingBot?.sandbox ?? serverSettings.sandbox.defaultProvider;
     const sandboxEnvironment =
       effectiveSandbox === "local"
@@ -2374,7 +2377,15 @@ const make = Effect.gen(function* () {
     }
   });
 
+  // Highest event sequence the subscriber has handed to the worker, so drain
+  // can wait for published events that are still in the subscription buffer.
+  const seenSequence = yield* SubscriptionRef.make(0);
+  const noteSeen = (sequence: number) =>
+    SubscriptionRef.update(seenSequence, (seen) => Math.max(seen, sequence));
+  const started = yield* SubscriptionRef.make(false);
+
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {
+    yield* SubscriptionRef.set(started, true);
     const interruptedTitleRegenerations = yield* findInterruptedThreadTitleRegenerations().pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
@@ -2387,6 +2398,12 @@ const make = Effect.gen(function* () {
       }),
     );
     const processEvent = Effect.fn("processEvent")(function* (event: OrchestrationEvent) {
+      yield* enqueueProviderIntent(event);
+      yield* noteSeen(event.sequence);
+    });
+    const enqueueProviderIntent = Effect.fn("enqueueProviderIntent")(function* (
+      event: OrchestrationEvent,
+    ) {
       if (
         (event.type === "thread.meta-updated" && event.payload.regenerateTitle === true) ||
         event.type === "thread.runtime-mode-set" ||
@@ -2404,6 +2421,7 @@ const make = Effect.gen(function* () {
 
     // Subscribe before returning, even while event handling waits for server activation.
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
+    yield* orchestrationEngine.latestSequence.pipe(Effect.flatMap(noteSeen));
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
     yield* recoverStartupProviderWork().pipe(
@@ -2443,9 +2461,21 @@ const make = Effect.gen(function* () {
 
   return {
     start,
+    // Waits until the subscriber has taken every event published so far, then
+    // until both workers are idle. Repeats while that work publishes more events.
     drain: Effect.gen(function* () {
-      yield* worker.drain;
-      yield* threadTitleRegenerationWorker.drain;
+      while (true) {
+        const target = (yield* SubscriptionRef.get(started))
+          ? yield* orchestrationEngine.latestSequence
+          : 0;
+        yield* SubscriptionRef.changes(seenSequence).pipe(
+          Stream.filter((seen) => seen >= target),
+          Stream.runHead,
+        );
+        yield* worker.drain;
+        yield* threadTitleRegenerationWorker.drain;
+        if (target === 0 || (yield* orchestrationEngine.latestSequence) === target) return;
+      }
     }),
   } satisfies ProviderCommandReactorShape;
 });

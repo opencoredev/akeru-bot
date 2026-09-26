@@ -19,7 +19,11 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
-import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
+import {
+  OrchestrationProjectionSnapshotQueryLive,
+  SHELL_DELEGATION_TEXT_MAX_CHARS,
+  SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
+} from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -101,6 +105,94 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.equal(snapshot.delegations.length, 1);
       assert.equal(snapshot.delegations[0]?.delegationId, "delegation-shell");
       assert.equal(snapshot.delegations[0]?.task, "Compare the release options.");
+      yield* sql`DELETE FROM projection_delegations`;
+    }),
+  );
+
+  it.effect("keeps open and recent delegations in the shell snapshot with capped text", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const makeRecord = (index: number, overrides: Record<string, unknown>) => ({
+        delegationId: `delegation-${String(index).padStart(3, "0")}`,
+        parentDelegationId: null,
+        parentBotId: "bot-parent",
+        childBotId: "bot-child",
+        parentThreadId: "thread-parent",
+        childThreadId: null,
+        parentTurnId: "turn-parent",
+        childTurnId: null,
+        ancestorBotIds: ["bot-parent"],
+        depth: 1,
+        task: `Task ${index}`,
+        expectedResult: "A short answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: [],
+          memoryScopes: [],
+          sandbox: null,
+          runtimeMode: "approval-required",
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "none",
+        },
+        state: "completed",
+        billedBotId: "bot-child",
+        result: { summary: `Done ${index}`, childThreadId: "thread-child", childTurnId: null },
+        failure: null,
+        keep: false,
+        createdAt: `2026-01-01T00:00:${String(index % 60).padStart(2, "0")}.000Z`,
+        updatedAt: `2026-01-02T00:${String(index).padStart(2, "0")}:00.000Z`,
+        startedAt: null,
+        completedAt: null,
+        ...overrides,
+      });
+      const terminalCount = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 5;
+      const records = [
+        // The oldest delegation is still running, so it survives the cap.
+        makeRecord(0, { state: "running", result: null }),
+        ...Array.from({ length: terminalCount }, (_, offset) => makeRecord(offset + 1, {})),
+        makeRecord(50, {
+          parentThreadId: "thread-other",
+          state: "failed",
+          result: null,
+          failure: { failureCode: "child_failed", message: "x".repeat(10_000) },
+        }),
+      ];
+
+      yield* sql`DELETE FROM projection_delegations`;
+      for (const record of records) {
+        const recordJson = yield* decodeDelegationRecord(record).pipe(
+          Effect.flatMap(encodeDelegationRecordJson),
+        );
+        yield* sql`
+          INSERT INTO projection_delegations (delegation_id, record_json)
+          VALUES (${record.delegationId}, ${recordJson})
+        `;
+      }
+
+      const snapshot = yield* snapshotQuery.getShellSnapshot();
+      const parentIds = snapshot.delegations
+        .filter((delegation) => delegation.parentThreadId === "thread-parent")
+        .map((delegation) => delegation.delegationId);
+      const newestTerminalIds = Array.from(
+        { length: SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD },
+        (_, offset) =>
+          `delegation-${String(terminalCount - SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + offset + 1).padStart(3, "0")}`,
+      );
+      assert.deepEqual(parentIds, ["delegation-000", ...newestTerminalIds]);
+
+      const failed = snapshot.delegations.find(
+        (delegation) => delegation.delegationId === "delegation-050",
+      );
+      assert.equal(failed?.failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
+      assert.isTrue(failed?.failure?.message.endsWith("…"));
+      assert.equal(
+        snapshot.delegations.find((delegation) => delegation.delegationId === "delegation-025")
+          ?.result?.summary,
+        "Done 25",
+      );
       yield* sql`DELETE FROM projection_delegations`;
     }),
   );

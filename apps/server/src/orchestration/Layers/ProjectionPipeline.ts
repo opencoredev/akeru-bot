@@ -119,8 +119,18 @@ function settledTurnStateForSessionStatus(
   }
 }
 
+const projectorEventTypes = (
+  types: ReadonlyArray<OrchestrationEvent["type"]>,
+): ReadonlySet<OrchestrationEvent["type"]> => new Set(types);
+
 interface ProjectorDefinition {
   readonly name: ProjectorName;
+  /**
+   * Event types `apply` acts on. The live pipeline skips `apply` for other
+   * types but still advances this projector's cursor. Omit to receive every
+   * event. Keep in sync with the cases handled by `apply`.
+   */
+  readonly eventTypes?: ReadonlySet<OrchestrationEvent["type"]>;
   readonly apply: (
     event: OrchestrationEvent,
     attachmentSideEffects: AttachmentSideEffects,
@@ -2143,58 +2153,164 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
+        eventTypes: projectorEventTypes([
+          "project.created",
+          "project.meta-updated",
+          "project.deleted",
+        ]),
         apply: applyProjectsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.bots,
+        eventTypes: projectorEventTypes([
+          "bot.created",
+          "bot.updated",
+          "bot.archived",
+          "bot.restored",
+        ]),
         apply: applyBotsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.groups,
+        eventTypes: projectorEventTypes([
+          "group.created",
+          "group.renamed",
+          "group.member-assigned",
+          "group.member-unassigned",
+          "group.person-assigned",
+          "group.person-unassigned",
+          "group.boss-set",
+          "group.deleted",
+        ]),
         apply: applyGroupsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.delegations,
+        eventTypes: projectorEventTypes(["delegation.created", "delegation.updated"]),
         apply: applyDelegationsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.mcpServers,
+        eventTypes: projectorEventTypes([
+          "mcp-server.created",
+          "mcp-server.updated",
+          "mcp-server.enabled",
+          "mcp-server.disabled",
+          "mcp-server.deleted",
+        ]),
         apply: applyMcpServersProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.routines,
+        eventTypes: projectorEventTypes([
+          "skill-assignment.assigned",
+          "skill-assignment.unassigned",
+          "routine.drafted",
+          "routine.approved",
+          "routine.enabled",
+          "routine.running",
+          "routine.paused",
+          "routine.blocked",
+          "routine.failed",
+          "routine.completed",
+          "routine.run-canceled",
+          "routine.deleted",
+        ]),
         apply: applyRoutinesProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threadMessages,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.message-sent",
+          "thread.message-reaction-set",
+          "thread.reverted",
+        ]),
         apply: applyThreadMessagesProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threadProposedPlans,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.proposed-plan-upserted",
+          "thread.reverted",
+        ]),
         apply: applyThreadProposedPlansProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threadActivities,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.activity-appended",
+          "thread.reverted",
+        ]),
         apply: applyThreadActivitiesProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threadSessions,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.turn-resume-requested",
+          "thread.session-set",
+        ]),
         apply: applyThreadSessionsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threadTurns,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.turn-start-requested",
+          "thread.session-set",
+          "thread.message-sent",
+          "thread.turn-interrupt-requested",
+          "thread.turn-diff-completed",
+          "thread.reverted",
+        ]),
         apply: applyThreadTurnsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.checkpoints,
+        eventTypes: projectorEventTypes([]),
         apply: applyCheckpointsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.pendingApprovals,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.activity-appended",
+          "thread.approval-response-requested",
+        ]),
         apply: applyPendingApprovalsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,
+        eventTypes: projectorEventTypes([
+          "thread.created",
+          "thread.ownership-updated",
+          "thread.archived",
+          "thread.unarchived",
+          "thread.settled",
+          "thread.unsettled",
+          "thread.snoozed",
+          "thread.unsnoozed",
+          "thread.pinned",
+          "thread.unpinned",
+          "thread.pin-reordered",
+          "thread.meta-updated",
+          "thread.runtime-mode-set",
+          "thread.interaction-mode-set",
+          "thread.deleted",
+          "thread.turn-start-requested",
+          "thread.message-sent",
+          "thread.message-reaction-set",
+          "thread.proposed-plan-upserted",
+          "thread.activity-appended",
+          "thread.approval-response-requested",
+          "thread.user-input-response-requested",
+          "thread.session-set",
+          "thread.turn-diff-completed",
+          "thread.reverted",
+        ]),
         apply: applyThreadsProjection,
       },
     ];
@@ -2250,12 +2366,17 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         ),
     );
 
+    const projectorHandlesEvent = (projector: ProjectorDefinition, event: OrchestrationEvent) =>
+      projector.eventTypes === undefined || projector.eventTypes.has(event.type);
+
     const applyProjectorForEvent = Effect.fn("applyProjectorForEvent")(function* (
       projector: ProjectorDefinition,
       event: OrchestrationEvent,
       attachmentSideEffects: AttachmentSideEffects,
     ) {
-      yield* projector.apply(event, attachmentSideEffects);
+      if (projectorHandlesEvent(projector, event)) {
+        yield* projector.apply(event, attachmentSideEffects);
+      }
       yield* projectionStateRepository.upsert({
         projector: projector.name,
         lastAppliedSequence: event.sequence,
@@ -2300,12 +2421,23 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedThreadIds: new Set<string>(),
             prunedThreadRelativePaths: new Map<string, Set<string>>(),
           };
+          // Every cursor still advances to this event, so resume and snapshot
+          // sequences match running each projector; only no-op applies are skipped.
           yield* sql.withTransaction(
-            Effect.forEach(
-              projectors,
-              (projector) => applyProjectorForEvent(projector, event, attachmentSideEffects),
-              { concurrency: 1, discard: true },
-            ),
+            Effect.gen(function* () {
+              for (const projector of projectors) {
+                if (projectorHandlesEvent(projector, event)) {
+                  yield* projector.apply(event, attachmentSideEffects);
+                }
+              }
+              yield* projectionStateRepository.upsertMany(
+                projectors.map((projector) => ({
+                  projector: projector.name,
+                  lastAppliedSequence: event.sequence,
+                  updatedAt: event.occurredAt,
+                })),
+              );
+            }),
           );
           // Return the cleanup effect so the caller runs it after the outer transaction commits.
           // @effect-diagnostics-next-line returnEffectInGen:off

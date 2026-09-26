@@ -720,6 +720,36 @@ const make = Effect.gen(function* () {
       Effect.flatMap(materializeBrowserProviderSecret),
     );
 
+  // Hot paths (runtime ingestion reads settings per streamed delta) must not
+  // hit the secret store every call. The materialized result is reused while
+  // the cached settings object is unchanged and no update has started since
+  // the read began. Every settings secret write goes through updateSettings,
+  // which bumps the generation before and after touching secrets.
+  type MaterializedState = {
+    readonly generation: number;
+    readonly entry?: {
+      readonly source: ServerSettings;
+      readonly materialized: ServerSettings;
+    };
+  };
+  const materializedRef = yield* Ref.make<MaterializedState>({ generation: 0 });
+  const bumpMaterializedGeneration = Ref.update(materializedRef, (state) => ({
+    generation: state.generation + 1,
+  }));
+
+  const getMaterializedSettings = Effect.gen(function* () {
+    const settings = yield* getSettingsFromCache;
+    const { generation, entry } = yield* Ref.get(materializedRef);
+    if (entry?.source === settings) return entry.materialized;
+    const materialized = yield* materializeAllSecrets(settings);
+    yield* Ref.update(materializedRef, (state) =>
+      state.generation === generation
+        ? { generation, entry: { source: settings, materialized } }
+        : state,
+    );
+    return materialized;
+  });
+
   type SecretSnapshot = {
     readonly name: string;
     readonly previous: Option.Option<Uint8Array>;
@@ -1159,13 +1189,11 @@ const make = Effect.gen(function* () {
   return {
     start,
     ready: Deferred.await(startedDeferred),
-    getSettings: getSettingsFromCache.pipe(
-      Effect.flatMap(materializeAllSecrets),
-      Effect.map(resolveTextGenerationProvider),
-    ),
+    getSettings: getMaterializedSettings.pipe(Effect.map(resolveTextGenerationProvider)),
     updateSettings: (patch) =>
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
+          yield* bumpMaterializedGeneration;
           const current = yield* getSettingsFromCache;
           const patched = applyServerSettingsPatch(current, patch);
           const sandboxMaterialized = yield* materializeSandboxEnvironmentSecrets(patched);
@@ -1223,7 +1251,7 @@ const make = Effect.gen(function* () {
           }
           const materialized = yield* materializeAllSecrets(next);
           return resolveTextGenerationProvider(materialized);
-        }),
+        }).pipe(Effect.ensuring(bumpMaterializedGeneration)),
       ),
     get streamChanges() {
       return materializeChanges(Stream.fromPubSub(changesPubSub));
