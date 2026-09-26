@@ -177,6 +177,10 @@ The backend agent runtime that actually performs work. Six drivers ship built in
 
 The live provider-backed runtime attached to a thread. Session shape is in [the orchestration contracts][1], and lifecycle is managed in [ProviderService.ts][14].
 
+#### Runtime seam
+
+The single bridge where Promise-based code (Mastra callbacks, tool handlers, library promises) re-enters AgentController's Effect runtime. Its fibers belong to the controller's layer scope, so background failures are logged and shutdown interrupts in-flight work. See the runtime seam section of [providers.md][16].
+
 #### Runtime mode
 
 The safety/access mode for a thread or session. [The contracts][1] define four values: `approval-required`, `auto-accept-edits`, `auto`, and `full-access`. See [permission modes][18].

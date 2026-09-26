@@ -51,6 +51,29 @@ All active provider paths receive bot-owned Markdown memory and participate in s
 review accounting. Mastra refreshes the files before turn admission; standard OpenCode carries
 them in its per-prompt system context. See [Memory architecture](memory.md).
 
+### Runtime seam
+
+AgentController is an Effect layer, but Mastra, the tool runtime, delegation, and memory work are
+Promise-based. [`AkeruRuntimeSeam`][seam] is the only place where those callers re-enter the
+controller's Effect runtime. The layer builds it once, and every fiber it starts joins a `FiberSet`
+owned by the layer scope, so stopping the layer interrupts in-flight work.
+
+- `runPromise` is for Promise callbacks that need an Effect result, such as Mastra tool handlers and
+  approval callbacks. It resolves in the same microtask order as `Effect.runPromiseWith`, which turn
+  admission relies on.
+- `fork` and `forkPromise` start background work: observational memory, turn dispatch and
+  admission, worker and delegation settlement after a turn, and auto-approval of allowed tools. A
+  failure is logged as a warning with the thread, turn, or tool context. `forkPromise` passes the
+  rejection to `onFailure` first so the controller can fail the turn or publish `runtime.error` as
+  before. Interruption is not logged.
+- Outbound calls from Effect into a Promise library go through `runMastra`, which types the failure
+  as `AgentControllerRuntimeError`.
+
+Some runtimes arrive after construction, because orchestration is built after the controller.
+The channel, plugin, bot-state, and delegation runtimes, plus the orchestration handle that workers
+use, live in one `Ref` that `configurePluginRuntime` and `configureDelegation` update. They are not
+mutable `let` bindings.
+
 ## Catalog tool parity
 
 The typed Akeru catalog is advertised only by the Mastra controller. Codex, Claude, Grok, Kimi
@@ -368,6 +391,7 @@ when a request opens (approval) or user input is requested, via
 [registry]: ../../apps/server/src/provider/Services/ProviderAdapterRegistry.ts
 [service]: ../../apps/server/src/provider/Layers/ProviderService.ts
 [controller]: ../../apps/server/src/provider/Layers/AgentController.ts
+[seam]: ../../apps/server/src/provider/AkeruRuntimeSeam.ts
 [bridge]: ../../apps/server/src/provider/Layers/LegacyProviderBridge.ts
 [contracts]: ../../packages/contracts/src/orchestration.ts
 [workers-contract]: ../../packages/contracts/src/akeruWorkers.ts
