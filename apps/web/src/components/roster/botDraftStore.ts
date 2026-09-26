@@ -1,8 +1,8 @@
-const DRAFTS_KEY = "akeru:bot-drafts:v1";
-// Which write each stored draft came from. `seq` only grows, so a version is never reused.
-// A pending edit remembers the version it saw when typed; a flush writes it only if storage
-// still holds that version, so an older edit never overwrites another tab's newer write or clear.
-const VERSIONS_KEY = "akeru:bot-drafts:v1:versions";
+// Each draft lives under its own key and is written as it is typed, so a keystroke costs one
+// small write instead of rewriting every draft, and the last write across tabs wins.
+const DRAFT_KEY_PREFIX = "akeru:bot-draft:v2:";
+// Drafts saved before per-draft keys, moved over once per page load.
+const LEGACY_DRAFTS_KEY = "akeru:bot-drafts:v1";
 const MAX_DRAFT_CHARS = 20_000;
 
 function storage(): Storage | null {
@@ -13,120 +13,60 @@ function storage(): Storage | null {
   }
 }
 
-function readJson(key: string): Record<string, unknown> {
-  const localStorage = storage();
-  if (!localStorage) return {};
+let legacyMigrated = false;
+
+function migrateLegacyDrafts(localStorage: Storage): void {
+  if (legacyMigrated) return;
+  legacyMigrated = true;
   try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return {};
+    const raw = localStorage.getItem(LEGACY_DRAFTS_KEY);
+    if (raw === null) return;
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
-    return parsed as Record<string, unknown>;
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      for (const [draftKey, text] of Object.entries(parsed)) {
+        const key = DRAFT_KEY_PREFIX + draftKey;
+        if (typeof text === "string" && text.length > 0 && localStorage.getItem(key) === null) {
+          localStorage.setItem(key, text.slice(0, MAX_DRAFT_CHARS));
+        }
+      }
+    }
+    localStorage.removeItem(LEGACY_DRAFTS_KEY);
   } catch {
-    return {};
+    // Unreadable legacy drafts are dropped. Draft recovery is best-effort.
   }
 }
 
-function writeJson(key: string, value: unknown): void {
+function draftStorage(): Storage | null {
   const localStorage = storage();
-  if (!localStorage) return;
+  if (localStorage) migrateLegacyDrafts(localStorage);
+  return localStorage;
+}
+
+export function readBotDraft(draftKey: string): string {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    return draftStorage()?.getItem(DRAFT_KEY_PREFIX + draftKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function writeBotDraft(draftKey: string, text: string): void {
+  const localStorage = draftStorage();
+  if (!localStorage) return;
+  const clipped = text.slice(0, MAX_DRAFT_CHARS);
+  try {
+    if (clipped.length === 0) localStorage.removeItem(DRAFT_KEY_PREFIX + draftKey);
+    else localStorage.setItem(DRAFT_KEY_PREFIX + draftKey, clipped);
   } catch {
     // Quota or private mode. Draft recovery is best-effort.
   }
 }
 
-function readAll(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(readJson(DRAFTS_KEY)).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
-}
-
-interface DraftVersions {
-  seq: number;
-  versions: Record<string, number>;
-}
-
-function readVersions(): DraftVersions {
-  const stored = readJson(VERSIONS_KEY);
-  const versions =
-    typeof stored.versions === "object" && stored.versions !== null ? stored.versions : {};
-  return {
-    seq: typeof stored.seq === "number" ? stored.seq : 0,
-    versions: Object.fromEntries(
-      Object.entries(versions).filter(
-        (entry): entry is [string, number] => typeof entry[1] === "number",
-      ),
-    ),
-  };
-}
-
-// Keystrokes land here first and reach localStorage after a short pause, on blur, or when
-// the page hides. Flushing merges into the stored map so drafts from other tabs survive.
-const pendingDrafts = new Map<
-  string,
-  { readonly text: string; readonly seenVersion: number | undefined }
->();
-const FLUSH_DELAY_MS = 400;
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-let unloadListenersInstalled = false;
-
-function installUnloadListeners(): void {
-  if (unloadListenersInstalled || typeof window === "undefined") return;
-  unloadListenersInstalled = true;
-  window.addEventListener("pagehide", flushBotDrafts);
-  window.addEventListener("beforeunload", flushBotDrafts);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushBotDrafts();
-  });
-}
-
-/** Writes pending drafts to storage now. Safe to call when nothing is pending. */
-export function flushBotDrafts(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer);
-    flushTimer = null;
-  }
-  if (pendingDrafts.size === 0) return;
-  const drafts = readAll();
-  const stored = readVersions();
-  for (const [draftKey, pending] of pendingDrafts) {
-    // Another tab wrote or cleared this draft after the pending edit was typed.
-    if (stored.versions[draftKey] !== pending.seenVersion) continue;
-    if (pending.text.length === 0) {
-      delete drafts[draftKey];
-      delete stored.versions[draftKey];
-    } else {
-      drafts[draftKey] = pending.text;
-      stored.seq += 1;
-      stored.versions[draftKey] = stored.seq;
-    }
-  }
-  pendingDrafts.clear();
-  writeJson(DRAFTS_KEY, drafts);
-  writeJson(VERSIONS_KEY, stored);
-}
-
-export function readBotDraft(draftKey: string): string {
-  return pendingDrafts.get(draftKey)?.text ?? readAll()[draftKey] ?? "";
-}
-
-/** Records a draft in memory and persists it after typing pauses. */
-export function writeBotDraft(draftKey: string, text: string): void {
-  pendingDrafts.set(draftKey, {
-    text: text.slice(0, MAX_DRAFT_CHARS),
-    seenVersion: readVersions().versions[draftKey],
-  });
-  installUnloadListeners();
-  if (flushTimer !== null) clearTimeout(flushTimer);
-  flushTimer = setTimeout(flushBotDrafts, FLUSH_DELAY_MS);
-}
-
-/** Clears a draft and persists the removal immediately. */
 export function clearBotDraft(draftKey: string): void {
-  pendingDrafts.set(draftKey, { text: "", seenVersion: readVersions().versions[draftKey] });
-  flushBotDrafts();
+  writeBotDraft(draftKey, "");
+}
+
+/** Resets the once-per-page legacy migration. Tests only. */
+export function resetBotDraftMigrationForTests(): void {
+  legacyMigrated = false;
 }
