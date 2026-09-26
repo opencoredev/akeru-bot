@@ -15,6 +15,7 @@ import {
 import { isToolLifecycleItemType } from "@t3tools/contracts";
 import type {
   AkeruDelegationRecord,
+  BotId,
   ChannelProvider,
   OrchestrationLatestTurn,
   OrchestrationThread,
@@ -1136,14 +1137,14 @@ function deriveThreadFeedTurnFolds(
       pendingUserBoundary = entry.message.createdAt;
       continue;
     }
+    // Delegation cards never join a fold: bot work stays visible in the chat
+    // without opening the turn's work log, as it does on web.
     const turnId =
       entry.type === "message" && entry.message.role === "assistant"
         ? entry.message.turnId
         : entry.type === "activity-group"
           ? entry.turnId
-          : entry.type === "delegation"
-            ? entry.delegation.parentTurnId
-            : null;
+          : null;
     if (!turnId) {
       continue;
     }
@@ -1431,6 +1432,28 @@ export function buildPendingUserInputAnswers(
   return answers;
 }
 
+/**
+ * Drops the `delegation.<state>` delivery activities whose record renders as a
+ * card; the card already shows that state and result. Activities without a
+ * card, such as `delegation.retry.failed`, stay in the work log.
+ */
+function withoutCardedDelegationActivities(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+): ReadonlyArray<OrchestrationThreadActivity> {
+  if (delegations.length === 0) return activities;
+  const cardIds = new Set<string>(delegations.map((delegation) => delegation.delegationId));
+  return activities.filter((activity) => {
+    if (!activity.kind.startsWith("delegation.")) return true;
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const delegationId = payload?.delegationId;
+    return typeof delegationId !== "string" || !cardIds.has(delegationId);
+  });
+}
+
 export function buildThreadFeed(
   thread: OrchestrationThread,
   options?: {
@@ -1439,8 +1462,9 @@ export function buildThreadFeed(
     /**
      * Delegations this chat started, from the environment snapshot's
      * `delegations` list (thread detail payloads do not carry them).
-     * `botChatTimeline` anchors each card to the turn that asked for it; the
-     * fold pass then keeps the card inside its turn's collapsed work.
+     * `botChatTimeline` anchors each card to the turn that asked for it. Cards
+     * stay outside collapsed work, and the `delegation.<state>` work-log rows
+     * for a record that has a card are dropped so it shows once.
      */
     readonly delegations?: ReadonlyArray<AkeruDelegationRecord>;
   },
@@ -1466,7 +1490,9 @@ export function buildThreadFeed(
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
   const botStepMeters = buildBotStepMeters(thread.activities);
-  const workLogEntries = deriveWorkLogEntries(thread.activities);
+  const workLogEntries = deriveWorkLogEntries(
+    withoutCardedDelegationActivities(thread.activities, options?.delegations ?? []),
+  );
   const timed: Array<{ readonly at: number; readonly entry: RawThreadFeedEntry }> = [];
   for (const message of messages) {
     const entry = messageFeedEntry(
@@ -1768,4 +1794,28 @@ function mergeDelegationCards(
   });
   merged.push(...(delegationsByPosition.get(grouped.length) ?? []));
   return merged;
+}
+
+/**
+ * In a group chat, the assistant messages that start a new speaker run, keyed
+ * by message id to the bot that spoke. A message without `respondingBotId` is
+ * the boss's, as on web. Pass the presented feed so labels follow what is
+ * visible; direct chats (no `groupBossBotId`) get no labels.
+ */
+export function deriveGroupSpeakerLabels(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+  groupBossBotId: BotId | null,
+): ReadonlyMap<string, BotId> {
+  const labels = new Map<string, BotId>();
+  if (groupBossBotId === null) return labels;
+  let previousSpeaker: BotId | null = null;
+  for (const entry of feed) {
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const { message } = entry;
+    if (message.text.trim().length === 0 && (message.attachments ?? []).length === 0) continue;
+    const speaker = message.respondingBotId ?? groupBossBotId;
+    if (speaker !== previousSpeaker) labels.set(message.id, speaker);
+    previousSpeaker = speaker;
+  }
+  return labels;
 }

@@ -71,6 +71,7 @@ import {
 import { labelSentMessageMentions, useSentMessageMentions } from "./sentMessageMentions";
 
 import { AppText as Text } from "../../components/AppText";
+import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
 import { ThreadDelegationFeedCard } from "./ThreadDelegationFeedCard";
 import type { OrchestrationBot } from "@t3tools/contracts";
 import { CopyTextButton } from "../../components/CopyTextButton";
@@ -111,6 +112,7 @@ import { useAppearanceCodeSurface } from "../settings/appearance/useAppearanceCo
 import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
 import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
 import {
+  deriveGroupSpeakerLabels,
   deriveThreadFeedPresentation,
   threadFeedEntriesEqual,
   type ThreadFeedEntry,
@@ -181,6 +183,8 @@ export interface ThreadFeedProps {
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   /** Bots by id, so delegation cards can show the child bot's name and avatar. */
   readonly botsById?: ReadonlyMap<string, OrchestrationBot>;
+  /** Set in group chats: assistant messages without a responding bot belong to the boss. */
+  readonly groupBossBotId?: BotId | null;
   readonly contentPresentation: ThreadContentPresentation;
   readonly agentLabel: string;
   readonly latestTurn: ThreadFeedLatestTurn | null;
@@ -1054,6 +1058,8 @@ function renderFeedEntry(
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly terminalAssistantMessageIds: ReadonlySet<string>;
+    /** Group chats only: the bot to name above a message where the speaker changes. */
+    readonly speakerLabels: ReadonlyMap<string, BotId>;
     readonly unsettledTurnId: TurnId | null;
     readonly onCopyWorkRow: (rowId: string, value: string) => void;
     readonly onToggleWorkGroup: (groupId: string) => void;
@@ -1070,6 +1076,7 @@ function renderFeedEntry(
     readonly userBubbleMaxWidth: number;
     readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
     readonly formatDate: (value: number, options: Intl.DateTimeFormatOptions) => string;
+    readonly unknownBotLabel: string;
   },
 ) {
   const entry = info.item;
@@ -1230,6 +1237,8 @@ function renderFeedEntry(
     }
 
     const enterAnimated = isFreshTimestamp(message.createdAt);
+    const speakerBotId = props.speakerLabels.get(message.id) ?? null;
+    const speakerBot = speakerBotId ? props.botsById?.get(speakerBotId) : undefined;
     const assistantMarkdown = message.streaming
       ? stabilizeStreamingMarkdown(message.text)
       : message.text;
@@ -1238,6 +1247,17 @@ function renderFeedEntry(
         className={cn(showAssistantMeta ? "mb-5 px-1" : "mb-2 px-1")}
         {...(enterAnimated ? { entering: FadeIn.duration(220) } : {})}
       >
+        {speakerBotId ? (
+          <View className="mb-1.5 flex-row items-center gap-2">
+            <BotAvatarView
+              avatar={speakerBot?.avatar ?? seededBlobAvatar(speakerBotId)}
+              size={20}
+            />
+            <Text className="font-t3-medium text-sm text-foreground" numberOfLines={1}>
+              {speakerBot?.name ?? props.unknownBotLabel}
+            </Text>
+          </View>
+        ) : null}
         {entry.botStepMeter ? <BotStepMeter meter={entry.botStepMeter} /> : null}
         {message.text.trim().length > 0 ? (
           hasNativeSelectableMarkdownText() ? (
@@ -2061,6 +2081,34 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     (props.latestTurn.completedAt === null || props.latestTurn.state === "running")
       ? props.latestTurn.turnId
       : null;
+  const speakerLabels = useMemo(
+    () => deriveGroupSpeakerLabels(presentedFeed, props.groupBossBotId ?? null),
+    [presentedFeed, props.groupBossBotId],
+  );
+  // LegendList does not invalidate visible rows when only the renderItem closure changes.
+  // Keep row-local interaction props in extraData so disclosures and copy feedback repaint.
+  const listAppearanceData = useMemo(
+    () => ({
+      copiedRowId,
+      expandedWorkRows,
+      iconSubtleColor,
+      markdownStyles,
+      reviewCommentColors,
+      speakerLabels,
+      userBubbleColor,
+      viewportWidth,
+    }),
+    [
+      copiedRowId,
+      expandedWorkRows,
+      iconSubtleColor,
+      markdownStyles,
+      reviewCommentColors,
+      speakerLabels,
+      userBubbleColor,
+      viewportWidth,
+    ],
+  );
 
   useEffect(() => {
     const previous = previousLatestTurnRef.current;
@@ -2240,6 +2288,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       copiedRowId,
       expandedWorkRows,
       terminalAssistantMessageIds,
+      speakerLabels,
       unsettledTurnId,
       onCopyWorkRow,
       onToggleWorkGroup,
@@ -2260,12 +2309,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       replyPlayback,
       replySynthesis,
       formatDate,
+      unknownBotLabel: t("Unknown bot"),
     }),
     [
       formatDate,
+      t,
       copiedRowId,
       expandedWorkRows,
       terminalAssistantMessageIds,
+      speakerLabels,
       unsettledTurnId,
       iconSubtleColor,
       userBubbleColor,

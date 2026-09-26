@@ -35,13 +35,15 @@ function stateLabel(state: AkeruDelegationState, t: ReturnType<typeof useMobileI
   }
 }
 
+// Mobile has no web status tokens (info, success, warning, destructive), so
+// the dots use palette colors that read in both themes.
 const STATE_DOT_CLASS: Record<AkeruDelegationState, string> = {
-  queued: "bg-muted-foreground/50",
-  running: "bg-info",
-  blocked: "bg-warning",
-  failed: "bg-destructive",
-  canceled: "bg-muted-foreground/60",
-  completed: "bg-success",
+  queued: "bg-icon-subtle",
+  running: "bg-sky-500",
+  blocked: "bg-amber-500",
+  failed: "bg-red-500",
+  canceled: "bg-icon-subtle",
+  completed: "bg-emerald-500",
 };
 
 /** Elapsed time stamps once the card mounts; live cards do not repaint per second. */
@@ -117,7 +119,7 @@ export function ThreadDelegationCard(props: {
         </Text>
         <View className="flex-row shrink-0 items-center gap-1.5">
           <View className={`size-1.5 rounded-full ${STATE_DOT_CLASS[state]}`} />
-          <Text className="text-xs text-muted-foreground" accessibilityLiveRegion="polite">
+          <Text className="text-xs text-foreground-muted" accessibilityLiveRegion="polite">
             {stateLabel(state, t)}
           </Text>
         </View>
@@ -126,14 +128,14 @@ export function ThreadDelegationCard(props: {
         {delegation.task}
       </Text>
       {elapsed !== null ? (
-        <Text className="text-xs tabular-nums text-muted-foreground">{elapsed}</Text>
+        <Text className="text-xs tabular-nums text-foreground-muted">{elapsed}</Text>
       ) : null}
       {outcome !== null ? (
         <Text
           className={
             presentation.outcome?.kind === "failure"
-              ? "text-sm text-destructive"
-              : "text-sm text-muted-foreground"
+              ? "text-sm text-danger-foreground"
+              : "text-sm text-foreground-muted"
           }
           numberOfLines={4}
         >
@@ -141,7 +143,7 @@ export function ThreadDelegationCard(props: {
         </Text>
       ) : null}
       {presentation.delivery ? (
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-xs text-foreground-muted">
           {presentation.delivery === "pending"
             ? t("Result waiting for the next reply")
             : t("Result delivered to {name}", { name: parentName })}

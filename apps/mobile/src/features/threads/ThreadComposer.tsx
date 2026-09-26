@@ -882,9 +882,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             onPress={props.onReconnectEnvironment}
           />
         ) : sendBlock ? (
+          // In flow, not absolute: the overlay's measured height becomes the
+          // feed's bottom inset, so the notice stacks above the pill instead
+          // of painting over the feed and the waiting line.
           <View
             accessibilityRole="alert"
-            className="absolute inset-x-0 bottom-full pb-2"
+            className="mb-2 rounded-2xl border border-border bg-card px-4 py-2"
             pointerEvents="none"
           >
             <Text className="text-center text-xs text-foreground-muted">

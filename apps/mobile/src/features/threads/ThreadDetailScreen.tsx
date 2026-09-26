@@ -58,6 +58,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAtomValue } from "@effect/atom-react";
 
 import { ControlPill } from "../../components/ControlPill";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -67,6 +68,7 @@ import { useThreadDraftForThread } from "../../state/use-thread-composer-state";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { environmentGroupsAtom } from "../../state/bots";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -277,6 +279,10 @@ const ThreadDraftComposer = memo(function ThreadDraftComposer(
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
+  const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+  const groupId = props.selectedThread.groupId ?? null;
+  const groupBossBotId =
+    groupId === null ? null : (groups.find((group) => group.id === groupId)?.bossBotId ?? null);
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can swallow the IME hide callbacks when the app is backgrounded
@@ -688,6 +694,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             workspaceRoot={props.threadCwd}
             feed={props.selectedThreadFeed}
             botsById={props.botsById}
+            groupBossBotId={groupBossBotId}
             contentPresentation={props.contentPresentation}
             agentLabel={agentLabel}
             latestTurn={props.selectedThread.latestTurn}
@@ -772,12 +779,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
               {props.waitingOnChildren === true && props.activeWorkStartedAt === null ? (
-                <Text
-                  accessibilityLiveRegion="polite"
-                  className="mx-4 mb-2 text-xs text-foreground-muted"
-                >
-                  {t("Waiting on delegated work")}
-                </Text>
+                <View className="mx-4 mb-2 self-start rounded-full border border-border bg-card px-3 py-1">
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    className="text-xs text-foreground-muted"
+                  >
+                    {t("Waiting on delegated work")}
+                  </Text>
+                </View>
               ) : null}
               {props.canResumeThread ? (
                 <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
