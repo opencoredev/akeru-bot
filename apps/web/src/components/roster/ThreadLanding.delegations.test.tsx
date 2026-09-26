@@ -164,9 +164,9 @@ vi.mock("./useGroupThreadRuntime", () => ({
   }),
 }));
 
+import { AssistantMessageRow } from "./BotChatMessageRows";
 import { BotThreadLanding } from "./BotThreadLanding";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
-import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
@@ -335,13 +335,14 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
-    const card = visitElements(
+    const row = visitElements(
       BotThreadLanding({ botId: parentBot.id }),
-      (element) => element.type === PluginSearchResultCard,
-    ) as ReactElement<Parameters<typeof PluginSearchResultCard>[0]> | null;
+      (element) => element.type === AssistantMessageRow,
+    ) as ReactElement<Parameters<typeof AssistantMessageRow>[0]> | null;
+    const result = row?.props.pluginResults?.[0]?.result;
 
-    expect(card?.props.result.query).toBe("email");
-    expect(card?.props.result.recommendations[0]?.name).toBe("Gmail");
+    expect(result?.query).toBe("email");
+    expect(result?.recommendations[0]?.name).toBe("Gmail");
   });
 
   it("renders provider questions inside the bot conversation", () => {

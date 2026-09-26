@@ -98,15 +98,14 @@ export function useGroupThreadRuntime(groupId: string) {
   const serverTarget = primaryEnvironmentId
     ? findLatestGroupThreadTarget(groupId, primaryEnvironmentId, primaryThreadShells)
     : null;
+  const targetEnvironmentId = serverTarget?.environmentId;
+  const targetThreadId = serverTarget?.threadId;
   const rememberedThreadRef = useMemo<ScopedThreadRef | null>(
     () =>
-      serverTarget
-        ? scopeThreadRef(
-            EnvironmentId.make(serverTarget.environmentId),
-            ThreadId.make(serverTarget.threadId),
-          )
+      targetEnvironmentId && targetThreadId
+        ? scopeThreadRef(EnvironmentId.make(targetEnvironmentId), ThreadId.make(targetThreadId))
         : null,
-    [serverTarget],
+    [targetEnvironmentId, targetThreadId],
   );
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;

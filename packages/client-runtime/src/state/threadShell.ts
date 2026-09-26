@@ -29,6 +29,64 @@ const EMPTY_THREAD_REFS_BY_PROJECT: ReadonlyMap<
   ReadonlyArray<ScopedThreadRef>
 > = new Map();
 
+/** Latest live thread per bot and per group in one environment. */
+export interface LatestOwnerThreadIds {
+  readonly byBot: ReadonlyMap<string, ThreadId>;
+  readonly byGroup: ReadonlyMap<string, ThreadId>;
+}
+
+const EMPTY_LATEST_OWNER_THREAD_IDS: LatestOwnerThreadIds = {
+  byBot: new Map(),
+  byGroup: new Map(),
+};
+
+function isNewerThread(candidate: OrchestrationThreadShell, current: OrchestrationThreadShell) {
+  return (
+    (candidate.updatedAt.localeCompare(current.updatedAt) ||
+      candidate.id.localeCompare(current.id)) > 0
+  );
+}
+
+function threadIdMapsEqual(
+  left: ReadonlyMap<string, ThreadId>,
+  right: ReadonlyMap<string, ThreadId>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, value] of right) {
+    if (left.get(key) !== value) return false;
+  }
+  return true;
+}
+
+/**
+ * Picks the most recently updated unarchived thread for each bot and group.
+ * Ties break on thread id so the choice is stable.
+ */
+export function latestOwnerThreadIds(
+  threads: ReadonlyArray<OrchestrationThreadShell>,
+): LatestOwnerThreadIds {
+  const byBot = new Map<string, OrchestrationThreadShell>();
+  const byGroup = new Map<string, OrchestrationThreadShell>();
+  for (const thread of threads) {
+    if (thread.archivedAt !== null) continue;
+    if (thread.botId) {
+      const current = byBot.get(thread.botId);
+      if (current === undefined || isNewerThread(thread, current)) byBot.set(thread.botId, thread);
+    }
+    if (thread.groupId) {
+      const current = byGroup.get(thread.groupId);
+      if (current === undefined || isNewerThread(thread, current)) {
+        byGroup.set(thread.groupId, thread);
+      }
+    }
+  }
+  const ids = (source: Map<string, OrchestrationThreadShell>) =>
+    new Map([...source].map(([owner, thread]) => [owner, thread.id] as const));
+  return { byBot: ids(byBot), byGroup: ids(byGroup) };
+}
+
+const OWNER_KEY_SEPARATOR = "\u0000";
+
 export function createEnvironmentThreadShellAtoms(input: {
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
   readonly snapshotAtom: (
@@ -98,6 +156,33 @@ export function createEnvironmentThreadShellAtoms(input: {
       previous = next;
       return previous;
     }).pipe(Atom.withLabel(`environment-thread-refs-by-project:${environmentId}`));
+  });
+
+  const environmentLatestOwnerThreadIdsAtom = Atom.family((environmentId: EnvironmentId) => {
+    let previous = EMPTY_LATEST_OWNER_THREAD_IDS;
+    return Atom.make((get) => {
+      const next = latestOwnerThreadIds(get(environmentThreadsAtom(environmentId)));
+      const byBot = threadIdMapsEqual(previous.byBot, next.byBot) ? previous.byBot : next.byBot;
+      const byGroup = threadIdMapsEqual(previous.byGroup, next.byGroup)
+        ? previous.byGroup
+        : next.byGroup;
+      if (byBot !== previous.byBot || byGroup !== previous.byGroup) {
+        previous = { byBot, byGroup };
+      }
+      return previous;
+    }).pipe(Atom.withLabel(`environment-latest-owner-threads:${environmentId}`));
+  });
+
+  const latestOwnerThreadIdAtomFamily = Atom.family((key: string) => {
+    const [kind, environmentId, ownerId] = key.split(OWNER_KEY_SEPARATOR) as [
+      "bot" | "group",
+      EnvironmentId,
+      string,
+    ];
+    return Atom.make((get): ThreadId | null => {
+      const latest = get(environmentLatestOwnerThreadIdsAtom(environmentId));
+      return (kind === "bot" ? latest.byBot : latest.byGroup).get(ownerId) ?? null;
+    }).pipe(Atom.withLabel(`environment-latest-owner-thread:${kind}:${environmentId}:${ownerId}`));
   });
 
   const threadShellAtomFamily = Atom.family((key: string) => {
@@ -182,5 +267,12 @@ export function createEnvironmentThreadShellAtoms(input: {
     threadShellsForProjectRefsAtom: (refs: ReadonlyArray<ScopedProjectRef>) =>
       threadShellsForProjectRefsAtomFamily(projectRefCollectionKey(refs)),
     threadShellAtom: (ref: ScopedThreadRef) => threadShellAtomFamily(threadKey(ref)),
+    environmentLatestOwnerThreadIdsAtom,
+    /** Latest live thread id for one bot. Changes only when that bot's latest thread changes. */
+    latestBotThreadIdAtom: (environmentId: EnvironmentId, botId: string) =>
+      latestOwnerThreadIdAtomFamily(["bot", environmentId, botId].join(OWNER_KEY_SEPARATOR)),
+    /** Latest live thread id for one group. Changes only when that group's latest thread changes. */
+    latestGroupThreadIdAtom: (environmentId: EnvironmentId, groupId: string) =>
+      latestOwnerThreadIdAtomFamily(["group", environmentId, groupId].join(OWNER_KEY_SEPARATOR)),
   };
 }

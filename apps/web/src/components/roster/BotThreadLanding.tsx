@@ -1,14 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  BotId,
-  type ChannelMessageOrigin,
-  type EnvironmentId,
-  type MessageId,
-  type ThreadId,
-  type TurnId,
-} from "@t3tools/contracts";
+import { BotId, type EnvironmentId, type TurnId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
@@ -19,20 +12,14 @@ import {
   deriveProviderInstanceEntries,
   sortProviderInstanceEntries,
 } from "../../providerInstances";
-import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
-import { threadEnvironment } from "../../state/threads";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentSessionState } from "../../state/session";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { openSettings } from "../../settingsDialogStore";
-import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
-import { toastManager } from "../ui/toast";
-import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
@@ -41,30 +28,26 @@ import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
 import {
+  AssistantMessageRow,
+  type ChannelApprovalTarget,
+  type MessageReplyHandler,
+  UserMessageRow,
+  useMessageReactionUpdater,
+} from "./BotChatMessageRows";
+import {
   channelOriginForAssistantMessage,
-  channelOriginLabel,
-  channelProviderLabel,
   isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 import { resolveStickyBotEngine } from "./botEngineSelection";
 import { BotPromptComposer } from "./BotPromptComposer";
-import { BotMessageAttachments } from "./BotMessageAttachments";
-import { BotStepMeter } from "./BotStepMeter";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
-import {
-  buildReplyPrompt,
-  MessageControls,
-  type MessageReactionOption,
-  type MessageReplyTarget,
-  selectedReactionForPerson,
-} from "../chat/MessageControls";
-import { MessageReactions } from "../chat/MessageReactions";
+import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
-import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
+import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
@@ -76,57 +59,6 @@ import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
-function ChannelSendApproval({
-  environmentId,
-  botId,
-  origin,
-  threadId,
-  messageId,
-  sent,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly botId: BotId;
-  readonly origin: ChannelMessageOrigin;
-  readonly threadId: ThreadId;
-  readonly messageId: MessageId;
-  readonly sent: boolean;
-}) {
-  const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
-  const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const delivered = sent || submitted;
-  const label = channelProviderLabel(origin.provider);
-  return (
-    <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-      <span className="min-w-0 flex-1 text-muted-foreground">
-        {delivered ? `Sent to ${label}` : `Send this reply to ${label}?`}
-      </span>
-      {!delivered ? (
-        <Button
-          size="xs"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            void send({
-              environmentId,
-              input: { botId, threadId, messageId },
-            }).then((result) => {
-              setBusy(false);
-              if (result._tag === "Failure") {
-                toastManager.add({ type: "error", title: `Could not send to ${label}` });
-              } else {
-                setSubmitted(true);
-              }
-            });
-          }}
-        >
-          {busy ? "Sending" : "Send"}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
@@ -134,9 +66,6 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
-  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
-    reportFailure: false,
-  });
   const bots = useRosterStore((state) => state.bots);
   const bot = bots.find((candidate) => candidate.id === botId);
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
@@ -215,14 +144,22 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
     presence,
   });
-  const messages = visibleBotChatMessages(runtime.messages, working);
+  const messages = useMemo(
+    () => visibleBotChatMessages(runtime.messages, working),
+    [runtime.messages, working],
+  );
   const available = bot?.archivedAt === null;
-  useReplyPlaybackThread({
+  const playbackKey = useReplyPlaybackThread({
     environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: available ? runtime.linkedThreadRef?.threadId : null,
     messages: available ? messages : [],
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
+  const updateReaction = useMessageReactionUpdater(runtime.linkedThreadRef);
+  const replyTo = useCallback<MessageReplyHandler>(
+    (messageId, label, text) => setReplyTarget({ messageId, label, text }),
+    [],
+  );
 
   if (!bot || bot.archivedAt !== null) return null;
   const assistantTurnIds = new Set(
@@ -241,38 +178,21 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
       ) ?? [])
     : [];
   const currentPersonId = snapshot?.currentPersonId;
-  const updateReaction = async (
-    messageId: MessageId,
-    current: MessageReactionOption | null,
-    next: MessageReactionOption | null,
-  ) => {
-    const threadRef = runtime.linkedThreadRef;
-    if (!threadRef) return;
-    const dispatch = (emoji: MessageReactionOption, present: boolean) =>
-      setMessageReaction({
-        environmentId: threadRef.environmentId,
-        input: {
-          threadId: threadRef.threadId,
-          messageId,
-          emoji,
-          present,
-        },
-      });
-    if (current && current !== next) {
-      const removed = await dispatch(current, false);
-      if (removed._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not update reaction" });
-        return;
-      }
-    }
-    if (next) {
-      const added = await dispatch(next, true);
-      if (added._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not update reaction" });
-      }
-    }
+  const linkedThreadId = runtime.linkedThreadRef?.threadId;
+  const channelApprovalFor = (messageIndex: number): ChannelApprovalTarget | null => {
+    if (!canManageChannelBindings || !environmentId || !linkedThreadId) return null;
+    const message = messages[messageIndex];
+    const origin = channelOriginForAssistantMessage(messages, messageIndex);
+    const binding = origin ? connectedChannelBinding(bot.channelBindings, origin.provider) : null;
+    if (!message || !origin || !binding) return null;
+    return {
+      environmentId,
+      botId: BotId.make(bot.id),
+      threadId: linkedThreadId,
+      origin,
+      sent: binding.sentMessageIds.includes(message.id),
+    };
   };
-
   return (
     <SidebarInset
       aria-label={`${bot.name} chat`}
@@ -302,143 +222,36 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
             ) : (
               messages.map((message, messageIndex) =>
                 message.role === "assistant" ? (
-                  <div
+                  <AssistantMessageRow
                     key={message.id}
-                    className="group/message flex items-start gap-3"
-                    data-testid="bot-provider-message"
-                  >
-                    <BotAvatarView
-                      avatar={bot.avatar}
-                      name={bot.name}
-                      className="mt-0.5 size-7 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{bot.name}</div>
-                      <BotStepMeter
-                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
-                      />
-                      <ChatMarkdown
-                        className="mt-1"
-                        cwd={runtime.defaultProject?.workspaceRoot}
-                        text={message.text}
-                        threadRef={runtime.linkedThreadRef ?? undefined}
-                      />
-                      {message.turnId === null
-                        ? null
-                        : pluginResultsByTurn
-                            .get(message.turnId)
-                            ?.map(({ id, result }) => (
-                              <PluginSearchResultCard className="mt-3" key={id} result={result} />
-                            ))}
-                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
-                        <MessageControls
-                          copyText={message.text || "Attachment"}
-                          {...(() => {
-                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
-                            return readAloud ? { readAloud } : {};
-                          })()}
-                          selectedReaction={selectedReactionForPerson(
-                            message.reactions,
-                            currentPersonId,
-                          )}
-                          onReply={() =>
-                            setReplyTarget({
-                              messageId: message.id,
-                              label: bot.name,
-                              text: message.text || "Attachment",
-                            })
-                          }
-                          onReactionChange={(next) =>
-                            void updateReaction(
-                              message.id,
-                              selectedReactionForPerson(message.reactions, currentPersonId),
-                              next,
-                            )
-                          }
-                        />
-                      </div>
-                      <MessageReactions reactions={message.reactions ?? []} />
-                      {canManageChannelBindings && environmentId && runtime.linkedThreadRef
-                        ? (() => {
-                            const origin = channelOriginForAssistantMessage(messages, messageIndex);
-                            const binding = origin
-                              ? connectedChannelBinding(bot.channelBindings, origin.provider)
-                              : undefined;
-                            return origin && binding ? (
-                              <ChannelSendApproval
-                                environmentId={environmentId}
-                                botId={BotId.make(bot.id)}
-                                origin={origin}
-                                threadId={runtime.linkedThreadRef.threadId}
-                                messageId={message.id}
-                                sent={binding.sentMessageIds.includes(message.id)}
-                              />
-                            ) : null;
-                          })()
-                        : null}
-                    </div>
-                  </div>
+                    message={message}
+                    author={bot}
+                    testId="bot-provider-message"
+                    cwd={runtime.defaultProject?.workspaceRoot}
+                    threadRef={runtime.linkedThreadRef ?? undefined}
+                    stepMeter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
+                    pluginResults={
+                      message.turnId === null ? undefined : pluginResultsByTurn.get(message.turnId)
+                    }
+                    currentPersonId={currentPersonId}
+                    playback={replyPlayback}
+                    playbackKey={playbackKey}
+                    channelApproval={channelApprovalFor(messageIndex)}
+                    onReply={replyTo}
+                    onReactionChange={updateReaction}
+                  />
                 ) : (
-                  <div
+                  <UserMessageRow
                     key={message.id}
-                    className="group/message flex items-end justify-end gap-1"
-                    data-testid="bot-user-message"
-                  >
-                    <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
-                      <MessageControls
-                        align="end"
-                        copyText={
-                          message.text ||
-                          message.attachments?.map((attachment) => attachment.name).join(", ") ||
-                          "Attachment"
-                        }
-                        selectedReaction={selectedReactionForPerson(
-                          message.reactions,
-                          currentPersonId,
-                        )}
-                        onReply={() =>
-                          setReplyTarget({
-                            messageId: message.id,
-                            label: "you",
-                            text:
-                              message.text ||
-                              message.attachments
-                                ?.map((attachment) => attachment.name)
-                                .join(", ") ||
-                              "Attachment",
-                          })
-                        }
-                        onReactionChange={(next) =>
-                          void updateReaction(
-                            message.id,
-                            selectedReactionForPerson(message.reactions, currentPersonId),
-                            next,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex max-w-[78%] flex-col items-end">
-                      <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                        {message.channelOrigin ? (
-                          <div className="mb-1 text-xs font-medium text-muted-foreground">
-                            {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
-                          </div>
-                        ) : null}
-                        {message.text ? (
-                          <p className="whitespace-pre-wrap">{message.text}</p>
-                        ) : null}
-                        {message.attachments?.length ? (
-                          <div className={message.text ? "mt-2" : undefined}>
-                            <BotMessageAttachments
-                              attachments={message.attachments}
-                              environmentId={environmentId ?? NO_ENVIRONMENT}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                      <MessageReactions reactions={message.reactions ?? []} />
-                    </div>
-                  </div>
+                    message={message}
+                    testId="bot-user-message"
+                    replyLabel="you"
+                    showChannelOrigin
+                    environmentId={environmentId}
+                    currentPersonId={currentPersonId}
+                    onReply={replyTo}
+                    onReactionChange={updateReaction}
+                  />
                 ),
               )
             )}

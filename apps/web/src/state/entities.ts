@@ -44,6 +44,9 @@ const EMPTY_THREAD_REFS_ATOM = Atom.make(EMPTY_THREAD_REFS).pipe(
 const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).pipe(
   Atom.withLabel("web-thread-shell:empty"),
 );
+const EMPTY_THREAD_ID_ATOM = Atom.make<ThreadId | null>(null).pipe(
+  Atom.withLabel("web-thread-id:empty"),
+);
 const EMPTY_THREAD_DETAIL_ATOM = Atom.make<EnvironmentThread | null>(null).pipe(
   Atom.withLabel("web-thread-detail:empty"),
 );
@@ -137,6 +140,30 @@ export function useProject(ref: ScopedProjectRef | null): EnvironmentProject | n
 export function useThreadShell(ref: ScopedThreadRef | null): EnvironmentThreadShell | null {
   return useAtomValue(
     ref === null ? EMPTY_THREAD_SHELL_ATOM : environmentThreadShells.threadShellAtom(ref),
+  );
+}
+
+/** Latest live thread id for a bot. Re-renders only when that bot's latest thread changes. */
+export function useLatestBotThreadId(
+  environmentId: EnvironmentId | null,
+  botId: string,
+): ThreadId | null {
+  return useAtomValue(
+    environmentId === null || botId === ""
+      ? EMPTY_THREAD_ID_ATOM
+      : environmentThreadShells.latestBotThreadIdAtom(environmentId, botId),
+  );
+}
+
+/** Latest live thread id for a group. Re-renders only when that group's latest thread changes. */
+export function useLatestGroupThreadId(
+  environmentId: EnvironmentId | null,
+  groupId: string,
+): ThreadId | null {
+  return useAtomValue(
+    environmentId === null || groupId === ""
+      ? EMPTY_THREAD_ID_ATOM
+      : environmentThreadShells.latestGroupThreadIdAtom(environmentId, groupId),
   );
 }
 

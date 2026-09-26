@@ -30,8 +30,10 @@ vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
 vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
-vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
-vi.mock("../../state/bots", () => ({ environmentPeopleAtom: () => null }));
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: (atom: unknown) => (atom === "people" ? { current: null, host: null } : null),
+}));
+vi.mock("../../state/bots", () => ({ environmentPeopleAtom: () => "people" }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
   useEnvironmentConnectionState: () => ({ data: null }),

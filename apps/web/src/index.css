@@ -2503,7 +2503,9 @@ code {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: ultrathink-rainbow 10s linear infinite;
+  /* Stepped to about 10fps: the slow drift reads the same and stops a
+     per-frame repaint of the masked ring. */
+  animation: ultrathink-rainbow 10s steps(100) infinite;
 }
 
 .ultrathink-frame > * {
@@ -2511,7 +2513,14 @@ code {
 }
 
 .ultrathink-chroma {
-  animation: ultrathink-chroma-shift 10s linear infinite;
+  animation: ultrathink-chroma-shift 10s steps(60) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ultrathink-frame::before,
+  .ultrathink-chroma {
+    animation: none;
+  }
 }
 
 @keyframes preview-loading-progress {
@@ -2577,7 +2586,10 @@ code {
   background-position: 120% 0;
   background-size: 240% 100%;
   background-clip: text;
-  animation: bot-status-shimmer 1.8s linear infinite;
+  /* background-clip: text cannot move on the compositor, so each frame
+     repaints the text. Stepping to about 15fps keeps the sweep smooth enough
+     at a quarter of the paint work on high-refresh displays. */
+  animation: bot-status-shimmer 1.8s steps(27) infinite;
 }
 
 @keyframes bot-status-shimmer {

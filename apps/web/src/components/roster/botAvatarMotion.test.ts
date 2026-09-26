@@ -30,6 +30,22 @@ describe("BotMotion", () => {
     expect(after.frame.spin).toBe(0);
   });
 
+  it("reports the working spin while it plays so the view can render it at full rate", () => {
+    const motion = new BotMotion(0.3);
+    const working = { ...rest, working: true };
+    let sawSpin = false;
+    for (let frame = 0; frame < 60 * 8 && !sawSpin; frame++) {
+      const { frame: pose } = motion.tick(1 / 60, working);
+      if (pose.spin !== 0) {
+        sawSpin = true;
+        expect(motion.spinning).toBe(true);
+      }
+    }
+    expect(sawSpin).toBe(true);
+    run(motion, rest, 6);
+    expect(motion.spinning).toBe(false);
+  });
+
   it("turns the eyes toward the pointer and enlarges them on hover", () => {
     const motion = new BotMotion(0.3);
     const { frame } = run(motion, { ...rest, hovered: true, pointer: { x: 1, y: 0 } }, 1.5);
