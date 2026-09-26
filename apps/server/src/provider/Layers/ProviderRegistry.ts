@@ -158,10 +158,20 @@ export const selectProvidersByKind = (
 ): ReadonlyArray<ServerProvider> =>
   providers.filter((provider) => providerKinds.has(provider.driver));
 
+const withoutCheckedAt = (providers: ReadonlyArray<ServerProvider>) =>
+  providers.map(({ checkedAt: _checkedAt, ...provider }) => provider);
+
+/**
+ * Every probe stamps a fresh `checkedAt`, so comparing it would make each
+ * background re-probe look like a change. Only the remaining fields decide
+ * whether clients need a new provider list.
+ */
 export const haveProvidersChanged = (
   previousProviders: ReadonlyArray<ServerProvider>,
   nextProviders: ReadonlyArray<ServerProvider>,
-): boolean => !Equal.equals(previousProviders, nextProviders);
+): boolean =>
+  previousProviders.length !== nextProviders.length ||
+  !Equal.equals(withoutCheckedAt(previousProviders), withoutCheckedAt(nextProviders));
 
 const correlateSnapshotWithSource = (
   source: ProviderSnapshotSource,
@@ -350,6 +360,8 @@ export const ProviderRegistryLive = Layer.effect(
         readonly publish?: boolean;
         readonly persist?: boolean;
         readonly replace?: boolean;
+        /** Treat a moved `checkedAt` as a change. Set for completed probes. */
+        readonly publishCheckedAt?: boolean;
       },
     ) {
       const nextProvidersWithUpdateState = yield* Effect.forEach(
@@ -386,16 +398,23 @@ export const ProviderRegistryLive = Layer.effect(
         },
       );
 
-      if (haveProvidersChanged(previousProviders, providers)) {
-        if (options?.persist !== false) {
-          yield* Effect.forEach(providersToPersist, persistProvider, {
-            concurrency: "unbounded",
-            discard: true,
-          });
-        }
-        if (options?.publish !== false) {
-          yield* PubSub.publish(changesPubSub, providers);
-        }
+      // Persist a fresh `checkedAt` so a restart does not treat the cache as
+      // stale. Broadcast it only when a probe actually completed, so Settings
+      // shows the real last-check time while snapshot re-syncs stay quiet.
+      const changedIncludingCheckedAt = !Equal.equals(previousProviders, providers);
+      if (changedIncludingCheckedAt && options?.persist !== false) {
+        yield* Effect.forEach(providersToPersist, persistProvider, {
+          concurrency: "unbounded",
+          discard: true,
+        });
+      }
+      if (
+        options?.publish !== false &&
+        (options?.publishCheckedAt === true
+          ? changedIncludingCheckedAt
+          : haveProvidersChanged(previousProviders, providers))
+      ) {
+        yield* PubSub.publish(changesPubSub, providers);
       }
 
       return providers;
@@ -405,6 +424,7 @@ export const ProviderRegistryLive = Layer.effect(
       provider: ServerProvider,
       options?: {
         readonly publish?: boolean;
+        readonly publishCheckedAt?: boolean;
       },
     ) {
       return yield* upsertProviders([provider], options);
@@ -452,10 +472,12 @@ export const ProviderRegistryLive = Layer.effect(
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
+      // A completed probe publishes even when only `checkedAt` moved, so
+      // clients can show when the provider was last checked.
       return yield* providerSource.refresh.pipe(
         Effect.flatMap((nextProvider) =>
           correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap(syncProvider),
+            Effect.flatMap((provider) => syncProvider(provider, { publishCheckedAt: true })),
           ),
         ),
       );
@@ -569,8 +591,12 @@ export const ProviderRegistryLive = Layer.effect(
         // the current read or the active subscriber observes the result.
         for (const [, instance] of newlyAdded) {
           const source = buildSnapshotSource(instance);
+          // Change-stream items are completed probes (periodic, explicit, or
+          // enrichment), so a new `checkedAt` alone is worth publishing.
           yield* Stream.runForEach(source.streamChanges, (provider) =>
-            correlateSnapshotWithSource(source, provider).pipe(Effect.flatMap(syncProvider)),
+            correlateSnapshotWithSource(source, provider).pipe(
+              Effect.flatMap((synced) => syncProvider(synced, { publishCheckedAt: true })),
+            ),
           ).pipe(Effect.forkScoped);
         }
         yield* Effect.yieldNow;

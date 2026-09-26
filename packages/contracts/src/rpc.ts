@@ -133,6 +133,7 @@ import {
   PreviewCloseInput,
   PreviewError,
   PreviewEvent,
+  PreviewEventsSubscribeInput,
   PreviewListInput,
   PreviewListResult,
   PreviewNavigateInput,
@@ -962,7 +963,7 @@ export const WsPreviewAutomationFocusHostRpc = Rpc.make(WS_METHODS.previewAutoma
 });
 
 export const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewEvents, {
-  payload: Schema.Struct({}),
+  payload: PreviewEventsSubscribeInput,
   success: PreviewEvent,
   error: EnvironmentAuthorizationError,
   stream: true,

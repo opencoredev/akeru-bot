@@ -45,6 +45,7 @@ import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Deferred from "effect/Deferred";
+import * as Exit from "effect/Exit";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -478,6 +479,7 @@ const buildAppUnderTest = (options?: {
       ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
+    previewManager?: Partial<PreviewManager.PreviewManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     routineRepository?: Partial<RoutineRepositoryShape>;
@@ -840,10 +842,11 @@ const buildAppUnderTest = (options?: {
             refresh: () => Effect.void,
             close: () => Effect.void,
             list: () => Effect.succeed({ sessions: [], serverEpoch: "test-server", revision: 0 }),
-            events: Stream.empty,
+            streamEvents: () => Stream.empty,
             subscribeEvents: Effect.flatMap(PubSub.unbounded<PreviewEvent>(), (pubsub) =>
               PubSub.subscribe(pubsub),
             ),
+            ...options?.layers?.previewManager,
           }),
           Layer.mock(PortScanner.PortDiscovery)({
             scan: () => Effect.succeed([]),
@@ -3820,6 +3823,105 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("subscribePreviewEvents forwards the chat scope to the preview manager", () =>
+    Effect.gen(function* () {
+      const previewEvent = (threadId: string, tabId: string): PreviewEvent =>
+        ({
+          type: "closed",
+          threadId,
+          tabId,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          serverEpoch: "test-server",
+          revision: 1,
+        }) as PreviewEvent;
+      const published = [
+        previewEvent("thread-preview-b", "tab-1"),
+        previewEvent("thread-preview-a", "tab-2"),
+        previewEvent("thread-preview-a", "tab-3"),
+      ];
+      const requestedScopes: Array<string | undefined> = [];
+
+      yield* buildAppUnderTest({
+        layers: {
+          previewManager: {
+            streamEvents: (input) => {
+              requestedScopes.push(input.threadId);
+              return Stream.fromIterable(published).pipe(
+                Stream.filter(PreviewManager.previewEventMatchesSubscription(input)),
+              );
+            },
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const events = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.subscribePreviewEvents]({ threadId: "thread-preview-a" }).pipe(
+            Stream.take(2),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      assert.deepEqual(requestedScopes, ["thread-preview-a"]);
+      assert.deepEqual(
+        Array.from(events, (event) => `${event.threadId}:${event.tabId}`),
+        ["thread-preview-a:tab-2", "thread-preview-a:tab-3"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeServerConfig probes a stale provider once across concurrent clients", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("codex");
+      const staleProvider = {
+        instanceId,
+        driver: ProviderDriverKind.make("codex"),
+        enabled: true,
+        installed: true,
+        version: "1.0.0",
+        status: "ready" as const,
+        auth: { status: "authenticated" as const },
+        checkedAt: "2020-01-01T00:00:00.000Z",
+        models: [],
+        slashCommands: [],
+        skills: [],
+      };
+      const releaseProbe = yield* Deferred.make<void>();
+      const probeSucceeded = yield* Deferred.make<boolean>();
+      const probedInstanceIds: Array<string> = [];
+
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([staleProvider]),
+            refreshInstance: (id) =>
+              Effect.sync(() => probedInstanceIds.push(id)).pipe(
+                Effect.andThen(Deferred.await(releaseProbe)),
+                Effect.as([staleProvider]),
+                Effect.onExit((exit) => Deferred.succeed(probeSucceeded, Exit.isSuccess(exit))),
+              ),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const takeSnapshot = withWsRpcClient(wsUrl, (client) =>
+        client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(1), Stream.runCollect),
+      );
+      // Each snapshot is sent after that subscription decided whether to
+      // probe, and the first probe stays blocked until both have arrived.
+      yield* Effect.scoped(Effect.all([takeSnapshot, takeSnapshot], { concurrency: "unbounded" }));
+      // Both clients have disconnected. The shared probe keeps running, so a
+      // later client still skips it and the probe completes.
+      yield* Effect.scoped(takeSnapshot);
+      assert.deepEqual(probedInstanceIds, [instanceId]);
+      yield* Deferred.succeed(releaseProbe, undefined);
+      assert.isTrue(yield* Deferred.await(probeSucceeded));
+    }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
+  );
+
   it.effect(
     "routes websocket rpc subscribeServerLifecycle replays snapshot and streams updates",
     () =>
@@ -6615,6 +6717,105 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.include(liveUpsertedIds, busyThreadId);
       assert.include(liveUpsertedIds, newThreadId);
       assert.isBelow(shellFetches.filter((id) => id === busyThreadId).length, 20);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
+  );
+
+  it.effect("subscribeShell skips a thread upsert whose shell did not change", () =>
+    Effect.gen(function* () {
+      const quietThreadId = ThreadId.make("thread-dedupe-quiet");
+      const otherThreadId = ThreadId.make("thread-dedupe-other");
+      const now = "2026-01-01T00:00:00.000Z";
+      const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+      const received = yield* Queue.unbounded<OrchestrationShellStreamItem>();
+      const shellFetches: Array<string> = [];
+      let quietTitle = "Quiet";
+
+      const threadEvent = (sequence: number, threadId: ThreadId): OrchestrationEvent =>
+        ({
+          sequence,
+          eventId: EventId.make(`event-dedupe-${sequence}`),
+          aggregateKind: "thread",
+          aggregateId: threadId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "thread.turn-diff-completed",
+          payload: {} as never,
+        }) satisfies OrchestrationEvent;
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: (threadId) =>
+              Effect.sync(() => {
+                shellFetches.push(threadId);
+                return Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    title: threadId === quietThreadId ? quietTitle : "Other",
+                  }),
+                );
+              }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const upsertedIds = yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+              requestCompletionMarker: true,
+            }).pipe(Stream.runForEach((item) => Queue.offer(received, item))),
+          ).pipe(Effect.forkScoped);
+
+          const takeUpsert = Effect.gen(function* () {
+            while (true) {
+              const item = yield* Queue.take(received);
+              if (item.kind === "thread-upserted") {
+                return `${item.thread.id}:${item.thread.title}@${item.sequence}`;
+              }
+            }
+          });
+          const waitForSynchronized = Effect.gen(function* () {
+            while ((yield* Queue.take(received)).kind !== "synchronized") {}
+          });
+
+          yield* waitForSynchronized;
+          yield* PubSub.publish(liveEvents, threadEvent(1, quietThreadId));
+          const first = yield* takeUpsert;
+          // Same shell again: refetched, then dropped. The other thread's
+          // upsert must be the next item the client sees.
+          yield* PubSub.publish(liveEvents, threadEvent(2, quietThreadId));
+          yield* PubSub.publish(liveEvents, threadEvent(3, otherThreadId));
+          const second = yield* takeUpsert;
+          // A real change is still sent.
+          quietTitle = "Quiet renamed";
+          yield* PubSub.publish(liveEvents, threadEvent(4, quietThreadId));
+          const third = yield* takeUpsert;
+          // An unchanged shell is re-sent once the client's cursor would lag
+          // 500 events behind, so reconnects stay inside the replay window.
+          yield* PubSub.publish(liveEvents, threadEvent(504, quietThreadId));
+          const fourth = yield* takeUpsert;
+          return [first, second, third, fourth];
+        }),
+      ).pipe(Effect.timeout("2 seconds"));
+
+      assert.deepEqual(upsertedIds, [
+        `${quietThreadId}:Quiet@1`,
+        `${otherThreadId}:Other@3`,
+        `${quietThreadId}:Quiet renamed@4`,
+        `${quietThreadId}:Quiet renamed@504`,
+      ]);
+      assert.equal(shellFetches.filter((id) => id === quietThreadId).length, 4);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 

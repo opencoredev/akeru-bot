@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -9,6 +10,7 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import {
   AkeruBotUsageReadError,
@@ -428,6 +430,99 @@ export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract
 }
 
 const PROVIDER_STATUS_DEBOUNCE_MS = 200;
+// A server-config subscription re-probes providers only when their cached
+// status is at least this old. Background health checks cover the rest.
+const PROVIDER_SUBSCRIBE_REFRESH_TTL_MS = 60_000;
+
+/**
+ * Subscription-triggered provider probes, shared by every connection so a
+ * reconnect burst probes each stale instance once instead of once per client.
+ * The probes run in the server's scope: a client that disconnects must not
+ * cancel a probe other clients skipped theirs for.
+ */
+interface ProviderSubscribeRefreshes {
+  /** Provider instance ids with a probe in flight. */
+  readonly inFlight: Set<string>;
+  readonly scope: Scope.Scope;
+}
+
+const THREAD_SHELL_REFETCH = "thread.shell-refetch";
+
+/**
+ * A live shell input that only asks for the thread's current shell. It keeps
+ * the coalescing key and sequence of the event it replaces without holding the
+ * event body.
+ */
+interface ThreadShellRefetch {
+  readonly type: typeof THREAD_SHELL_REFETCH;
+  readonly aggregateKind: "thread";
+  readonly aggregateId: ThreadId;
+  readonly threadId: ThreadId;
+  readonly sequence: number;
+}
+
+type ShellSourceEvent = OrchestrationEvent | ThreadShellRefetch;
+
+/** Thread events whose shell item reads the event payload instead of the projection. */
+const THREAD_SHELL_PAYLOAD_EVENT_TYPES: ReadonlySet<OrchestrationEvent["type"]> = new Set([
+  "thread.deleted",
+  "thread.archived",
+  "thread.unarchived",
+]);
+
+/** Reduce a thread event that the shell only refetches to its thread id and sequence. */
+const toShellSourceEvent = (event: OrchestrationEvent): ShellSourceEvent => {
+  if (event.aggregateKind !== "thread" || THREAD_SHELL_PAYLOAD_EVENT_TYPES.has(event.type)) {
+    return event;
+  }
+  const threadId = ThreadId.make(event.aggregateId);
+  return {
+    type: THREAD_SHELL_REFETCH,
+    aggregateKind: "thread",
+    aggregateId: threadId,
+    threadId,
+    sequence: event.sequence,
+  };
+};
+
+/** What one shell subscription has already sent to its client. */
+interface SentThreadShells {
+  /** Serialized thread shells last sent, keyed by thread id. */
+  readonly threads: Map<string, string>;
+  /** Sequence of the last item sent, which is the client's resume cursor. */
+  lastSentSequence: number;
+}
+
+const makeSentThreadShells = (): SentThreadShells => ({ threads: new Map(), lastSentSequence: 0 });
+
+/**
+ * Record a shell item for one subscription and report whether it repeats the
+ * thread shell already sent. A removal clears the entry so a restored thread
+ * is always sent again. An unchanged shell is still sent once the client's
+ * cursor would fall `SHELL_CURSOR_REFRESH_GAP` events behind, so a long run of
+ * unchanged events cannot push a reconnect past the replay window.
+ */
+const isUnchangedThreadShell = (
+  sent: SentThreadShells,
+  item: OrchestrationShellStreamEvent,
+): boolean => {
+  if (
+    item.kind === "thread-upserted" &&
+    item.sequence - sent.lastSentSequence < SHELL_CURSOR_REFRESH_GAP
+  ) {
+    const serialized = JSON.stringify(item.thread);
+    if (sent.threads.get(item.thread.id) === serialized) {
+      return true;
+    }
+    sent.threads.set(item.thread.id, serialized);
+  } else if (item.kind === "thread-upserted") {
+    sent.threads.set(item.thread.id, JSON.stringify(item.thread));
+  } else if (item.kind === "thread-removed") {
+    sent.threads.delete(item.threadId);
+  }
+  sent.lastSentSequence = Math.max(sent.lastSentSequence, item.sequence);
+  return false;
+};
 
 // When a resuming client's cursor is more than this many events behind the
 // current head, skip the per-event catch-up replay and send a fresh shell
@@ -435,6 +530,9 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 // past this gap a single O(active-threads) snapshot is cheaper and bounded.
 // Matches the event store's default page size (DEFAULT_READ_FROM_SEQUENCE_LIMIT).
 const SHELL_RESUME_MAX_GAP = 1_000;
+// A shell subscription re-sends an unchanged thread shell once its client's
+// cursor lags this far, keeping reconnects well inside the replay window.
+const SHELL_CURSOR_REFRESH_GAP = SHELL_RESUME_MAX_GAP / 2;
 
 // Thread replay counts only this thread's rows. Busy or pruned unrelated
 // streams must not force a full thread snapshot.
@@ -512,6 +610,7 @@ const makeWsRpcLayer = (
   clientOrigin: OrchestrationClientOrigin,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
+  providerRefreshes: ProviderSubscribeRefreshes,
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -929,8 +1028,12 @@ const makeWsRpcLayer = (
       };
 
       const toShellStreamEvent = (
-        event: OrchestrationEvent,
+        source: ShellSourceEvent,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> => {
+        if (source.type === THREAD_SHELL_REFETCH) {
+          return threadUpsertOrRemove(source.threadId, source.sequence);
+        }
+        const event = source;
         switch (event.type) {
           case "project.created":
           case "project.meta-updated":
@@ -1225,15 +1328,21 @@ const makeWsRpcLayer = (
       // the client — which applies shell items strictly by increasing sequence
       // and drops any `sequence <= snapshotSequence` — never skips a coalesced
       // item. The refetch runs with bounded concurrency (order-preserving).
+      //
+      // `sentThreads` holds the last thread shell sent on this subscription, so
+      // a refetch that returns an identical shell (for example after a turn
+      // diff or checkpoint that changes no sidebar field) is not re-sent unless
+      // the client's resume cursor has fallen too far behind.
       const SHELL_REFETCH_CONCURRENCY = 8;
       const coalesceShellEvents = (
-        events: ReadonlyArray<OrchestrationEvent>,
+        events: ReadonlyArray<ShellSourceEvent>,
+        sentThreads: SentThreadShells,
       ): Effect.Effect<ReadonlyArray<OrchestrationShellStreamEvent>, never, never> =>
         Effect.gen(function* () {
           if (events.length === 0) {
             return [];
           }
-          const latestByAggregate = new Map<string, OrchestrationEvent>();
+          const latestByAggregate = new Map<string, ShellSourceEvent>();
           for (const event of events) {
             latestByAggregate.set(`${event.aggregateKind}:${event.aggregateId}`, event);
           }
@@ -1243,7 +1352,11 @@ const makeWsRpcLayer = (
           const shellEvents = yield* Effect.forEach(survivors, toShellStreamEvent, {
             concurrency: SHELL_REFETCH_CONCURRENCY,
           });
-          return shellEvents.flatMap((option) => (Option.isSome(option) ? [option.value] : []));
+          return shellEvents.flatMap((option) =>
+            Option.isSome(option) && !isUnchangedThreadShell(sentThreads, option.value)
+              ? [option.value]
+              : [],
+          );
         });
 
       // Small time/size window over which to coalesce shell events. The window
@@ -1254,15 +1367,16 @@ const makeWsRpcLayer = (
       const SHELL_COALESCE_MAX_CHUNK = 512;
       const coalesceShellStream = <E, R>(
         stream: Stream.Stream<OrchestrationEvent, E, R>,
+        sentThreads: SentThreadShells,
       ): Stream.Stream<OrchestrationShellStreamEvent, E, R> =>
         stream.pipe(
           Stream.groupedWithin(SHELL_COALESCE_MAX_CHUNK, SHELL_COALESCE_WINDOW),
-          Stream.mapEffect(coalesceShellEvents),
+          Stream.mapEffect((events) => coalesceShellEvents(events, sentThreads)),
           Stream.flatMap((items) => Stream.fromIterable(items)),
         );
 
       type ShellLiveInput =
-        | { readonly kind: "event"; readonly event: OrchestrationEvent }
+        | { readonly kind: "event"; readonly event: ShellSourceEvent }
         | { readonly kind: "synchronized" };
 
       // A completion marker is queued alongside raw live events so it cannot
@@ -1270,10 +1384,11 @@ const makeWsRpcLayer = (
       // batch at markers and coalesce only the event segments on either side.
       const coalesceShellLiveInputs = (
         inputs: ReadonlyArray<ShellLiveInput>,
+        sentThreads: SentThreadShells,
       ): Effect.Effect<ReadonlyArray<OrchestrationShellStreamItem>, never, never> =>
         Effect.gen(function* () {
           const output: Array<OrchestrationShellStreamItem> = [];
-          let pendingEvents: Array<OrchestrationEvent> = [];
+          let pendingEvents: Array<ShellSourceEvent> = [];
 
           for (const input of inputs) {
             if (input.kind === "event") {
@@ -1281,12 +1396,12 @@ const makeWsRpcLayer = (
               continue;
             }
 
-            output.push(...(yield* coalesceShellEvents(pendingEvents)));
+            output.push(...(yield* coalesceShellEvents(pendingEvents, sentThreads)));
             pendingEvents = [];
             output.push({ kind: "synchronized" });
           }
 
-          output.push(...(yield* coalesceShellEvents(pendingEvents)));
+          output.push(...(yield* coalesceShellEvents(pendingEvents, sentThreads)));
           return output;
         });
 
@@ -1896,6 +2011,7 @@ const makeWsRpcLayer = (
               // path below emits from this same buffered live tail. Overlapping
               // events are deduped by sequence on the client.
               const liveBudget = yield* makeLiveStreamBudget();
+              const sentThreads = makeSentThreadShells();
               const liveBuffer = yield* Queue.unbounded<
                 RetainedLiveItem<ShellLiveInput>,
                 OrchestrationGetSnapshotError
@@ -1921,10 +2037,15 @@ const makeWsRpcLayer = (
               yield* Effect.forkScoped(
                 orchestrationEngine.streamDomainEvents.pipe(
                   Stream.runForEach((event) =>
-                    liveBudget.retain({ kind: "event" as const, event }, event).pipe(
-                      Effect.flatMap((item) => Queue.offer(liveBuffer, item)),
-                      Effect.uninterruptible,
-                    ),
+                    // Retain only what the shell reads. A thread refetch needs
+                    // the thread id and sequence, not a large message or tool
+                    // payload, so the budget charges the small reference.
+                    liveBudget
+                      .retain({ kind: "event" as const, event: toShellSourceEvent(event) })
+                      .pipe(
+                        Effect.flatMap((item) => Queue.offer(liveBuffer, item)),
+                        Effect.uninterruptible,
+                      ),
                   ),
                   // Stop the PubSub consumer even if RPC delivery is waiting
                   // for an ACK and never pulls the failed buffer again.
@@ -1936,9 +2057,10 @@ const makeWsRpcLayer = (
               const coalesceRetainedInputs = (
                 items: ReadonlyArray<RetainedLiveItem<ShellLiveInput>>,
               ) =>
-                coalesceShellLiveInputs(items.map((item) => item.value)).pipe(
-                  Effect.flatMap((output) => liveBudget.replace(items, output)),
-                );
+                coalesceShellLiveInputs(
+                  items.map((item) => item.value),
+                  sentThreads,
+                ).pipe(Effect.flatMap((output) => liveBudget.replace(items, output)));
               const bufferedLiveStream = Stream.fromQueue(liveBuffer).pipe(
                 Stream.groupedWithin(SHELL_COALESCE_MAX_CHUNK, SHELL_COALESCE_WINDOW),
                 Stream.mapEffect(coalesceRetainedInputs),
@@ -2032,6 +2154,7 @@ const makeWsRpcLayer = (
                   // cannot chase a moving event-store head or grow the live
                   // buffer indefinitely while waiting for an empty page.
                   orchestrationEngine.readEvents(afterSequence, replayGap, headSequence),
+                  sentThreads,
                 ).pipe(
                   Stream.mapError(
                     (cause) =>
@@ -3428,8 +3551,8 @@ const makeWsRpcLayer = (
             previewAutomationBroker.focusHost(input),
             { "rpc.aggregate": "preview-automation" },
           ),
-        [WS_METHODS.subscribePreviewEvents]: (_input) =>
-          observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
+        [WS_METHODS.subscribePreviewEvents]: (input) =>
+          observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.streamEvents(input), {
             "rpc.aggregate": "preview",
           }),
         [WS_METHODS.subscribeDiscoveredLocalServers]: (input) =>
@@ -3493,9 +3616,33 @@ const makeWsRpcLayer = (
                 })),
               );
 
-              yield* providerRegistry
-                .refresh()
-                .pipe(Effect.ignoreCause({ log: true }), Effect.forkScoped);
+              // Serve the cached provider list. Re-probe only instances whose
+              // last check is older than the TTL and that no other
+              // subscription is already probing, so reconnect bursts and
+              // additional clients do not spawn repeated CLI version checks.
+              const nowMs = yield* Clock.currentTimeMillis;
+              const staleProviders = (yield* providerRegistry.getProviders).filter(
+                (provider) =>
+                  !providerRefreshes.inFlight.has(provider.instanceId) &&
+                  nowMs - Date.parse(provider.checkedAt) >= PROVIDER_SUBSCRIBE_REFRESH_TTL_MS,
+              );
+              for (const provider of staleProviders) {
+                providerRefreshes.inFlight.add(provider.instanceId);
+              }
+              if (staleProviders.length > 0) {
+                yield* Effect.forEach(
+                  staleProviders,
+                  (provider) =>
+                    providerRegistry
+                      .refreshInstance(provider.instanceId)
+                      .pipe(
+                        Effect.ensuring(
+                          Effect.sync(() => providerRefreshes.inFlight.delete(provider.instanceId)),
+                        ),
+                      ),
+                  { concurrency: "unbounded", discard: true },
+                ).pipe(Effect.ignoreCause({ log: true }), Effect.forkIn(providerRefreshes.scope));
+              }
 
               const liveUpdates = Stream.merge(
                 keybindingsUpdates,
@@ -3589,6 +3736,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const voiceCalls = yield* VoiceCallManager.VoiceCallManager;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
+    const providerRefreshes: ProviderSubscribeRefreshes = {
+      inFlight: new Set(),
+      scope: yield* Effect.scope,
+    };
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -3610,7 +3761,13 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker, voiceCalls).pipe(
+            makeWsRpcLayer(
+              session,
+              clientOrigin,
+              previewAutomationBroker,
+              voiceCalls,
+              providerRefreshes,
+            ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),

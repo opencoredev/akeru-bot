@@ -631,15 +631,28 @@ export function projectThreadDetailSnapshot(
   };
 }
 
+// Published events are immutable and shared by every live subscriber. Project
+// each one once so subscribers share the projected object, which also lets the
+// live stream budget reuse its serialized-size measurement.
+const projectedActivityEvents = new WeakMap<OrchestrationEvent, OrchestrationEvent>();
+
 export function projectActivityEvent(event: OrchestrationEvent): OrchestrationEvent {
   if (event.type !== "thread.activity-appended") {
     return event;
   }
-  return {
+  const cached = projectedActivityEvents.get(event);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const projected: OrchestrationEvent = {
     ...event,
     payload: {
       ...event.payload,
       activity: projectActivityPayload(event.payload.activity),
     },
   };
+  projectedActivityEvents.set(event, projected);
+  // Mark the result as already projected so a repeat call returns it unchanged.
+  projectedActivityEvents.set(projected, projected);
+  return projected;
 }
