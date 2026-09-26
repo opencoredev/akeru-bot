@@ -127,6 +127,11 @@ export class BotMotion {
     this.scheduleIdle();
   }
 
+  /** True while the belt spin plays; callers render it at the full frame rate. */
+  get spinning() {
+    return this.spin !== null;
+  }
+
   /** Plays a short lively moment on a resting avatar. */
   beat(lengthMs: number) {
     this.beatUntil = this.clock + lengthMs / 1000;

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { STORED_REPLY_SYNTHESIS_UNAVAILABLE } from "./capability.ts";
+import { replyReadoutMessageAction } from "./messageAction.ts";
 import { createReplyPlaybackSession } from "./session.ts";
+
+vi.mock("./messageAction.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./messageAction.ts")>();
+  return { replyReadoutMessageAction: vi.fn(actual.replyReadoutMessageAction) };
+});
 
 const message = {
   id: "reply-1",
@@ -41,6 +47,20 @@ function setup(available = false) {
 }
 
 describe("reply playback session", () => {
+  it("derives spoken text once per stored reply text", async () => {
+    const { session } = setup(true);
+    await session.preference.load();
+    vi.mocked(replyReadoutMessageAction).mockClear();
+    session.actionFor(message);
+    session.actionFor(message);
+    session.observe([message]);
+    session.observe([message]);
+    expect(replyReadoutMessageAction).toHaveBeenCalledTimes(1);
+    const edited = { ...message, text: "Edited answer", updatedAt: later.updatedAt };
+    expect(session.actionFor(edited)?.request.text).toBe("Edited answer");
+    expect(replyReadoutMessageAction).toHaveBeenCalledTimes(2);
+  });
+
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({

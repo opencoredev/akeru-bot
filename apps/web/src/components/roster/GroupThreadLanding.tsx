@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { type EnvironmentId, type MessageId } from "@t3tools/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { type EnvironmentId } from "@t3tools/contracts";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { openSettings } from "../../settingsDialogStore";
@@ -10,22 +10,11 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
-import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { SidebarInset } from "../ui/sidebar";
-import { toastManager } from "../ui/toast";
-import ChatMarkdown from "../ChatMarkdown";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import {
-  buildReplyPrompt,
-  MessageControls,
-  type MessageReactionOption,
-  type MessageReplyTarget,
-  selectedReactionForPerson,
-} from "../chat/MessageControls";
-import { MessageReactions } from "../chat/MessageReactions";
+import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
-import { replyPlaybackControlProps, useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
+import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { BotActivityStatus } from "./BotActivityStatus";
@@ -38,8 +27,12 @@ import { DelegationCard } from "./DelegationCard";
 import { GroupMemberStack } from "./GroupMemberStack";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
-import { BotMessageAttachments } from "./BotMessageAttachments";
-import { BotStepMeter } from "./BotStepMeter";
+import {
+  AssistantMessageRow,
+  type MessageReplyHandler,
+  UserMessageRow,
+  useMessageReactionUpdater,
+} from "./BotChatMessageRows";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
@@ -70,9 +63,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const runtime = useGroupThreadRuntime(groupId);
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
-  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
-    reportFailure: false,
-  });
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const activities = useThreadActivities(runtime.linkedThreadRef);
@@ -93,15 +83,21 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     setReplyTarget(null);
   }, [groupId, runtime.linkedThreadRef?.environmentId, runtime.linkedThreadRef?.threadId]);
 
-  const messages = visibleBotChatMessages(runtime.messages);
-  useReplyPlaybackThread({
+  const messages = useMemo(() => visibleBotChatMessages(runtime.messages), [runtime.messages]);
+  const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,
     messages: group ? messages : [],
     mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
   });
+  const updateReaction = useMessageReactionUpdater(runtime.linkedThreadRef);
+  const replyTo = useCallback<MessageReplyHandler>(
+    (messageId, label, text) => setReplyTarget({ messageId, label, text }),
+    [],
+  );
 
   if (!group) return null;
+  const currentPersonId = peopleIdentity.current?.id;
   const members = groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null);
   const boss = resolveAvailableGroupBoss(members, group.bossBotId);
   const working =
@@ -118,38 +114,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         (delegation) => delegation.parentThreadId === runtime.linkedThreadRef?.threadId,
       ) ?? [])
     : [];
-  const updateReaction = async (
-    messageId: MessageId,
-    current: MessageReactionOption | null,
-    next: MessageReactionOption | null,
-  ) => {
-    const threadRef = runtime.linkedThreadRef;
-    if (!threadRef) return;
-    const dispatch = (emoji: MessageReactionOption, present: boolean) =>
-      setMessageReaction({
-        environmentId: threadRef.environmentId,
-        input: {
-          threadId: threadRef.threadId,
-          messageId,
-          emoji,
-          present,
-        },
-      });
-    if (current && current !== next) {
-      const removed = await dispatch(current, false);
-      if (removed._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not update reaction" });
-        return;
-      }
-    }
-    if (next) {
-      const added = await dispatch(next, true);
-      if (added._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not update reaction" });
-      }
-    }
-  };
-
   return (
     <SidebarInset
       aria-label={`${group.name} group chat`}
@@ -186,153 +150,44 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 const respondingBot = message.respondingBotId
                   ? members.find((bot) => bot.id === message.respondingBotId)
                   : boss;
-                if (!respondingBot) {
-                  return (
-                    <div
-                      key={message.id}
-                      className="group/message max-w-[85%]"
-                      data-testid="group-provider-message"
-                    >
-                      <div className="text-sm font-medium">Unavailable bot</div>
-                      <ChatMarkdown
-                        className="mt-1"
-                        cwd={runtime.defaultProject?.workspaceRoot}
-                        text={message.text}
-                        threadRef={runtime.linkedThreadRef ?? undefined}
-                      />
-                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
-                        <MessageControls
-                          copyText={message.text || "Attachment"}
-                          {...(() => {
-                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
-                            return readAloud ? { readAloud } : {};
-                          })()}
-                          onReply={() =>
-                            setReplyTarget({
-                              messageId: message.id,
-                              label: "Unavailable bot",
-                              text: message.text || "Attachment",
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                  );
-                }
                 return (
-                  <div
+                  <AssistantMessageRow
                     key={message.id}
-                    className="group/message flex items-start gap-3"
-                    data-testid="group-provider-message"
-                  >
-                    <BotAvatarView
-                      avatar={respondingBot.avatar}
-                      name={respondingBot.name}
-                      className="mt-0.5 size-7 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{respondingBot.name}</div>
-                      <BotStepMeter
-                        meter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
-                      />
-                      <ChatMarkdown
-                        className="mt-1"
-                        cwd={runtime.defaultProject?.workspaceRoot}
-                        text={message.text}
-                        threadRef={runtime.linkedThreadRef ?? undefined}
-                      />
-                      <div className="mt-1 flex opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
-                        <MessageControls
-                          copyText={message.text || "Attachment"}
-                          {...(() => {
-                            const readAloud = replyPlaybackControlProps(replyPlayback, message);
-                            return readAloud ? { readAloud } : {};
-                          })()}
-                          selectedReaction={selectedReactionForPerson(
-                            message.reactions,
-                            peopleIdentity.current?.id,
-                          )}
-                          onReply={() =>
-                            setReplyTarget({
-                              messageId: message.id,
-                              label: respondingBot.name,
-                              text: message.text || "Attachment",
-                            })
-                          }
-                          onReactionChange={(next) =>
-                            void updateReaction(
-                              message.id,
-                              selectedReactionForPerson(
-                                message.reactions,
-                                peopleIdentity.current?.id,
-                              ),
-                              next,
-                            )
-                          }
-                        />
-                      </div>
-                      <MessageReactions reactions={message.reactions ?? []} />
-                    </div>
-                  </div>
+                    message={message}
+                    author={respondingBot ?? null}
+                    testId="group-provider-message"
+                    cwd={runtime.defaultProject?.workspaceRoot}
+                    threadRef={runtime.linkedThreadRef ?? undefined}
+                    stepMeter={
+                      message.turnId === null ? undefined : stepMeters.get(message.turnId)
+                    }
+                    pluginResults={undefined}
+                    currentPersonId={currentPersonId}
+                    playback={replyPlayback}
+                    playbackKey={playbackKey}
+                    channelApproval={null}
+                    onReply={replyTo}
+                    onReactionChange={updateReaction}
+                  />
                 );
               }
               const current = isCurrentGroupPerson(
                 message.authorPersonId,
-                peopleIdentity.current?.id,
+                currentPersonId,
                 peopleIdentity.host?.id,
               );
               return (
-                <div
+                <UserMessageRow
                   key={message.id}
-                  className="group/message flex items-end justify-end gap-1"
-                  data-testid="group-user-message"
-                >
-                  <div className="opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 max-md:opacity-100">
-                    <MessageControls
-                      align="end"
-                      copyText={
-                        message.text ||
-                        message.attachments?.map((attachment) => attachment.name).join(", ") ||
-                        "Attachment"
-                      }
-                      selectedReaction={selectedReactionForPerson(
-                        message.reactions,
-                        peopleIdentity.current?.id,
-                      )}
-                      onReply={() =>
-                        setReplyTarget({
-                          messageId: message.id,
-                          label: current ? "you" : "participant",
-                          text:
-                            message.text ||
-                            message.attachments?.map((attachment) => attachment.name).join(", ") ||
-                            "Attachment",
-                        })
-                      }
-                      onReactionChange={(next: MessageReactionOption | null) =>
-                        void updateReaction(
-                          message.id,
-                          selectedReactionForPerson(message.reactions, peopleIdentity.current?.id),
-                          next,
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="flex max-w-[78%] flex-col items-end">
-                    <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-                      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
-                      {message.attachments?.length ? (
-                        <div className={message.text ? "mt-2" : undefined}>
-                          <BotMessageAttachments
-                            attachments={message.attachments}
-                            environmentId={environmentId ?? NO_ENVIRONMENT}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                    <MessageReactions reactions={message.reactions ?? []} />
-                  </div>
-                </div>
+                  message={message}
+                  testId="group-user-message"
+                  replyLabel={current ? "you" : "participant"}
+                  showChannelOrigin={false}
+                  environmentId={environmentId}
+                  currentPersonId={currentPersonId}
+                  onReply={replyTo}
+                  onReactionChange={updateReaction}
+                />
               );
             })
           )}
