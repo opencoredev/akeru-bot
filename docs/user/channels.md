@@ -51,7 +51,13 @@ Akeru records confirmed replies and prevents normal retries from posting them ag
 
 A network failure can leave delivery unknown. Akeru keeps that attempt and does not post it again automatically. Settings and the bot's Channels panel show a warning. Check the external conversation before taking further action. Reconnecting does not prove whether the earlier reply arrived.
 
+Each assistant reply to an external message carries its own delivery state in the conversation: sending, sent, failed to deliver, or unknown. Web and mobile show that state under the reply so you can tell which external conversation it reached without opening channel settings.
+
 Mobile shows channel health, the selected project, recent confirmed deliveries, and a warning when a channel needs attention. When a channel needs a new project, mobile tells you to repair it from Settings > Bot channels on the host; only an administrator session can reconnect a channel. Recent delivery counts cover retained confirmations, not the channel's full history.
+
+## Open in Akeru links
+
+When the environment advertises a public address, external replies end with an **Open in Akeru** link to the bot. The operator sets that address explicitly with `--public-origin` (or `T3CODE_PUBLIC_ORIGIN`). Binding the server to a non-loopback host does not enable the link, and without an advertised public origin replies go out without it; Akeru never guesses it from a bind address, browser, or client address.
 
 ## Status signals
 

@@ -1,7 +1,6 @@
 import type {
   ChannelBinding,
   ChannelBindingStatus,
-  ChannelMessageOrigin,
   ChannelProvider,
   ProjectId,
 } from "@t3tools/contracts";
@@ -192,13 +191,4 @@ export function canChangeChannelProject(
     return false;
   }
   return channelBindingNeedsProject(binding, liveProjects) || pickedProjectId !== binding.projectId;
-}
-
-export function channelOriginLabel(
-  origin: ChannelMessageOrigin,
-  senderDisplayName?: string | null,
-): string {
-  const sender = senderDisplayName?.trim() || origin.externalSenderId;
-  const provider = channelProviderLabel(origin.provider);
-  return sender ? `${provider} · ${sender}` : provider;
 }

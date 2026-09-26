@@ -1322,4 +1322,52 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("lucide-x");
     expect(markup).toContain('aria-label="Tool call failed"');
   });
+
+  it("renders the channel origin chip and delivery line in the generic thread view", () => {
+    const channelOrigin = {
+      provider: "slack" as const,
+      externalThreadId: "slack:C1:1",
+      externalSenderId: "U42",
+      externalMessageId: "m-external",
+    };
+    const timelineEntries = [
+      {
+        id: "entry-user",
+        kind: "message" as const,
+        createdAt: MESSAGE_CREATED_AT,
+        message: {
+          id: MessageId.make("message-inbound"),
+          role: "user" as const,
+          text: "Question from Slack",
+          turnId: null,
+          channelOrigin,
+          createdAt: MESSAGE_CREATED_AT,
+          updatedAt: MESSAGE_CREATED_AT,
+          streaming: false,
+        },
+      },
+      {
+        id: "entry-assistant",
+        kind: "message" as const,
+        createdAt: MESSAGE_CREATED_AT,
+        message: {
+          id: MessageId.make("message-reply"),
+          role: "assistant" as const,
+          text: "Approved answer",
+          turnId: null,
+          channelDelivery: "failed" as const,
+          createdAt: MESSAGE_CREATED_AT,
+          updatedAt: MESSAGE_CREATED_AT,
+          streaming: false,
+        },
+      },
+    ];
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={timelineEntries} />,
+    );
+
+    expect(markup).toContain("Slack");
+    expect(markup).toContain("U42");
+    expect(markup).toContain("Could not deliver to Slack");
+  });
 });

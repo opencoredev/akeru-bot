@@ -667,7 +667,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(threadDetail._tag, "Some");
       if (threadDetail._tag === "Some") {
-        assert.deepEqual(threadDetail.value, snapshot.threads[0]);
+        const {
+          parentThreadId: _parentThreadId,
+          parentDelegationId: _parentDelegationId,
+          ...snapshotThread
+        } = snapshot.threads[0]!;
+        assert.deepEqual(threadDetail.value, snapshotThread);
       }
 
       const turnStart = yield* snapshotQuery.getTurnStartMessage({
@@ -679,6 +684,80 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         assert.equal(turnStart.value.message.role, "assistant");
         assert.equal(turnStart.value.message.text, "hello from projection");
         assert.equal(turnStart.value.hasOtherUserMessages, false);
+      }
+    }),
+  );
+
+  it.effect("reads the projected channel_delivery column over the deliveries join fallback", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`DELETE FROM channel_deliveries`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, default_model_selection_json, scripts_json,
+          created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'project-1', 'Project 1', '/tmp/project-1',
+          '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+          '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z', NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          branch, worktree_path, linked_pull_request_json, latest_turn_id,
+          latest_user_message_at, pending_approval_count, pending_user_input_count,
+          has_actionable_proposed_plan, pinned_at, pin_order_key,
+          created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'thread-1', 'project-1', 'Thread 1',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+          NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL,
+          '2026-02-24T00:00:02.000Z', '2026-02-24T00:00:03.000Z', NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text,
+          channel_delivery, is_streaming, created_at, updated_at
+        )
+        VALUES
+          ('message-unknown', 'thread-1', NULL, 'assistant', 'ambiguous reply',
+           'unknown', 0, '2026-02-24T00:00:04.000Z', '2026-02-24T00:00:05.000Z'),
+          ('message-failed', 'thread-1', NULL, 'assistant', 'rejected reply',
+           'failed', 0, '2026-02-24T00:00:06.000Z', '2026-02-24T00:00:07.000Z'),
+          ('message-legacy', 'thread-1', NULL, 'assistant', 'pre-column reply',
+           NULL, 0, '2026-02-24T00:00:08.000Z', '2026-02-24T00:00:09.000Z')
+      `;
+      // A 'requested' row must not mask a projected 'unknown'; the same row is
+      // the fallback for messages written before migration 071.
+      yield* sql`
+        INSERT INTO channel_deliveries (
+          message_id, bot_id, thread_id, provider, external_thread_id,
+          status, requested_at, sent_at
+        )
+        VALUES
+          ('message-unknown', 'bot-1', 'thread-1', 'slack', 'slack:C1:1',
+           'requested', '2026-02-24T00:00:04.000Z', NULL),
+          ('message-legacy', 'bot-1', 'thread-1', 'slack', 'slack:C1:1',
+           'sent', '2026-02-24T00:00:08.000Z', '2026-02-24T00:00:09.000Z')
+      `;
+
+      const detail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
+      assert.equal(detail._tag, "Some");
+      if (detail._tag === "Some") {
+        const byId = new Map(detail.value.messages.map((message) => [message.id, message]));
+        assert.equal(byId.get(asMessageId("message-unknown"))?.channelDelivery, "unknown");
+        assert.equal(byId.get(asMessageId("message-failed"))?.channelDelivery, "failed");
+        assert.equal(byId.get(asMessageId("message-legacy"))?.channelDelivery, "sent");
       }
     }),
   );

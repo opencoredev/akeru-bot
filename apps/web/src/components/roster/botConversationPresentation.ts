@@ -1,31 +1,9 @@
-import {
-  channelOriginLabel as sharedChannelOriginLabel,
-  channelProviderLabel as sharedChannelProviderLabel,
-} from "@t3tools/client-runtime/channel-presentation";
+import { channelProviderLabel as sharedChannelProviderLabel } from "@t3tools/client-runtime/channel-presentation";
 import { formatDate } from "@t3tools/client-runtime/i18n";
-import type { ChannelMessageOrigin, OrchestrationMessage } from "@t3tools/contracts";
+import type { OrchestrationMessage } from "@t3tools/contracts";
 import type { RosterPresence } from "./roster.logic";
 
 export const channelProviderLabel = sharedChannelProviderLabel;
-
-export function channelOriginLabel(
-  origin: ChannelMessageOrigin,
-  senderDisplayName?: string | null,
-): string {
-  return sharedChannelOriginLabel(origin, senderDisplayName);
-}
-
-export function channelOriginForAssistantMessage(
-  messages: ReadonlyArray<OrchestrationMessage>,
-  assistantIndex: number,
-): ChannelMessageOrigin | null {
-  if (messages[assistantIndex]?.role !== "assistant") return null;
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role === "user") return message.channelOrigin ?? null;
-  }
-  return null;
-}
 
 /**
  * One measure for the transcript, the composer, and everything docked between them.

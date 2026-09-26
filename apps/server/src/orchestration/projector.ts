@@ -26,6 +26,7 @@ import {
   RoutineRunningPayload,
   RoutineSkillAssignedPayload,
   RoutineSkillUnassignedPayload,
+  ThreadChannelDeliverySetPayload,
   ThreadTurnResumeRequestedPayload,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -1085,6 +1086,30 @@ export function projectEvent(
           }),
         };
       });
+
+    case "thread.channel-delivery-set":
+      return decodeForEvent(
+        ThreadChannelDeliverySetPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
+          if (!thread) return nextBase;
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              messages: thread.messages.map((entry) =>
+                entry.id === payload.messageId
+                  ? { ...entry, channelDelivery: payload.delivery }
+                  : entry,
+              ),
+              updatedAt: event.occurredAt,
+            }),
+          };
+        }),
+      );
 
     case "thread.message-reaction-set":
       return decodeForEvent(

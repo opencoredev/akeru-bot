@@ -28,6 +28,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
     channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
+    channelDelivery: Schema.NullOr(Schema.String),
     reactions: Schema.fromJsonString(Schema.Array(OrchestrationMessageReaction)),
   }),
 );
@@ -44,6 +45,7 @@ function toProjectionThreadMessage(
     authorPersonId: row.authorPersonId ?? null,
     authorDisplayName: row.authorDisplayName ?? null,
     channelOrigin: row.channelOrigin,
+    channelDelivery: row.channelDelivery as ProjectionThreadMessage["channelDelivery"],
     role: row.role,
     text: row.text,
     isStreaming: row.isStreaming === 1,
@@ -72,6 +74,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           author_person_id,
           author_display_name,
           channel_origin_json,
+          channel_delivery,
           role,
           text,
           attachments_json,
@@ -88,6 +91,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           ${row.authorPersonId ?? null},
           ${row.authorDisplayName ?? null},
           ${row.channelOrigin == null ? null : JSON.stringify(row.channelOrigin)},
+          ${row.channelDelivery ?? null},
           ${row.role},
           ${row.text},
           COALESCE(
@@ -108,6 +112,10 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           thread_id = excluded.thread_id,
           turn_id = excluded.turn_id,
           responding_bot_id = excluded.responding_bot_id,
+          channel_delivery = COALESCE(
+            excluded.channel_delivery,
+            projection_thread_messages.channel_delivery
+          ),
           author_person_id = excluded.author_person_id,
           author_display_name = excluded.author_display_name,
           channel_origin_json = COALESCE(
@@ -217,6 +225,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
           channel_origin_json AS "channelOrigin",
+          channel_delivery AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
@@ -260,6 +269,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
           channel_origin_json AS "channelOrigin",
+          channel_delivery AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",

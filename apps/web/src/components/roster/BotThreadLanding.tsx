@@ -45,8 +45,10 @@ import {
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
 import {
-  buildBotConversationEntries,
   channelOriginForAssistantMessage,
+} from "@t3tools/client-runtime/channel-origin-presentation";
+import {
+  buildBotConversationEntries,
   isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
@@ -436,17 +438,21 @@ export function BotThreadLanding({
   const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;
   const linkedThreadId = runtime.linkedThreadRef?.threadId;
   const channelApprovalFor = (messageIndex: number): ChannelApprovalTarget | null => {
-    if (!canManageChannelBindings || !environmentId || !linkedThreadId) return null;
+    if (!environmentId || !linkedThreadId) return null;
     const message = messages[messageIndex];
     const origin = channelOriginForAssistantMessage(messages, messageIndex);
-    const binding = origin ? connectedChannelBinding(bot.channelBindings, origin.provider) : null;
-    if (!message || !origin || !binding) return null;
+    if (!message || !origin) return null;
+    const binding = connectedChannelBinding(bot.channelBindings, origin.provider);
+    // Only channel admins with a live binding may trigger a send.
+    const canSend = canManageChannelBindings && binding !== undefined;
+    if (message.channelDelivery === undefined && !canSend) return null;
     return {
       environmentId,
       botId: BotId.make(bot.id),
       threadId: linkedThreadId,
       origin,
-      sent: binding.sentMessageIds.includes(message.id),
+      sent: binding?.sentMessageIds.includes(message.id) ?? false,
+      canSend,
     };
   };
 

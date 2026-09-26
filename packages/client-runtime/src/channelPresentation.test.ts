@@ -8,7 +8,6 @@ import {
   channelPickerProjectId,
   channelRestoreProjectId,
   channelHealthLabel,
-  channelOriginLabel,
   channelProviderLabel,
   channelRepairAction,
   channelRepairLabel,
@@ -199,17 +198,6 @@ describe("channel presentation", () => {
     ).toBe(true);
   });
 
-  it("falls back to the sender ID and permits an absent sender", () => {
-    expect(
-      channelOriginLabel(
-        { provider: "discord", externalThreadId: "thread", externalSenderId: "sender" },
-        "  ",
-      ),
-    ).toBe("Discord · sender");
-    expect(channelOriginLabel({ provider: "imessage", externalThreadId: "thread" })).toBe(
-      "iMessage",
-    );
-  });
   it("labels every advertised provider", () => {
     expect([
       channelProviderLabel("telegram"),
@@ -218,18 +206,5 @@ describe("channel presentation", () => {
       channelProviderLabel("slack"),
       channelProviderLabel("discord"),
     ]).toEqual(["Telegram", "iMessage", "WhatsApp", "Slack", "Discord"]);
-  });
-
-  it("prefers the persisted sender display name", () => {
-    expect(
-      channelOriginLabel(
-        {
-          provider: "slack",
-          externalThreadId: "slack:C1:1",
-          externalSenderId: "U1",
-        },
-        "Alice",
-      ),
-    ).toBe("Slack · Alice");
   });
 });

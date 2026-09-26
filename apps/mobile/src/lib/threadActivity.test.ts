@@ -254,6 +254,64 @@ function makeThread(
 }
 
 describe("buildThreadFeed", () => {
+  it("tags channel-originated assistant replies with the delivery provider", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-channel-delivery"),
+      projectId: ProjectId.make("project-1"),
+      title: "Channel thread",
+      messages: [
+        {
+          id: MessageId.make("user-plain"),
+          role: "user",
+          text: "Local message",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-09-25T12:00:00.000Z",
+          updatedAt: "2026-09-25T12:00:00.000Z",
+        },
+        {
+          id: MessageId.make("assistant-plain"),
+          role: "assistant",
+          text: "Local reply",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-09-25T12:00:01.000Z",
+          updatedAt: "2026-09-25T12:00:01.000Z",
+        },
+        {
+          id: MessageId.make("user-telegram"),
+          role: "user",
+          text: "Telegram message",
+          turnId: null,
+          channelOrigin: { provider: "telegram", externalThreadId: "chat-1" },
+          streaming: false,
+          createdAt: "2026-09-25T12:00:02.000Z",
+          updatedAt: "2026-09-25T12:00:02.000Z",
+        },
+        {
+          id: MessageId.make("assistant-telegram"),
+          role: "assistant",
+          text: "Telegram reply",
+          turnId: null,
+          channelDelivery: "sent",
+          streaming: false,
+          createdAt: "2026-09-25T12:00:03.000Z",
+          updatedAt: "2026-09-25T12:00:03.000Z",
+        },
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const byId = new Map(
+      feed.flatMap((entry) => (entry.type === "message" ? [[entry.id, entry]] : [])),
+    );
+    expect(byId.get("assistant-plain")).not.toHaveProperty("channelProvider");
+    expect(byId.get("assistant-telegram")).toEqual(
+      expect.objectContaining({ channelProvider: "telegram" }),
+    );
+    expect(byId.get("assistant-telegram")?.message.channelDelivery).toBe("sent");
+  });
+
   it("attaches bot step usage to its assistant message without a duplicate work row", () => {
     const turnId = TurnId.make("turn-bot");
     const thread = makeThread({

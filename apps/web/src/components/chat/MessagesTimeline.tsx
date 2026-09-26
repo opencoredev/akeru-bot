@@ -6,6 +6,10 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  channelDeliveryLabel,
+  channelOriginLabel,
+} from "@t3tools/client-runtime/channel-origin-presentation";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -1071,6 +1075,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         ) : null}
+        {row.message.channelOrigin ? (
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+            {channelOriginLabel(row.message.channelOrigin, row.message.authorDisplayName)}
+          </div>
+        ) : null}
         <CollapsibleUserMessageBody
           text={elementContextState.promptText}
           terminalContexts={terminalContexts}
@@ -1175,6 +1184,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
               className="mt-2"
             />
           ) : null}
+          <ChannelDeliveryLine row={row} />
           <MessageReactions reactions={row.message.reactions ?? []} />
           <AssistantChangedFilesSection
             turnSummary={row.assistantTurnDiffSummary}
@@ -1202,6 +1212,26 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         </div>
       </div>
     </>
+  );
+}
+
+function ChannelDeliveryLine({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const origin = row.assistantChannelOrigin ?? null;
+  const delivery = channelDeliveryLabel(row.message.channelDelivery, origin?.provider ?? "slack");
+  if (!delivery || !origin) return null;
+  return (
+    <p
+      className={cn(
+        "mt-1 text-[11px]",
+        delivery.tone === "error"
+          ? "text-destructive"
+          : delivery.tone === "warning"
+            ? "text-amber-700 dark:text-amber-400"
+            : "text-muted-foreground",
+      )}
+    >
+      {delivery.message}
+    </p>
   );
 }
 

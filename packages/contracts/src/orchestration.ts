@@ -603,6 +603,9 @@ export const ChannelMessageOrigin = Schema.Struct({
 });
 export type ChannelMessageOrigin = typeof ChannelMessageOrigin.Type;
 
+export const ChannelDeliveryState = Schema.Literals(["pending", "sent", "failed", "unknown"]);
+export type ChannelDeliveryState = typeof ChannelDeliveryState.Type;
+
 export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
@@ -623,6 +626,10 @@ export const OrchestrationMessage = Schema.Struct({
   authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
   authorDisplayName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
+  /** External delivery state for channel-originated assistant replies, projected
+      from the delivery store. Optional so pre-channel servers and older
+      payloads decode without it. */
+  channelDelivery: Schema.optional(Schema.NullOr(ChannelDeliveryState)),
   reactions: Schema.optional(Schema.Array(OrchestrationMessageReaction)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -2020,6 +2027,15 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadChannelDeliverySetCommand = Schema.Struct({
+  type: Schema.Literal("thread.channel-delivery.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  delivery: ChannelDeliveryState,
+  createdAt: IsoDateTime,
+});
+
 const ThreadProposedPlanUpsertCommand = Schema.Struct({
   type: Schema.Literal("thread.proposed-plan.upsert"),
   commandId: CommandId,
@@ -2100,6 +2116,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
+  ThreadChannelDeliverySetCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -2166,6 +2183,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
+  "thread.channel-delivery-set",
   "thread.message-reaction-set",
   "thread.turn-start-requested",
   "thread.turn-resume-requested",
@@ -2499,6 +2517,13 @@ export const ThreadMessageSentPayload = Schema.Struct({
   channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadChannelDeliverySetPayload = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  delivery: ChannelDeliveryState,
   updatedAt: IsoDateTime,
 });
 
@@ -2892,6 +2917,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.message-sent"),
     payload: ThreadMessageSentPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.channel-delivery-set"),
+    payload: ThreadChannelDeliverySetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

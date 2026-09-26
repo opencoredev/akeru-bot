@@ -303,6 +303,22 @@ export function applyThreadDetailEvent(
     }
 
     // ── Messages ────────────────────────────────────────────────────
+    case "thread.channel-delivery-set": {
+      const messages = thread.messages.map((entry) =>
+        entry.id === event.payload.messageId
+          ? {
+              ...entry,
+              channelDelivery: event.payload.delivery,
+              updatedAt: event.payload.updatedAt,
+            }
+          : entry,
+      );
+      return {
+        kind: "updated",
+        thread: { ...thread, messages, updatedAt: event.payload.updatedAt },
+      };
+    }
+
     case "thread.message-sent": {
       const message: OrchestrationMessage = {
         id: event.payload.messageId,
