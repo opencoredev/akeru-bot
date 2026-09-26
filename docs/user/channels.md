@@ -55,7 +55,7 @@ Mobile shows channel health, the selected project, recent confirmed deliveries, 
 
 ## Status signals
 
-On Slack and Discord, the bot marks your request message with a reaction: an eyes reaction when it accepts the request, a check mark on success, and an X on failure or cancellation. Akeru removes stale reactions when a connection restores or closes. Telegram, iMessage, and WhatsApp do not support these reactions and receive no status signal. Detailed progress stays inside Akeru; the channel never receives a stream of tool output.
+On Slack and Discord, the bot marks your request message with a reaction: an eyes reaction when it accepts the request, an hourglass while it waits for your approval or answer inside Akeru, a check mark on success, and an X on failure or cancellation. Akeru removes stale reactions when a connection restores or closes. Telegram, iMessage, and WhatsApp do not support these reactions and receive no status signal. Detailed progress stays inside Akeru; the channel never receives a stream of tool output.
 
 ## Conversation behavior
 
@@ -89,9 +89,11 @@ External iMessage group chats are not supported.
 
 ## WhatsApp
 
-Akeru uses the WhatsApp Business Cloud API. The connection needs an access token, app secret, phone number ID, and verify token. Configure Meta to send webhook requests to `https://<server>/api/channels/whatsapp/<bot-id>/webhook`. Replace `<server>` with your environment server's public hostname. Replace `<bot-id>` with the identifier after `/bots/` in the bot's web address.
+Akeru uses the WhatsApp Business Cloud API. The connection needs an access token, app secret, phone number ID, and verify token.
 
-WhatsApp must be able to reach the environment server over public HTTPS. If the environment has no public address, the WhatsApp connection cannot receive webhooks.
+WhatsApp must be able to reach the environment server over public HTTPS. Start the server with a public HTTPS origin, for example `--public-origin https://akeru.example.com`. Configure Meta to send webhook requests to `https://<server>/api/channels/whatsapp/<bot-id>/webhook`, using your verify token. Replace `<server>` with that public hostname. Replace `<bot-id>` with the identifier after `/bots/` in the bot's web address.
+
+Without a public origin, the connection saves as **Not live**: replies can still be sent, but WhatsApp cannot deliver new messages to Akeru. Restart the server with a public origin and reconnect to go live.
 
 ## Slack
 
@@ -101,7 +103,7 @@ Create a Slack app for one workspace.
 2. Create an app-level token with the Socket Mode connection scope.
 3. Install the app and copy the bot token.
 4. Subscribe the app to direct-message and mention events.
-5. Save the bot token and app-level token in Akeru.
+5. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
 6. Select a bot and click **Connect**.
 
 Socket Mode uses an outbound connection from the environment server. It works when Akeru runs locally, over SSH, or through Tailscale without a public webhook URL.
@@ -112,7 +114,7 @@ The Slack channel connection is separate from the Slack plugin. The connection r
 
 Create a Discord application and bot. Enable Message Content Intent, then copy the application ID, public key, and bot token. Invite the bot with permission to view channels, send messages, read message history, create or use threads, and add reactions.
 
-Enter the credentials in Akeru, select a bot, and click **Connect**. Direct messages reach the bot. A direct mention in a server starts work in the linked Discord conversation.
+Enter the credentials in Akeru, select a bot, and click **Connect**. Direct messages reach the bot. A direct mention of the bot in a server starts a Discord thread on that message and continues the work there. Role mentions and @everyone do not start work.
 
 ## Access warning
 

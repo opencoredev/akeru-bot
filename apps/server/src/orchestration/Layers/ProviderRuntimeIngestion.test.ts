@@ -44,7 +44,7 @@ import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { it as effectIt } from "@effect/vitest";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -487,6 +487,7 @@ describe("ProviderRuntimeIngestion", () => {
       disconnectChannel: (botId: BotId, channelProvider: "telegram" | "slack" | "discord") =>
         withChannels((channels) => channels.disconnect(botId, channelProvider)),
       shutdownChannels: () => withChannels((channels) => channels.shutdown),
+      channels: () => withChannels((channels) => Effect.succeed(channels)),
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       readThreadShell: () =>
         runtime!.runPromise(
@@ -602,7 +603,7 @@ describe("ProviderRuntimeIngestion", () => {
       }
       await inbound;
       await harness.drain();
-      expect([...signals]).toEqual(["white_check_mark"]);
+      expect([...signals]).toEqual(["check"]);
       await harness.shutdownChannels();
       expect([...signals]).toEqual([]);
     },
@@ -695,7 +696,7 @@ describe("ProviderRuntimeIngestion", () => {
       harness.emit(terminal);
       await harness.drain();
       expect([...signals]).toEqual(
-        provider === "telegram" ? [] : [state === "completed" ? "white_check_mark" : "x"],
+        provider === "telegram" ? [] : [state === "completed" ? "check" : "x"],
       );
       expect(posts).toEqual(
         state === "completed" ? ["I finished without a text response. Please try again."] : [],
@@ -708,6 +709,182 @@ describe("ProviderRuntimeIngestion", () => {
       await harness.disconnectChannel(BotId.make("bot-akeru"), provider);
       expect([...signals]).toEqual([]);
       if (provider === "telegram") expect(calls).toEqual([]);
+    },
+  );
+
+  it.each(["slack", "discord"] as const)(
+    "shows a waiting reaction while approvals and user input are pending: %s",
+    async (provider) => {
+      const harness = await createHarness({ botOwned: true });
+      const signals = new Set<string>();
+      const adds: string[] = [];
+      const channel = await harness.connectChannel(async () => {}, provider, {
+        add: async (_thread, _message, emoji) => {
+          signals.add(emoji);
+          adds.push(emoji);
+        },
+        remove: async (_thread, _message, emoji) => {
+          signals.delete(emoji);
+        },
+      });
+      const message = {
+        externalThreadId: `${provider}:waiting`,
+        externalMessageId: "request-waiting",
+        text: "Deploy it",
+      };
+      await channel.inbound(message);
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        provider,
+        message.externalThreadId,
+      );
+      const turnId = asTurnId("waiting-turn");
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-started"),
+        type: "turn.started",
+        payload: {},
+      });
+      await harness.drain();
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-approval"),
+        type: "request.opened",
+        requestId: ApprovalRequestId.make("waiting-approval"),
+        payload: { requestType: "command_execution_approval", detail: "deploy" },
+      });
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-question"),
+        type: "user-input.requested",
+        requestId: ApprovalRequestId.make("waiting-question"),
+        payload: {
+          questions: [
+            {
+              id: "env",
+              header: "Env",
+              question: "Which environment?",
+              options: [{ label: "prod", description: "Production" }],
+            },
+          ],
+        },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      harness.emit({
+        ...base,
+        eventId: asEventId("waiting-approval-resolved"),
+        type: "request.resolved",
+        requestId: ApprovalRequestId.make("waiting-approval"),
+        payload: { requestType: "command_execution_approval", decision: "accept" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-question-resolved"),
+        type: "user-input.resolved",
+        requestId: ApprovalRequestId.make("waiting-question"),
+        payload: { answers: { env: "prod" } },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["eyes"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-completed"),
+        type: "turn.completed",
+        payload: { state: "completed" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["check"]);
+      expect(adds).toEqual(["eyes", "hourglass", "eyes", "check"]);
+      await harness.disconnectChannel(BotId.make("bot-akeru"), provider);
+    },
+  );
+
+  it.each(["error", "stopped"] as const)(
+    "forgets pending channel requests when the session ends: %s",
+    async (state) => {
+      const harness = await createHarness({ botOwned: true });
+      const signals = new Set<string>();
+      const channel = await harness.connectChannel(async () => {}, "slack", {
+        add: async (_thread, _message, emoji) => {
+          signals.add(emoji);
+        },
+        remove: async (_thread, _message, emoji) => {
+          signals.delete(emoji);
+        },
+      });
+      const markWaiting = vi.spyOn(await harness.channels(), "markChannelTurnWaiting");
+      const message = {
+        externalThreadId: "slack:session-ended",
+        externalMessageId: "request-ended",
+        text: "Deploy it",
+      };
+      await channel.inbound(message);
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        "slack",
+        message.externalThreadId,
+      );
+      const turnId = asTurnId("ended-turn");
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-started"),
+        type: "turn.started",
+        payload: {},
+      });
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-approval"),
+        type: "request.opened",
+        requestId: ApprovalRequestId.make("ended-approval"),
+        payload: { requestType: "command_execution_approval", detail: "deploy" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-session"),
+        type: "session.state.changed",
+        payload: { state },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["x"]);
+      markWaiting.mockClear();
+      // A late resolution no longer matches a pending request, so nothing is resumed.
+      harness.emit({
+        ...base,
+        eventId: asEventId("ended-approval-resolved"),
+        type: "request.resolved",
+        requestId: ApprovalRequestId.make("ended-approval"),
+        payload: { requestType: "command_execution_approval", decision: "accept" },
+      });
+      await harness.drain();
+      expect(markWaiting).not.toHaveBeenCalled();
+      expect([...signals]).toEqual(["x"]);
+      markWaiting.mockRestore();
+      await harness.disconnectChannel(BotId.make("bot-akeru"), "slack");
     },
   );
 

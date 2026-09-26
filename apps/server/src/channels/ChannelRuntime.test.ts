@@ -42,6 +42,7 @@ import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
 import * as Cause from "effect/Cause";
 import * as FiberSet from "effect/FiberSet";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { it } from "@effect/vitest";
 import { afterEach, describe, expect, vi } from "vite-plus/test";
 
@@ -595,6 +596,21 @@ function makeMemorySecretStore() {
   return { store, values };
 }
 
+/** Answers Slack's apps.connections.open app-token probe with `ok`. */
+const slackProbeClient = (ok: boolean) =>
+  HttpClient.make((request) =>
+    Effect.succeed(
+      HttpClientResponse.fromWeb(
+        request,
+        request.url === "https://slack.com/api/apps.connections.open"
+          ? Response.json(
+              ok ? { ok, url: "wss://wss.slack.test/link" } : { ok, error: "invalid_auth" },
+            )
+          : Response.json({ ok: false, error: "unexpected_request" }, { status: 404 }),
+      ),
+    ),
+  );
+
 function makeHarness(input: {
   readonly bots?: ReadonlyArray<OrchestrationBot>;
   readonly threads?: ReadonlyArray<OrchestrationThread>;
@@ -672,6 +688,9 @@ function makeHarness(input: {
       Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
     nowIso: Effect.succeed(NOW),
     randomUuid: Effect.sync(() => `uuid-${commands.length}`),
+    // Accepts the Slack app-token probe, the only request the built-in transports send here.
+    httpClient: slackProbeClient(true),
+    publicOrigin: "https://akeru.example",
     ...(input.startTransport === null
       ? {}
       : {
@@ -999,34 +1018,38 @@ describe("channel runtime", () => {
         const prefix = `${externalThreadId}:external-request`;
         expect(externalAdapters.reactions).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "completed");
-        expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:white_check_mark`);
+        expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:check`);
         const count = externalAdapters.reactions.length;
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "completed");
         expect(externalAdapters.reactions).toHaveLength(count);
         yield* clearChannelThreadStatuses(threadId);
-        expect(externalAdapters.reactions.slice(-3)).toEqual([
+        expect(externalAdapters.reactions.slice(-4)).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "failed");
         expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:x`);
         yield* disconnectChannel(harness.dependencies, BOT_ID, provider);
-        expect(externalAdapters.reactions.slice(-3)).toEqual([
+        expect(externalAdapters.reactions.slice(-4)).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         externalAdapters.reactions.length = 0;
         yield* reconnectChannel(harness.dependencies, BOT_ID, provider);
         expect(externalAdapters.reactions).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
       }),
   );

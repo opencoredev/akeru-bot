@@ -17,6 +17,36 @@ import { readBootstrapEnvelope } from "../bootstrap.ts";
 import * as ServerConfig from "../config.ts";
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 
+/** An http(s) origin with no credentials, path, query, or fragment, normalized to `URL.origin`. */
+export const PublicOriginFromString = Schema.String.pipe(
+  Schema.decodeTo(
+    Schema.String,
+    SchemaTransformation.transformOrFail({
+      decode: (value) => {
+        const url = URL.canParse(value.trim()) ? new URL(value.trim()) : null;
+        if (
+          url &&
+          (url.protocol === "https:" || url.protocol === "http:") &&
+          url.username.length === 0 &&
+          url.password.length === 0 &&
+          url.pathname === "/" &&
+          url.search.length === 0 &&
+          url.hash.length === 0
+        ) {
+          return Effect.succeed(url.origin);
+        }
+        return Effect.fail(
+          new SchemaIssue.InvalidValue({
+            message:
+              "Invalid public origin. Use the http(s) origin your tunnel serves, for example https://akeru.example.com.",
+          }),
+        );
+      },
+      encode: (origin) => Effect.succeed(origin),
+    }),
+  ),
+);
+
 export const modeFlag = Flag.choice("mode", ServerConfig.RuntimeMode.literals).pipe(
   Flag.withDescription("Runtime mode. `desktop` keeps loopback defaults unless overridden."),
   Flag.optional,
@@ -66,6 +96,13 @@ export const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
 export const tailscaleServeFlag = Flag.boolean("tailscale-serve").pipe(
   Flag.withDescription(
     "Configure Tailscale Serve to expose this backend over HTTPS on the Tailnet.",
+  ),
+  Flag.optional,
+);
+export const publicOriginFlag = Flag.string("public-origin").pipe(
+  Flag.withSchema(PublicOriginFromString),
+  Flag.withDescription(
+    "Public https origin that forwards to this server, used for inbound channel webhooks (equivalent to T3CODE_PUBLIC_ORIGIN).",
   ),
   Flag.optional,
 );
@@ -141,6 +178,10 @@ const EnvServerConfig = Config.all({
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
+  publicOrigin: Config.schema(PublicOriginFromString, "T3CODE_PUBLIC_ORIGIN").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
 });
 
 export interface CliServerFlags {
@@ -156,6 +197,7 @@ export interface CliServerFlags {
   readonly logWebSocketEvents: Option.Option<boolean>;
   readonly tailscaleServeEnabled: Option.Option<boolean>;
   readonly tailscaleServePort: Option.Option<number>;
+  readonly publicOrigin?: Option.Option<string>;
 }
 
 export interface CliAuthLocationFlags {
@@ -190,6 +232,7 @@ export const sharedServerCommandFlags = {
   logWebSocketEvents: logWebSocketEventsFlag,
   tailscaleServeEnabled: tailscaleServeFlag,
   tailscaleServePort: tailscaleServePortFlag,
+  publicOrigin: publicOriginFlag,
 } as const;
 
 export const authLocationFlags = sharedServerLocationFlags;
@@ -235,6 +278,7 @@ export const resolveServerConfig = (
       logWebSocketEvents: flags.logWebSocketEvents ?? Option.none(),
       tailscaleServeEnabled: flags.tailscaleServeEnabled ?? Option.none(),
       tailscaleServePort: flags.tailscaleServePort ?? Option.none(),
+      publicOrigin: flags.publicOrigin ?? Option.none(),
     } satisfies CliServerFlags;
     const bootstrapFd = Option.getOrUndefined(normalizedFlags.bootstrapFd) ?? env.bootstrapFd;
     const bootstrapEnvelope =
@@ -349,6 +393,12 @@ export const resolveServerConfig = (
       ),
       () => (mode === "desktop" ? "127.0.0.1" : undefined),
     );
+    const publicOrigin = Option.getOrUndefined(
+      resolveOptionPrecedence(
+        normalizedFlags.publicOrigin,
+        Option.fromUndefinedOr(env.publicOrigin),
+      ),
+    );
     const logLevel = Option.getOrElse(cliLogLevel, () => env.logLevel);
 
     const config: ServerConfig.ServerConfig["Service"] = {
@@ -388,6 +438,7 @@ export const resolveServerConfig = (
       logWebSocketEvents,
       tailscaleServeEnabled,
       tailscaleServePort,
+      publicOrigin,
     };
 
     return config;

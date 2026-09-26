@@ -722,6 +722,8 @@ export const ChannelConnectionProfile = Schema.Struct({
   name: TrimmedNonEmptyString,
   externalIdentity: Schema.optional(TrimmedNonEmptyString),
   managementUrl: Schema.optional(TrimmedNonEmptyString),
+  /** Server-built inbound webhook URL for providers that push events (WhatsApp). */
+  webhookUrl: Schema.optional(TrimmedNonEmptyString),
 });
 export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
 
