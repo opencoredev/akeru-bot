@@ -446,6 +446,32 @@ describe("applyShellStreamEvent", () => {
       expect(ids).toContain("delegation-finished-5");
       expect(ids).toHaveLength(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 2);
     });
+
+    it("breaks finished delegation ties the same way as the shell snapshot", () => {
+      const tied = (index: number) => ({
+        ...stubDelegation,
+        delegationId: DelegationId.make(`delegation-tied-${String(index).padStart(2, "0")}`),
+        state: "completed" as const,
+        createdAt: `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+        updatedAt: "2026-04-02T00:00:00.000Z",
+      });
+      let snapshot = baseSnapshot;
+      // Arrive newest-created first, so arrival order disagrees with the ranking.
+      for (let index = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD; index >= 0; index--) {
+        snapshot = applyShellStreamEvent(snapshot, {
+          kind: "delegation-upserted",
+          sequence: SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD - index + 1,
+          delegation: tied(index),
+        });
+      }
+
+      const ids = snapshot.delegations.map((delegation) => delegation.delegationId);
+      expect(ids).toHaveLength(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD);
+      expect(ids).toContain("delegation-tied-00");
+      expect(ids).not.toContain(
+        `delegation-tied-${String(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD).padStart(2, "0")}`,
+      );
+    });
   });
 
   describe("thread-upserted", () => {

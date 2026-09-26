@@ -164,6 +164,11 @@ export function applyShellStreamEvent(
  * Keeps the newest finished delegations for one parent thread, matching the
  * limit the server applies to shell snapshots.
  */
+// Binary order, matching SQLite's default collation in the shell snapshot query.
+const compareText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+// Keeps the same finished delegations as the shell snapshot, which ranks them
+// by updatedAt DESC, createdAt ASC, delegation_id ASC.
 function capTerminalDelegations(
   delegations: ReadonlyArray<AkeruDelegationRecord>,
   parentThreadId: AkeruDelegationRecord["parentThreadId"],
@@ -175,7 +180,12 @@ function capTerminalDelegations(
   if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
   const dropped = new Set(
     terminal
-      .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .toSorted(
+        (left, right) =>
+          compareText(right.updatedAt, left.updatedAt) ||
+          compareText(left.createdAt, right.createdAt) ||
+          compareText(left.delegationId, right.delegationId),
+      )
       .slice(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD),
   );
   return delegations.filter((delegation) => !dropped.has(delegation));

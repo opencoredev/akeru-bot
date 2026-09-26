@@ -35,7 +35,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -2385,23 +2384,38 @@ const make = Effect.gen(function* () {
     SubscriptionRef.update(seenSequence, (seen) => Math.max(seen, sequence));
   const started = yield* SubscriptionRef.make(false);
 
-  // Subscribes with the engine sequence it starts after. A read before the
-  // subscription would wait on events published in between, and a read after it
-  // would mark buffered events as seen, so retry until no commit lands between
-  // the two reads.
+  // Subscribes before returning and yields every event after the baseline once.
+  // Events committed between the first sequence read and the subscription may
+  // have been published before it existed, so that gap is replayed from the
+  // store and the live stream skips anything the replay already covered.
   const subscribeWithBaseline = Effect.fn("subscribeWithBaseline")(function* () {
-    const parentScope = yield* Effect.scope;
-    while (true) {
-      const before = yield* orchestrationEngine.latestSequence;
-      const subscriptionScope = yield* Scope.fork(parentScope);
-      const domainEvents = yield* orchestrationEngine.subscribeDomainEvents.pipe(
-        Scope.provide(subscriptionScope),
-      );
-      if ((yield* orchestrationEngine.latestSequence) === before) {
-        return { domainEvents, baselineSequence: before };
-      }
-      yield* Scope.close(subscriptionScope, Exit.void);
+    const baselineSequence = yield* orchestrationEngine.latestSequence;
+    const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+    const replayThrough = yield* orchestrationEngine.latestSequence;
+    if (replayThrough === baselineSequence) {
+      return { domainEvents: liveEvents, baselineSequence };
     }
+    const gapEvents = orchestrationEngine
+      .readEvents(baselineSequence, undefined, replayThrough)
+      .pipe(
+        Stream.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Stream.failCause(cause)
+            : Stream.fromEffect(
+                Effect.logWarning("provider command reactor failed to replay startup events", {
+                  cause: Cause.pretty(cause),
+                }),
+              ).pipe(Stream.drain),
+        ),
+      );
+    return {
+      domainEvents: gapEvents.pipe(
+        // A failed replay must not leave drain waiting on the gap.
+        Stream.concat(Stream.fromEffect(noteSeen(replayThrough)).pipe(Stream.drain)),
+        Stream.concat(liveEvents.pipe(Stream.filter((event) => event.sequence > replayThrough))),
+      ),
+      baselineSequence,
+    };
   });
 
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {

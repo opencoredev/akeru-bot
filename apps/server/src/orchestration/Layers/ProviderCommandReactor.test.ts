@@ -193,7 +193,7 @@ describe("ProviderCommandReactor", () => {
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
-    readonly commitDuringFirstSequenceRead?: boolean;
+    readonly commitDuringSequenceRead?: 1 | 2;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -531,24 +531,27 @@ describe("ProviderCommandReactor", () => {
                 )
               : engine.subscribeDomainEvents,
           latestSequence:
-            input?.commitDuringFirstSequenceRead === true
-              ? Effect.suspend(() => {
-                  if (sequenceReads++ > 0) return engine.latestSequence;
-                  // Commit and publish right after the read, before the reactor subscribes.
-                  return engine.latestSequence.pipe(
-                    Effect.tap(() =>
-                      engine
-                        .dispatch({
-                          type: "thread.meta.update",
-                          commandId: CommandId.make("cmd-commit-during-sequence-read"),
-                          threadId: ThreadId.make("thread-1"),
-                          title: "Renamed during startup",
-                        })
-                        .pipe(Effect.orDie),
-                    ),
-                  );
-                })
-              : engine.latestSequence,
+            input?.commitDuringSequenceRead === undefined
+              ? engine.latestSequence
+              : Effect.suspend(() => {
+                  sequenceReads += 1;
+                  if (sequenceReads !== input.commitDuringSequenceRead)
+                    return engine.latestSequence;
+                  // The first read precedes the reactor's subscription, so a commit
+                  // after it lands in the gap. The second read follows the
+                  // subscription, so a commit before it is buffered and counted.
+                  const commit = engine
+                    .dispatch({
+                      type: "thread.meta.update",
+                      commandId: CommandId.make("cmd-commit-during-sequence-read"),
+                      threadId: ThreadId.make("thread-1"),
+                      regenerateTitle: true,
+                    })
+                    .pipe(Effect.orDie);
+                  return sequenceReads === 1
+                    ? engine.latestSequence.pipe(Effect.tap(() => commit))
+                    : commit.pipe(Effect.andThen(engine.latestSequence));
+                }),
         } satisfies OrchestrationEngineService["Service"];
       }),
     ).pipe(Layer.provide(orchestrationLayer));
@@ -891,16 +894,21 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
-  it("drains when an event commits between the startup sequence read and subscription", async () => {
-    const harness = await createHarness({ commitDuringFirstSequenceRead: true });
+  it.each([
+    [1, "before"],
+    [2, "after"],
+  ] as const)(
+    "handles an intent committed on startup sequence read %i, %s subscribing",
+    async (commitDuringSequenceRead, _position) => {
+      const harness = await createHarness({ commitDuringSequenceRead });
 
-    await harness.drain();
+      await harness.drain();
 
-    const readModel = await harness.readModel();
-    expect(readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title).toBe(
-      "Renamed during startup",
-    );
-  });
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.titleRegeneration).toBeNull();
+    },
+  );
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {
     const harness = await createHarness({ turnStartBeforeReactor: true });
