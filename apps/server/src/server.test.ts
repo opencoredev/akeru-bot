@@ -479,6 +479,7 @@ const buildAppUnderTest = (options?: {
       ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
+    previewManager?: Partial<PreviewManager.PreviewManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     routineRepository?: Partial<RoutineRepositoryShape>;
@@ -845,6 +846,7 @@ const buildAppUnderTest = (options?: {
             subscribeEvents: Effect.flatMap(PubSub.unbounded<PreviewEvent>(), (pubsub) =>
               PubSub.subscribe(pubsub),
             ),
+            ...options?.layers?.previewManager,
           }),
           Layer.mock(PortScanner.PortDiscovery)({
             scan: () => Effect.succeed([]),
@@ -3818,6 +3820,55 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         type: "providerStatuses",
         payload: { providers: nextProviders },
       });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribePreviewEvents forwards the chat scope to the preview manager", () =>
+    Effect.gen(function* () {
+      const previewEvent = (threadId: string, tabId: string): PreviewEvent =>
+        ({
+          type: "closed",
+          threadId,
+          tabId,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          serverEpoch: "test-server",
+          revision: 1,
+        }) as PreviewEvent;
+      const published = [
+        previewEvent("thread-preview-b", "tab-1"),
+        previewEvent("thread-preview-a", "tab-2"),
+        previewEvent("thread-preview-a", "tab-3"),
+      ];
+      const requestedScopes: Array<string | undefined> = [];
+
+      yield* buildAppUnderTest({
+        layers: {
+          previewManager: {
+            streamEvents: (input) => {
+              requestedScopes.push(input.threadId);
+              return Stream.fromIterable(published).pipe(
+                Stream.filter(PreviewManager.previewEventMatchesSubscription(input)),
+              );
+            },
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const events = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.subscribePreviewEvents]({ threadId: "thread-preview-a" }).pipe(
+            Stream.take(2),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      assert.deepEqual(requestedScopes, ["thread-preview-a"]);
+      assert.deepEqual(
+        Array.from(events, (event) => `${event.threadId}:${event.tabId}`),
+        ["thread-preview-a:tab-2", "thread-preview-a:tab-3"],
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
