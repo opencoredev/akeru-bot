@@ -1,4 +1,7 @@
-import { NativeStackScreenOptions } from "../../native/StackHeader";
+import {
+  NativeStackScreenOptions,
+  type AppNativeStackNavigationOptions,
+} from "../../native/StackHeader";
 import {
   StackActions,
   useFocusEffect,
@@ -752,6 +755,55 @@ function ThreadRouteContent(
     [navigation],
   );
 
+  const selectedThreadTitle = selectedThread?.title ?? "";
+  // Memoized so a composer keystroke does not re-sign the whole header config.
+  const stackScreenOptions = useMemo<AppNativeStackNavigationOptions>(
+    () => ({
+      // Android draws its own in-flow header (AndroidScreenHeader below);
+      // the native stack header stays iOS-only.
+      headerShown: Platform.OS !== "android",
+      headerTitle: selectedThreadTitle,
+      headerTitleStyle: usesNativeHeaderGlass
+        ? {
+            fontSize: 17,
+            fontWeight: "800",
+          }
+        : undefined,
+      title: selectedThreadTitle,
+      headerBackVisible: !layout.usesSplitView,
+      // Compact uses the NATIVE back button when a previous route exists;
+      // deep links / cold starts get an explicit Home button instead.
+      // Split view always uses its custom left items.
+      unstable_headerLeftItems:
+        Platform.OS === "ios"
+          ? layout.usesSplitView
+            ? () => splitLeftHeaderItems
+            : canGoBack
+              ? undefined
+              : () => compactHomeHeaderItems
+          : undefined,
+      // Search lives in the persistent sidebar, so the split header keeps
+      // the git controls on the RIGHT (no center items — center space is
+      // reserved for future breadcrumbs/status).
+      unstable_headerRightItems:
+        Platform.OS === "ios"
+          ? () => (layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems)
+          : undefined,
+      unstable_headerSubtitle: usesNativeHeaderGlass ? headerSubtitle : undefined,
+    }),
+    [
+      canGoBack,
+      compactHomeHeaderItems,
+      compactRightHeaderItems,
+      headerSubtitle,
+      layout.usesSplitView,
+      selectedThreadTitle,
+      splitLeftHeaderItems,
+      threadCenterHeaderItems,
+      usesNativeHeaderGlass,
+    ],
+  );
+
   if (!environmentId || !threadId) {
     return <OpeningThreadLoadingScreen />;
   }
@@ -788,8 +840,6 @@ function ThreadRouteContent(
           activePendingUserInputDrafts={requests.activePendingUserInputDrafts}
           activePendingUserInputAnswers={requests.activePendingUserInputAnswers}
           respondingUserInputId={requests.respondingUserInputId}
-          draftMessage={composer.draftMessage}
-          draftAttachments={composer.draftAttachments}
           connectionStateLabel={routeConnectionState}
           threadSyncStatus={selectedThreadDetailState.status}
           loadEarlier={loadEarlierTurns}
@@ -832,41 +882,7 @@ function ThreadRouteContent(
   return (
     <>
       {activeInspectorRenderer ? <InspectorPaneRoleActivation /> : null}
-      <NativeStackScreenOptions
-        options={{
-          // Android draws its own in-flow header (AndroidScreenHeader below);
-          // the native stack header stays iOS-only.
-          headerShown: Platform.OS !== "android",
-          headerTitle: selectedThread.title,
-          headerTitleStyle: usesNativeHeaderGlass
-            ? {
-                fontSize: 17,
-                fontWeight: "800",
-              }
-            : undefined,
-          title: selectedThread.title,
-          headerBackVisible: !layout.usesSplitView,
-          // Compact uses the NATIVE back button when a previous route exists;
-          // deep links / cold starts get an explicit Home button instead.
-          // Split view always uses its custom left items.
-          unstable_headerLeftItems:
-            Platform.OS === "ios"
-              ? layout.usesSplitView
-                ? () => splitLeftHeaderItems
-                : canGoBack
-                  ? undefined
-                  : () => compactHomeHeaderItems
-              : undefined,
-          // Search lives in the persistent sidebar, so the split header keeps
-          // the git controls on the RIGHT (no center items — center space is
-          // reserved for future breadcrumbs/status).
-          unstable_headerRightItems:
-            Platform.OS === "ios"
-              ? () => (layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems)
-              : undefined,
-          unstable_headerSubtitle: usesNativeHeaderGlass ? headerSubtitle : undefined,
-        }}
-      />
+      <NativeStackScreenOptions options={stackScreenOptions} />
 
       {Platform.OS === "android" ? (
         <AndroidScreenHeader

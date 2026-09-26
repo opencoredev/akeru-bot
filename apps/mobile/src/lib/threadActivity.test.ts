@@ -19,7 +19,9 @@ import {
   deriveThreadFeedPresentation,
   isPendingUserInputOptionSelected,
   setPendingUserInputCustomAnswer,
+  threadFeedEntriesEqual,
   togglePendingUserInputOptionSelection,
+  unchangedPrefixLength,
   type ThreadFeedActivity,
   type ThreadFeedEntry,
 } from "./threadActivity";
@@ -293,6 +295,85 @@ describe("buildThreadFeed", () => {
         botStepMeter: expect.objectContaining({ tokens: 1_200, costUsd: 0.42 }),
       }),
     ]);
+  });
+
+  it("keeps unchanged rows referentially stable while a turn streams", () => {
+    const turnId = TurnId.make("turn-stream");
+    const user = {
+      id: MessageId.make("user-stream"),
+      role: "user" as const,
+      text: "Run the tests",
+      turnId: null,
+      streaming: false,
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+    };
+    const toolUpdated = makeActivity({
+      id: EventId.make("stream-tool-updated"),
+      kind: "tool.updated",
+      tone: "tool",
+      summary: "Run tests",
+      createdAt: "2026-08-31T00:00:01.000Z",
+      turnId,
+      payload: { title: "Run tests", itemType: "command_execution", detail: "bun run test" },
+    });
+    const assistant = {
+      id: MessageId.make("assistant-stream"),
+      role: "assistant" as const,
+      text: "Work",
+      turnId,
+      streaming: true,
+      createdAt: "2026-08-31T00:00:02.000Z",
+      updatedAt: "2026-08-31T00:00:02.000Z",
+    };
+    const base = {
+      id: ThreadId.make("thread-stream"),
+      projectId: ProjectId.make("project-1"),
+      title: "Streaming",
+    };
+    const first = buildThreadFeed(
+      makeThread({ ...base, messages: [user, assistant], activities: [toolUpdated] }),
+    );
+    const grown = { ...assistant, text: "Working", updatedAt: "2026-08-31T00:00:03.000Z" };
+    const second = buildThreadFeed(
+      makeThread({ ...base, messages: [user, grown], activities: [toolUpdated] }),
+    );
+
+    expect(second.map((entry) => entry.id)).toEqual(first.map((entry) => entry.id));
+    expect(second[0]).toBe(first[0]);
+    const firstGroup = first[1];
+    const secondGroup = second[1];
+    expect(firstGroup?.type).toBe("activity-group");
+    if (firstGroup?.type !== "activity-group" || secondGroup?.type !== "activity-group") return;
+    expect(secondGroup.activities[0]).toBe(firstGroup.activities[0]);
+    expect(second[2]).not.toBe(first[2]);
+    expect(second[2]).toMatchObject({ type: "message", message: { text: "Working" } });
+
+    // Presentation rebuilds wrapper rows; list equality still sees only the streamed row change.
+    const presentFirst = deriveThreadFeedPresentation(first, null, new Set());
+    const presentSecond = deriveThreadFeedPresentation(second, null, new Set());
+    expect(presentSecond[1]).not.toBe(presentFirst[1]);
+    expect(
+      presentSecond.map((entry, index) => threadFeedEntriesEqual(presentFirst[index]!, entry)),
+    ).toEqual([true, true, false]);
+
+    // A lifecycle row merged from a new activity gets a fresh presentation.
+    const toolCompleted = makeActivity({
+      ...toolUpdated,
+      id: EventId.make("stream-tool-completed"),
+      kind: "tool.completed",
+      summary: "Run tests completed",
+      createdAt: "2026-08-31T00:00:01.500Z",
+    });
+    const third = buildThreadFeed(
+      makeThread({ ...base, messages: [user, grown], activities: [toolUpdated, toolCompleted] }),
+    );
+    const thirdGroup = third[1];
+    if (thirdGroup?.type !== "activity-group") throw new Error("expected activity group");
+    expect(thirdGroup.activities).toHaveLength(1);
+    expect(thirdGroup.activities[0]).not.toBe(firstGroup.activities[0]);
+    expect(thirdGroup.activities[0]?.id).toBe("stream-tool-completed");
+    expect(threadFeedEntriesEqual(secondGroup, thirdGroup)).toBe(false);
   });
 
   it("keeps older local feedback before newer messages returned by the server", () => {
@@ -902,5 +983,19 @@ describe("quiet timeline: nested agents", () => {
     );
     expect(ids).toContain("nested-done");
     expect(ids).not.toContain("shell-done");
+  });
+});
+
+describe("unchangedPrefixLength", () => {
+  it("reports the shared prefix for appends and zero for anything else", () => {
+    const a = { id: "a" };
+    const b = { id: "b" };
+    const c = { id: "c" };
+    expect(unchangedPrefixLength([], [a])).toBe(0);
+    expect(unchangedPrefixLength([a, b], [a, b, c])).toBe(2);
+    expect(unchangedPrefixLength([a, b], [a, b])).toBe(2);
+    expect(unchangedPrefixLength([a, b, c], [a, c])).toBe(0);
+    expect(unchangedPrefixLength([a, b], [a, c, b])).toBe(0);
+    expect(unchangedPrefixLength([a, b], [{ id: "a" }, b])).toBe(0);
   });
 });

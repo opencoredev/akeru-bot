@@ -56,7 +56,8 @@ const STATUS_LABEL_BY_STATUS: Partial<
   failed: { label: "Failed", className: "text-red-700 dark:text-red-300" },
 };
 
-function threadTimeLabel(thread: EnvironmentThreadShell): string {
+/** Relative time shown on a v2 row. Parents compute it on their minute tick. */
+export function threadListV2TimeLabel(thread: EnvironmentThreadShell): string {
   return relativeTime(thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt);
 }
 
@@ -316,9 +317,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   /** Preformatted against the parent minute tick so this memoized row's
       countdown keeps moving. */
   readonly snoozeWakeLabelText?: string;
-  /** Parent minute tick passed as a prop so this memoized row refreshes its
-      native snooze menu while mounted. */
-  readonly snoozePresetMinute: string;
+  /** Relative time from threadListV2TimeLabel, formatted by the parent on its
+      minute tick. Rows whose label text is unchanged skip that re-render. */
+  readonly timeLabel: string;
+  /** Parent minute tick so this memoized row refreshes its native snooze menu
+      while mounted. Null for rows that can never offer snooze presets (already
+      snoozed, or the server lacks snooze), which then ignore the tick. */
+  readonly snoozePresetMinute: string | null;
   readonly project: EnvironmentProject | null;
   readonly projectTitle?: string;
   readonly providerDriver: string | null;
@@ -406,7 +411,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   const status = resolveThreadListV2Status(thread);
   const statusLabel = STATUS_LABEL_BY_STATUS[status];
-  const timeLabel = threadTimeLabel(thread);
+  const timeLabel = props.timeLabel;
 
   const handleDelete = useCallback(() => onDeleteThread(thread), [onDeleteThread, thread]);
   const handleRegenerateTitle = useCallback(
@@ -888,7 +893,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           >
             {snoozedRow && props.snoozeWakeLabelText !== undefined
               ? props.snoozeWakeLabelText
-              : relativeTime(thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt)}
+              : timeLabel}
           </Text>
         </View>
       </Pressable>

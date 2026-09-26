@@ -45,6 +45,7 @@ import {
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  threadListV2TimeLabel,
   ThreadListV2SettledShelfHeader,
   ThreadListV2SnoozedShelfHeader,
 } from "../threads/thread-list-v2-items";
@@ -775,7 +776,10 @@ export function HomeScreen(props: HomeScreenProps) {
           variant={item.item.variant}
           snoozed={item.item.snoozed}
           pinned={item.item.pinned}
-          snoozePresetMinute={nowMinute}
+          timeLabel={threadListV2TimeLabel(thread)}
+          snoozePresetMinute={
+            !item.item.snoozed && snoozeEnvironmentIds.has(thread.environmentId) ? nowMinute : null
+          }
           snoozeWakeLabelText={item.snoozeWakeLabelText}
           showTrailingDivider={showTrailingDivider}
           project={
