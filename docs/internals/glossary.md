@@ -48,6 +48,10 @@ A single user-to-assistant work cycle inside a thread. It starts with user input
 
 A running turn whose provider has sent no output for `SILENCE_WATCHDOG_SILENT_MS` (90 seconds). Ingestion records it as a `turn.silent` activity and clears it with `turn.silent.cleared` or the end of the turn. It is a status, not a failure: nothing interrupts the turn. See [silence-watchdog.md](./silence-watchdog.md).
 
+#### Temporary worker
+
+A short-lived helper a bot starts with the Task tool during its own turn. It runs in a hidden child thread under a narrower grant, cannot start workers of its own, and is canceled when the parent turn ends. It is not a bot and is separate from bot-to-bot delegation. See [providers.md](./providers.md#temporary-workers).
+
 ### Roster organization
 
 The live sidebar is `BotRosterSidebar`. Pins and the main Bots list are a client layout over bots and groups. They must not assign or remove group members, and they must not settle chats. Drag planning lives in `roster.logic.ts`; pointer cleanup, insertion-gap projection, and list motion live beside it in `roster.pointer.ts`, `roster.drag.ts`, and `roster.motion.ts`.

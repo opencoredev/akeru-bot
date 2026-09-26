@@ -20,6 +20,7 @@ import {
   AkeruUsageReservationId,
   CommandId,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
   McpServerId,
@@ -124,6 +125,7 @@ import {
   type AkeruDelegationRuntime,
   type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
+import { AkeruWorkerError, makeAkeruWorkerRuntime } from "../AkeruWorkerRuntime.ts";
 import {
   AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
   AKERU_ROUTINE_REVIEW_TIMEOUT,
@@ -561,7 +563,12 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
   return `Approve this ${target}? This approval applies only to the pending action. It cannot undo completed work.`;
 }
 
-function usesMastraCode(provider: ProviderDriverKind): boolean {
+/**
+ * Providers whose bots run through Akeru's Mastra controller and receive the
+ * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
+ * registers a tool session, so it gets no catalog tools, workers included.
+ */
+export function usesMastraCode(provider: ProviderDriverKind): boolean {
   return (
     provider === "codex" ||
     provider === "claudeAgent" ||
@@ -1677,6 +1684,128 @@ const make = (options?: AgentControllerLiveOptions) =>
           })
         : undefined;
 
+    /** Orchestration access for temporary workers. Set with delegation. */
+    let workerOrchestration:
+      | {
+          readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+          readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+        }
+      | undefined =
+      Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
+        ? {
+            readSnapshot: () => Effect.runPromise(projectionSnapshotQuery.value.getSnapshot()),
+            dispatch: (command) => Effect.runPromise(orchestrationEngine.value.dispatch(command)),
+          }
+        : undefined;
+    /** Runtime mode for each hidden worker thread's turns, keyed by child thread id. */
+    const workerTurnDefaults = new Map<string, RuntimeMode>();
+    const workerCall = <A>(
+      run: (orchestration: NonNullable<typeof workerOrchestration>) => Promise<A>,
+    ) =>
+      Effect.tryPromise({
+        try: () => {
+          if (!workerOrchestration) throw new Error("Workers need the orchestration engine.");
+          return run(workerOrchestration);
+        },
+        catch: (cause) =>
+          new AkeruWorkerError({ reason: "start_failed", detail: failureDetail(cause) }),
+      });
+    const workerRuntime = yield* makeAkeruWorkerRuntime({
+      createChild: (spec) =>
+        workerCall(async (orchestration) => {
+          const snapshot = await orchestration.readSnapshot();
+          const parentThread = snapshot.threads.find(
+            (candidate) => candidate.id === spec.parentThreadId,
+          );
+          if (!parentThread) throw new Error(`Chat '${spec.parentThreadId}' was not found.`);
+          const botId =
+            sessions.get(String(spec.parentThreadId))?.toolSession.botId ??
+            parentThread.respondingBotId ??
+            parentThread.botId ??
+            null;
+          const childThreadId = ThreadId.make(`worker-thread-${NodeCrypto.randomUUID()}`);
+          workerTurnDefaults.set(String(childThreadId), parentThread.runtimeMode);
+          // A worker is a direct copy of the responding bot, never a group chat,
+          // even when the parent is one.
+          await orchestration.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`worker:thread:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            projectId: parentThread.projectId,
+            botId,
+            groupId: null,
+            parentThreadId: spec.parentThreadId,
+            parentDelegationId: null,
+            title: spec.title,
+            modelSelection: parentThread.modelSelection,
+            runtimeMode: parentThread.runtimeMode,
+            interactionMode: "default",
+            branch: parentThread.branch,
+            worktreePath: parentThread.worktreePath,
+            createdAt: nowIso(),
+          });
+          return childThreadId;
+        }),
+      messageChild: (childThreadId, text) =>
+        workerCall(async (orchestration) => {
+          const runtimeMode = workerTurnDefaults.get(String(childThreadId));
+          if (!runtimeMode) throw new Error(`Worker chat '${childThreadId}' is not known.`);
+          await orchestration.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`worker:turn:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            message: {
+              messageId: MessageId.make(`worker-message-${NodeCrypto.randomUUID()}`),
+              role: "user",
+              text,
+              attachments: [],
+            },
+            runtimeMode,
+            interactionMode: "default",
+            createdAt: nowIso(),
+          });
+        }),
+      interruptChild: (childThreadId) =>
+        workerCall((orchestration) =>
+          orchestration.dispatch({
+            type: "thread.turn.interrupt",
+            commandId: CommandId.make(`worker:interrupt:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            createdAt: nowIso(),
+          }),
+        ).pipe(Effect.ignoreCause({ log: true })),
+      discardChild: (childThreadId) =>
+        Effect.sync(() => workerTurnDefaults.delete(String(childThreadId))).pipe(
+          Effect.andThen(
+            workerCall((orchestration) =>
+              orchestration.dispatch({
+                type: "thread.delete",
+                commandId: CommandId.make(`worker:discard:${NodeCrypto.randomUUID()}`),
+                threadId: childThreadId,
+              }),
+            ),
+          ),
+          Effect.ignoreCause({ log: true }),
+        ),
+    });
+    const workersFor = (
+      threadId: ThreadId,
+      access: AkeruDelegationAccessGrant,
+    ): NonNullable<AkeruToolSession["workers"]> => {
+      const parent = () => {
+        const turnId = sessions.get(String(threadId))?.activeTurn?.turnId;
+        if (!turnId) throw new Error("Workers require an active turn.");
+        return { threadId, turnId, depth: workerRuntime.depthForThread(threadId), access };
+      };
+      return {
+        depth: workerRuntime.depthForThread(threadId),
+        spawn: (request) => runPromise(workerRuntime.spawn(parent(), request)),
+        check: (request) => runPromise(workerRuntime.check({ threadId }, request)),
+        message: (request) => runPromise(workerRuntime.message({ threadId }, request)),
+        stop: (request) => runPromise(workerRuntime.stop({ threadId }, request)),
+      };
+    };
+
     const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
       const resolved = resolvedByThread.get(String(threadId));
       if (turn.memoryQueued || !bundle.observeAfterTurn || !resolved) return;
@@ -2058,6 +2187,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
+      void runPromise(
+        workerRuntime.childTurnFinished(threadId, {
+          state: state === "completed" ? "completed" : "failed",
+          ...(state === "completed" && turn.assistantText.trim()
+            ? { summary: turn.assistantText.trim() }
+            : { error: errorMessage ?? `The worker turn ${state}.` }),
+        }),
+      );
+      void runPromise(workerRuntime.parentTurnEnded(threadId));
       if (state !== "completed") {
         void delegationRuntime
           ?.parentFinished({ threadId, turnId: turn.turnId, failed: state === "failed" })
@@ -2279,6 +2417,20 @@ const make = (options?: AgentControllerLiveOptions) =>
             ).catch((cause: unknown) => {
               if (active.activeTurn !== turn || turn.finished) return;
               void failActiveTurn(active, threadId, turn.turnId, cause);
+            });
+            return;
+          }
+          const grant =
+            delegationRuntime?.accessForThread(threadId) ?? workerRuntime.accessForThread(threadId);
+          if (grant?.approvalCeiling === "none") {
+            // Nobody can answer a prompt here, so the call fails now instead of waiting.
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "decline",
+              declineContext: {
+                reason: "approval_unavailable",
+                message: `Tool '${event.toolName}' needs approval, and this chat cannot ask anyone for it. Finish without it or report the blocker.`,
+              },
             });
             return;
           }
@@ -2632,7 +2784,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       const { parentDelegation, bot, botId, activeChildDelegations, threadTitle } =
         yield* readSessionStartContext(threadId, input.botId ?? null);
       const delegatedAccess =
-        delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
+        delegationRuntime?.accessForThread(threadId) ??
+        parentDelegation?.access ??
+        workerRuntime.accessForThread(threadId);
+      const isWorkerThread = workerRuntime.depthForThread(threadId) > 0;
       const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
         allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
         memoryScopes: ["private", "bot", "project", "group", "workspace"],
@@ -2777,6 +2932,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.botName;
         delete toolSession.billedBotId;
         delete toolSession.delegation;
+        delete toolSession.workers;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
         delete toolSession.imageGeneration;
@@ -2803,6 +2959,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                   activeChildDelegations,
                 }),
               }
+            : {}),
+          ...(workerOrchestration && botId && !isWorkerThread
+            ? { workers: workersFor(threadId, access) }
             : {}),
           ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
           imageGeneration,
@@ -3128,6 +3287,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                 activeChildDelegations,
               }),
             }
+          : {}),
+        ...(workerOrchestration && botId && !isWorkerThread
+          ? { workers: workersFor(threadId, access) }
           : {}),
         ...(input.botId && channelRuntime
           ? {
@@ -3916,6 +4078,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             toolRuntime.unregisterSession(key);
             sessions.delete(key);
             memoryUsageByThread.delete(key);
+            yield* workerRuntime.releaseThread(input.threadId);
+            workerTurnDefaults.delete(key);
           }),
         ),
       );
@@ -3990,9 +4154,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           botStateRuntime = createAkeruBotStateRuntime(input);
           channelRuntime = createAkeruChannelRuntime(input);
           delegationRuntime ??= makeDelegationRuntime(input);
+          workerOrchestration ??= input;
         }),
       failDelegation: ({ threadId, error }) =>
-        Effect.sync(() => resolveChildWaiter(threadId, { state: "failed", turnId: null, error })),
+        Effect.sync(() =>
+          resolveChildWaiter(threadId, { state: "failed", turnId: null, error }),
+        ).pipe(
+          Effect.andThen(workerRuntime.childTurnFinished(threadId, { state: "failed", error })),
+        ),
       authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
         Effect.tryPromise({
           try: async (signal) => {

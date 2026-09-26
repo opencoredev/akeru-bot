@@ -173,6 +173,56 @@ cannot load, and Grok's named glyphs are open vocabulary, so both fall back to t
 glyph. The composer skill chip stores the resolved emoji on its Lexical node and still
 serializes to `$name`.
 
+## Temporary workers
+
+Task, CheckSubagent, MessageSubagent, and StopSubagent let a bot hand a bounded subtask to a
+short-lived worker during its own turn. They are separate from bot-to-bot delegation through
+SendToAgent: a worker has no bot identity of its own and belongs to the parent turn that started it.
+The contracts live in [`akeruWorkers.ts`][workers-contract] and the runtime in
+[`AkeruWorkerRuntime.ts`][workers-runtime].
+
+Task creates a child thread for the calling bot, with the parent's project, model, runtime mode, and
+workspace, and starts a turn with the task text. The child is always a direct thread with the
+responding bot, even when the parent is a group chat, so no group sender rules apply to it. If its
+first turn cannot start, the child thread is deleted and the worker fails with `internal`. It waits for the result unless `background` is set.
+CheckSubagent reports the current status, or waits for a terminal one. MessageSubagent starts a
+follow-up turn on a running worker; the worker completes after its last open turn finishes.
+StopSubagent interrupts the child turn. Every tool returns the same status with a tagged phase:
+`Running`, `Completed`, `Failed` (`timeout`, `worker_failed`, or `internal`), or `Canceled`
+(`stop` or `parent-turn-ended`). Terminal phases are final, so a late child result cannot revive a
+stopped worker.
+
+Limits are enforced by the runtime and returned as failed tool receipts with a readable message:
+
+- Depth is at most 1. Task is hidden from workers, and a spawn from a worker fails with
+  `depth_limit`.
+- A parent turn may own at most 3 running workers. The fourth spawn fails with `concurrency_limit`
+  until one finishes or stops.
+- A worker without a result after 10 minutes fails with `timeout` and its child turn is
+  interrupted.
+
+When the parent turn finishes, fails, or is interrupted, every worker it still owns lands
+`Canceled` with `parent-turn-ended` and its child turn is interrupted. Background workers do not
+outlive the turn. A worker id only resolves from the chat that started it.
+
+Worker grants narrow the parent's delegation grant. Workers get no memory scopes, an approval
+ceiling of `none`, no access to the user's computer, and the parent's sandbox or the local
+workspace. They cannot use the worker tools, the agent tools (CreateAgent, CheckAgent, MessageAgent,
+StopAgent, SendToAgent), channel creation or updates, SendToUser, request_box_help, ReactToMessage,
+UpdateBotProfile, ExternalShell, or AwaitExternalShell. The `none` ceiling also covers MCP and
+built-in tools: a call that would open an approval request is declined at once with an error the
+worker can read, so a worker never waits on a prompt nobody can see. The worker tools themselves need no approval because they
+only start work that runs under this narrower grant.
+
+Child threads carry a `parentThreadId`, so the clients hide them from bot chat lists the same way they
+hide delegated work.
+
+The tools exist only in Mastra tool sessions with worker orchestration configured, which covers
+Codex, Kimi For Coding, OpenCode Go, and Claude and Grok when they run on the Mastra controller.
+Standard OpenCode stays on the legacy bridge (`usesMastraCode` in [`AgentController.ts`][controller])
+and does not advertise them. This is deliberate: the legacy bridge has no Akeru tool session to route
+worker calls through, so advertising the tools there would promise behavior the provider cannot run.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
@@ -318,6 +368,8 @@ when a request opens (approval) or user input is requested, via
 [controller]: ../../apps/server/src/provider/Layers/AgentController.ts
 [bridge]: ../../apps/server/src/provider/Layers/LegacyProviderBridge.ts
 [contracts]: ../../packages/contracts/src/orchestration.ts
+[workers-contract]: ../../packages/contracts/src/akeruWorkers.ts
+[workers-runtime]: ../../apps/server/src/provider/AkeruWorkerRuntime.ts
 [worker]: ../../packages/shared/src/DrainableWorker.ts
 [ingest]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts
 [cmd]: ../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts

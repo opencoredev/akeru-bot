@@ -14,6 +14,13 @@ import {
 } from "./baseSchemas.ts";
 import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
+import {
+  AKERU_WORKER_MAX_DEPTH,
+  AkeruWorkerCheckInput,
+  AkeruWorkerMessageInput,
+  AkeruWorkerStopInput,
+  AkeruWorkerTaskInput,
+} from "./akeruWorkers.ts";
 import { McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
 import { ImageGenerationRequest } from "./imageGeneration.ts";
 import { BotSandbox, RuntimeMode } from "./orchestration.ts";
@@ -64,9 +71,7 @@ const WebSearchInput = Schema.Struct({
   query: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
   domains: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
-const WebFetchInput = Schema.Struct({
-  url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)),
-});
+const WebFetchInput = Schema.Struct({ url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)) });
 const AddMcpServerInput = Schema.Union([
   Schema.Struct({
     serverId: McpServerId,
@@ -141,6 +146,10 @@ export const AkeruToolId = Schema.Literals([
   "RemoveMcpAccount",
   "RenameMcpAccount",
   "SetMcpInstructions",
+  "Task",
+  "CheckSubagent",
+  "MessageSubagent",
+  "StopSubagent",
 ]);
 export type AkeruToolId = typeof AkeruToolId.Type;
 
@@ -246,6 +255,10 @@ export const AkeruToolInputSchemas = {
   RemoveMcpAccount: Schema.Struct({ serverId: McpServerId }),
   RenameMcpAccount: RenameMcpAccountInput,
   SetMcpInstructions: Schema.Struct({ serverId: McpServerId, instructions: McpServerInstructions }),
+  Task: AkeruWorkerTaskInput,
+  CheckSubagent: AkeruWorkerCheckInput,
+  MessageSubagent: AkeruWorkerMessageInput,
+  StopSubagent: AkeruWorkerStopInput,
 } as const satisfies Record<AkeruToolId, Schema.Top>;
 
 export const AkeruMessageReactionResult = Schema.Union([
@@ -461,9 +474,23 @@ export const AKERU_TOOL_CATALOG = [
   define("UninstallMcpServer", "bot-workspace", "Remove an MCP server.", { approval: "delete" }),
   define("RemoveMcpAccount", "bot-workspace", "Remove an MCP account.", { approval: "delete" }),
   define("RenameMcpAccount", "bot-workspace", "Rename an MCP account.", { approval: "secrets" }),
-  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", {
-    approval: "secrets",
-  }),
+  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", { approval: "secrets" }),
+  define(
+    "Task",
+    "bot-workspace",
+    "Start a temporary worker for a bounded subtask. The worker is a copy of this bot with the same tools and no memory writes, runs in a hidden chat, and ends with this turn. Waits for the result unless background is true. Workers cannot start workers, and one turn can run at most 3 at once.",
+  ),
+  define(
+    "CheckSubagent",
+    "bot-workspace",
+    "Report a temporary worker's status: Running, Completed with its result, Failed, or Canceled. Set wait to block until it finishes.",
+  ),
+  define(
+    "MessageSubagent",
+    "bot-workspace",
+    "Send a follow-up instruction to a running temporary worker.",
+  ),
+  define("StopSubagent", "bot-workspace", "Cancel a temporary worker. It ends as Canceled."),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {
@@ -474,6 +501,8 @@ export interface AkeruToolAvailabilityContext {
   readonly implementedTools: ReadonlySet<string>;
   readonly delegationDepth?: number;
   readonly activeDelegations?: number;
+  /** 0 for a bot turn, 1 inside a temporary worker. */
+  readonly workerDepth?: number;
 }
 
 export function filterAkeruTools(
@@ -488,6 +517,7 @@ export function filterAkeruTools(
         (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
     )
       return false;
+    if (tool.id === "Task" && (context.workerDepth ?? 0) >= AKERU_WORKER_MAX_DEPTH) return false;
     if (tool.workspace === "bot-workspace" && context.workspaceType === "none") return false;
     if (tool.workspace === "user-computer" && !context.hasUserComputer) return false;
     return !(tool.requiresUserComputer && !context.hasUserComputer);

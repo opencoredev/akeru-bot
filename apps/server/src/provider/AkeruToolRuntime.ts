@@ -10,6 +10,7 @@ import {
   type AkeruToolId,
   type AkeruToolReceipt,
   type AkeruToolWorkspaceType,
+  type AkeruWorkerStatus,
   type RuntimeMode,
   ThreadId,
   akeruToolApprovalForInput,
@@ -71,6 +72,22 @@ export interface AkeruToolSession {
     readonly check?: (input: (typeof AkeruToolInputSchemas.CheckAgent)["Type"]) => Promise<unknown>;
     readonly send: (input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"]) => Promise<unknown>;
     readonly stop?: (input: (typeof AkeruToolInputSchemas.StopAgent)["Type"]) => Promise<unknown>;
+  };
+  /** Temporary workers owned by this bot turn. Worker threads never get this. */
+  readonly workers?: {
+    readonly depth: number;
+    readonly spawn: (
+      input: (typeof AkeruToolInputSchemas.Task)["Type"],
+    ) => Promise<AkeruWorkerStatus>;
+    readonly check: (
+      input: (typeof AkeruToolInputSchemas.CheckSubagent)["Type"],
+    ) => Promise<AkeruWorkerStatus>;
+    readonly message: (
+      input: (typeof AkeruToolInputSchemas.MessageSubagent)["Type"],
+    ) => Promise<AkeruWorkerStatus>;
+    readonly stop: (
+      input: (typeof AkeruToolInputSchemas.StopSubagent)["Type"],
+    ) => Promise<AkeruWorkerStatus>;
   };
   readonly channels?: {
     readonly create: (
@@ -141,6 +158,10 @@ const BACKEND_NAMES: Record<
     | "MessageAgent"
     | "StopAgent"
     | "SendToAgent"
+    | "Task"
+    | "CheckSubagent"
+    | "MessageSubagent"
+    | "StopSubagent"
     | "CreateChannel"
     | "UpdateChannel"
     | "SendToUser"
@@ -382,6 +403,12 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       if (session.delegation.stop) tools.add("StopAgent");
       tools.add("SendToAgent");
     }
+    if (session.workers) {
+      tools.add("Task");
+      tools.add("CheckSubagent");
+      tools.add("MessageSubagent");
+      tools.add("StopSubagent");
+    }
     if (session.channels) {
       tools.add("CreateChannel");
       tools.add("UpdateChannel");
@@ -420,6 +447,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             activeDelegations: session.delegation.activeDelegations,
           }
         : {}),
+      ...(session.workers ? { workerDepth: session.workers.depth } : {}),
     });
     return session.memoryHandlers
       ? [...workspaceTools, ...MEMORY_TOOL_DEFINITIONS]
@@ -608,6 +636,41 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               failureCode,
               fatalToThread: false,
               ...(billedBotId ? { billedBotId } : {}),
+              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+            } satisfies AkeruToolReceipt;
+            emitReceipt(input, "failure", { failureCode, summary });
+            return result;
+          }
+        } else if (
+          input.toolId === "Task" ||
+          input.toolId === "CheckSubagent" ||
+          input.toolId === "MessageSubagent" ||
+          input.toolId === "StopSubagent"
+        ) {
+          if (!session.workers) throw new Error("Workers are not available for this session.");
+          failureCode = "internal";
+          try {
+            result =
+              input.toolId === "Task"
+                ? await session.workers.spawn(decodeAkeruToolInput("Task", decoded))
+                : input.toolId === "CheckSubagent"
+                  ? await session.workers.check(decodeAkeruToolInput("CheckSubagent", decoded))
+                  : input.toolId === "MessageSubagent"
+                    ? await session.workers.message(
+                        decodeAkeruToolInput("MessageSubagent", decoded),
+                      )
+                    : await session.workers.stop(decodeAkeruToolInput("StopSubagent", decoded));
+          } catch (cause) {
+            const summary = cause instanceof Error ? cause.message : String(cause);
+            result = {
+              receiptId: input.toolCallId,
+              toolId: input.toolId,
+              phase: "failure",
+              threadId: ThreadId.make(input.threadId),
+              botId: session.botId,
+              summary,
+              failureCode,
+              fatalToThread: false,
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });

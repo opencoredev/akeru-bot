@@ -88,6 +88,7 @@ import {
   mcpServerIdForToolName,
   recordProviderAccessHealth,
   toMcpServerConfigs,
+  usesMastraCode,
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
 import {
@@ -762,6 +763,16 @@ function resolveCodex(controller: AgentController["Service"]) {
     botConversation: true,
   });
 }
+
+describe("usesMastraCode", () => {
+  it("gives catalog tools, workers included, only to Mastra-backed providers", () => {
+    for (const provider of ["codex", "claudeAgent", "grok", "kimi", "opencodeGo"]) {
+      expect(usesMastraCode(ProviderDriverKind.make(provider))).toBe(true);
+    }
+    // Standard OpenCode runs on the legacy bridge, which registers no tool session.
+    expect(usesMastraCode(ProviderDriverKind.make("opencode"))).toBe(false);
+  });
+});
 
 describe("toMcpServerConfigs", () => {
   it("attributes namespaced MCP tools to the exact server id", () => {
@@ -5164,6 +5175,236 @@ describe("AgentControllerLive", () => {
       mastra.factory,
       makeMcpManager,
     );
+  });
+
+  describe("temporary workers", () => {
+    const bossBotId = BotId.make("bot-boss");
+    const linearServer: McpServer = {
+      id: McpServerId.make("linear"),
+      name: "Linear",
+      transport: "url",
+      url: "https://mcp.example.com/linear",
+      enabled: true,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    const groupParentSnapshot = {
+      threads: [
+        {
+          id: codexThreadId,
+          projectId: ProjectId.make("project-workers"),
+          botId: null,
+          groupId: GroupId.make("group-workers"),
+          respondingBotId: bossBotId,
+          runtimeMode: "approval-required",
+          modelSelection: codexSelection,
+          branch: null,
+          worktreePath: null,
+        },
+      ],
+      bots: [],
+      groups: [],
+      delegations: [],
+    } as unknown as OrchestrationReadModel;
+
+    /** A second fake Mastra session, so events reach only the worker thread. */
+    const makeWorkerSession = (base: Session<Record<string, unknown>>) => {
+      const listeners = new Set<(event: AgentControllerEvent) => void>();
+      const session = {
+        ...base,
+        subscribe: vi.fn((listener: (event: AgentControllerEvent) => void) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        }),
+        sendMessage: vi.fn(() => new Promise<void>(() => undefined)),
+        respondToToolApproval: vi.fn(),
+      } as unknown as Session<Record<string, unknown>>;
+      return {
+        session,
+        emit: (event: AgentControllerEvent) => {
+          for (const listener of listeners) listener(event);
+        },
+      };
+    };
+
+    it.effect("runs a Task from a group chat as a direct, locked-down worker", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const worker = makeWorkerSession(mastra.session);
+      const mcpManager = {
+        init: vi.fn(async () => undefined),
+        disconnect: vi.fn(async () => undefined),
+        getTools: vi.fn(() => ({ linear_update: { mcp: { annotations: {} } } })),
+        getServerStatuses: vi.fn(() => []),
+      };
+      const dispatched: OrchestrationCommand[] = [];
+      const turnStarted = Promise.withResolvers<void>();
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* controller.configureDelegation!({
+            readSnapshot: async () => groupParentSnapshot,
+            dispatch: async (command) => {
+              dispatched.push(command);
+              if (command.type === "thread.turn.start") turnStarted.resolve();
+              return { sequence: dispatched.length };
+            },
+          });
+          yield* resolveCodex(controller);
+          const sessionInput = {
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            cwd: process.cwd(),
+            modelSelection: codexSelection,
+            runtimeMode: "approval-required" as const,
+            botId: bossBotId,
+            botName: "Boss",
+            mcpServers: [linearServer],
+          };
+          yield* controller.startSession(codexThreadId, {
+            ...sessionInput,
+            threadId: codexThreadId,
+          });
+          yield* controller.sendTurn({ threadId: codexThreadId, input: "Split this up." });
+
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          const parentTools = runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id);
+          expect(parentTools).toEqual(expect.arrayContaining(["Task", "ExternalShell"]));
+
+          const spawned = (yield* Effect.promise(() =>
+            runtime.execute({
+              threadId: String(codexThreadId),
+              toolId: "Task",
+              toolCallId: "task-1",
+              input: { task: "Update the Linear issue", background: true },
+              approvalMode: "require-grant",
+            }),
+          )) as { readonly phase: { readonly _tag: string } };
+          expect(spawned.phase._tag).toBe("Running");
+          yield* Effect.promise(() => turnStarted.promise);
+          const [create, start] = dispatched;
+          expect(create).toMatchObject({
+            type: "thread.create",
+            botId: bossBotId,
+            groupId: null,
+            parentThreadId: codexThreadId,
+          });
+          const childThreadId = (create as { readonly threadId: ThreadId }).threadId;
+          expect(start).toMatchObject({ type: "thread.turn.start", threadId: childThreadId });
+          expect(start).not.toHaveProperty("respondingBotId");
+
+          // The turn-start reactor would start the worker session like this.
+          mastra.createSession.mockImplementationOnce(async () => worker.session as never);
+          yield* controller.resolveEngine({
+            threadId: childThreadId,
+            engine: null,
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(childThreadId, {
+            ...sessionInput,
+            threadId: childThreadId,
+          });
+          const workerTools = runtime.toolsForThread(String(childThreadId)).map((tool) => tool.id);
+          for (const toolId of [
+            "Task",
+            "request_box_help",
+            "ReactToMessage",
+            "ExternalShell",
+            "AwaitExternalShell",
+          ]) {
+            expect(workerTools).not.toContain(toolId);
+          }
+
+          const events: ProviderRuntimeEvent[] = [];
+          const eventsFiber = yield* controller.streamEvents.pipe(
+            Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+            Effect.forkChild({ startImmediately: true }),
+          );
+          yield* Effect.yieldNow;
+          yield* controller.sendTurn({ threadId: childThreadId, input: "Update the issue." });
+          worker.emit({
+            type: "tool_approval_required",
+            toolCallId: "worker-linear",
+            toolName: "linear_update",
+            args: { issue: "LEO-1", state: "done" },
+          } as AgentControllerEvent);
+          yield* Effect.yieldNow;
+
+          expect(worker.session.respondToToolApproval).toHaveBeenCalledWith({
+            toolCallId: "worker-linear",
+            decision: "decline",
+            declineContext: expect.objectContaining({
+              message: expect.stringContaining("linear_update"),
+            }),
+          });
+          expect(mastra.session.respondToToolApproval).not.toHaveBeenCalled();
+          expect(events.filter((event) => event.type === "request.opened")).toEqual([]);
+          yield* Fiber.interrupt(eventsFiber);
+        }),
+        bridge.service,
+        mastra.factory,
+        () => mcpManager as never,
+      );
+    });
+
+    it.effect("removes the hidden worker chat when its first turn is rejected", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const dispatched: OrchestrationCommand[] = [];
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* controller.configureDelegation!({
+            readSnapshot: async () => groupParentSnapshot,
+            dispatch: async (command) => {
+              dispatched.push(command);
+              if (command.type === "thread.turn.start") {
+                throw new Error("A person member must send turns to this group.");
+              }
+              return { sequence: dispatched.length };
+            },
+          });
+          yield* resolveCodex(controller);
+          yield* controller.startSession(codexThreadId, {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            cwd: process.cwd(),
+            modelSelection: codexSelection,
+            runtimeMode: "approval-required",
+            botId: bossBotId,
+            botName: "Boss",
+          });
+          yield* controller.sendTurn({ threadId: codexThreadId, input: "Split this up." });
+
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          const status = (yield* Effect.promise(() =>
+            runtime.execute({
+              threadId: String(codexThreadId),
+              toolId: "Task",
+              toolCallId: "task-rejected",
+              input: { task: "Never starts" },
+              approvalMode: "require-grant",
+            }),
+          )) as { readonly phase: { readonly _tag: string; readonly failureCode?: string } };
+          expect(status.phase).toMatchObject({ _tag: "Failed", failureCode: "internal" });
+          // Foreground Task settles only after the discard ran.
+          const [create, start, discard] = dispatched;
+          expect(create).toMatchObject({ type: "thread.create" });
+          expect(start).toMatchObject({ type: "thread.turn.start" });
+          expect(discard).toMatchObject({
+            type: "thread.delete",
+            threadId: (create as { readonly threadId: ThreadId }).threadId,
+          });
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
   });
 
   it.effect("resolves pending approvals when a turn or session ends", () => {
