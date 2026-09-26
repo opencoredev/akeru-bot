@@ -360,8 +360,8 @@ export const ProviderRegistryLive = Layer.effect(
         readonly publish?: boolean;
         readonly persist?: boolean;
         readonly replace?: boolean;
-        /** Publish even when only `checkedAt` moved. */
-        readonly publishUnchanged?: boolean;
+        /** Treat a moved `checkedAt` as a change. Set for completed probes. */
+        readonly publishCheckedAt?: boolean;
       },
     ) {
       const nextProvidersWithUpdateState = yield* Effect.forEach(
@@ -399,8 +399,10 @@ export const ProviderRegistryLive = Layer.effect(
       );
 
       // Persist a fresh `checkedAt` so a restart does not treat the cache as
-      // stale, but only broadcast when a client-visible field changed.
-      if (!Equal.equals(previousProviders, providers) && options?.persist !== false) {
+      // stale. Broadcast it only when a probe actually completed, so Settings
+      // shows the real last-check time while snapshot re-syncs stay quiet.
+      const changedIncludingCheckedAt = !Equal.equals(previousProviders, providers);
+      if (changedIncludingCheckedAt && options?.persist !== false) {
         yield* Effect.forEach(providersToPersist, persistProvider, {
           concurrency: "unbounded",
           discard: true,
@@ -408,7 +410,9 @@ export const ProviderRegistryLive = Layer.effect(
       }
       if (
         options?.publish !== false &&
-        (options?.publishUnchanged === true || haveProvidersChanged(previousProviders, providers))
+        (options?.publishCheckedAt === true
+          ? changedIncludingCheckedAt
+          : haveProvidersChanged(previousProviders, providers))
       ) {
         yield* PubSub.publish(changesPubSub, providers);
       }
@@ -420,7 +424,7 @@ export const ProviderRegistryLive = Layer.effect(
       provider: ServerProvider,
       options?: {
         readonly publish?: boolean;
-        readonly publishUnchanged?: boolean;
+        readonly publishCheckedAt?: boolean;
       },
     ) {
       return yield* upsertProviders([provider], options);
@@ -468,12 +472,12 @@ export const ProviderRegistryLive = Layer.effect(
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
-      // An explicit refresh publishes even when nothing but `checkedAt`
-      // moved, so clients can show when the provider was last checked.
+      // A completed probe publishes even when only `checkedAt` moved, so
+      // clients can show when the provider was last checked.
       return yield* providerSource.refresh.pipe(
         Effect.flatMap((nextProvider) =>
           correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap((provider) => syncProvider(provider, { publishUnchanged: true })),
+            Effect.flatMap((provider) => syncProvider(provider, { publishCheckedAt: true })),
           ),
         ),
       );
@@ -587,8 +591,12 @@ export const ProviderRegistryLive = Layer.effect(
         // the current read or the active subscriber observes the result.
         for (const [, instance] of newlyAdded) {
           const source = buildSnapshotSource(instance);
+          // Change-stream items are completed probes (periodic, explicit, or
+          // enrichment), so a new `checkedAt` alone is worth publishing.
           yield* Stream.runForEach(source.streamChanges, (provider) =>
-            correlateSnapshotWithSource(source, provider).pipe(Effect.flatMap(syncProvider)),
+            correlateSnapshotWithSource(source, provider).pipe(
+              Effect.flatMap((synced) => syncProvider(synced, { publishCheckedAt: true })),
+            ),
           ).pipe(Effect.forkScoped);
         }
         yield* Effect.yieldNow;

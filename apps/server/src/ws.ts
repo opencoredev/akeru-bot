@@ -433,6 +433,13 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 // status is at least this old. Background health checks cover the rest.
 const PROVIDER_SUBSCRIBE_REFRESH_TTL_MS = 60_000;
 
+/**
+ * Provider instance ids with a subscription-triggered probe in flight. One set
+ * is shared by every connection, so a reconnect burst probes each stale
+ * instance once instead of queueing one probe per client.
+ */
+type ProviderSubscribeRefreshesInFlight = Set<string>;
+
 const THREAD_SHELL_REFETCH = "thread.shell-refetch";
 
 /**
@@ -472,30 +479,42 @@ const toShellSourceEvent = (event: OrchestrationEvent): ShellSourceEvent => {
   };
 };
 
-/** Serialized thread shells last sent on one shell subscription, keyed by thread id. */
-type SentThreadShells = Map<string, string>;
+/** What one shell subscription has already sent to its client. */
+interface SentThreadShells {
+  /** Serialized thread shells last sent, keyed by thread id. */
+  readonly threads: Map<string, string>;
+  /** Sequence of the last item sent, which is the client's resume cursor. */
+  lastSentSequence: number;
+}
+
+const makeSentThreadShells = (): SentThreadShells => ({ threads: new Map(), lastSentSequence: 0 });
 
 /**
- * Record a thread shell item for one subscription and report whether it
- * repeats the shell already sent. A removal clears the entry so a restored
- * thread is always sent again.
+ * Record a shell item for one subscription and report whether it repeats the
+ * thread shell already sent. A removal clears the entry so a restored thread
+ * is always sent again. An unchanged shell is still sent once the client's
+ * cursor would fall `SHELL_CURSOR_REFRESH_GAP` events behind, so a long run of
+ * unchanged events cannot push a reconnect past the replay window.
  */
 const isUnchangedThreadShell = (
-  sentThreads: SentThreadShells,
+  sent: SentThreadShells,
   item: OrchestrationShellStreamEvent,
 ): boolean => {
-  if (item.kind === "thread-removed") {
-    sentThreads.delete(item.threadId);
-    return false;
+  if (
+    item.kind === "thread-upserted" &&
+    item.sequence - sent.lastSentSequence < SHELL_CURSOR_REFRESH_GAP
+  ) {
+    const serialized = JSON.stringify(item.thread);
+    if (sent.threads.get(item.thread.id) === serialized) {
+      return true;
+    }
+    sent.threads.set(item.thread.id, serialized);
+  } else if (item.kind === "thread-upserted") {
+    sent.threads.set(item.thread.id, JSON.stringify(item.thread));
+  } else if (item.kind === "thread-removed") {
+    sent.threads.delete(item.threadId);
   }
-  if (item.kind !== "thread-upserted") {
-    return false;
-  }
-  const serialized = JSON.stringify(item.thread);
-  if (sentThreads.get(item.thread.id) === serialized) {
-    return true;
-  }
-  sentThreads.set(item.thread.id, serialized);
+  sent.lastSentSequence = Math.max(sent.lastSentSequence, item.sequence);
   return false;
 };
 
@@ -505,6 +524,9 @@ const isUnchangedThreadShell = (
 // past this gap a single O(active-threads) snapshot is cheaper and bounded.
 // Matches the event store's default page size (DEFAULT_READ_FROM_SEQUENCE_LIMIT).
 const SHELL_RESUME_MAX_GAP = 1_000;
+// A shell subscription re-sends an unchanged thread shell once its client's
+// cursor lags this far, keeping reconnects well inside the replay window.
+const SHELL_CURSOR_REFRESH_GAP = SHELL_RESUME_MAX_GAP / 2;
 
 // Thread replay counts only this thread's rows. Busy or pruned unrelated
 // streams must not force a full thread snapshot.
@@ -582,6 +604,7 @@ const makeWsRpcLayer = (
   clientOrigin: OrchestrationClientOrigin,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
+  providerRefreshesInFlight: ProviderSubscribeRefreshesInFlight,
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -1302,7 +1325,8 @@ const makeWsRpcLayer = (
       //
       // `sentThreads` holds the last thread shell sent on this subscription, so
       // a refetch that returns an identical shell (for example after a turn
-      // diff or checkpoint that changes no sidebar field) is not re-sent.
+      // diff or checkpoint that changes no sidebar field) is not re-sent unless
+      // the client's resume cursor has fallen too far behind.
       const SHELL_REFETCH_CONCURRENCY = 8;
       const coalesceShellEvents = (
         events: ReadonlyArray<ShellSourceEvent>,
@@ -1981,7 +2005,7 @@ const makeWsRpcLayer = (
               // path below emits from this same buffered live tail. Overlapping
               // events are deduped by sequence on the client.
               const liveBudget = yield* makeLiveStreamBudget();
-              const sentThreads: SentThreadShells = new Map();
+              const sentThreads = makeSentThreadShells();
               const liveBuffer = yield* Queue.unbounded<
                 RetainedLiveItem<ShellLiveInput>,
                 OrchestrationGetSnapshotError
@@ -3587,17 +3611,29 @@ const makeWsRpcLayer = (
               );
 
               // Serve the cached provider list. Re-probe only instances whose
-              // last check is older than the TTL, so reconnect bursts and
-              // additional clients do not spawn CLI version checks.
+              // last check is older than the TTL and that no other
+              // subscription is already probing, so reconnect bursts and
+              // additional clients do not spawn repeated CLI version checks.
               const nowMs = yield* Clock.currentTimeMillis;
               const staleProviders = (yield* providerRegistry.getProviders).filter(
                 (provider) =>
+                  !providerRefreshesInFlight.has(provider.instanceId) &&
                   nowMs - Date.parse(provider.checkedAt) >= PROVIDER_SUBSCRIBE_REFRESH_TTL_MS,
               );
+              for (const provider of staleProviders) {
+                providerRefreshesInFlight.add(provider.instanceId);
+              }
               if (staleProviders.length > 0) {
                 yield* Effect.forEach(
                   staleProviders,
-                  (provider) => providerRegistry.refreshInstance(provider.instanceId),
+                  (provider) =>
+                    providerRegistry
+                      .refreshInstance(provider.instanceId)
+                      .pipe(
+                        Effect.ensuring(
+                          Effect.sync(() => providerRefreshesInFlight.delete(provider.instanceId)),
+                        ),
+                      ),
                   { concurrency: "unbounded", discard: true },
                 ).pipe(Effect.ignoreCause({ log: true }), Effect.forkScoped);
               }
@@ -3694,6 +3730,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const voiceCalls = yield* VoiceCallManager.VoiceCallManager;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
+    const providerRefreshesInFlight: ProviderSubscribeRefreshesInFlight = new Set();
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -3715,7 +3752,13 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker, voiceCalls).pipe(
+            makeWsRpcLayer(
+              session,
+              clientOrigin,
+              previewAutomationBroker,
+              voiceCalls,
+              providerRefreshesInFlight,
+            ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
