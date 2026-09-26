@@ -10,6 +10,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Thread timeline](#thread-timeline)
 - [Roster organization](#roster-organization)
 - [Orchestration](#orchestration)
+- [Channels](#channels)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
 - [Image provider](#image-provider)
@@ -131,6 +132,26 @@ Work one bot sends to another with `SendToAgent`. It runs in a child thread and 
 #### Waiting on children
 
 A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
+
+### Channels
+
+External channels connect a messaging conversation (Telegram, Slack, Discord, iMessage, or WhatsApp) to normal Akeru orchestration. See [channels.md](./channels.md) and the [user guide](../user/channels.md).
+
+#### Channel connection profile
+
+A reusable record for one set of provider credentials, holding only safe display data such as the provider, a name, the external identity, and optional `managementUrl` and `webhookUrl`. Credentials live in the environment secret store, never on the profile. A profile can be saved unassigned and attached later.
+
+#### Channel binding
+
+The assignment of a channel connection profile to a bot and a project, carried on the bot record. It reports health through `status`, `lastError`, `failureCategory`, and `lastSucceededAt`. Statuses are `connecting`, `connected`, `needs-reconnect`, `failed`, `blocked` (project unavailable), `not-live` (WhatsApp without a public origin), and `disconnected`. See the health section of [channels.md](./channels.md).
+
+#### Channel origin
+
+The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives thread subscriptions restored on startup and the origin label clients render.
+
+#### Channel delivery
+
+The per-reply delivery state (`pending`, `sent`, `failed`, `unknown`) mirrored from the durable delivery store onto each channel-originated assistant message. `unknown` means provider acceptance could not be proven; Akeru never reposts it automatically.
 
 ### Dictation
 

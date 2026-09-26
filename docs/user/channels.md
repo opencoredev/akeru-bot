@@ -18,7 +18,7 @@ Choose the project that should receive this channel's turns when you connect the
 
 To move a working channel, pick another project on its card in **Settings > Bot channels** or in the bot's Channels panel, then click **Move to this project**. Akeru restarts the channel in the new project. If the move fails, the channel keeps running in its earlier project.
 
-You can reconnect, disconnect, unassign, or delete a connection. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails during server restart shows a repair state instead of appearing connected.
+You can reconnect, disconnect, unassign, or delete a connection. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails while the server restores it after a restart shows a repair state instead of appearing connected; the server still starts, and the card offers the right repair for the failure.
 
 If reassignment changes the workspace, replies from the earlier workspace cannot use the new assignment.
 
@@ -54,6 +54,10 @@ A network failure can leave delivery unknown. Akeru keeps that attempt and does 
 Each assistant reply to an external message carries its own delivery state in the conversation: sending, sent, failed to deliver, or unknown. Web and mobile show that state under the reply so you can tell which external conversation it reached without opening channel settings.
 
 Mobile shows channel health, the selected project, recent confirmed deliveries, and a warning when a channel needs attention. When a channel needs a new project, mobile tells you to repair it from Settings > Bot channels on the host; only an administrator session can reconnect a channel. Recent delivery counts cover retained confirmations, not the channel's full history.
+
+## Replies
+
+When a channel turn finishes, the bot's reply posts to the external conversation automatically. There is no separate send step, and no tool output or progress stream reaches the channel, only the final reply. The connected bot stays the reply owner: work it sends to another bot comes back through its own reply, never as a second external message.
 
 ## Open in Akeru links
 
@@ -106,11 +110,12 @@ Without a public origin, the connection saves as **Not live**: replies can still
 Create a Slack app for one workspace.
 
 1. Enable Socket Mode.
-2. Create an app-level token with the Socket Mode connection scope.
-3. Install the app and copy the bot token.
-4. Subscribe the app to direct-message and mention events.
-5. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
-6. Select a bot and click **Connect**.
+2. Create an app-level token with the `connections:write` scope.
+3. Install the app to the workspace and copy the bot token.
+4. Subscribe the app's bot events to `message.im` for direct messages, `app_mention` for channel mentions, and `message.channels` so replies inside a subscribed thread keep reaching the bot.
+5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `im:history`, `im:read`, and `im:write`.
+6. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
+7. Select a bot and click **Connect**.
 
 Socket Mode uses an outbound connection from the environment server. It works when Akeru runs locally, over SSH, or through Tailscale without a public webhook URL.
 
@@ -118,7 +123,7 @@ The Slack channel connection is separate from the Slack plugin. The connection r
 
 ## Discord
 
-Create a Discord application and bot. Enable Message Content Intent, then copy the application ID, public key, and bot token. Invite the bot with permission to view channels, send messages, read message history, create or use threads, and add reactions.
+Create a Discord application and bot. In the developer portal, enable the Message Content privileged intent; Akeru also requests the Guilds, Guild Messages, Direct Messages, Guild Message Reactions, and Direct Message Reactions intents, which need no portal switch. Copy the application ID, public key, and bot token. Invite the bot with permission to view channels, send messages, read message history, create or use threads, and add reactions.
 
 Enter the credentials in Akeru, select a bot, and click **Connect**. Direct messages reach the bot. A direct mention of the bot in a server starts a Discord thread on that message and continues the work there. Role mentions and @everyone do not start work.
 
