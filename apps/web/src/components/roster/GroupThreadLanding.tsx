@@ -1,4 +1,5 @@
 import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
 import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@t3tools/client-runtime/errors";
@@ -186,6 +187,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     runtime.linkedThreadRef && snapshot
       ? threadDelegations(snapshot.delegations, runtime.linkedThreadRef.threadId)
       : { delegations: [], waitingOnChildren: false };
+  const timeline = botChatTimeline({
+    messages: entries.map((entry) => ({
+      id: entry.message.id,
+      turnId: entry.message.turnId,
+      createdAt: entry.message.createdAt,
+      entry,
+    })),
+    delegations,
+  });
+  const activeBotById = (id: string) =>
+    bots.find((candidate) => candidate.id === id && candidate.archivedAt === null) ?? null;
   return (
     <SidebarInset
       aria-label={t("{name} group chat", { name: group.name })}
@@ -200,7 +212,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           </div>
         </WorkspacePageHeader>
         <BotConversationScrollArea>
-          {messages.length === 0 ? (
+          {timeline.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
               <div className="flex -space-x-3">
                 {members.slice(0, 3).map((bot) => (
@@ -217,7 +229,20 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               </h1>
             </div>
           ) : (
-            entries.map(({ message, separator, startsGroup }) => {
+            timeline.map((item) => {
+              if (item._tag === "Delegation") {
+                return (
+                  <DelegationCard
+                    key={item.key}
+                    variant="group"
+                    delegation={item.delegation}
+                    childBot={activeBotById(item.delegation.childBotId)}
+                    parentBot={activeBotById(item.delegation.parentBotId)}
+                  />
+                );
+              }
+              if (item._tag !== "Message") return null;
+              const { message, separator, startsGroup } = item.message.entry;
               if (message.role === "assistant") {
                 const respondingBot = message.respondingBotId
                   ? members.find((bot) => bot.id === message.respondingBotId)
@@ -276,24 +301,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
             />
           ) : null}
-          {delegations.map((delegation) => (
-            <DelegationCard
-              key={delegation.delegationId}
-              delegation={delegation}
-              childBot={
-                bots.find(
-                  (candidate) =>
-                    candidate.id === delegation.childBotId && candidate.archivedAt === null,
-                ) ?? null
-              }
-              parentBot={
-                bots.find(
-                  (candidate) =>
-                    candidate.id === delegation.parentBotId && candidate.archivedAt === null,
-                ) ?? null
-              }
-            />
-          ))}
           {waitingOnChildren && !working ? (
             <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
               {t("Waiting on delegated work")}

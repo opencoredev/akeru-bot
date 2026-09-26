@@ -4,6 +4,7 @@ import {
   isThreadWaitingOnChildren,
   type AkeruDelegationRecord,
   type AkeruDelegationState,
+  type AkeruDelegationTrigger,
   type ThreadId,
 } from "@t3tools/contracts";
 
@@ -23,6 +24,12 @@ export interface DelegationPresentation {
     | { readonly kind: "blocked"; readonly text: string }
     | null;
   readonly delivery: DelegationDelivery | null;
+  /** The child's chat, once the work has started. Opens the read-only detail view. */
+  readonly childThreadId: ThreadId | null;
+  /** Scheduled work comes from a routine, not from the parent bot's reply. */
+  readonly trigger: AkeruDelegationTrigger;
+  /** Whether this card retries earlier Failed or Canceled work. */
+  readonly retried: boolean;
 }
 
 /** Card state shared by the web and mobile delegation views. */
@@ -48,7 +55,27 @@ export function presentDelegation(delegation: AkeruDelegationRecord): Delegation
             ? { kind: "blocked", text: phase.reason }
             : null,
     delivery,
+    childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
+    trigger: delegation.trigger,
+    retried: delegation.retryOfDelegationId !== null,
   };
+}
+
+/**
+ * Milliseconds the work has run: from start (or creation while queued) to its
+ * end, or to `now` while it is live. Null when the timestamps do not parse.
+ */
+export function delegationElapsedMs(delegation: AkeruDelegationRecord, now: number): number | null {
+  const phase = delegation.phase;
+  const startedAt = Date.parse(
+    phase._tag === "Queued" || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
+  );
+  const endedAt =
+    phase._tag === "Failed" || phase._tag === "Canceled" || phase._tag === "Completed"
+      ? Date.parse(phase.completedAt)
+      : now;
+  if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return null;
+  return endedAt - startedAt;
 }
 
 /** Delegations a chat started, oldest first, and whether any are still working. */

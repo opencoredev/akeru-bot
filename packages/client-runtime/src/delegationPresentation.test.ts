@@ -7,7 +7,11 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { presentDelegation, threadDelegations } from "./delegationPresentation.ts";
+import {
+  delegationElapsedMs,
+  presentDelegation,
+  threadDelegations,
+} from "./delegationPresentation.ts";
 
 const NOW = "2026-09-25T12:00:00.000Z";
 const PARENT_THREAD_ID = ThreadId.make("thread-parent");
@@ -78,6 +82,9 @@ describe("presentDelegation", () => {
       terminal: true,
       outcome: { kind: "result", text: "Flight B." },
       delivery: "pending",
+      childThreadId: CHILD_THREAD_ID,
+      trigger: "bot",
+      retried: false,
     });
     expect(presentDelegation(makeDelegation(completed(NOW)))).toMatchObject({
       delivery: "delivered",
@@ -122,6 +129,47 @@ describe("presentDelegation", () => {
       outcome: { kind: "blocked", text: "Waiting for approval." },
       delivery: null,
     });
+  });
+});
+
+describe("presentDelegation card labels", () => {
+  it("marks scheduled and retried work and has no child chat while queued", () => {
+    const queued = {
+      ...makeDelegation({ _tag: "Queued" }),
+      trigger: "scheduled" as const,
+      retryOfDelegationId: DelegationId.make("delegation-original"),
+    };
+    expect(presentDelegation(queued)).toMatchObject({
+      childThreadId: null,
+      trigger: "scheduled",
+      retried: true,
+    });
+  });
+});
+
+describe("delegationElapsedMs", () => {
+  const later = Date.parse(NOW) + 42_000;
+
+  it("counts live work up to now and finished work up to its end", () => {
+    expect(delegationElapsedMs(makeDelegation(running), later)).toBe(42_000);
+    expect(
+      delegationElapsedMs(
+        makeDelegation({
+          _tag: "Canceled",
+          childThreadId: CHILD_THREAD_ID,
+          childTurnId: CHILD_TURN_ID,
+          startedAt: NOW,
+          completedAt: "2026-09-25T12:00:05.000Z",
+          canceledBy: "user",
+        }),
+        later,
+      ),
+    ).toBe(5_000);
+  });
+
+  it("counts queued work from creation and rejects a clock behind the start", () => {
+    expect(delegationElapsedMs(makeDelegation({ _tag: "Queued" }), later)).toBe(42_000);
+    expect(delegationElapsedMs(makeDelegation(running), Date.parse(NOW) - 1)).toBeNull();
   });
 });
 

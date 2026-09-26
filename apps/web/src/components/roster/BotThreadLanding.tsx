@@ -1,4 +1,5 @@
 import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
 import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@t3tools/client-runtime/errors";
@@ -74,7 +75,6 @@ import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../sess
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import {
   deriveRoutineReceipts,
-  mergeBotConversationTimeline,
   mergeRoutineRunHistory,
   type RoutineReceipt,
 } from "./routineReceipts";
@@ -370,11 +370,28 @@ export function BotThreadLanding({
       t,
     ],
   );
-  // Each message carries the index it had in `messages`, because the merge below
+  const { delegations, waitingOnChildren } = useMemo(
+    () =>
+      runtime.linkedThreadRef && snapshot
+        ? threadDelegations(snapshot.delegations, runtime.linkedThreadRef.threadId)
+        : { delegations: [], waitingOnChildren: false },
+    [runtime.linkedThreadRef, snapshot],
+  );
+  // Each message row carries the index it had in `messages`, because the merge
   // reorders it away from that position and a row must not go looking for itself.
   const timelineItems = useMemo(
-    () => mergeBotConversationTimeline(entries, routineReceipts),
-    [entries, routineReceipts],
+    () =>
+      botChatTimeline({
+        messages: entries.map((entry) => ({
+          id: entry.message.id,
+          turnId: entry.message.turnId,
+          createdAt: entry.message.createdAt,
+          entry,
+        })),
+        receipts: routineReceipts,
+        delegations,
+      }),
+    [entries, routineReceipts, delegations],
   );
   const available = bot?.archivedAt === null;
   const playbackKey = useReplyPlaybackThread({
@@ -413,10 +430,8 @@ export function BotThreadLanding({
   );
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
-  const { delegations, waitingOnChildren } =
-    runtime.linkedThreadRef && snapshot
-      ? threadDelegations(snapshot.delegations, runtime.linkedThreadRef.threadId)
-      : { delegations: [], waitingOnChildren: false };
+  const activeBot = (id: string) =>
+    bots.find((candidate) => candidate.id === id && candidate.archivedAt === null) ?? null;
   const currentPersonId = snapshot?.currentPersonId;
   const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;
   const linkedThreadId = runtime.linkedThreadRef?.threadId;
@@ -485,16 +500,23 @@ export function BotThreadLanding({
                 <h1 className="text-lg font-medium">{t("Message {name}", { name: bot.name })}</h1>
               </div>
             ) : (
-              timelineItems.map((item) => (
-                <Fragment key={item.kind === "receipt" ? item.receipt.id : item.entry.message.id}>
-                  {item.kind === "receipt" ? (
+              timelineItems.map((item, timelineIndex) => (
+                <Fragment key={item.key}>
+                  {item._tag === "Receipt" ? (
                     <RoutineReceiptRow
                       receipt={item.receipt}
                       {...(onOpenRoutines ? { onOpenRoutines } : {})}
                     />
+                  ) : item._tag === "Delegation" ? (
+                    <DelegationCard
+                      delegation={item.delegation}
+                      childBot={activeBot(item.delegation.childBotId)}
+                      parentBot={activeBot(item.delegation.parentBotId)}
+                    />
                   ) : (
                     (() => {
-                      const { message, separator, startsGroup } = item.entry;
+                      const { message, separator, startsGroup } = item.message.entry;
+                      const startsAfterReceipt = timelineItems[timelineIndex - 1]?._tag === "Receipt";
                       const messageIndex = item.index;
                       return (
                         <>
@@ -504,7 +526,7 @@ export function BotThreadLanding({
                               message={message}
                               author={bot}
                               testId="bot-provider-message"
-                              startsGroup={startsGroup}
+                              startsGroup={startsGroup || startsAfterReceipt}
                               cwd={runtime.defaultProject?.workspaceRoot}
                               threadRef={runtime.linkedThreadRef ?? undefined}
                               stepMeter={
@@ -526,7 +548,7 @@ export function BotThreadLanding({
                             <UserMessageRow
                               message={message}
                               testId="bot-user-message"
-                              startsGroup={startsGroup}
+                              startsGroup={startsGroup || startsAfterReceipt}
                               replyLabel="you"
                               showChannelOrigin
                               skills={engineCatalog?.skills}
@@ -590,24 +612,6 @@ export function BotThreadLanding({
                 title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
               />
             ) : null}
-            {delegations.map((delegation) => (
-              <DelegationCard
-                key={delegation.delegationId}
-                delegation={delegation}
-                childBot={
-                  bots.find(
-                    (candidate) =>
-                      candidate.id === delegation.childBotId && candidate.archivedAt === null,
-                  ) ?? null
-                }
-                parentBot={
-                  bots.find(
-                    (candidate) =>
-                      candidate.id === delegation.parentBotId && candidate.archivedAt === null,
-                  ) ?? null
-                }
-              />
-            ))}
             {waitingOnChildren && !working ? (
               <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
                 {t("Waiting on delegated work")}
