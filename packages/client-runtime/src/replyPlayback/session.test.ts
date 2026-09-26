@@ -123,6 +123,7 @@ describe("reply playback session", () => {
     expect(session.preference.getSnapshot().enabled).toBe(true);
     unsubscribe();
   });
+
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({
@@ -132,6 +133,41 @@ describe("reply playback session", () => {
     expect(session.actionFor({ ...message, role: "user" })).toBeNull();
     expect(session.actionFor({ ...message, streaming: true })).toBeNull();
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("resolves synthesis per environment when given a lookup", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: (environmentId) =>
+        environmentId === "environment"
+          ? { available: true, provider: "speech", voice: "voice" }
+          : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
+    });
+    expect(session.synthesisFor("environment")).toEqual({
+      available: true,
+      provider: "speech",
+      voice: "voice",
+    });
+    expect(session.synthesisFor("other").available).toBe(false);
+  });
+
+  it("returns the default capability for a null or empty environment", () => {
+    const lookup = vi.fn(() => ({
+      available: true as const,
+      provider: "speech",
+      voice: "voice",
+    }));
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: lookup,
+    });
+    expect(session.synthesisFor(null).available).toBe(false);
+    expect(session.synthesisFor("").available).toBe(false);
+    expect(lookup).not.toHaveBeenCalled();
+    expect(session.actionFor(message)).toBeNull();
+    expect(lookup).not.toHaveBeenCalled();
   });
 
   it("hydrates history and loaded-earlier replies without automatic playback", async () => {

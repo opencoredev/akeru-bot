@@ -74,6 +74,7 @@ export function useReplyPlaybackThread(options: {
     if (!session || !options.environmentId || !options.threadId) return;
     const environmentId = options.environmentId;
     const threadId = options.threadId;
+    const synthesis = session.synthesisFor(environmentId);
     session.setContext({
       environmentId,
       threadId,

@@ -40,9 +40,17 @@ export function createReplyPlaybackSession(options: {
     signal: AbortSignal,
     events: ReplyAudioEvents,
   ) => Promise<ReplyAudioHandle>;
-  readonly synthesis?: StoredReplySynthesisCapability;
+  readonly synthesis?:
+    | StoredReplySynthesisCapability
+    | ((environmentId: string) => StoredReplySynthesisCapability);
 }) {
-  let synthesis = options.synthesis ?? storedReplySynthesisCapability();
+  const synthesisFor = (environmentId: string | null) =>
+    typeof options.synthesis === "function"
+      ? environmentId
+        ? options.synthesis(environmentId)
+        : storedReplySynthesisCapability()
+      : (options.synthesis ?? storedReplySynthesisCapability());
+  let synthesis = synthesisFor(null);
   const synthesisListeners = new Set<() => void>();
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
@@ -87,6 +95,7 @@ export function createReplyPlaybackSession(options: {
     const spoken = spokenFor(message);
     const base = identityBase();
     if (!spoken || !base) return null;
+    const synthesis = synthesisFor(base.environmentId);
     const request: ReplyPlaybackRequest = {
       identity: {
         ...base,
@@ -120,6 +129,7 @@ export function createReplyPlaybackSession(options: {
     get synthesis() {
       return synthesis;
     },
+    synthesisFor,
     getSynthesisSnapshot: () => synthesis,
     subscribeSynthesis: (listener: () => void) => {
       synthesisListeners.add(listener);
@@ -188,7 +198,7 @@ export function createReplyPlaybackSession(options: {
         sequence += 1;
         if (reply.contentVersion <= baseline) continue;
         const next = tracker.completed(scope, sequence, reply);
-        if (next && synthesis.available && base) {
+        if (next && base && synthesisFor(base.environmentId).available) {
           void controller.start({
             identity: { ...base, messageId: next.messageId, contentVersion: next.contentVersion },
             text: next.text,

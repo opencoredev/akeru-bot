@@ -14,7 +14,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
-    expect(session.synthesis).toEqual({ available: true, provider: "openai", voice: "alloy" });
+    expect(session.synthesisFor("environment")).toEqual({ available: true, provider: "openai", voice: "alloy" });
     session.dispose();
   });
 
@@ -25,7 +25,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
-    expect(session.synthesis).toEqual({ available: true, provider: "openai", voice: "alloy" });
+    expect(session.synthesisFor("environment")).toEqual({ available: true, provider: "openai", voice: "alloy" });
     session.dispose();
   });
 });
