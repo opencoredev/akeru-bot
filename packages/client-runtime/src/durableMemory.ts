@@ -134,26 +134,28 @@ export function summarizeDurableFacts(
     const earliest = first.get(revision.rootId);
     if (!earliest || revision.revision < earliest.revision) first.set(revision.rootId, revision);
   }
-  return [...latest.values()]
-    .map((revision) => {
-      const previous = revision.supersedesId ? byId.get(revision.supersedesId) : undefined;
-      return {
-        rootId: revision.rootId,
-        fact: revision.fact,
-        scope: revision.partition.scope,
-        sourceThreadId: revision.sourceThreadId,
-        affectedBotIds: revision.affectedBotIds,
-        approvalState: revision.approvalState,
-        deletionState: revision.deletionState,
-        pinned: revision.pinned,
-        createdAt: first.get(revision.rootId)?.createdAt ?? revision.createdAt,
-        updatedAt: revision.updatedAt,
-        revision: revision.revision,
-        supersededFact: previous && previous.fact !== revision.fact ? previous.fact : null,
-      };
-    })
-    // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return (
+    [...latest.values()]
+      .map((revision) => {
+        const previous = revision.supersedesId ? byId.get(revision.supersedesId) : undefined;
+        return {
+          rootId: revision.rootId,
+          fact: revision.fact,
+          scope: revision.partition.scope,
+          sourceThreadId: revision.sourceThreadId,
+          affectedBotIds: revision.affectedBotIds,
+          approvalState: revision.approvalState,
+          deletionState: revision.deletionState,
+          pinned: revision.pinned,
+          createdAt: first.get(revision.rootId)?.createdAt ?? revision.createdAt,
+          updatedAt: revision.updatedAt,
+          revision: revision.revision,
+          supersededFact: previous && previous.fact !== revision.fact ? previous.fact : null,
+        };
+      })
+      // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  );
 }
 
 export function durableFactsFromArchive(archive: AkeruMemoryArchiveV2) {

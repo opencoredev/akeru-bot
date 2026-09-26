@@ -31,7 +31,8 @@ export function createMobileReplyPlaybackSession(options: {
         await SecureStore.setItemAsync(key, value);
       },
     },
-    synthesis: (environmentId) => storedReplySynthesisCapability(options.voiceSettings(environmentId)),
+    synthesis: (environmentId) =>
+      storedReplySynthesisCapability(options.voiceSettings(environmentId)),
     prepare: async (request, signal, events) => {
       const environmentId = EnvironmentId.make(request.identity.environmentId);
       const operationId = `voice-${Date.now()}-${Math.random()}`;
@@ -46,7 +47,8 @@ export function createMobileReplyPlaybackSession(options: {
           options.synthesize({ environmentId, input: { operationId, text } }),
         );
         for (const result of results) {
-          if (result._tag !== "Success" || !result.value) throw new Error("Voice synthesis failed.");
+          if (result._tag !== "Success" || !result.value)
+            throw new Error("Voice synthesis failed.");
           segments.push(decodeReplyAudioBase64(result.value.audioBase64));
           mimeType = result.value.mimeType;
         }

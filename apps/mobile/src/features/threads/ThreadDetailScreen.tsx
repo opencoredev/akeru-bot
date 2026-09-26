@@ -780,10 +780,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
               {props.waitingOnChildren === true && props.activeWorkStartedAt === null ? (
                 <View className="mx-4 mb-2 self-start rounded-full border border-border bg-card px-3 py-1">
-                  <Text
-                    accessibilityLiveRegion="polite"
-                    className="text-xs text-foreground-muted"
-                  >
+                  <Text accessibilityLiveRegion="polite" className="text-xs text-foreground-muted">
                     {t("Waiting on delegated work")}
                   </Text>
                 </View>

@@ -42,7 +42,12 @@ describe("mobile reply playback session", () => {
       cancel: vi.fn(),
       voiceSettings: (environmentId) =>
         environmentId === "environment"
-          ? { enabled: true, provider: "composed", synthesisProvider: "openai", synthesisVoices: { openai: "alloy" } }
+          ? {
+              enabled: true,
+              provider: "composed",
+              synthesisProvider: "openai",
+              synthesisVoices: { openai: "alloy" },
+            }
           : { enabled: false },
     });
     expect(session.synthesisFor("environment")).toEqual({
@@ -63,7 +68,11 @@ describe("mobile reply playback session", () => {
       },
     }));
     const cancel = vi.fn(async () => ({}));
-    const session = createMobileReplyPlaybackSession({ synthesize, cancel, voiceSettings: () => ({}) });
+    const session = createMobileReplyPlaybackSession({
+      synthesize,
+      cancel,
+      voiceSettings: () => ({}),
+    });
     // Drive prepare through the controller's start path.
     session.setContext({
       environmentId: "environment",
