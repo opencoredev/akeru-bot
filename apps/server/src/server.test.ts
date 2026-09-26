@@ -3820,6 +3820,50 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("subscribeServerConfig probes a stale provider once across concurrent clients", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("codex");
+      const staleProvider = {
+        instanceId,
+        driver: ProviderDriverKind.make("codex"),
+        enabled: true,
+        installed: true,
+        version: "1.0.0",
+        status: "ready" as const,
+        auth: { status: "authenticated" as const },
+        checkedAt: "2020-01-01T00:00:00.000Z",
+        models: [],
+        slashCommands: [],
+        skills: [],
+      };
+      const releaseProbe = yield* Deferred.make<void>();
+      const probedInstanceIds: Array<string> = [];
+
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([staleProvider]),
+            refreshInstance: (id) =>
+              Effect.sync(() => probedInstanceIds.push(id)).pipe(
+                Effect.andThen(Deferred.await(releaseProbe)),
+                Effect.as([staleProvider]),
+              ),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const takeSnapshot = withWsRpcClient(wsUrl, (client) =>
+        client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(1), Stream.runCollect),
+      );
+      // Each snapshot is sent after that subscription decided whether to
+      // probe, and the first probe stays blocked until both have arrived.
+      yield* Effect.scoped(Effect.all([takeSnapshot, takeSnapshot], { concurrency: "unbounded" }));
+      assert.deepEqual(probedInstanceIds, [instanceId]);
+      yield* Deferred.succeed(releaseProbe, undefined);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
+  );
+
   it.effect(
     "routes websocket rpc subscribeServerLifecycle replays snapshot and streams updates",
     () =>
@@ -6679,7 +6723,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             while (true) {
               const item = yield* Queue.take(received);
               if (item.kind === "thread-upserted") {
-                return item.thread;
+                return `${item.thread.id}:${item.thread.title}@${item.sequence}`;
               }
             }
           });
@@ -6699,16 +6743,21 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           quietTitle = "Quiet renamed";
           yield* PubSub.publish(liveEvents, threadEvent(4, quietThreadId));
           const third = yield* takeUpsert;
-          return [first, second, third].map((thread) => `${thread.id}:${thread.title}`);
+          // An unchanged shell is re-sent once the client's cursor would lag
+          // 500 events behind, so reconnects stay inside the replay window.
+          yield* PubSub.publish(liveEvents, threadEvent(504, quietThreadId));
+          const fourth = yield* takeUpsert;
+          return [first, second, third, fourth];
         }),
       ).pipe(Effect.timeout("2 seconds"));
 
       assert.deepEqual(upsertedIds, [
-        `${quietThreadId}:Quiet`,
-        `${otherThreadId}:Other`,
-        `${quietThreadId}:Quiet renamed`,
+        `${quietThreadId}:Quiet@1`,
+        `${otherThreadId}:Other@3`,
+        `${quietThreadId}:Quiet renamed@4`,
+        `${quietThreadId}:Quiet renamed@504`,
       ]);
-      assert.equal(shellFetches.filter((id) => id === quietThreadId).length, 3);
+      assert.equal(shellFetches.filter((id) => id === quietThreadId).length, 4);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
