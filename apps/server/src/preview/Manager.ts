@@ -12,6 +12,7 @@
 import {
   type PreviewCloseInput,
   type PreviewEvent,
+  type PreviewEventsSubscribeInput,
   type PreviewError,
   type PreviewFrame,
   PreviewInvalidUrlError,
@@ -61,10 +62,20 @@ export class PreviewManager extends Context.Service<
     readonly refresh: (input: PreviewRefreshInput) => Effect.Effect<void, PreviewError>;
     readonly close: (input: PreviewCloseInput) => Effect.Effect<void, PreviewError>;
     readonly list: (input: PreviewListInput) => Effect.Effect<PreviewListResult>;
-    readonly events: Stream.Stream<PreviewEvent>;
+    /** Live events, filtered to one chat when the subscriber names it. */
+    readonly streamEvents: (input: PreviewEventsSubscribeInput) => Stream.Stream<PreviewEvent>;
     readonly subscribeEvents: Effect.Effect<PubSub.Subscription<PreviewEvent>, never, Scope.Scope>;
   }
 >()("akeru-bot/preview/Manager/PreviewManager") {}
+
+/**
+ * Frame events carry a full-viewport PNG, so a subscriber scoped to one chat
+ * must never receive another chat's frames. Filter before RPC serialization.
+ */
+export const previewEventMatchesSubscription =
+  (input: PreviewEventsSubscribeInput) =>
+  (event: PreviewEvent): boolean =>
+    input.threadId === undefined || event.threadId === input.threadId;
 
 interface PreviewSessionState {
   readonly threadId: string;
@@ -158,11 +169,13 @@ const buildIdleSnapshot = (input: {
 export const make = Effect.gen(function* PreviewManagerMake() {
   const serverEpoch = NodeCrypto.randomUUID();
   const stateRef = yield* SynchronizedRef.make<ManagerState>(initialState);
-  // Unbounded PubSub is fine here — events are tiny and we don't want to
-  // block publishers if a subscriber is slow. WS clients backpressure on
-  // their own queues downstream.
+  // Unbounded so a slow subscriber never blocks publishers or loses a
+  // lifecycle event. Frame events are not tiny (base64 PNGs): a subscriber
+  // that stops pulling retains every event published in the meantime, and
+  // its chat filter runs only as it pulls.
   const eventsPubSub = yield* PubSub.unbounded<PreviewEvent>();
-  const events: Stream.Stream<PreviewEvent> = Stream.fromPubSub(eventsPubSub);
+  const streamEvents: PreviewManager["Service"]["streamEvents"] = (input) =>
+    Stream.fromPubSub(eventsPubSub).pipe(Stream.filter(previewEventMatchesSubscription(input)));
 
   /**
    * Atomic read-modify-write over the session for `(threadId, tabId)`. The
@@ -464,7 +477,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     refresh,
     close,
     list,
-    events,
+    streamEvents,
     subscribeEvents: PubSub.subscribe(eventsPubSub),
   });
 }).pipe(Effect.withSpan("PreviewManager.make"));

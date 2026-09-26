@@ -840,7 +840,7 @@ const buildAppUnderTest = (options?: {
             refresh: () => Effect.void,
             close: () => Effect.void,
             list: () => Effect.succeed({ sessions: [], serverEpoch: "test-server", revision: 0 }),
-            events: Stream.empty,
+            streamEvents: () => Stream.empty,
             subscribeEvents: Effect.flatMap(PubSub.unbounded<PreviewEvent>(), (pubsub) =>
               PubSub.subscribe(pubsub),
             ),
@@ -6615,6 +6615,100 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.include(liveUpsertedIds, busyThreadId);
       assert.include(liveUpsertedIds, newThreadId);
       assert.isBelow(shellFetches.filter((id) => id === busyThreadId).length, 20);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
+  );
+
+  it.effect("subscribeShell skips a thread upsert whose shell did not change", () =>
+    Effect.gen(function* () {
+      const quietThreadId = ThreadId.make("thread-dedupe-quiet");
+      const otherThreadId = ThreadId.make("thread-dedupe-other");
+      const now = "2026-01-01T00:00:00.000Z";
+      const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+      const received = yield* Queue.unbounded<OrchestrationShellStreamItem>();
+      const shellFetches: Array<string> = [];
+      let quietTitle = "Quiet";
+
+      const threadEvent = (sequence: number, threadId: ThreadId): OrchestrationEvent =>
+        ({
+          sequence,
+          eventId: EventId.make(`event-dedupe-${sequence}`),
+          aggregateKind: "thread",
+          aggregateId: threadId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "thread.turn-diff-completed",
+          payload: {} as never,
+        }) satisfies OrchestrationEvent;
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.succeed(Stream.fromPubSub(liveEvents)),
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: (threadId) =>
+              Effect.sync(() => {
+                shellFetches.push(threadId);
+                return Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    title: threadId === quietThreadId ? quietTitle : "Other",
+                  }),
+                );
+              }),
+            getThreadRuntimeContext: () => Effect.die("unused"),
+            getTurnStartMessage: () => Effect.die("unused"),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const upsertedIds = yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+              requestCompletionMarker: true,
+            }).pipe(Stream.runForEach((item) => Queue.offer(received, item))),
+          ).pipe(Effect.forkScoped);
+
+          const takeUpsert = Effect.gen(function* () {
+            while (true) {
+              const item = yield* Queue.take(received);
+              if (item.kind === "thread-upserted") {
+                return item.thread;
+              }
+            }
+          });
+          const waitForSynchronized = Effect.gen(function* () {
+            while ((yield* Queue.take(received)).kind !== "synchronized") {}
+          });
+
+          yield* waitForSynchronized;
+          yield* PubSub.publish(liveEvents, threadEvent(1, quietThreadId));
+          const first = yield* takeUpsert;
+          // Same shell again: refetched, then dropped. The other thread's
+          // upsert must be the next item the client sees.
+          yield* PubSub.publish(liveEvents, threadEvent(2, quietThreadId));
+          yield* PubSub.publish(liveEvents, threadEvent(3, otherThreadId));
+          const second = yield* takeUpsert;
+          // A real change is still sent.
+          quietTitle = "Quiet renamed";
+          yield* PubSub.publish(liveEvents, threadEvent(4, quietThreadId));
+          const third = yield* takeUpsert;
+          return [first, second, third].map((thread) => `${thread.id}:${thread.title}`);
+        }),
+      ).pipe(Effect.timeout("2 seconds"));
+
+      assert.deepEqual(upsertedIds, [
+        `${quietThreadId}:Quiet`,
+        `${otherThreadId}:Other`,
+        `${quietThreadId}:Quiet renamed`,
+      ]);
+      assert.equal(shellFetches.filter((id) => id === quietThreadId).length, 3);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 

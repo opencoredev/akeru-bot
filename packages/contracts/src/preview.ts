@@ -303,6 +303,16 @@ export const PreviewEvent = Schema.Union([
 export type PreviewEvent = typeof PreviewEvent.Type;
 
 /**
+ * Scopes a preview event subscription. Frame events carry full-viewport PNGs,
+ * so clients should subscribe per chat. Omitting `threadId` streams every
+ * chat's events, which older clients rely on.
+ */
+export const PreviewEventsSubscribeInput = Schema.Struct({
+  threadId: Schema.optional(TrimmedNonEmptyString),
+});
+export type PreviewEventsSubscribeInput = typeof PreviewEventsSubscribeInput.Type;
+
+/**
  * A localhost server detected by the port scanner. Used to populate the
  * "Local" recommendations in the empty-state of the preview panel.
  */
