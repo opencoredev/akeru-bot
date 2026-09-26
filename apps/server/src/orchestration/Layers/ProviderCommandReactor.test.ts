@@ -944,14 +944,10 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.titleRegeneration).toBeNull();
   });
 
-  it("keeps buffered startup intents when the gap replay fails", async () => {
-    const harness = await createHarness({ commitDuringSequenceRead: 2, failStartupReplay: true });
-
-    await harness.drain();
-
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.titleRegeneration).toBeNull();
+  it("fails startup instead of dropping a gap it cannot replay", async () => {
+    await expect(
+      createHarness({ commitDuringSequenceRead: 1, failStartupReplay: true }),
+    ).rejects.toThrow("Injected startup replay failure");
   });
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {
