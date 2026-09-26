@@ -2297,6 +2297,19 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (yield* snapshotQuery.searchThreads({ query: "hidden needle" })).matches,
         [],
       );
+      // Child work shows only as a card in its parent chat, never as a chat of its own.
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchThreads({ query: "100x" })).matches.map(
+          (match) => match.threadId,
+        ),
+        [ThreadId.make("thread-percent-decoy")],
+      );
+      yield* sql`
+        UPDATE projection_threads
+        SET parent_thread_id = 'thread-active'
+        WHERE thread_id = 'thread-percent-decoy'
+      `;
+      assert.deepStrictEqual((yield* snapshotQuery.searchThreads({ query: "100x" })).matches, []);
       yield* sql`
         UPDATE projection_threads
         SET deleted_at = '2026-05-01T00:00:20.000Z'

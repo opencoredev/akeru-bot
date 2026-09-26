@@ -1,10 +1,12 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useLatestBotThreadId, useThreadShell } from "../../state/entities";
 import { parseChatPath } from "./roster.logic";
+import { isBotOwnChatShell } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
 
 /**
@@ -37,7 +39,23 @@ export function useBotThreadCandidate(
   );
 }
 
+export function useBotChatTarget(
+  botId: string,
+  target: { environmentId: string; threadId: string } | null,
+): { ref: ScopedThreadRef | null; shell: EnvironmentThreadShell | null } {
+  const candidate = useMemo(
+    () =>
+      target
+        ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
+        : null,
+    [target?.environmentId, target?.threadId],
+  );
+  const shell = useThreadShell(candidate);
+  return isBotOwnChatShell(botId, shell) ? { ref: candidate, shell } : { ref: null, shell: null };
+}
+
 export function useBotThreadRef(botId: string): ScopedThreadRef | null {
   const ref = useBotThreadCandidate(botId, { rememberedInPrimaryOnly: true });
-  return useThreadShell(ref) ? ref : null;
+  const shell = useThreadShell(ref);
+  return isBotOwnChatShell(botId, shell) ? ref : null;
 }

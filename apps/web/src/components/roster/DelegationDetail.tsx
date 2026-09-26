@@ -11,7 +11,7 @@ import { useMemo } from "react";
 
 import { useI18n } from "../../i18n";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useThreadMessages, useThreadShell } from "../../state/entities";
+import { useThreadMessages } from "../../state/entities";
 import ChatMarkdown from "../ChatMarkdown";
 import { Button } from "../ui/button";
 import {
@@ -24,7 +24,6 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { BotAvatarView } from "./BotAvatarView";
-import { useRosterStore } from "./rosterStore";
 import type { Bot } from "./types";
 
 type Translate = (key: MessageKey, params?: TranslationParams) => string;
@@ -101,11 +100,12 @@ export function DelegationDetail({
         : null,
     [environmentId, presentation.childThreadId],
   );
-  const childThread = useThreadShell(childThreadRef);
   const messages = useThreadMessages(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
   const childName = activeChildBot?.name ?? t("Unknown bot");
-  const canOpen = activeChildBot !== null && childThread !== null && environmentId !== null;
+  // Child work lives only in this view and the parent chat's card, so "Open
+  // chat" goes to the bot's own continuous chat, never the child thread.
+  const canOpen = activeChildBot !== null;
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -170,9 +170,6 @@ export function DelegationDetail({
             disabled={!canOpen}
             onClick={() => {
               if (!canOpen) return;
-              useRosterStore
-                .getState()
-                .recordChatPath(activeChildBot.id, `/${environmentId}/${childThread.id}`);
               onOpenChange(false);
               void navigate({ to: "/bots/$botId", params: { botId: activeChildBot.id } });
             }}

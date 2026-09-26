@@ -544,11 +544,11 @@ describe("DelegationCard", () => {
     expect(renderCard("queued")).toMatch(/aria-label="View Mori&#x27;s work" disabled=""/);
   });
 
-  it("opens the child chat through roster thread navigation from the work view", () => {
+  it("opens the child bot's own chat, not the child work thread, from the work view", () => {
     const onOpenChange = vi.fn();
     const open = findByLabel(detailElement(childBot, onOpenChange), "Open Mori chat");
     (open?.props.onClick as (() => void) | undefined)?.();
-    expect(mocks.recordChatPath).toHaveBeenCalledWith("bot-child", "/environment-1/thread-child");
+    expect(mocks.recordChatPath).not.toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(mocks.navigate).toHaveBeenCalledWith({
       to: "/bots/$botId",

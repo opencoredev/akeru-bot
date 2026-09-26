@@ -8,7 +8,9 @@ import {
   findLatestBotThreadTarget,
   findLatestGroupThreadTarget,
   findUnhandledMcpAuthorization,
+  isBotOwnChatShell,
   joinOrStartThreadCreate,
+  resolveBotThreadTarget,
 } from "./botThreadRuntime.logic";
 
 describe.each([
@@ -294,6 +296,64 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toBeNull();
+  });
+
+  describe("bot chat resolution with child work", () => {
+    const child = (id: string, updatedAt: string) => ({
+      environmentId: "env-a",
+      id,
+      botId: "bot-ren",
+      parentThreadId: "thread-mira",
+      updatedAt,
+      archivedAt: null,
+    });
+    const direct = {
+      environmentId: "env-a",
+      id: "thread-ren",
+      botId: "bot-ren",
+      parentThreadId: null,
+      updatedAt: "2026-08-27T00:00:00.000Z",
+      archivedAt: null,
+    };
+    // Mirrors the roster hooks: the shell list leaves out child work, and the
+    // resolved target's own shell (which does include child work) decides.
+    const resolveChat = (
+      allThreads: ReadonlyArray<typeof direct | ReturnType<typeof child>>,
+      rememberedPath?: string,
+    ) => {
+      const listed = allThreads.filter((thread) => thread.parentThreadId == null);
+      const target = resolveBotThreadTarget("bot-ren", "env-a", listed, rememberedPath);
+      if (!target) return null;
+      const shell = allThreads.find((thread) => thread.id === target.threadId) ?? null;
+      return isBotOwnChatShell("bot-ren", shell) ? target.threadId : null;
+    };
+
+    it("gives a bot whose only threads are child work no chat, even when remembered", () => {
+      const threads = [
+        child("child-1", "2026-08-28T00:00:00.000Z"),
+        child("child-2", "2026-08-29T00:00:00.000Z"),
+      ];
+      expect(resolveChat(threads)).toBeNull();
+      expect(resolveChat(threads, "/env-a/child-2")).toBeNull();
+    });
+
+    it("keeps the direct chat when a newer child thread exists", () => {
+      const threads = [direct, child("child-new", "2026-08-29T00:00:00.000Z")];
+      expect(resolveChat(threads)).toBe("thread-ren");
+      expect(resolveChat(threads, "/env-a/child-new")).toBe("thread-ren");
+    });
+
+    it("rejects child work and other owners' threads as a bot's chat", () => {
+      expect(
+        isBotOwnChatShell("bot-ren", { botId: "bot-ren", parentThreadId: "thread-mira" }),
+      ).toBe(false);
+      expect(isBotOwnChatShell("bot-ren", { botId: "bot-mira", parentThreadId: null })).toBe(false);
+      expect(isBotOwnChatShell("bot-ren", { botId: "bot-ren", parentThreadId: null })).toBe(true);
+    });
+
+    it("still follows a remembered chat the shell list has not caught up to", () => {
+      expect(resolveChat([], "/env-a/thread-new")).toBe("thread-new");
+    });
   });
 
   it("restores the latest durable thread owned by a group", () => {

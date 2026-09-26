@@ -7,9 +7,16 @@ shell. Both fields are nullable and optional at the decode boundary so events
 and clients from before this feature continue to replay.
 
 Parent-linked threads are execution details, not a bot's user conversation.
-Navigation selectors, roster message derivation, the web sidebar, and mobile
-thread lists therefore omit them. Work cards retain the child thread id and
-remain the supported path to open that detail.
+Navigation selectors, roster message derivation, the web sidebar, mobile
+thread lists, and server thread search therefore omit them. Work cards retain
+the child thread id and remain the supported path to open that detail.
+
+The web roster also remembers each bot's last chat path. Because a remembered
+path can point at a thread that is not in the child-free shell list yet,
+`useBotChatTarget` checks the target's own shell and drops it when the shell is
+parent-linked or belongs to another bot. A bot with only child threads resolves
+to no chat, so selecting it starts its direct chat. The work view's **Open
+chat** navigates to the child bot's route rather than the child thread.
 
 ## Record fields for placement, retry, and triggers
 

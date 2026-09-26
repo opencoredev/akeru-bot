@@ -156,11 +156,17 @@ export function findLatestBotThreadTarget(
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
 
+/**
+ * The bot's own chat: its newest direct thread, else the remembered chat path
+ * while a just-created thread has not reached the shell list yet. The shell
+ * list leaves out child work, so pair this with `isBotOwnChatShell` on the
+ * target's shell before treating it as the bot's chat.
+ */
 export function resolveBotThreadTarget(
   botId: string,
   environmentId: string,
   threads: Parameters<typeof findLatestBotThreadTarget>[2],
-  rememberedPath: string | undefined,
+  rememberedPath: string | null | undefined,
 ) {
   const latest = findLatestBotThreadTarget(botId, environmentId, threads);
   if (latest) return latest;
@@ -168,6 +174,22 @@ export function resolveBotThreadTarget(
   return remembered?.kind === "thread" && remembered.environmentId === environmentId
     ? remembered
     : null;
+}
+
+/**
+ * Whether a resolved target's shell can be the bot's own chat. Child work
+ * (delegated threads) only ever shows as cards in the parent chat, and a
+ * remembered path can point at child work or another owner's thread. A shell
+ * that has not loaded yet still counts, so a just-created chat stays linked.
+ */
+export function isBotOwnChatShell(
+  botId: string,
+  shell: {
+    botId?: string | null | undefined;
+    parentThreadId?: string | null | undefined;
+  } | null,
+): boolean {
+  return shell === null || (shell.parentThreadId == null && shell.botId === botId);
 }
 
 export function findLatestGroupThreadTarget(

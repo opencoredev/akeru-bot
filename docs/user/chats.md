@@ -59,7 +59,9 @@ Mori", because any bot in the group can hand off work.
 
 Open **Details** on a card to see the expected result and the access the other bot was given,
 including its tools and MCP servers. **View work** opens a read-only view of the other bot's chat
-for that work, with an **Open chat** button when you want to continue there.
+for that work. **Open chat** takes you to that bot's own chat, where you can keep talking to it.
+Handed-off work only appears as cards. It never becomes the bot's chat in the sidebar and does not
+show up in chat search.
 
 While work is still running, the chat shows **Waiting on delegated work**. When the work finishes,
 the card shows the result or what went wrong, and one of these lines:
