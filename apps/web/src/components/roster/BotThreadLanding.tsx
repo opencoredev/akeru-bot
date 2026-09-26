@@ -229,9 +229,7 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
                     testId="bot-provider-message"
                     cwd={runtime.defaultProject?.workspaceRoot}
                     threadRef={runtime.linkedThreadRef ?? undefined}
-                    stepMeter={
-                      message.turnId === null ? undefined : stepMeters.get(message.turnId)
-                    }
+                    stepMeter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
                     pluginResults={
                       message.turnId === null ? undefined : pluginResultsByTurn.get(message.turnId)
                     }

@@ -189,7 +189,9 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   const readAloud = replyPlaybackControlProps(playback, message);
   const copyText = message.text || "Attachment";
   const label = author?.name ?? "Unavailable bot";
-  const markdown = <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />;
+  const markdown = (
+    <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />
+  );
   if (!author) {
     return (
       <div className={`group/message max-w-[85%] ${ROW_VISIBILITY_CLASS}`} data-testid={testId}>
@@ -248,9 +250,7 @@ function shallowEqual<T extends object>(a: T | null | undefined, b: T | null | u
   if (a === b) return true;
   if (!a || !b) return false;
   const keys = Object.keys(a) as (keyof T)[];
-  return (
-    keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]))
-  );
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
 }
 
 function stepMetersEqual(a: BotStepMeterData | undefined, b: BotStepMeterData | undefined) {

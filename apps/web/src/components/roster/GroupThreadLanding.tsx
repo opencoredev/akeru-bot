@@ -158,9 +158,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     testId="group-provider-message"
                     cwd={runtime.defaultProject?.workspaceRoot}
                     threadRef={runtime.linkedThreadRef ?? undefined}
-                    stepMeter={
-                      message.turnId === null ? undefined : stepMeters.get(message.turnId)
-                    }
+                    stepMeter={message.turnId === null ? undefined : stepMeters.get(message.turnId)}
                     pluginResults={undefined}
                     currentPersonId={currentPersonId}
                     playback={replyPlayback}

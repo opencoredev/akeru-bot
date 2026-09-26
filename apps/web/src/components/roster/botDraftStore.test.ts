@@ -1,13 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  clearBotDraft,
-  flushBotDrafts,
-  onBotDraftsStorageChange,
-  readBotDraft,
-  writeBotDraft,
-} from "./botDraftStore";
+import { clearBotDraft, flushBotDrafts, readBotDraft, writeBotDraft } from "./botDraftStore";
 
+const DRAFTS = "akeru:bot-drafts:v1";
+const EDITED_AT = "akeru:bot-drafts:v1:edited-at";
 const memory = new Map<string, string>();
 
 beforeEach(() => {
@@ -73,17 +69,28 @@ describe("botDraftStore", () => {
     });
   });
 
-  it("does not restore a draft another tab cleared while an edit was pending", () => {
+  it("does not restore a draft another tab cleared after a pending edit", () => {
     vi.useFakeTimers();
-    const key = "akeru:bot-drafts:v1";
-    memory.set(key, JSON.stringify({ "bot-1": "hello", "bot-2": "other" }));
+    vi.setSystemTime(1_000);
+    memory.set(DRAFTS, JSON.stringify({ "bot-1": "hello", "bot-2": "other" }));
     writeBotDraft("bot-1", "hello there");
     writeBotDraft("bot-2", "other bot edit");
-    const oldValue = memory.get(key) ?? null;
-    const newValue = JSON.stringify({ "bot-2": "other" });
-    memory.set(key, newValue);
-    onBotDraftsStorageChange({ key, oldValue, newValue });
+    // Another tab sends bot-1's draft and clears it after this tab's edit.
+    memory.set(DRAFTS, JSON.stringify({ "bot-2": "other" }));
+    memory.set(EDITED_AT, JSON.stringify({ "bot-1": 1_200 }));
     vi.advanceTimersByTime(500);
-    expect(JSON.parse(memory.get(key) ?? "{}")).toEqual({ "bot-2": "other bot edit" });
+    expect(JSON.parse(memory.get(DRAFTS) ?? "{}")).toEqual({ "bot-2": "other bot edit" });
+  });
+
+  it("keeps a local edit made after another tab's write", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(2_000);
+    // Another tab wrote an older draft; its storage event may arrive after local typing.
+    memory.set(DRAFTS, JSON.stringify({ "bot-1": "remote older draft" }));
+    memory.set(EDITED_AT, JSON.stringify({ "bot-1": 1_500 }));
+    writeBotDraft("bot-1", "my newer local edit");
+    vi.advanceTimersByTime(500);
+    expect(JSON.parse(memory.get(DRAFTS) ?? "{}")).toEqual({ "bot-1": "my newer local edit" });
+    expect(JSON.parse(memory.get(EDITED_AT) ?? "{}")).toEqual({ "bot-1": 2_000 });
   });
 });
