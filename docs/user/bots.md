@@ -82,6 +82,11 @@ can change **Right Panel: Toggle** in keybinding settings. Narrow screens open t
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.
 During longer bot work, the bot posts short status notes after meaningful progress.
 
+When a bot hands work to another bot or group, the chat shows a card for each handoff. Cards for
+work that is still running always stay. For finished, failed, or canceled work, the chat keeps the
+20 most recent cards, and a long result shows its first 2,000 characters. Open the delegated chat to
+read the full result.
+
 ## Voice calls
 
 1. Open **Settings > Voice**.

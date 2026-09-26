@@ -20,10 +20,10 @@ import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import {
-  OrchestrationProjectionSnapshotQueryLive,
   SHELL_DELEGATION_TEXT_MAX_CHARS,
   SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
-} from "./ProjectionSnapshotQuery.ts";
+} from "../ShellDelegations.ts";
+import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";

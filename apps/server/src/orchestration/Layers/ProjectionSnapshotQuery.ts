@@ -78,6 +78,10 @@ import {
   encodeThreadDetailPageCursor,
 } from "../threadDetailCursor.ts";
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
+import {
+  SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
+  toShellDelegation,
+} from "../ShellDelegations.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import {
@@ -308,74 +312,6 @@ function maxIso(left: string | null, right: string): string {
     return right;
   }
   return left > right ? left : right;
-}
-
-/** Terminal delegations the shell snapshot keeps per parent thread. Open ones are always kept. */
-export const SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD = 20;
-/** Longest delegation result summary or failure message the shell snapshot carries. */
-export const SHELL_DELEGATION_TEXT_MAX_CHARS = 2_000;
-
-const TERMINAL_DELEGATION_STATES: ReadonlySet<AkeruDelegationRecord["state"]> = new Set([
-  "failed",
-  "canceled",
-  "completed",
-]);
-
-function truncateShellText(text: string): string {
-  return text.length <= SHELL_DELEGATION_TEXT_MAX_CHARS
-    ? text
-    : `${text.slice(0, SHELL_DELEGATION_TEXT_MAX_CHARS - 1).trimEnd()}…`;
-}
-
-/** Caps a delegation's free-form result text for shell payloads. */
-export function toShellDelegation(delegation: AkeruDelegationRecord): AkeruDelegationRecord {
-  const summary = delegation.result?.summary;
-  const message = delegation.failure?.message;
-  const summaryFits = summary === undefined || summary.length <= SHELL_DELEGATION_TEXT_MAX_CHARS;
-  const messageFits = message === undefined || message.length <= SHELL_DELEGATION_TEXT_MAX_CHARS;
-  if (summaryFits && messageFits) return delegation;
-  return {
-    ...delegation,
-    result:
-      delegation.result === null || summaryFits
-        ? delegation.result
-        : { ...delegation.result, summary: truncateShellText(delegation.result.summary) },
-    failure:
-      delegation.failure === null || messageFits
-        ? delegation.failure
-        : { ...delegation.failure, message: truncateShellText(delegation.failure.message) },
-  };
-}
-
-/**
- * Keeps every open delegation plus the most recently updated terminal ones for
- * each parent thread, in the input order, with result text capped.
- */
-export function selectShellDelegations(
-  delegations: ReadonlyArray<AkeruDelegationRecord>,
-): AkeruDelegationRecord[] {
-  const terminalByThread = new Map<string, AkeruDelegationRecord[]>();
-  for (const delegation of delegations) {
-    if (!TERMINAL_DELEGATION_STATES.has(delegation.state)) continue;
-    const bucket = terminalByThread.get(delegation.parentThreadId);
-    if (bucket) bucket.push(delegation);
-    else terminalByThread.set(delegation.parentThreadId, [delegation]);
-  }
-  const dropped = new Set<AkeruDelegationRecord>();
-  for (const bucket of terminalByThread.values()) {
-    if (bucket.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) continue;
-    const newestFirst = bucket.toSorted((left, right) =>
-      right.updatedAt.localeCompare(left.updatedAt),
-    );
-    for (const delegation of newestFirst.slice(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD)) {
-      dropped.add(delegation);
-    }
-  }
-  const selected: AkeruDelegationRecord[] = [];
-  for (const delegation of delegations) {
-    if (!dropped.has(delegation)) selected.push(toShellDelegation(delegation));
-  }
-  return selected;
 }
 
 function escapeLikePattern(value: string): string {
@@ -692,6 +628,35 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       SELECT record_json AS delegation
       FROM projection_delegations
       ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
+    `,
+  });
+
+  // Open delegations plus the newest terminal ones per parent thread, so the
+  // shell snapshot never hydrates a thread's whole delegation history.
+  const listShellDelegationRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: () => sql`
+      SELECT delegation
+      FROM (
+        SELECT
+          record_json AS delegation,
+          delegation_id,
+          json_extract(record_json, '$.createdAt') AS created_at,
+          json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled') AS terminal,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              json_extract(record_json, '$.parentThreadId'),
+              json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled')
+            ORDER BY
+              json_extract(record_json, '$.updatedAt') DESC,
+              json_extract(record_json, '$.createdAt') ASC,
+              delegation_id ASC
+          ) AS recency
+        FROM projection_delegations
+      )
+      WHERE terminal = 0 OR recency <= ${SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD}
+      ORDER BY created_at ASC, delegation_id ASC
     `,
   });
 
@@ -2734,7 +2699,7 @@ pending_approval_requests AS (
               ),
             ),
           ),
-          listDelegationRows(undefined).pipe(
+          listShellDelegationRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
                 "ProjectionSnapshotQuery.getShellSnapshot:listDelegations:query",
@@ -2852,7 +2817,7 @@ pending_approval_requests AS (
                 ),
                 bots: botRows.map(mapBotRow),
                 groups: groupRows.map(mapGroupRow),
-                delegations: selectShellDelegations(delegationRows.map((row) => row.delegation)),
+                delegations: delegationRows.map((row) => toShellDelegation(row.delegation)),
                 mcpServers,
                 routines: routines.filter((routine) => routine.deletedAt === null),
                 routineRuns,

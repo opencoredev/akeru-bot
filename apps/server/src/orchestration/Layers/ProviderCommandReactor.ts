@@ -2419,9 +2419,12 @@ const make = Effect.gen(function* () {
       }
     });
 
+    // Read the baseline before subscribing. The engine commits a sequence before
+    // publishing it, so a later read could mark still-buffered events as seen.
+    const baselineSequence = yield* orchestrationEngine.latestSequence;
     // Subscribe before returning, even while event handling waits for server activation.
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
-    yield* orchestrationEngine.latestSequence.pipe(Effect.flatMap(noteSeen));
+    yield* noteSeen(baselineSequence);
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
     yield* recoverStartupProviderWork().pipe(

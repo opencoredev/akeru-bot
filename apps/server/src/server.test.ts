@@ -116,6 +116,7 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
@@ -5320,7 +5321,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const created = record(DelegationId.make("delegation-created"));
       const updated = {
         ...record(DelegationId.make("delegation-updated")),
-        state: "running",
+        state: "completed",
+        result: {
+          summary: "y".repeat(10_000),
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+        },
       } as const;
       const events = [
         {
@@ -5370,10 +5376,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
 
+      // Streamed upserts carry the same capped result text as the shell snapshot.
       assert.deepEqual(Array.from(items), [
         { kind: "delegation-upserted", sequence: 1, delegation: created },
-        { kind: "delegation-upserted", sequence: 2, delegation: updated },
+        { kind: "delegation-upserted", sequence: 2, delegation: toShellDelegation(updated) },
       ]);
+      const streamedUpdate = Array.from(items)[1];
+      assert.isTrue(
+        streamedUpdate?.kind === "delegation-upserted" &&
+          (streamedUpdate.delegation.result?.summary.length ?? 0) < updated.result.summary.length,
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
