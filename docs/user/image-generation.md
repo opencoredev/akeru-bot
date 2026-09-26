@@ -68,9 +68,9 @@ Image settings are not in the chat composer.
 
 Ask any bot for a picture in a direct chat or a group chat. The bot calls
 Akeru's image tool, which sends the request to the bot's own image provider,
-or to the default provider when the bot has no choice of its own. For Codex
-and Kimi For Coding bots the tool asks for your approval first; Claude,
-Grok, and OpenCode bots follow their own tool permission setting. You can
+or to the default provider when the bot has no choice of its own. On Akeru's
+runtime the tool asks for your approval first; standard OpenCode bots follow
+their own tool permission setting. You can
 also name a provider in your request, for example "make it with Grok". A
 named provider is used on its own, without fallback.
 

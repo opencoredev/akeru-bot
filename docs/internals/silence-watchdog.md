@@ -4,7 +4,7 @@ A running turn that stops producing output is reported as a typed silent-run sta
 
 ## Where it runs
 
-The watchdog lives in `ProviderRuntimeIngestion`, after provider events are normalized into `ProviderRuntimeEvent`s. Every provider passes through that point. Codex and Kimi For Coding arrive through the Mastra `AgentController`, and Claude, Grok, and OpenCode arrive through the legacy adapter bridge. None of the providers needs its own watchdog code.
+The watchdog lives in `ProviderRuntimeIngestion`, after provider events are normalized into `ProviderRuntimeEvent`s. Every provider passes through that point. Codex, Claude, Grok, Kimi For Coding, and OpenCode Go arrive through the Mastra `AgentController`, and standard OpenCode arrives through the legacy adapter bridge. None of the providers needs its own watchdog code.
 
 The timer itself is `startSilenceWatchdog` in `apps/server/src/orchestration/SilenceWatchdog.ts`. It is a fiber forked into the ingestion scope, driven by a signal queue and `Clock`, so tests control it with `TestClock`. The silent interval is the named constant `SILENCE_WATCHDOG_SILENT_MS` (90 seconds).
 

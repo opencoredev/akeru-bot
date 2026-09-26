@@ -90,6 +90,12 @@ as a plain code block without the tinted lines or counts, and checklists do not 
 summary. Settings chips open the matching mobile screen, or the main Settings screen when mobile
 has no matching screen.
 
+## When a bot goes quiet
+
+A provider that stops sending output does not stall the chat silently. See
+[When a bot goes quiet](silence-watchdog.md) for the notice, the inbox item,
+and what you can do.
+
 ## Link a pull request
 
 Right-click a pull-request link and select **Link to chat**. Select **Unlink from chat** from the same

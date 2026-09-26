@@ -193,6 +193,24 @@ Controls how assistant text reaches the thread timeline. In [the contracts][1], 
 
 A point-in-time view of state. The word is used in multiple layers, including orchestration, provider, and checkpointing. See [ProjectionSnapshotQuery.ts][10], [ProviderAdapter.ts][15], and [CheckpointStore.ts][19].
 
+#### Model routing
+
+The path a bot's saved model takes to its provider. On `thread.turn.start` the decider rewrites the
+command's `modelSelection` from the responding bot's engine, Mastra drivers map the slug to a wire
+id such as `openai/<model>` or `anthropic/<model>` and call `session.model.switch`, and standard
+OpenCode re-sends `modelSelection` per turn through the legacy bridge. Validation fails closed at
+`bot.create`/`bot.update`, at turn-start preflight in `ws.ts`, and at `AgentController.inspectEngine`,
+and all three only trust a provider snapshot that reports `status === "ready"`. See
+[providers.md](./providers.md#model-routing) and
+[provider-model-routing.md](../operations/provider-model-routing.md).
+
+#### Model reroute
+
+A runtime report that the provider served a different model than the one requested. Adapters emit
+the `model.rerouted` runtime event and ingestion projects a `model.rerouted` activity line so the
+change is visible. Today only the Codex adapter emits it. See
+[providers.md](./providers.md#model-routing).
+
 #### Model manifest
 
 The per-driver list of current model slugs that decides which models land in the model picker's legacy section. Bundled at `apps/server/src/provider/model-manifest.json` and refreshed at runtime from the same file on `main`, so classification updates ship as commits instead of releases. See the [provider architecture][16] model manifest section.

@@ -53,11 +53,11 @@ them in its per-prompt system context. See [Memory architecture](memory.md).
 
 ## Catalog tool parity
 
-The typed Akeru catalog is advertised only by the Mastra controller. Codex and Kimi receive the
-same catalog and approval semantics through that controller. Claude and Grok also use the Mastra
-controller when configured, while standard OpenCode remains on the legacy bridge and does not
-advertise catalog-only tools. Legacy providers must not claim WebSearch, WebFetch, image generation,
-or MCP account mutations unless they are routed through the shared Mastra runtime.
+The typed Akeru catalog is advertised only by the Mastra controller. Codex, Claude, Grok, Kimi
+For Coding, and OpenCode Go receive the same catalog and approval semantics through that controller,
+while standard OpenCode remains on the legacy bridge and does not advertise catalog-only tools. A
+legacy-path provider must not claim WebSearch, WebFetch, image generation, or MCP account mutations
+unless it is routed through the shared Mastra runtime.
 
 Mastra sessions wire four network and media catalog backends. `AkeruWebFetch.ts` owns WebFetch.
 Each hop is resolved once and rejected if any address is loopback, private, link-local, CGNAT,
@@ -205,22 +205,22 @@ When the parent turn finishes, fails, or is interrupted, every worker it still o
 `Canceled` with `parent-turn-ended` and its child turn is interrupted. Background workers do not
 outlive the turn. A worker id only resolves from the chat that started it.
 
-Worker grants narrow the parent's delegation grant. Workers get no memory scopes, an approval
-ceiling of `none`, no access to the user's computer, and the parent's sandbox or the local
-workspace. They cannot use the worker tools, the agent tools (CreateAgent, CheckAgent, MessageAgent,
-StopAgent, SendToAgent), channel creation or updates, SendToUser, request_box_help, ReactToMessage,
-UpdateBotProfile, ExternalShell, or AwaitExternalShell. The `none` ceiling also covers MCP and
-built-in tools: a call that would open an approval request is declined at once with an error the
-worker can read, so a worker never waits on a prompt nobody can see. The worker tools themselves need no approval because they
-only start work that runs under this narrower grant.
+`workerAccess` in [`AkeruWorkerRuntime.ts`][workers-runtime] narrows the parent's delegation
+grant. Workers get no memory scopes, an approval ceiling of `none`, no access to the user's
+computer, and the parent's sandbox or the local workspace. `AKERU_WORKER_EXCLUDED_TOOL_IDS` removes
+the worker tools, the agent tools (CreateAgent, CheckAgent, MessageAgent, StopAgent, SendToAgent),
+channel creation and updates, SendToUser, request_box_help, ReactToMessage, and UpdateBotProfile.
+The `none` ceiling covers MCP and built-in tools: a call that would open an approval request is
+declined at once with an error the worker can read, so a worker never waits on a prompt nobody can
+see. The worker tools themselves need no approval because they only start work that runs under
+this narrower grant.
 
 Child threads carry a `parentThreadId`, so the clients hide them from bot chat lists the same way they
 hide delegated work.
 
 The tools exist only in Mastra tool sessions with worker orchestration configured, which covers
-Codex, Kimi For Coding, OpenCode Go, and Claude and Grok when they run on the Mastra controller.
-Standard OpenCode stays on the legacy bridge (`usesMastraCode` in [`AgentController.ts`][controller])
-and does not advertise them. This is deliberate: the legacy bridge has no Akeru tool session to route
+Codex, Claude, Grok, Kimi For Coding, and OpenCode Go. Standard OpenCode stays on the legacy bridge
+(`usesMastraCode` in [`AgentController.ts`][controller]) and does not advertise them. This is deliberate: the legacy bridge has no Akeru tool session to route
 worker calls through, so advertising the tools there would promise behavior the provider cannot run.
 
 ## Raw protocol observation
@@ -290,7 +290,9 @@ built-in catalog, so an unlisted model there is not evidence the model is gone:
   list.
 - `thread.turn.start` preflights both the command selection and the responding bot's saved engine
   against the same settled snapshot; an unadvertised model returns a typed `unsupported-model`
-  dispatch error before `turn.started` is emitted.
+  dispatch error before `turn.started` is emitted. For group threads without an explicit
+  `respondingBotId` the bot-engine check is skipped there, because the decider may pick a different
+  responder than the thread's last one; `inspectEngine` still covers the real responder.
 - `AgentController.inspectEngine`/`resolveEngine` re-check the saved model against the instance's
   settled snapshot before dispatch, which also covers channels and delegations that never pass
   through the WebSocket layer. An absent, unsettled, or empty catalog is treated as unknown, not

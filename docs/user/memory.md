@@ -94,6 +94,11 @@ If the same fact changed on another device while you were working, Akeru shows t
 with a short message instead of overwriting it. Try the change again on the fresh version. A
 connection paired with read-only access can view facts but not change them.
 
+Observation work continues in the background after a reply. A restart picks queued work back up.
+If condensing older conversation keeps failing after a few tries, Akeru drops that one piece of
+work, notes it in the chat, and keeps newer observations coming; nothing else about the chat is
+lost.
+
 Clearing a chat's observations does not remove durable facts, the bot, or its notes. Facts waiting
 for approval, rejected facts, and forgotten facts stay out of what the bot uses.
 

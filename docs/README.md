@@ -14,6 +14,7 @@
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Terminal history](./user/terminal.md)
 - [Organizing chats](./user/chats.md)
+- [When a bot goes quiet](./user/silence-watchdog.md)
 - [Bot memory](./user/memory.md)
 - [Sending product feedback](./user/product-feedback.md)
 - [Plugins](./user/plugins.md)
@@ -45,6 +46,8 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Interface translations](./internals/interface-translations.md)
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)
+- [Delegation threads](./internals/delegation.md)
+- [Silence watchdog](./internals/silence-watchdog.md)
 - [Memory architecture](./internals/memory.md)
 - [External channels](./internals/channels.md)
 - [Plugin lifecycle verification](./internals/plugin-lifecycle-verification.md)
@@ -61,4 +64,6 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 
 - [Release](./operations/release.md)
 - [Observability](./operations/observability.md)
+- [Provider model routing](./operations/provider-model-routing.md)
+- [Kimi Mastra verification](./operations/kimi-mastra-verification.md)
 - [Mobile app store screenshots](./operations/mobile-app-store-screenshots.md)

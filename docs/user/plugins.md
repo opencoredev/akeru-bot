@@ -60,7 +60,7 @@ at least one connected account. Configure accounts from the web or desktop clien
 Use **Add server** under **Custom MCP servers** when a connector is not in the directory. Installed
 servers can be edited, disabled, or removed from the same section.
 
-Codex and Kimi For Coding bots can also save short guidance for an MCP server, such as which tool
+Bots can also save short guidance for an MCP server, such as which tool
 to try first. Ask the bot to set it. The bot asks for approval, and the guidance applies to every
 bot that uses the server from the next message on. Guidance can be up to 4,000 characters. Ask the bot to clear it to
 remove it. Editing the server keeps its guidance.

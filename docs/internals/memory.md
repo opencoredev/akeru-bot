@@ -255,9 +255,9 @@ promoted into active observations on restore so Mastra's chunk-based storage ret
 Bots save shared facts through the same `memory` tool: an optional `share`
 field (`{ fact, scope: "project" | "group" | "workspace", sensitive? }`) is
 handled in `BotMemoryToolHandlers.ts` and forwarded to the agent controller's
-`shareFact`. Because the handler set is shared, the Mastra controller (Codex,
-Kimi) and the MCP bridge for legacy adapters (Claude, Grok, OpenCode) take the
-same path. `shareFact` checks the bot's scope grant and calls
+`shareFact`. Because the handler set is shared, the Mastra controller (Codex, Claude,
+Grok, Kimi, OpenCode Go) and the MCP bridge for the legacy adapter (standard
+OpenCode) take the same path. `shareFact` checks the bot's scope grant and calls
 `MemoryApprovals.propose` (`apps/server/src/memory/MemoryApprovals.ts`) with
 the `sharedProjectMemory` mode.
 
