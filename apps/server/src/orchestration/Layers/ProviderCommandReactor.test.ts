@@ -193,6 +193,7 @@ describe("ProviderCommandReactor", () => {
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
+    readonly commitDuringFirstSequenceRead?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -478,6 +479,7 @@ describe("ProviderCommandReactor", () => {
       Layer.provide(SqlitePersistenceMemory),
     );
     let titleRegenerationCompletionDispatchAttempts = 0;
+    let sequenceReads = 0;
     const reactorOrchestrationLayer = Layer.effect(
       OrchestrationEngineService,
       Effect.gen(function* () {
@@ -528,7 +530,25 @@ describe("ProviderCommandReactor", () => {
                   ),
                 )
               : engine.subscribeDomainEvents,
-          latestSequence: engine.latestSequence,
+          latestSequence:
+            input?.commitDuringFirstSequenceRead === true
+              ? Effect.suspend(() => {
+                  if (sequenceReads++ > 0) return engine.latestSequence;
+                  // Commit and publish right after the read, before the reactor subscribes.
+                  return engine.latestSequence.pipe(
+                    Effect.tap(() =>
+                      engine
+                        .dispatch({
+                          type: "thread.meta.update",
+                          commandId: CommandId.make("cmd-commit-during-sequence-read"),
+                          threadId: ThreadId.make("thread-1"),
+                          title: "Renamed during startup",
+                        })
+                        .pipe(Effect.orDie),
+                    ),
+                  );
+                })
+              : engine.latestSequence,
         } satisfies OrchestrationEngineService["Service"];
       }),
     ).pipe(Layer.provide(orchestrationLayer));
@@ -869,6 +889,17 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("drains when an event commits between the startup sequence read and subscription", async () => {
+    const harness = await createHarness({ commitDuringFirstSequenceRead: true });
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    expect(readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title).toBe(
+      "Renamed during startup",
+    );
   });
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {

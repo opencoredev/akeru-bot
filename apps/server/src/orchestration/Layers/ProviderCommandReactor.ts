@@ -35,6 +35,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -2384,6 +2385,25 @@ const make = Effect.gen(function* () {
     SubscriptionRef.update(seenSequence, (seen) => Math.max(seen, sequence));
   const started = yield* SubscriptionRef.make(false);
 
+  // Subscribes with the engine sequence it starts after. A read before the
+  // subscription would wait on events published in between, and a read after it
+  // would mark buffered events as seen, so retry until no commit lands between
+  // the two reads.
+  const subscribeWithBaseline = Effect.fn("subscribeWithBaseline")(function* () {
+    const parentScope = yield* Effect.scope;
+    while (true) {
+      const before = yield* orchestrationEngine.latestSequence;
+      const subscriptionScope = yield* Scope.fork(parentScope);
+      const domainEvents = yield* orchestrationEngine.subscribeDomainEvents.pipe(
+        Scope.provide(subscriptionScope),
+      );
+      if ((yield* orchestrationEngine.latestSequence) === before) {
+        return { domainEvents, baselineSequence: before };
+      }
+      yield* Scope.close(subscriptionScope, Exit.void);
+    }
+  });
+
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {
     yield* SubscriptionRef.set(started, true);
     const interruptedTitleRegenerations = yield* findInterruptedThreadTitleRegenerations().pipe(
@@ -2419,11 +2439,8 @@ const make = Effect.gen(function* () {
       }
     });
 
-    // Read the baseline before subscribing. The engine commits a sequence before
-    // publishing it, so a later read could mark still-buffered events as seen.
-    const baselineSequence = yield* orchestrationEngine.latestSequence;
     // Subscribe before returning, even while event handling waits for server activation.
-    const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
+    const { domainEvents, baselineSequence } = yield* subscribeWithBaseline();
     yield* noteSeen(baselineSequence);
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 

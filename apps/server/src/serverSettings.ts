@@ -737,17 +737,34 @@ const make = Effect.gen(function* () {
     generation: state.generation + 1,
   }));
 
-  const getMaterializedSettings = Effect.gen(function* () {
+  const readMaterializedEntry = Effect.gen(function* () {
     const settings = yield* getSettingsFromCache;
     const { generation, entry } = yield* Ref.get(materializedRef);
-    if (entry?.source === settings) return entry.materialized;
-    const materialized = yield* materializeAllSecrets(settings);
-    yield* Ref.update(materializedRef, (state) =>
-      state.generation === generation
-        ? { generation, entry: { source: settings, materialized } }
-        : state,
+    return {
+      settings,
+      generation,
+      cached: entry?.source === settings ? entry.materialized : undefined,
+    };
+  });
+  // Misses run one at a time so a burst of reads after a change shares one
+  // secret read instead of each materializing the same settings.
+  const materializeSemaphore = yield* Semaphore.make(1);
+  const getMaterializedSettings = Effect.gen(function* () {
+    const first = yield* readMaterializedEntry;
+    if (first.cached) return first.cached;
+    return yield* materializeSemaphore.withPermits(1)(
+      Effect.gen(function* () {
+        const { settings, generation, cached } = yield* readMaterializedEntry;
+        if (cached) return cached;
+        const materialized = yield* materializeAllSecrets(settings);
+        yield* Ref.update(materializedRef, (state) =>
+          state.generation === generation
+            ? { generation, entry: { source: settings, materialized } }
+            : state,
+        );
+        return materialized;
+      }),
     );
-    return materialized;
   });
 
   type SecretSnapshot = {

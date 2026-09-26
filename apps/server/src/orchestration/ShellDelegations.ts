@@ -1,10 +1,7 @@
 import type { AkeruDelegationRecord } from "@t3tools/contracts";
 
-/**
- * Terminal delegations (completed, failed, canceled) the shell snapshot keeps
- * per parent thread, newest first. Open ones are always kept.
- */
-export const SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD = 20;
+export { SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD } from "@t3tools/contracts";
+
 /** Longest delegation result summary or failure message the shell snapshot carries. */
 export const SHELL_DELEGATION_TEXT_MAX_CHARS = 2_000;
 
