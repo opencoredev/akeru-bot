@@ -10,6 +10,7 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import {
   AkeruBotUsageReadError,
@@ -434,11 +435,16 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 const PROVIDER_SUBSCRIBE_REFRESH_TTL_MS = 60_000;
 
 /**
- * Provider instance ids with a subscription-triggered probe in flight. One set
- * is shared by every connection, so a reconnect burst probes each stale
- * instance once instead of queueing one probe per client.
+ * Subscription-triggered provider probes, shared by every connection so a
+ * reconnect burst probes each stale instance once instead of once per client.
+ * The probes run in the server's scope: a client that disconnects must not
+ * cancel a probe other clients skipped theirs for.
  */
-type ProviderSubscribeRefreshesInFlight = Set<string>;
+interface ProviderSubscribeRefreshes {
+  /** Provider instance ids with a probe in flight. */
+  readonly inFlight: Set<string>;
+  readonly scope: Scope.Scope;
+}
 
 const THREAD_SHELL_REFETCH = "thread.shell-refetch";
 
@@ -604,7 +610,7 @@ const makeWsRpcLayer = (
   clientOrigin: OrchestrationClientOrigin,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
-  providerRefreshesInFlight: ProviderSubscribeRefreshesInFlight,
+  providerRefreshes: ProviderSubscribeRefreshes,
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -3617,11 +3623,11 @@ const makeWsRpcLayer = (
               const nowMs = yield* Clock.currentTimeMillis;
               const staleProviders = (yield* providerRegistry.getProviders).filter(
                 (provider) =>
-                  !providerRefreshesInFlight.has(provider.instanceId) &&
+                  !providerRefreshes.inFlight.has(provider.instanceId) &&
                   nowMs - Date.parse(provider.checkedAt) >= PROVIDER_SUBSCRIBE_REFRESH_TTL_MS,
               );
               for (const provider of staleProviders) {
-                providerRefreshesInFlight.add(provider.instanceId);
+                providerRefreshes.inFlight.add(provider.instanceId);
               }
               if (staleProviders.length > 0) {
                 yield* Effect.forEach(
@@ -3631,11 +3637,11 @@ const makeWsRpcLayer = (
                       .refreshInstance(provider.instanceId)
                       .pipe(
                         Effect.ensuring(
-                          Effect.sync(() => providerRefreshesInFlight.delete(provider.instanceId)),
+                          Effect.sync(() => providerRefreshes.inFlight.delete(provider.instanceId)),
                         ),
                       ),
                   { concurrency: "unbounded", discard: true },
-                ).pipe(Effect.ignoreCause({ log: true }), Effect.forkScoped);
+                ).pipe(Effect.ignoreCause({ log: true }), Effect.forkIn(providerRefreshes.scope));
               }
 
               const liveUpdates = Stream.merge(
@@ -3730,7 +3736,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const voiceCalls = yield* VoiceCallManager.VoiceCallManager;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
-    const providerRefreshesInFlight: ProviderSubscribeRefreshesInFlight = new Set();
+    const providerRefreshes: ProviderSubscribeRefreshes = {
+      inFlight: new Set(),
+      scope: yield* Effect.scope,
+    };
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -3757,7 +3766,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               clientOrigin,
               previewAutomationBroker,
               voiceCalls,
-              providerRefreshesInFlight,
+              providerRefreshes,
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),

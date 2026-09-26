@@ -45,6 +45,7 @@ import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Deferred from "effect/Deferred";
+import * as Exit from "effect/Exit";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -3837,6 +3838,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         skills: [],
       };
       const releaseProbe = yield* Deferred.make<void>();
+      const probeSucceeded = yield* Deferred.make<boolean>();
       const probedInstanceIds: Array<string> = [];
 
       yield* buildAppUnderTest({
@@ -3847,6 +3849,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => probedInstanceIds.push(id)).pipe(
                 Effect.andThen(Deferred.await(releaseProbe)),
                 Effect.as([staleProvider]),
+                Effect.onExit((exit) => Deferred.succeed(probeSucceeded, Exit.isSuccess(exit))),
               ),
           },
         },
@@ -3859,8 +3862,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       // Each snapshot is sent after that subscription decided whether to
       // probe, and the first probe stays blocked until both have arrived.
       yield* Effect.scoped(Effect.all([takeSnapshot, takeSnapshot], { concurrency: "unbounded" }));
+      // Both clients have disconnected. The shared probe keeps running, so a
+      // later client still skips it and the probe completes.
+      yield* Effect.scoped(takeSnapshot);
       assert.deepEqual(probedInstanceIds, [instanceId]);
       yield* Deferred.succeed(releaseProbe, undefined);
+      assert.isTrue(yield* Deferred.await(probeSucceeded));
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
