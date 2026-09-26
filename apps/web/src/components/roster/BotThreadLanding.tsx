@@ -12,7 +12,6 @@ import {
   deriveProviderInstanceEntries,
   sortProviderInstanceEntries,
 } from "../../providerInstances";
-import { botEnvironment } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
