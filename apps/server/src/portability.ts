@@ -1321,6 +1321,7 @@ function itemForCommand(
       case "delegation.state.set":
         return `delegation:${command.delegation.delegationId}`;
       case "delegation.cancel":
+      case "delegation.retry":
         return `delegation:${command.delegationId}`;
       case "routine.create-approved":
       case "routine.draft":

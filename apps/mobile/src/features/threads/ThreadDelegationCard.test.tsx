@@ -25,6 +25,8 @@ vi.mock("../../lib/i18n", async () => {
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
+import { delegationActions } from "@t3tools/client-runtime/delegation-presentation";
+
 import { ThreadDelegationCard } from "./ThreadDelegationCard";
 
 const delegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecord => ({
@@ -132,5 +134,101 @@ describe("ThreadDelegationCard", () => {
     expect(html).toContain("Child crashed.");
     expect(html).toContain("Result waiting for the next reply");
     expect(html).toContain("Unknown bot");
+  });
+
+  describe("actions", () => {
+    const phases: Record<string, AkeruDelegationRecord["phase"]> = {
+      queued: { _tag: "Queued" },
+      running: {
+        _tag: "Running",
+        childThreadId: ThreadId.make("thread-child"),
+        childTurnId: null,
+        startedAt: "2026-09-25T10:00:30.000Z",
+        progress: null,
+      },
+      failed: {
+        _tag: "Failed",
+        childThreadId: null,
+        childTurnId: null,
+        startedAt: null,
+        completedAt: "2026-09-25T10:05:00.000Z",
+        failure: { failureCode: "child_failed", message: "Child crashed." },
+        acknowledgedAt: null,
+      },
+      canceled: {
+        _tag: "Canceled",
+        childThreadId: null,
+        childTurnId: null,
+        startedAt: null,
+        completedAt: "2026-09-25T10:05:00.000Z",
+        canceledBy: "user",
+      },
+      completed: {
+        _tag: "Completed",
+        childThreadId: ThreadId.make("thread-child"),
+        childTurnId: null,
+        startedAt: "2026-09-25T10:00:30.000Z",
+        completedAt: "2026-09-25T10:05:00.000Z",
+        result: {
+          summary: "Done.",
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+        },
+        acknowledgedAt: null,
+      },
+    };
+    const labels = ["Let it finish", "Cancel", "Try again"] as const;
+    const rendered = (record: AkeruDelegationRecord, all: ReadonlyArray<AkeruDelegationRecord>) => {
+      const html = markup(
+        createElement(ThreadDelegationCard, {
+          delegation: record,
+          childBot: bot("bot-child", "Scout"),
+          parentBot: bot("bot-parent", "Boss"),
+          actions: delegationActions(record, all),
+          onAction: () => Promise.resolve(),
+        }),
+      );
+      return labels.filter((label) => html.includes(`>${label}</span>`));
+    };
+
+    it.each([
+      ["queued", ["Let it finish", "Cancel"]],
+      ["running", ["Let it finish", "Cancel"]],
+      ["failed", ["Try again"]],
+      ["canceled", ["Try again"]],
+      ["completed", []],
+    ] as const)("shows the %s buttons", (state, expected) => {
+      const record = delegation(phases[state]!);
+      expect(rendered(record, [record])).toEqual(expected);
+    });
+
+    it("drops Let it finish once the work is kept", () => {
+      const record = { ...delegation(phases.running!), keep: true };
+      expect(rendered(record, [record])).toEqual(["Cancel"]);
+    });
+
+    it("drops Try again once a later card retries the work", () => {
+      const original = delegation(phases.failed!);
+      const retry = {
+        ...delegation(phases.running!),
+        delegationId: DelegationId.make("d-2"),
+        retryOfDelegationId: original.delegationId,
+      };
+      expect(rendered(original, [original, retry])).toEqual([]);
+    });
+
+    it("shows no buttons when the card cannot run commands", () => {
+      const record = delegation(phases.running!);
+      const html = markup(
+        createElement(ThreadDelegationCard, {
+          delegation: record,
+          childBot: null,
+          parentBot: null,
+          actions: delegationActions(record, [record]),
+        }),
+      );
+      expect(html).not.toContain("Let it finish");
+      expect(html).not.toContain(">Cancel<");
+    });
   });
 });

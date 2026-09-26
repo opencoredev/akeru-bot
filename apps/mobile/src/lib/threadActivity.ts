@@ -1,5 +1,9 @@
 import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
-import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
+import {
+  delegationActions,
+  threadDelegations,
+  type DelegationAction,
+} from "@t3tools/client-runtime/delegation-presentation";
 import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
 import {
   derivePendingApprovals,
@@ -115,6 +119,8 @@ export type ThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly delegation: AkeruDelegationRecord;
+      /** Reverse-state moves the card offers, judged against the whole chat. */
+      readonly actions: ReadonlyArray<DelegationAction>;
     }
   | {
       readonly type: "working";
@@ -1695,13 +1701,14 @@ function mergeDelegationCards(
   });
 
   const delegationsByPosition = new Map<number, (ThreadFeedEntry & { type: "delegation" })[]>();
+  const feedDelegations = delegations;
   const timelineEntries = botChatTimeline({
     messages: rawMessages.map((message) => ({
       id: message.id,
       turnId: message.turnId,
       createdAt: message.createdAt,
     })),
-    delegations: delegations,
+    delegations: feedDelegations,
   });
   let previousTimelineMessage:
     | Extract<(typeof timelineEntries)[number], { _tag: "Message" }>
@@ -1717,6 +1724,7 @@ function mergeDelegationCards(
       id: `delegation:${timelineEntry.delegation.delegationId}`,
       createdAt: timelineEntry.delegation.createdAt,
       delegation: timelineEntry.delegation,
+      actions: delegationActions(timelineEntry.delegation, feedDelegations),
     };
     if (previousTimelineMessage === undefined) {
       // Cards before the first message (empty chat or end-fallback) lead the feed.

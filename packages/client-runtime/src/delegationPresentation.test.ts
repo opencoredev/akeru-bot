@@ -8,7 +8,9 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  delegationActions,
   delegationElapsedMs,
+  isDelegationSuperseded,
   presentDelegation,
   threadDelegations,
 } from "./delegationPresentation.ts";
@@ -183,5 +185,59 @@ describe("threadDelegations", () => {
     });
     const working = makeDelegation(running);
     expect(threadDelegations([done, working], PARENT_THREAD_ID).waitingOnChildren).toBe(true);
+  });
+});
+
+describe("delegationActions", () => {
+  it("offers let it finish and cancel for live work", () => {
+    expect(delegationActions(makeDelegation({ _tag: "Queued" }), [])).toEqual(["keep", "cancel"]);
+    expect(delegationActions(makeDelegation(running), [])).toEqual(["keep", "cancel"]);
+  });
+
+  it("drops let it finish once the work is kept", () => {
+    expect(delegationActions({ ...makeDelegation(running), keep: true }, [])).toEqual(["cancel"]);
+  });
+
+  it("offers retry for failed and canceled work and nothing for completed work", () => {
+    const failed = makeDelegation({
+      _tag: "Failed",
+      childThreadId: CHILD_THREAD_ID,
+      childTurnId: CHILD_TURN_ID,
+      startedAt: NOW,
+      completedAt: NOW,
+      acknowledgedAt: null,
+      failure: { failureCode: "child_failed", message: "The site was down." },
+    });
+    const canceled = makeDelegation({
+      _tag: "Canceled",
+      childThreadId: null,
+      childTurnId: null,
+      startedAt: null,
+      completedAt: NOW,
+      canceledBy: "user",
+    });
+    expect(delegationActions(failed, [failed])).toEqual(["retry"]);
+    expect(delegationActions(canceled, [canceled])).toEqual(["retry"]);
+    expect(delegationActions(makeDelegation(completed(null)), [])).toEqual([]);
+  });
+
+  it("offers no retry once a later record retries the work", () => {
+    const canceled = makeDelegation({
+      _tag: "Canceled",
+      childThreadId: null,
+      childTurnId: null,
+      startedAt: null,
+      completedAt: NOW,
+      canceledBy: "user",
+    });
+    const retry = {
+      ...makeDelegation({ _tag: "Queued" }),
+      delegationId: DelegationId.make("delegation-retry"),
+      retryOfDelegationId: canceled.delegationId,
+    };
+    expect(isDelegationSuperseded(canceled, [canceled, retry])).toBe(true);
+    expect(isDelegationSuperseded(retry, [canceled, retry])).toBe(false);
+    expect(delegationActions(canceled, [canceled, retry])).toEqual([]);
+    expect(delegationActions(retry, [canceled, retry])).toEqual(["keep", "cancel"]);
   });
 });

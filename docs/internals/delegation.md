@@ -237,3 +237,87 @@ temporary worker inside the parent's own turn. The worker is a copy of the
 bot under a narrower grant, not a delegation to another bot, so it is not
 covered by this document's acknowledgement and delivery rules. See
 [Temporary workers](providers.md#temporary-workers) in providers.md.
+
+## Reverse states
+
+Every way into a delegation state has a way back out.
+
+- **Cancel.** `delegation.cancel` with `keep: false` moves live work to
+  `Canceled` with `canceledBy: "user"`. It does nothing to work that has
+  already finished.
+- **Let it finish.** `delegation.cancel` with `keep: true` only sets `keep` on
+  the record, and the work keeps running. A kept child survives its parent turn
+  being interrupted or failing. A bot can set the same flag up front with
+  `keep: true` on `SendToAgent`.
+- **Retry.** `delegation.retry` starts new work from a `Failed` or `Canceled`
+  record. The decider refuses any other phase, a record that another record
+  already retries (its `retryOfDelegationId` points at it), and a retry when
+  the parent chat already has `AKERU_DELEGATION_MAX_CONCURRENCY` active
+  delegations. The refusals are `OrchestrationCommandInvariantError`s whose
+  detail is readable text. Once a retry exists, the original is superseded: a
+  later retry has to start from the newest record. An accepted retry emits
+  `delegation.retry-requested` and leaves the original record untouched.
+  `ProviderCommandReactor` then calls `AgentController.dispatchDelegation`
+  with `{ _tag: "Retry" }`. The runtime sends a new delegation to the same bot
+  with the original task, expected result, access grant, `keep`, `trigger`,
+  and anchor, plus `retryOfDelegationId` pointing at the original. A deadline
+  carries over only if it is still in the future. The original `context` is
+  not stored on the record, so a retry runs without it. Storing it would put up
+  to 8,000 characters on every record sent to clients. If the runtime refuses
+  the new work, the reactor appends a `delegation.retry.failed` activity to
+  the parent chat with the reason.
+
+`delegationActions(record, delegations)` in
+`@t3tools/client-runtime/delegationPresentation` lists the actions a work card
+offers, given the chat's delegations. Live work offers `keep`, unless it is
+already kept, and `cancel` when `AKERU_DELEGATION_TRANSITIONS` allows it.
+Failed and canceled work offers `retry` unless `isDelegationSuperseded` finds a
+record that already retries it, which matches the decider's rule. Completed
+work offers nothing. Clients send the actions with the `cancelDelegation` and
+`retryDelegation` orchestration commands.
+
+On web, `DelegationCard` takes the chat's `delegations` and renders one button
+per action in its actions slot (Let it finish, Cancel, Try again), disables them
+all while a command is in flight, and shows the decider's refusal text in an
+error toast. On mobile, `buildThreadFeed` stores each card's actions on its feed
+entry, and `ThreadDelegationFeedCard` sends the same commands. The buttons
+disable while a command is in flight, and a refusal shows in an alert with the
+server's text.
+
+## Scheduled delegation
+
+A routine with `delegateToBotId` hands each run to that bot instead of running
+a turn in its own chat. The routines runtime adapter calls
+`AgentController.dispatchDelegation` with `{ _tag: "Scheduled" }`. The runtime
+records the delegation with `trigger: "scheduled"`, parented on the routine's
+chat with depth 0 and the owner bot's default grant. The run's approval policy
+sets the runtime mode. The card anchors to the chat's last message when the
+routine fired. The run's `threadRef` is the child thread, which is how the
+runtime links the run to its delegation.
+
+- A `Completed` delegation completes the run with the result summary.
+- A `Failed` delegation fails the run, opens an incident, and blocks the
+  routine.
+- A `Canceled` delegation cancels the run.
+- Canceling the run cancels its delegation. A run canceled while its
+  delegation is still starting has no `threadRef` yet. The decider refuses
+  `routine.run.start` for a run that already ended, and the adapter then
+  cancels the new delegation by the `delegationId` the runtime returned.
+- Pausing or disabling the routine leaves running work alone. The pause only
+  stops future runs.
+- The web **Done by** picker leaves out the routine's own bot and lists bots
+  whose provider cannot take handed-off work as disabled options, using
+  `routineDelegateOptions` in `botEngineSelection.ts`. Mobile only shows the
+  saved helper's name, so it has no picker to filter.
+- `checkDependencies` blocks a run up front, with "pick another bot"
+  guidance, when the delegate bot is archived or missing, is the routine's own
+  bot, or runs on a provider where `driverSupportsDelegation` is false (standard
+  OpenCode). A run whose delegation the runtime still refuses is blocked with
+  the runtime's reason.
+
+Scheduled work has no live parent turn. Ending a turn in the routine's chat
+therefore never cancels it.
+
+A delegation that ends while the server is down, or before `routine.run.start`
+records the run's `threadRef`, does not settle the run. Recovering those runs after a restart is
+follow-up work.

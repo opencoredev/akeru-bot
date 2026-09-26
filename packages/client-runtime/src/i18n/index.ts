@@ -980,6 +980,9 @@ export const englishCatalog = {
   "Audio could not play. Retry, or check voice settings.":
     "Audio could not play. Retry, or check voice settings.",
   "Cancel delegation to {name}": "Cancel delegation to {name}",
+  "Let it finish": "Let it finish",
+  "Let {name} finish the work": "Let {name} finish the work",
+  "Ask {name} to try again": "Ask {name} to try again",
   "Change reaction, {emoji} selected": "Change reaction, {emoji} selected",
   "Change this file?": "Change this file?",
   "Choose a reaction": "Choose a reaction",
@@ -1004,6 +1007,8 @@ export const englishCatalog = {
   "Could not approve procedure": "Could not approve procedure",
   "Could not assign {name}": "Could not assign {name}",
   "Could not cancel delegation": "Could not cancel delegation",
+  "Could not let the work finish": "Could not let the work finish",
+  "Could not retry the work": "Could not retry the work",
   "Could not create routine": "Could not create routine",
   "Could not delete routine": "Could not delete routine",
   "Could not enable routine": "Could not enable routine",
@@ -1557,6 +1562,7 @@ export const englishCatalog = {
   "When to run": "When to run",
   "Last run": "Last run",
   "Latest run": "Latest run",
+  "Done by": "Done by",
   "This routine runs only once you approve its procedure.":
     "This routine runs only once you approve its procedure.",
   "Approve procedure": "Approve procedure",

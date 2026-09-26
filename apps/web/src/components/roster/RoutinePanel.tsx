@@ -16,6 +16,7 @@ import {
   routineStatus,
   runStatusTone,
   runSummaryLine,
+  type RoutineAdapterBot,
   type RoutineAdapterDraft,
   type RoutineAdapterFrequency,
   type RoutineAdapterItem,
@@ -57,6 +58,11 @@ export interface RoutinePanelProps {
   readonly error?: string | null;
   readonly routines?: readonly RoutineAdapterItem[];
   readonly projectOptions?: readonly RoutineAdapterProject[];
+  /**
+   * Other bots a routine can hand its work to. The owner is always offered first.
+   * A bot with `canTakeWork: false` shows disabled with the reason.
+   */
+  readonly delegateOptions?: readonly RoutineAdapterBot[];
   readonly skillOptions?: readonly string[];
   readonly connectorOptions?: readonly string[];
   readonly busyRoutineId?: string | null;
@@ -74,6 +80,7 @@ export interface RoutinePanelProps {
 
 const EMPTY_ROUTINES: readonly RoutineAdapterItem[] = [];
 const EMPTY_PROJECT_OPTIONS: readonly RoutineAdapterProject[] = [];
+const EMPTY_DELEGATE_OPTIONS: readonly RoutineAdapterBot[] = [];
 
 const WEEKDAYS: readonly MessageKey[] = [
   "Sunday",
@@ -123,6 +130,7 @@ function editDraft(routine: RoutineAdapterItem): RoutineAdapterDraft {
     approval: routine.approval,
     skills: routine.skills,
     connectors: routine.connectors,
+    delegateToBotId: routine.delegateToBotId,
   };
 }
 
@@ -149,6 +157,7 @@ function blankDraft(projectOptions: readonly RoutineAdapterProject[]): RoutineAd
     approval: "approval-required",
     skills: [],
     connectors: [],
+    delegateToBotId: null,
   };
 }
 
@@ -167,14 +176,18 @@ function RoutineFormDialog({
   title,
   submitLabel,
   initialDraft,
+  botName,
   projectOptions,
+  delegateOptions,
   onClose,
   onSubmit,
 }: {
   readonly title: MessageKey;
   readonly submitLabel: MessageKey;
   readonly initialDraft: RoutineAdapterDraft;
+  readonly botName: string;
   readonly projectOptions: readonly RoutineAdapterProject[];
+  readonly delegateOptions: readonly RoutineAdapterBot[];
   readonly onClose: () => void;
   readonly onSubmit?: (draft: RoutineAdapterDraft) => void | Promise<void>;
 }) {
@@ -312,6 +325,35 @@ function RoutineFormDialog({
             <p className="text-xs text-muted-foreground">
               {t("Add a project to this environment before creating a routine.")}
             </p>
+          ) : null}
+          {delegateOptions.length > 0 || draft.delegateToBotId !== null ? (
+            <label className="block space-y-1.5 text-sm">
+              <span>{t("Done by")}</span>
+              <select
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={draft.delegateToBotId ?? ""}
+                onChange={(event) =>
+                  setDraft({ ...draft, delegateToBotId: event.target.value || null })
+                }
+              >
+                <option value="">{botName}</option>
+                {delegateOptions.map((bot) =>
+                  bot.canTakeWork === false ? (
+                    <option key={bot.id} value={bot.id} disabled>
+                      {`${bot.name}, ${t("Cannot take handed-off work")}`}
+                    </option>
+                  ) : (
+                    <option key={bot.id} value={bot.id}>
+                      {bot.name}
+                    </option>
+                  ),
+                )}
+                {draft.delegateToBotId !== null &&
+                !delegateOptions.some((bot) => bot.id === draft.delegateToBotId) ? (
+                  <option value={draft.delegateToBotId}>{t("Unknown bot")}</option>
+                ) : null}
+              </select>
+            </label>
           ) : null}
           <label className="block space-y-1.5 text-sm">
             <span>{t("Skills")}</span>
@@ -539,6 +581,7 @@ function RoutineCard({
 export function RoutineDetail({
   routine,
   projectName,
+  doneBy = null,
   busy,
   onBack,
   onEdit,
@@ -547,6 +590,8 @@ export function RoutineDetail({
 }: {
   readonly routine: RoutineAdapterItem;
   readonly projectName: string;
+  /** The bot that does each run's work, when it is not the owner. */
+  readonly doneBy?: string | null;
   readonly busy: boolean;
   readonly onBack: () => void;
   readonly onEdit: () => void;
@@ -603,6 +648,12 @@ export function RoutineDetail({
               <dt>{t("Workspace")}</dt>
               <dd className="min-w-0 truncate text-foreground">{projectName}</dd>
             </div>
+            {doneBy !== null ? (
+              <div className="flex gap-2">
+                <dt>{t("Done by")}</dt>
+                <dd className="min-w-0 truncate text-foreground">{doneBy}</dd>
+              </div>
+            ) : null}
           </dl>
         </section>
 
@@ -704,6 +755,7 @@ export function RoutinePanel({
   error,
   routines = EMPTY_ROUTINES,
   projectOptions = EMPTY_PROJECT_OPTIONS,
+  delegateOptions = EMPTY_DELEGATE_OPTIONS,
   busyRoutineId = null,
   onCreate,
   createNeedsChat = false,
@@ -815,6 +867,12 @@ export function RoutinePanel({
               projectOptions.find((project) => project.id === openRoutine.projectId)?.name ??
               openRoutine.projectId
             }
+            doneBy={
+              openRoutine.delegateToBotId === null
+                ? null
+                : (delegateOptions.find((bot) => bot.id === openRoutine.delegateToBotId)?.name ??
+                  t("Unknown bot"))
+            }
             busy={busyRoutineId === openRoutine.id}
             onBack={() => setOpenRoutineId(null)}
             onEdit={() => setEditorRoutine(openRoutine)}
@@ -871,7 +929,9 @@ export function RoutinePanel({
           title="New routine"
           submitLabel="Create routine"
           initialDraft={blankDraft(projectOptions)}
+          botName={botName}
           projectOptions={projectOptions}
+          delegateOptions={delegateOptions}
           onSubmit={onCreate}
           onClose={() => setCreating(false)}
         />
@@ -881,7 +941,9 @@ export function RoutinePanel({
           title="Edit routine"
           submitLabel="Save changes"
           initialDraft={editDraft(editorRoutine)}
+          botName={botName}
           projectOptions={projectOptions}
+          delegateOptions={delegateOptions}
           {...(onUpdate ? { onSubmit: (draft) => onUpdate(editorRoutine.id, draft) } : {})}
           onClose={() => setEditorRoutine(null)}
         />

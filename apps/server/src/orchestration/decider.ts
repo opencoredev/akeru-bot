@@ -1530,6 +1530,59 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "delegation.retry": {
+      const original = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: command.delegationId,
+      });
+      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only failed or canceled bot work can be retried.",
+        });
+      }
+      if (
+        readModel.delegations.some(
+          (candidate) => candidate.retryOfDelegationId === original.delegationId,
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "This bot work was already retried. Use the newer card instead.",
+        });
+      }
+      yield* requireThread({ readModel, command, threadId: original.parentThreadId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.parentBotId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.childBotId });
+      const activeDelegationCount = readModel.delegations.filter(
+        (candidate) =>
+          candidate.parentBotId === original.parentBotId &&
+          !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
+      ).length;
+      if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `This bot already has ${activeDelegationCount} bot work items running. Wait for one to finish, then retry.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.retry-requested",
+        payload: {
+          delegationId: command.delegationId,
+          parentThreadId: original.parentThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+    }
+
     case "routine.create-approved": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
@@ -1819,6 +1872,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' does not exist.`,
+        });
+      }
+      // A run canceled or settled before it started stays ended.
+      if (
+        command.type === "routine.run.start" &&
+        existingRun.status !== "queued" &&
+        existingRun.status !== "waiting-for-approval" &&
+        existingRun.status !== "running"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Routine run '${command.runId}' already ended with status '${existingRun.status}'.`,
         });
       }
       const occurredAt =

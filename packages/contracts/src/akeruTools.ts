@@ -217,7 +217,11 @@ export const AkeruToolInputSchemas = {
   CheckAgent: Schema.Struct({ botId: BotId }),
   MessageAgent: AgentMessageInput,
   StopAgent: Schema.Struct({ botId: BotId }),
-  SendToAgent: AgentMessageInput,
+  SendToAgent: Schema.Struct({
+    ...AgentMessageInput.fields,
+    /** Keep the work running after the parent turn ends instead of stopping it. */
+    keep: Schema.optional(Schema.Boolean),
+  }),
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
     specialistBotIds: Schema.optional(Schema.Array(BotId)),

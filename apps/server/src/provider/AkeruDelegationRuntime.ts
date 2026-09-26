@@ -27,7 +27,7 @@ import {
   type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-  type TurnId,
+  TurnId,
   isGroupBotMember,
 } from "@t3tools/contracts";
 import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
@@ -119,6 +119,32 @@ export interface AkeruDelegationRuntimeOptions {
   readonly id?: () => string;
 }
 
+/**
+ * Bot work started without a live parent turn. `Retry` repeats a Failed or
+ * Canceled record; `Scheduled` is a routine run handing work from the owner
+ * chat to another bot.
+ */
+export type AkeruDelegationDispatch =
+  | { readonly _tag: "Retry"; readonly delegationId: DelegationId }
+  | {
+      readonly _tag: "Scheduled";
+      readonly parentThreadId: ThreadId;
+      readonly parentBotId: BotId;
+      readonly childBotId: BotId;
+      readonly task: string;
+      readonly expectedResult: string;
+      readonly runtimeMode: AkeruDelegationAccessGrant["runtimeMode"];
+    };
+
+/** How a record was started, when not by a bot tool call inside a live turn. */
+interface AkeruDelegationOrigin {
+  readonly trigger: AkeruDelegationRecord["trigger"];
+  readonly retryOfDelegationId: DelegationId | null;
+  readonly anchorMessageId: MessageId | null;
+}
+
+const isDispatchedDelegation = (delegation: AkeruDelegationRecord) =>
+  delegation.trigger !== "bot" || delegation.retryOfDelegationId !== null;
 /** Why a group chat did not receive a finished delegation's result message. */
 export type AkeruGroupResultSkipReason = "bot_left_group" | "group_unavailable";
 
@@ -505,6 +531,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   const send = async (
     parent: AkeruDelegationParent,
     request: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
+    origin?: AkeruDelegationOrigin,
   ) => {
     const snapshot = await options.readSnapshot();
     const parentThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
@@ -601,10 +628,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       deadline: request.deadline ?? null,
       access: grant,
       billedBotId: bot.id,
-      keep: false,
-      anchorMessageId: parentTurnRequestMessageId(parentThread, parent.turnId),
-      retryOfDelegationId: null,
-      trigger: "bot",
+      keep: request.keep ?? false,
+      anchorMessageId: origin
+        ? origin.anchorMessageId
+        : parentTurnRequestMessageId(parentThread, parent.turnId),
+      retryOfDelegationId: origin?.retryOfDelegationId ?? null,
+      trigger: origin?.trigger ?? "bot",
       createdAt,
       updatedAt: createdAt,
       phase: { _tag: "Queued" },
@@ -794,6 +823,95 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     return handle;
   };
 
+  /**
+   * Starts bot work that no live parent turn owns. The record reuses the parent
+   * chain the original (or the routine's owner chat) implies, so the decider's
+   * depth, cycle, and cap rules apply unchanged. `parentFinished` leaves these
+   * records alone; they settle on the child's outcome or a cancel.
+   */
+  const dispatchDelegation = async (input: AkeruDelegationDispatch) => {
+    const snapshot = await options.readSnapshot();
+    if (input._tag === "Retry") {
+      const original = snapshot.delegations.find(
+        (delegation) => delegation.delegationId === input.delegationId,
+      );
+      if (!original) throw new Error("The bot work to retry no longer exists.");
+      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+        throw new Error("Only failed or canceled bot work can be retried.");
+      }
+      const deadline =
+        original.deadline !== null && Date.parse(original.deadline) > Date.parse(now())
+          ? original.deadline
+          : undefined;
+      return send(
+        {
+          threadId: original.parentThreadId,
+          turnId: original.parentTurnId,
+          botId: original.parentBotId,
+          parentDelegationId: original.parentDelegationId,
+          ancestorBotIds: original.ancestorBotIds.slice(0, -1),
+          depth: original.depth - 1,
+          access: original.access,
+        },
+        {
+          botId: original.childBotId,
+          task: original.task,
+          expectedResult: original.expectedResult,
+          ...(deadline ? { deadline } : {}),
+          allowedToolIds: original.access.allowedToolIds,
+          memoryScopes: original.access.memoryScopes,
+          mcpServerIds: original.access.enabledMcpServerIds,
+          sandbox: original.access.sandbox,
+          runtimeMode: original.access.runtimeMode,
+          approvalCeiling: original.access.approvalCeiling,
+          keep: original.keep,
+        },
+        {
+          trigger: original.trigger,
+          retryOfDelegationId: original.delegationId,
+          anchorMessageId: original.anchorMessageId,
+        },
+      );
+    }
+
+    const parentThread = snapshot.threads.find((thread) => thread.id === input.parentThreadId);
+    const owner = snapshot.bots.find((bot) => bot.id === input.parentBotId);
+    if (!parentThread || !owner || owner.archivedAt !== null) {
+      throw new Error("The routine's chat or bot is not available.");
+    }
+    // The owner's default grant, the same one an ordinary turn in this chat gets.
+    const access: AkeruDelegationAccessGrant = {
+      allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
+      memoryScopes: ["private", "bot", "project", "group", "workspace"],
+      sandbox: owner.sandbox,
+      runtimeMode: input.runtimeMode,
+      hasUserComputer: owner.sandbox === "local",
+      enabledMcpServerIds: (snapshot.mcpServers ?? [])
+        .filter((server) => server.enabled && !owner.disabledMcpServerIds.includes(server.id))
+        .map((server) => server.id),
+      disabledMcpServerIds: owner.disabledMcpServerIds,
+      approvalCeiling: "secrets",
+    };
+    return send(
+      {
+        threadId: parentThread.id,
+        turnId: parentThread.latestTurn?.turnId ?? TurnId.make(`scheduled-${id()}`),
+        botId: owner.id,
+        parentDelegationId: null,
+        ancestorBotIds: [],
+        depth: 0,
+        access,
+      },
+      { botId: input.childBotId, task: input.task, expectedResult: input.expectedResult },
+      {
+        trigger: "scheduled",
+        retryOfDelegationId: null,
+        // The card sits where the chat was when the routine fired.
+        anchorMessageId: parentThread.messages.at(-1)?.id ?? null,
+      },
+    );
+  };
+
   // Settles only the children the ended turn started. Children from earlier,
   // completed turns keep running and report to the chat when they finish.
   const parentFinished = async (input: {
@@ -807,6 +925,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       (delegation) =>
         delegation.parentThreadId === input.threadId &&
         delegation.parentTurnId === input.turnId &&
+        !isDispatchedDelegation(delegation) &&
         !TERMINAL_PHASES.has(delegation.phase._tag),
     );
     const children = activeByParent.get(input.threadId);
@@ -864,6 +983,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     create,
     check,
     send,
+    dispatchDelegation,
     stop,
     sendToUser,
     parentFinished,

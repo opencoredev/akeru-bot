@@ -1,4 +1,8 @@
-import { RoutineRunId, type OrchestrationEvent } from "@t3tools/contracts";
+import {
+  type AkeruDelegationRecord,
+  RoutineRunId,
+  type OrchestrationEvent,
+} from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -89,6 +93,15 @@ const make = Effect.gen(function* () {
     }
 
     const dispatched = yield* adapter.dispatchTurn(routine, run);
+    if ("failure" in dispatched) {
+      yield* block(routine, run, dispatched.failure);
+      return run;
+    }
+    if ("canceled" in dispatched) {
+      const completedAt = DateTime.formatIso(yield* DateTime.now);
+      yield* repository.markSettled(run.id, "failed", completedAt);
+      return { ...run, status: "canceled" as const, completedAt };
+    }
     yield* repository.markDispatched(run.id, dispatched.threadRef);
     return { ...run, status: "running" as const, ...dispatched };
   });
@@ -151,11 +164,65 @@ const make = Effect.gen(function* () {
       return yield* execute(routine, claim);
     });
 
+  // Scheduled bot work settles its run from the delegation's terminal phase.
+  const settleDelegatedRun = Effect.fn("RoutineRuntime.settleDelegatedRun")(function* (
+    delegation: AkeruDelegationRecord,
+  ) {
+    const phase = delegation.phase;
+    if (
+      delegation.trigger !== "scheduled" ||
+      (phase._tag !== "Completed" && phase._tag !== "Failed" && phase._tag !== "Canceled") ||
+      phase.childThreadId === null
+    )
+      return;
+    const run = (yield* repository.listAllRuns).find(
+      (candidate) =>
+        candidate.threadRef === phase.childThreadId &&
+        (candidate.status === "queued" ||
+          candidate.status === "running" ||
+          candidate.status === "waiting-for-approval"),
+    );
+    if (run === undefined) return;
+    const routine = yield* repository.getById(run.routineId);
+    if (routine === null || routine.lifecycle === "deleted") return;
+    const completedAt = phase.completedAt;
+    if (phase._tag === "Completed") {
+      const nextRunAt = routine.enabled
+        ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
+        : null;
+      yield* adapter.recordCompleted(run, nextRunAt, phase.result.summary, completedAt);
+      yield* repository.markSettled(run.id, "completed", completedAt);
+      return;
+    }
+    if (phase._tag === "Canceled") {
+      yield* adapter.recordCanceled(run, completedAt);
+      yield* repository.markSettled(run.id, "failed", completedAt);
+      return;
+    }
+    const failure = {
+      kind: "execution",
+      reason: phase.failure.message,
+      nextAction: "Review the bot work in the routine chat, then resume the routine.",
+    } satisfies RoutineDependencyFailure;
+    yield* adapter.recordFailed(run, failure, completedAt);
+    yield* adapter.openFailureIncident(routine, failure);
+    yield* repository.markBlocked(run.id, failure.reason, completedAt);
+  });
+
   const settleRunForEvent = Effect.fn("RoutineRuntime.settleRunForEvent")(function* (
     event: OrchestrationEvent,
   ) {
     if (event.type === "routine.deleted") {
       yield* adapter.resolveFailureIncident(event.payload.routine.id);
+      return;
+    }
+    if (event.type === "delegation.updated") {
+      yield* settleDelegatedRun(event.payload.delegation);
+      return;
+    }
+    // Canceling a run also cancels the bot work it started. Pausing does not.
+    if (event.type === "routine.run-canceled") {
+      yield* adapter.cancelDelegatedRun(event.payload.run);
       return;
     }
     if (event.type !== "thread.turn-diff-completed" && event.type !== "thread.session-set") return;

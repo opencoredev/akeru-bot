@@ -362,7 +362,7 @@ export interface AgentControllerLiveOptions {
     AkeruDelegationRuntime,
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
-    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
+    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop" | "dispatchDelegation">>;
   /** Overrides the WebFetch resolver and address policy in tests. */
   readonly webFetch?: AkeruWebFetchOptions;
   /**
@@ -4267,6 +4267,20 @@ const make = (options?: AgentControllerLiveOptions) =>
         ).pipe(
           Effect.andThen(workerRuntime.childTurnFinished(threadId, { state: "failed", error })),
         ),
+      dispatchDelegation: (input) =>
+        Effect.tryPromise({
+          try: async () => {
+            const dispatchDelegation = wired().delegationRuntime?.dispatchDelegation;
+            if (!dispatchDelegation) throw new Error("Bot work is not available yet.");
+            return dispatchDelegation(input);
+          },
+          catch: (cause) =>
+            new AgentControllerRuntimeError({
+              operation: "dispatchDelegation",
+              detail: failureDetail(cause),
+              cause,
+            }),
+        }),
       authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
         runMastra("mcp.authenticate", async (signal) => {
           const recoveryFailures: string[] = [];

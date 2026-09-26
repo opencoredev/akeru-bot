@@ -1,4 +1,4 @@
-import { RoutineId, ThreadId, type Routine, type RoutineRun } from "@t3tools/contracts";
+import { BotId, RoutineId, ThreadId, type Routine, type RoutineRun } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createTranslator } from "./i18n/index.ts";
@@ -87,6 +87,14 @@ describe("toRoutinePanelItem", () => {
     expect(item.runHistory.map((entry) => entry.id)).toEqual(["run-new", "run-old"]);
     expect(item.latestRun).toMatchObject({ id: "run-new", error: "Provider timed out" });
     expect(item.runHistory[1]?.startedAt).toBe("2026-09-19T09:00:00.000Z");
+    expect(item.delegateToBotId).toBeNull();
+  });
+
+  it("carries the bot a routine hands its work to", () => {
+    const delegateToBotId = BotId.make("bot-helper");
+    expect(toRoutinePanelItem({ ...routine, delegateToBotId }, [], [], []).delegateToBotId).toBe(
+      delegateToBotId,
+    );
   });
 });
 

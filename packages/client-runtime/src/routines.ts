@@ -23,6 +23,14 @@ export interface RoutineAdapterProject {
   readonly name: string;
 }
 
+/** A bot a routine can hand its work to. */
+export interface RoutineAdapterBot {
+  readonly id: string;
+  readonly name: string;
+  /** False when the bot's provider cannot take handed-off work. Defaults to true. */
+  readonly canTakeWork?: boolean;
+}
+
 export interface RoutineAdapterSchedule {
   readonly frequency: RoutineAdapterFrequency;
   readonly time: string;
@@ -51,6 +59,8 @@ export interface RoutineAdapterItem {
   readonly approval: RoutineAdapterApproval;
   readonly skills: readonly string[];
   readonly connectors: readonly string[];
+  /** The bot each run hands its work to, or null when the owner does it. */
+  readonly delegateToBotId: string | null;
   readonly procedureApproved: boolean;
   readonly enabled: boolean;
   readonly paused: boolean;
@@ -71,6 +81,7 @@ export interface RoutineAdapterDraft {
   readonly approval: RoutineAdapterApproval;
   readonly skills: readonly string[];
   readonly connectors: readonly string[];
+  readonly delegateToBotId: string | null;
 }
 
 const WEEKDAY_IDS = [
@@ -159,6 +170,7 @@ export function toRoutinePanelItem(
       const name = connectorNames.get(id);
       return name ? [name] : [];
     }),
+    delegateToBotId: routine.delegateToBotId,
     procedureApproved: routine.approvalVersion === routine.procedureVersion,
     enabled: routine.enabled,
     paused:

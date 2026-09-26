@@ -129,7 +129,8 @@ type ProviderIntentEvent = Extract<
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
       | "thread.session-stop-requested"
-      | "delegation.updated";
+      | "delegation.updated"
+      | "delegation.retry-requested";
   }
 >;
 
@@ -479,7 +480,8 @@ const make = Effect.gen(function* () {
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
       | "provider.session.update.failed"
-      | "provider.session.stop.failed";
+      | "provider.session.stop.failed"
+      | "delegation.retry.failed";
     readonly summary: string;
     readonly detail: string;
     readonly turnId: TurnId | null;
@@ -2276,7 +2278,9 @@ const make = Effect.gen(function* () {
                 ? null
                 : event.payload.delegation.phase.childThreadId) ?? "unassigned",
           }
-        : { "orchestration.thread_id": event.payload.threadId }),
+        : event.type === "delegation.retry-requested"
+          ? { "orchestration.thread_id": event.payload.parentThreadId }
+          : { "orchestration.thread_id": event.payload.threadId }),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
     yield* increment(orchestrationEventsProcessedTotal, {
@@ -2291,6 +2295,31 @@ const make = Effect.gen(function* () {
             ...(delegation.phase.childTurnId ? { turnId: delegation.phase.childTurnId } : {}),
           });
         }
+        return;
+      }
+      case "delegation.retry-requested": {
+        // The decider already checked phase and cap; the runtime starts a fresh
+        // record that points back at the original, which stays untouched.
+        const { delegationId, parentThreadId } = event.payload;
+        const dispatchDelegation = agentController.dispatchDelegation;
+        if (!dispatchDelegation) {
+          yield* Effect.logWarning("delegation retry requested without a delegation runtime", {
+            delegationId,
+          });
+          return;
+        }
+        yield* dispatchDelegation({ _tag: "Retry", delegationId }).pipe(
+          Effect.catchTag("AgentControllerRuntimeError", (error) =>
+            appendProviderFailureActivity({
+              threadId: parentThreadId,
+              kind: "delegation.retry.failed",
+              summary: "Bot work could not be retried",
+              detail: error.detail,
+              turnId: null,
+              createdAt: event.occurredAt,
+            }),
+          ),
+        );
         return;
       }
       case "thread.meta-updated":
@@ -2376,7 +2405,9 @@ const make = Effect.gen(function* () {
         event.payload.delegation.phase.childThreadId === null
         ? Effect.succeed(false)
         : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId)
-      : reconcileRestrictiveSessionCleanup(event.payload.threadId)
+      : event.type === "delegation.retry-requested"
+        ? Effect.succeed(false)
+        : reconcileRestrictiveSessionCleanup(event.payload.threadId)
     ).pipe(
       Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
       Effect.catchCause((cause) => {
@@ -2753,7 +2784,8 @@ const make = Effect.gen(function* () {
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
         event.type === "thread.session-stop-requested" ||
-        event.type === "delegation.updated"
+        event.type === "delegation.updated" ||
+        event.type === "delegation.retry-requested"
       ) {
         return yield* worker.enqueue(event);
       }

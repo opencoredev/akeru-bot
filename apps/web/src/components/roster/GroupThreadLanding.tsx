@@ -236,6 +236,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     key={item.key}
                     variant="group"
                     delegation={item.delegation}
+                    delegations={delegations}
                     childBot={activeBotById(item.delegation.childBotId)}
                     parentBot={activeBotById(item.delegation.parentBotId)}
                   />

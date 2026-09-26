@@ -36,6 +36,30 @@ export function botEngineTakesDelegatedWork(
 }
 
 /**
+ * Helpers a routine owned by `ownerId` can hand its work to: every other active
+ * bot, marked when its provider cannot take handed-off work so the picker can
+ * show it disabled with the reason.
+ */
+export function routineDelegateOptions(
+  ownerId: string,
+  bots: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly archivedAt: string | null;
+    readonly engine: BotEngine | null;
+  }>,
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+): ReadonlyArray<{ readonly id: string; readonly name: string; readonly canTakeWork: boolean }> {
+  return bots
+    .filter((candidate) => candidate.id !== ownerId && candidate.archivedAt === null)
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      canTakeWork: botEngineTakesDelegatedWork(candidate.engine, instanceEntries),
+    }));
+}
+
+/**
  * The engine a bot answers with. A saved engine is returned as saved, even when
  * its provider is signed out, turned off, or no longer lists the model: the
  * bot keeps its choice and `botEngineUnavailability` explains why it cannot

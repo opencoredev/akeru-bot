@@ -10,6 +10,7 @@ import {
   botEngineTakesDelegatedWork,
   botEngineUnavailability,
   resolveStickyBotEngine,
+  routineDelegateOptions,
 } from "./botEngineSelection";
 
 const settings = DEFAULT_UNIFIED_SETTINGS;
@@ -296,5 +297,42 @@ describe("botEngineTakesDelegatedWork", () => {
     expect(
       botEngineTakesDelegatedWork({ provider: "missing", model: "model" }, instanceEntries),
     ).toBe(true);
+  });
+});
+
+describe("routineDelegateOptions", () => {
+  const instanceEntries = deriveProviderInstanceEntries([
+    makeComposerTestProvider(),
+    {
+      ...makeComposerTestProvider(),
+      instanceId: ProviderInstanceId.make("opencode"),
+      driver: ProviderDriverKind.make("opencode"),
+    },
+  ]);
+  const bot = (id: string, provider: string | null, archivedAt: string | null = null) => ({
+    id,
+    name: id,
+    archivedAt,
+    engine: provider === null ? null : { provider, model: "model" },
+  });
+
+  it("leaves out the routine's own bot and archived bots, and marks bots that cannot take work", () => {
+    expect(
+      routineDelegateOptions(
+        "owner",
+        [
+          bot("owner", "codex"),
+          bot("scout", "codex"),
+          bot("builder", "opencode"),
+          bot("retired", "codex", "2026-09-01T00:00:00.000Z"),
+          bot("fresh", null),
+        ],
+        instanceEntries,
+      ),
+    ).toEqual([
+      { id: "scout", name: "scout", canTakeWork: true },
+      { id: "builder", name: "builder", canTakeWork: false },
+      { id: "fresh", name: "fresh", canTakeWork: true },
+    ]);
   });
 });

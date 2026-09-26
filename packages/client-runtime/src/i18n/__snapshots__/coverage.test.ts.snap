@@ -357,6 +357,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/threads/ThreadChannels.tsx",
     "apps/mobile/src/features/threads/ThreadComposer.tsx",
     "apps/mobile/src/features/threads/ThreadDelegationCard.tsx",
+    "apps/mobile/src/features/threads/ThreadDelegationFeedCard.tsx",
     "apps/mobile/src/features/threads/ThreadDetailScreen.tsx",
     "apps/mobile/src/features/threads/ThreadFeed.tsx",
     "apps/mobile/src/features/threads/ThreadGitControls.tsx",

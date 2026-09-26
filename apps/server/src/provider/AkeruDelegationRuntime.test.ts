@@ -12,6 +12,9 @@ import {
   ThreadId,
   TurnId,
   AkeruDelegationRecord,
+  AkeruToolInputSchemas,
+  type AkeruDelegationAccessGrant,
+  type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
@@ -274,6 +277,166 @@ describe("AkeruDelegationRuntime", () => {
     );
     await otherTurn.runtime.send(parent(), request() as never);
     expect(otherTurn.state.delegations.at(-1)?.anchorMessageId).toBeNull();
+  });
+
+  it("keeps work a bot sent with keep running after its turn ends", async () => {
+    const test = harness();
+    const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: test.dispatch,
+      awaitChild: () => child.promise,
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: (() => {
+        let next = 100;
+        return () => String(++next);
+      })(),
+    });
+    const input = Schema.decodeUnknownSync(AkeruToolInputSchemas.SendToAgent)(
+      request({ keep: true }),
+    );
+    const handle = await runtime.send(parent(), input);
+    expect(test.state.delegations.at(-1)).toMatchObject({ keep: true });
+
+    await runtime.parentFinished({
+      threadId: PARENT_THREAD_ID,
+      turnId: PARENT_TURN_ID,
+      failed: false,
+    });
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Running");
+
+    child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done later." });
+    await runtime.drain();
+    expect(test.state.delegations.at(-1)).toMatchObject({
+      delegationId: handle.delegationId,
+      phase: { _tag: "Completed", result: { summary: "Done later." } },
+    });
+  });
+
+  it("retries failed work as a new record and never changes the original", async () => {
+    const original = delegation(DelegationId.make("delegation-original"), {
+      anchorMessageId: MessageId.make("message-user"),
+      access: access({ memoryScopes: ["project"], allowedToolIds: ["Read"] }),
+      phase: {
+        _tag: "Failed",
+        childThreadId: ThreadId.make("child-old"),
+        childTurnId: CHILD_TURN_ID,
+        startedAt: NOW,
+        completedAt: NOW,
+        failure: { failureCode: "child_failed", message: "The child failed." },
+        acknowledgedAt: null,
+      },
+    });
+    const test = harness(snapshot({ delegations: [original] }));
+
+    const handle = await test.runtime.dispatchDelegation({
+      _tag: "Retry",
+      delegationId: original.delegationId,
+    });
+    await test.runtime.drain();
+
+    expect(test.state.delegations[0]).toEqual(original);
+    expect(
+      test.commands.filter(
+        (command) =>
+          (command.type === "delegation.state.set" || command.type === "delegation.create") &&
+          command.delegation.delegationId === original.delegationId,
+      ),
+    ).toEqual([]);
+    const retried = test.state.delegations.find(
+      (entry) => entry.delegationId === handle.delegationId,
+    );
+    expect(retried).toMatchObject({
+      retryOfDelegationId: original.delegationId,
+      anchorMessageId: "message-user",
+      trigger: "bot",
+      parentBotId: PARENT_BOT_ID,
+      childBotId: CHILD_BOT_ID,
+      parentTurnId: PARENT_TURN_ID,
+      ancestorBotIds: [PARENT_BOT_ID],
+      depth: 1,
+      task: original.task,
+      access: original.access,
+      phase: { _tag: "Completed" },
+    });
+
+    await expect(
+      test.runtime.dispatchDelegation({ _tag: "Retry", delegationId: handle.delegationId }),
+    ).rejects.toThrow("Only failed or canceled bot work can be retried.");
+  });
+
+  it("starts scheduled work from the owner chat that its turn end leaves running", async () => {
+    const test = harness(
+      snapshot({
+        threads: [
+          thread(PARENT_THREAD_ID, PARENT_BOT_ID, {
+            latestTurn: {
+              turnId: PARENT_TURN_ID,
+              state: "running",
+              requestedAt: NOW,
+              startedAt: NOW,
+              completedAt: null,
+              assistantMessageId: null,
+              requestMessageId: MessageId.make("message-user"),
+            },
+            messages: [
+              {
+                id: MessageId.make("message-last"),
+                role: "assistant",
+                text: "Earlier reply.",
+                turnId: PARENT_TURN_ID,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: test.dispatch,
+      awaitChild: () => child.promise,
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: (() => {
+        let next = 200;
+        return () => String(++next);
+      })(),
+    });
+
+    await runtime.dispatchDelegation({
+      _tag: "Scheduled",
+      parentThreadId: PARENT_THREAD_ID,
+      parentBotId: PARENT_BOT_ID,
+      childBotId: CHILD_BOT_ID,
+      task: "Summarize the inbox.",
+      expectedResult: "Three bullet points.",
+      runtimeMode: "approval-required",
+    });
+    expect(test.state.delegations.at(-1)).toMatchObject({
+      trigger: "scheduled",
+      retryOfDelegationId: null,
+      anchorMessageId: "message-last",
+      parentBotId: PARENT_BOT_ID,
+      parentDelegationId: null,
+      depth: 1,
+      access: { memoryScopes: [], runtimeMode: "approval-required" },
+    });
+
+    await runtime.parentFinished({
+      threadId: PARENT_THREAD_ID,
+      turnId: PARENT_TURN_ID,
+      failed: true,
+    });
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Running");
+
+    child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Inbox summary." });
+    await runtime.drain();
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Completed");
   });
 
   it("keeps lowercase activity kinds and states for delivered phases", async () => {

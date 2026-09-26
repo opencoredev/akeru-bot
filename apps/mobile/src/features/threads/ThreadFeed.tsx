@@ -71,7 +71,7 @@ import {
 import { labelSentMessageMentions, useSentMessageMentions } from "./sentMessageMentions";
 
 import { AppText as Text } from "../../components/AppText";
-import { ThreadDelegationCard } from "./ThreadDelegationCard";
+import { ThreadDelegationFeedCard } from "./ThreadDelegationFeedCard";
 import type { OrchestrationBot } from "@t3tools/contracts";
 import { CopyTextButton } from "../../components/CopyTextButton";
 import { ReplyPlaybackControls } from "../replyPlayback/ReplyPlaybackControls";
@@ -1116,8 +1116,10 @@ function renderFeedEntry(
   if (entry.type === "delegation") {
     const botsById = props.botsById;
     return (
-      <ThreadDelegationCard
+      <ThreadDelegationFeedCard
+        environmentId={props.environmentId}
         delegation={entry.delegation}
+        actions={entry.actions}
         childBot={botsById?.get(entry.delegation.childBotId) ?? null}
         parentBot={botsById?.get(entry.delegation.parentBotId) ?? null}
       />

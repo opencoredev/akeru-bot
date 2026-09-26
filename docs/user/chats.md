@@ -87,6 +87,22 @@ is not posted in the group.
 Work that has a deadline stops at the deadline. Work without one stops after 4 hours if the other
 bot has not reported back. Either way the card shows it as failed because it timed out.
 
+On web, desktop, and mobile, a card's buttons change with the state of the work:
+
+- **Let it finish** keeps running work going even if you stop the reply that started it. A bot can
+  also mark its own work this way. Once work is kept, the button goes away.
+- **Cancel** stops queued, running, or blocked work.
+- **Try again** appears on failed or canceled work. It starts new work for the same bot with the
+  same task and gets its own card; the original card keeps its result. Each card can be retried
+  once: after you try again, the original card drops the button, and further retries start from
+  the newer card. A retry is refused while three pieces of work from the chat are still running.
+
+A retry sends the task and expected result again, but not the extra background your bot added when
+it first handed off the work. If that background matters, ask your bot to send the work again
+instead.
+
+If an action fails, a message explains why and the card stays as it was.
+
 ## Tables, checklists, and other rich replies
 
 Bot replies render richer Markdown directly in the chat. There is no separate dashboard.

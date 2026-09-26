@@ -1,14 +1,18 @@
 /**
- * One work card inside the mobile chat feed: the other bot, its task, and the
- * delegation's state — the same row the web timeline renders, read-only here.
+ * One work card inside the mobile chat feed: the other bot, its task, the
+ * delegation's state, and the same reverse-state actions the web card offers.
  *
  * @module features/threads/ThreadDelegationCard
  */
 import type { AkeruDelegationRecord, OrchestrationBot } from "@t3tools/contracts";
 import { akeruDelegationStateOf, type AkeruDelegationState } from "@t3tools/contracts";
-import { presentDelegation } from "@t3tools/client-runtime/delegation-presentation";
+import {
+  presentDelegation,
+  type DelegationAction,
+} from "@t3tools/client-runtime/delegation-presentation";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
-import { View } from "react-native";
+import { useState } from "react";
+import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
@@ -54,12 +58,37 @@ function delegationElapsed(delegation: AkeruDelegationRecord): string | null {
   return formatDuration(endedAt - startedAt);
 }
 
+type Translate = ReturnType<typeof useMobileI18n>["t"];
+
+function actionCopy(action: DelegationAction, t: Translate, name: string) {
+  switch (action) {
+    case "keep":
+      return {
+        label: t("Let it finish"),
+        accessibilityLabel: t("Let {name} finish the work", { name }),
+      };
+    case "cancel":
+      return { label: t("Cancel"), accessibilityLabel: t("Cancel delegation to {name}", { name }) };
+    case "retry":
+      return { label: t("Try again"), accessibilityLabel: t("Ask {name} to try again", { name }) };
+  }
+}
+
+/**
+ * `actions` comes from the shared `delegationActions`, judged against the whole
+ * chat. `onAction` runs one; every button stays disabled until it settles.
+ */
 export function ThreadDelegationCard(props: {
   readonly delegation: AkeruDelegationRecord;
   readonly childBot: OrchestrationBot | null;
   readonly parentBot: OrchestrationBot | null;
+  readonly actions?: ReadonlyArray<DelegationAction>;
+  readonly onAction?: (action: DelegationAction) => Promise<void>;
 }) {
   const { t } = useMobileI18n();
+  const [pending, setPending] = useState<DelegationAction | null>(null);
+  const onAction = props.onAction;
+  const actions = onAction ? (props.actions ?? []) : [];
   const { delegation } = props;
   const presentation = presentDelegation(delegation);
   const state = akeruDelegationStateOf(delegation.phase);
@@ -117,6 +146,29 @@ export function ThreadDelegationCard(props: {
             ? t("Result waiting for the next reply")
             : t("Result delivered to {name}", { name: parentName })}
         </Text>
+      ) : null}
+      {onAction && actions.length > 0 ? (
+        <View className="flex-row gap-1">
+          {actions.map((action) => {
+            const copy = actionCopy(action, t, childName);
+            return (
+              <Pressable
+                key={action}
+                accessibilityRole="button"
+                accessibilityLabel={copy.accessibilityLabel}
+                accessibilityState={{ disabled: pending !== null, busy: pending === action }}
+                className="min-h-11 justify-center rounded-lg px-2 active:bg-subtle disabled:opacity-40"
+                disabled={pending !== null}
+                onPress={() => {
+                  setPending(action);
+                  void onAction(action).finally(() => setPending(null));
+                }}
+              >
+                <Text className="font-t3-medium text-xs text-foreground-muted">{copy.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       ) : null}
     </View>
   );

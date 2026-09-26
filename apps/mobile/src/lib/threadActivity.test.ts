@@ -1169,6 +1169,28 @@ describe("delegation cards in the feed", () => {
     ]);
   });
 
+  it("offers try again only on a card no later card retries", () => {
+    const canceledPhase = {
+      _tag: "Canceled" as const,
+      childThreadId: null,
+      childTurnId: null,
+      startedAt: null,
+      completedAt: at(4),
+      canceledBy: "user" as const,
+    };
+    const original = { ...feedDelegation("d-1", 2, "turn-1", "user-1"), phase: canceledPhase };
+    const retry = {
+      ...feedDelegation("d-2", 11, "turn-2", "user-2"),
+      retryOfDelegationId: original.delegationId,
+      phase: canceledPhase,
+    };
+    const feed = buildThreadFeed(feedThread(messages), { delegations: [original, retry] });
+    const actions = Object.fromEntries(
+      feed.flatMap((entry) => (entry.type === "delegation" ? [[entry.id, entry.actions]] : [])),
+    );
+    expect(actions).toEqual({ "delegation:d-1": [], "delegation:d-2": ["retry"] });
+  });
+
   it("lands the card under its anchor before the turn has a reply", () => {
     const feed = buildThreadFeed(feedThread(messages.slice(0, 3)), {
       delegations: [feedDelegation("d-2", 11, "turn-2", "user-2")],

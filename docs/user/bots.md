@@ -119,6 +119,15 @@ The older notes remain readable without opening the Routines panel.
 The chat loads recent routine notes first. Select **Load older routine notes** above the conversation
 to bring earlier runs into view.
 
+A routine can hand its work to another bot. In the routine form, pick that bot under **Done by**.
+Bots whose provider cannot take handed-off work appear in the list but can't be picked.
+Each run then sends the instructions to the other bot, and a work card in the routine's chat shows
+the work as it runs. The run finishes, fails, or is canceled along with that work, and canceling the
+run cancels the work. Pausing the routine stops future runs but lets work that already started
+finish. The routine detail on web and desktop and the routine card on mobile show **Done by** with
+the other bot's name. If that bot is archived or cannot take work from other bots, the run is
+blocked and says why.
+
 On mobile, open a bot's chat, open chat settings, and select **Routines**. Each routine shows its
 schedule, status, next and last run, and recent runs. You can approve its procedure, test it, run it,
 pause, resume, or turn it back on, and delete it. Creating and editing routines needs the desktop or

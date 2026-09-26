@@ -46,6 +46,7 @@ const routine: RoutineAdapterItem = {
   approval: "approval-required",
   skills: ["research"],
   connectors: ["Gmail"],
+  delegateToBotId: null,
   procedureApproved: true,
   enabled: true,
   paused: false,
@@ -56,11 +57,12 @@ const routine: RoutineAdapterItem = {
   runHistory: [run],
 };
 
-const detail = (item: RoutineAdapterItem) =>
+const detail = (item: RoutineAdapterItem, doneBy: string | null = null) =>
   renderToStaticMarkup(
     <RoutineDetail
       routine={item}
       projectName="Akeru"
+      doneBy={doneBy}
       busy={false}
       onBack={() => undefined}
       onEdit={() => undefined}
@@ -133,6 +135,7 @@ describe("RoutinePanel", () => {
         approval: "approval-required",
         skills: [],
         connectors: [],
+        delegateToBotId: null,
       }),
     ).toEqual({ kind: "weekly", weekdays: ["friday"], time: "14:00" });
   });
@@ -311,6 +314,13 @@ describe("RoutinePanel", () => {
     expect(markup).toContain(">Pause</button>");
     expect(markup).toContain(">Edit</button>");
     expect(markup).toContain(">Delete</button>");
+    expect(markup).not.toContain("Done by");
+  });
+
+  it("names the bot a routine hands its work to", () => {
+    const markup = detail({ ...routine, delegateToBotId: "bot-helper" }, "Scout");
+    expect(markup).toContain("<dt>Done by</dt>");
+    expect(markup).toContain(">Scout</dd>");
   });
 
   it("offers only the reverse state a routine is actually in", () => {

@@ -77,6 +77,8 @@ function ActionButton(props: {
 
 function RoutineCard(props: {
   readonly routine: RoutineAdapterItem;
+  /** The bot that does each run's work, when it is not the owner. */
+  readonly doneBy: string | null;
   readonly busy: boolean;
   readonly canOperate: boolean;
   readonly error: string | null;
@@ -121,6 +123,11 @@ function RoutineCard(props: {
         <Text className="text-xs text-foreground-muted">
           {t("Last run")}: {routineDateLabel(routine.lastRunAt, i18n)}
         </Text>
+        {props.doneBy !== null ? (
+          <Text className="text-xs text-foreground-muted">
+            {t("Done by")}: {props.doneBy}
+          </Text>
+        ) : null}
       </View>
       {history.length > 0 ? (
         <View className="gap-2">
@@ -261,6 +268,12 @@ export function ThreadRoutinesScreen() {
           return (
             <RoutineCard
               key={routine.id}
+              doneBy={
+                routine.delegateToBotId === null
+                  ? null
+                  : (snapshot?.bots.find((bot) => bot.id === routine.delegateToBotId)?.name ??
+                    t("Unknown bot"))
+              }
               busy={busyRoutineId === routine.id}
               canOperate={canOperate}
               error={failure?.routineId === routine.id ? failure.message : null}
