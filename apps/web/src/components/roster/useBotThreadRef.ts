@@ -19,7 +19,8 @@ export function useBotThreadCandidate(
   const environmentId = usePrimaryEnvironmentId();
   const latestThreadId = useLatestBotThreadId(environmentId, botId);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
-  const remembered = latestThreadId === null && rememberedPath ? parseChatPath(rememberedPath) : null;
+  const remembered =
+    latestThreadId === null && rememberedPath ? parseChatPath(rememberedPath) : null;
   const rememberedUsable =
     remembered !== null &&
     (options?.rememberedInPrimaryOnly !== true || remembered.environmentId === environmentId);
