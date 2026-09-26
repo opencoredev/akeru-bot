@@ -940,6 +940,13 @@ export const zhCNCatalog: TranslationCatalog = {
   "Choose a reaction": "选择回应",
   "Choose an active group boss in the group sidebar.": "请在群组侧边栏中选择一个活跃的群组负责人。",
   "Close image preview": "关闭图片预览",
+  "Open image": "打开图片",
+  "Save image": "保存图片",
+  "Copy image": "复制图片",
+  "Image copied": "已复制图片",
+  "Could not save the image": "无法保存图片",
+  "Could not copy the image": "无法复制图片",
+  "Could not reveal the image": "无法显示图片位置",
   "Collapse (Esc)": "收起 (Esc)",
   "Collapse {name} browser": "收起 {name} 的浏览器",
   "Connect a provider in Settings > Providers so this group can reply.":

@@ -89,6 +89,8 @@ export interface AkeruToolSession {
     toolCallId: string,
   ) => Promise<unknown>;
   readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
+  /** Image providers enabled in Settings; gates the GenerateImage tool. */
+  readonly imageGeneration?: { readonly chatgptEnabled: boolean; readonly grokEnabled: boolean };
 }
 
 export interface AkeruToolRuntimeOptions {
@@ -388,6 +390,10 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     if (session.botId && session.botState) tools.add("UpdateBotProfile");
     if (session.reactToMessage) tools.add("ReactToMessage");
     for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
+      if (toolId === "GenerateImage") {
+        const image = session.imageGeneration;
+        if (image && !image.chatgptEnabled && !image.grokEnabled) continue;
+      }
       tools.add(toolId);
     }
     if (session.delegation) {

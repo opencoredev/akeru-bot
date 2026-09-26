@@ -90,6 +90,9 @@ describe("image provider detail labels", () => {
 
   it("names supported operations", () => {
     expect(imageProviderOperationsLabel(status("healthy"))).toBe("Supports image generation");
+    expect(
+      imageProviderOperationsLabel(status("healthy", { operations: ["generate", "edit"] })),
+    ).toBe("Supports image generation and editing");
     expect(imageProviderOperationsLabel(status("unsupported", { operations: [] }))).toBe(
       "No supported operations reported",
     );

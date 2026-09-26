@@ -87,9 +87,10 @@ export function imageProviderAccessLabel(
 }
 
 export function imageProviderOperationsLabel(status: ImageProviderStatus): string {
-  return status.operations.includes("generate")
-    ? "Supports image generation"
-    : "No supported operations reported";
+  if (!status.operations.includes("generate")) return "No supported operations reported";
+  return status.operations.includes("edit")
+    ? "Supports image generation and editing"
+    : "Supports image generation";
 }
 
 /** Only meaningful for a loaded row; a missing row is loading or unavailable, not empty. */

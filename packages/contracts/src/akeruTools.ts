@@ -15,6 +15,7 @@ import {
 import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
 import { McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
+import { ImageGenerationRequest } from "./imageGeneration.ts";
 import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
@@ -63,13 +64,7 @@ const WebSearchInput = Schema.Struct({
   query: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
   domains: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
-const WebFetchInput = Schema.Struct({
-  url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)),
-});
-const GenerateImageInput = Schema.Struct({
-  prompt: TrimmedNonEmptyString.check(Schema.isMaxLength(4_000)),
-  provider: Schema.optional(Schema.Literals(["chatgpt", "grok"])),
-});
+const WebFetchInput = Schema.Struct({ url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)) });
 const AddMcpServerInput = Schema.Union([
   Schema.Struct({
     serverId: McpServerId,
@@ -139,7 +134,6 @@ export const AkeruToolId = Schema.Literals([
   "WebSearch",
   "WebFetch",
   "GenerateImage",
-  "generate_image",
   "AddMcpServer",
   "UninstallMcpServer",
   "RemoveMcpAccount",
@@ -244,8 +238,7 @@ export const AkeruToolInputSchemas = {
   }),
   WebSearch: WebSearchInput,
   WebFetch: WebFetchInput,
-  GenerateImage: GenerateImageInput,
-  generate_image: GenerateImageInput,
+  GenerateImage: ImageGenerationRequest,
   AddMcpServer: AddMcpServerInput,
   UninstallMcpServer: Schema.Struct({ serverId: McpServerId }),
   RemoveMcpAccount: Schema.Struct({ serverId: McpServerId }),
@@ -452,19 +445,21 @@ export const AKERU_TOOL_CATALOG = [
   }),
   define("WebSearch", "bot-workspace", "Search the public web."),
   define("WebFetch", "bot-workspace", "Fetch and extract a public URL."),
-  define("GenerateImage", "bot-workspace", "Generate an image with the configured provider.", {
-    approval: "production",
-  }),
-  define("generate_image", "bot-workspace", "Generate an image with Codex Imagegen.", {
-    approval: "production",
-  }),
+  define(
+    "GenerateImage",
+    "bot-workspace",
+    "Generate a new image, or edit images from this chat, with the image provider the user configured. " +
+      'Use operation "generate" with a prompt, or operation "edit" with a prompt and optional inputImages ' +
+      "(attachment ids from this chat; defaults to the images on the latest user message). " +
+      "Finished images appear in the chat automatically; do not repeat or describe the file data. " +
+      'If the result status is "needs-consent", ask the user before retrying with allowProvider.',
+    { approval: "production" },
+  ),
   define("AddMcpServer", "bot-workspace", "Add an MCP server account.", { approval: "secrets" }),
   define("UninstallMcpServer", "bot-workspace", "Remove an MCP server.", { approval: "delete" }),
   define("RemoveMcpAccount", "bot-workspace", "Remove an MCP account.", { approval: "delete" }),
   define("RenameMcpAccount", "bot-workspace", "Rename an MCP account.", { approval: "secrets" }),
-  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", {
-    approval: "secrets",
-  }),
+  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", { approval: "secrets" }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {

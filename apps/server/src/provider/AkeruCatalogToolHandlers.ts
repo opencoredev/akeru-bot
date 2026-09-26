@@ -131,23 +131,14 @@ export interface AkeruPluginRuntimeOptions {
 }
 
 export interface AkeruCatalogBackendOptions {
-  readonly webSearch?: (input: {
-    readonly query: string;
-    readonly domains?: readonly string[];
-  }) => Promise<unknown>;
+  readonly webSearch?: (input: { readonly query: string; readonly domains?: readonly string[] }) => Promise<unknown>;
   readonly webFetch?: (input: { readonly url: string }) => Promise<unknown>;
-  readonly generateImage?: (input: {
-    readonly prompt: string;
-    readonly provider?: "chatgpt" | "grok";
-  }) => Promise<unknown>;
+  readonly generateImage?: (input: unknown) => Promise<unknown>;
   readonly addMcpServer?: (input: unknown) => Promise<unknown>;
   readonly uninstallMcpServer?: (serverId: string) => Promise<unknown>;
   readonly removeMcpAccount?: (serverId: string) => Promise<unknown>;
   readonly renameMcpAccount?: (input: unknown) => Promise<unknown>;
-  readonly setMcpInstructions?: (input: {
-    readonly serverId: string;
-    readonly instructions: string;
-  }) => Promise<unknown>;
+  readonly setMcpInstructions?: (input: { readonly serverId: string; readonly instructions: string }) => Promise<unknown>;
 }
 
 function pluginServerId(pluginId: string) {
@@ -547,9 +538,7 @@ export function createAkeruCatalogToolHandlers(
 ): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
   const statuses = () => mcpManager?.getServerStatuses() ?? [];
   return {
-    ...(backends.webSearch
-      ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) }
-      : {}),
+    ...(backends.webSearch ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) } : {}),
     ...(backends.webFetch
       ? {
           WebFetch: async ({ input }) => {
@@ -559,29 +548,16 @@ export function createAkeruCatalogToolHandlers(
         }
       : {}),
     ...(backends.generateImage
-      ? {
-          GenerateImage: async ({ input }) => backends.generateImage!(input as never),
-          generate_image: async ({ input }) => backends.generateImage!(input as never),
-        }
+      ? { GenerateImage: async ({ input }) => backends.generateImage!(input) }
       : {}),
-    ...(backends.addMcpServer
-      ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) }
-      : {}),
+    ...(backends.addMcpServer ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) } : {}),
     ...(backends.uninstallMcpServer
-      ? {
-          UninstallMcpServer: async ({ input }) =>
-            backends.uninstallMcpServer!(requiredString(input, "serverId")),
-        }
+      ? { UninstallMcpServer: async ({ input }) => backends.uninstallMcpServer!(requiredString(input, "serverId")) }
       : {}),
     ...(backends.removeMcpAccount
-      ? {
-          RemoveMcpAccount: async ({ input }) =>
-            backends.removeMcpAccount!(requiredString(input, "serverId")),
-        }
+      ? { RemoveMcpAccount: async ({ input }) => backends.removeMcpAccount!(requiredString(input, "serverId")) }
       : {}),
-    ...(backends.renameMcpAccount
-      ? { RenameMcpAccount: async ({ input }) => backends.renameMcpAccount!(input) }
-      : {}),
+    ...(backends.renameMcpAccount ? { RenameMcpAccount: async ({ input }) => backends.renameMcpAccount!(input) } : {}),
     ...(backends.setMcpInstructions
       ? { SetMcpInstructions: async ({ input }) => backends.setMcpInstructions!(input as never) }
       : {}),

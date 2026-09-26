@@ -1,19 +1,79 @@
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  FolderOpenIcon,
+  XIcon,
+} from "lucide-react";
 import { useI18n } from "../../i18n";
+import { serverEnvironment } from "../../state/server";
+import { shellEnvironment } from "../../state/shell";
+import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  revealInFileExplorerLabelForKind,
+  revealInFileExplorerLabelForOs,
+} from "../preview/fileExplorerLabel";
 import { Button } from "../ui/button";
-import type { ExpandedImagePreview } from "./ExpandedImagePreview";
+import { toastManager } from "../ui/toast";
+import { copyExpandedImage, saveExpandedImage } from "./expandedImageActions";
+import type { ExpandedImageItem, ExpandedImagePreview } from "./ExpandedImagePreview";
 
 interface ExpandedImageDialogProps {
   preview: ExpandedImagePreview;
   onClose: () => void;
+  /** Set for sent chat attachments so they can be revealed on the environment. */
+  environmentId?: EnvironmentId;
+}
+
+/** Returns a reveal action when the environment can show a stored attachment in its file manager. */
+function useRevealAttachment(environmentId: EnvironmentId | undefined) {
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId ?? null));
+  const revealAttachment = useAtomCommand(shellEnvironment.revealAttachment, {
+    reportFailure: false,
+  });
+  if (
+    environmentId === undefined ||
+    serverConfig?.shellRevealInFileManager !== true ||
+    !serverConfig.availableEditors.includes("file-manager")
+  ) {
+    return null;
+  }
+  const label =
+    serverConfig.shellRevealInFileManagerKind === undefined
+      ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
+      : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind);
+  return {
+    label,
+    reveal: async (attachmentId: string) => {
+      const result = await revealAttachment({ environmentId, input: { attachmentId } });
+      if (result._tag === "Failure") throw new Error("The environment could not show the image.");
+    },
+  };
 }
 
 export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   preview,
   onClose,
+  environmentId,
 }: ExpandedImageDialogProps) {
   const { t } = useI18n();
+  const reveal = useRevealAttachment(environmentId);
+  const runAction = useCallback((title: string, action: () => Promise<void>) => {
+    action().catch((error: unknown) =>
+      toastManager.add({
+        type: "error",
+        title,
+        ...(error instanceof Error ? { description: error.message } : {}),
+      }),
+    );
+  }, []);
+  const openImage = (item: ExpandedImageItem) =>
+    window.open(item.src, "_blank", "noopener,noreferrer");
   const [imageOffset, setImageOffset] = useState(0);
   const index = (preview.index + imageOffset + preview.images.length) % preview.images.length;
 
@@ -74,16 +134,67 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         </Button>
       )}
       <div className="relative isolate z-10 max-h-[92vh] max-w-[92vw]">
-        <Button
-          type="button"
-          size="icon-xs"
-          variant="ghost"
-          className="absolute right-2 top-2"
-          onClick={onClose}
-          aria-label={t("Close image preview")}
-        >
-          <XIcon />
-        </Button>
+        <div className="absolute right-2 top-2 flex gap-1 rounded-md bg-background/80 p-0.5 shadow-sm">
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => openImage(item)}
+            aria-label={t("Open image")}
+            title={t("Open image")}
+          >
+            <ExternalLinkIcon />
+          </Button>
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => runAction(t("Could not save the image"), () => saveExpandedImage(item))}
+            aria-label={t("Save image")}
+            title={t("Save image")}
+          >
+            <DownloadIcon />
+          </Button>
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={() =>
+              runAction(t("Could not copy the image"), async () => {
+                await copyExpandedImage(item);
+                toastManager.add({ type: "success", title: t("Image copied") });
+              })
+            }
+            aria-label={t("Copy image")}
+            title={t("Copy image")}
+          >
+            <CopyIcon />
+          </Button>
+          {reveal ? (
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              onClick={() =>
+                runAction(t("Could not reveal the image"), () => reveal.reveal(item.id))
+              }
+              aria-label={reveal.label}
+              title={reveal.label}
+            >
+              <FolderOpenIcon />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={onClose}
+            aria-label={t("Close image preview")}
+            title={t("Close image preview")}
+          >
+            <XIcon />
+          </Button>
+        </div>
         <img
           src={item.src}
           alt={item.name}

@@ -79,6 +79,23 @@ export const AttachmentDeleteInput = Schema.Struct({
 });
 export type AttachmentDeleteInput = typeof AttachmentDeleteInput.Type;
 
+/** Reveals a stored chat attachment in the environment's file manager. */
+export const AttachmentRevealInput = Schema.Struct({
+  attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+});
+export type AttachmentRevealInput = typeof AttachmentRevealInput.Type;
+
+export class AttachmentNotFoundError extends Schema.TaggedErrorClass<AttachmentNotFoundError>()(
+  "AttachmentNotFoundError",
+  {
+    attachmentId: TrimmedNonEmptyString,
+  },
+) {
+  override get message(): string {
+    return "The attachment is no longer stored on this environment.";
+  }
+}
+
 export class AttachmentUploadSigningKeyError extends Schema.TaggedErrorClass<AttachmentUploadSigningKeyError>()(
   "AttachmentUploadSigningKeyError",
   {

@@ -61,6 +61,8 @@ import { type EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import type { McpCapability } from "../../mcp/McpInvocationContext.ts";
+import { cancelActiveImageGenerations } from "../../image-generation/ImageGenerationRuntime.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
@@ -244,6 +246,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * accepts nothing but tokens issued from this path.
    */
   /**
+   * Capabilities for the session's `/mcp` credential: browser preview when
+   * agent browser access is on, and `generate_image` when an image provider is
+   * enabled.
+   *
    * Deny on an unreadable settings file rather than letting the read failure
    * escape: adding `ServerSettingsError` to `ProviderServiceError` would widen
    * a union every caller handles, for a branch that only decides whether one
@@ -251,19 +257,27 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * "off" silently becoming "on" would violate the user's stated choice,
    * whereas the reverse costs an agent one toolset and is visible immediately.
    */
-  const agentBrowserAccessEnabled = serverSettings.getSettings.pipe(
-    Effect.map((settings) => settings.enableAgentBrowserAccess),
+  const mcpCapabilities = serverSettings.getSettings.pipe(
+    Effect.map((settings) => {
+      const capabilities = new Set<McpCapability>();
+      if (settings.enableAgentBrowserAccess) capabilities.add("preview");
+      if (settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled) {
+        capabilities.add("image");
+      }
+      return capabilities;
+    }),
     Effect.catch((cause) =>
       Effect.logWarning(
-        "Could not read server settings; withholding agent browser access for this session.",
+        "Could not read server settings; withholding agent browser access and image generation for this session.",
         { cause },
-      ).pipe(Effect.as(false)),
+      ).pipe(Effect.as(new Set<McpCapability>())),
     ),
   );
 
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
-      if (!(yield* agentBrowserAccessEnabled)) {
+      const capabilities = yield* mcpCapabilities;
+      if (capabilities.size === 0) {
         // Revoke as well as clear. Every other prepare path reaches
         // `issueActiveMcpCredential`, which revokes the thread first, so
         // skipping it here would leave a previously issued bearer token valid
@@ -274,7 +288,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId));
         return undefined;
       }
-      const credential = yield* issueMcpCredential({ threadId, providerInstanceId });
+      const credential = yield* issueMcpCredential({ threadId, providerInstanceId, capabilities });
       if (credential) {
         yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
       }
@@ -805,6 +819,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         schema: ProviderInterruptTurnInput,
         payload: rawInput,
       });
+      // Stop runs before the image request finishes; an interrupted request
+      // posts nothing and aborts its provider call.
+      yield* cancelActiveImageGenerations(input.threadId);
       let metricProvider = "unknown";
       return yield* Effect.gen(function* () {
         const routed = yield* resolveRoutableSession({

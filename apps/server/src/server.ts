@@ -112,6 +112,7 @@ import * as NetService from "@t3tools/shared/Net";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
 import { ServerActivation } from "./serverActivation.ts";
 import { RoutineLayerLive } from "./routines/layer.ts";
+import * as ImageGenerationRuntime from "./image-generation/ImageGenerationRuntime.ts";
 import { RoutineDraftDispatcherLive } from "./routines/RoutineDraftDispatcher.ts";
 import { MemoryApprovalsLive } from "./memory/MemoryApprovals.ts";
 
@@ -439,9 +440,10 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   ),
 );
 
-const RuntimeCoreWithRoutinesLive = Layer.merge(
+const RuntimeCoreWithRoutinesLive = Layer.mergeAll(
   RuntimeCoreDependenciesLive,
   RoutineLayerLive.pipe(Layer.provide(RuntimeCoreDependenciesLive)),
+  ImageGenerationRuntime.layer.pipe(Layer.provide(RuntimeCoreDependenciesLive)),
 );
 
 const RuntimeDependenciesLive = RuntimeCoreWithRoutinesLive.pipe(

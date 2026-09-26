@@ -139,7 +139,10 @@ import {
   createAkeruWebFetch,
   type AkeruWebFetchOptions,
 } from "../AkeruWebFetch.ts";
-import { generateImageWithProviders } from "../../image-generation/service.ts";
+import {
+  cancelActiveImageGenerations,
+  runImageGenerationTool,
+} from "../../image-generation/ImageGenerationRuntime.ts";
 import {
   formatMcpServerInstructions,
   getMcpRuntimeHeaders,
@@ -343,8 +346,11 @@ export interface AgentControllerLiveOptions {
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
   /** Overrides the WebFetch resolver and address policy in tests. */
   readonly webFetch?: AkeruWebFetchOptions;
-  /** Overrides the HTTP client for image generation requests in tests. */
-  readonly imageFetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * Overrides the image generation entry for tests. Defaults to
+   * `runImageGenerationTool`, which calls the active ImageGenerationRuntime.
+   */
+  readonly generateImage?: (threadId: ThreadId, input: unknown) => Effect.Effect<unknown>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -2751,6 +2757,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.delegation;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
+        delete toolSession.imageGeneration;
         const settings = yield* memorySettings();
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
@@ -2932,6 +2939,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           : undefined;
       const registeredMemoryHandlers = nextMemoryHandlers;
       const mcpManager = sessionResources.getMcpManager(key);
+      // An unreadable settings file hides the image tool rather than offering a
+      // call that can only fail (ProviderService denies the MCP capability the
+      // same way). Without the service, tests keep the tool visible.
+      const imageGenerationSettings = Option.isSome(serverSettings)
+        ? ((yield* serverSettings.value.getSettings.pipe(Effect.orElseSucceed(() => undefined)))
+            ?.imageGeneration ?? { chatgptEnabled: false, grokEnabled: false })
+        : { chatgptEnabled: true, grokEnabled: true };
       const mcpDependencies =
         input.botId && input.botName
           ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
@@ -2945,6 +2959,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+        ...(imageGenerationSettings ? { imageGeneration: imageGenerationSettings } : {}),
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,
           pluginRuntime,
@@ -2987,39 +3002,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           {
             webSearch: akeruWebSearchUnavailable,
             webFetch,
-            ...(Option.isSome(serverSettings)
-              ? {
-                  generateImage: async (request: {
-                    readonly prompt: string;
-                    readonly provider?: "chatgpt" | "grok";
-                  }) => {
-                    const settings = await runPromise(serverSettings.value.getSettings);
-                    const image = await generateImageWithProviders({
-                      prompt: request.prompt,
-                      settings: settings.imageGeneration,
-                      subscriptionAuth,
-                      requested: request.provider,
-                      botProvider: bot?.imageProvider ?? null,
-                      ...(options?.imageFetch ? { fetchFn: options.imageFetch } : {}),
-                    });
-                    const directory = NodePath.join(config.attachmentsDir, "generated-images");
-                    NodeFS.mkdirSync(directory, { recursive: true });
-                    const extension = image.mimeType.slice("image/".length);
-                    const path = NodePath.join(
-                      directory,
-                      `${NodeCrypto.randomUUID()}.${extension}`,
-                    );
-                    NodeFS.writeFileSync(path, image.bytes);
-                    return {
-                      provider: image.provider,
-                      model: image.model,
-                      mimeType: image.mimeType,
-                      path,
-                      ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
-                    };
-                  },
-                }
-              : {}),
+            // The router bounds each provider attempt and interruptTurn cancels
+            // in-flight requests, so there is no outer deadline here.
+            generateImage: async (request: unknown) => {
+              const generate = options?.generateImage ?? runImageGenerationTool;
+              return runPromise(generate(threadId, request));
+            },
             ...(pluginRuntimeOptions
               ? {
                   addMcpServer: async (input: unknown) => {
@@ -3521,6 +3509,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
+      yield* cancelActiveImageGenerations(input.threadId);
       yield* releaseMastraReservations(input.threadId);
       finishTurn(input.threadId, active, "interrupted");
     });

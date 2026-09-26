@@ -8,15 +8,17 @@
  * under `image:<provider>` keys so an image failure cannot masquerade as a
  * chat-driver failure or vice versa.
  *
- * The connection test performs one cheap request against the provider's account
- * API. It does not prove image access; a connected credential remains
- * `detected` until an image is generated.
+ * The connection test performs one cheap account request. It verifies the
+ * credential path but cannot prove image access. Only a completed generation
+ * moves a provider to `healthy`; a connected credential reports `detected`
+ * until then. ChatGPT is probed through the ChatGPT backend with
+ * the Codex sign-in, never the OpenAI API, because an API key does not
+ * qualify for ChatGPT images.
  *
- * `generateImageWithProviders` is the generation producer behind the
- * GenerateImage catalog tool. ChatGPT generation calls the OpenAI Images API,
- * which takes only an API key, so a ChatGPT sign-in fails with that message. It records request health on the same
- * `image:<provider>` keys. `lastGenerationAt` is not persisted yet, so it
- * stays absent.
+ * Generation itself is owned by `ImageGenerationRuntime`, the single producer
+ * behind every image tool surface (the MCP `generate_image` tool and the
+ * Mastra `GenerateImage` catalog tool). This module keeps provider status
+ * rows, settings normalization, and the health test.
  */
 import {
   type ImageGenerationSettings,
@@ -29,7 +31,12 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
-import { readBoundedText } from "./boundedResponse.ts";
+import {
+  CHATGPT_IMAGE_CAPABILITIES,
+  GROK_IMAGE_CAPABILITIES,
+  type ImageProviderCapabilities,
+  operationsFor,
+} from "./adapters.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
@@ -42,8 +49,7 @@ const IMAGE_PROVIDER_META: Readonly<
       label: string;
       subscription: SubscriptionProviderId;
       probeUrl: string;
-      generationsUrl: string;
-      generationModel: string;
+      capabilities: ImageProviderCapabilities;
     }
   >
 > = {
@@ -51,21 +57,18 @@ const IMAGE_PROVIDER_META: Readonly<
     label: "ChatGPT",
     subscription: "openai-codex",
     probeUrl: "https://chatgpt.com/backend-api/wham/usage",
-    generationsUrl: "https://api.openai.com/v1/images/generations",
-    generationModel: "gpt-image-1",
+    capabilities: CHATGPT_IMAGE_CAPABILITIES,
   },
   grok: {
     label: "Grok",
     subscription: "xai",
     probeUrl: "https://api.x.ai/v1/models",
-    generationsUrl: "https://api.x.ai/v1/images/generations",
-    generationModel: "grok-imagine-image-2.0",
+    capabilities: GROK_IMAGE_CAPABILITIES,
   },
 };
 
 const IMAGE_PROVIDER_IDS: ReadonlyArray<ImageProviderId> = ["chatgpt", "grok"];
 const HEALTH_TEST_TIMEOUT_MS = 15_000;
-const GENERATION_TIMEOUT_MS = 120_000;
 
 function oauthFailureKind(cause: unknown): "request" | "revoked" {
   const message = cause instanceof Error ? cause.message : String(cause);
@@ -98,14 +101,14 @@ function rowHealth(input: {
 
 /**
  * Build the two provider rows from subscription status, request health, and
- * the imageGeneration settings block. `lastGenerationAt` stays undefined: the
- * generation tool ships in milestone 7 and nothing records it yet.
+ * the imageGeneration settings block.
  */
 export function imageProviderStatuses(input: {
   readonly settings: ImageGenerationSettings;
   readonly subscriptionStatuses: ReadonlyArray<SubscriptionProviderStatus>;
   readonly chatgptAccountConnected: boolean;
   readonly requestHealth: (provider: ImageProviderId) => ImageRequestHealth;
+  readonly lastGenerationAt?: (provider: ImageProviderId) => string | undefined;
 }): ImageProviderStatus[] {
   return IMAGE_PROVIDER_IDS.map((provider) => {
     const meta = IMAGE_PROVIDER_META[provider];
@@ -115,6 +118,7 @@ export function imageProviderStatuses(input: {
     const enabled =
       provider === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
     const requestHealth = input.requestHealth(provider);
+    const lastGenerationAt = input.lastGenerationAt?.(provider);
     const health = rowHealth({
       connected,
       enabled,
@@ -138,7 +142,8 @@ export function imageProviderStatuses(input: {
       connected,
       enabled,
       health,
-      operations: ["generate"],
+      operations: operationsFor(meta.capabilities),
+      ...(lastGenerationAt ? { lastGenerationAt } : {}),
       ...(probeFailure && healthTest?.status === "failed"
         ? { lastFailure: { at: probeFailure.at, message: probeFailure.message } }
         : requestHealth?.lastFailedRequest
@@ -223,8 +228,10 @@ export function imageGenerationSettingsPatch(
 }
 
 /**
- * One account request per provider. The result verifies the credential path,
- * not image generation. Only a completed image can mark generation healthy.
+ * One real request per provider. ChatGPT needs the `openai-codex` sign-in and
+ * its account id; Grok uses the `xai` token, which may be OAuth or API key.
+ * A non-OK response or network error records a failure and never reports
+ * healthy.
  */
 export async function runImageProviderHealthTest(input: {
   readonly provider: ImageProviderId;
@@ -252,6 +259,7 @@ export async function runImageProviderHealthTest(input: {
     );
     return;
   }
+
   if (!token) {
     // getAccessToken swallows a rejected refresh and returns undefined after
     // recording the provider-level OAuth failure. Mirror the honest state onto
@@ -322,175 +330,6 @@ export async function runImageProviderHealthTest(input: {
         : `The ${meta.label} image health check failed.`,
     );
   }
-}
-
-export interface GeneratedImage {
-  readonly provider: ImageProviderId;
-  readonly model: string;
-  readonly mimeType: "image/png" | "image/jpeg" | "image/webp";
-  readonly bytes: Uint8Array;
-  readonly revisedPrompt?: string;
-}
-
-/**
- * Provider order for one generation. An explicit provider is the only
- * candidate. Otherwise the bot's provider, the global default, and the
- * fallback order are tried in that order. Disabled providers never run.
- */
-export function imageProviderCandidates(input: {
-  readonly settings: ImageGenerationSettings;
-  readonly requested?: ImageProviderId | undefined;
-  readonly botProvider?: ImageProviderId | null | undefined;
-}): ImageProviderId[] {
-  const enabled = (id: ImageProviderId) =>
-    id === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
-  if (input.requested) {
-    if (!enabled(input.requested)) {
-      throw new Error(
-        `${IMAGE_PROVIDER_META[input.requested].label} image generation is turned off in Settings.`,
-      );
-    }
-    return [input.requested];
-  }
-  const ordered = [
-    input.botProvider,
-    input.settings.defaultProvider,
-    ...input.settings.fallbackOrder,
-  ].filter((id): id is ImageProviderId => id != null && enabled(id));
-  const candidates = [...new Set(ordered)];
-  if (candidates.length === 0) {
-    throw new Error("No image provider is turned on. Turn one on in Settings, Image generation.");
-  }
-  return candidates;
-}
-
-function imageMimeType(bytes: Uint8Array): GeneratedImage["mimeType"] | undefined {
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    return "image/png";
-  }
-  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
-  const header = new TextDecoder().decode(bytes.subarray(0, 12));
-  if (header.startsWith("RIFF") && header.endsWith("WEBP")) return "image/webp";
-  return undefined;
-}
-
-const CHATGPT_API_KEY_REQUIRED =
-  "ChatGPT image generation needs an OpenAI API key; a ChatGPT sign-in cannot call the OpenAI Images API.";
-
-/** A generation failure whose health classification is already known. */
-class ImageRequestError extends Error {
-  readonly failureKind: "request" | "revoked";
-
-  constructor(message: string, failureKind: "request" | "revoked") {
-    super(message);
-    this.failureKind = failureKind;
-  }
-}
-
-async function generateWithProvider(input: {
-  readonly provider: ImageProviderId;
-  readonly prompt: string;
-  readonly subscriptionAuth: SubscriptionAuthService;
-  readonly fetchFn: (input: string | URL, init?: RequestInit) => Promise<Response>;
-}): Promise<GeneratedImage> {
-  const meta = IMAGE_PROVIDER_META[input.provider];
-  // The OpenAI Images API only accepts a Platform API key. A ChatGPT sign-in
-  // token is a subscription credential for the ChatGPT backend, so it is never
-  // sent there.
-  const token =
-    input.provider === "chatgpt"
-      ? input.subscriptionAuth.getApiKeyCredential(meta.subscription)?.access
-      : await input.subscriptionAuth.getAccessToken(meta.subscription);
-  if (!token) {
-    throw new ImageRequestError(
-      input.provider === "chatgpt"
-        ? CHATGPT_API_KEY_REQUIRED
-        : `No ${meta.label} subscription is connected.`,
-      "request",
-    );
-  }
-  const response = await input.fetchFn(meta.generationsUrl, {
-    method: "POST",
-    redirect: "error",
-    signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "akeru-bot/0.0.37",
-    },
-    body: JSON.stringify({
-      model: meta.generationModel,
-      prompt: input.prompt,
-      n: 1,
-      ...(input.provider === "grok" ? { response_format: "b64_json" } : {}),
-    }),
-  });
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    const rejectedCredential = response.status === 401 || response.status === 403;
-    // A rejected OpenAI API key says nothing about the ChatGPT subscription,
-    // so it never marks the subscription revoked.
-    throw new ImageRequestError(
-      `${meta.label} image generation was rejected (${response.status}).${
-        rejectedCredential && input.provider === "chatgpt" ? ` ${CHATGPT_API_KEY_REQUIRED}` : ""
-      }`,
-      rejectedCredential && input.provider === "grok" ? "revoked" : "request",
-    );
-  }
-  const body = JSON.parse(await readBoundedText(response, meta.label)) as {
-    readonly data?: ReadonlyArray<{ readonly b64_json?: string; readonly revised_prompt?: string }>;
-  };
-  const image = body.data?.[0];
-  if (!image?.b64_json) throw new Error(`${meta.label} returned no image data.`);
-  const bytes = Uint8Array.from(Buffer.from(image.b64_json, "base64"));
-  const mimeType = imageMimeType(bytes);
-  if (!mimeType) throw new Error(`${meta.label} returned an unrecognized image format.`);
-  return {
-    provider: input.provider,
-    model: meta.generationModel,
-    mimeType,
-    bytes,
-    ...(image.revised_prompt ? { revisedPrompt: image.revised_prompt } : {}),
-  };
-}
-
-/**
- * Generate one image with the first candidate provider that succeeds. Every
- * attempt records image request health, so a failed generation shows up on
- * the provider row the same way a failed health test does.
- */
-export async function generateImageWithProviders(input: {
-  readonly prompt: string;
-  readonly settings: ImageGenerationSettings;
-  readonly subscriptionAuth: SubscriptionAuthService;
-  readonly requested?: ImageProviderId | undefined;
-  readonly botProvider?: ImageProviderId | null | undefined;
-  readonly fetchFn?: (input: string | URL, init?: RequestInit) => Promise<Response>;
-}): Promise<GeneratedImage> {
-  const candidates = imageProviderCandidates(input);
-  const failures: string[] = [];
-  for (const provider of candidates) {
-    try {
-      const image = await generateWithProvider({
-        provider,
-        prompt: input.prompt,
-        subscriptionAuth: input.subscriptionAuth,
-        fetchFn: input.fetchFn ?? fetch,
-      });
-      input.subscriptionAuth.recordImageRequestSuccess(provider);
-      return image;
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      input.subscriptionAuth.recordImageRequestFailure(
-        provider,
-        message,
-        undefined,
-        cause instanceof ImageRequestError ? cause.failureKind : oauthFailureKind(cause),
-      );
-      failures.push(message);
-    }
-  }
-  throw new Error(failures.join(" "));
 }
 
 const decodePatch = Schema.decodeUnknownSync(ImageGenerationSettingsPatch);

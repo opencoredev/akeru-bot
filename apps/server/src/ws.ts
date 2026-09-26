@@ -77,6 +77,7 @@ import {
   isProviderAvailable,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
+  AttachmentNotFoundError,
   RpcClientId,
   ComputerError,
   EnvironmentAuthorizationError,
@@ -169,6 +170,7 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
+import { resolveAttachmentPathById } from "./attachmentStore.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -1002,6 +1004,7 @@ const makeWsRpcLayer = (
             subscriptionStatuses: subscriptionAuth.statuses(),
             chatgptAccountConnected: subscriptionAuth.hasOpenAICodexAccount(),
             requestHealth: (provider) => subscriptionAuth.imageRequestHealth(provider),
+            lastGenerationAt: (provider) => subscriptionAuth.imageLastGenerationAt(provider),
           }),
         };
       });
@@ -3907,6 +3910,25 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.shellOpenInEditor, externalLauncher.launchEditor(input), {
             "rpc.aggregate": "workspace",
           }),
+        [WS_METHODS.shellRevealAttachment]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.shellRevealAttachment,
+            Effect.gen(function* () {
+              const path = resolveAttachmentPathById({
+                attachmentsDir: config.attachmentsDir,
+                attachmentId: input.attachmentId,
+              });
+              if (!path) {
+                return yield* new AttachmentNotFoundError({ attachmentId: input.attachmentId });
+              }
+              yield* externalLauncher.launchEditor({
+                cwd: path,
+                editor: "file-manager",
+                reveal: true,
+              });
+            }),
+            { "rpc.aggregate": "workspace" },
+          ),
         [WS_METHODS.filesystemBrowse]: (input) =>
           observeRpcEffect(
             WS_METHODS.filesystemBrowse,
