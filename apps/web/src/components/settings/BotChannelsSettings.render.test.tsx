@@ -12,7 +12,7 @@ const fixtures = vi.hoisted(() => ({
     channelBindings: Array<{
       botId: string;
       connectionId: string;
-      provider: "imessage";
+      provider: "imessage" | "whatsapp";
       projectId: string;
       status: ChannelBinding["status"];
       lastError?: string;
@@ -33,6 +33,7 @@ const fixtures = vi.hoisted(() => ({
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
   ] as Array<Record<string, unknown>>,
+  selectedProvider: "imessage" as "imessage" | "whatsapp",
   scopes: [] as string[],
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
   buttons: new Map<string, () => void>(),
@@ -55,7 +56,7 @@ vi.mock("../../hooks/useSettings", () => ({ useEnvironmentSettings: () => fixtur
 vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
 vi.mock("../../settingsDialogStore", () => ({
   useSettingsEnvironmentId: () => "environment-1",
-  useSettingsChannelProvider: () => ["imessage", vi.fn()],
+  useSettingsChannelProvider: () => [fixtures.selectedProvider, vi.fn()],
 }));
 vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: fixtures.confirm }));
 vi.mock("../../state/session", () => ({
@@ -106,6 +107,7 @@ function boundBot(
   status: ChannelBinding["status"],
   lastError?: string,
   failureCategory?: ChannelBinding["failureCategory"],
+  provider: "imessage" | "whatsapp" = "imessage",
 ) {
   return {
     id: "bot-uuid",
@@ -115,7 +117,7 @@ function boundBot(
       {
         botId: "bot-uuid",
         connectionId: "profile-1",
-        provider: "imessage" as const,
+        provider,
         projectId: "project-uuid",
         status,
         ...(lastError ? { lastError } : {}),
@@ -135,6 +137,7 @@ function trigger(html: string, label: string) {
 describe("channel project selection", () => {
   beforeEach(() => {
     fixtures.bots = [];
+    fixtures.selectedProvider = "imessage";
     fixtures.projects = [liveProject];
     fixtures.selects = [];
     fixtures.scopes = [AuthAccessWriteScope];
@@ -239,6 +242,7 @@ function button(html: string, label: string) {
 
 describe("channel health and repair", () => {
   beforeEach(() => {
+    fixtures.selectedProvider = "imessage";
     fixtures.bots = [];
     fixtures.projects = [liveProject];
     fixtures.connections = [fixtureConnection];
@@ -256,10 +260,15 @@ describe("channel health and repair", () => {
   });
 
   it("explains a not live channel and shows the webhook URL from the profile", () => {
+    fixtures.selectedProvider = "whatsapp";
     fixtures.connections = [
-      { ...fixtureConnection, webhookUrl: "https://akeru.example.com/channels/whatsapp/hook" },
+      {
+        ...fixtureConnection,
+        provider: "whatsapp",
+        webhookUrl: "https://akeru.example.com/channels/whatsapp/hook",
+      },
     ];
-    fixtures.bots = [boundBot("not-live")];
+    fixtures.bots = [boundBot("not-live", undefined, undefined, "whatsapp")];
     const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
     expect(html).toContain(">Not live<");
     expect(html).toContain("WhatsApp needs a public HTTPS address to receive messages.");
@@ -273,6 +282,32 @@ describe("channel health and repair", () => {
     const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
     expect(html).toContain(">Not live<");
     expect(html).not.toContain("Webhook URL");
+  });
+
+  it("shows the saved webhook URL for a connected WhatsApp channel", () => {
+    fixtures.selectedProvider = "whatsapp";
+    fixtures.connections = [
+      {
+        ...fixtureConnection,
+        provider: "whatsapp",
+        webhookUrl: "https://akeru.example.com/channels/whatsapp/hook",
+      },
+    ];
+    fixtures.bots = [boundBot("connected", undefined, undefined, "whatsapp")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).toContain(">Assigned to Akeru<");
+    expect(html).toContain("Webhook URL");
+    expect(html).toContain("https://akeru.example.com/channels/whatsapp/hook");
+  });
+
+  it("does not show a webhook URL for a connected non-WhatsApp channel", () => {
+    fixtures.connections = [
+      { ...fixtureConnection, webhookUrl: "https://akeru.example.com/not-whatsapp" },
+    ];
+    fixtures.bots = [boundBot("connected")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(html).not.toContain("Webhook URL");
+    expect(html).not.toContain("https://akeru.example.com/not-whatsapp");
   });
 
   it.each([
@@ -361,6 +396,7 @@ describe("channel health and repair", () => {
 
 describe("channel identity conflicts", () => {
   beforeEach(() => {
+    fixtures.selectedProvider = "imessage";
     fixtures.bots = [];
     fixtures.projects = [liveProject];
     fixtures.connections = [fixtureConnection];
@@ -388,6 +424,7 @@ describe("channel identity conflicts", () => {
 
 describe("failed channel attempts", () => {
   beforeEach(() => {
+    fixtures.selectedProvider = "imessage";
     fixtures.projects = [liveProject];
     fixtures.connections = [fixtureConnection];
     fixtures.selects = [];
