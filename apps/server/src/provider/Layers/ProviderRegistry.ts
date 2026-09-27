@@ -30,6 +30,7 @@ import {
   type ServerProviderUpdateState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
@@ -362,6 +363,13 @@ export const ProviderRegistryLive = Layer.effect(
         readonly replace?: boolean;
         /** Treat a moved `checkedAt` as a change. Set for completed probes. */
         readonly publishCheckedAt?: boolean;
+        /**
+         * Skip a snapshot whose `checkedAt` is older than the stored one. Set
+         * for probe results, which can arrive out of order through an
+         * explicit refresh and the instance's change stream. A stored
+         * `checkedAt` in the future (the clock moved back) never blocks.
+         */
+        readonly keepNewer?: boolean;
       },
     ) {
       const nextProvidersWithUpdateState = yield* Effect.forEach(
@@ -371,6 +379,7 @@ export const ProviderRegistryLive = Layer.effect(
           concurrency: "unbounded",
         },
       );
+      const nowMs = options?.keepNewer === true ? yield* Clock.currentTimeMillis : 0;
       const [previousProviders, providers, providersToPersist] = yield* Ref.modify(
         providersRef,
         (previousProviders) => {
@@ -381,12 +390,22 @@ export const ProviderRegistryLive = Layer.effect(
 
           for (const provider of nextProvidersWithUpdateState) {
             const key = snapshotInstanceKey(provider);
+            const previousProvider = mergedProviders.get(key);
+            if (options?.keepNewer === true && previousProvider !== undefined) {
+              const previousCheckedAtMs = Date.parse(previousProvider.checkedAt);
+              if (
+                previousCheckedAtMs <= nowMs &&
+                previousCheckedAtMs > Date.parse(provider.checkedAt)
+              ) {
+                continue;
+              }
+            }
             updatedKeys.add(key);
             mergedProviders.set(
               key,
               options?.replace === true
                 ? provider
-                : mergeProviderSnapshot(mergedProviders.get(key), provider),
+                : mergeProviderSnapshot(previousProvider, provider),
             );
           }
 
@@ -425,6 +444,7 @@ export const ProviderRegistryLive = Layer.effect(
       options?: {
         readonly publish?: boolean;
         readonly publishCheckedAt?: boolean;
+        readonly keepNewer?: boolean;
       },
     ) {
       return yield* upsertProviders([provider], options);
@@ -470,40 +490,20 @@ export const ProviderRegistryLive = Layer.effect(
     );
 
     // Probes of one instance may overlap (a background TTL probe and an
-    // explicit refresh). Each probe takes a start generation, and a result
-    // only lands if no newer probe of that instance has landed first, so a
-    // slow older probe cannot overwrite fresher status.
-    const probeGenerationsRef = yield* Ref.make<
-      ReadonlyMap<ProviderInstanceId, { readonly started: number; readonly applied: number }>
-    >(new Map());
-    const probeApplySemaphore = yield* Semaphore.make(1);
+    // explicit refresh), and each result also arrives on the instance's
+    // change stream. The newest `checkedAt` wins, so a result that lands late
+    // cannot overwrite fresher status.
+    const applyProbeResult = (provider: ServerProvider) =>
+      // A completed probe publishes even when only `checkedAt` moved, so
+      // clients can show when the provider was last checked.
+      syncProvider(provider, { publishCheckedAt: true, keepNewer: true });
 
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
-      const instanceId = providerSource.instanceId;
-      const generation = yield* Ref.modify(probeGenerationsRef, (previous) => {
-        const current = previous.get(instanceId) ?? { started: 0, applied: 0 };
-        const started = current.started + 1;
-        return [started, new Map(previous).set(instanceId, { ...current, started })];
-      });
       const nextProvider = yield* providerSource.refresh;
       const provider = yield* correlateSnapshotWithSource(providerSource, nextProvider);
-      return yield* probeApplySemaphore.withPermits(1)(
-        Effect.gen(function* () {
-          const applied = (yield* Ref.get(probeGenerationsRef)).get(instanceId)?.applied ?? 0;
-          if (generation < applied) {
-            return yield* Ref.get(providersRef);
-          }
-          yield* Ref.update(probeGenerationsRef, (previous) => {
-            const current = previous.get(instanceId) ?? { started: generation, applied: 0 };
-            return new Map(previous).set(instanceId, { ...current, applied: generation });
-          });
-          // A completed probe publishes even when only `checkedAt` moved, so
-          // clients can show when the provider was last checked.
-          return yield* syncProvider(provider, { publishCheckedAt: true });
-        }),
-      );
+      return yield* applyProbeResult(provider);
     });
 
     const refreshAll = Effect.fn("refreshAll")(function* () {
@@ -615,11 +615,9 @@ export const ProviderRegistryLive = Layer.effect(
         for (const [, instance] of newlyAdded) {
           const source = buildSnapshotSource(instance);
           // Change-stream items are completed probes (periodic, explicit, or
-          // enrichment), so a new `checkedAt` alone is worth publishing.
+          // enrichment), so they follow the same newest-wins rule.
           yield* Stream.runForEach(source.streamChanges, (provider) =>
-            correlateSnapshotWithSource(source, provider).pipe(
-              Effect.flatMap((synced) => syncProvider(synced, { publishCheckedAt: true })),
-            ),
+            correlateSnapshotWithSource(source, provider).pipe(Effect.flatMap(applyProbeResult)),
           ).pipe(Effect.forkScoped);
         }
         yield* Effect.yieldNow;

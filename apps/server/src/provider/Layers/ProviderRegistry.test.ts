@@ -1378,11 +1378,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         }),
       );
 
-      it.effect("keeps the newest probe when an older probe finishes last", () =>
+      it.effect("keeps the newest provider result across refreshes and the change stream", () =>
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");
           const codexInstanceId = ProviderInstanceId.make("codex");
-          const makeProvider = (checkedAt: string, version: string) =>
+          yield* TestClock.setTime(Date.parse("2026-04-29T11:00:00.000Z"));
+          const makeProvider = (checkedAt: string, version: string): ServerProvider =>
             ({
               instanceId: codexInstanceId,
               driver: codexDriver,
@@ -1412,6 +1413,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             },
           ] as const;
           const probeCount = yield* Ref.make(0);
+          const changes = yield* PubSub.unbounded<ServerProvider>();
           const instance = {
             instanceId: codexInstanceId,
             driverKind: codexDriver,
@@ -1433,7 +1435,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 yield* Deferred.await(probe.release);
                 return probe.result;
               }),
-              streamChanges: Stream.empty,
+              streamChanges: Stream.fromPubSub(changes),
             },
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
@@ -1491,7 +1493,36 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             yield* Deferred.succeed(probes[0].release, undefined);
             assert.deepStrictEqual(yield* Fiber.join(olderProbe), [newerProvider]);
             assert.deepStrictEqual(yield* registry.getProviders, [newerProvider]);
-          }).pipe(Effect.provide(runtimeServices));
+
+            // A stale result delivered late on the change stream is dropped,
+            // while a newer status change still lands. Stream items apply in
+            // order, so the first broadcast shows whether the stale one landed.
+            const signedOutProvider: ServerProvider = {
+              ...newerProvider,
+              checkedAt: "2026-04-29T10:03:00.000Z",
+              status: "warning",
+              auth: { status: "unauthenticated" },
+            };
+            const afterSignOut = yield* registry.streamChanges.pipe(
+              Stream.take(1),
+              Stream.runCollect,
+              Effect.forkScoped({ startImmediately: true }),
+            );
+            yield* PubSub.publish(changes, olderProvider);
+            yield* PubSub.publish(changes, signedOutProvider);
+            assert.deepStrictEqual(yield* Fiber.join(afterSignOut), [[signedOutProvider]]);
+
+            // If the clock moved back, a stored result from the "future" does
+            // not block new results.
+            yield* TestClock.setTime(Date.parse("2026-04-29T09:00:00.000Z"));
+            const afterClockReset = yield* registry.streamChanges.pipe(
+              Stream.take(1),
+              Stream.runCollect,
+              Effect.forkScoped({ startImmediately: true }),
+            );
+            yield* PubSub.publish(changes, olderProvider);
+            assert.deepStrictEqual(yield* Fiber.join(afterClockReset), [[olderProvider]]);
+          }).pipe(Effect.provide(runtimeServices), Effect.scoped);
         }),
       );
 
