@@ -1277,6 +1277,76 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("reuses materialized secrets until settings or secrets change", () => {
+    const secretReads = { count: 0 };
+    const countingSecretStoreLayer = Layer.effect(
+      ServerSecretStore.ServerSecretStore,
+      Effect.gen(function* () {
+        const store = yield* ServerSecretStore.ServerSecretStore;
+        return ServerSecretStore.ServerSecretStore.of({
+          ...store,
+          get: (name) => {
+            secretReads.count += 1;
+            return store.get(name);
+          },
+        });
+      }),
+    ).pipe(Layer.provide(ServerSecretStore.layer));
+    const configLayer = Layer.fresh(
+      ServerConfig.layerTest(process.cwd(), {
+        prefix: "t3code-server-settings-materialize-cache-test-",
+      }),
+    );
+    const settingsLayer = ServerSettingsModule.layer.pipe(
+      Layer.provide(countingSecretStoreLayer),
+      Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
+      Layer.provideMerge(configLayer),
+    );
+    const instanceId = ProviderInstanceId.make("codex_personal");
+    const withSecret = (value: string) => ({
+      providerInstances: {
+        [instanceId]: {
+          driver: ProviderDriverKind.make("codex"),
+          environment: [{ name: "OPENROUTER_API_KEY", value, sensitive: true }],
+          config: {},
+        },
+      },
+    });
+
+    return Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* serverSettings.updateSettings(withSecret("sk-first"));
+
+      const readsBeforeFirst = secretReads.count;
+      const first = yield* serverSettings.getSettings;
+      assert.equal(first.providerInstances[instanceId]?.environment?.[0]?.value, "sk-first");
+      const readsAfterFirst = secretReads.count;
+      const readsPerMaterialize = readsAfterFirst - readsBeforeFirst;
+      const second = yield* serverSettings.getSettings;
+      assert.equal(second.providerInstances[instanceId]?.environment?.[0]?.value, "sk-first");
+      assert.equal(secretReads.count, readsAfterFirst);
+
+      yield* serverSettings.updateSettings(withSecret("sk-second"));
+      const updated = yield* serverSettings.getSettings;
+      assert.equal(updated.providerInstances[instanceId]?.environment?.[0]?.value, "sk-second");
+      assert.isAbove(secretReads.count, readsAfterFirst);
+
+      // Concurrent misses after a change share one materialization.
+      yield* serverSettings.updateSettings(withSecret("sk-third"));
+      const readsBeforeBurst = secretReads.count;
+      const burst = yield* Effect.all(
+        Array.from({ length: 5 }, () => serverSettings.getSettings),
+        {
+          concurrency: "unbounded",
+        },
+      );
+      for (const settings of burst) {
+        assert.equal(settings.providerInstances[instanceId]?.environment?.[0]?.value, "sk-third");
+      }
+      assert.equal(secretReads.count - readsBeforeBurst, readsPerMaterialize);
+    }).pipe(Effect.provide(settingsLayer));
+  });
+
   it.effect("rejects plaintext sandbox secrets loaded from settings.json", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;

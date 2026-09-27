@@ -49,7 +49,10 @@ import { ProjectionThreadProposedPlanRepositoryLive } from "../../persistence/La
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
-import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import {
+  ProjectionSnapshotQuery,
+  type ProjectionThreadRuntimeContext,
+} from "../Services/ProjectionSnapshotQuery.ts";
 import {
   ProviderRuntimeIngestionService,
   type ProviderRuntimeIngestionShape,
@@ -1125,6 +1128,28 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
+  // Assistant text deltas only need to know the thread exists and is active,
+  // so they reuse the context read by the thread's most recent non-delta
+  // event. Every other runtime event re-reads and refreshes the entry; session
+  // exit and thread session/delete/archive domain events drop it.
+  const deltaRuntimeContextByThread = new Map<string, ProjectionThreadRuntimeContext>();
+  const resolveThreadRuntimeContextForEvent = Effect.fn("resolveThreadRuntimeContextForEvent")(
+    function* (event: ProviderRuntimeEvent) {
+      const key = String(event.threadId);
+      if (event.type === "content.delta") {
+        const cached = deltaRuntimeContextByThread.get(key);
+        if (cached) return cached;
+      }
+      const thread = yield* resolveThreadRuntimeContext(event.threadId);
+      if (thread && event.type !== "session.exited") {
+        deltaRuntimeContextByThread.set(key, thread);
+      } else {
+        deltaRuntimeContextByThread.delete(key);
+      }
+      return thread;
+    },
+  );
+
   const getThreadMessageById = Effect.fn("getThreadMessageById")(function* (
     threadId: ThreadId,
     messageId: MessageId,
@@ -1696,7 +1721,7 @@ const make = Effect.gen(function* () {
       if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") {
         return;
       }
-      const thread = yield* resolveThreadRuntimeContext(event.threadId);
+      const thread = yield* resolveThreadRuntimeContextForEvent(event);
       if (!thread) return;
       if (event.type === "request.opened" || event.type === "request.resolved") {
         yield* syncApprovalInbox(event, thread);
@@ -2472,9 +2497,13 @@ const make = Effect.gen(function* () {
       );
       yield* forkParked(
         Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
+          if (event.type === "thread.deleted" || event.type === "thread.archived") {
+            deltaRuntimeContextByThread.delete(String(event.payload.threadId));
+          }
           if (event.type !== "thread.session-set") {
             return Effect.void;
           }
+          deltaRuntimeContextByThread.delete(String(event.payload.threadId));
           return worker.enqueue({ source: "domain", event });
         }),
       );

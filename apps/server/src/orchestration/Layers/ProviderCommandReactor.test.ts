@@ -193,6 +193,9 @@ describe("ProviderCommandReactor", () => {
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
+    readonly commitDuringSequenceRead?: 1 | 2;
+    readonly titleUpdatesBeforeStartupCommit?: number;
+    readonly failStartupReplay?: boolean;
     readonly pendingRequestBeforeReactor?: "approval" | "user-input";
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnRemovesSession?: boolean;
@@ -478,12 +481,16 @@ describe("ProviderCommandReactor", () => {
       Layer.provide(SqlitePersistenceMemory),
     );
     let titleRegenerationCompletionDispatchAttempts = 0;
+    let sequenceReads = 0;
     const reactorOrchestrationLayer = Layer.effect(
       OrchestrationEngineService,
       Effect.gen(function* () {
         const engine = yield* OrchestrationEngineService;
         return {
-          readEvents: engine.readEvents,
+          readEvents:
+            input?.failStartupReplay === true
+              ? () => Stream.die(new Error("Injected startup replay failure"))
+              : engine.readEvents,
           readThreadEvents: engine.readThreadEvents,
           getThreadReplayStats: engine.getThreadReplayStats,
           dispatch: (command) => {
@@ -528,7 +535,44 @@ describe("ProviderCommandReactor", () => {
                   ),
                 )
               : engine.subscribeDomainEvents,
-          latestSequence: engine.latestSequence,
+          latestSequence:
+            input?.commitDuringSequenceRead === undefined
+              ? engine.latestSequence
+              : Effect.suspend(() => {
+                  sequenceReads += 1;
+                  if (sequenceReads !== input.commitDuringSequenceRead)
+                    return engine.latestSequence;
+                  // The first read precedes the reactor's subscription, so a commit
+                  // after it lands in the gap. The second read follows the
+                  // subscription, so a commit before it is buffered and counted.
+                  const commit = engine
+                    .dispatch({
+                      type: "thread.meta.update",
+                      commandId: CommandId.make("cmd-commit-during-sequence-read"),
+                      threadId: ThreadId.make("thread-1"),
+                      regenerateTitle: true,
+                    })
+                    .pipe(Effect.orDie);
+                  const titleUpdates = Effect.forEach(
+                    Array.from(
+                      { length: input.titleUpdatesBeforeStartupCommit ?? 0 },
+                      (_, index) => index,
+                    ),
+                    (index) =>
+                      engine
+                        .dispatch({
+                          type: "thread.meta.update",
+                          commandId: CommandId.make(`cmd-startup-title-${index}`),
+                          threadId: ThreadId.make("thread-1"),
+                          title: `Startup title ${index}`,
+                        })
+                        .pipe(Effect.orDie),
+                    { discard: true },
+                  ).pipe(Effect.andThen(commit));
+                  return sequenceReads === 1
+                    ? engine.latestSequence.pipe(Effect.tap(() => titleUpdates))
+                    : titleUpdates.pipe(Effect.andThen(engine.latestSequence));
+                }),
         } satisfies OrchestrationEngineService["Service"];
       }),
     ).pipe(Layer.provide(orchestrationLayer));
@@ -869,6 +913,41 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it.each([
+    [1, "before"],
+    [2, "after"],
+  ] as const)(
+    "handles an intent committed on startup sequence read %i, %s subscribing",
+    async (commitDuringSequenceRead, _position) => {
+      const harness = await createHarness({ commitDuringSequenceRead });
+
+      await harness.drain();
+
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.titleRegeneration).toBeNull();
+    },
+  );
+
+  it("replays a startup gap longer than one event store page", async () => {
+    const harness = await createHarness({
+      commitDuringSequenceRead: 1,
+      titleUpdatesBeforeStartupCommit: 1_000,
+    });
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.titleRegeneration).toBeNull();
+  });
+
+  it("fails startup instead of dropping a gap it cannot replay", async () => {
+    await expect(
+      createHarness({ commitDuringSequenceRead: 1, failStartupReplay: true }),
+    ).rejects.toThrow("Injected startup replay failure");
   });
 
   it("replays a persisted turn start that predates reactor startup exactly once", async () => {

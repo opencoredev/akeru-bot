@@ -2984,3 +2984,151 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
     }),
   );
 });
+
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-skip-")))(
+  "OrchestrationProjectionPipeline projector skipping",
+  (it) => {
+    it.effect("advances every projector cursor while skipping unrelated projectors", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const now = "2026-01-01T00:00:00.000Z";
+        const later = "2026-01-01T00:00:05.000Z";
+
+        const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
+          eventStore.append(event).pipe(Effect.tap(projectionPipeline.projectEvent));
+
+        yield* appendAndProject({
+          type: "project.created",
+          eventId: EventId.make("evt-skip-1"),
+          aggregateKind: "project",
+          aggregateId: ProjectId.make("project-skip"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-skip-1"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-skip-1"),
+          metadata: {},
+          payload: {
+            projectId: ProjectId.make("project-skip"),
+            title: "Skip Project",
+            workspaceRoot: "/tmp/project-skip",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* appendAndProject({
+          type: "thread.created",
+          eventId: EventId.make("evt-skip-2"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-skip"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-skip-2"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-skip-2"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.make("thread-skip"),
+            projectId: ProjectId.make("project-skip"),
+            title: "Skip Thread",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* appendAndProject({
+          type: "thread.message-sent",
+          eventId: EventId.make("evt-skip-3"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-skip"),
+          occurredAt: now,
+          commandId: CommandId.make("cmd-skip-3"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-skip-3"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.make("thread-skip"),
+            messageId: MessageId.make("message-skip"),
+            role: "assistant",
+            text: "kept",
+            turnId: null,
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        // Only the projects projector handles this event; every other projector
+        // must skip it yet still record the sequence.
+        const lastEvent = yield* appendAndProject({
+          type: "project.meta-updated",
+          eventId: EventId.make("evt-skip-4"),
+          aggregateKind: "project",
+          aggregateId: ProjectId.make("project-skip"),
+          occurredAt: later,
+          commandId: CommandId.make("cmd-skip-4"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-skip-4"),
+          metadata: {},
+          payload: {
+            projectId: ProjectId.make("project-skip"),
+            title: "Renamed Project",
+            updatedAt: later,
+          },
+        });
+
+        const readStateRows = sql<{
+          readonly projector: string;
+          readonly lastAppliedSequence: number;
+          readonly updatedAt: string;
+        }>`
+          SELECT
+            projector,
+            last_applied_sequence AS "lastAppliedSequence",
+            updated_at AS "updatedAt"
+          FROM projection_state
+          ORDER BY projector ASC
+        `;
+        const stateRows = yield* readStateRows;
+        assert.deepEqual(
+          stateRows.map((row) => row.projector),
+          Object.values(ORCHESTRATION_PROJECTOR_NAMES).toSorted(),
+        );
+        for (const row of stateRows) {
+          assert.equal(row.lastAppliedSequence, lastEvent.sequence);
+          assert.equal(row.updatedAt, later);
+        }
+
+        const readRows = Effect.all({
+          projects: sql<{ readonly title: string }>`
+            SELECT title FROM projection_projects WHERE project_id = 'project-skip'
+          `,
+          messages: sql<{ readonly text: string }>`
+            SELECT text FROM projection_thread_messages WHERE thread_id = 'thread-skip'
+          `,
+          threads: sql<{ readonly title: string }>`
+            SELECT title FROM projection_threads WHERE thread_id = 'thread-skip'
+          `,
+        });
+        const rows = yield* readRows;
+        assert.deepEqual(rows, {
+          projects: [{ title: "Renamed Project" }],
+          messages: [{ text: "kept" }],
+          threads: [{ title: "Skip Thread" }],
+        });
+
+        // A restart resumes from the shared cursor without replaying anything.
+        yield* projectionPipeline.bootstrap;
+        assert.deepEqual(yield* readStateRows, stateRows);
+        assert.deepEqual(yield* readRows, rows);
+      }),
+    );
+  },
+);
