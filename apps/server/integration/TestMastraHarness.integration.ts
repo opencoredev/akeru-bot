@@ -30,6 +30,8 @@ export interface TestMastraHarness {
   readonly getStartCount: () => number;
   readonly listActiveSessionIds: () => ReadonlyArray<ThreadId>;
   readonly getInterruptCalls: (threadId: ThreadId) => ReadonlyArray<TurnId | undefined>;
+  /** Mastra model ids the thread's sessions switched to, oldest first. */
+  readonly getModelSwitches: (threadId: ThreadId) => ReadonlyArray<string>;
   readonly getApprovalResponses: (threadId: ThreadId) => ReadonlyArray<{
     readonly threadId: ThreadId;
     readonly requestId: ApprovalRequestId;
@@ -44,6 +46,7 @@ interface SessionState {
   readonly queuedResponses: Array<TestTurnResponse>;
   readonly listeners: Set<(event: AgentControllerEvent) => void>;
   readonly interruptCalls: Array<TurnId | undefined>;
+  readonly modelSwitches: Array<string>;
   readonly approvalResponses: Array<{
     readonly threadId: ThreadId;
     readonly requestId: ApprovalRequestId;
@@ -90,6 +93,8 @@ function payloadString(raw: Record<string, unknown>, key: string): string | unde
 
 export function makeTestMastraHarness(): TestMastraHarness {
   const sessions = new Map<string, SessionState>();
+  // Outlives session restarts so a model change that restarts the session stays visible.
+  const modelSwitchesByThread = new Map<string, Array<string>>();
   const queuedResponsesForNextSession: TestTurnResponse[] = [];
   let sessionStartCount = 0;
   let toolCallCount = 0;
@@ -209,7 +214,12 @@ export function makeTestMastraHarness(): TestMastraHarness {
         },
       },
       mode: { get: () => "build", switch: async () => undefined },
-      model: { get: () => "default", switch: async () => undefined },
+      model: {
+        get: () => state.modelSwitches.at(-1) ?? "default",
+        switch: async ({ modelId }: { readonly modelId: string }) => {
+          state.modelSwitches.push(modelId);
+        },
+      },
       permissions: {
         setForCategory: async () => undefined,
         setForTool: async () => undefined,
@@ -275,6 +285,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
             queuedResponses: queuedResponsesForNextSession.splice(0),
             listeners: new Set(),
             interruptCalls: [],
+            modelSwitches: modelSwitchesByThread.get(String(threadId)) ?? [],
             approvalResponses: [],
             turnCount: 0,
             activeTurnId: undefined,
@@ -284,6 +295,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
             assistantText: "",
             resolvePendingApproval: undefined,
           };
+          modelSwitchesByThread.set(String(threadId), state.modelSwitches);
           sessionStartCount += 1;
           sessions.set(String(threadId), state);
           return makeSession(state);
@@ -305,6 +317,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
     getStartCount: () => sessionStartCount,
     listActiveSessionIds: () => Array.from(sessions.values(), (state) => state.threadId),
     getInterruptCalls: (threadId) => [...(sessions.get(String(threadId))?.interruptCalls ?? [])],
+    getModelSwitches: (threadId) => [...(modelSwitchesByThread.get(String(threadId)) ?? [])],
     getApprovalResponses: (threadId) => [
       ...(sessions.get(String(threadId))?.approvalResponses ?? []),
     ],

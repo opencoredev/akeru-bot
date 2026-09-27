@@ -42,7 +42,7 @@ import { ServerSettingsService } from "../src/serverSettings.ts";
 import { makeAgentControllerLive, usesMastraCode } from "../src/provider/Layers/AgentController.ts";
 import { AgentController } from "../src/provider/Services/AgentController.ts";
 import { EntityMemoryRepository } from "../src/memory/Services/EntityMemoryRepository.ts";
-import { makeTestMastraHarness } from "./TestMastraHarness.integration.ts";
+import { makeTestMastraHarness, type TestMastraHarness } from "./TestMastraHarness.integration.ts";
 import { EntityMemoryRepositoryLive } from "../src/memory/Layers/EntityMemoryRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../src/provider/Layers/LegacyProviderBridge.ts";
@@ -189,6 +189,8 @@ export interface OrchestrationIntegrationHarness {
   readonly workspaceDir: string;
   readonly dbPath: string;
   readonly adapterHarness: TestProviderAdapterHarness | null;
+  /** Mastra session stub for Mastra-backed providers, null otherwise. */
+  readonly mastraHarness: TestMastraHarness | null;
   readonly engine: OrchestrationEngineShape;
   readonly snapshotQuery: ProjectionSnapshotQuery["Service"];
   readonly checkpointStore: CheckpointStore.CheckpointStore["Service"];
@@ -623,6 +625,7 @@ export const makeOrchestrationIntegrationHarness = (
       workspaceDir,
       dbPath,
       adapterHarness: providerHarness,
+      mastraHarness,
       engine,
       snapshotQuery,
       checkpointStore,

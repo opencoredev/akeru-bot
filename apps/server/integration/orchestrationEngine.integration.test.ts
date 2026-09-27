@@ -1505,50 +1505,64 @@ it.live("reverts claudeAgent turns and rolls back provider conversation state", 
 for (const provider of MASTRA_PROVIDERS) {
   const label = String(provider);
 
-  if (provider === GROK_PROVIDER) {
-    it.live(`${label} custom harness covers tool turn and model switch`, () =>
-      withHarness(
-        (harness) =>
-          Effect.gen(function* () {
-            yield* seedProjectAndThread(harness);
-            yield* harness.adapterHarness!.queueTurnResponseForNextSession(
-              mastraFixture(provider, label),
-            );
-            yield* startTurn({
-              harness,
-              commandId: `cmd-${label}-turn-1`,
-              messageId: `msg-${label}-turn-1`,
-              text: "run fixture tool",
-              modelSelection: {
-                instanceId: ProviderInstanceId.make(label),
-                model: modelFor(provider, "a"),
-              },
-            });
-            yield* harness.waitForThread(THREAD_ID, (entry) => entry.session?.providerName === label);
+  it.live(`${label} custom harness covers tool turn and model switch`, () =>
+    withHarness(
+      (harness) =>
+        Effect.gen(function* () {
+          yield* seedProjectAndThread(harness);
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, label),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-turn-1`,
+            messageId: `msg-${label}-turn-1`,
+            text: "run fixture tool",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "a"),
+            },
+          });
+          const first = yield* harness.waitForThread(
+            THREAD_ID,
+            (entry) =>
+              entry.session?.providerName === label && entry.latestTurn?.state === "completed",
+          );
+          const firstTurnId = first.latestTurn!.turnId;
+          const switchesAfterFirstTurn = harness.mastraHarness!.getModelSwitches(THREAD_ID).length;
 
-            yield* harness.adapterHarness!.queueTurnResponseForNextSession(
-              mastraFixture(provider, `${label}-second`),
-            );
-            yield* startTurn({
-              harness,
-              commandId: `cmd-${label}-turn-2`,
-              messageId: `msg-${label}-turn-2`,
-              text: "switch model",
-              modelSelection: {
-                instanceId: ProviderInstanceId.make(label),
-                model: modelFor(provider, "b"),
-              },
-            });
-            const switched = yield* harness.waitForThread(
-              THREAD_ID,
-              (entry) => entry.modelSelection.model === modelFor(provider, "b"),
-            );
-            assert.equal(switched.modelSelection.model, modelFor(provider, "b"));
-          }),
-        provider,
-      ),
-    );
-  }
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, `${label}-second`),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-turn-2`,
+            messageId: `msg-${label}-turn-2`,
+            text: "switch model",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "b"),
+            },
+          });
+          yield* harness.waitForThread(
+            THREAD_ID,
+            (entry) =>
+              entry.latestTurn !== null &&
+              entry.latestTurn.turnId !== firstTurnId &&
+              entry.latestTurn.state === "completed",
+          );
+          // A turn's model reaches the Mastra session, not the persisted
+          // thread selection, which only thread.meta.update changes.
+          // Some providers use one model id for "a" and "b", so require a new
+          // switch from turn 2 rather than reading turn 1's.
+          const secondTurnSwitches = harness
+            .mastraHarness!.getModelSwitches(THREAD_ID)
+            .slice(switchesAfterFirstTurn);
+          assert.equal(secondTurnSwitches.at(-1)?.endsWith(modelFor(provider, "b")), true);
+        }),
+      provider,
+    ),
+  );
 
   it.live(`${label} custom harness denies approval and cancels pending turn`, () =>
     withHarness(
@@ -1601,11 +1615,23 @@ for (const provider of MASTRA_PROVIDERS) {
             decision: "decline",
             createdAt: nowIso(),
           });
-          const resolved = yield* harness.waitForPendingApproval(
-            approvalId,
-            (row) => row.status === "resolved" && row.decision === "decline",
+          // Resolution deletes the pending row, so the approval.resolved
+          // activity and the harness spy are the durable signal.
+          yield* harness.waitForThread(THREAD_ID, (entry) =>
+            entry.activities.some(
+              (activity) =>
+                activity.kind === "approval.resolved" &&
+                String(
+                  (activity.payload as { readonly requestId?: string } | undefined)?.requestId,
+                ) === approvalId,
+            ),
           );
-          assert.equal(resolved.decision, "decline");
+          const approvalResponses = yield* waitForSync(
+            () => harness.adapterHarness!.getApprovalResponses(THREAD_ID),
+            (responses) => responses.length === 1,
+            `${label} approval response`,
+          );
+          assert.equal(approvalResponses[0]?.decision, "decline");
 
           yield* harness.adapterHarness!.queueTurnResponse(THREAD_ID, {
             events: [
