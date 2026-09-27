@@ -50,6 +50,45 @@ const APPROVAL_REQUEST_ID = asApprovalRequestId("req-approval-1");
 type IntegrationProvider = ProviderDriverKind;
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
 const CLAUDE_AGENT_PROVIDER = ProviderDriverKind.make("claudeAgent");
+const GROK_PROVIDER = ProviderDriverKind.make("grok");
+const OPENCODE_GO_PROVIDER = ProviderDriverKind.make("opencodeGo");
+const MASTRA_PROVIDERS = [CLAUDE_AGENT_PROVIDER, GROK_PROVIDER, OPENCODE_GO_PROVIDER] as const;
+
+function modelFor(provider: IntegrationProvider, variant: "a" | "b"): string {
+  if (provider === CLAUDE_AGENT_PROVIDER)
+    return variant === "a" ? "claude-sonnet-5" : "claude-opus-4-6";
+  if (provider === GROK_PROVIDER) return "grok-build";
+  return variant === "a" ? "gpt-5.6-luna" : "gpt-5.6-sol";
+}
+
+function mastraFixture(provider: IntegrationProvider, suffix: string): TestTurnResponse {
+  const base = (eventId: string, createdAt: string) => ({
+    ...runtimeBase(eventId, createdAt, provider),
+    threadId: String(THREAD_ID),
+    turnId: FIXTURE_TURN_ID,
+  });
+  return {
+    events: [
+      { type: "turn.started", ...base(`evt-${suffix}-start`, "2026-05-01T00:00:00.000Z") },
+      {
+        type: "tool.started",
+        ...base(`evt-${suffix}-tool`, "2026-05-01T00:00:00.050Z"),
+        title: "fixture tool",
+        detail: "echo fixture",
+      },
+      {
+        type: "message.delta",
+        ...base(`evt-${suffix}-message`, "2026-05-01T00:00:00.100Z"),
+        delta: `${suffix} response\n`,
+      },
+      {
+        type: "turn.completed",
+        ...base(`evt-${suffix}-done`, "2026-05-01T00:00:00.150Z"),
+        status: "completed",
+      },
+    ],
+  };
+}
 
 function nowIso() {
   return "2026-05-01T00:00:00.000Z";
@@ -1462,3 +1501,186 @@ it.live("reverts claudeAgent turns and rolls back provider conversation state", 
     CLAUDE_AGENT_PROVIDER,
   ),
 );
+
+for (const provider of MASTRA_PROVIDERS) {
+  const label = String(provider);
+
+  it.live(`${label} custom harness covers tool turn and model switch`, () =>
+    withHarness(
+      (harness) =>
+        Effect.gen(function* () {
+          yield* seedProjectAndThread(harness);
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, label),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-turn-1`,
+            messageId: `msg-${label}-turn-1`,
+            text: "run fixture tool",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "a"),
+            },
+          });
+          yield* harness.waitForThread(THREAD_ID, (entry) => entry.session?.providerName === label);
+
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, `${label}-second`),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-turn-2`,
+            messageId: `msg-${label}-turn-2`,
+            text: "switch model",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "b"),
+            },
+          });
+          const switched = yield* harness.waitForThread(
+            THREAD_ID,
+            (entry) => entry.modelSelection.model === modelFor(provider, "b"),
+          );
+          assert.equal(switched.modelSelection.model, modelFor(provider, "b"));
+        }),
+      provider,
+    ),
+  );
+
+  it.live(`${label} custom harness denies approval and cancels pending turn`, () =>
+    withHarness(
+      (harness) =>
+        Effect.gen(function* () {
+          yield* seedProjectAndThread(harness);
+          const approvalId = `${label}-approval`;
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession({
+            events: [
+              {
+                type: "turn.started",
+                ...runtimeBase(`evt-${label}-approval-start`, "2026-05-01T00:01:00.000Z", provider),
+                threadId: String(THREAD_ID),
+                turnId: FIXTURE_TURN_ID,
+              },
+              {
+                type: "approval.requested",
+                ...runtimeBase(`evt-${label}-approval`, "2026-05-01T00:01:00.050Z", provider),
+                threadId: String(THREAD_ID),
+                turnId: FIXTURE_TURN_ID,
+                requestId: approvalId,
+                requestKind: "command",
+                detail: "Approve fixture command",
+              },
+              {
+                type: "turn.completed",
+                ...runtimeBase(`evt-${label}-approval-done`, "2026-05-01T00:01:00.100Z", provider),
+                threadId: String(THREAD_ID),
+                turnId: FIXTURE_TURN_ID,
+                status: "completed",
+              },
+            ],
+          });
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-approval`,
+            messageId: `msg-${label}-approval`,
+            text: "ask approval",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "a"),
+            },
+          });
+          yield* harness.waitForPendingApproval(approvalId, (row) => row.status === "pending");
+          yield* harness.engine.dispatch({
+            type: "thread.approval.respond",
+            commandId: CommandId.make(`cmd-${label}-deny`),
+            threadId: THREAD_ID,
+            requestId: asApprovalRequestId(approvalId),
+            decision: "decline",
+            createdAt: nowIso(),
+          });
+          const resolved = yield* harness.waitForPendingApproval(
+            approvalId,
+            (row) => row.status === "resolved" && row.decision === "decline",
+          );
+          assert.equal(resolved.decision, "decline");
+
+          yield* harness.adapterHarness!.queueTurnResponse(THREAD_ID, {
+            events: [
+              {
+                type: "turn.started",
+                ...runtimeBase(`evt-${label}-cancel`, "2026-05-01T00:02:00.000Z", provider),
+                threadId: String(THREAD_ID),
+                turnId: FIXTURE_TURN_ID,
+              },
+            ],
+          });
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-cancel`,
+            messageId: `msg-${label}-cancel`,
+            text: "cancel turn",
+          });
+          yield* harness.waitForThread(THREAD_ID, (entry) => entry.session?.providerName === label);
+          yield* harness.engine.dispatch({
+            type: "thread.turn.interrupt",
+            commandId: CommandId.make(`cmd-${label}-interrupt`),
+            threadId: THREAD_ID,
+            createdAt: nowIso(),
+          });
+          const interrupts = yield* waitForSync(
+            () => harness.adapterHarness!.getInterruptCalls(THREAD_ID),
+            (calls) => calls.length >= 1,
+            `${label} cancellation`,
+          );
+          assert.equal(interrupts.length >= 1, true);
+        }),
+      provider,
+    ),
+  );
+
+  it.live(`${label} custom harness recovers after restart`, () =>
+    withHarness(
+      (harness) =>
+        Effect.gen(function* () {
+          yield* seedProjectAndThread(harness);
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, `${label}-before`),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-restart-1`,
+            messageId: `msg-${label}-restart-1`,
+            text: "before restart",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make(label),
+              model: modelFor(provider, "a"),
+            },
+          });
+          yield* harness.waitForThread(THREAD_ID, (entry) => entry.latestTurn !== null);
+          yield* harness.adapterHarness!.adapter.stopAll();
+          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+            mastraFixture(provider, `${label}-after`),
+          );
+          yield* startTurn({
+            harness,
+            commandId: `cmd-${label}-restart-2`,
+            messageId: `msg-${label}-restart-2`,
+            text: "after restart",
+          });
+          const starts = yield* waitForSync(
+            () => harness.adapterHarness!.getStartCount(),
+            (count) => count === 2,
+            `${label} recovery start`,
+          );
+          assert.equal(starts, 2);
+          const recovered = yield* harness.waitForThread(
+            THREAD_ID,
+            (entry) => entry.session?.providerName === label && entry.latestTurn !== null,
+          );
+          assert.equal(recovered.session?.providerName, label);
+        }),
+      provider,
+    ),
+  );
+}
