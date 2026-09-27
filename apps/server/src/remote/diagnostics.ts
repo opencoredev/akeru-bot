@@ -10,6 +10,7 @@ import {
   type RemoteDiagnosticCheck,
   type RemoteDoctorReport as RemoteDoctorReportValue,
 } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { BOOT_SERVICE_LAUNCHD_LABEL, BOOT_SERVICE_UNIT_FILE } from "../cloud/bootService.ts";
 
@@ -20,17 +21,17 @@ const decodeReport = Schema.decodeUnknownSync(RemoteDoctorReport);
 const COMMAND_TIMEOUT_MS = 10_000;
 
 const commandOutput = (command: string, args: ReadonlyArray<string>) =>
-  new Promise<{ readonly ok: boolean; readonly stdout: string }>((resolve) => {
+  Effect.callback<{ readonly ok: boolean; readonly stdout: string }, never>((resume) => {
     NodeChildProcess.execFile(
       command,
       args,
       { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
-      (error, stdout) => resolve({ ok: error === null, stdout }),
+      (error, stdout) => resume(Effect.succeed({ ok: error === null, stdout })),
     );
   });
 
 const commandOk = async (command: string, args: ReadonlyArray<string>) =>
-  (await commandOutput(command, args)).ok;
+  (await Effect.runPromise(commandOutput(command, args))).ok;
 
 const isMissingFile = (cause: unknown) =>
   typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT";
@@ -145,13 +146,13 @@ export async function runRemoteDoctor(input: {
     ),
   );
   if (!container && (await commandOk("sh", ["-c", "command -v loginctl"]))) {
-    const linger = await commandOutput("loginctl", [
+    const linger = await Effect.runPromise(commandOutput("loginctl", [
       "show-user",
       process.env.USER ?? "",
       "-p",
       "Linger",
       "--value",
-    ]);
+    ]));
     const persistent = linger.ok && linger.stdout.trim() === "yes";
     checks.push(
       check(
@@ -293,14 +294,16 @@ export async function runRemoteDoctor(input: {
     typeof binding?.endpoint === "string" ? httpsOrigin(binding.endpoint) : undefined;
   if (typeof binding?.endpoint === "string") {
     const response = endpointOrigin
-      ? await commandOutput("curl", [
-          "-fsS",
-          "--proto",
-          "=https",
-          "--max-time",
-          "5",
-          `${endpointOrigin}/.well-known/t3/environment`,
-        ])
+      ? await Effect.runPromise(
+          commandOutput("curl", [
+            "-fsS",
+            "--proto",
+            "=https",
+            "--max-time",
+            "5",
+            `${endpointOrigin}/.well-known/t3/environment`,
+          ]),
+        )
       : { ok: false, stdout: "" };
     let servedId = "";
     try {
