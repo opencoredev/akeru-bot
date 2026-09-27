@@ -24,6 +24,7 @@ import {
   AuthTokenExchangeGrantType,
   BotId,
   type ChannelBinding,
+  ChannelConnectionId,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   DelegationId,
@@ -182,6 +183,7 @@ import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
+import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -554,6 +556,8 @@ const buildAppUnderTest = (options?: {
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
     serverRuntimeStartup?: Partial<ServerRuntimeStartup.ServerRuntimeStartup["Service"]>;
     channelDeliveryStore?: ChannelDeliveryStore.ChannelDeliveryStoreShape | null;
+    channelRuntime?: Partial<ChannelRuntime.ChannelRuntimeShape> &
+      Pick<ChannelRuntime.ChannelRuntimeShape, "channelBindingsForRuntime">;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
     repositoryIdentityResolver?: Partial<
       RepositoryIdentityResolver.RepositoryIdentityResolver["Service"]
@@ -1190,6 +1194,11 @@ const buildAppUnderTest = (options?: {
           : Layer.empty,
       ),
       Layer.provideMerge(ServerSecretStore.layer),
+      Layer.provideMerge(
+        options?.layers?.channelRuntime
+          ? Layer.mock(ChannelRuntime.ChannelRuntime)(options.layers.channelRuntime)
+          : Layer.empty,
+      ),
       Layer.provideMerge(
         options?.layers?.channelDeliveryStore === null
           ? Layer.empty
@@ -2412,6 +2421,47 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         lastSucceededAt: "2026-01-01T00:00:00.000Z",
       });
       assert.notProperty(slack, "failureCategory");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("sends a failed channel attach category over the WebSocket RPC", () =>
+    Effect.gen(function* () {
+      const bot = makeChannelTestBot();
+      yield* buildAppUnderTest({
+        layers: {
+          channelRuntime: {
+            channelBindingsForRuntime: (bindings) => bindings,
+            attach: () =>
+              Effect.fail(
+                new ChannelRuntime.ChannelRuntimeError({
+                  message: "The selected project is unavailable. Choose another project.",
+                  category: "project",
+                }),
+              ),
+          },
+        },
+      });
+
+      const command = {
+        type: "channel.attach" as const,
+        commandId: CommandId.make("cmd-channel-attach-missing-project"),
+        botId: bot.id,
+        connectionId: ChannelConnectionId.make("connection-1"),
+        projectId: ProjectId.make("missing-project"),
+        provider: "telegram" as const,
+      };
+      const failure = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand](command),
+          ),
+        ),
+      );
+      if (failure._tag !== "OrchestrationDispatchCommandError") {
+        throw new Error(`Expected channel dispatch error, received ${failure._tag}`);
+      }
+      assert.equal(failure.message, "The selected project is unavailable. Choose another project.");
+      assert.equal(failure.channelFailureCategory, "project");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
