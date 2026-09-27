@@ -67,6 +67,14 @@ async function runLifecycle(config: McpServerConfig) {
     expect(reconnected.connected).toBe(true);
     status = reconnected;
     expect(status.toolNames).toContain("matrix-target_echo");
+
+    // Removal is represented by rebuilding the manager without the registration.
+    await restarted.disconnect();
+    const removed = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test");
+    managers.push(removed);
+    await removed.init();
+    expect(removed.getServerStatuses()).toEqual([]);
+    expect(removed.getTools()).toEqual({});
   } finally {
     await manager.disconnect();
     while (managers.length > 0) await managers.pop()?.disconnect();
@@ -79,16 +87,15 @@ describe("plugin lifecycle matrix execution", () => {
     while (fixtures.length > 0) await fixtures.pop()?.close();
   });
 
-  it("runs the local stdio lifecycle for the Executor and Computer Use recipe shape", async () => {
+  it("runs the local stdio lifecycle for the Computer Use recipe shape", async () => {
     const catalog = loadManifestCatalog(catalogManifests());
-    for (const pluginId of ["executor", "computer-use"]) {
+    for (const pluginId of ["computer-use"]) {
       const plugin = catalog.find((entry) => entry.id === pluginId);
       if (plugin?.transport.type !== "stdio") {
         throw new TypeError(`Plugin '${pluginId}' is missing its stdio recipe.`);
       }
-      // Neither `executor` nor `akeru-codex-computer-use` is on PATH in CI; the
-      // fixture substitutes the command while keeping the manifest's
-      // `<command> mcp` recipe shape.
+      // `akeru-codex-computer-use` is not on PATH in CI; the fixture substitutes
+      // the command while keeping the manifest's `<command> mcp` recipe shape.
       await runLifecycle({
         command: process.execPath,
         args: [STDIO_FIXTURE, ...(plugin.transport.args ?? [])],
@@ -109,6 +116,18 @@ describe("plugin lifecycle matrix execution", () => {
       expect(plugin.transport.url).toMatch(/^https:\/\//);
       await runLifecycle({ url: fixture.url });
     }
+  });
+
+  it("runs Executor 2 discovery with the required bearer header", async () => {
+    const fixture = await startHttpMcpFixture({ authorization: "Bearer fixture-token" });
+    fixtures.push(fixture);
+    const executor = loadManifestCatalog(catalogManifests()).find((entry) => entry.id === "executor");
+    if (executor?.transport.type !== "url") {
+      throw new TypeError("Executor is missing its HTTP recipe.");
+    }
+    expect(executor.transport.url).toBe("https://executor.sh/mcp");
+    expect(executor.authentication).toBe("oauth");
+    await runLifecycle({ url: fixture.url, headers: { authorization: "Bearer fixture-token" } });
   });
 
   it("keeps every unverified entry non-installable with a named blocker", () => {
