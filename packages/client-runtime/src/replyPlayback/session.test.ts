@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { STORED_REPLY_SYNTHESIS_UNAVAILABLE } from "./capability.ts";
-import { createReplyPlaybackSession } from "./session.ts";
+import { replyReadoutMessageAction } from "./messageAction.ts";
+import { createReplyPlaybackSession, SPOKEN_CACHE_LIMIT } from "./session.ts";
+
+vi.mock("./messageAction.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./messageAction.ts")>();
+  return { replyReadoutMessageAction: vi.fn(actual.replyReadoutMessageAction) };
+});
 
 const message = {
   id: "reply-1",
@@ -41,6 +47,49 @@ function setup(available = false) {
 }
 
 describe("reply playback session", () => {
+  it("derives spoken text once per stored reply text", async () => {
+    const { session } = setup(true);
+    await session.preference.load();
+    vi.mocked(replyReadoutMessageAction).mockClear();
+    session.actionFor(message);
+    session.actionFor(message);
+    session.observe([message]);
+    session.observe([message]);
+    expect(replyReadoutMessageAction).toHaveBeenCalledTimes(1);
+    const edited = { ...message, text: "Edited answer", updatedAt: later.updatedAt };
+    expect(session.actionFor(edited)?.request.text).toBe("Edited answer");
+    expect(replyReadoutMessageAction).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a long chat cached across repeated passes", async () => {
+    const { session } = setup(true);
+    await session.preference.load();
+    const replies = Array.from({ length: 501 }, (_, index) => ({
+      ...message,
+      id: `reply-${index}`,
+    }));
+    for (const reply of replies) session.actionFor(reply);
+    vi.mocked(replyReadoutMessageAction).mockClear();
+    for (const reply of replies) session.actionFor(reply);
+    expect(replyReadoutMessageAction).not.toHaveBeenCalled();
+  });
+
+  it("evicts only the oldest reply past the cache limit", async () => {
+    const { session } = setup(true);
+    await session.preference.load();
+    const replies = Array.from({ length: SPOKEN_CACHE_LIMIT + 1 }, (_, index) => ({
+      ...message,
+      id: `reply-${index}`,
+    }));
+    for (const reply of replies) session.actionFor(reply);
+    vi.mocked(replyReadoutMessageAction).mockClear();
+    session.actionFor(replies[1]!);
+    session.actionFor(replies.at(-1)!);
+    expect(replyReadoutMessageAction).not.toHaveBeenCalled();
+    session.actionFor(replies[0]!);
+    expect(replyReadoutMessageAction).toHaveBeenCalledTimes(1);
+  });
+
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({

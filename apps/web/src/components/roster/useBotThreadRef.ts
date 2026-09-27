@@ -3,26 +3,41 @@ import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contract
 import { useMemo } from "react";
 
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useThreadShell, useThreadShells } from "../../state/entities";
-import { resolveBotThreadTarget } from "./botThreadRuntime.logic";
+import { useLatestBotThreadId, useThreadShell } from "../../state/entities";
+import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 
-export function useBotThreadRef(botId: string): ScopedThreadRef | null {
+/**
+ * The bot's latest durable thread in the primary environment, falling back to
+ * the chat path the roster remembered for it. Subscribes to that one bot's
+ * latest thread id, not the whole thread list.
+ */
+export function useBotThreadCandidate(
+  botId: string,
+  options?: { readonly rememberedInPrimaryOnly?: boolean },
+): ScopedThreadRef | null {
   const environmentId = usePrimaryEnvironmentId();
-  const threads = useThreadShells();
+  const latestThreadId = useLatestBotThreadId(environmentId, botId);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
-  const candidate = environmentId
-    ? resolveBotThreadTarget(botId, environmentId, threads, rememberedPath)
-    : null;
-  const ref = useMemo(
+  const remembered =
+    latestThreadId === null && rememberedPath ? parseChatPath(rememberedPath) : null;
+  const rememberedUsable =
+    remembered !== null &&
+    (options?.rememberedInPrimaryOnly !== true || remembered.environmentId === environmentId);
+  const targetEnvironmentId =
+    latestThreadId !== null ? environmentId : rememberedUsable ? remembered.environmentId : null;
+  const targetThreadId =
+    latestThreadId !== null ? latestThreadId : rememberedUsable ? remembered.threadId : null;
+  return useMemo(
     () =>
-      candidate
-        ? scopeThreadRef(
-            EnvironmentId.make(candidate.environmentId),
-            ThreadId.make(candidate.threadId),
-          )
+      targetEnvironmentId && targetThreadId
+        ? scopeThreadRef(EnvironmentId.make(targetEnvironmentId), ThreadId.make(targetThreadId))
         : null,
-    [candidate?.environmentId, candidate?.threadId],
+    [targetEnvironmentId, targetThreadId],
   );
+}
+
+export function useBotThreadRef(botId: string): ScopedThreadRef | null {
+  const ref = useBotThreadCandidate(botId, { rememberedInPrimaryOnly: true });
   return useThreadShell(ref) ? ref : null;
 }
