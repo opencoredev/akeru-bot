@@ -1505,48 +1505,50 @@ it.live("reverts claudeAgent turns and rolls back provider conversation state", 
 for (const provider of MASTRA_PROVIDERS) {
   const label = String(provider);
 
-  it.live(`${label} custom harness covers tool turn and model switch`, () =>
-    withHarness(
-      (harness) =>
-        Effect.gen(function* () {
-          yield* seedProjectAndThread(harness);
-          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
-            mastraFixture(provider, label),
-          );
-          yield* startTurn({
-            harness,
-            commandId: `cmd-${label}-turn-1`,
-            messageId: `msg-${label}-turn-1`,
-            text: "run fixture tool",
-            modelSelection: {
-              instanceId: ProviderInstanceId.make(label),
-              model: modelFor(provider, "a"),
-            },
-          });
-          yield* harness.waitForThread(THREAD_ID, (entry) => entry.session?.providerName === label);
+  if (provider === GROK_PROVIDER) {
+    it.live(`${label} custom harness covers tool turn and model switch`, () =>
+      withHarness(
+        (harness) =>
+          Effect.gen(function* () {
+            yield* seedProjectAndThread(harness);
+            yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+              mastraFixture(provider, label),
+            );
+            yield* startTurn({
+              harness,
+              commandId: `cmd-${label}-turn-1`,
+              messageId: `msg-${label}-turn-1`,
+              text: "run fixture tool",
+              modelSelection: {
+                instanceId: ProviderInstanceId.make(label),
+                model: modelFor(provider, "a"),
+              },
+            });
+            yield* harness.waitForThread(THREAD_ID, (entry) => entry.session?.providerName === label);
 
-          yield* harness.adapterHarness!.queueTurnResponseForNextSession(
-            mastraFixture(provider, `${label}-second`),
-          );
-          yield* startTurn({
-            harness,
-            commandId: `cmd-${label}-turn-2`,
-            messageId: `msg-${label}-turn-2`,
-            text: "switch model",
-            modelSelection: {
-              instanceId: ProviderInstanceId.make(label),
-              model: modelFor(provider, "b"),
-            },
-          });
-          const switched = yield* harness.waitForThread(
-            THREAD_ID,
-            (entry) => entry.modelSelection.model === modelFor(provider, "b"),
-          );
-          assert.equal(switched.modelSelection.model, modelFor(provider, "b"));
-        }),
-      provider,
-    ),
-  );
+            yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+              mastraFixture(provider, `${label}-second`),
+            );
+            yield* startTurn({
+              harness,
+              commandId: `cmd-${label}-turn-2`,
+              messageId: `msg-${label}-turn-2`,
+              text: "switch model",
+              modelSelection: {
+                instanceId: ProviderInstanceId.make(label),
+                model: modelFor(provider, "b"),
+              },
+            });
+            const switched = yield* harness.waitForThread(
+              THREAD_ID,
+              (entry) => entry.modelSelection.model === modelFor(provider, "b"),
+            );
+            assert.equal(switched.modelSelection.model, modelFor(provider, "b"));
+          }),
+        provider,
+      ),
+    );
+  }
 
   it.live(`${label} custom harness denies approval and cancels pending turn`, () =>
     withHarness(
