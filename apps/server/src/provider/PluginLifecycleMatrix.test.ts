@@ -4,10 +4,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
+import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { isInstallableManifest, loadManifestCatalog } from "../../../../plugins/manifestCatalog.ts";
 import { startHttpMcpFixture } from "./pluginLifecycleFixtures.ts";
+import { toMcpServerConfigs } from "./Layers/AgentController.ts";
+import { withMcpRuntimeHeaders } from "./McpServerConfig.ts";
 
 const STDIO_FIXTURE = new URL("./pluginLifecycleStdioFixture.mjs", import.meta.url).pathname;
 const PLUGIN_ENTRIES = new URL("../../../../plugins/entries/", import.meta.url);
@@ -36,9 +39,35 @@ function temporaryRuntimeDir() {
  * transport, so manifest drift breaks the matrix.
  */
 async function runLifecycle(config: McpServerConfig) {
+  const registration: McpServer =
+    "url" in config
+      ? withMcpRuntimeHeaders(
+          {
+            id: McpServerId.make("matrix-target"),
+            name: "matrix-target",
+            transport: "url",
+            url: config.url,
+            enabled: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          config.headers ?? {},
+        )
+      : {
+          id: McpServerId.make("matrix-target"),
+          name: "matrix-target",
+          transport: "stdio",
+          command: config.command,
+          ...(config.args ? { args: config.args } : {}),
+          enabled: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        };
+  const registeredConfig = toMcpServerConfigs([registration])["matrix-target"];
+  if (!registeredConfig) throw new Error("MCP fixture registration was not projected.");
   const managers: ReturnType<typeof createMcpManager>[] = [];
   const manager = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test", {
-    "matrix-target": config,
+    "matrix-target": registeredConfig,
   });
   try {
     // install + connect
@@ -59,7 +88,7 @@ async function runLifecycle(config: McpServerConfig) {
     // fresh manager models the per-server reconnect the bot tools expose.
     await manager.disconnect();
     const restarted = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test", {
-      "matrix-target": config,
+      "matrix-target": registeredConfig,
     });
     managers.push(restarted);
     await restarted.init();
@@ -121,7 +150,9 @@ describe("plugin lifecycle matrix execution", () => {
   it("runs Executor 2 discovery with the required bearer header", async () => {
     const fixture = await startHttpMcpFixture({ authorization: "Bearer fixture-token" });
     fixtures.push(fixture);
-    const executor = loadManifestCatalog(catalogManifests()).find((entry) => entry.id === "executor");
+    const executor = loadManifestCatalog(catalogManifests()).find(
+      (entry) => entry.id === "executor",
+    );
     if (executor?.transport.type !== "url") {
       throw new TypeError("Executor is missing its HTTP recipe.");
     }
