@@ -157,14 +157,20 @@ export function NativeStackScreenOptions(props: {
   const latestOptionFunctionsRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const optionFunctionWrappersRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const normalizedOptions = useMemo(() => normalizeScreenOptions(props.options), [props.options]);
-  const stableOptions = normalizedOptions
-    ? (stabilizeOptionFunctions(
-        normalizedOptions,
-        "options",
-        latestOptionFunctionsRef.current,
-        optionFunctionWrappersRef.current,
-      ) as NativeStackNavigationOptions)
-    : undefined;
+  // Keyed on the options identity: callers that memoize their options skip the
+  // deep copy and the signature walk below on unrelated re-renders.
+  const stableOptions = useMemo(
+    () =>
+      normalizedOptions
+        ? (stabilizeOptionFunctions(
+            normalizedOptions,
+            "options",
+            latestOptionFunctionsRef.current,
+            optionFunctionWrappersRef.current,
+          ) as NativeStackNavigationOptions)
+        : undefined,
+    [normalizedOptions],
+  );
 
   useLayoutEffect(() => {
     if (!navigation || !stableOptions) {

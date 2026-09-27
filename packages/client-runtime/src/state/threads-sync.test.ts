@@ -99,7 +99,21 @@ const ACTIVE_THREAD: OrchestrationThread = {
   },
 };
 
-type TestThreadInput = OrchestrationThreadStreamItem | Error;
+// An array is delivered as one transport chunk, like a burst read off the socket.
+type TestThreadInput =
+  | OrchestrationThreadStreamItem
+  | readonly [OrchestrationThreadStreamItem, ...OrchestrationThreadStreamItem[]]
+  | Error;
+
+type StreamBatch = readonly [OrchestrationThreadStreamItem, ...OrchestrationThreadStreamItem[]];
+
+function toStreamBatch(input: Exclude<TestThreadInput, Error>): StreamBatch {
+  return isStreamBatch(input) ? input : [input];
+}
+
+function isStreamBatch(input: Exclude<TestThreadInput, Error>): input is StreamBatch {
+  return Array.isArray(input);
+}
 
 function testSession(
   client: WsRpcProtocolClient,
@@ -151,8 +165,9 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
   const streamFrom = (queue: Queue.Queue<TestThreadInput>) =>
     Stream.fromQueue(queue).pipe(
       Stream.mapEffect((input) =>
-        input instanceof Error ? Effect.fail(input) : Effect.succeed(input),
+        input instanceof Error ? Effect.fail(input) : Effect.succeed(toStreamBatch(input)),
       ),
+      Stream.flattenArray,
     );
   const client = {
     [ORCHESTRATION_WS_METHODS.subscribeThread]: (input: {
@@ -366,6 +381,36 @@ describe("EnvironmentThreads", () => {
       expect(Option.getOrThrow(state.data).title).toBe("Live title");
       expect((yield* Ref.get(harness.savedThreads)).at(-1)?.thread.title).toBe("Live title");
       expect((yield* Ref.get(harness.savedThreads)).at(-1)?.snapshotSequence).toBe(2);
+    }),
+  );
+
+  it.effect("publishes a burst of events delivered together as one state change", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ cached: BASE_THREAD });
+      yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+
+      yield* Queue.offer(harness.inputs, [
+        titleUpdated("First", CACHED_SNAPSHOT_SEQUENCE + 1),
+        titleUpdated("Second", CACHED_SNAPSHOT_SEQUENCE + 2),
+        // A replayed sequence inside the batch is still ignored.
+        titleUpdated("Replayed", CACHED_SNAPSHOT_SEQUENCE + 2),
+        titleUpdated("Third", CACHED_SNAPSHOT_SEQUENCE + 3),
+      ]);
+      const published = yield* awaitThreadState(
+        harness.observed,
+        (value) => Option.isSome(value.data) && value.data.value.title !== BASE_THREAD.title,
+      );
+
+      // The first state carrying any event already carries all of them.
+      expect(Option.getOrThrow(published.data).title).toBe("Third");
+
+      // The resume cursor covers the whole batch.
+      yield* harness.replaceSession;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
+        yield* Effect.yieldNow;
+      }
+      expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(CACHED_SNAPSHOT_SEQUENCE + 3);
     }),
   );
 

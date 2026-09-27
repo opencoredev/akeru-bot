@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import { memo } from "react";
 import { type AppSymbolName, SymbolView } from "../../components/AppSymbol";
 import { LayoutAnimation, Pressable, ScrollView, View } from "react-native";
 
@@ -120,14 +121,40 @@ export function collapsedWorkLogHeight(
   );
 }
 
-export function ThreadWorkLog(props: {
+type ThreadWorkLogProps = {
   readonly activities: ReadonlyArray<ThreadFeedActivity>;
   readonly copiedRowId: string | null;
   readonly expandedRows: Readonly<Record<string, boolean>>;
   readonly iconSubtleColor: import("react-native").ColorValue;
   readonly onCopyRow: (rowId: string, value: string) => void;
   readonly onToggleRow: (rowId: string) => void;
-}) {
+};
+
+/**
+ * Copy feedback and row expansion are feed-wide maps, so a work log only
+ * re-renders when a change touches one of its own rows.
+ */
+export function threadWorkLogPropsEqual(
+  previous: ThreadWorkLogProps,
+  next: ThreadWorkLogProps,
+): boolean {
+  if (
+    previous.activities !== next.activities ||
+    previous.iconSubtleColor !== next.iconSubtleColor ||
+    previous.onCopyRow !== next.onCopyRow ||
+    previous.onToggleRow !== next.onToggleRow
+  ) {
+    return false;
+  }
+  for (const activity of next.activities) {
+    const id = activity.id;
+    if ((previous.copiedRowId === id) !== (next.copiedRowId === id)) return false;
+    if ((previous.expandedRows[id] ?? false) !== (next.expandedRows[id] ?? false)) return false;
+  }
+  return true;
+}
+
+export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogProps) {
   const pressedBackground = useThemeColor("--color-subtle");
   const rows = visibleWorkLogActivities(props.activities).map((activity) => ({
     ...activity,
@@ -272,7 +299,7 @@ export function ThreadWorkLog(props: {
       </View>
     </View>
   );
-}
+}, threadWorkLogPropsEqual);
 
 export function ThreadWorkGroupToggle(props: {
   readonly expanded: boolean;

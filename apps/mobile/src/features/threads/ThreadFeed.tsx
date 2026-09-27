@@ -103,6 +103,7 @@ import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons
 import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
 import {
   deriveThreadFeedPresentation,
+  threadFeedEntriesEqual,
   type ThreadFeedEntry,
   type ThreadFeedLatestTurn,
 } from "../../lib/threadActivity";
@@ -1585,14 +1586,39 @@ function ThreadFeedPlaceholder(props: {
   );
 }
 
+const threadFeedKeyExtractor = (entry: ThreadFeedEntry) => entry.id;
+const threadFeedItemType = (entry: ThreadFeedEntry) =>
+  entry.type === "message" ? `message:${entry.message.role}` : entry.type;
+
+type PlaybackMessage = Extract<ThreadFeedEntry, { type: "message" }>["message"];
+
+function sameMessages(
+  left: ReadonlyArray<PlaybackMessage>,
+  right: ReadonlyArray<PlaybackMessage>,
+): boolean {
+  return left.length === right.length && left.every((message, index) => message === right[index]);
+}
+
+function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const id of left) {
+    if (!right.has(id)) return false;
+  }
+  return true;
+}
+
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const navigation = useNavigation();
   const replyPlayback = useOptionalReplyPlayback();
   const environment = useEnvironmentPresentation(props.environmentId);
-  const playbackMessages = useMemo(
-    () => props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
-    [props.feed],
-  );
+  // Activity-only feed updates keep the previous array so reply playback does not re-observe.
+  const playbackMessagesRef = useRef<ReadonlyArray<PlaybackMessage>>([]);
+  const playbackMessages = useMemo(() => {
+    const next = props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : []));
+    if (sameMessages(playbackMessagesRef.current, next)) return playbackMessagesRef.current;
+    playbackMessagesRef.current = next;
+    return next;
+  }, [props.feed]);
   useReplyPlaybackThread({
     environmentId: props.environmentId,
     threadId: props.threadId,
@@ -1763,28 +1789,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   );
   const markdownStyles = useMarkdownStyles(onMarkdownLinkPress, renderMarkdownImage);
   const reviewCommentColors = useReviewCommentColors();
-  // LegendList does not invalidate visible rows when only the renderItem closure changes.
-  // Keep row-local interaction props in extraData so disclosures and copy feedback repaint.
-  const listAppearanceData = useMemo(
-    () => ({
-      copiedRowId,
-      expandedWorkRows,
-      iconSubtleColor,
-      markdownStyles,
-      reviewCommentColors,
-      userBubbleColor,
-      viewportWidth,
-    }),
-    [
-      copiedRowId,
-      expandedWorkRows,
-      iconSubtleColor,
-      markdownStyles,
-      reviewCommentColors,
-      userBubbleColor,
-      viewportWidth,
-    ],
-  );
   const reportHeaderMaterialVisibility = useCallback(
     (visible: boolean) => {
       if (headerMaterialVisibleRef.current === visible) {
@@ -1953,6 +1957,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       ),
     [presentedFeed, props.anchorMessageId, anchorTopInset],
   );
+  // Kept identity-stable while streaming: it is row render context, and a new Set would
+  // repaint every visible row on each delta.
+  const terminalAssistantMessageIdsRef = useRef<ReadonlySet<string>>(new Set());
   const terminalAssistantMessageIds = useMemo(() => {
     const terminalIdsByTurn = new Map<TurnId, string>();
     for (const entry of props.feed) {
@@ -1960,7 +1967,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         terminalIdsByTurn.set(entry.message.turnId, entry.message.id);
       }
     }
-    return new Set(terminalIdsByTurn.values());
+    const next = new Set(terminalIdsByTurn.values());
+    if (sameIds(terminalAssistantMessageIdsRef.current, next)) {
+      return terminalAssistantMessageIdsRef.current;
+    }
+    terminalAssistantMessageIdsRef.current = next;
+    return next;
   }, [props.feed]);
   const unsettledTurnId =
     props.latestTurn &&
@@ -2138,30 +2150,31 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     [expandedWorkRows, workingRowHeight, appearance.baseFontSize],
   );
 
-  const renderItem = useCallback(
-    (info: { item: ThreadFeedEntry; index: number }) =>
-      renderFeedEntry(info, {
-        environmentId: props.environmentId,
-        copiedRowId,
-        expandedWorkRows,
-        terminalAssistantMessageIds,
-        unsettledTurnId,
-        onCopyWorkRow,
-        onToggleWorkGroup,
-        onToggleWorkRow,
-        onToggleTurnFold,
-        onPressImage,
-        onMarkdownLinkPress,
-        renderMarkdownImage,
-        iconSubtleColor,
-        userBubbleColor,
-        markdownStyles,
-        reviewCommentColors,
-        reviewCommentBubbleWidth,
-        userBubbleMaxWidth,
-        skills: props.skills,
-        replyPlayback,
-      }),
+  // LegendList repaints visible rows only when their item or extraData changes, never for a
+  // new renderItem closure. Everything rows read lives here and doubles as extraData.
+  const feedRenderContext = useMemo(
+    () => ({
+      environmentId: props.environmentId,
+      copiedRowId,
+      expandedWorkRows,
+      terminalAssistantMessageIds,
+      unsettledTurnId,
+      onCopyWorkRow,
+      onToggleWorkGroup,
+      onToggleWorkRow,
+      onToggleTurnFold,
+      onPressImage,
+      onMarkdownLinkPress,
+      renderMarkdownImage,
+      iconSubtleColor,
+      userBubbleColor,
+      markdownStyles,
+      reviewCommentColors,
+      reviewCommentBubbleWidth,
+      userBubbleMaxWidth,
+      skills: props.skills,
+      replyPlayback,
+    }),
     [
       copiedRowId,
       expandedWorkRows,
@@ -2184,6 +2197,35 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       renderMarkdownImage,
       replyPlayback,
     ],
+  );
+  const renderItem = useCallback(
+    (info: { item: ThreadFeedEntry; index: number }) => renderFeedEntry(info, feedRenderContext),
+    [feedRenderContext],
+  );
+  const loadEarlier = props.loadEarlier;
+  const listHeader = useMemo(
+    () => (
+      <>
+        {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
+        <ThreadChannels environmentId={props.environmentId} botId={props.botId} />
+        {loadEarlier != null ? (
+          <Pressable
+            onPress={loadEarlier.onLoadEarlier}
+            disabled={loadEarlier.loading}
+            className="items-center py-2"
+          >
+            <Text className="text-xs text-foreground-secondary">
+              {loadEarlier.loading ? "Loading earlier turns…" : "Load earlier turns"}
+            </Text>
+          </Pressable>
+        ) : null}
+      </>
+    ),
+    [loadEarlier, props.botId, props.environmentId, topContentInset, usesNativeAutomaticInsets],
+  );
+  const listContentContainerStyle = useMemo(
+    () => ({ paddingTop: 12, paddingHorizontal: contentHorizontalPadding }),
+    [contentHorizontalPadding],
   );
 
   if (props.contentPresentation.kind === "unavailable") {
@@ -2279,12 +2321,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             }
             maintainVisibleContentPosition={maintainVisibleContentPosition}
             data={presentedFeed}
-            extraData={listAppearanceData}
+            extraData={feedRenderContext}
             renderItem={renderItem}
-            keyExtractor={(entry) => entry.id}
-            getItemType={(entry) =>
-              entry.type === "message" ? `message:${entry.message.role}` : entry.type
-            }
+            keyExtractor={threadFeedKeyExtractor}
+            getItemType={threadFeedItemType}
+            itemsAreEqual={threadFeedEntriesEqual}
             getFixedItemSize={getFixedItemSize}
             // Measure rows well before they scroll into view so estimate→actual
             // corrections land offscreen instead of under the user's finger.
@@ -2320,27 +2361,8 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onMomentumScrollBegin={handleMomentumScrollBegin}
             onMomentumScrollEnd={handleMomentumScrollEnd}
             scrollEventThrottle={16}
-            ListHeaderComponent={
-              <>
-                {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
-                <ThreadChannels environmentId={props.environmentId} botId={props.botId} />
-                {props.loadEarlier != null ? (
-                  <Pressable
-                    onPress={props.loadEarlier.onLoadEarlier}
-                    disabled={props.loadEarlier.loading}
-                    className="items-center py-2"
-                  >
-                    <Text className="text-xs text-foreground-secondary">
-                      {props.loadEarlier.loading ? "Loading earlier turns…" : "Load earlier turns"}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </>
-            }
-            contentContainerStyle={{
-              paddingTop: 12,
-              paddingHorizontal: contentHorizontalPadding,
-            }}
+            ListHeaderComponent={listHeader}
+            contentContainerStyle={listContentContainerStyle}
           />
         </View>
         {props.feed.length === 0 &&
