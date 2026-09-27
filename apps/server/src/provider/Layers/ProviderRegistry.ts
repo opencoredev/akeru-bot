@@ -30,6 +30,7 @@ import {
   type ServerProviderUpdateState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
@@ -158,10 +159,20 @@ export const selectProvidersByKind = (
 ): ReadonlyArray<ServerProvider> =>
   providers.filter((provider) => providerKinds.has(provider.driver));
 
+const withoutCheckedAt = (providers: ReadonlyArray<ServerProvider>) =>
+  providers.map(({ checkedAt: _checkedAt, ...provider }) => provider);
+
+/**
+ * Every probe stamps a fresh `checkedAt`, so comparing it would make each
+ * background re-probe look like a change. Only the remaining fields decide
+ * whether clients need a new provider list.
+ */
 export const haveProvidersChanged = (
   previousProviders: ReadonlyArray<ServerProvider>,
   nextProviders: ReadonlyArray<ServerProvider>,
-): boolean => !Equal.equals(previousProviders, nextProviders);
+): boolean =>
+  previousProviders.length !== nextProviders.length ||
+  !Equal.equals(withoutCheckedAt(previousProviders), withoutCheckedAt(nextProviders));
 
 const correlateSnapshotWithSource = (
   source: ProviderSnapshotSource,
@@ -350,6 +361,15 @@ export const ProviderRegistryLive = Layer.effect(
         readonly publish?: boolean;
         readonly persist?: boolean;
         readonly replace?: boolean;
+        /** Treat a moved `checkedAt` as a change. Set for completed probes. */
+        readonly publishCheckedAt?: boolean;
+        /**
+         * Skip a snapshot whose `checkedAt` is older than the stored one. Set
+         * for probe results, which can arrive out of order through an
+         * explicit refresh and the instance's change stream. A stored
+         * `checkedAt` in the future (the clock moved back) never blocks.
+         */
+        readonly keepNewer?: boolean;
       },
     ) {
       const nextProvidersWithUpdateState = yield* Effect.forEach(
@@ -359,6 +379,7 @@ export const ProviderRegistryLive = Layer.effect(
           concurrency: "unbounded",
         },
       );
+      const nowMs = options?.keepNewer === true ? yield* Clock.currentTimeMillis : 0;
       const [previousProviders, providers, providersToPersist] = yield* Ref.modify(
         providersRef,
         (previousProviders) => {
@@ -369,12 +390,22 @@ export const ProviderRegistryLive = Layer.effect(
 
           for (const provider of nextProvidersWithUpdateState) {
             const key = snapshotInstanceKey(provider);
+            const previousProvider = mergedProviders.get(key);
+            if (options?.keepNewer === true && previousProvider !== undefined) {
+              const previousCheckedAtMs = Date.parse(previousProvider.checkedAt);
+              if (
+                previousCheckedAtMs <= nowMs &&
+                previousCheckedAtMs > Date.parse(provider.checkedAt)
+              ) {
+                continue;
+              }
+            }
             updatedKeys.add(key);
             mergedProviders.set(
               key,
               options?.replace === true
                 ? provider
-                : mergeProviderSnapshot(mergedProviders.get(key), provider),
+                : mergeProviderSnapshot(previousProvider, provider),
             );
           }
 
@@ -386,16 +417,23 @@ export const ProviderRegistryLive = Layer.effect(
         },
       );
 
-      if (haveProvidersChanged(previousProviders, providers)) {
-        if (options?.persist !== false) {
-          yield* Effect.forEach(providersToPersist, persistProvider, {
-            concurrency: "unbounded",
-            discard: true,
-          });
-        }
-        if (options?.publish !== false) {
-          yield* PubSub.publish(changesPubSub, providers);
-        }
+      // Persist a fresh `checkedAt` so a restart does not treat the cache as
+      // stale. Broadcast it only when a probe actually completed, so Settings
+      // shows the real last-check time while snapshot re-syncs stay quiet.
+      const changedIncludingCheckedAt = !Equal.equals(previousProviders, providers);
+      if (changedIncludingCheckedAt && options?.persist !== false) {
+        yield* Effect.forEach(providersToPersist, persistProvider, {
+          concurrency: "unbounded",
+          discard: true,
+        });
+      }
+      if (
+        options?.publish !== false &&
+        (options?.publishCheckedAt === true
+          ? changedIncludingCheckedAt
+          : haveProvidersChanged(previousProviders, providers))
+      ) {
+        yield* PubSub.publish(changesPubSub, providers);
       }
 
       return providers;
@@ -405,6 +443,8 @@ export const ProviderRegistryLive = Layer.effect(
       provider: ServerProvider,
       options?: {
         readonly publish?: boolean;
+        readonly publishCheckedAt?: boolean;
+        readonly keepNewer?: boolean;
       },
     ) {
       return yield* upsertProviders([provider], options);
@@ -449,16 +489,21 @@ export const ProviderRegistryLive = Layer.effect(
       },
     );
 
+    // Probes of one instance may overlap (a background TTL probe and an
+    // explicit refresh), and each result also arrives on the instance's
+    // change stream. The newest `checkedAt` wins, so a result that lands late
+    // cannot overwrite fresher status.
+    const applyProbeResult = (provider: ServerProvider) =>
+      // A completed probe publishes even when only `checkedAt` moved, so
+      // clients can show when the provider was last checked.
+      syncProvider(provider, { publishCheckedAt: true, keepNewer: true });
+
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
-      return yield* providerSource.refresh.pipe(
-        Effect.flatMap((nextProvider) =>
-          correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap(syncProvider),
-          ),
-        ),
-      );
+      const nextProvider = yield* providerSource.refresh;
+      const provider = yield* correlateSnapshotWithSource(providerSource, nextProvider);
+      return yield* applyProbeResult(provider);
     });
 
     const refreshAll = Effect.fn("refreshAll")(function* () {
@@ -569,8 +614,10 @@ export const ProviderRegistryLive = Layer.effect(
         // the current read or the active subscriber observes the result.
         for (const [, instance] of newlyAdded) {
           const source = buildSnapshotSource(instance);
+          // Change-stream items are completed probes (periodic, explicit, or
+          // enrichment), so they follow the same newest-wins rule.
           yield* Stream.runForEach(source.streamChanges, (provider) =>
-            correlateSnapshotWithSource(source, provider).pipe(Effect.flatMap(syncProvider)),
+            correlateSnapshotWithSource(source, provider).pipe(Effect.flatMap(applyProbeResult)),
           ).pipe(Effect.forkScoped);
         }
         yield* Effect.yieldNow;
