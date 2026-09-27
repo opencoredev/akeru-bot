@@ -67,6 +67,7 @@ import {
   type ServerProvider,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
+  isProviderAvailable,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   RpcClientId,
@@ -3620,9 +3621,12 @@ const makeWsRpcLayer = (
               // last check is older than the TTL and that no other
               // subscription is already probing, so reconnect bursts and
               // additional clients do not spawn repeated CLI version checks.
+              // Unavailable instances have no driver to probe, so their
+              // `checkedAt` never moves and they are skipped.
               const nowMs = yield* Clock.currentTimeMillis;
               const staleProviders = (yield* providerRegistry.getProviders).filter(
                 (provider) =>
+                  isProviderAvailable(provider) &&
                   !providerRefreshes.inFlight.has(provider.instanceId) &&
                   nowMs - Date.parse(provider.checkedAt) >= PROVIDER_SUBSCRIBE_REFRESH_TTL_MS,
               );

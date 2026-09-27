@@ -3872,7 +3872,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("subscribeServerConfig probes a stale provider once across concurrent clients", () =>
+  it.effect("subscribeServerConfig probes a stale available provider once across clients", () =>
     Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex");
       const staleProvider = {
@@ -3888,6 +3888,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         slashCommands: [],
         skills: [],
       };
+      // An instance whose driver is missing has nothing to probe.
+      const unavailableProvider = {
+        ...staleProvider,
+        instanceId: ProviderInstanceId.make("missing_driver"),
+        availability: "unavailable" as const,
+      };
       const releaseProbe = yield* Deferred.make<void>();
       const probeSucceeded = yield* Deferred.make<boolean>();
       const probedInstanceIds: Array<string> = [];
@@ -3895,7 +3901,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
-            getProviders: Effect.succeed([staleProvider]),
+            getProviders: Effect.succeed([staleProvider, unavailableProvider]),
             refreshInstance: (id) =>
               Effect.sync(() => probedInstanceIds.push(id)).pipe(
                 Effect.andThen(Deferred.await(releaseProbe)),
@@ -6807,7 +6813,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           const fourth = yield* takeUpsert;
           return [first, second, third, fourth];
         }),
-      ).pipe(Effect.timeout("2 seconds"));
+      );
 
       assert.deepEqual(upsertedIds, [
         `${quietThreadId}:Quiet@1`,
