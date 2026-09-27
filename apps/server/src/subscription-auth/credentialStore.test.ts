@@ -288,6 +288,27 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("removes the temp file when replacement fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { directory, authPath } = yield* authFile;
+      const store = yield* subscriptionCredentialStore(authPath);
+
+      const error = yield* Effect.flip(
+        store.update((data) => {
+          NodeFS.mkdirSync(authPath);
+          return { ...data, xai: currentFormat.xai };
+        }),
+      );
+
+      assert.strictEqual(error.reason, "write");
+      assert.deepStrictEqual(yield* fs.readDirectory(directory), ["subscription-auth.json"]);
+      assert.strictEqual((yield* fs.stat(authPath)).type, "Directory");
+      assert.deepStrictEqual(store.current().data, {});
+      assert.strictEqual(store.current().loadError?.reason, "unreadable");
+    }),
+  );
+
   it.effect("fails a write with a typed error and keeps the last good state", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
