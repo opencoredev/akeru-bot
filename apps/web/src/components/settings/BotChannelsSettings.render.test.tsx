@@ -466,6 +466,18 @@ describe("failed channel attempts", () => {
       input: { connectionId: "profile-1" },
     });
   });
+
+  it("explains how to enable Delete for an assigned connection", () => {
+    fixtures.bots = [boundBot("connected")];
+    const assigned = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(assigned).toContain("Choose No bot above to delete this connection.");
+    expect(assigned).toMatch(/<button[^>]*disabled=""[^>]*>Delete<\/button>/);
+
+    fixtures.bots = [];
+    const unassigned = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(unassigned).not.toContain("Choose No bot above to delete this connection.");
+    expect(unassigned).not.toMatch(/<button[^>]*disabled=""[^>]*>Delete<\/button>/);
+  });
 });
 
 describe("Photon connection type", () => {
