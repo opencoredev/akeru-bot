@@ -63,7 +63,9 @@ export function ThreadChannels(props: {
         const needsProject = channelBindingNeedsProject(binding, projects);
         const warning = binding.failureCategory
           ? channelFailureReason(binding.failureCategory, binding.provider, t)
-          : channel.warning;
+          : needsProject
+            ? channel.warning
+            : (binding.lastError ?? channel.warning);
         return (
           <View key={key} className="gap-1">
             <Text className="font-t3-medium text-xs text-neutral-900 dark:text-neutral-100">

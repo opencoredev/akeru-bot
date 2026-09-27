@@ -54,7 +54,6 @@ const binding: ChannelBinding = {
   status: "connected",
   externalIdentity: "private-identity",
   connectedAt: null,
-  lastError: "private-credential-error",
   sentMessageIds: [MessageId.make("message-1")],
 };
 
@@ -90,7 +89,14 @@ describe("mobile thread channels", () => {
       bots: [
         {
           id: botId,
-          channelBindings: [{ ...binding, status: "failed", failureCategory: "credentials" }],
+          channelBindings: [
+            {
+              ...binding,
+              status: "failed",
+              failureCategory: "credentials",
+              lastError: "private-credential-error",
+            },
+          ],
         },
       ],
       projects: [{ id: projectId, title: "Selected workspace" }],
@@ -101,11 +107,43 @@ describe("mobile thread channels", () => {
     expect(html).not.toContain("private-credential-error");
   });
 
+  it("shows the saved reason when a channel has no failure category", () => {
+    state.snapshot = {
+      bots: [
+        {
+          id: botId,
+          channelBindings: [
+            {
+              ...binding,
+              status: "not-live",
+              failureCategory: undefined,
+              lastError: "WhatsApp needs a public HTTPS address to receive messages.",
+            },
+          ],
+        },
+      ],
+      projects: [{ id: projectId, title: "Selected workspace" }],
+    };
+    const html = render();
+    expect(html).toContain("WhatsApp needs a public HTTPS address to receive messages.");
+    expect(html).not.toContain("Channel needs attention");
+  });
+
   it("offers every live project when the channel's project is unavailable", () => {
     const other = ProjectId.make("project-2");
     state.snapshot = {
       bots: [
-        { id: botId, channelBindings: [{ ...binding, status: "failed", sentMessageIds: [] }] },
+        {
+          id: botId,
+          channelBindings: [
+            {
+              ...binding,
+              status: "failed",
+              lastError: "private-credential-error",
+              sentMessageIds: [],
+            },
+          ],
+        },
       ],
       projects: [{ id: other, title: "Other workspace" }],
     };
