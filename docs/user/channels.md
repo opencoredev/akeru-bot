@@ -103,7 +103,7 @@ External iMessage group chats are not supported.
 
 Akeru uses the WhatsApp Business Cloud API. The connection needs an access token, app secret, phone number ID, and verify token.
 
-WhatsApp must be able to reach the environment server over public HTTPS. Start the server with a public HTTPS origin, for example `--public-origin https://akeru.example.com`. Configure Meta to send webhook requests to `https://<server>/api/channels/whatsapp/<bot-id>/webhook`, using your verify token. Replace `<server>` with that public hostname. Replace `<bot-id>` with the identifier after `/bots/` in the bot's web address.
+WhatsApp must be able to reach the environment server over public HTTPS. Start the server with a public HTTPS origin, for example `--public-origin https://akeru.example.com`. Add a WhatsApp connection in **Settings > Bot channels**, then configure Meta with the **Webhook URL** shown on that connection and your verify token. The URL uses `/api/channels/whatsapp/connections/<connection-id>/webhook` and stays with the saved connection if you assign it to another bot.
 
 Without a public origin, the connection saves as **Not live**: replies can still be sent, but WhatsApp cannot deliver new messages to Akeru. Restart the server with a public origin and reconnect to go live.
 
