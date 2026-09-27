@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -1373,6 +1374,123 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             assert.deepStrictEqual(yield* registry.refreshInstance(codexInstanceId), [
               cachedProvider,
             ]);
+          }).pipe(Effect.provide(runtimeServices));
+        }),
+      );
+
+      it.effect("keeps the newest probe when an older probe finishes last", () =>
+        Effect.gen(function* () {
+          const codexDriver = ProviderDriverKind.make("codex");
+          const codexInstanceId = ProviderInstanceId.make("codex");
+          const makeProvider = (checkedAt: string, version: string) =>
+            ({
+              instanceId: codexInstanceId,
+              driver: codexDriver,
+              status: "ready",
+              enabled: true,
+              installed: true,
+              auth: { status: "authenticated" },
+              checkedAt,
+              version,
+              models: [],
+              slashCommands: [],
+              skills: [],
+            }) as const satisfies ServerProvider;
+          const cachedProvider = makeProvider("2026-04-29T10:00:00.000Z", "1.0.0");
+          const olderProvider = makeProvider("2026-04-29T10:01:00.000Z", "1.0.1");
+          const newerProvider = makeProvider("2026-04-29T10:02:00.000Z", "1.0.2");
+          const probes = [
+            {
+              started: yield* Deferred.make<void>(),
+              release: yield* Deferred.make<void>(),
+              result: olderProvider,
+            },
+            {
+              started: yield* Deferred.make<void>(),
+              release: yield* Deferred.make<void>(),
+              result: newerProvider,
+            },
+          ] as const;
+          const probeCount = yield* Ref.make(0);
+          const instance = {
+            instanceId: codexInstanceId,
+            driverKind: codexDriver,
+            continuationIdentity: {
+              driverKind: codexDriver,
+              continuationKey: "codex:instance:codex",
+            },
+            displayName: undefined,
+            enabled: true,
+            snapshot: {
+              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+                provider: codexDriver,
+                packageName: null,
+              }),
+              getSnapshot: Effect.succeed(cachedProvider),
+              refresh: Effect.gen(function* () {
+                const probe = probes[yield* Ref.getAndUpdate(probeCount, (count) => count + 1)]!;
+                yield* Deferred.succeed(probe.started, undefined);
+                yield* Deferred.await(probe.release);
+                return probe.result;
+              }),
+              streamChanges: Stream.empty,
+            },
+            adapter: {} as ProviderInstance["adapter"],
+            textGeneration: {} as ProviderInstance["textGeneration"],
+          } satisfies ProviderInstance;
+          const instanceRegistryLayer = Layer.succeed(
+            ProviderInstanceRegistry.ProviderInstanceRegistry,
+            {
+              getInstance: (instanceId) =>
+                Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
+              dispatchIfEnabled: (instanceId, dispatch) =>
+                Effect.sync(() =>
+                  instanceId === codexInstanceId
+                    ? ({ _tag: "Dispatched", value: dispatch() } as const)
+                    : ({ _tag: "Missing" } as const),
+                ),
+              listInstances: Effect.succeed([instance]),
+              listUnavailable: Effect.succeed([]),
+              streamChanges: Stream.empty,
+              subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
+                PubSub.subscribe(pubsub),
+              ),
+            },
+          );
+          const scope = yield* Scope.make();
+          yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+          const runtimeServices = yield* Layer.build(
+            ProviderRegistryLive.pipe(
+              Layer.provideMerge(instanceRegistryLayer),
+              Layer.provideMerge(
+                ServerConfig.layerTest(process.cwd(), {
+                  prefix: "t3-provider-registry-probe-order-",
+                }),
+              ),
+              Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ).pipe(Scope.provide(scope));
+
+          yield* Effect.gen(function* () {
+            const registry = yield* ProviderRegistry.ProviderRegistry;
+
+            // The background probe starts first, then the explicit refresh.
+            const olderProbe = yield* registry
+              .refreshInstance(codexInstanceId)
+              .pipe(Effect.forkScoped);
+            yield* Deferred.await(probes[0].started);
+            const newerProbe = yield* registry
+              .refreshInstance(codexInstanceId)
+              .pipe(Effect.forkScoped);
+            yield* Deferred.await(probes[1].started);
+
+            yield* Deferred.succeed(probes[1].release, undefined);
+            assert.deepStrictEqual(yield* Fiber.join(newerProbe), [newerProvider]);
+
+            yield* Deferred.succeed(probes[0].release, undefined);
+            assert.deepStrictEqual(yield* Fiber.join(olderProbe), [newerProvider]);
+            assert.deepStrictEqual(yield* registry.getProviders, [newerProvider]);
           }).pipe(Effect.provide(runtimeServices));
         }),
       );

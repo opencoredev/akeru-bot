@@ -469,17 +469,40 @@ export const ProviderRegistryLive = Layer.effect(
       },
     );
 
+    // Probes of one instance may overlap (a background TTL probe and an
+    // explicit refresh). Each probe takes a start generation, and a result
+    // only lands if no newer probe of that instance has landed first, so a
+    // slow older probe cannot overwrite fresher status.
+    const probeGenerationsRef = yield* Ref.make<
+      ReadonlyMap<ProviderInstanceId, { readonly started: number; readonly applied: number }>
+    >(new Map());
+    const probeApplySemaphore = yield* Semaphore.make(1);
+
     const refreshOneSource = Effect.fn("refreshOneSource")(function* (
       providerSource: ProviderSnapshotSource,
     ) {
-      // A completed probe publishes even when only `checkedAt` moved, so
-      // clients can show when the provider was last checked.
-      return yield* providerSource.refresh.pipe(
-        Effect.flatMap((nextProvider) =>
-          correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap((provider) => syncProvider(provider, { publishCheckedAt: true })),
-          ),
-        ),
+      const instanceId = providerSource.instanceId;
+      const generation = yield* Ref.modify(probeGenerationsRef, (previous) => {
+        const current = previous.get(instanceId) ?? { started: 0, applied: 0 };
+        const started = current.started + 1;
+        return [started, new Map(previous).set(instanceId, { ...current, started })];
+      });
+      const nextProvider = yield* providerSource.refresh;
+      const provider = yield* correlateSnapshotWithSource(providerSource, nextProvider);
+      return yield* probeApplySemaphore.withPermits(1)(
+        Effect.gen(function* () {
+          const applied = (yield* Ref.get(probeGenerationsRef)).get(instanceId)?.applied ?? 0;
+          if (generation < applied) {
+            return yield* Ref.get(providersRef);
+          }
+          yield* Ref.update(probeGenerationsRef, (previous) => {
+            const current = previous.get(instanceId) ?? { started: generation, applied: 0 };
+            return new Map(previous).set(instanceId, { ...current, applied: generation });
+          });
+          // A completed probe publishes even when only `checkedAt` moved, so
+          // clients can show when the provider was last checked.
+          return yield* syncProvider(provider, { publishCheckedAt: true });
+        }),
       );
     });
 
