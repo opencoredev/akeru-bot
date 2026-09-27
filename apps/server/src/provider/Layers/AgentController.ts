@@ -1080,10 +1080,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         return undefined;
       return { ...access, groupMemberBotIds };
     };
-    const entityMemoryContext = async (
-      access: AkeruMemoryThreadAccess | undefined,
-    ): Promise<string> => {
-      const current = await refreshEntityMemoryAccess(access);
+    const entityMemoryPacket = async (current: AkeruMemoryThreadAccess | undefined): Promise<string> => {
       if (!current || !options?.entityMemoryRepository) return "";
       if (current.groupId !== null && current.groupMemberBotIds.length === 0) return "";
       const currentRevisions = await runPromise(
@@ -1108,6 +1105,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       const packet = buildProviderMemoryPacket(current.threadId, revisions);
       return packet.rendered ? `<entity-memory>\n${packet.rendered}\n</entity-memory>` : "";
     };
+    const entityMemoryContext = async (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): Promise<string> => entityMemoryPacket(await refreshEntityMemoryAccess(access));
     const memoryHandlers = (
       access: AkeruMemoryThreadAccess | undefined,
       allowedScopes: AkeruDelegationAccessGrant["memoryScopes"],
@@ -2046,23 +2046,21 @@ const make = (options?: AgentControllerLiveOptions) =>
       return failActiveTurn(active, pending.threadId, pending.turnId, cause);
     };
 
-    const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
+    const startAdmittedPendingTurn = (
+      active: ActiveSession,
+      pending: PendingTurn,
+      settings: { readonly enabled: boolean; readonly privateBotMemory: boolean } | undefined,
+      entityMemoryAccess: AkeruMemoryThreadAccess | undefined,
+    ) => {
       const { threadId, turnId, message } = pending;
       if (active.admittingTurn?.turnId !== turnId) return;
       const dispatch: Promise<void> = (async () => {
-        const settings = pending.memoryAccess ? await runPromise(memorySettings()) : undefined;
-        // The settings read is asynchronous; the turn may have been interrupted
-        // while it was pending. Only mutate session state if this admission
-        // still owns the turn.
         if (active.admittingTurn?.turnId !== turnId) return;
         const memoryAccess =
           pending.memoryAccess && settings?.enabled ? pending.memoryAccess : undefined;
         // Entity memory rides on durable memory access. With Memory off (or a
         // delegated turn without memory) the turn runs without memory, so group
         // membership is only checked when memory is actually in play.
-        const entityMemoryAccess = memoryAccess
-          ? await refreshEntityMemoryAccess(pending.entityMemoryAccess)
-          : undefined;
         if (memoryAccess && pending.entityMemoryAccess && !entityMemoryAccess) {
           active.admittingTurn = null;
           beginPendingTurn(active, pending);
@@ -2130,7 +2128,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             const currentState = active.session.state.get();
             const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
               currentState;
-            const entityPacket = await entityMemoryContext(entityMemoryAccess);
+            const entityPacket = await entityMemoryPacket(entityMemoryAccess);
             const persistentMemoryContext = [
               memoryTurn.context,
               entityPacket,
@@ -2177,20 +2175,29 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const admitPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
       active.admittingTurn = pending;
-      return legacyProviderBridge
-        .dispatchIfEnabled(active.providerInstanceId, "AgentController.startPendingTurn", () =>
-          startAdmittedPendingTurn(active, pending),
-        )
-        .pipe(
-          Effect.onInterrupt(() =>
-            Effect.sync(() => {
-              if (active.admittingTurn?.turnId !== pending.turnId) return;
-              active.admittingTurn = null;
-              const nextTurn = active.pendingTurns.shift();
-              if (nextTurn) startPendingTurn(active, nextTurn);
-            }),
-          ),
+      return Effect.gen(function* () {
+        const settings = pending.memoryAccess ? yield* memorySettings() : undefined;
+        const entityMemoryAccess = pending.memoryAccess && settings?.enabled
+          ? yield* runMastra("memory.access", () =>
+              refreshEntityMemoryAccess(pending.entityMemoryAccess),
+            )
+          : undefined;
+        if (active.admittingTurn?.turnId !== pending.turnId) return;
+        yield* legacyProviderBridge.dispatchIfEnabled(
+          active.providerInstanceId,
+          "AgentController.startPendingTurn",
+          () => startAdmittedPendingTurn(active, pending, settings, entityMemoryAccess),
         );
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            if (active.admittingTurn?.turnId !== pending.turnId) return;
+            active.admittingTurn = null;
+            const nextTurn = active.pendingTurns.shift();
+            if (nextTurn) startPendingTurn(active, nextTurn);
+          }),
+        ),
+      );
     };
 
     function startPendingTurn(active: ActiveSession, pending: PendingTurn) {
