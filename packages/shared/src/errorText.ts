@@ -1,9 +1,10 @@
 // A stack frame: "at fn (file:///...)", "at Class.method (definition) (node:...)",
-// "at fn (/srv/app.js:1:2)", or a bare "at file:///...". Only frames that name
-// a location count, so a sentence such as "Could not look at the file" is left
-// alone.
+// "at fn (/srv/app.js:1:2)", a bare "at file:///...", or a bare path such as
+// "at /srv/app.js:1:2" or "at C:\app\main.js:1:2". Only frames that name a
+// location count, so a sentence such as "Could not look at the file" or
+// "Try again at 10:30:00" is left alone.
 const STACK_FRAME =
-  /\s+at\s+(?:\S+\s+)*?(?:\(?(?:file|node|https?):\/*\S|\([^()\s]+:\d+:\d+\))/;
+  /\s+at\s+(?:(?:async\s+)?[^()\s]*[\\/.][^()\s]*:\d+:\d+(?=\s|$)|(?:\S+\s+)*?(?:\(?(?:file|node|https?):\/*\S|\([^()\s]+:\d+:\d+\)))/;
 const STACK_FRAME_LINE = new RegExp(`^${STACK_FRAME.source}`);
 const ANY_FRAME_LINE = /^\s+at\s/;
 const ERROR_CLASS_PREFIX = /^(?:[A-Z][A-Za-z0-9]*)?Error:\s+/;

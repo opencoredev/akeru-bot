@@ -25,6 +25,16 @@ describe("withoutErrorStack", () => {
     expect(withoutErrorStack("Boom at new Worker (node:internal/worker:1:2)")).toBe("Boom");
   });
 
+  it("removes bare path frames", () => {
+    expect(withoutErrorStack("Error: Boom\n    at /srv/app.js:12:3")).toBe("Boom");
+    expect(withoutErrorStack("Error: Boom\n    at C:\\srv\\app.js:12:3")).toBe("Boom");
+    expect(withoutErrorStack("Error: Boom\n    at async /srv/app.js:12:3")).toBe("Boom");
+    expect(withoutErrorStack("Boom at /srv/app.js:12:3")).toBe("Boom");
+    expect(
+      withoutErrorStack("Error: Bad input\n- Missing key\n    at /srv/app.js:1:2\nMore detail"),
+    ).toBe("Bad input\n- Missing key\nMore detail");
+  });
+
   it("keeps the details of a multi-line message", () => {
     const message = "Validation failed:\n- Missing API key\n- Choose a configured model";
     expect(withoutErrorStack(message)).toBe(message);
@@ -55,6 +65,7 @@ describe("withoutErrorStack", () => {
       "Could not look at the file.",
       "The server restarted before this work finished.",
       "See https://example.com at noon.",
+      "Try again at 10:30:00.",
     ]) {
       expect(withoutErrorStack(message)).toBe(message);
     }
