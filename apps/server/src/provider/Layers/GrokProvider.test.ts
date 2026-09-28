@@ -240,7 +240,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
     }),
   );
 
-  it.effect("falls back to CLI-listed models with a warning when ACP initialize fails", () =>
+  it.effect("uses an authoritative CLI model list when ACP initialize fails", () =>
     Effect.gen(function* () {
       const snapshot = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -255,7 +255,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
         }),
       );
 
-      expect(snapshot.status).toBe("warning");
+      expect(snapshot.status).toBe("ready");
       expect(snapshot.installed).toBe(true);
       expect(snapshot.auth.status).toBe("authenticated");
       expect(snapshot.models.map((model) => [model.slug, model.isDefault ?? false])).toEqual([
@@ -286,7 +286,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
         type: "api_key",
         label: "xAI API key",
       });
-      expect(snapshot.status).toBe("warning");
+      expect(snapshot.status).toBe("ready");
     }),
   );
 });

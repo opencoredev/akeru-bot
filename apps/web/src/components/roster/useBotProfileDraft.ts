@@ -136,8 +136,14 @@ export function useBotProfileDraft(
         : undefined),
   );
   const modelOptionsByInstance = useMemo(
-    () => getCustomModelOptionsByInstance(settings, providers),
-    [providers, settings],
+    () =>
+      getCustomModelOptionsByInstance(
+        settings,
+        providers,
+        ProviderInstanceId.make(provider),
+        model,
+      ),
+    [model, provider, providers, settings],
   );
 
   useEffect(() => {

@@ -404,8 +404,8 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     probe: {
       installed: true,
       version,
-      // A failed metadata probe degrades the model picker, it does not make chats fail.
-      status: acpFailed ? "warning" : "ready",
+      // A successful CLI listing is authoritative even if ACP metadata failed.
+      status: acpFailed && cliModels.models.length === 0 ? "warning" : "ready",
       auth,
       ...(acpFailed
         ? {

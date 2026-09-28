@@ -2,6 +2,7 @@ import { CircleAlertIcon, XIcon } from "lucide-react";
 import { memo, useState } from "react";
 
 import { presentThreadError } from "@t3tools/client-runtime/errors";
+import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 
 import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";
 import { openSettings } from "../../settingsDialogStore";
@@ -9,7 +10,8 @@ import { Button } from "../ui/button";
 
 export function threadErrorFeedbackDraft(error: string): string {
   const presentation = presentThreadError(error);
-  return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}`;
+  const details = redactSensitiveText(presentation.technicalDetails).value;
+  return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}\n\nError details:\n${details}`;
 }
 
 export function getThreadErrorBannerKey(threadKey: string, error: string | null): string | null {
