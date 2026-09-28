@@ -58,6 +58,7 @@ import {
   resolveHeadlessConnectionString,
 } from "../startupAccess.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
+import { aliasedEnv } from "./envAliases.ts";
 
 const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
@@ -358,7 +359,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
     if (worktreeHome !== undefined) {
       bases.push(worktreeHome);
     }
-    const envHome = yield* Config.string("T3CODE_HOME").pipe(Config.option);
+    const envHome = yield* aliasedEnv(Config.string, "HOME");
     bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
   }
 

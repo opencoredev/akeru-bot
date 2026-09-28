@@ -238,7 +238,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   /**
-   * Attach the `t3-code` MCP server to the session that is about to start.
+   * Attach the `akeru` MCP server to the session that is about to start.
    *
    * This is the only place a credential is minted, so withholding one here is
    * what disables agent browser access everywhere: every adapter already

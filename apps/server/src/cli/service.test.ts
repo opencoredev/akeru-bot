@@ -6,7 +6,7 @@ const status = {
   supported: true,
   installed: true,
   current: true,
-  unitPath: "/home/me/.config/systemd/user/t3code.service",
+  unitPath: "/home/me/.config/systemd/user/akeru-bot.service",
   logPath: "/home/me/.t3/userdata/logs/boot-service.log",
 } as const;
 
@@ -16,7 +16,7 @@ it("reports the installed service version and host paths", () => {
     [
       "Akeru Bot service",
       "  Status: installed · akeru-bot@0.0.29",
-      "  Unit: /home/me/.config/systemd/user/t3code.service",
+      "  Unit: /home/me/.config/systemd/user/akeru-bot.service",
       "  Logs: /home/me/.t3/userdata/logs/boot-service.log",
     ].join("\n"),
   );

@@ -138,6 +138,53 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     }),
   );
 
+  it.effect("reads AKERU_ variables ahead of their legacy T3CODE_ aliases", () =>
+    Effect.gen(function* () {
+      const { join } = yield* Path.Path;
+      const baseDir = join(NodeOS.tmpdir(), "akeru-cli-config-env-base");
+      const resolved = yield* resolveServerConfig(
+        {
+          mode: Option.none(),
+          port: Option.none(),
+          host: Option.none(),
+          baseDir: Option.none(),
+          cwd: Option.none(),
+          devUrl: Option.none(),
+          noBrowser: Option.none(),
+          bootstrapFd: Option.none(),
+          autoBootstrapProjectFromCwd: Option.none(),
+          logWebSocketEvents: Option.none(),
+          tailscaleServeEnabled: Option.none(),
+          tailscaleServePort: Option.none(),
+        },
+        Option.none(),
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            ConfigProvider.layer(
+              ConfigProvider.fromEnv({
+                env: {
+                  AKERU_PORT: "4002",
+                  T3CODE_PORT: "4001",
+                  AKERU_HOME: baseDir,
+                  T3CODE_HOME: join(NodeOS.tmpdir(), "ignored-legacy-base"),
+                  T3CODE_HOST: "0.0.0.0",
+                  AKERU_OTLP_SERVICE_NAME: "akeru-test",
+                },
+              }),
+            ),
+            NetService.layer,
+          ),
+        ),
+      );
+
+      expect(resolved.port).toBe(4002);
+      expect(resolved.baseDir).toBe(baseDir);
+      expect(resolved.host).toBe("0.0.0.0");
+      expect(resolved.otlpServiceName).toBe("akeru-test");
+    }),
+  );
+
   it.effect("uses CLI flags when provided", () =>
     Effect.gen(function* () {
       const { join } = yield* Path.Path;

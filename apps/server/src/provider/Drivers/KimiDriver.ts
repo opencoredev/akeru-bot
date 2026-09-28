@@ -43,7 +43,7 @@ export type KimiDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
 
 export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
   driverKind: DRIVER_KIND,
-  metadata: { displayName: "Kimi For Coding", supportsMultipleInstances: false },
+  metadata: { displayName: "Kimi For Coding", supportsMultipleInstances: true },
   configSchema: KimiSettings,
   defaultConfig: () => decodeSettings({}),
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
@@ -62,7 +62,7 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
       });
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
-        const connected = auth.isConnected("kimi-for-coding");
+        const connected = auth.isConnected("kimi-for-coding", instanceId);
         return {
           instanceId,
           driver: DRIVER_KIND,

@@ -86,15 +86,15 @@ interface BrowserAttribution {
   references: number;
 }
 
-const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
-const T3_CODE_PREVIEW_TOOL_PREFIX = `${T3_CODE_PREVIEW_MCP_SERVER_NAME}_`;
+const AKERU_PREVIEW_MCP_SERVER_NAME = "akeru";
+const AKERU_PREVIEW_TOOL_PREFIX = `${AKERU_PREVIEW_MCP_SERVER_NAME}_`;
 /**
  * Mastra sessions reach image generation through the GenerateImage catalog
  * tool on the runtime, not the shared `/mcp` server (their credential never
  * carries the `image` capability). Hide the dead MCP copy so a bot sees
  * exactly one image tool.
  */
-const T3_CODE_MASTRA_HIDDEN_TOOLS = new Set([`${T3_CODE_PREVIEW_TOOL_PREFIX}generate_image`]);
+const AKERU_MASTRA_HIDDEN_TOOLS = new Set([`${AKERU_PREVIEW_TOOL_PREFIX}generate_image`]);
 
 export class AkeruSessionResources {
   private readonly options: AkeruSessionResourcesOptions;
@@ -310,7 +310,7 @@ export class AkeruSessionResources {
           : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
-          configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
+          configs[AKERU_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
         }
         if (usesComputer) {
           if (!this.options.hostPlatform) {
@@ -380,10 +380,10 @@ export class AkeruSessionResources {
     };
     return Object.fromEntries(
       Object.entries(tools)
-        .filter(([name]) => !T3_CODE_MASTRA_HIDDEN_TOOLS.has(name))
+        .filter(([name]) => !AKERU_MASTRA_HIDDEN_TOOLS.has(name))
         .map(([name, tool]) => {
-          const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
-            ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
+          const exposedName = name.startsWith(AKERU_PREVIEW_TOOL_PREFIX)
+            ? name.slice(AKERU_PREVIEW_TOOL_PREFIX.length)
             : name;
           const execute = Reflect.get(tool, "execute") as unknown;
           if (!isCodexComputerUseTool(name) || typeof execute !== "function") {

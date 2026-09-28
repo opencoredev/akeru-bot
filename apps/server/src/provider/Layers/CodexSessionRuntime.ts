@@ -569,13 +569,13 @@ function buildCodexCollaborationMode(input: {
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL;
   const reasoningEffort = input.effort ?? "medium";
+  // Plan mode is retired; every turn runs in Codex's default collaboration mode.
   return {
-    mode: input.interactionMode,
+    mode: "default",
     settings: {
       model,
       reasoning_effort: reasoningEffort,
       developer_instructions: buildCodexDeveloperInstructions(
-        input.interactionMode,
         { model, reasoningEffort },
         input.browserToolsAvailable ?? true,
       ),

@@ -80,7 +80,7 @@ export type OpenCodeGoDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Pa
 
 export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriverEnv> = {
   driverKind: DRIVER_KIND,
-  metadata: { displayName: "OpenCode Go", supportsMultipleInstances: false },
+  metadata: { displayName: "OpenCode Go", supportsMultipleInstances: true },
   configSchema: OpenCodeGoSettings,
   defaultConfig: () => decodeSettings({}),
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
@@ -99,7 +99,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
       });
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
-        const connected = auth.isConnected("opencode-go");
+        const connected = auth.isConnected("opencode-go", instanceId);
         return {
           instanceId,
           driver: DRIVER_KIND,
