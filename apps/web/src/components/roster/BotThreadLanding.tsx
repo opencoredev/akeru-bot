@@ -59,7 +59,7 @@ import { BotPromptComposer } from "./BotPromptComposer";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
-import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
+import { ProviderUnavailableLine } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { OpenComputerAction } from "../computer/OpenComputerAction";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
@@ -695,15 +695,6 @@ export function BotThreadLanding({
             {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
             resuming={runtime.resuming}
           />
-          {sendBlocked && engineUnavailability ? (
-            <ProviderUnavailableNotice
-              id={engineNoticeId}
-              className="mx-auto mt-2 w-[min(46rem,calc(100%-2rem))]"
-              presentation={engineUnavailability}
-              environmentId={environmentId}
-              onOpenUsage={openBotSettings}
-            />
-          ) : null}
           <BotPromptComposer
             mentionScope={mentionScope}
             commandCatalog={engineCatalog}
@@ -766,7 +757,14 @@ export function BotThreadLanding({
               return sent;
             }}
           />
-          {sendBlocked ? null : !runtime.botReady ? (
+          {sendBlocked && engineUnavailability ? (
+            <ProviderUnavailableLine
+              id={engineNoticeId}
+              presentation={engineUnavailability}
+              environmentId={environmentId}
+              onOpenUsage={openBotSettings}
+            />
+          ) : sendBlocked ? null : !runtime.botReady ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
               {t("Connecting bot…")}
             </p>

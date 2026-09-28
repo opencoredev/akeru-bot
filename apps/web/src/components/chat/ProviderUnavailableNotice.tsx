@@ -1,10 +1,14 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import type { ProviderAvailabilityPresentation } from "@t3tools/client-runtime/provider-availability";
+import {
+  joinProviderUnavailability,
+  type ProviderAvailabilityPresentation,
+} from "@t3tools/client-runtime/provider-availability";
 import { settingsDeepLinkHref } from "@t3tools/client-runtime/settings-deep-link";
 import { CircleAlertIcon } from "lucide-react";
 
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
+import { openSettings } from "../../settingsDialogStore";
 import { parseSettingsDeepLink } from "../../settingsDeepLink";
 import { Button } from "../ui/button";
 import { SettingsLinkChip } from "./SettingsLinkChip";
@@ -106,6 +110,55 @@ export function ProviderUnavailableNotice({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One quiet line under a chat composer while Send is blocked: why, and the
+ * single next step. Pass its `id` as the composer's `sendBlockedDescriptionId`
+ * so the disabled Send button reads the same reason.
+ */
+export function ProviderUnavailableLine({
+  presentation,
+  environmentId,
+  onOpenUsage,
+  id,
+}: {
+  readonly id?: string | undefined;
+  readonly presentation: Pick<ProviderAvailabilityPresentation, "title" | "description" | "action">;
+  readonly environmentId: EnvironmentId | null;
+  readonly onOpenUsage?: (() => void) | undefined;
+}) {
+  const { t } = useI18n();
+  const action =
+    presentation.action === "providers" ? (
+      <Button
+        size="xs"
+        type="button"
+        variant="outline"
+        onClick={() => openSettings("providers", null, environmentId)}
+      >
+        {t("Set up a provider")}
+      </Button>
+    ) : presentation.action === "usage" && onOpenUsage ? (
+      <Button size="xs" type="button" variant="outline" onClick={onOpenUsage}>
+        {t("Bot settings")}
+      </Button>
+    ) : null;
+  return (
+    <div
+      id={id}
+      role="status"
+      data-provider-unavailable=""
+      className="flex flex-wrap items-center justify-center gap-2 px-4 pb-3 text-center text-xs text-muted-foreground"
+    >
+      <span>
+        {action
+          ? t("{title}.", { title: presentation.title })
+          : joinProviderUnavailability(presentation, t)}
+      </span>
+      {action}
     </div>
   );
 }

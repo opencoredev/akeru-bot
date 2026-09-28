@@ -109,7 +109,7 @@ const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t
 
 /**
  * Why the bot's engine cannot run a turn right now, or null when it can. Feeds
- * the disabled Send button and the inline message above the composer.
+ * the disabled Send button and the quiet line below the composer.
  */
 export function botEngineUnavailability(
   selection: ModelSelection | null,
@@ -119,7 +119,7 @@ export function botEngineUnavailability(
   if (!selection) {
     return {
       reason: "missing-provider" as const,
-      title: t("No provider is connected"),
+      title: t("No provider is ready for this bot"),
       description: t("Connect a provider in Settings > Providers so this bot can reply."),
       technicalDetails: "",
       action: "providers" as const,

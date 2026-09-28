@@ -26,7 +26,6 @@ import { resolveBotModelLabel } from "./botModelLabel";
 import { botPersonalityToneLabel, canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, botSandboxLabel } from "./botSandbox";
 import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
-import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import type { Bot } from "./types";
 import { useDetailsPanelState } from "./useDetailsPanelState";
 import { useBotDetailsOpen } from "./detailsPanelOpen";
@@ -44,7 +43,6 @@ export function BotOverview({
   routinePanel,
   routinePanelRef,
   routinePanelRequest = 0,
-  modelUnavailable = null,
 }: {
   readonly bot: Bot;
   readonly onOpenSettings?: () => void;
@@ -53,8 +51,6 @@ export function BotOverview({
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
   readonly routinePanelRequest?: number;
   readonly routinePanelRef?: Ref<HTMLDivElement>;
-  /** Why the bot's model cannot run right now. The model stays on the bot. */
-  readonly modelUnavailable?: string | null;
 }) {
   const { t } = useI18n();
   const providers = useAtomValue(primaryServerProvidersAtom);
@@ -103,14 +99,7 @@ export function BotOverview({
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
           <dt className="text-muted-foreground">{t("Model")}</dt>
-          <dd className="min-w-0 max-w-44 text-right">
-            <span className="block truncate font-medium">{modelLabel}</span>
-            {modelUnavailable ? (
-              <span className="block text-xs text-warning" data-model-unavailable="">
-                {t("Unavailable: {reason}", { reason: modelUnavailable })}
-              </span>
-            ) : null}
-          </dd>
+          <dd className="max-w-44 truncate font-medium">{modelLabel}</dd>
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
           <dt className="text-muted-foreground">{t("Sandbox")}</dt>
@@ -153,7 +142,6 @@ export function BotDetailsPanel({
   const mobileRoutineRef = useRef<HTMLDivElement>(null);
   const handledRoutineRequest = useRef(0);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
-  const engine = useBotEngineAvailability(bot.engine);
 
   useEffect(() => {
     if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
@@ -235,7 +223,6 @@ export function BotDetailsPanel({
             bot={bot}
             routinePanelRef={routinePanelRef}
             routinePanelRequest={routinePanelRequest}
-            modelUnavailable={engine.blocked ? (engine.unavailability?.title ?? null) : null}
             {...(onOpenSettings ? { onOpenSettings } : {})}
             {...(threadRef
               ? {

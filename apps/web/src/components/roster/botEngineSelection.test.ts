@@ -66,7 +66,7 @@ describe("resolveStickyBotEngine", () => {
     ).toBeNull();
     expect(botEngineUnavailability(null, instanceEntries)).toMatchObject({
       reason: "missing-provider",
-      title: "No provider is connected",
+      title: "No provider is ready for this bot",
     });
   });
 
@@ -106,7 +106,7 @@ describe("resolveStickyBotEngine", () => {
     });
     expect(botEngineUnavailability(null, signedIn, zh)).toMatchObject({
       reason: "missing-provider",
-      title: "未连接任何提供商",
+      title: "此机器人没有可用的提供商",
       description: "请在“设置 > 提供商”中连接一个提供商，以便此机器人回复。",
     });
   });
