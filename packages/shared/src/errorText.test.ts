@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import { withoutErrorStack } from "./errorText.ts";
+
+const STACK = [
+  "ProviderValidationError: Provider validation failed in AgentController.inspectEngine: Provider instance 'codex' is disabled in Akeru Bot settings.",
+  "    at disabledProviderError (file:///home/leo/akeru/apps/server/src/provider/Layers/AgentController.ts:584:10)",
+  "    at AgentController.inspectEngine (definition) (file:///home/leo/akeru/apps/server/src/provider/Layers/AgentController.ts:2497:73)",
+  "    at ensureSessionForThread (file:///home/leo/akeru/apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:1282:28)",
+].join("\n");
+
+describe("withoutErrorStack", () => {
+  it("keeps the first line of a stored stack without its class name", () => {
+    expect(withoutErrorStack(STACK)).toBe(
+      "Provider validation failed in AgentController.inspectEngine: Provider instance 'codex' is disabled in Akeru Bot settings.",
+    );
+  });
+
+  it("cuts a stack that was collapsed onto one line", () => {
+    expect(withoutErrorStack(STACK.replace(/\n\s+/g, " "))).toBe(
+      "Provider validation failed in AgentController.inspectEngine: Provider instance 'codex' is disabled in Akeru Bot settings.",
+    );
+    expect(withoutErrorStack("Boom at file:///srv/app.js:1:2")).toBe("Boom");
+    expect(withoutErrorStack("Error: Boom\n    at run (node:internal/x:1:2)")).toBe("Boom");
+    expect(withoutErrorStack("Boom at new Worker (node:internal/worker:1:2)")).toBe("Boom");
+  });
+
+  it("leaves readable messages alone", () => {
+    for (const message of [
+      "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.",
+      "Could not look at the file.",
+      "The server restarted before this work finished.",
+      "See https://example.com at noon.",
+    ]) {
+      expect(withoutErrorStack(message)).toBe(message);
+    }
+    expect(withoutErrorStack("")).toBe("");
+  });
+});

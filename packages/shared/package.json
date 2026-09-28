@@ -16,6 +16,10 @@
       "types": "./src/channelProject.ts",
       "import": "./src/channelProject.ts"
     },
+    "./errorText": {
+      "types": "./src/errorText.ts",
+      "import": "./src/errorText.ts"
+    },
     "./model": {
       "types": "./src/model.ts",
       "import": "./src/model.ts"

@@ -1,4 +1,5 @@
 import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { withoutErrorStack } from "@t3tools/shared/errorText";
 import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@t3tools/contracts";
 import type { BotConversationEntry } from "./botConversationPresentation";
 
@@ -105,7 +106,10 @@ export function deriveRoutineReceipts(
         receipts.push({
           id: `routine-run-finished:${run.id}`,
           createdAt: run.completedAt ?? run.updatedAt,
-          text: withDetail(t("“{name}” failed", { name: routine.job }), run.failure?.message),
+          text: withDetail(
+            t("“{name}” failed", { name: routine.job }),
+            run.failure ? withoutErrorStack(run.failure.message) : undefined,
+          ),
           tone: "error",
           ...(archived ? { archived: true } : {}),
         });
