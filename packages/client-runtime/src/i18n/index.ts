@@ -2436,6 +2436,8 @@ export const englishCatalog = {
   "It is missing the server address or the token. Copy the whole link and open it again.":
     "It is missing the server address or the token. Copy the whole link and open it again.",
   Paired: "Paired",
+  "If the server accepted this one-time token, get a new pairing link before trying again.":
+    "If the server accepted this one-time token, get a new pairing link before trying again.",
   "This browser can now use {name}.": "This browser can now use {name}.",
   "This browser can now use the environment.": "This browser can now use the environment.",
   "Paste the pairing token from your link to connect.":

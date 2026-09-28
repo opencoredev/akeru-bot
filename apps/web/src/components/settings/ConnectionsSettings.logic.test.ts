@@ -4,6 +4,7 @@ import {
   applyWslEnableSelection,
   isAdvertisedEndpointRemotelyReachable,
   isQrShareableEndpoint,
+  parsePairingUrlFields,
   selectQrEndpointOption,
 } from "./ConnectionsSettings.logic";
 
@@ -188,5 +189,39 @@ describe("selectQrEndpointOption", () => {
     const loopbackOnly = options.slice(0, 1);
     expect(selectQrEndpointOption(loopbackOnly, null, null)?.id).toBe("desktop-loopback:4780");
     expect(selectQrEndpointOption([], "anything", "anything")).toBeNull();
+  });
+});
+
+describe("parsePairingUrlFields", () => {
+  const origin = "https://akeru.example.com";
+
+  it("pairs a direct link with its own origin", () => {
+    expect(parsePairingUrlFields("https://box.tail.ts.net:3773/pair#token=abc", origin)).toEqual({
+      host: "https://box.tail.ts.net:3773",
+      pairingCode: "abc",
+    });
+  });
+
+  it("pairs a hosted link with its host parameter, not the origin that served it", () => {
+    expect(
+      parsePairingUrlFields(
+        "https://tunnel.example.com/pair?host=https%3A%2F%2Fbox.tail.ts.net%3A3773&label=Box#token=abc",
+        origin,
+      ),
+    ).toEqual({ host: "https://box.tail.ts.net:3773", pairingCode: "abc" });
+  });
+
+  it("accepts a hosted link that carries its token in the query", () => {
+    expect(
+      parsePairingUrlFields("tunnel.example.com/pair?host=box.local:3773&token=abc", origin),
+    ).toEqual({ host: "box.local:3773", pairingCode: "abc" });
+  });
+
+  it("returns null for a bare host or a link without a token", () => {
+    expect(parsePairingUrlFields("box.local:3773", origin)).toBeNull();
+    expect(
+      parsePairingUrlFields("https://tunnel.example.com/pair?host=box.local", origin),
+    ).toBeNull();
+    expect(parsePairingUrlFields("   ", origin)).toBeNull();
   });
 });

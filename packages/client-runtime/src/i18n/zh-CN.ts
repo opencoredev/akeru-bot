@@ -2342,6 +2342,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "It is missing the server address or the token. Copy the whole link and open it again.":
     "链接缺少服务器地址或令牌。请复制完整链接后重新打开。",
   Paired: "已配对",
+  "If the server accepted this one-time token, get a new pairing link before trying again.":
+    "如果服务器已接受这个一次性令牌，请先获取新的配对链接再重试。",
   "This browser can now use {name}.": "此浏览器现在可以使用 {name}。",
   "This browser can now use the environment.": "此浏览器现在可以使用该环境。",
   "Paste the pairing token from your link to connect.": "粘贴链接中的配对令牌以连接。",
