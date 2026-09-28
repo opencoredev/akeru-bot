@@ -712,7 +712,10 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     Effect.withSpan("EnvironmentSupervisor.disconnect"),
   );
 
+  // Retry is the user asking to connect now, so it also restores connection
+  // intent: an available environment that is not connecting starts connecting.
   const retryNow = Ref.set(resetRetryState, true).pipe(
+    Effect.andThen(Ref.update(intent, (current) => ({ ...current, desired: true }))),
     Effect.andThen(signal({ _tag: "RetryRequested" })),
     Effect.withSpan("EnvironmentSupervisor.retryNow"),
   );
