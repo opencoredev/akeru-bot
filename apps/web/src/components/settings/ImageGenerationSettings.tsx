@@ -145,7 +145,7 @@ export function ImageGenerationSettingsContent({
       <SettingsSection id="image-generation" title="Image generation">
         <SettingsRow
           title="Subscriptions"
-          description="Bots create images with the ChatGPT or Grok subscription connected to this environment. This does not change which model a bot chats with."
+          description="Connect ChatGPT or Grok here and choose which subscription bots will use when image creation becomes available. Image creation is not available in chats yet. This does not change a bot’s chat model."
           status={
             providersQuery.error ? (
               <span className="text-destructive">
