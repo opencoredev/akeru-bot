@@ -27,6 +27,7 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }))
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };
+    if (atom === "rosterLoaded") return true;
     if (atom === "bots") return [];
     return [];
   },
@@ -34,6 +35,7 @@ vi.mock("@effect/atom-react", () => ({
 vi.mock("../../state/bots", () => ({
   botEnvironment: { create: "create" },
   environmentBotsAtom: () => "bots",
+  environmentRosterLoadedAtom: () => "rosterLoaded",
 }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => "onboarding-environment",
