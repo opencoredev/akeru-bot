@@ -23,10 +23,7 @@ const PREVIEW_PANEL_MIN_WIDTH = 360;
 if (typeof window !== "undefined") {
   try {
     const legacy = window.localStorage.getItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);
-    if (
-      legacy !== null &&
-      window.localStorage.getItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY) === null
-    ) {
+    if (legacy !== null && window.localStorage.getItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY) === null) {
       window.localStorage.setItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY, legacy);
     }
     window.localStorage.removeItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);

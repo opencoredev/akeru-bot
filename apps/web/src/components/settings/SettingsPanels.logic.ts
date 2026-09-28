@@ -33,8 +33,7 @@ export function projectGroupingModeFromToggle(
 
 const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "akeru:last-enabled-project-grouping-mode";
 // Pre-rebrand key, kept as a read fallback so the grouping preference survives.
-const LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY =
-  "t3code:last-enabled-project-grouping-mode";
+const LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
 
 export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
   try {

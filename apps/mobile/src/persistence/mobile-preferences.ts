@@ -289,13 +289,15 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     }
 
     const fallbackResult = yield* Effect.result(
-      secureStorage.getItem(PREFERENCES_FALLBACK_KEY).pipe(
-        Effect.flatMap((value) =>
-          value !== null
-            ? Effect.succeed(value)
-            : secureStorage.getItem(LEGACY_PREFERENCES_FALLBACK_KEY),
+      secureStorage
+        .getItem(PREFERENCES_FALLBACK_KEY)
+        .pipe(
+          Effect.flatMap((value) =>
+            value !== null
+              ? Effect.succeed(value)
+              : secureStorage.getItem(LEGACY_PREFERENCES_FALLBACK_KEY),
+          ),
         ),
-      ),
     );
     let fallbackJson: string | null = null;
     if (fallbackResult._tag === "Success") {
@@ -343,9 +345,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
         .getItem(PREFERENCES_KEY)
         .pipe(
           Effect.flatMap((value) =>
-            value !== null
-              ? Effect.succeed(value)
-              : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
+            value !== null ? Effect.succeed(value) : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
           ),
         );
       const legacyPreferences = parsePayload(legacyJson);

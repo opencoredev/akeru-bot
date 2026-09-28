@@ -48,10 +48,7 @@ export function InboxPanel() {
         ) : inboxQuery.error ? (
           <SettingsRow title="Could not load errors" description={inboxQuery.error} />
         ) : openItems.length === 0 ? (
-          <SettingsRow
-            title="No errors"
-            description="Bot failures appear here."
-          />
+          <SettingsRow title="No errors" description="Bot failures appear here." />
         ) : (
           openItems.map((item) => (
             <InboxIncidentRow

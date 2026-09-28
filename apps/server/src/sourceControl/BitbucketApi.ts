@@ -1091,9 +1091,7 @@ export const make = Effect.gen(function* () {
           remoteName,
           remoteBranch,
         });
-        yield* Effect.scoped(
-          git.switchRef({ cwd: input.cwd, refName: effectiveLocalBranch }),
-        );
+        yield* Effect.scoped(git.switchRef({ cwd: input.cwd, refName: effectiveLocalBranch }));
       }).pipe(
         Effect.mapError((cause) =>
           isBitbucketApiError(cause)

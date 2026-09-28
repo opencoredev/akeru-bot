@@ -62,7 +62,10 @@ export function providerUnavailabilityFromDetail(
   const mappings: Record<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>> = {
     codex: [
       [/refresh token|token expired|login expired/, "expired-login"],
-      [/not logged in|not authenticated|authentication required|unauthorized|api key/, "missing-login"],
+      [
+        /not logged in|not authenticated|authentication required|unauthorized|api key/,
+        "missing-login",
+      ],
       [/model .*not found|unknown model|invalid model/, "unsupported-model"],
       [/usage cap|spending limit|budget exceeded/, "usage-cap"],
       [/rate limit|too many requests|quota/, "limit-reached"],

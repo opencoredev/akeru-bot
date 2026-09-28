@@ -206,11 +206,18 @@ const preflightProvider = (input: {
   readonly providerId: string;
   readonly model: string;
   readonly subscriptionStatuses?: ReadonlyArray<ProviderStatus>;
-  readonly subscriptionHealth?: (instanceId: string) => { readonly health: string; readonly lastFailedRequest?: { readonly message: string } } | undefined;
+  readonly subscriptionHealth?: (
+    instanceId: string,
+  ) =>
+    | { readonly health: string; readonly lastFailedRequest?: { readonly message: string } }
+    | undefined;
 }): { readonly category: ServerProviderUnavailability; readonly detail: string } | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
   if (!provider) {
-    return { category: "temporary-failure", detail: `Provider '${input.providerId}' is unavailable.` };
+    return {
+      category: "temporary-failure",
+      detail: `Provider '${input.providerId}' is unavailable.`,
+    };
   }
   const subscriptionProviderByDriver: Record<string, string> = {
     codex: "openai-codex",
@@ -220,28 +227,44 @@ const preflightProvider = (input: {
     opencodeGo: "opencode-go",
   };
   const subscriptionId = subscriptionProviderByDriver[provider.driver];
-  const subscription = input.subscriptionStatuses?.find((status) => status.provider === subscriptionId);
+  const subscription = input.subscriptionStatuses?.find(
+    (status) => status.provider === subscriptionId,
+  );
   const requestHealth = input.subscriptionHealth?.(provider.instanceId);
   const health = requestHealth?.health ?? subscription?.health;
   if (health === "missing" || health === "revoked") {
-    return { category: health === "revoked" ? "expired-login" : "missing-login", detail: subscription?.reconnectAction ?? "Connect this provider." };
+    return {
+      category: health === "revoked" ? "expired-login" : "missing-login",
+      detail: subscription?.reconnectAction ?? "Connect this provider.",
+    };
   }
-  if (health === "expired") return { category: "expired-login", detail: "Provider login has expired." };
+  if (health === "expired")
+    return { category: "expired-login", detail: "Provider login has expired." };
   if (health === "failed" || health === "failed-first-request") {
-    const detail = requestHealth?.lastFailedRequest?.message ?? subscription?.lastFailedRequest?.message ?? "The provider request failed.";
+    const detail =
+      requestHealth?.lastFailedRequest?.message ??
+      subscription?.lastFailedRequest?.message ??
+      "The provider request failed.";
     return { category: providerUnavailabilityFromDetail(provider.driver, detail), detail };
   }
   if (provider.unavailability) {
     return {
       category: provider.unavailability,
-      detail: provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
+      detail:
+        provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
     };
   }
   if (!provider.enabled || !provider.installed || provider.availability === "unavailable") {
-    return { category: "temporary-failure", detail: provider.unavailableReason ?? "Provider is unavailable." };
+    return {
+      category: "temporary-failure",
+      detail: provider.unavailableReason ?? "Provider is unavailable.",
+    };
   }
   if (provider.auth.status === "unauthenticated") {
-    return { category: "missing-login", detail: "Sign in to this provider before starting a chat." };
+    return {
+      category: "missing-login",
+      detail: "Sign in to this provider before starting a chat.",
+    };
   }
   if (provider.models.length > 0 && !provider.models.some((model) => model.slug === input.model)) {
     return {
@@ -1962,9 +1985,12 @@ const makeWsRpcLayer = (
                     });
                   }
                 }
-                const botId = normalizedCommand.respondingBotId ?? thread?.respondingBotId ?? thread?.botId;
+                const botId =
+                  normalizedCommand.respondingBotId ?? thread?.respondingBotId ?? thread?.botId;
                 if (botId) {
-                  const bot = yield* projectionBots.getById({ botId }).pipe(Effect.map(Option.getOrUndefined));
+                  const bot = yield* projectionBots
+                    .getById({ botId })
+                    .pipe(Effect.map(Option.getOrUndefined));
                   if (bot?.usageCap) {
                     const usage = yield* botUsageLedger.summarize(botId);
                     if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {

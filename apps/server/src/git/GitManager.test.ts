@@ -4640,13 +4640,22 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       yield* runGit(repoDir, ["push", "-u", "fork-seed", "feature/pr-legacy-fork"]);
       yield* runGit(repoDir, ["checkout", "main"]);
       // Simulate a pre-rebrand checkout: worktree on t3code/pr-84/<head>.
-      yield* runGit(repoDir, ["branch", "t3code/pr-84/feature/pr-legacy-fork", "feature/pr-legacy-fork"]);
+      yield* runGit(repoDir, [
+        "branch",
+        "t3code/pr-84/feature/pr-legacy-fork",
+        "feature/pr-legacy-fork",
+      ]);
       const worktreePath = NodePath.join(
         repoDir,
         "..",
         `pr-legacy-fork-${NodePath.basename(repoDir)}`,
       );
-      yield* runGit(repoDir, ["worktree", "add", worktreePath, "t3code/pr-84/feature/pr-legacy-fork"]);
+      yield* runGit(repoDir, [
+        "worktree",
+        "add",
+        worktreePath,
+        "t3code/pr-84/feature/pr-legacy-fork",
+      ]);
 
       const { manager } = yield* makeManager({
         ghScenario: {

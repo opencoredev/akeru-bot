@@ -32,7 +32,9 @@ describe("getPierreTerminalTheme", () => {
 describe("getMobileTerminalTheme", () => {
   it("preserves the Pierre terminal for the default theme", () => {
     for (const scheme of ["light", "dark"] as const) {
-      expect(getMobileTerminalTheme("akeru-classic", scheme)).toEqual(getPierreTerminalTheme(scheme));
+      expect(getMobileTerminalTheme("akeru-classic", scheme)).toEqual(
+        getPierreTerminalTheme(scheme),
+      );
     }
   });
 

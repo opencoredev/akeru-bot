@@ -278,7 +278,11 @@ export function subscribeToCustomThemes(listener: () => void): () => void {
     return () => customThemeListeners.delete(listener);
   }
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === CUSTOM_THEMES_STORAGE_KEY || event.key === LEGACY_CUSTOM_THEMES_STORAGE_KEY || event.key === null) {
+    if (
+      event.key === CUSTOM_THEMES_STORAGE_KEY ||
+      event.key === LEGACY_CUSTOM_THEMES_STORAGE_KEY ||
+      event.key === null
+    ) {
       invalidateCustomThemes();
     }
   };

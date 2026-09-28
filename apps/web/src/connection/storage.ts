@@ -178,9 +178,7 @@ const databaseIsEmpty = Effect.fn("web.connectionStorage.databaseIsEmpty")(funct
     let pending = storeNames.length;
     let sawEntry = false;
     for (const storeName of storeNames) {
-      const request = transaction.objectStore(storeName).getKey(
-        IDBKeyRange.lowerBound(""),
-      );
+      const request = transaction.objectStore(storeName).getKey(IDBKeyRange.lowerBound(""));
       request.addEventListener("success", () => {
         if (request.result !== undefined && request.result !== null) {
           sawEntry = true;
@@ -208,8 +206,7 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
 ) {
   const storeNames = OBJECT_STORE_NAMES.filter(
     (storeName) =>
-      source.objectStoreNames.contains(storeName) &&
-      target.objectStoreNames.contains(storeName),
+      source.objectStoreNames.contains(storeName) && target.objectStoreNames.contains(storeName),
   );
   if (storeNames.length === 0) return;
 
@@ -247,9 +244,7 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
     const transaction = target.transaction(storeNames, "readwrite");
     transaction.addEventListener("error", () => {
       resume(
-        Effect.fail(
-          catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error"),
-        ),
+        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error")),
       );
     });
     transaction.addEventListener("complete", () => {
@@ -286,16 +281,15 @@ export const migrateLegacyConnectionDatabase = Effect.fn(
     ),
   );
   if (legacyResult._tag === "Failure") {
-    yield* Effect.logWarning(
-      "Could not open the legacy connection database for migration.",
-    ).pipe(Effect.annotateLogs({ error: legacyResult.failure }));
+    yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
+      Effect.annotateLogs({ error: legacyResult.failure }),
+    );
     return;
   }
   yield* Effect.scoped(
     Effect.gen(function* () {
-      const legacy = yield* Effect.acquireRelease(
-        Effect.succeed(legacyResult.success),
-        (db) => Effect.sync(() => db.close()),
+      const legacy = yield* Effect.acquireRelease(Effect.succeed(legacyResult.success), (db) =>
+        Effect.sync(() => db.close()),
       );
       yield* copyDatabaseContents(legacy, database);
     }),

@@ -5,11 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { afterEach, vi } from "vite-plus/test";
 
-import {
-  makeCatalogBackend,
-  makeCatalogStore,
-  migrateLegacyConnectionDatabase,
-} from "./storage";
+import { makeCatalogBackend, makeCatalogStore, migrateLegacyConnectionDatabase } from "./storage";
 
 const emptyCatalog = {
   schemaVersion: 1,
@@ -97,13 +93,7 @@ describe("migrateLegacyConnectionDatabase", () => {
         () =>
           new Promise<IDBDatabase>((resolve, reject) => {
             legacyOpen.addEventListener("upgradeneeded", () => {
-              for (const name of [
-                "catalog",
-                "shell",
-                "thread",
-                "server-config",
-                "vcs-refs",
-              ]) {
+              for (const name of ["catalog", "shell", "thread", "server-config", "vcs-refs"]) {
                 legacyOpen.result.createObjectStore(name);
               }
             });
@@ -129,13 +119,7 @@ describe("migrateLegacyConnectionDatabase", () => {
         () =>
           new Promise<IDBDatabase>((resolve, reject) => {
             migratedOpen.addEventListener("upgradeneeded", () => {
-              for (const name of [
-                "catalog",
-                "shell",
-                "thread",
-                "server-config",
-                "vcs-refs",
-              ]) {
+              for (const name of ["catalog", "shell", "thread", "server-config", "vcs-refs"]) {
                 migratedOpen.result.createObjectStore(name);
               }
             });

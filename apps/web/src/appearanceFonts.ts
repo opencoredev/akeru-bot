@@ -30,10 +30,7 @@ export const TYPOGRAPHY_ADVANCED_STORAGE_KEY = "akeru:typography-advanced";
 // Pre-rebrand key; migrateLocalStorageKey drains it on module load.
 const LEGACY_TYPOGRAPHY_ADVANCED_STORAGE_KEY = "t3code:typography-advanced";
 
-migrateLocalStorageKey(
-  TYPOGRAPHY_ADVANCED_STORAGE_KEY,
-  LEGACY_TYPOGRAPHY_ADVANCED_STORAGE_KEY,
-);
+migrateLocalStorageKey(TYPOGRAPHY_ADVANCED_STORAGE_KEY, LEGACY_TYPOGRAPHY_ADVANCED_STORAGE_KEY);
 
 /**
  * Simple typography treats the terminal as another monospace surface. In
