@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import type { ModelCapabilities } from "@t3tools/contracts";
+import { ProviderDriverKind, type ModelCapabilities } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
@@ -10,11 +10,36 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
+  buildServerProvider,
   isCommandMissingCause,
   providerModelsFromSettings,
   providerUnavailabilityFromDetail,
   spawnAndCollect,
 } from "./providerSnapshot.ts";
+
+describe("buildServerProvider", () => {
+  it("does not turn a ready provider's upgrade notice into a login block", () => {
+    const input = {
+      driver: ProviderDriverKind.make("claudeAgent"),
+      presentation: { displayName: "Claude" },
+      enabled: true,
+      checkedAt: "2026-09-28T00:00:00.000Z",
+      models: [],
+      probe: {
+        installed: true,
+        version: null,
+        status: "ready" as const,
+        auth: { status: "authenticated" as const },
+        message: "Please run login after upgrading Claude",
+      },
+    };
+
+    expect(buildServerProvider(input).unavailability).toBeUndefined();
+    expect(
+      buildServerProvider({ ...input, probe: { ...input.probe, status: "error" } }).unavailability,
+    ).toBe("missing-login");
+  });
+});
 
 describe("providerUnavailabilityFromDetail", () => {
   it.each([

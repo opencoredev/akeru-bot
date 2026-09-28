@@ -275,11 +275,12 @@ export function buildServerProvider(input: {
         checkedAt: input.checkedAt,
       })
     : undefined;
-  const unavailability = input.probe.message
-    ? providerUnavailabilityFromDetail(input.driver ?? "unknown", input.probe.message)
-    : input.probe.auth.status === "unauthenticated"
+  const unavailability =
+    input.probe.auth.status === "unauthenticated"
       ? "missing-login"
-      : undefined;
+      : input.probe.status === "error" && input.probe.message
+        ? providerUnavailabilityFromDetail(input.driver ?? "unknown", input.probe.message)
+        : undefined;
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),
