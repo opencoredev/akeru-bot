@@ -135,6 +135,53 @@ describe("AkeruSessionResources", () => {
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
   });
 
+  it("retries failed workspace sleeps after releasing sessions during shutdown", async () => {
+    const remote = workspace();
+    const botWorkspace = {
+      ...localBotWorkspace(remote),
+      provider: "vercel" as const,
+      sleep: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("pause unavailable"))
+        .mockResolvedValue(undefined),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => botWorkspace,
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "shutdown-retry" });
+    await expect(resources.shutdown()).rejects.toThrow("pause unavailable");
+    expect(botWorkspace.sleep).toHaveBeenCalledTimes(2);
+    await resources.retryFailedWorkspaceSleeps();
+  });
+
+  it("retries a failed workspace sleep with no active session", async () => {
+    const remote = workspace();
+    const botWorkspace = {
+      ...localBotWorkspace(remote),
+      provider: "vercel" as const,
+      sleep: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("pause unavailable"))
+        .mockResolvedValue(undefined),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => botWorkspace,
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "idle-retry" });
+    await expect(resources.release("idle-retry")).rejects.toThrow("pause unavailable");
+    await resources.retryFailedWorkspaceSleeps();
+    expect(botWorkspace.sleep).toHaveBeenCalledTimes(2);
+    await resources.shutdown();
+  });
+
   it.each(["local", "vercel", "e2b", "daytona", "upstash", "tenki"] as const)(
     "acquires only usable connector browser attachments in %s workspaces",
     async (botSandbox) => {
@@ -172,6 +219,7 @@ describe("AkeruSessionResources", () => {
               mcpServers: [server, exaServer],
             });
             const requiresBrowser =
+              botSandbox !== "tenki" &&
               (id === "builtin-executor" || id === "builtin-tinyfish") &&
               (transport === "stdio" || botSandbox !== "local");
             expect(acquireAttachment).toHaveBeenCalledTimes(requiresBrowser ? 1 : 0);

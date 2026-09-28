@@ -52,6 +52,7 @@ interface BotWorkspacePoolEntry {
   readonly workspace: Promise<AkeruBotWorkspace>;
   references: number;
   sleeping?: Promise<void>;
+  sleepFailed?: boolean;
   waking?: Promise<void>;
   destroying?: Promise<void>;
   destroyWhenUnused?: boolean;
@@ -98,8 +99,9 @@ export class BotWorkspacePool {
       workspace = await entry.workspace;
       if (wake && !entry.waking) {
         entry.waking = (async () => {
-          await entry.sleeping;
+          await entry.sleeping?.catch(() => undefined);
           delete entry.sleeping;
+          delete entry.sleepFailed;
           await workspace.wake();
         })().finally(() => {
           delete entry.waking;
@@ -108,15 +110,14 @@ export class BotWorkspacePool {
       await entry.waking;
     } catch (error) {
       entry.references -= 1;
-      if (entry.references === 0 && this.entries.get(key) === entry) {
-        this.entries.delete(key);
-      }
       if (entry.references === 0) {
-        void entry.workspace
-          .then((failedWorkspace) =>
-            failedWorkspace.provider === "local" ? failedWorkspace.destroy() : undefined,
-          )
-          .catch(() => undefined);
+        const failedWorkspace = await entry.workspace.catch(() => undefined);
+        if (failedWorkspace && failedWorkspace.provider !== "local") {
+          entry.sleepFailed = true;
+        } else {
+          if (this.entries.get(key) === entry) this.entries.delete(key);
+          await failedWorkspace?.destroy().catch(() => undefined);
+        }
       }
       throw error;
     }
@@ -137,23 +138,46 @@ export class BotWorkspacePool {
           return;
         }
 
-        entry.sleeping = (async () => {
-          await entry.waking;
-          await workspace.sleep();
-        })().catch(async (error: unknown) => {
-          if (workspace.provider === "local") {
-            entry.destroying ??= workspace.destroy().finally(() => {
-              if (this.entries.get(key) === entry) this.entries.delete(key);
-            });
-            await entry.destroying.catch(() => undefined);
-          } else if (this.entries.get(key) === entry) {
-            this.entries.delete(key);
-          }
-          throw error;
-        });
-        await entry.sleeping;
+        await this.sleepEntry(key, entry, workspace);
       },
     };
+  }
+
+  async retryFailedSleeps(): Promise<void> {
+    const results = await Promise.allSettled(
+      [...this.entries.entries()].map(async ([key, entry]) => {
+        if (!entry.sleepFailed || entry.references > 0 || entry.destroying) return;
+        const workspace = await entry.workspace;
+        if (entry.references > 0 || entry.destroying || this.entries.get(key) !== entry) return;
+        await this.sleepEntry(key, entry, workspace);
+      }),
+    );
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  }
+
+  private sleepEntry(
+    key: string,
+    entry: BotWorkspacePoolEntry,
+    workspace: AkeruBotWorkspace,
+  ): Promise<void> {
+    if (entry.sleeping && !entry.sleepFailed) return entry.sleeping;
+    delete entry.sleepFailed;
+    entry.sleeping = (async () => {
+      await entry.waking;
+      await workspace.sleep();
+    })().catch(async (error: unknown) => {
+      if (workspace.provider === "local") {
+        entry.destroying ??= workspace.destroy().finally(() => {
+          if (this.entries.get(key) === entry) this.entries.delete(key);
+        });
+        await entry.destroying.catch(() => undefined);
+      } else {
+        entry.sleepFailed = true;
+      }
+      throw error;
+    });
+    return entry.sleeping;
   }
 
   async destroyAll(): Promise<void> {

@@ -54,6 +54,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
@@ -3175,6 +3176,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           Effect.ignoreCause({ log: true }),
         );
       }),
+    );
+
+    yield* runMastra("resources.retryFailedWorkspaceSleeps", () =>
+      sessionResources.retryFailedWorkspaceSleeps(),
+    ).pipe(
+      Effect.ignoreCause({ log: true }),
+      Effect.repeat(Schedule.spaced("30 seconds")),
+      Effect.forkScoped,
     );
 
     return AgentController.of({

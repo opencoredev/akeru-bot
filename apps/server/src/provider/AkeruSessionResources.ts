@@ -214,11 +214,11 @@ export class AkeruSessionResources {
 
       const previewMcpServerConfig = this.options.getPreviewMcpServerConfig?.(key);
       if (input.mcpServers.length > 0 || previewMcpServerConfig) {
-        const attachment = input.mcpServers.some((server) =>
-          mcpServerNeedsBrowserAttachment(server, remote),
-        )
-          ? await browser.attachment()
-          : undefined;
+        const attachment =
+          input.botSandbox !== "tenki" &&
+          input.mcpServers.some((server) => mcpServerNeedsBrowserAttachment(server, remote))
+            ? await browser.attachment()
+            : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
           configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
@@ -338,6 +338,10 @@ export class AkeruSessionResources {
     );
   }
 
+  retryFailedWorkspaceSleeps(): Promise<void> {
+    return this.workspacePool.retryFailedSleeps();
+  }
+
   async release(threadId: string, options?: { readonly destroy?: boolean }): Promise<void> {
     await this.acquisitions.get(threadId)?.catch(() => undefined);
     await this.releaseOnce(threadId, options);
@@ -413,6 +417,7 @@ export class AkeruSessionResources {
   }
 
   async shutdown(): Promise<void> {
+    const failures: unknown[] = [];
     this.shuttingDown = true;
     await Promise.allSettled(this.acquisitions.values());
     const threadIds = new Set([
@@ -422,11 +427,27 @@ export class AkeruSessionResources {
       ...this.mcpManagers.keys(),
       ...this.threadBrowsers.keys(),
     ]);
-    await Promise.allSettled([...threadIds].map((threadId) => this.release(threadId)));
-    await Promise.allSettled([...this.resourceBrowsers.values()].map((browser) => browser.close()));
+    const releases = await Promise.allSettled(
+      [...threadIds].map((threadId) => this.release(threadId)),
+    );
+    for (const result of releases) {
+      if (result.status === "rejected") failures.push(result.reason);
+    }
+    try {
+      await this.workspacePool.retryFailedSleeps();
+    } catch (cause) {
+      failures.push(cause);
+    }
+    const browserClosures = await Promise.allSettled(
+      [...this.resourceBrowsers.values()].map((browser) => browser.close()),
+    );
+    for (const result of browserClosures) {
+      if (result.status === "rejected") failures.push(result.reason);
+    }
     this.resourceBrowsers.clear();
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
+    if (failures.length > 0) throw failures[0];
   }
 }

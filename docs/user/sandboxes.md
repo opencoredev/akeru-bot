@@ -9,6 +9,7 @@ Tenki previews are public: anyone with a preview URL can access it. Pausing pres
 and disk but clears `/tmp`; keep durable files under `/home/tenki`.
 The sandbox browser is not available on Tenki: Akeru does not expose browser control through a public
 preview URL. This does not prevent agents from running commands in the VM.
+Executor and Tinyfish connectors can still start, but receive no sandbox browser connection.
 
 Select **Connect** and enter the provider credentials. The environment stores secret values outside
 `settings.json`. Clients receive only a redacted marker after a secret is saved.
@@ -25,6 +26,7 @@ so connect that service before you start the bot.
 
 Akeru pauses remote sandboxes while bots are idle and reconnects to the saved provider workspace when
 bot work resumes.
+If a remote pause fails, Akeru keeps the workspace and retries the pause while it remains idle.
 
 Changing a provider credential replaces active sessions that use the connection. A running session
 cannot continue with the old credential.
