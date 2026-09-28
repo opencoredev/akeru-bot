@@ -333,4 +333,75 @@ describe("sandbox bot browser", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it.each(["timed out", "rejected"])(
+    "keeps a live remote browser attached when its monitor %s",
+    async (failure) => {
+      let finishMonitor!: () => void;
+      const monitor = new Promise<void>((resolve) => (finishMonitor = resolve));
+      let failureReceipt!: () => void;
+      const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
+      const onFailure = vi.fn((_error: unknown) => failureReceipt());
+      const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
+        if (command === "uname") {
+          return {
+            exitCode: 0,
+            stdout: `${args[0] === "-s" ? "Linux" : "x86_64"}\n`,
+            stderr: "",
+            success: true,
+            executionTimeMs: 1,
+          };
+        }
+        if (command === "sh" && args[1]?.includes("while kill")) {
+          await monitor;
+          if (failure === "rejected") throw new Error("monitor connection lost");
+          return {
+            exitCode: 124,
+            stdout: "",
+            stderr: "monitor timed out",
+            success: false,
+            executionTimeMs: 30_000,
+          };
+        }
+        return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
+      });
+      const workspace = new Workspace({
+        filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+        sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
+      });
+      vi.stubGlobal(
+        "fetch",
+        async (_url: string | URL, init?: RequestInit) =>
+          new Response(JSON.stringify({ result: { content: [{ text: "ok" }] } }), {
+            status: 200,
+            headers: init?.method === "POST" ? { "mcp-session-id": "session" } : {},
+          }),
+      );
+      const browser = createBotBrowser({
+        threadId: "remote-monitor-failure",
+        workspace,
+        cacheDir: "/tmp/unused-remote-browser-cache",
+        browserEndpoint: async () => ({ url: "https://remote.example", requestHeaders: {} }),
+        onFailure,
+      });
+      try {
+        const attachment = await browser.attachment();
+        finishMonitor();
+        await failureObserved;
+        expect(onFailure).toHaveBeenCalledOnce();
+        expect(String(onFailure.mock.calls[0]?.[0])).toContain(
+          failure === "rejected" ? "monitor connection lost" : "monitor timed out",
+        );
+        await expect(browser.attachment()).resolves.toEqual(attachment);
+        await expect(executeTool(browser.tools.browser_snapshot, {})).resolves.toEqual({
+          snapshot: "ok",
+          truncated: false,
+        });
+        expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
+      } finally {
+        await browser.close();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 });

@@ -257,12 +257,8 @@ async function spawnRemoteBrowser(
   return {
     kill: async () =>
       (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false,
-    wait: async () => {
-      await sandbox.executeCommand?.("sh", [
-        "-lc",
-        `while kill -0 ${pid} 2>/dev/null; do sleep 1; done`,
-      ]);
-    },
+    wait: () =>
+      execute(sandbox, "sh", ["-lc", `while kill -0 ${pid} 2>/dev/null; do sleep 1; done`]),
   };
 }
 
@@ -386,7 +382,14 @@ class LightpandaRpc implements BotBrowserRpc {
       };
       this.input.onReady?.();
       if (browserHandle.wait)
-        void browserHandle.wait().then(() => this.processStopped(browserHandle));
+        void browserHandle.wait().then(
+          () => this.processStopped(browserHandle),
+          (error: unknown) => {
+            if (!this.closed && this.processes.includes(browserHandle)) {
+              this.input.onFailure?.(error);
+            }
+          },
+        );
     } catch (cause) {
       this.processes = [];
       this.requestTransport = undefined;
