@@ -114,6 +114,7 @@ import {
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
+import { resolveRosterListState } from "./rosterRouteSelection";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotChatTarget, useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
@@ -927,6 +928,8 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         unassignedItems: state.unassignedItems,
       })),
     );
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const rosterListState = resolveRosterListState(environmentId, rosterEnvironmentId, bots);
   const [query, setQuery] = useState("");
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
@@ -1446,7 +1449,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           )
         }
       >
-        {bots.every((bot) => bot.archivedAt !== null) ? (
+        {rosterListState === "loading" ? null : rosterListState === "empty" ? (
           <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
             {t("No bots yet")}
           </div>

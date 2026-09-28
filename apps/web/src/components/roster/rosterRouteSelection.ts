@@ -20,6 +20,19 @@ export function resolveRoutedBot(
   return bot ? { status: "available", bot } : { status: "missing" };
 }
 
+/**
+ * What the roster list shows. Until the store mirrors the active environment
+ * the list stays blank, so a roster that has not arrived never claims "No bots yet".
+ */
+export function resolveRosterListState(
+  environmentId: string | null,
+  rosterEnvironmentId: string | null,
+  bots: readonly Pick<Bot, "archivedAt">[],
+): "loading" | "empty" | "bots" {
+  if (!isRosterReady(environmentId, rosterEnvironmentId)) return "loading";
+  return bots.every((bot) => bot.archivedAt !== null) ? "empty" : "bots";
+}
+
 export function isRosterReady(
   environmentId: string | null,
   rosterEnvironmentId: string | null,

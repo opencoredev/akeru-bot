@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { isRosterReady, resolveRoutedBot } from "./rosterRouteSelection";
+import { isRosterReady, resolveRosterListState, resolveRoutedBot } from "./rosterRouteSelection";
 import type { Bot } from "./types";
 
 function bot(id: string, archivedAt: string | null = null): Bot {
@@ -70,5 +70,21 @@ describe("roster route selection", () => {
     expect(source).toContain('if (routedBot.status === "loading") return;');
     expect(source).toContain("useRosterStore.getState().selectBot(botId)");
     expect(source).toContain("[botId, navigate, routedBot.status]");
+  });
+});
+
+describe("resolveRosterListState", () => {
+  it("stays blank until the first roster snapshot for this environment arrives", () => {
+    expect(resolveRosterListState("env-1", null, [])).toBe("loading");
+    expect(resolveRosterListState(null, null, [])).toBe("loading");
+    expect(resolveRosterListState("env-2", "env-1", [bot("ada")])).toBe("loading");
+  });
+
+  it("says the roster is empty only once it has loaded without an active bot", () => {
+    expect(resolveRosterListState("env-1", "env-1", [])).toBe("empty");
+    expect(resolveRosterListState("env-1", "env-1", [bot("ada", "2026-08-02T00:00:00.000Z")])).toBe(
+      "empty",
+    );
+    expect(resolveRosterListState("env-1", "env-1", [bot("ada")])).toBe("bots");
   });
 });
