@@ -1926,10 +1926,13 @@ const makeWsRpcLayer = (
                 const providerId = selection?.instanceId ?? thread?.session?.providerName;
                 const model = selection?.model ?? "";
                 if (providerId && model) {
+                  const providerInstanceConfig = (yield* serverSettings.getSettings)
+                    .providerInstances[ProviderInstanceId.make(providerId)];
                   const verdict = preflightProvider({
                     providers: yield* providerRegistry.getProviders,
                     providerId,
                     model,
+                    ...(providerInstanceConfig ? { providerInstanceConfig } : {}),
                     subscriptionStatuses: subscriptionAuth.statuses(),
                     subscriptionHealth: (instanceId) =>
                       subscriptionAuth.providerInstanceRequestHealth(instanceId),

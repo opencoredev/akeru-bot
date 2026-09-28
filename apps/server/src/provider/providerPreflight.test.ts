@@ -162,4 +162,58 @@ describe("preflightProvider", () => {
   it("rejects a model the provider no longer lists", () => {
     expect(preflight(provider(), "claude-9")?.category).toBe("unsupported-model");
   });
+  it("blocks revoked shared Kimi credentials despite a ready snapshot", () => {
+    const kimi = provider({
+      instanceId: ProviderInstanceId.make("kimi"),
+      driver: ProviderDriverKind.make("kimi"),
+      displayName: "Kimi",
+    });
+    const baseStatus = {
+      provider: "kimi-for-coding" as const,
+      connected: true,
+      reconnectAction: "Reconnect Kimi",
+      healthTest: { status: "not-run" as const },
+      dependentBots: [],
+      dependentRoutines: [],
+    };
+    for (const health of ["revoked", "expired"] as const) {
+      expect(
+        preflightProvider({
+          providers: [kimi],
+          providerId: "kimi",
+          model: "claude-sonnet",
+          subscriptionStatuses: [{ ...baseStatus, health }],
+          subscriptionHealth: () => ({
+            health: "failed",
+            lastFailedRequest: { message: "temporary gateway failure" },
+          }),
+        }),
+      ).toMatchObject({ category: "expired-login", repairAction: "providers" });
+    }
+  });
+
+  it("ignores shared subscription health for an independently credentialed instance", () => {
+    expect(
+      preflightProvider({
+        providers: [provider()],
+        providerId: "claude",
+        model: "claude-sonnet",
+        providerInstanceConfig: {
+          driver: ProviderDriverKind.make("claudeAgent"),
+          environment: [{ name: "ANTHROPIC_API_KEY", value: "own-key", sensitive: true }],
+        },
+        subscriptionStatuses: [
+          {
+            provider: "anthropic",
+            connected: false,
+            health: "revoked",
+            reconnectAction: "Reconnect Claude",
+            healthTest: { status: "not-run" },
+            dependentBots: [],
+            dependentRoutines: [],
+          },
+        ],
+      }),
+    ).toBeUndefined();
+  });
 });

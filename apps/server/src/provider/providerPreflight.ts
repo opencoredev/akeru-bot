@@ -1,6 +1,11 @@
-import type { ServerProvider, ServerProviderUnavailability } from "@t3tools/contracts";
+import type {
+  ProviderInstanceConfig,
+  ServerProvider,
+  ServerProviderUnavailability,
+} from "@t3tools/contracts";
 
-import type { ProviderStatus } from "../subscription-auth/service.ts";
+import { instanceUsesSavedCredential } from "../subscription-auth/runtime.ts";
+import type { ProviderStatus, SubscriptionProviderId } from "../subscription-auth/service.ts";
 import { providerUnavailabilityFromDetail } from "./providerSnapshot.ts";
 
 // How long a recorded rate limit keeps blocking new turns when the provider
@@ -40,7 +45,7 @@ export interface ProviderPreflightVerdict {
   readonly repairAction?: "providers" | "usage";
 }
 
-const SUBSCRIPTION_PROVIDER_BY_DRIVER: Record<string, string> = {
+const SUBSCRIPTION_PROVIDER_BY_DRIVER: Record<string, SubscriptionProviderId> = {
   codex: "openai-codex",
   claudeAgent: "anthropic",
   grok: "xai",
@@ -57,6 +62,7 @@ export const preflightProvider = (input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly providerId: string;
   readonly model: string;
+  readonly providerInstanceConfig?: ProviderInstanceConfig;
   readonly subscriptionStatuses?: ReadonlyArray<ProviderStatus>;
   readonly subscriptionHealth?: (instanceId: string) =>
     | {
@@ -87,9 +93,15 @@ export const preflightProvider = (input: {
     (status) => status.provider === subscriptionId,
   );
   const requestHealth = input.subscriptionHealth?.(provider.instanceId);
+  const sharedCredential =
+    subscriptionId !== undefined &&
+    instanceUsesSavedCredential(subscriptionId, input.providerInstanceConfig);
+  const sharedHealth = sharedCredential ? subscription?.health : undefined;
   const health =
-    requestHealth?.health ??
-    (provider.auth.status === "unauthenticated" ? subscription?.health : undefined);
+    sharedHealth === "revoked" || sharedHealth === "expired"
+      ? sharedHealth
+      : (requestHealth?.health ??
+        (provider.auth.status === "unauthenticated" ? sharedHealth : undefined));
   if (health === "missing" || health === "revoked") {
     return {
       category: health === "revoked" ? "expired-login" : "missing-login",
