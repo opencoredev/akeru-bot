@@ -347,7 +347,7 @@ export function BotThreadLanding({
             runtime.linkedThreadRef.threadId,
             [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])],
             mergeRoutineRunHistory(currentHistory.runs, snapshot?.routineRuns ?? []),
-            i18n,
+            { t },
           )
         : [],
     [
@@ -356,7 +356,7 @@ export function BotThreadLanding({
       snapshot?.routineReceiptSources,
       snapshot?.routineRuns,
       currentHistory.runs,
-      i18n,
+      t,
     ],
   );
   // Each message carries the index it had in `messages`, because the merge below
