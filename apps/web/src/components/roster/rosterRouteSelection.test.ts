@@ -3,7 +3,12 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { isRosterReady, resolveRosterListState, resolveRoutedBot } from "./rosterRouteSelection";
+import {
+  isRosterReady,
+  resolveRosterListState,
+  resolveRosterLoadState,
+  resolveRoutedBot,
+} from "./rosterRouteSelection";
 import type { Bot } from "./types";
 
 function bot(id: string, archivedAt: string | null = null): Bot {
@@ -86,5 +91,65 @@ describe("resolveRosterListState", () => {
       "empty",
     );
     expect(resolveRosterListState("env-1", "env-1", [bot("ada")])).toBe("bots");
+  });
+
+  it("shows the load status, never a blank pane, before the roster arrives", () => {
+    const sidebar = NodeFS.readFileSync(new URL("./BotRosterSidebar.tsx", import.meta.url), "utf8");
+    const index = NodeFS.readFileSync(
+      new URL("../../routes/_chat.index.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(sidebar).toContain('<RosterLoadStatus state={rosterLoadState} variant="sidebar" />');
+    expect(index).toContain('<RosterLoadStatus state={loadState} variant="page" />');
+    expect(index).not.toContain("if (!rosterReady || botId !== null) return null;");
+  });
+});
+
+describe("resolveRosterLoadState", () => {
+  const connection = (
+    phase: "connecting" | "connected" | "backoff" | "blocked" | "offline",
+    attempt = 1,
+    lastFailure: { message: string } | null = null,
+  ) =>
+    ({ phase, attempt, lastFailure }) as Parameters<typeof resolveRosterLoadState>[0]["connection"];
+
+  it("loads while the connection comes up or retries its first attempts", () => {
+    expect(resolveRosterLoadState({ shellError: null, connection: null })).toEqual({
+      kind: "loading",
+    });
+    expect(
+      resolveRosterLoadState({ shellError: null, connection: connection("connecting") }),
+    ).toEqual({ kind: "loading" });
+    expect(
+      resolveRosterLoadState({ shellError: null, connection: connection("backoff", 2) }),
+    ).toEqual({ kind: "loading" });
+  });
+
+  it("fails with the reason when the first snapshot fails on a live connection", () => {
+    expect(
+      resolveRosterLoadState({
+        shellError: "Could not synchronize environment data.",
+        connection: connection("connected"),
+      }),
+    ).toEqual({ kind: "failed", message: "Could not synchronize environment data." });
+  });
+
+  it("fails when the connection is blocked, offline, or keeps failing", () => {
+    expect(
+      resolveRosterLoadState({
+        shellError: null,
+        connection: connection("blocked", 1, { message: "Pairing expired." }),
+      }),
+    ).toEqual({ kind: "failed", message: "Pairing expired." });
+    expect(
+      resolveRosterLoadState({ shellError: null, connection: connection("offline", 0) }),
+    ).toEqual({ kind: "failed", message: "The environment is not reachable." });
+    expect(
+      resolveRosterLoadState({
+        shellError: null,
+        connection: connection("backoff", 3, { message: "Server unreachable." }),
+      }),
+    ).toEqual({ kind: "failed", message: "Server unreachable." });
   });
 });

@@ -1,3 +1,5 @@
+import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
+
 import type { Bot } from "./types";
 
 export type RoutedBotResolution =
@@ -38,4 +40,39 @@ export function isRosterReady(
   rosterEnvironmentId: string | null,
 ): boolean {
   return environmentId !== null && rosterEnvironmentId === environmentId;
+}
+
+export type RosterLoadState =
+  | { readonly kind: "loading" }
+  | { readonly kind: "failed"; readonly message: string };
+
+const ROSTER_LOADING: RosterLoadState = { kind: "loading" };
+const ROSTER_UNREACHABLE_MESSAGE = "The environment is not reachable.";
+
+/**
+ * Why the roster has not arrived. A failed first snapshot or a connection
+ * that stopped trying reads as a failure the user can retry. A retrying
+ * connection gets its first two attempts before it counts as failed, matching
+ * the landing's bootstrap gate.
+ */
+export function resolveRosterLoadState(input: {
+  readonly shellError: string | null;
+  readonly connection: Pick<SupervisorConnectionState, "phase" | "attempt" | "lastFailure"> | null;
+}): RosterLoadState {
+  if (input.shellError !== null) return { kind: "failed", message: input.shellError };
+  const connection = input.connection;
+  if (connection === null) return ROSTER_LOADING;
+  const failed = (): RosterLoadState => ({
+    kind: "failed",
+    message: connection.lastFailure?.message ?? ROSTER_UNREACHABLE_MESSAGE,
+  });
+  switch (connection.phase) {
+    case "blocked":
+    case "offline":
+      return failed();
+    case "backoff":
+      return connection.attempt > 2 ? failed() : ROSTER_LOADING;
+    default:
+      return ROSTER_LOADING;
+  }
 }

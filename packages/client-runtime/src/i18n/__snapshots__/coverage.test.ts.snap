@@ -448,6 +448,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/MemoryApprovalPrompt.tsx",
     "apps/web/src/components/roster/NewBotDialog.tsx",
     "apps/web/src/components/roster/NewGroupDialog.tsx",
+    "apps/web/src/components/roster/RosterLoadStatus.tsx",
     "apps/web/src/components/roster/RoutinePanel.tsx",
     "apps/web/src/components/roster/botEngineSelection.ts",
     "apps/web/src/components/roster/botPersonalityTone.ts",

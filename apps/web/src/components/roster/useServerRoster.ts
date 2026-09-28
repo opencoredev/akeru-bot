@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useEffect } from "react";
+import * as Option from "effect/Option";
+import { useCallback, useEffect, useMemo } from "react";
 
 import {
   botEnvironment,
@@ -8,8 +9,10 @@ import {
   environmentGroupsAtom,
   environmentRosterLoadedAtom,
 } from "../../state/bots";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../state/environments";
+import { environmentShell } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { type RosterLoadState, resolveRosterLoadState } from "./rosterRouteSelection";
 import { useRosterStore } from "./rosterStore";
 import type { BotAvatar } from "./types";
 
@@ -36,6 +39,23 @@ export function useServerRosterSync(): void {
       groups: groups.map((group) => ({ ...group })),
     });
   }, [bots, environmentId, groups, loaded]);
+}
+
+/**
+ * What the roster shows before the primary environment's first snapshot:
+ * loading, or a failure with the reason, so a roster that never arrives is
+ * never a blank list.
+ */
+export function useRosterLoadState(): RosterLoadState {
+  const environmentId = usePrimaryEnvironmentId();
+  const shellError = useAtomValue(
+    environmentShell.stateValueAtom(environmentId ?? NO_ENVIRONMENT),
+  ).error;
+  const connection = useEnvironmentConnectionState(environmentId).data;
+  return useMemo(
+    () => resolveRosterLoadState({ shellError: Option.getOrNull(shellError), connection }),
+    [connection, shellError],
+  );
 }
 
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
