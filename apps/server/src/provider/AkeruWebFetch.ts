@@ -8,9 +8,8 @@
  * which closes the rebinding window between validation and connect. Bodies are
  * streamed with a byte cap and truncated with a visible marker.
  */
-import * as NodeDNS from "node:dns/promises";
-import type * as NodeHttp from "node:http";
-import * as NodeHttpModule from "node:http";
+import * as NodeDnsPromises from "node:dns/promises";
+import * as NodeHttp from "node:http";
 import * as NodeHttps from "node:https";
 import * as NodeNet from "node:net";
 
@@ -163,7 +162,7 @@ function requestHop(
   maxBytes: number,
   timeoutMs: number,
 ): Promise<HopResponse> {
-  const transport = url.protocol === "https:" ? NodeHttps : NodeHttpModule;
+  const transport = url.protocol === "https:" ? NodeHttps : NodeHttp;
   return new Promise((resolve, reject) => {
     const request = transport.request(
       url,
@@ -228,7 +227,7 @@ function requestHop(
 
 export function createAkeruWebFetch(options: AkeruWebFetchOptions = {}) {
   const lookup: AkeruWebFetchLookup =
-    options.lookup ?? ((hostname) => NodeDNS.lookup(hostname, { all: true }));
+    options.lookup ?? ((hostname) => NodeDnsPromises.lookup(hostname, { all: true }));
   const allowAddress = options.allowAddress ?? ((address) => !isAkeruPrivateAddress(address));
   const maxBytes = options.maxBytes ?? AKERU_WEB_FETCH_MAX_BYTES;
   const timeoutMs = options.timeoutMs ?? AKERU_WEB_FETCH_TIMEOUT_MS;
