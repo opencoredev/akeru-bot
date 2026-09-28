@@ -66,12 +66,14 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
     // Pre-rebrand catalogs migrate as-is: the document shape did not change.
     const rebrandedRaw = yield* getItem(LEGACY_CATALOG_KEY);
     if (rebrandedRaw !== null && rebrandedRaw.trim() !== "") {
-      yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
+      const decoded = yield* Effect.result(decodeCatalog(rebrandedRaw));
+      if (decoded._tag === "Success") {
+        yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
+        yield* deleteItem(LEGACY_CATALOG_KEY);
+        return decoded.success;
+      }
+      yield* Effect.logWarning("Discarding corrupt legacy mobile connection catalog");
       yield* deleteItem(LEGACY_CATALOG_KEY);
-      const decoded = yield* decodeCatalog(rebrandedRaw).pipe(
-        Effect.catch(() => Effect.succeed(EMPTY_CONNECTION_CATALOG_DOCUMENT)),
-      );
-      return decoded;
     }
     const legacyRaw = yield* getItem(LEGACY_CONNECTIONS_KEY);
     const catalog =

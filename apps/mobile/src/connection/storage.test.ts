@@ -94,4 +94,33 @@ describe("mobile connection catalog storage", () => {
       expect(memory.values.has(LEGACY_CONNECTIONS_KEY)).toBe(false);
     }),
   );
+
+  it.effect("migrates flat connections when the old catalog is malformed", () =>
+    Effect.gen(function* () {
+      const memory = makeStorage({
+        "t3code.connection-catalog.v1": "{not-json",
+        [LEGACY_CONNECTIONS_KEY]: JSON.stringify({
+          connections: [
+            {
+              environmentId: "legacy-environment",
+              environmentLabel: "Legacy",
+              pairingUrl: "https://legacy.example.test/pair",
+              displayUrl: "https://legacy.example.test",
+              httpBaseUrl: "https://legacy.example.test",
+              wsBaseUrl: "wss://legacy.example.test",
+              bearerToken: "legacy-token",
+              authenticationMethod: "bearer",
+            },
+          ],
+        }),
+      });
+      const catalog = yield* make().pipe(
+        Effect.provideService(MobileSecureStorage, memory.storage),
+      );
+
+      expect((yield* catalog.read).targets).toHaveLength(1);
+      expect(memory.deleted).toEqual(["t3code.connection-catalog.v1", LEGACY_CONNECTIONS_KEY]);
+      expect(memory.values.has(CONNECTION_CATALOG_KEY)).toBe(true);
+    }),
+  );
 });
