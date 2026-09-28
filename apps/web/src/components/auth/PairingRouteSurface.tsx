@@ -14,7 +14,7 @@ import {
 } from "../../environments/primary";
 import { isPrimaryEnvironmentPairingCredentialRequiredError } from "../../environments/primary/auth";
 import { connectPairing } from "../../connection/onboarding";
-import { readHostedPairingLink, runHostedPairing } from "../../hostedPairing";
+import { listenForPairingHash, readHostedPairingLink, runHostedPairing } from "../../hostedPairing";
 import { useI18n } from "../../i18n";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -75,9 +75,12 @@ export function PairingRouteSurface({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
+  const submittingRef = useRef(false);
 
   const submitCredential = useCallback(
     async (nextCredential: string) => {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       setIsSubmitting(true);
       setPairingError(null);
 
@@ -86,6 +89,7 @@ export function PairingRouteSurface({
         (error) => pairingErrorFromUnknown(error),
       );
 
+      submittingRef.current = false;
       setIsSubmitting(false);
 
       if (submitError) {
@@ -118,6 +122,22 @@ export function PairingRouteSurface({
     stripPairingTokenFromUrl();
     void submitCredential(token);
   }, [submitCredential]);
+
+  // Opening the same link with its #token in this tab is a same-document
+  // navigation, so read the token again rather than keep the first verdict.
+  useEffect(
+    () =>
+      listenForPairingHash(window, {
+        read: peekPairingTokenFromUrl,
+        isBusy: () => submittingRef.current,
+        strip: stripPairingTokenFromUrl,
+        submit: (token) => {
+          setCredential(token);
+          void submitCredential(token);
+        },
+      }),
+    [submitCredential],
+  );
 
   const supportedMethodsNote = describeSupportedMethods(auth.bootstrapMethods);
   const status: PairingPanelStatus = isSubmitting
@@ -199,17 +219,19 @@ export function HostedPairingRouteSurface() {
 
   // Opening the same link with its #token in this tab is a same-document
   // navigation, so read the link again rather than keep the first verdict.
-  useEffect(() => {
-    const onHashChange = () => {
-      const next = readHostedPairingLink(window.location.href);
-      if (!next || pairingRef.current) return;
-      requestRef.current = next;
-      stripPairingTokenFromUrl();
-      void pair();
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [pair]);
+  useEffect(
+    () =>
+      listenForPairingHash(window, {
+        read: () => readHostedPairingLink(window.location.href),
+        isBusy: () => pairingRef.current,
+        strip: stripPairingTokenFromUrl,
+        submit: (next) => {
+          requestRef.current = next;
+          void pair();
+        },
+      }),
+    [pair],
+  );
 
   const request = requestRef.current;
   return (

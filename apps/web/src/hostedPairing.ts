@@ -13,11 +13,14 @@ import type { PairingPanelStatus } from "./components/auth/PairingPanel";
  * in this browser. A link with a host but no token still counts, so the page
  * can say what is missing instead of pairing with the origin that served it.
  * A link whose host is the page's own origin is ordinary pairing: the browser
- * signs in to this origin and the app opens here.
+ * signs in to this origin and the app opens here. A `?token=` query value on
+ * any link with a host keeps the hosted path, so the page refuses it as
+ * incomplete instead of submitting a token the request already exposed.
  */
 export function isHostedPairingLink(href: string): boolean {
   const url = new URL(href);
-  return url.pathname === "/pair" && url.searchParams.has("host") && !namesPageOrigin(url);
+  if (url.pathname !== "/pair" || !url.searchParams.has("host")) return false;
+  return url.searchParams.has("token") || !namesPageOrigin(url);
 }
 
 function namesPageOrigin(url: URL): boolean {
@@ -47,6 +50,31 @@ export function readHostedPairingLink(href: string): HostedPairingRequest | null
   if (url.pathname !== "/pair" || url.searchParams.has("token")) return null;
   const request = readHostedPairingRequest(url);
   return request && readHashParams(url).get("token")?.trim() === request.token ? request : null;
+}
+
+/**
+ * Resubmits a pairing link opened again in this tab with its `#token`, a
+ * same-document navigation that only fires `hashchange`. Reads the link with
+ * `read`, skips it while a submission is in flight, strips the token from the
+ * address bar, then hands it to `submit`. Returns the unsubscribe function.
+ */
+export function listenForPairingHash<T>(
+  target: Pick<EventTarget, "addEventListener" | "removeEventListener">,
+  options: {
+    readonly read: () => T | null;
+    readonly isBusy: () => boolean;
+    readonly strip: () => void;
+    readonly submit: (value: T) => void;
+  },
+): () => void {
+  const onHashChange = () => {
+    const value = options.read();
+    if (value === null || options.isBusy()) return;
+    options.strip();
+    options.submit(value);
+  };
+  target.addEventListener("hashchange", onHashChange);
+  return () => target.removeEventListener("hashchange", onHashChange);
 }
 
 export type HostedPairingOutcome =

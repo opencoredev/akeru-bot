@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { isHostedPairingLink, readHostedPairingLink, runHostedPairing } from "./hostedPairing";
+import {
+  isHostedPairingLink,
+  listenForPairingHash,
+  readHostedPairingLink,
+  runHostedPairing,
+} from "./hostedPairing";
 
 const LINK =
   "https://tunnel.example.com/pair?host=https%3A%2F%2Fbox.tail.ts.net%3A3773&label=Box#token=abc";
@@ -37,6 +42,44 @@ describe("isHostedPairingLink", () => {
         "http://localhost:6563/pair?host=http%3A%2F%2Flocalhost%3A3773#token=abc",
       ),
     ).toBe(true);
+  });
+
+  it("keeps a query token on a same-origin link on the hosted path, which refuses it", () => {
+    const href = "http://localhost:6563/pair?host=http%3A%2F%2Flocalhost%3A6563&token=abc";
+    expect(isHostedPairingLink(href)).toBe(true);
+    expect(readHostedPairingLink(href)).toBeNull();
+    expect(isHostedPairingLink("http://localhost:6563/pair?token=abc")).toBe(false);
+  });
+});
+
+describe("listenForPairingHash", () => {
+  it("submits a token that arrives by hash change, stripped first and once in flight", () => {
+    const target = new EventTarget();
+    let token: string | null = null;
+    let busy = false;
+    const calls: string[] = [];
+    const stop = listenForPairingHash(target, {
+      read: () => token,
+      isBusy: () => busy,
+      strip: () => calls.push("strip"),
+      submit: (value) => {
+        calls.push(`submit:${value}`);
+        busy = true;
+      },
+    });
+
+    target.dispatchEvent(new Event("hashchange"));
+    expect(calls).toEqual([]);
+
+    token = "abc";
+    target.dispatchEvent(new Event("hashchange"));
+    target.dispatchEvent(new Event("hashchange"));
+    expect(calls).toEqual(["strip", "submit:abc"]);
+
+    busy = false;
+    stop();
+    target.dispatchEvent(new Event("hashchange"));
+    expect(calls).toEqual(["strip", "submit:abc"]);
   });
 });
 
