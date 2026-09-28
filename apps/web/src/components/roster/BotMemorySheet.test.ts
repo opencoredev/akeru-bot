@@ -44,8 +44,6 @@ vi.mock("../../state/memory", () => ({
     mutateFact: "mutate-fact",
     replaceDocument: "replace-document",
     clearObservations: "clear-observations",
-    listFacts: vi.fn(() => "list-facts"),
-    mutateFact: "mutate-fact",
   },
 }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: controls.query }));
