@@ -39,6 +39,7 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   daytona: "Daytona",
   vercel: "Vercel Sandbox",
   upstash: "Upstash Box",
+  railway: "Railway",
 };
 
 function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
@@ -142,7 +143,7 @@ function EnvironmentSandboxSettingsPanel({
           />
           <SettingsRow
             {...searchableSetting("sandbox-auto-idle")}
-            description="Akeru pauses remote sandboxes when bots are idle."
+            description="Akeru pauses idle remote sandboxes when supported. Railway VMs keep running until cleanup."
             control={<Switch checked disabled aria-label="Auto-idle" />}
           />
         </SettingsSection>
@@ -211,9 +212,10 @@ function EnvironmentSandboxSettingsPanel({
                   autoComplete="off"
                   value={draft[field.name] ?? ""}
                   placeholder={field.secret ? "Leave blank to keep the saved value" : undefined}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, [field.name]: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setDraft((current) => ({ ...current, [field.name]: value }));
+                  }}
                 />
               </label>
             ))}

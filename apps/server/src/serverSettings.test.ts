@@ -1447,24 +1447,43 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             e2b: {
               environment: [{ name: "E2B_API_KEY", value: "e2b-secret", sensitive: true }],
             },
+            railway: {
+              environment: [
+                { name: "RAILWAY_API_TOKEN", value: "railway-secret", sensitive: true },
+                { name: "RAILWAY_ENVIRONMENT_ID", value: "environment-id", sensitive: false },
+              ],
+            },
           },
         },
       });
 
       assert.equal(next.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
+      assert.equal(next.sandbox.providers.railway.environment[0]?.value, "railway-secret");
+      assert.equal(next.sandbox.providers.railway.environment[1]?.value, "environment-id");
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
       assert.notInclude(raw, "e2b-secret");
+      assert.notInclude(raw, "railway-secret");
 
       const clientSettings = ServerSettingsModule.redactServerSettingsForClient(next);
       assert.deepInclude(clientSettings.sandbox.providers.e2b.environment[0], {
         value: "",
         valueRedacted: true,
       });
+      assert.deepInclude(clientSettings.sandbox.providers.railway.environment[0], {
+        value: "",
+        valueRedacted: true,
+      });
+      assert.deepInclude(clientSettings.sandbox.providers.railway.environment[1], {
+        value: "environment-id",
+        sensitive: false,
+      });
 
       const roundTripped = yield* serverSettings.updateSettings({
         sandbox: clientSettings.sandbox,
       });
       assert.equal(roundTripped.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
+      assert.equal(roundTripped.sandbox.providers.railway.environment[0]?.value, "railway-secret");
+      assert.equal(roundTripped.sandbox.providers.railway.environment[1]?.value, "environment-id");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 

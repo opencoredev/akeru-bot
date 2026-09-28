@@ -50,6 +50,16 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Run bots in an Upstash Box with your API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
+  railway: {
+    id: "railway",
+    label: "Railway",
+    description:
+      "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.",
+    fields: [
+      { name: "RAILWAY_API_TOKEN", label: "API token", secret: true },
+      { name: "RAILWAY_ENVIRONMENT_ID", label: "Environment ID", secret: false },
+    ],
+  },
 };
 
 export const SANDBOX_PROVIDER_DEFINITIONS = Object.values(SANDBOX_PROVIDER_DEFINITION_BY_ID);

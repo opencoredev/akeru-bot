@@ -10,6 +10,29 @@ import {
 } from "./SandboxSettingsPanel.logic";
 
 describe("sandbox settings", () => {
+  it("requires Railway credentials and resets the default on disconnect", () => {
+    expect(
+      canSaveSandboxProviderConnection({
+        settings: DEFAULT_SERVER_SETTINGS.sandbox,
+        provider: "railway",
+        draft: { RAILWAY_API_TOKEN: "token" },
+      }),
+    ).toBe(false);
+    const connected = saveSandboxProviderConnection({
+      settings: DEFAULT_SERVER_SETTINGS.sandbox,
+      provider: "railway",
+      draft: { RAILWAY_API_TOKEN: " token ", RAILWAY_ENVIRONMENT_ID: " env " },
+    });
+    expect(isSandboxProviderConnected(connected, "railway")).toBe(true);
+    expect(selectableSandboxProviders(connected)).toEqual(["local", "railway"]);
+    const disconnected = disconnectSandboxProvider(
+      { ...connected, defaultProvider: "railway" },
+      "railway",
+    );
+    expect(disconnected.defaultProvider).toBe("local");
+    expect(isSandboxProviderConnected(disconnected, "railway")).toBe(false);
+  });
+
   it("offers only local until a cloud provider is connected", () => {
     expect(selectableSandboxProviders(DEFAULT_SERVER_SETTINGS.sandbox)).toEqual(["local"]);
   });

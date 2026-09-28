@@ -34,6 +34,7 @@ describe("botSandbox", () => {
       "daytona",
       "vercel",
       "upstash",
+      "railway",
     ]);
     expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
   });

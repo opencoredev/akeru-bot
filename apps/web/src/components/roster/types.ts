@@ -31,7 +31,7 @@ export interface Bot {
   disabledMcpServerIds: readonly McpServerId[];
   avatar: BotAvatar;
   engine: BotEngine | null;
-  sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | null;
+  sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | "railway" | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */

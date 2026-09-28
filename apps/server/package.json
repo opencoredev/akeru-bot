@@ -55,6 +55,7 @@
     "node-pty": "^1.1.0",
     "playwright-core": "1.60.0",
     "pngjs": "7.0.0",
+    "railway": "3.11.0",
     "yaml": "catalog:",
     "zod": "^4.4.3"
   },
