@@ -81,7 +81,6 @@ describe("plugin contribution policy", () => {
     ["apps/server/src/provider/Services/ClaudeAdapter.ts", ["type:provider"]],
     ["apps/server/src/subscription-auth/providers/openaiCodex.ts", ["type:provider"]],
     ["apps/web/src/components/plugins/PluginsDialog.tsx", ["area:directory"]],
-    ["apps/web/src/components/settings/PluginsSettings.tsx", ["area:directory"]],
     ["apps/web/src/pluginsDialogStore.ts", ["area:directory"]],
     ["docs/user/plugins.md", ["area:directory"]],
     ["apps/web/src/components/sidebar/SidebarChrome.tsx", ["area:directory"]],
