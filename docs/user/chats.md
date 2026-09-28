@@ -146,6 +146,10 @@ the card shows the result or what went wrong, and one of these lines:
 - **Result delivered to {name}** means your bot has received the result, with {name} naming your
   bot that received it. It does not receive it again.
 
+If the server restarts while work is still running, that work stops. Its card shows "The server
+restarted before this work finished." and offers **Try again**. Work that is waiting on you keeps
+its card as it was.
+
 A bot runs at most three pieces of work at a time from one chat. Asking the same bot twice starts
 two separate pieces of work, each with its own card.
 
