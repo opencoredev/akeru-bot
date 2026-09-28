@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The route contract reads its source.
 import * as NodeFS from "node:fs";
 
+import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -64,6 +65,7 @@ describe("BotDetailsPanel", () => {
       <BotOverview
         bot={{ ...bot, engine: { provider: "claudeAgent", model: "claude-fable-5" } }}
         modelUnavailable="Claude is not connected"
+        routinePanelRef={createRef<HTMLDivElement>()}
       />,
     );
     expect(markup).toContain("claude-fable-5");
