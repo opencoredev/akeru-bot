@@ -247,16 +247,21 @@ const preflightProvider = (input: {
       requestHealth?.lastFailedRequest?.message ??
       subscription?.lastFailedRequest?.message ??
       "The provider request failed.";
-    return { category: providerUnavailabilityFromDetail(provider.driver, detail), detail };
+    const category = providerUnavailabilityFromDetail(provider.driver, detail);
+    if (category !== "temporary-failure") return { category, detail };
   }
-  if (provider.unavailability) {
+  if (provider.unavailability && provider.unavailability !== "temporary-failure") {
     return {
       category: provider.unavailability,
       detail:
         provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
     };
   }
-  if (!provider.enabled || !provider.installed || provider.availability === "unavailable") {
+  if (
+    !provider.enabled ||
+    !provider.installed ||
+    (provider.availability === "unavailable" && provider.status !== "error")
+  ) {
     return {
       category: "temporary-failure",
       detail: provider.unavailableReason ?? "Provider is unavailable.",

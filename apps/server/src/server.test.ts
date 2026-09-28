@@ -7650,6 +7650,53 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("retries a turn after a transient provider failure", () =>
+    Effect.gen(function* () {
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 1 }),
+      );
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([
+              {
+                ...readyDefaultProvider,
+                status: "error" as const,
+                availability: "unavailable" as const,
+                unavailability: "temporary-failure" as const,
+                unavailabilityDetail: "temporary gateway failure",
+              },
+            ]),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-retry-transient-provider"),
+            threadId: ThreadId.make("thread-retry-transient-provider"),
+            message: {
+              messageId: MessageId.make("msg-retry-transient-provider"),
+              role: "user",
+              text: "Try again",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+        ),
+      );
+      assert.equal(result.sequence, 1);
+      assert.equal(dispatch.mock.calls.length, 1);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect(
     "bootstraps first-send worktree turns on the server before dispatching turn start",
     () =>
