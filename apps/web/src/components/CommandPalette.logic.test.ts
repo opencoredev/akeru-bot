@@ -148,4 +148,22 @@ describe("chat actions in the command palette", () => {
     await item?.run();
     expect(run).toHaveBeenCalledTimes(1);
   });
+
+  it("shows an action's description, such as a snooze preset's wake time", () => {
+    const [snooze, pin] = buildChatCommandPaletteItems({
+      actions: [
+        {
+          id: "snooze:hour",
+          title: "Snooze chat: In 1 hour",
+          description: "1:00 PM",
+          searchTerms: ["snooze"],
+          run: () => undefined,
+        },
+        { id: "pin", title: "Pin chat", searchTerms: ["pin"], run: () => undefined },
+      ],
+      icon: null,
+    });
+    expect(snooze?.description).toBe("1:00 PM");
+    expect(pin).not.toHaveProperty("description");
+  });
 });

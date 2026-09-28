@@ -76,7 +76,8 @@ vi.mock("../ui/tooltip", () => ({
   TooltipPopup: () => null,
 }));
 
-import { ChatActionsMenu } from "./ChatActionsMenu";
+import { buildChatPaletteActions, ChatActionsMenu } from "./ChatActionsMenu";
+import { resolveChatMenuState } from "./chatActions.logic";
 
 const threadRef = {
   environmentId: EnvironmentId.make("env-1"),
@@ -252,5 +253,53 @@ describe("ChatActionsMenu", () => {
     expect(menuLabels()[0]).toBe("New chat");
     click("New chat");
     expect(start).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildChatPaletteActions", () => {
+  const t = ((message: string, params?: Record<string, string | number>) =>
+    message.replace(/\{(\w+)\}/g, (_, key: string) => String(params?.[key]))) as Parameters<
+    typeof buildChatPaletteActions
+  >[0]["t"];
+
+  function paletteActions(overrides: Partial<OrchestrationThreadShell> = {}) {
+    const state = resolveChatMenuState({
+      shell: shell(overrides),
+      lastVisitedAt: "2026-09-27T10:01:00.000Z",
+      now: "2026-09-27T12:00:00.000Z",
+      supports: { settlement: true, snooze: true, pinning: true, titleRegeneration: true },
+    });
+    return buildChatPaletteActions({
+      threadRef,
+      state,
+      newChat: null,
+      actions: mocks.actions as unknown as Parameters<typeof buildChatPaletteActions>[0]["actions"],
+      t,
+      now: new Date("2026-09-27T12:00:00.000Z"),
+      openRename: vi.fn(),
+    });
+  }
+
+  it("offers each snooze preset with its wake time and snoozes from now", async () => {
+    const actions = paletteActions();
+    const snoozes = actions.filter((action) => action.id.startsWith("snooze:"));
+
+    expect(snoozes.map((action) => action.title)).toContain("Snooze chat: Tomorrow");
+    expect(snoozes.length).toBeGreaterThanOrEqual(4);
+    expect(snoozes.every((action) => (action.description ?? "").length > 0)).toBe(true);
+    expect(actions.some((action) => action.id === "unsnooze")).toBe(false);
+
+    await snoozes.find((action) => action.id === "snooze:tomorrow")?.run();
+    const [ref, until] = mocks.actions.snooze.mock.calls[0] ?? [];
+    expect(ref).toEqual(threadRef);
+    expect(Date.parse(until)).toBeGreaterThan(Date.now());
+  });
+
+  it("offers Wake chat instead of the presets while the chat is snoozed", async () => {
+    const actions = paletteActions({ snoozedUntil: "2999-01-01T09:00:00.000Z" });
+
+    expect(actions.some((action) => action.id.startsWith("snooze:"))).toBe(false);
+    await actions.find((action) => action.id === "unsnooze")?.run();
+    expect(mocks.actions.unsnooze).toHaveBeenCalledWith(threadRef);
   });
 });

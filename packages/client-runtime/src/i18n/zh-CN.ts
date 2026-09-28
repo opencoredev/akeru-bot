@@ -2504,6 +2504,7 @@ export const zhCNCatalog: TranslationCatalog = {
   Snooze: "延后",
   "Snoozed until {time}": "延后至 {time}",
   "Wake chat": "唤醒聊天",
+  "Snooze chat: {when}": "延后聊天：{when}",
   "Archive chat": "归档聊天",
   "Delete chat": "删除聊天",
   "Delete this chat? This permanently clears the conversation history.":

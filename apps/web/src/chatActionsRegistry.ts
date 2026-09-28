@@ -8,6 +8,7 @@ import type { KeybindingCommand } from "@t3tools/contracts";
 export interface ChatPaletteAction {
   readonly id: string;
   readonly title: string;
+  readonly description?: string;
   readonly searchTerms: ReadonlyArray<string>;
   readonly shortcutCommand?: KeybindingCommand;
   readonly destructive?: boolean;

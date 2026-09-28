@@ -30,7 +30,8 @@ top right of that chat to act on it:
 
 The chat header shows a pin when the chat is pinned, and **Settled** or **Snoozed until** with the
 wake time while those apply. The same actions are in the command palette under **This chat** while
-the chat is open.
+the chat is open. The palette lists each snooze choice as its own entry, such as **Snooze chat:
+Tomorrow**, with its wake time.
 
 On mobile, the chat list keeps its own menu for each chat, and you can swipe left on a chat for
 archive and delete.

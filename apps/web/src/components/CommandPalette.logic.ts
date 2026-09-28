@@ -31,6 +31,7 @@ export function buildChatCommandPaletteItems(input: {
   readonly actions: ReadonlyArray<{
     readonly id: string;
     readonly title: string;
+    readonly description?: string;
     readonly searchTerms: ReadonlyArray<string>;
     readonly shortcutCommand?: KeybindingCommand;
     readonly run: () => Promise<void> | void;
@@ -41,6 +42,7 @@ export function buildChatCommandPaletteItems(input: {
     value: `chat:${action.id}`,
     searchTerms: [action.title, "chat", ...action.searchTerms],
     title: action.title,
+    ...(action.description ? { description: action.description } : {}),
     icon: input.icon,
     ...(action.shortcutCommand ? { shortcutCommand: action.shortcutCommand } : {}),
     run: async () => {

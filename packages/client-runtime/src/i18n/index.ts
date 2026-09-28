@@ -2605,6 +2605,7 @@ export const englishCatalog = {
   Snooze: "Snooze",
   "Snoozed until {time}": "Snoozed until {time}",
   "Wake chat": "Wake chat",
+  "Snooze chat: {when}": "Snooze chat: {when}",
   "Archive chat": "Archive chat",
   "Delete chat": "Delete chat",
   "Delete this chat? This permanently clears the conversation history.":
