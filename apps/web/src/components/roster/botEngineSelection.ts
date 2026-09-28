@@ -22,9 +22,7 @@ export function resolveStickyBotEngine(input: {
   const preferredId = ProviderInstanceId.make(
     input.engine?.provider ?? input.defaultSelection.instanceId,
   );
-  const entry =
-    resolveSelectableProviderInstanceEntry(input.instanceEntries, preferredId) ??
-    null;
+  const entry = resolveSelectableProviderInstanceEntry(input.instanceEntries, preferredId) ?? null;
   if (!entry) return null;
   if (input.engine && input.engine.provider === entry.instanceId) {
     const options =

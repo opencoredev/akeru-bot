@@ -47,7 +47,9 @@ export function latestThreadRuntimeError(
         (right.sequence ?? -1) - (left.sequence ?? -1) ||
         right.createdAt.localeCompare(left.createdAt),
     )
-    .find((candidate) => candidate.kind === "runtime.error" && candidate.turnId === latestTurn.turnId);
+    .find(
+      (candidate) => candidate.kind === "runtime.error" && candidate.turnId === latestTurn.turnId,
+    );
   if (!activity) return null;
   const payload =
     activity.payload && typeof activity.payload === "object"
