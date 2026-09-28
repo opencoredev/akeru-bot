@@ -153,9 +153,11 @@ export function ChannelRepairButton({
   disabled,
   managementUrl,
   onRepair,
+  size,
 }: {
   readonly action: ChannelRepairAction;
   readonly status: ChannelBinding["status"];
+  readonly size?: "xs" | "sm" | "default";
   readonly disabled: boolean;
   readonly managementUrl: string | undefined;
   readonly onRepair: (
@@ -169,7 +171,7 @@ export function ChannelRepairButton({
       return null;
     case "wait":
       return (
-        <Button variant="outline" disabled>
+        <Button size={size} variant="outline" disabled>
           {t("Connecting…")}
         </Button>
       );
@@ -178,6 +180,7 @@ export function ChannelRepairButton({
         <>
           {managementUrl ? (
             <Button
+              size={size}
               variant="outline"
               render={<a href={managementUrl} target="_blank" rel="noreferrer" />}
             >
@@ -185,7 +188,7 @@ export function ChannelRepairButton({
             </Button>
           ) : null}
           {status === "failed" ? (
-            <Button disabled={disabled} onClick={() => onRepair("reconnect")}>
+            <Button size={size} disabled={disabled} onClick={() => onRepair("reconnect")}>
               {t("Reconnect")}
             </Button>
           ) : null}
@@ -193,25 +196,25 @@ export function ChannelRepairButton({
       );
     case "connect":
       return (
-        <Button disabled={disabled} onClick={() => onRepair(action)}>
+        <Button size={size} disabled={disabled} onClick={() => onRepair(action)}>
           {t("Connect")}
         </Button>
       );
     case "reconnect":
       return (
-        <Button disabled={disabled} onClick={() => onRepair(action)}>
+        <Button size={size} disabled={disabled} onClick={() => onRepair(action)}>
           {t("Reconnect")}
         </Button>
       );
     case "update-credentials":
       return (
-        <Button disabled={disabled} onClick={() => onRepair(action)}>
+        <Button size={size} disabled={disabled} onClick={() => onRepair(action)}>
           {t("Update credentials")}
         </Button>
       );
     case "choose-project":
       return (
-        <Button disabled={disabled} onClick={() => onRepair(action)}>
+        <Button size={size} disabled={disabled} onClick={() => onRepair(action)}>
           {t("Reconnect in this project")}
         </Button>
       );
