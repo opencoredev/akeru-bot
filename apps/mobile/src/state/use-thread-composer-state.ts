@@ -183,18 +183,8 @@ export function useThreadComposerState() {
   const selectedDraft = useComposerDraftSettings(selectedThreadKey);
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadDetail ?? selectedThreadShell;
-<<<<<<< HEAD
   const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
   const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
-  const interactionMode = selectedDraft.interactionMode ?? selectedThread?.interactionMode ?? null;
-||||||| parent of 21db1a319 (feat: retire review, terminal, source control, plan mode and project UI)
-  const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
-  const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
-  const interactionMode = selectedDraft?.interactionMode ?? selectedThread?.interactionMode ?? null;
-=======
-  const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
-  const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
->>>>>>> 21db1a319 (feat: retire review, terminal, source control, plan mode and project UI)
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;

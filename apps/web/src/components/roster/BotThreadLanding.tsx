@@ -62,7 +62,11 @@ import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { OpenComputerAction } from "../computer/OpenComputerAction";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
-import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
+import {
+  buildReplyPrompt,
+  findReplySourceMessageId,
+  type MessageReplyTarget,
+} from "../chat/MessageControls";
 import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
@@ -581,6 +585,11 @@ export function BotThreadLanding({
                           ) : (
                             <UserMessageRow
                               message={message}
+                              replySourceMessageId={findReplySourceMessageId(
+                                messages,
+                                messageIndex,
+                                message.text,
+                              )}
                               arrived={arrivedMessageIds.has(message.id)}
                               testId="bot-user-message"
                               startsGroup={startsGroup || startsAfterReceipt}

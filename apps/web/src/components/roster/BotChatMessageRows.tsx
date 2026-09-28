@@ -308,13 +308,17 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
       <div
         id={`chat-message-${message.id}`}
         tabIndex={-1}
-        className={`group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`}
+        className={cn(
+          `group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`,
+          arrived && "motion-message-enter",
+        )}
         data-testid={testId}
       >
         <div className="text-sm font-medium">{label}</div>
         {markdown}
         <div className={`mt-0.5 flex ${HOVER_CONTROLS_CLASS}`}>
           <MessageControls
+            flushStart
             copyText={copyText}
             {...(readAloud ? { readAloud } : {})}
             onReply={() => onReply(message.id, label, copyText)}
@@ -355,6 +359,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
         ))}
         <div className={`mt-0.5 flex ${HOVER_CONTROLS_CLASS}`}>
           <MessageControls
+            flushStart
             copyText={copyText}
             {...(readAloud ? { readAloud } : {})}
             selectedReaction={selectedReaction}
@@ -439,6 +444,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   message,
   testId,
   arrived,
+  replySourceMessageId = null,
   startsGroup,
   replyLabel,
   showChannelOrigin,
@@ -451,6 +457,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   readonly message: OrchestrationMessage;
   readonly testId: string;
   readonly arrived?: boolean;
+  readonly replySourceMessageId?: string | null;
   readonly startsGroup: boolean;
   readonly replyLabel: string;
   readonly showChannelOrigin: boolean;
@@ -496,7 +503,13 @@ export const UserMessageRow = memo(function UserMessageRow({
               {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
             </div>
           ) : null}
-          {message.text ? <SentMessageText text={message.text} skills={skills} /> : null}
+          {message.text ? (
+            <SentMessageText
+              text={message.text}
+              skills={skills}
+              replySourceMessageId={replySourceMessageId}
+            />
+          ) : null}
           {message.attachments?.length ? (
             <div className={message.text ? "mt-2" : undefined}>
               <BotMessageAttachments

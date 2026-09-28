@@ -382,24 +382,16 @@ function ThreadRouteContent(
               ? undefined
               : () => compactHomeHeaderItems
           : undefined,
-      // The header title identifies the chat on older iOS and the bot on native glass; the workspace tools
-      // stay on the RIGHT, where split view keeps the richer center-item
-      // ordering (no breadcrumbs occupy that space yet).
-      unstable_headerRightItems:
-        Platform.OS === "ios"
-          ? () => (layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems)
-          : undefined,
+
       unstable_headerSubtitle: usesNativeHeaderGlass ? headerSubtitle : undefined,
     }),
     [
       canGoBack,
       compactHomeHeaderItems,
-      compactRightHeaderItems,
       headerTitle,
       headerSubtitle,
       layout.usesSplitView,
       splitLeftHeaderItems,
-      threadCenterHeaderItems,
       usesNativeHeaderGlass,
     ],
   );

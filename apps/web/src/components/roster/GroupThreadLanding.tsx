@@ -16,7 +16,11 @@ import { serverEnvironment } from "../../state/server";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { SidebarInset } from "../ui/sidebar";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { buildReplyPrompt, type MessageReplyTarget } from "../chat/MessageControls";
+import {
+  buildReplyPrompt,
+  findReplySourceMessageId,
+  type MessageReplyTarget,
+} from "../chat/MessageControls";
 import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
@@ -297,6 +301,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   {separator ? <ConversationSeparator label={separator} /> : null}
                   <UserMessageRow
                     message={message}
+                    replySourceMessageId={findReplySourceMessageId(
+                      messages,
+                      item.index,
+                      message.text,
+                    )}
                     arrived={arrivedMessageIds.has(message.id)}
                     testId="group-user-message"
                     startsGroup={startsGroup}
