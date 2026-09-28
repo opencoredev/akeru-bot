@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "@tanstack/react-router";
 
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { settingsSectionFromPathname } from "../../settingsDialogStore";
 import { useSidebarExperiment } from "../sidebar/ExperimentalSidebar";
 import { AppIcon } from "../ui/app-icon";
@@ -14,11 +15,12 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { SETTINGS_NAV_ITEMS, settingsSectionLabel } from "./SettingsDialog";
 
 export function SettingsRoutePage() {
+  const { t } = useI18n();
   const pathname = useLocation({ select: (location) => location.pathname });
   const sidebarExperiment = useSidebarExperiment();
   const section = settingsSectionFromPathname(pathname);
   const navItem = SETTINGS_NAV_ITEMS.find((item) => item.section === section);
-  const label = settingsSectionLabel(section);
+  const label = t(settingsSectionLabel(section));
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
@@ -37,9 +39,9 @@ export function SettingsRoutePage() {
           </WorkspacePageHeader>
         ) : (
           <WorkspacePageHeader electron={isElectron} className="border-b border-border/70">
-            <WorkspaceBreadcrumb ariaLabel="Settings breadcrumb">
+            <WorkspaceBreadcrumb ariaLabel={t("Settings breadcrumb")}>
               <WorkspaceBreadcrumbItem>
-                <h1>Settings</h1>
+                <h1>{t("Settings")}</h1>
               </WorkspaceBreadcrumbItem>
               <WorkspaceBreadcrumbSeparator />
               <WorkspaceBreadcrumbItem current>{label}</WorkspaceBreadcrumbItem>

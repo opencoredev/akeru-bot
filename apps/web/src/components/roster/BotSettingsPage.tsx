@@ -208,17 +208,22 @@ function BotSettingsForm({
             <h1 className="truncate text-xl font-semibold tracking-tight">
               {draft.name || bot.name}
             </h1>
-            <p className="text-sm text-muted-foreground">Set up how this bot works with you.</p>
+            <p className="text-sm text-muted-foreground">
+              {t("Set up how this bot works with you.")}
+            </p>
           </div>
         </div>
-        <nav aria-label="Bot settings sections" className="flex gap-1 overflow-x-auto px-2 sm:px-3">
+        <nav
+          aria-label={t("Bot settings sections")}
+          className="flex gap-1 overflow-x-auto px-2 sm:px-3"
+        >
           {(
             [
-              ["identity", "Identity"],
-              ["behavior", "Behavior"],
-              ["model", "Model & usage"],
-              ["workspace", "Workspace"],
-              ["tools", "Tools"],
+              ["identity", t("Identity")],
+              ["behavior", t("Behavior")],
+              ["model", t("Model & usage")],
+              ["workspace", t("Workspace")],
+              ["tools", t("Tools")],
             ] as const
           ).map(([id, label]) => (
             <a
@@ -235,7 +240,7 @@ function BotSettingsForm({
           ))}
         </nav>
 
-        <SettingsSection id="identity" title="Identity">
+        <SettingsSection id="identity" title={t("Identity")}>
           <SettingsRow
             title={t("Avatar")}
             description={t("Shown in the roster, the chat header, and anywhere this bot speaks.")}
@@ -313,7 +318,7 @@ function BotSettingsForm({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection id="behavior" title="Behavior">
+        <SettingsSection id="behavior" title={t("Behavior")}>
           <SettingsRow
             id="personality"
             title={t("Personality")}
@@ -355,7 +360,7 @@ function BotSettingsForm({
           />
         </SettingsSection>
 
-        <SettingsSection id="model" title="Model & usage">
+        <SettingsSection id="model" title={t("Model & usage")}>
           <SettingsRow
             title={t("Model")}
             description={t("The provider and model this bot runs on.")}
@@ -442,7 +447,7 @@ function BotSettingsForm({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection id="workspace" title="Workspace">
+        <SettingsSection id="workspace" title={t("Workspace")}>
           <SettingsRow
             title={t("Sandbox")}
             description={t("Where this bot runs commands and edits files.")}

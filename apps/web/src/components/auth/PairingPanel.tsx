@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 
 import { AppIcon } from "../ui/app-icon";
 import { Spinner } from "../ui/spinner";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { AuthSurfaceSection, AuthSurfaceShell } from "./AuthSurfaceShell";
 
@@ -44,10 +45,20 @@ const TONE_TILE_CLASS: Record<Tone, string> = {
   success: "bg-success/12 text-success-foreground",
 };
 
-const PAIRING_GRANTS = [
-  { icon: BubbleChatIcon, label: "Chat with your bots and start new work" },
-  { icon: ComputerTerminal01Icon, label: "Run terminals and commands on this machine" },
-] as const;
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function pairingGrants(t: Translate) {
+  return [
+    { icon: BubbleChatIcon, label: t("Chat with your bots and start new work") },
+    { icon: ComputerTerminal01Icon, label: t("Run terminals and commands on this machine") },
+  ];
+}
+
+/** Splits a message around one `{placeholder}` so JSX can fill the gap. */
+function splitAround(message: string): [string, string] {
+  const [before = "", after = ""] = message.split("\u0000");
+  return [before, after];
+}
 
 export const NEW_LINK_COMMAND = "npx akeru-bot pair";
 
@@ -55,58 +66,63 @@ function describeStatus(
   status: PairingPanelStatus,
   environmentName: string | null,
   readyDescription: string,
+  t: Translate,
 ): { icon: typeof Link02Icon; tone: Tone; title: string; description: string } {
   switch (status.kind) {
     case "checking":
       return {
         icon: Link02Icon,
         tone: "neutral",
-        title: "Pairing this browser",
-        description: "Checking your pairing link.",
+        title: t("Pairing this browser"),
+        description: t("Checking your pairing link."),
       };
     case "ready":
       return {
         icon: Link02Icon,
         tone: "neutral",
-        title: "Pair this browser",
+        title: t("Pair this browser"),
         description: readyDescription,
       };
     case "submitting":
       return {
         icon: Link02Icon,
         tone: "neutral",
-        title: "Pairing this browser",
-        description: "Connecting to the environment.",
+        title: t("Pairing this browser"),
+        description: t("Connecting to the environment."),
       };
     case "rejected":
       return {
         icon: Unlink02Icon,
         tone: "danger",
-        title: "This link no longer works",
-        description:
+        title: t("This link no longer works"),
+        description: t(
           "Pairing links work once and expire after a while. Get a new link and open it on this device.",
+        ),
       };
     case "incomplete":
       return {
         icon: Unlink02Icon,
         tone: "danger",
-        title: "This link is incomplete",
-        description:
+        title: t("This link is incomplete"),
+        description: t(
           "It is missing the server address or the token. Copy the whole link and open it again.",
+        ),
       };
     case "failed":
       return {
         icon: Alert02Icon,
         tone: "danger",
-        title: "Pairing failed",
+        title: t("Pairing failed"),
         description: status.message,
       };
     case "paired":
       return {
         icon: Tick02Icon,
         tone: "success",
-        title: "Paired",
-        description: `This browser can now use ${environmentName ?? "the environment"}.`,
+        title: t("Paired"),
+        description: environmentName
+          ? t("This browser can now use {name}.", { name: environmentName })
+          : t("This browser can now use the environment."),
       };
   }
 }
@@ -118,7 +134,7 @@ function describeStatus(
 export function PairingPanel({
   status,
   environment,
-  readyDescription = "Paste the pairing token from your link to connect.",
+  readyDescription,
   children,
 }: {
   readonly status: PairingPanelStatus;
@@ -126,10 +142,20 @@ export function PairingPanel({
   readonly readyDescription?: string;
   readonly children?: ReactNode;
 }) {
+  const { t } = useI18n();
   const { icon, tone, title, description } = describeStatus(
     status,
     environment.name,
-    readyDescription,
+    readyDescription ?? t("Paste the pairing token from your link to connect."),
+    t,
+  );
+  const [footerBefore, footerAfter] = splitAround(
+    t("Treat pairing links like passwords. You can remove this browser later in {location}.", {
+      location: "\u0000",
+    }),
+  );
+  const [runBefore, runAfter] = splitAround(
+    t("On the server, run {command}", { command: "\u0000" }),
   );
   const showGrants =
     status.kind === "checking" || status.kind === "ready" || status.kind === "submitting";
@@ -139,8 +165,9 @@ export function PairingPanel({
     <AuthSurfaceShell
       footer={
         <>
-          Treat pairing links like passwords. You can remove this browser later in{" "}
-          <span className="text-foreground/80">Settings &gt; Connections</span>.
+          {footerBefore}
+          <span className="text-foreground/80">{t("Settings > Connections")}</span>
+          {footerAfter}
         </>
       }
     >
@@ -169,13 +196,13 @@ export function PairingPanel({
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
             {environment.name ? (
               <>
-                <dt className="text-muted-foreground">Environment</dt>
+                <dt className="text-muted-foreground">{t("Environment")}</dt>
                 <dd className="truncate text-right font-medium">{environment.name}</dd>
               </>
             ) : null}
             {environment.address ? (
               <>
-                <dt className="text-muted-foreground">Address</dt>
+                <dt className="text-muted-foreground">{t("Address")}</dt>
                 <dd className="truncate text-right font-mono text-[13px] text-foreground/80">
                   {environment.address}
                 </dd>
@@ -187,9 +214,11 @@ export function PairingPanel({
 
       {showGrants ? (
         <AuthSurfaceSection>
-          <p className="text-xs font-medium text-muted-foreground">Pairing lets this browser</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {t("Pairing lets this browser")}
+          </p>
           <ul className="mt-3 space-y-2.5">
-            {PAIRING_GRANTS.map((grant) => (
+            {pairingGrants(t).map((grant) => (
               <li key={grant.label} className="flex items-center gap-3 text-sm">
                 <AppIcon icon={grant.icon} className="size-4 shrink-0 text-muted-foreground" />
                 <span>{grant.label}</span>
@@ -201,15 +230,18 @@ export function PairingPanel({
 
       {status.kind === "rejected" ? (
         <AuthSurfaceSection>
-          <p className="text-xs font-medium text-muted-foreground">Get a new link</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("Get a new link")}</p>
           <ol className="mt-3 space-y-2.5 text-sm">
             <li>
-              On the server, run{" "}
+              {runBefore}
               <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px]">
                 {NEW_LINK_COMMAND}
               </code>
+              {runAfter}
             </li>
-            <li>Or, on a paired device, open Settings &gt; Connections and select Create link.</li>
+            <li>
+              {t("Or, on a paired device, open Settings > Connections and select Create link.")}
+            </li>
           </ol>
         </AuthSurfaceSection>
       ) : null}

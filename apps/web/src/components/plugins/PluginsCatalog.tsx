@@ -7,6 +7,7 @@ import {
 import type { ComposioToolkit, McpServer, ProviderAccessStatus } from "@t3tools/contracts";
 import type { ReactNode } from "react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
@@ -18,6 +19,64 @@ import {
   type PluginPrimaryAction,
   type PluginSection,
 } from "./pluginPresentation";
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+/**
+ * Translates the fixed labels that `pluginPresentation` returns: filters,
+ * categories, section titles, primary actions, and connection kinds. Any other
+ * text (catalog data) passes through unchanged.
+ */
+export function pluginLabel(label: string, t: Translate): string {
+  switch (label) {
+    case "All":
+      return t("All");
+    case "Featured":
+      return t("Featured");
+    case "Installed":
+      return t("Installed");
+    case "Search results":
+      return t("Search results");
+    case "Work":
+      return t("Work");
+    case "Web":
+      return t("Web");
+    case "Marketing":
+      return t("Marketing");
+    case "Build":
+      return t("Build");
+    case "Design":
+      return t("Design");
+    case "Sales":
+      return t("Sales");
+    case "Support":
+      return t("Support");
+    case "Commerce":
+      return t("Commerce");
+    case "Add":
+      return t("Add");
+    case "Connect":
+      return t("Connect");
+    case "Add key":
+      return t("Add key");
+    case "Disable":
+      return t("Disable");
+    case "Reconnect":
+      return t("Reconnect");
+    case "Approval pending":
+      return t("Approval pending");
+    case "Verification pending":
+      return t("Verification pending");
+    case "Local":
+      return t("Local");
+    case "API key":
+      return t("API key");
+    case "No sign-in":
+      return t("No sign-in");
+    default:
+      return label;
+  }
+}
 
 const LOGO_TILE_CLASS_NAME =
   "flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-muted/70 p-2 ring-1 ring-border/50 ring-inset";
@@ -220,7 +279,9 @@ function PluginCard({
   readonly onToggle: (enabled: boolean) => void;
   readonly onOpen: () => void;
 }) {
+  const { t } = useI18n();
   const action = pluginPrimaryAction(plugin, server, accessStatus);
+  const actionLabel = pluginLabel(action.label, t);
   const brokerName = pluginBrokerName(plugin);
   const awaitingVendor =
     plugin.connection.type === "approval-pending" ||
@@ -233,15 +294,15 @@ function PluginCard({
       title={plugin.title}
       description={plugin.description}
       status={[
-        connected && "Connected",
-        awaitingVendor && pluginConnectionLabel(plugin),
-        brokerName && `via ${brokerName}`,
+        connected && t("Connected"),
+        awaitingVendor && pluginLabel(pluginConnectionLabel(plugin), t),
+        brokerName && t("via {name}", { name: brokerName }),
       ]}
-      openLabel={`Open ${plugin.title}`}
+      openLabel={t("Open {name}", { name: plugin.title })}
       onOpen={onOpen}
       action={
         <Button
-          aria-label={`${action.label} ${plugin.title}`}
+          aria-label={t("{action} {name}", { action: actionLabel, name: plugin.title })}
           className={ACTION_CLASS_NAME}
           size="sm"
           variant={actionVariant(action)}
@@ -249,7 +310,7 @@ function PluginCard({
           title={action.blocker}
           onClick={() => action.enable !== null && onToggle(action.enable)}
         >
-          {action.label}
+          {actionLabel}
         </Button>
       }
     />
@@ -265,17 +326,18 @@ export function PluginsCatalog({
   onOpen,
   nothingInstalled = false,
 }: PluginsCatalogProps) {
+  const { t } = useI18n();
   const resultCount = sections.reduce((count, section) => count + section.plugins.length, 0);
   if (resultCount === 0) {
     return (
       <div className="py-16 text-center">
         <p className="text-sm font-medium text-foreground">
-          {nothingInstalled ? "No plugins connected yet" : "No plugins match"}
+          {nothingInstalled ? t("No plugins connected yet") : t("No plugins match")}
         </p>
         <p className="mt-1 text-[13px] text-muted-foreground">
           {nothingInstalled
-            ? "Connect one from All and it shows up here."
-            : "Try another name or clear the filter."}
+            ? t("Connect one from All and it shows up here.")
+            : t("Try another name or clear the filter.")}
         </p>
       </div>
     );
@@ -286,7 +348,7 @@ export function PluginsCatalog({
         <DirectorySection
           count={section.plugins.length}
           key={section.title}
-          label={section.title}
+          label={pluginLabel(section.title, t)}
           layout={section.title === "Featured" ? "featured" : "grid"}
         >
           {section.plugins.map((plugin) => {
@@ -320,9 +382,10 @@ export function ComposioToolkitResults({
   readonly pendingToolkitId: string | null;
   readonly onConnect: (toolkit: ComposioToolkit) => void;
 }) {
+  const { t, plural } = useI18n();
   if (toolkits.length === 0) return null;
   return (
-    <DirectorySection count={toolkits.length} label="From Composio">
+    <DirectorySection count={toolkits.length} label={t("From Composio")}>
       {toolkits.map((toolkit) => {
         const connected = connectedToolkitIds.has(toolkit.slug);
         return (
@@ -341,18 +404,24 @@ export function ComposioToolkitResults({
               </span>
             }
             title={toolkit.name}
-            description={toolkit.description ?? `${toolkit.toolsCount} tools`}
-            status={["via Composio"]}
+            description={
+              toolkit.description ??
+              plural(toolkit.toolsCount, { one: "{count} tool", other: "{count} tools" })
+            }
+            status={[t("via Composio")]}
             action={
               <Button
-                aria-label={`${connected ? "Connected" : "Connect"} ${toolkit.name}`}
+                aria-label={t("{action} {name}", {
+                  action: connected ? t("Connected") : t("Connect"),
+                  name: toolkit.name,
+                })}
                 className={ACTION_CLASS_NAME}
                 disabled={connected || pendingToolkitId === toolkit.slug}
                 size="sm"
                 variant={connected ? "ghost-muted" : "outline"}
                 onClick={() => onConnect(toolkit)}
               >
-                {connected ? "Connected" : "Connect"}
+                {connected ? t("Connected") : t("Connect")}
               </Button>
             }
           />
@@ -371,11 +440,12 @@ export function RemovedBuiltinServers({
   readonly pendingServerId: string | null;
   readonly onDelete: (server: McpServer) => void;
 }) {
+  const { t } = useI18n();
   if (servers.length === 0) return null;
   return (
     <DirectorySection
       count={servers.length}
-      label="Removed plugins"
+      label={t("Removed plugins")}
       labelId="removed-plugins-title"
       layout="list"
     >
@@ -384,17 +454,19 @@ export function RemovedBuiltinServers({
           <McpLogo />
           <RowText
             title={server.name}
-            description={`No longer in the directory · ${server.enabled ? "Enabled" : "Disabled"}`}
+            description={t("No longer in the directory · {status}", {
+              status: server.enabled ? t("Enabled") : t("Disabled"),
+            })}
           />
           <Button
-            aria-label={`Remove ${server.name}`}
+            aria-label={t("Remove {name}", { name: server.name })}
             className={ACTION_CLASS_NAME}
             size="sm"
             variant="ghost-muted"
             disabled={pendingServerId === server.id}
             onClick={() => onDelete(server)}
           >
-            Remove
+            {t("Remove")}
           </Button>
         </div>
       ))}
@@ -425,22 +497,23 @@ export function CustomMcpServers({
   onEdit,
   onDelete,
 }: CustomMcpServersProps) {
+  const { t } = useI18n();
   return (
     <DirectorySection
       count={servers.length}
-      label="Custom MCP servers"
+      label={t("Custom MCP servers")}
       labelId="custom-mcp-title"
       layout="list"
       trailing={
         <Button className="h-7 rounded-full" size="sm" variant="ghost-muted" onClick={onCreate}>
           <AppIcon icon={PlusSignIcon} className="size-3.5" />
-          Add server
+          {t("Add server")}
         </Button>
       }
     >
       {servers.length === 0 ? (
         <p className="px-2.5 py-3 text-[13px] text-muted-foreground">
-          Add a local command or remote URL to use your own MCP server.
+          {t("Add a local command or remote URL to use your own MCP server.")}
         </p>
       ) : null}
       {servers.map((server) => {
@@ -450,11 +523,11 @@ export function CustomMcpServers({
             <McpLogo />
             <RowText
               title={server.name}
-              meta={[server.enabled && "Connected"]}
+              meta={[server.enabled && t("Connected")]}
               description={serverDescription(server)}
             />
             <Button
-              aria-label={`Edit ${server.name}`}
+              aria-label={t("Edit {name}", { name: server.name })}
               className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
               size="icon-sm"
               variant="ghost-muted"
@@ -464,7 +537,7 @@ export function CustomMcpServers({
               <AppIcon icon={PencilEdit02Icon} className="size-4" />
             </Button>
             <Button
-              aria-label={`Delete ${server.name}`}
+              aria-label={t("Delete {name}", { name: server.name })}
               className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
               size="icon-sm"
               variant="ghost-muted"
@@ -474,7 +547,11 @@ export function CustomMcpServers({
               <AppIcon icon={Delete02Icon} className="size-4" />
             </Button>
             <Button
-              aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
+              aria-label={
+                server.enabled
+                  ? t("Disable {name}", { name: server.name })
+                  : t("Enable {name}", { name: server.name })
+              }
               className={ACTION_CLASS_NAME}
               size="sm"
               variant={server.enabled ? "ghost-muted" : "outline"}
@@ -482,7 +559,7 @@ export function CustomMcpServers({
               onClick={() => onToggle(server, !server.enabled)}
             >
               {server.enabled ? <AppIcon icon={Tick02Icon} className="size-3.5" /> : null}
-              {server.enabled ? "Added" : "Add"}
+              {server.enabled ? t("Added") : t("Add")}
             </Button>
           </div>
         );

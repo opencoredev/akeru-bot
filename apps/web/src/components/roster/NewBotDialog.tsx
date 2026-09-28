@@ -78,9 +78,9 @@ export function NewBotDialog({
           }}
         >
           <DialogHeader className="shrink-0">
-            <DialogTitle>New bot</DialogTitle>
+            <DialogTitle>{t("New bot")}</DialogTitle>
             <DialogDescription>
-              Give your teammate an identity. You can set its model and instructions next.
+              {t("Give your teammate an identity. You can set its model and instructions next.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -96,19 +96,19 @@ export function NewBotDialog({
             <div className="flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-secondary/35 px-4 py-7 text-center">
               <BotAvatarView avatar={avatar} name={trimmedName} className="size-20" />
               <div className="mt-4 max-w-full truncate text-sm font-semibold">
-                {trimmedName || "Your bot"}
+                {trimmedName || t("Your bot")}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Preview</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("Preview")}</p>
             </div>
 
             <div className="min-w-0 space-y-6">
               <label className="flex flex-col gap-2 text-sm font-medium">
-                Bot name
+                {t("Bot name")}
                 <Input
                   autoFocus
                   data-testid="new-bot-name-input"
                   maxLength={80}
-                  placeholder="Name your bot"
+                  placeholder={t("Name your bot")}
                   required
                   aria-describedby="new-bot-name-help"
                   value={name}
@@ -133,10 +133,10 @@ export function NewBotDialog({
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 id="new-bot-avatar-heading" className="text-sm font-medium text-foreground">
-                    Appearance
+                    {t("Appearance")}
                   </h3>
                   <label className="cursor-pointer rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-sm font-medium text-foreground outline-none transition-colors hover:bg-secondary focus-within:ring-2 focus-within:ring-foreground/20">
-                    Upload image
+                    {t("Upload image")}
                     <input
                       type="file"
                       accept="image/*"
@@ -187,7 +187,7 @@ export function NewBotDialog({
               disabled={submitting}
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="submit"

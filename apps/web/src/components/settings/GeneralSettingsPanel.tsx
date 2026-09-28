@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { DEFAULT_UNIFIED_SETTINGS, type QuitConfirmationMode } from "@t3tools/contracts/settings";
 
 import { APP_VERSION } from "../../branding";
@@ -11,6 +12,7 @@ import {
   resolveDesktopUpdateButtonAction,
 } from "../../components/desktopUpdate.logic";
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { ensureLocalApi } from "../../localApi";
 import { openProductFeedback } from "../../productFeedbackStore";
@@ -36,24 +38,26 @@ const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
   "12-hour": "12-hour",
   "24-hour": "24-hour",
-} as const;
+} as const satisfies Record<string, MessageKey>;
 
-const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
+const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, MessageKey> = {
   hold: "Hold",
   "double-click": "Double press",
   direct: "Direct",
 };
 
 function AboutVersionTitle() {
+  const { t } = useI18n();
   return (
     <span className="inline-flex items-baseline gap-2">
-      <span>Version</span>
+      <span>{t("Version")}</span>
       <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
     </span>
   );
 }
 
 function AboutVersionSection() {
+  const { t } = useI18n();
   const updateState = useDesktopUpdateState();
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
 
@@ -68,8 +72,8 @@ function AboutVersionSection() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not download update",
-            description: error instanceof Error ? error.message : "Download failed.",
+            title: t("Could not download update"),
+            description: error instanceof Error ? error.message : t("Download failed."),
           }),
         );
       });
@@ -91,8 +95,8 @@ function AboutVersionSection() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
+            title: t("Could not confirm update"),
+            description: error instanceof Error ? error.message : t("Update confirmation failed."),
           }),
         );
         return;
@@ -107,8 +111,8 @@ function AboutVersionSection() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Could not install update",
-              description: error instanceof Error ? error.message : "Install failed.",
+              title: t("Could not install update"),
+              description: error instanceof Error ? error.message : t("Install failed."),
             }),
           );
         })
@@ -124,9 +128,9 @@ function AboutVersionSection() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Could not check for updates",
+              title: t("Could not check for updates"),
               description:
-                result.state.message ?? "Automatic updates are not available in this build.",
+                result.state.message ?? t("Automatic updates are not available in this build."),
             }),
           );
         }
@@ -135,12 +139,12 @@ function AboutVersionSection() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not check for updates",
-            description: error instanceof Error ? error.message : "Update check failed.",
+            title: t("Could not check for updates"),
+            description: error instanceof Error ? error.message : t("Update check failed."),
           }),
         );
       });
-  }, [isUpdateActionPending, updateState]);
+  }, [isUpdateActionPending, t, updateState]);
 
   const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
   const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
@@ -149,18 +153,19 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
-  const statusLabel: Record<string, string> = {
+  const actionLabel: Record<string, MessageKey> = { download: "Download", install: "Install" };
+  const statusLabel: Record<string, MessageKey> = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
   };
-  const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+  const buttonLabel = t(
+    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",
+  );
   const description =
     action === "download" || action === "install"
-      ? "Update available."
-      : "Current version of the application.";
+      ? t("Update available.")
+      : t("Current version of the application.");
 
   return (
     <SettingsRow
@@ -187,21 +192,39 @@ function AboutVersionSection() {
   );
 }
 
+/** "How often the usage page reloads plan limits.", with the page name as a link. */
+function UsageRefreshDescription() {
+  const { t } = useI18n();
+  const [beforeLink, afterLink = ""] = t("How often the {link} reloads plan limits.", {
+    link: "\u0000",
+  }).split("\u0000");
+  return (
+    <>
+      {beforeLink}
+      <Link to="/usage" className="text-foreground underline underline-offset-2">
+        {t("usage page")}
+      </Link>
+      {afterLink}
+    </>
+  );
+}
+
 export function GeneralSettingsPanel() {
+  const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Preferences">
+      <SettingsSection title={t("Preferences")}>
         <LanguageSetting />
         <SettingsRow
-          {...searchableSetting("time-format")}
-          description="System default follows your browser or OS clock preference."
+          {...searchableSetting("time-format", t)}
+          description={t("System default follows your browser or OS clock preference.")}
           resetAction={
             settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
               <SettingResetButton
-                label="time format"
+                label={t("time format")}
                 onClick={() =>
                   updateSettings({
                     timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
@@ -219,18 +242,18 @@ export function GeneralSettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Timestamp format">
-                <SelectValue>{TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}</SelectValue>
+              <SelectTrigger className="w-full sm:w-40" aria-label={t("Timestamp format")}>
+                <SelectValue>{t(TIMESTAMP_FORMAT_LABELS[settings.timestampFormat])}</SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="locale">
-                  {TIMESTAMP_FORMAT_LABELS.locale}
+                  {t(TIMESTAMP_FORMAT_LABELS.locale)}
                 </SelectItem>
                 <SelectItem hideIndicator value="12-hour">
-                  {TIMESTAMP_FORMAT_LABELS["12-hour"]}
+                  {t(TIMESTAMP_FORMAT_LABELS["12-hour"])}
                 </SelectItem>
                 <SelectItem hideIndicator value="24-hour">
-                  {TIMESTAMP_FORMAT_LABELS["24-hour"]}
+                  {t(TIMESTAMP_FORMAT_LABELS["24-hour"])}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -238,20 +261,12 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("usage-refresh")}
-          description={
-            <>
-              How often the{" "}
-              <Link to="/usage" className="text-foreground underline underline-offset-2">
-                usage page
-              </Link>{" "}
-              reloads plan limits.
-            </>
-          }
+          {...searchableSetting("usage-refresh", t)}
+          description={<UsageRefreshDescription />}
           resetAction={
             settings.usageRefreshMinutes !== DEFAULT_UNIFIED_SETTINGS.usageRefreshMinutes ? (
               <SettingResetButton
-                label="usage refresh"
+                label={t("usage refresh")}
                 onClick={() =>
                   updateSettings({
                     usageRefreshMinutes: DEFAULT_UNIFIED_SETTINGS.usageRefreshMinutes,
@@ -270,21 +285,23 @@ export function GeneralSettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Usage refresh">
-                <SelectValue>{`${settings.usageRefreshMinutes} min`}</SelectValue>
+              <SelectTrigger className="w-full sm:w-40" aria-label={t("Usage refresh")}>
+                <SelectValue>
+                  {t("{count} min", { count: settings.usageRefreshMinutes })}
+                </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="1">
-                  1 min
+                  {t("{count} min", { count: 1 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="5">
-                  5 min
+                  {t("{count} min", { count: 5 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="15">
-                  15 min
+                  {t("{count} min", { count: 15 })}
                 </SelectItem>
                 <SelectItem hideIndicator value="30">
-                  30 min
+                  {t("{count} min", { count: 30 })}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -293,12 +310,12 @@ export function GeneralSettingsPanel() {
 
         {isElectron ? (
           <SettingsRow
-            {...searchableSetting("quit-confirmation")}
-            description="Hold mode also quits on two quick presses."
+            {...searchableSetting("quit-confirmation", t)}
+            description={t("Hold mode also quits on two quick presses.")}
             resetAction={
               settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
                 <SettingResetButton
-                  label="quit shortcut behavior"
+                  label={t("quit shortcut behavior")}
                   onClick={() =>
                     updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
                   }
@@ -317,14 +334,20 @@ export function GeneralSettingsPanel() {
                 <SelectTrigger
                   size="sm"
                   className="w-full sm:w-40"
-                  aria-label="Quit shortcut behavior"
+                  aria-label={t("Quit shortcut behavior")}
                 >
-                  <SelectValue>{QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit]}</SelectValue>
+                  <SelectValue>
+                    {t(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
+                  {(
+                    Object.entries(QUIT_CONFIRMATION_MODE_LABELS) as Array<
+                      [QuitConfirmationMode, MessageKey]
+                    >
+                  ).map(([value, label]) => (
                     <SelectItem hideIndicator key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -334,20 +357,20 @@ export function GeneralSettingsPanel() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection title="About">
+      <SettingsSection title={t("About")}>
         {isElectron ? (
           <AboutVersionSection />
         ) : (
           <SettingsRow
             title={<AboutVersionTitle />}
-            description="Current version of the application."
+            description={t("Current version of the application.")}
           />
         )}
         <SettingsRow
-          title="Send feedback"
+          title={t("Send feedback")}
           control={
             <Button size="xs" variant="outline" onClick={() => openProductFeedback()}>
-              Send feedback
+              {t("Send feedback")}
             </Button>
           }
         />

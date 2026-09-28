@@ -15,6 +15,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { useChangedSinceMount } from "../../hooks/useChangedSinceMount";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
@@ -91,10 +92,11 @@ export function ExperimentalSidebar() {
   const panel = onSettings ? "settings" : place;
   // Only rail switches animate; the first paint of the panel stays still.
   const panelSwitched = useChangedSinceMount(panel);
+  const { t } = useI18n();
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       <nav
-        aria-label="Main"
+        aria-label={t("Main")}
         className="flex h-full shrink-0 flex-col items-center pb-3"
         style={{ width: RAIL_WIDTH }}
       >
@@ -111,19 +113,19 @@ export function ExperimentalSidebar() {
         />
         <div className="flex flex-col items-center gap-1.5">
           <RailButton
-            label="Chats"
+            label={t("Chats")}
             icon={BubbleChatIcon}
             active={!onSettings && !onPlugins && place === "chats"}
             onClick={() => choosePlace("chats")}
           />
           <RailButton
-            label="Routines"
+            label={t("Routines")}
             icon={Calendar03Icon}
             active={!onSettings && !onPlugins && place === "routines"}
             onClick={() => choosePlace("routines")}
           />
           <RailButton
-            label="Plugins"
+            label={t("Plugins")}
             icon={PuzzleIcon}
             active={onPlugins}
             onClick={() => {
@@ -134,17 +136,17 @@ export function ExperimentalSidebar() {
         </div>
         <div className="mt-auto flex flex-col items-center gap-1.5">
           <RailButton
-            label={nextAppearance === "dark" ? "Switch to dark mode" : "Switch to light mode"}
+            label={nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode")}
             icon={nextAppearance === "dark" ? Moon02Icon : Sun03Icon}
             onClick={() => setAppearanceMode(nextAppearance)}
           />
           <RailButton
-            label="Feedback"
+            label={t("Feedback")}
             icon={HelpCircleIcon}
             onClick={() => openProductFeedback()}
           />
           <RailButton
-            label="Settings"
+            label={t("Settings")}
             icon={Settings02Icon}
             active={onSettings}
             onClick={() => {
@@ -167,7 +169,7 @@ export function ExperimentalSidebar() {
           >
             {panel === "settings" ? (
               <>
-                <PanelHeader title="Settings" />
+                <PanelHeader title={t("Settings")} />
                 <SettingsPanelNav />
               </>
             ) : panel === "chats" ? (
@@ -281,24 +283,28 @@ function RoutinesPanel() {
   const snapshot = useEnvironmentSnapshot();
   const bots = useLiveBots();
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const { t } = useI18n();
   const routines = (snapshot?.routines ?? []).filter((routine) => routine.lifecycle !== "deleted");
   return (
     <>
-      <PanelHeader title="Routines" />
+      <PanelHeader title={t("Routines")} />
       <div className="min-h-0 flex-1 overflow-y-auto px-2">
         {routines.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-            No routines yet. Ask a bot to do something on a schedule.
+            {t("No routines yet. Ask a bot to do something on a schedule.")}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {routines.map((routine) => {
               const bot = bots.find((candidate) => candidate.id === routine.botId);
+              const time = routine.nextRunAt
+                ? formatRosterTimestamp(routine.nextRunAt, timestampFormat)
+                : null;
               const when = !routine.enabled
-                ? "Paused"
-                : routine.nextRunAt
-                  ? `Next ${formatRosterTimestamp(routine.nextRunAt, timestampFormat)}`
-                  : "Not scheduled";
+                ? t("Paused")
+                : time
+                  ? t("Next {time}", { time })
+                  : t("Not scheduled");
               return (
                 <PanelRow
                   key={routine.id}
@@ -311,7 +317,7 @@ function RoutinesPanel() {
                     ) : null
                   }
                   title={routine.job}
-                  detail={`${bot?.name ?? "Unknown bot"} · ${when}`}
+                  detail={`${bot?.name ?? t("Unknown bot")} · ${when}`}
                 />
               );
             })}

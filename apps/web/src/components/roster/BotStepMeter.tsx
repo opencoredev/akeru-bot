@@ -10,9 +10,9 @@ export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | und
   // Unknown usage is left out rather than shown as a placeholder.
   const parts = [
     formatBotStepEngine(meter.engine),
-    meter.tokens === null ? null : `${formatTokens(meter.tokens)} tokens`,
+    meter.tokens === null ? null : t("{tokens} tokens", { tokens: formatTokens(meter.tokens) }),
     meter.costUsd === null ? null : formatUsd(meter.costUsd),
-    meter.hardStopReached ? "Hard stop" : null,
+    meter.hardStopReached ? t("Hard stop") : null,
   ].filter((part) => part !== null);
 
   return (

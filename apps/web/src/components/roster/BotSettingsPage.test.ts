@@ -39,11 +39,11 @@ describe("bot settings page", () => {
   it("groups the bot's own settings into named sections", () => {
     const source = read("./BotSettingsPage.tsx");
 
-    expect(source).toContain('id="identity" title="Identity"');
-    expect(source).toContain('id="behavior" title="Behavior"');
-    expect(source).toContain('id="model" title="Model & usage"');
-    expect(source).toContain('title="Workspace"');
-    expect(source).toContain('aria-label="Bot settings sections"');
+    expect(source).toContain('id="identity" title={t("Identity")}');
+    expect(source).toContain('id="behavior" title={t("Behavior")}');
+    expect(source).toContain('id="model" title={t("Model & usage")}');
+    expect(source).toContain('title={t("Workspace")}');
+    expect(source).toContain('aria-label={t("Bot settings sections")}');
   });
 
   it("saves through the shared bot update command", () => {
@@ -92,13 +92,13 @@ describe("bot settings page", () => {
     const section = read("./BotToolsSection.tsx");
 
     expect(page).toContain("<BotToolsSection");
-    expect(page).toContain('["tools", "Tools"]');
+    expect(page).toContain('["tools", t("Tools")]');
     expect(page).toContain("draft.setDisabledMcpServerIds(ids)");
     // Tools used to open an overlay sheet; they now live on the page.
     expect(page).not.toContain("BotToolsSheet");
     expect(section).toContain('id="tools"');
     expect(section).toContain("<Switch");
-    expect(section).toContain("No tools yet");
+    expect(section).toContain('t("No tools yet")');
     expect(section).not.toContain("BotSideSheet");
   });
 

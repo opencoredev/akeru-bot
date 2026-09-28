@@ -53,8 +53,8 @@ function MemoryDocumentEditor({
 
   return (
     <BotSideSheetSection
-      title={copy.title}
-      description={copy.description}
+      title={t(copy.title)}
+      description={t(copy.description)}
       action={
         <span
           className={
@@ -62,16 +62,19 @@ function MemoryDocumentEditor({
               ? "whitespace-nowrap text-xs tabular-nums text-destructive"
               : "whitespace-nowrap text-xs tabular-nums text-muted-foreground"
           }
-          aria-label={`${draft.length} of ${document.charLimit} characters used`}
+          aria-label={t("{used} of {limit} characters used", {
+            used: formatNumber(draft.length),
+            limit: formatNumber(document.charLimit),
+          })}
         >
           {formatNumber(draft.length)} / {formatNumber(document.charLimit)}
         </span>
       }
     >
       <Textarea
-        aria-label={`Edit ${copy.title.toLowerCase()}`}
+        aria-label={t("Edit {name}", { name: t(copy.title) })}
         className="min-h-32"
-        placeholder="Nothing saved yet. Add a note in plain text or Markdown."
+        placeholder={t("Nothing saved yet. Add a note in plain text or Markdown.")}
         value={draft}
         onChange={(event) => setDraft(event.currentTarget.value)}
         disabled={busy}
@@ -106,7 +109,7 @@ export function BotMemorySheet({
   readonly onOpenChange: (open: boolean) => void;
   readonly threadRef: ScopedThreadRef | null;
 }) {
-  const { t, plural } = useI18n();
+  const { t, plural, formatNumber } = useI18n();
   const query = useEnvironmentQuery(
     open && threadRef
       ? memoryEnvironment.inspectDocuments({
@@ -164,14 +167,16 @@ export function BotMemorySheet({
     <BotSideSheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Memory"
-      description="What this bot remembers between chats. Edit anything that is wrong or out of date."
+      title={t("Memory")}
+      description={t(
+        "What this bot remembers between chats. Edit anything that is wrong or out of date.",
+      )}
     >
       {!threadRef ? (
         <BotSideSheetEmpty
           icon={BrainIcon}
-          title="No memory yet"
-          description="Start a chat with this bot to see and edit what it remembers."
+          title={t("No memory yet")}
+          description={t("Start a chat with this bot to see and edit what it remembers.")}
         />
       ) : null}
       {(error ?? query.error) ? (
@@ -184,7 +189,7 @@ export function BotMemorySheet({
       ) : null}
       {query.isPending && !query.data ? (
         <div className="flex justify-center py-12">
-          <Spinner aria-label="Loading memory" />
+          <Spinner aria-label={t("Loading memory…")} />
         </div>
       ) : null}
       {query.data ? (
@@ -203,8 +208,10 @@ export function BotMemorySheet({
 
           <BotSideSheetSection
             className="border-t pt-6"
-            title="Chat summary"
-            description="Notes the bot writes on its own as this chat grows, so it can recall earlier parts of a long conversation. They only apply to this chat."
+            title={t("Chat summary")}
+            description={t(
+              "Notes the bot writes on its own as this chat grows, so it can recall earlier parts of a long conversation. They only apply to this chat.",
+            )}
             action={
               <Button
                 size="sm"
@@ -225,14 +232,14 @@ export function BotMemorySheet({
                       setError(message);
                       toastManager.add({
                         type: "error",
-                        title: "Could not clear the chat summary",
+                        title: t("Could not clear the chat summary"),
                         description: message,
                       });
                     } else setClearPending(false);
                   });
                 }}
               >
-                {clearPending ? "Confirm clear" : "Clear summary"}
+                {clearPending ? t("Confirm clear") : t("Clear summary")}
               </Button>
             }
           >
@@ -241,14 +248,18 @@ export function BotMemorySheet({
                 <p className="whitespace-pre-wrap rounded-lg bg-secondary px-3 py-2">{summary}</p>
                 {current.generationCount > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    Condensed {current.generationCount.toLocaleString()}{" "}
-                    {current.generationCount === 1 ? "time" : "times"} to stay short.
+                    {plural(current.generationCount, {
+                      one: "Condensed {count} time to stay short.",
+                      other: "Condensed {count} times to stay short.",
+                    })}
                   </p>
                 ) : null}
                 {previousObservations.length > 0 ? (
                   <details>
                     <summary className="cursor-pointer text-xs text-muted-foreground">
-                      Earlier summaries ({previousObservations.length})
+                      {t("Earlier summaries ({count})", {
+                        count: formatNumber(previousObservations.length),
+                      })}
                     </summary>
                     <div className="mt-2 space-y-3">
                       {previousObservations.map((item) => (
@@ -265,7 +276,7 @@ export function BotMemorySheet({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Nothing yet. The bot starts a summary once the chat gets long.
+                {t("Nothing yet. The bot starts a summary once the chat gets long.")}
               </p>
             )}
           </BotSideSheetSection>

@@ -1,3 +1,4 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type {
   ProviderInstanceEnvironmentVariable,
   SandboxProvider,
@@ -8,14 +9,14 @@ export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
 
 export interface SandboxCredentialField {
   readonly name: string;
-  readonly label: string;
+  readonly label: MessageKey;
   readonly secret: boolean;
 }
 
 export interface SandboxProviderDefinition {
   readonly id: CloudSandboxProvider;
   readonly label: string;
-  readonly description: string;
+  readonly description: MessageKey;
   readonly fields: ReadonlyArray<SandboxCredentialField>;
 }
 

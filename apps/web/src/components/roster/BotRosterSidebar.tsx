@@ -213,7 +213,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
  * Header for the roster when it sits inside the experimental rail layout:
  * the wordmark as the panel title, with search and create beside it.
  */
-function RosterPanelHeader({
+export function RosterPanelHeader({
   onNewBot,
   onNewGroup,
   onSearch,
@@ -222,6 +222,7 @@ function RosterPanelHeader({
   onNewGroup: () => void;
   onSearch: () => void;
 }) {
+  const { t } = useI18n();
   const iconButton =
     "size-8! rounded-lg text-sidebar-muted-foreground hover:text-sidebar-foreground [-webkit-app-region:no-drag]";
   return (
@@ -241,7 +242,7 @@ function RosterPanelHeader({
         <TooltipTrigger
           render={
             <Button
-              aria-label="Search"
+              aria-label={t("Search")}
               className={iconButton}
               size="icon"
               variant="ghost"
@@ -251,13 +252,13 @@ function RosterPanelHeader({
             </Button>
           }
         />
-        <TooltipPopup>Search</TooltipPopup>
+        <TooltipPopup>{t("Search")}</TooltipPopup>
       </Tooltip>
       <Menu>
         <MenuTrigger
           render={
             <Button
-              aria-label="Create"
+              aria-label={t("Create")}
               data-testid="roster-new-bot"
               className={iconButton}
               size="icon"
@@ -270,11 +271,11 @@ function RosterPanelHeader({
         <MenuPopup align="end">
           <MenuItem onClick={onNewBot}>
             <BotIcon />
-            New bot
+            {t("New bot")}
           </MenuItem>
           <MenuItem onClick={onNewGroup}>
             <UsersIcon />
-            New group
+            {t("New group")}
           </MenuItem>
         </MenuPopup>
       </Menu>
@@ -345,9 +346,12 @@ const setRosterItemPinned = (item: RosterItemRef, pinned: boolean) =>
 const nudgeRosterItem = (item: RosterItemRef, delta: -1 | 1) =>
   useRosterStore.getState().nudgeRosterItem(item, delta);
 
-function commandFailureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
+function commandFailureMessage(
+  result: Parameters<typeof squashAtomCommandFailure>[0],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "The environment rejected the change.";
+  return error instanceof Error ? error.message : t("The environment rejected the change.");
 }
 
 /**
@@ -1170,7 +1174,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       toastManager.add({
         type: "error",
         title: t("Could not archive {name}", { name: bot.name }),
-        description: commandFailureMessage(result),
+        description: commandFailureMessage(result, t),
       });
       return;
     }
@@ -1208,7 +1212,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       toastManager.add({
         type: "error",
         title: t("Could not restore {name}", { name: bot.name }),
-        description: commandFailureMessage(result),
+        description: commandFailureMessage(result, t),
       });
     }
   };

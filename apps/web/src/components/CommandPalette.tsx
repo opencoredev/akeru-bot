@@ -22,7 +22,6 @@ import { useI18n } from "../i18n";
 import {
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
-  COMMAND_PALETTE_INPUT_PLACEHOLDER,
   filterCommandPaletteGroups,
   ITEM_ICON_CLASS,
   type CommandPaletteActionItem,
@@ -83,9 +82,10 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 }
 
 function CommandPaletteDialog(props: { readonly setOpen: (open: boolean) => void }) {
+  const { t } = useI18n();
   return (
     <CommandDialogPopup
-      aria-label="Command palette"
+      aria-label={t("Command palette")}
       className="overflow-hidden p-0"
       data-command-palette="true"
       data-testid="command-palette"
@@ -101,20 +101,22 @@ function CommandPaletteDialog(props: { readonly setOpen: (open: boolean) => void
 
 function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => void }) {
   const { setOpen } = props;
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme, setAppearanceMode } = useTheme();
-  const { t } = useI18n();
 
   // Names the mode you would switch to, so the row reads as a verb.
   const nextAppearance = resolvedTheme === "dark" ? "light" : "dark";
+  const appearanceTitle =
+    nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode");
   const actionItems: CommandPaletteActionItem[] = [
     {
       value: "action:toggle-appearance",
-      searchTerms: ["theme", "appearance", "dark", "light", "mode", "toggle"],
-      title: nextAppearance === "dark" ? "Switch to dark mode" : "Switch to light mode",
+      searchTerms: [appearanceTitle, "theme", "appearance", "dark", "light", "mode", "toggle"],
+      title: appearanceTitle,
       icon:
         nextAppearance === "dark" ? (
           <MoonIcon className={ITEM_ICON_CLASS} />
@@ -127,8 +129,15 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     },
     {
       value: "action:theme-editor",
-      searchTerms: ["theme", "appearance", "colors", "palette", "customize"],
-      title: "Toggle theme editor",
+      searchTerms: [
+        t("Toggle theme editor"),
+        "theme",
+        "appearance",
+        "colors",
+        "palette",
+        "customize",
+      ],
+      title: t("Toggle theme editor"),
       icon: <PaletteIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "themeEditor.toggle",
       run: async () => {
@@ -149,8 +158,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     }),
     {
       value: "action:plugins",
-      searchTerms: ["plugins", "mcp", "tools", "executor", "composio"],
-      title: "Open plugins",
+      searchTerms: [t("Open plugins"), "plugins", "mcp", "tools", "executor", "composio"],
+      title: t("Open plugins"),
       icon: <PuzzleIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openPlugins();
@@ -158,8 +167,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     },
     {
       value: "action:usage",
-      searchTerms: ["usage", "limits", "quota", "plan", "subscription"],
-      title: "Open usage",
+      searchTerms: [t("Open usage"), "usage", "limits", "quota", "plan", "subscription"],
+      title: t("Open usage"),
       icon: <ChartNoAxesColumnIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openUsage();
@@ -167,8 +176,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     },
     {
       value: "action:feedback",
-      searchTerms: ["feedback", "help", "bug", "idea"],
-      title: "Send feedback",
+      searchTerms: [t("Send feedback"), "feedback", "help", "bug", "idea"],
+      title: t("Send feedback"),
       icon: <MessageCircleIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openProductFeedback();
@@ -198,8 +207,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     }),
     {
       value: "action:settings",
-      searchTerms: ["settings", "preferences", "configuration", "keybindings"],
-      title: "Open settings",
+      searchTerms: [t("Open settings"), "settings", "preferences", "configuration", "keybindings"],
+      title: t("Open settings"),
       icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openSettings();
@@ -207,7 +216,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     },
   ];
   const groups: CommandPaletteGroup[] = [
-    { value: "actions", label: "Actions", items: actionItems },
+    { value: "actions", label: t("Actions"), items: actionItems },
   ];
   const filteredGroups = filterCommandPaletteGroups({ groups, query: deferredQuery });
 
@@ -218,8 +227,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Unable to run command",
-          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          title: t("Unable to run command"),
+          description: error instanceof Error ? error.message : t("An unexpected error occurred."),
         }),
       );
     });
@@ -227,10 +236,10 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
 
   return (
     <CommandPaletteContent
-      aria-label="Command palette"
+      aria-label={t("Command palette")}
       autoHighlight="always"
-      footerActionLabel="Select"
-      inputProps={{ placeholder: COMMAND_PALETTE_INPUT_PLACEHOLDER }}
+      footerActionLabel={t("Select")}
+      inputProps={{ placeholder: t("Search commands...") }}
       mode="none"
       onItemHighlighted={(value) => {
         setHighlightedItemValue(typeof value === "string" ? value : null);

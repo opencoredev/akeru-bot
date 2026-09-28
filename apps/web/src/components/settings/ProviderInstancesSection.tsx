@@ -43,6 +43,7 @@ import { getDriverOption } from "./providerDriverMeta";
 import { SettingsMessageRow } from "./settingsDetailLayout";
 import { buildProviderInstanceUpdatePatch } from "./SettingsPanels.logic";
 import { SettingResetButton, SettingsSection } from "./settingsLayout";
+import { useI18n } from "../../i18n";
 
 function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
@@ -129,6 +130,7 @@ export function ProviderInstancesSection({
   readonly providerLabel: string;
   readonly account?: SubscriptionProviderDefinition;
 }) {
+  const { t } = useI18n();
   const environment = useEnvironment(environmentId);
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
@@ -195,11 +197,13 @@ export function ProviderInstancesSection({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: `Could not update ${PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver}`,
+            title: t("Could not update {provider}", {
+              provider: PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
+            }),
             description:
               error instanceof Error
                 ? error.message
-                : "The provider update command could not be started.",
+                : t("The provider update command could not be started."),
           }),
         );
       }
@@ -211,7 +215,7 @@ export function ProviderInstancesSection({
         return next;
       });
     },
-    [environmentId, updateProvider],
+    [environmentId, t, updateProvider],
   );
 
   const updateInstance = (row: InstanceRow, next: ProviderInstanceConfig) => {
@@ -300,7 +304,7 @@ export function ProviderInstancesSection({
     <>
       <SettingsSection
         id="provider-instances"
-        title={rows.length > 1 ? "Instances" : "Configuration"}
+        title={rows.length > 1 ? t("Instances") : t("Configuration")}
         headerAction={
           <div className="flex items-center gap-1">
             <Button
@@ -308,26 +312,28 @@ export function ProviderInstancesSection({
               variant="ghost-muted"
               disabled={isRefreshing}
               onClick={refreshProviders}
-              aria-label={`Refresh ${providerLabel} status`}
+              aria-label={t("Refresh {provider} status", { provider: providerLabel })}
             >
               {isRefreshing ? (
                 <LoaderIcon className="size-3.5 animate-spin" />
               ) : (
                 <RefreshCwIcon className="size-3.5" />
               )}
-              Refresh
+              {t("Refresh")}
             </Button>
             <Button size="xs" variant="ghost-muted" onClick={() => setIsAddDialogOpen(true)}>
               <PlusIcon className="size-3.5" />
-              Add instance
+              {t("Add instance")}
             </Button>
           </div>
         }
       >
         {rows.length === 0 ? (
           <SettingsMessageRow>
-            This environment has no {providerLabel} runtime. Update the environment server to
-            configure it here.
+            {t(
+              "This environment has no {provider} runtime. Update the environment server to configure it here.",
+              { provider: providerLabel },
+            )}
           </SettingsMessageRow>
         ) : (
           rows.map((row) => {
@@ -384,7 +390,9 @@ export function ProviderInstancesSection({
                 headerAction={
                   row.isDefault && row.isDirty ? (
                     <SettingResetButton
-                      label={`${driverOption?.label ?? String(row.driver)} provider settings`}
+                      label={t("{provider} provider settings", {
+                        provider: driverOption?.label ?? String(row.driver),
+                      })}
                       onClick={() => resetDefaultInstance(row.driver)}
                     />
                   ) : null
@@ -419,7 +427,7 @@ export function ProviderInstancesSection({
         <AddProviderInstanceDialog
           open
           environmentId={environmentId}
-          environmentLabel={environment?.label ?? "this environment"}
+          environmentLabel={environment?.label ?? t("this environment")}
           {...(drivers[0] ? { initialDriver: drivers[0] } : {})}
           onOpenChange={setIsAddDialogOpen}
         />

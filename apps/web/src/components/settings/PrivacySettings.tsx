@@ -35,14 +35,16 @@ export function PrivacySettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Data sharing">
+      <SettingsSection title={t("Data sharing")}>
         <SettingsRow
           {...searchableSetting("anonymous-analytics", t)}
-          description="Share anonymous usage counts and app details. Prompts, files, and provider account IDs are excluded."
+          description={t(
+            "Share anonymous usage counts and app details. Prompts, files, and provider account IDs are excluded.",
+          )}
           resetAction={
             settings.analyticsEnabled !== DEFAULT_SERVER_SETTINGS.analyticsEnabled ? (
               <SettingResetButton
-                label="anonymous analytics"
+                label={t("anonymous analytics")}
                 onClick={() =>
                   updateSettings({ analyticsEnabled: DEFAULT_SERVER_SETTINGS.analyticsEnabled })
                 }
@@ -53,33 +55,37 @@ export function PrivacySettingsPanel() {
             <Switch
               checked={settings.analyticsEnabled}
               onCheckedChange={(checked) => updateSettings({ analyticsEnabled: Boolean(checked) })}
-              aria-label="Send anonymous analytics"
+              aria-label={t("Send anonymous analytics")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("privacy-product-feedback", t)}
-          description="Allow feedback you submit to reach the Akeru feedback service. Submissions may be kept for up to 90 days."
+          description={t(
+            "Allow feedback you submit to reach the Akeru feedback service. Submissions may be kept for up to 90 days.",
+          )}
           control={
             <Switch
               checked={settings.productFeedbackEnabled}
               onCheckedChange={(checked) =>
                 updateSettings({ productFeedbackEnabled: Boolean(checked) })
               }
-              aria-label="Enable product feedback"
+              aria-label={t("Enable product feedback")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("privacy-voice-calls", t)}
-          description="Allow calls through ChatGPT Realtime. Microphone audio and call data leave this environment during a call."
+          description={t(
+            "Allow calls through ChatGPT Realtime. Microphone audio and call data leave this environment during a call.",
+          )}
           control={
             <Switch
               checked={settings.voice.enabled}
               onCheckedChange={(checked) =>
                 updateSettings({ voice: { enabled: Boolean(checked) } })
               }
-              aria-label="Enable voice calls"
+              aria-label={t("Enable voice calls")}
             />
           }
         />
@@ -131,20 +137,22 @@ export function PrivacySettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Backup and transfer">
+      <SettingsSection title={t("Backup and transfer")}>
         <PortabilitySettings />
       </SettingsSection>
 
-      <SettingsSection title="Other connections">
+      <SettingsSection title={t("Other connections")}>
         <SettingsRow
-          title="Desktop updates"
-          description="Signed desktop builds contact the configured release host to check for and download updates."
+          title={t("Desktop updates")}
+          description={t(
+            "Signed desktop builds contact the configured release host to check for and download updates.",
+          )}
         />
       </SettingsSection>
 
-      <SettingsSection title="Policies">
+      <SettingsSection title={t("Policies")}>
         <SettingsRow
-          title="Read the terms and privacy policy"
+          title={t("Read the terms and privacy policy")}
           description={
             <span className="flex gap-3">
               <a
@@ -153,7 +161,7 @@ export function PrivacySettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Terms of Use
+                {t("Terms of Use")}
               </a>
               <a
                 className="underline underline-offset-4"
@@ -161,7 +169,7 @@ export function PrivacySettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Privacy Policy
+                {t("Privacy Policy")}
               </a>
             </span>
           }

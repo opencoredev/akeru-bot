@@ -1,4 +1,5 @@
 import type { AuthSessionState } from "@t3tools/contracts";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
 import {
@@ -11,6 +12,7 @@ import {
   submitServerAuthCredential,
 } from "../../environments/primary";
 import { isPrimaryEnvironmentPairingCredentialRequiredError } from "../../environments/primary/auth";
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Spinner } from "../ui/spinner";
@@ -60,6 +62,7 @@ export function PairingRouteSurface({
   initialErrorMessage?: string;
   onAuthenticated: () => void;
 }) {
+  const { t } = useI18n();
   const environment = usePrimaryEnvironmentSummary();
   const autoPairTokenRef = useRef<string | null>(peekPairingTokenFromUrl());
   const [credential, setCredential] = useState(() => autoPairTokenRef.current ?? "");
@@ -124,7 +127,7 @@ export function PairingRouteSurface({
   return (
     <PairingPanel
       environment={environment}
-      readyDescription={describeAuthGate(auth.bootstrapMethods)}
+      readyDescription={t(describeAuthGate(auth.bootstrapMethods))}
       status={status}
     >
       <PairingTokenForm
@@ -134,11 +137,13 @@ export function PairingRouteSurface({
         onCredentialChange={setCredential}
         onSubmit={(event) => void handleSubmit(event)}
         showReload={pairingError?.kind === "failed"}
-        submitLabel={pairingError?.kind === "failed" ? "Try again" : "Pair this browser"}
-        tokenLabel={pairingError?.kind === "rejected" ? "New pairing token" : "Pairing token"}
+        submitLabel={pairingError?.kind === "failed" ? t("Try again") : t("Pair this browser")}
+        tokenLabel={pairingError?.kind === "rejected" ? t("New pairing token") : t("Pairing token")}
       />
       {supportedMethodsNote ? (
-        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{supportedMethodsNote}</p>
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+          {t(supportedMethodsNote)}
+        </p>
       ) : null}
     </PairingPanel>
   );
@@ -163,6 +168,7 @@ export function PairingTokenForm({
   readonly submitLabel: string;
   readonly tokenLabel: string;
 }) {
+  const { t } = useI18n();
   return (
     <form className="space-y-3" onSubmit={onSubmit}>
       <div className="space-y-1.5">
@@ -180,7 +186,7 @@ export function PairingTokenForm({
           disabled={isSubmitting}
           nativeInput
           onChange={(event) => onCredentialChange(event.currentTarget.value)}
-          placeholder="Paste a token"
+          placeholder={t("Paste a token")}
           spellCheck={false}
           value={credential}
         />
@@ -196,7 +202,7 @@ export function PairingTokenForm({
           {isSubmitting ? (
             <>
               <Spinner className="size-4" />
-              Pairing
+              {t("Pairing")}
             </>
           ) : (
             submitLabel
@@ -210,7 +216,7 @@ export function PairingTokenForm({
             size="lg"
             variant="ghost"
           >
-            Reload page
+            {t("Reload page")}
           </Button>
         ) : null}
       </div>
@@ -259,7 +265,7 @@ function errorMessageFromUnknown(error: unknown): string {
   return "Authentication failed.";
 }
 
-function describeAuthGate(bootstrapMethods: ReadonlyArray<string>): string {
+function describeAuthGate(bootstrapMethods: ReadonlyArray<string>): MessageKey {
   if (bootstrapMethods.includes("desktop-bootstrap")) {
     return "Paste the pairing credential from the desktop app to connect.";
   }
@@ -267,7 +273,7 @@ function describeAuthGate(bootstrapMethods: ReadonlyArray<string>): string {
   return "Paste the pairing token from your link to connect.";
 }
 
-function describeSupportedMethods(bootstrapMethods: ReadonlyArray<string>): string | null {
+function describeSupportedMethods(bootstrapMethods: ReadonlyArray<string>): MessageKey | null {
   if (!bootstrapMethods.includes("desktop-bootstrap")) {
     return null;
   }
