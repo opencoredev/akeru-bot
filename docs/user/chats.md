@@ -49,6 +49,14 @@ Use **Snooze** to hide a chat until its wake time. Use **Wake chat** to return i
 On web and desktop, settling or snoozing a bot's open chat keeps it open. Archiving or deleting it
 does not: the bot then opens its next newest chat, or an empty chat if it has none.
 
+## Archived chats
+
+**Settings > Archived chats** lists the chats you archived on this environment, grouped by bot or
+group, newest first. Select **Unarchive** to bring a chat back, or the delete button to remove it
+for good. An unarchived chat becomes the bot's open chat again when it is the bot's newest chat.
+Work one bot handed to another does not appear here, because it never shows as a chat of its own.
+The command palette's **Archived chats** action opens the same page.
+
 ## Pinned order
 
 On mobile, pinned chats appear above active bot work across projects and environments. Open a

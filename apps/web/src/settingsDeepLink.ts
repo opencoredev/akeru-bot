@@ -35,6 +35,7 @@ const destinations: Readonly<
   plugins: { section: "plugins", label: "Plugins" },
   sandbox: { section: "sandbox", label: "Sandbox" },
   privacy: { section: "privacy", label: "Privacy & data" },
+  "archived-chats": { section: "archived", label: "Archived chats" },
   connections: { section: "connections", label: "Connections" },
   "bot-inbox": { section: "advanced", label: "Advanced > Bot inbox", targetId: "errors" },
   diagnostics: { section: "diagnostics", label: "Diagnostics" },

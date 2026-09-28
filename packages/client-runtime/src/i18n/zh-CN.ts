@@ -2508,4 +2508,13 @@ export const zhCNCatalog: TranslationCatalog = {
   "Delete chat": "删除聊天",
   "Delete this chat? This permanently clears the conversation history.":
     "删除此聊天？这会永久清除该聊天记录。",
+  "No environment": "没有环境",
+  "Connect to an environment to see its archived chats.": "连接到一个环境以查看其已归档聊天。",
+  "Could not load archived chats": "无法加载已归档聊天",
+  "Check the connection to this environment, then reopen this page.":
+    "请检查与此环境的连接，然后重新打开此页面。",
+  "Deleted group": "已删除的群组",
+  "Removed bot": "已移除的机器人",
+  "Other chats": "其他聊天",
+  "Archived {time}": "归档于 {time}",
 };

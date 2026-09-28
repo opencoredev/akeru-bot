@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS = [
   "keybindings",
   "connections",
   "privacy",
+  "archived",
   "advanced",
   "providers",
   "channels",
@@ -111,7 +112,6 @@ export const LEGACY_SETTINGS_SECTIONS: Readonly<
   inbox: { section: "advanced", targetId: "errors" },
   errors: { section: "advanced", targetId: "errors" },
   voice: { section: "providers", targetId: "voice" },
-  archived: { section: "general" },
   "source-control": { section: "general" },
 };
 

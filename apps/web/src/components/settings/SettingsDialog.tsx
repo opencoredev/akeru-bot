@@ -1,4 +1,5 @@
 import {
+  Archive02Icon,
   BotIcon,
   GlobeIcon,
   HardDriveIcon,
@@ -55,6 +56,9 @@ const KeybindingsSettingsPanel = lazy(async () => ({
 const ImageGenerationSettingsPanel = lazy(async () => ({
   default: (await import("./ImageGenerationSettings")).ImageGenerationSettingsPanel,
 }));
+const ArchivedChatsSettingsPanel = lazy(async () => ({
+  default: (await import("./ArchivedChatsSettings")).ArchivedChatsSettingsPanel,
+}));
 const DiagnosticsSettingsPanel = lazy(async () => ({
   default: (await import("./DiagnosticsSettings")).DiagnosticsSettingsPanel,
 }));
@@ -65,6 +69,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   keybindings: KeybindingsSettingsPanel,
   connections: ConnectionsSettings,
   privacy: PrivacySettingsPanel,
+  archived: ArchivedChatsSettingsPanel,
   advanced: AdvancedSettingsPage,
   providers: ProvidersSettingsPage,
   channels: BotChannelsSettingsPanel,
@@ -113,6 +118,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       { section: "keybindings", label: "Keyboard", icon: KeyboardIcon },
       { section: "connections", label: "Connections", icon: Link02Icon },
       { section: "privacy", label: "Privacy & data", icon: SecurityCheckIcon },
+      { section: "archived", label: "Archived chats", icon: Archive02Icon },
       { section: "advanced", label: "Advanced", icon: SlidersHorizontalIcon },
     ],
   },

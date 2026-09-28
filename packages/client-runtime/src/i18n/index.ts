@@ -2609,6 +2609,16 @@ export const englishCatalog = {
   "Delete chat": "Delete chat",
   "Delete this chat? This permanently clears the conversation history.":
     "Delete this chat? This permanently clears the conversation history.",
+  "No environment": "No environment",
+  "Connect to an environment to see its archived chats.":
+    "Connect to an environment to see its archived chats.",
+  "Could not load archived chats": "Could not load archived chats",
+  "Check the connection to this environment, then reopen this page.":
+    "Check the connection to this environment, then reopen this page.",
+  "Deleted group": "Deleted group",
+  "Removed bot": "Removed bot",
+  "Other chats": "Other chats",
+  "Archived {time}": "Archived {time}",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;

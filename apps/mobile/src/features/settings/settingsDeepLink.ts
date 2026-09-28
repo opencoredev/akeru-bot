@@ -15,7 +15,10 @@ export type MobileSettingsHealthTarget =
  */
 export type MobileSettingsDestination =
   | { readonly kind: "health"; readonly target: MobileSettingsHealthTarget }
-  | { readonly kind: "screen"; readonly screen: "SettingsAppearance" | "SettingsEnvironments" }
+  | {
+      readonly kind: "screen";
+      readonly screen: "SettingsAppearance" | "SettingsEnvironments" | "SettingsArchive";
+    }
   | { readonly kind: "home" };
 
 const HOME: MobileSettingsDestination = { kind: "home" };
@@ -34,6 +37,7 @@ const destinations: Readonly<Record<SettingsDeepLinkId, MobileSettingsDestinatio
   plugins: HOME,
   sandbox: HOME,
   privacy: HOME,
+  "archived-chats": { kind: "screen", screen: "SettingsArchive" },
   connections: { kind: "screen", screen: "SettingsEnvironments" },
   "bot-inbox": { kind: "health", target: "bot-inbox" },
   diagnostics: HOME,

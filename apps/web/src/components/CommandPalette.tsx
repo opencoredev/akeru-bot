@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArchiveIcon,
   BotIcon,
   ChartNoAxesColumnIcon,
   ImageIcon,
@@ -208,6 +209,15 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       openSettings,
       icon: <LanguagesIcon className={ITEM_ICON_CLASS} />,
     }),
+    {
+      value: "action:archived-chats",
+      searchTerms: [t("Archived chats"), "archived", "archive", "unarchive", "restore", "chats"],
+      title: t("Archived chats"),
+      icon: <ArchiveIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openSettings("archived");
+      },
+    },
     {
       value: "action:settings",
       searchTerms: [t("Open settings"), "settings", "preferences", "configuration", "keybindings"],
