@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
-import type { AddressInfo } from "node:net";
+import type * as NodeNet from "node:net";
 
 type JsonRpcMessage = {
   readonly id?: unknown;
@@ -86,7 +86,7 @@ export async function startHttpMcpFixture(): Promise<HttpMcpFixture> {
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const port = (server.address() as AddressInfo).port;
+  const port = (server.address() as NodeNet.AddressInfo).port;
   return {
     url: `http://127.0.0.1:${port}/mcp`,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
