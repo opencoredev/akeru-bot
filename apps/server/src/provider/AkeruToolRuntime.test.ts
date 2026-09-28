@@ -506,6 +506,32 @@ describe("AkeruToolRuntime", () => {
     await expect(runtime.execute(execution)).resolves.toBeDefined();
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "success"]);
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
+
+    runtime.grantApproval({
+      ...execution,
+      toolCallId: "tool-null-cwd",
+      input: { command: "pwd", cwd: null, background: false },
+    });
+    await expect(
+      runtime.execute({
+        ...execution,
+        toolCallId: "tool-null-cwd",
+        input: { command: "pwd", background: false },
+      }),
+    ).resolves.toBeDefined();
+
+    runtime.grantApproval({
+      ...execution,
+      toolCallId: "tool-undefined-cwd",
+      input: { command: "pwd", background: false },
+    });
+    await expect(
+      runtime.execute({
+        ...execution,
+        toolCallId: "tool-undefined-cwd",
+        input: { command: "pwd", cwd: undefined, background: false },
+      }),
+    ).resolves.toBeDefined();
   });
 
   it("requires approval before catalog MCP handlers run and forwards progress", async () => {

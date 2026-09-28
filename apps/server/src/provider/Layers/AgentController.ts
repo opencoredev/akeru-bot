@@ -582,6 +582,10 @@ function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string)
     | { readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } } }
     | undefined;
   if (tool) return tool.mcp?.annotations?.readOnlyHint !== true;
+  // Akeru's own tools declare their risk; plain workspace tools follow the bot's mode.
+  const akeruTool = AKERU_TOOL_CATALOG.find((entry) => entry.id === toolName);
+  if (akeruTool) return akeruTool.approval !== "none";
+  if (isMemoryToolId(toolName)) return false;
   return !BUILTIN_MASTRA_TOOL_NAMES.has(toolName);
 }
 
@@ -700,7 +704,16 @@ export function recordProviderAccessHealth(
   if (event.type === "turn.completed") {
     if (event.payload.state === "failed") {
       const message = event.payload.errorMessage ?? "The provider request failed.";
-      if (provider) subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      if (provider) {
+        if (providerInstanceId)
+          subscriptionAuth.recordAccountRequestFailure(
+            provider,
+            providerInstanceId,
+            message,
+            event.createdAt,
+          );
+        else subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      }
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceFailure(
           providerInstanceId,
@@ -710,7 +723,15 @@ export function recordProviderAccessHealth(
         );
       }
     } else if (event.payload.state === "completed") {
-      if (provider) subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      if (provider) {
+        if (providerInstanceId)
+          subscriptionAuth.recordAccountRequestSuccess(
+            provider,
+            providerInstanceId,
+            event.createdAt,
+          );
+        else subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      }
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
       }
@@ -719,7 +740,14 @@ export function recordProviderAccessHealth(
   }
   if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
   if (provider) {
-    subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+    if (providerInstanceId)
+      subscriptionAuth.recordAccountRequestFailure(
+        provider,
+        providerInstanceId,
+        event.payload.message,
+        event.createdAt,
+      );
+    else subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
   }
   if (providerInstanceId) {
     subscriptionAuth.recordProviderInstanceFailure(
@@ -1400,10 +1428,19 @@ const make = (options?: AgentControllerLiveOptions) =>
     const makeMastraHarness = options?.makeMastraHarness ?? makeAkeruMastraHarness;
     const bundle = yield* makeMastraHarness({
       authStorage,
-      getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-      getOpenCodeGoApiKey: async () => subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
-      getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
-      getModelConnection: (providerInstanceId) => modelConnections.get(providerInstanceId),
+      getKimiAccess: (instanceId) => subscriptionAuth.getKimiForCodingAccess(instanceId),
+      getOpenCodeGoApiKey: async (instanceId) =>
+        subscriptionAuth.getApiKeyCredential("opencode-go", instanceId)?.access,
+      getSubscriptionApiKey: (provider, instanceId) =>
+        subscriptionAuth.getApiKeyCredential(provider, instanceId),
+      getSubscriptionOAuth: (provider, instanceId) =>
+        subscriptionAuth.getOAuthCredential(provider, instanceId),
+      getSubscriptionAccessToken: (provider, instanceId) =>
+        subscriptionAuth.getAccessToken(provider, instanceId),
+      getModelConnection: (providerInstanceId) => {
+        const connection = modelConnections.get(providerInstanceId);
+        return connection ? { ...connection, instanceId: providerInstanceId } : undefined;
+      },
       memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
       syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
         const active = sessions.get(threadId);
@@ -2499,6 +2536,18 @@ const make = (options?: AgentControllerLiveOptions) =>
                     "AgentController.handleControllerEvent",
                     () => {
                       if (active.activeTurn !== turn || turn.finished) return;
+                      // Akeru runtime tools check their own grant before running.
+                      const runtimeToolId =
+                        AKERU_TOOL_CATALOG.find((tool) => tool.id === event.toolName)?.id ??
+                        (isMemoryToolId(event.toolName) ? event.toolName : undefined);
+                      if (runtimeToolId) {
+                        toolRuntime.grantApproval({
+                          threadId: String(threadId),
+                          toolCallId: event.toolCallId,
+                          toolId: runtimeToolId,
+                          input: event.args,
+                        });
+                      }
                       active.session.respondToToolApproval({
                         toolCallId: event.toolCallId,
                         decision: "approve",
@@ -2577,20 +2626,15 @@ const make = (options?: AgentControllerLiveOptions) =>
                         { decision: "accept", label: "Create routine" },
                         { decision: "decline", label: "Cancel" },
                       ]
-                    : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
-                        isMemoryToolId(event.toolName) ||
-                        oneUseApproval
+                    : oneUseApproval
                       ? [
                           { decision: "decline", label: "Decline" },
-                          {
-                            decision: "accept",
-                            label: oneUseApproval ? "Approve" : "Allow",
-                          },
+                          { decision: "accept", label: "Approve" },
                         ]
                       : [
-                          { decision: "accept", label: "Allow" },
-                          { decision: "acceptForSession", label: "Allow for session" },
                           { decision: "decline", label: "Decline" },
+                          { decision: "acceptAlways", label: "Enable Auto Review" },
+                          { decision: "accept", label: "Allow" },
                         ],
             },
           });
@@ -2751,7 +2795,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         const issue = mastraConnectionIssue(
           routing.driverKind,
           routing.mastraConnection,
-          subscriptionProvider ? subscriptionAuth.isConnected(subscriptionProvider) : false,
+          subscriptionProvider
+            ? subscriptionAuth.isConnected(subscriptionProvider, modelSelection.instanceId)
+            : false,
         );
         if (issue) return yield* unavailable(new Error(issue));
       }
@@ -3955,6 +4001,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         !isCodexComputerUseTool(toolName) &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+      const enableAutoReview =
+        input.decision === "acceptAlways" &&
+        !isCodexComputerUseTool(toolName) &&
+        !akeruActionNeedsApproval(toolName, toolInput) &&
+        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
+        toolName !== AKERU_CREATE_ROUTINE_TOOL_NAME;
       const target = pendingApproval.toolName;
       const decision =
         input.decision === "acceptForSession" || input.decision === "acceptAlways"
@@ -3977,6 +4029,9 @@ const make = (options?: AgentControllerLiveOptions) =>
               input: toolInput,
             });
           }
+          // Auto Review lets permissionPolicy run the rest of this session; risky
+          // one-use actions still ask.
+          if (enableAutoReview) active.runtimeMode = "auto";
           const update = acceptForSession
             ? active.session.permissions.setForTool({ toolName, policy: "allow" })
             : undefined;
