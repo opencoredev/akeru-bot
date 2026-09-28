@@ -205,6 +205,25 @@ const defaultModelSelection = {
   model: "gpt-5-codex",
 } as const;
 
+const worktreeTestModelSelection = {
+  instanceId: ProviderInstanceId.make("opencode"),
+  model: "test-model",
+} as const;
+
+const readyWorktreeProvider = {
+  instanceId: worktreeTestModelSelection.instanceId,
+  driver: ProviderDriverKind.make("opencode"),
+  enabled: true,
+  installed: true,
+  version: "1.0.0",
+  status: "ready" as const,
+  auth: { status: "authenticated" as const },
+  checkedAt: "2026-01-01T00:00:00.000Z",
+  models: [],
+  slashCommands: [],
+  skills: [],
+};
+
 const makeLiveToolActivityEvent = (
   sequence: number,
   kind: OrchestrationThreadActivity["kind"] = "tool.updated",
@@ -8167,6 +8186,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const config = yield* buildAppUnderTest({
         layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyWorktreeProvider]) },
           gitVcsDriver: {
             createWorktree,
           },
@@ -8216,14 +8236,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   },
                 ],
               },
-              modelSelection: defaultModelSelection,
+              modelSelection: worktreeTestModelSelection,
               runtimeMode: "full-access",
               interactionMode: "default",
               bootstrap: {
                 createThread: {
                   projectId: defaultProjectId,
                   title: "Bootstrap Thread",
-                  modelSelection: defaultModelSelection,
+                  modelSelection: worktreeTestModelSelection,
                   runtimeMode: "full-access",
                   interactionMode: "default",
                   branch: "main",
@@ -8271,6 +8291,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* buildAppUnderTest({
         layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyWorktreeProvider]) },
           gitVcsDriver: {
             createWorktree,
           },
@@ -8306,14 +8327,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               text: "hello",
               attachments: [],
             },
-            modelSelection: defaultModelSelection,
+            modelSelection: worktreeTestModelSelection,
             runtimeMode: "full-access",
             interactionMode: "default",
             bootstrap: {
               createThread: {
                 projectId: defaultProjectId,
                 title: "Bootstrap Thread",
-                modelSelection: defaultModelSelection,
+                modelSelection: worktreeTestModelSelection,
                 runtimeMode: "full-access",
                 interactionMode: "default",
                 branch: "main",
