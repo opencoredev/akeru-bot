@@ -660,9 +660,8 @@ export class SubscriptionAuthService {
       return;
     }
     try {
-      const refreshed = credential.expires > Date.now()
-        ? credential
-        : await this.runRefresh(provider, credential);
+      const refreshed =
+        credential.expires > Date.now() ? credential : await this.runRefresh(provider, credential);
       this.reload();
       const current = this.data[provider];
       if (current?.type !== "oauth" || current.refresh !== credential.refresh) return;

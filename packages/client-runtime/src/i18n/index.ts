@@ -701,7 +701,8 @@ export const englishCatalog = {
   "Finish signing in on the provider page.": "Finish signing in on the provider page.",
   "Copy sign-in code": "Copy sign-in code",
   "Code copied": "Code copied",
-  "Couldn't copy the code. Select it and copy it manually.": "Couldn't copy the code. Select it and copy it manually.",
+  "Couldn't copy the code. Select it and copy it manually.":
+    "Couldn't copy the code. Select it and copy it manually.",
   "Checking health…": "Checking health…",
   "Paste authorization code": "Paste authorization code",
   "Waiting for approval": "Waiting for approval",

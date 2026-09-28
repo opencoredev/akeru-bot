@@ -259,7 +259,9 @@ describe("voice capability adapters", () => {
         const failures = [
           adapters.synthesize(provider, "secret", "alloy", "Hello", signal()),
           adapters.test(provider, "secret", signal()),
-          ...(provider === "fish" ? [] : [adapters.transcribe(provider, "secret", audio, signal())]),
+          ...(provider === "fish"
+            ? []
+            : [adapters.transcribe(provider, "secret", audio, signal())]),
         ];
         for (const failure of failures) {
           const error = await failure.then(

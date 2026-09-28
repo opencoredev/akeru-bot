@@ -87,7 +87,8 @@ export function voiceFailure(reason: VoiceCallError["reason"] = "upstream-failed
     "provider-in-use": "Hang up the active call before changing this provider's key.",
     cancelled: "The voice operation was cancelled.",
     busy: "Too many voice operations are in progress.",
-    "provider-auth": "The voice provider rejected the API key. Replace the key in Settings and test it.",
+    "provider-auth":
+      "The voice provider rejected the API key. Replace the key in Settings and test it.",
     "provider-quota":
       "The voice provider reported a quota, billing, or rate limit. Check that provider account.",
     network: "Could not reach the voice provider. Check the network and try again.",
