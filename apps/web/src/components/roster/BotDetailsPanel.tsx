@@ -58,11 +58,13 @@ function BotOverview({
   onOpenSettings,
   routinePanel,
   routinePanelRef,
+  routinePanelRequest = 0,
 }: {
   readonly bot: Bot;
   readonly onOpenSettings?: () => void;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
   readonly routinePanelRef: Ref<HTMLDivElement>;
+  readonly routinePanelRequest?: number;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
@@ -107,6 +109,7 @@ function BotOverview({
       <div ref={routinePanelRef}>
         <RoutinePanel
           botName={bot.name}
+          listRequest={routinePanelRequest}
           {...(routinePanel ?? { status: "unavailable" as const })}
         />
       </div>
@@ -150,11 +153,15 @@ export function BotDetailsPanel({
       dispatchPanel({ type: "open-desktop" });
       return;
     }
+    if (browserExpanded) {
+      setBrowserExpanded(false);
+      return;
+    }
     handledRoutineRequest.current = routinePanelRequest;
     const panel = mobile ? mobileRoutineRef.current : desktopRoutineRef.current;
     panel?.scrollIntoView({ block: "start" });
     panel?.querySelector<HTMLElement>("h3[tabindex]")?.focus();
-  }, [panelState.desktopOpen, panelState.mobileOpen, routinePanelRequest]);
+  }, [browserExpanded, panelState.desktopOpen, panelState.mobileOpen, routinePanelRequest]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -206,6 +213,7 @@ export function BotDetailsPanel({
           <BotOverview
             bot={bot}
             routinePanelRef={routinePanelRef}
+            routinePanelRequest={routinePanelRequest}
             {...(onOpenSettings ? { onOpenSettings } : {})}
             {...(routinePanel ? { routinePanel } : {})}
           />

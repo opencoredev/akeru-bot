@@ -49,6 +49,7 @@ interface ReadModelOptions {
   readonly archived?: boolean;
   readonly group?: boolean;
   readonly interrupted?: boolean;
+  readonly noResponder?: boolean;
 }
 
 function makeThread(options?: ReadModelOptions): OrchestrationThread {
@@ -57,7 +58,7 @@ function makeThread(options?: ReadModelOptions): OrchestrationThread {
     projectId: ProjectId.make("project-1"),
     botId: options?.group ? null : BOT_ID,
     groupId: options?.group ? GROUP_ID : null,
-    respondingBotId: options?.group ? BOT_ID : null,
+    respondingBotId: options?.group && !options.noResponder ? BOT_ID : null,
     title: "Direct chat",
     modelSelection: { instanceId: ProviderInstanceId.make("default"), model: "default-model" },
     runtimeMode: "full-access",
@@ -180,4 +181,20 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
       }),
     );
   }
+
+  it.effect("refuses to resume a group chat before its archived boss became the responder", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: turnResume,
+        readModel: makeReadModel({
+          group: true,
+          interrupted: true,
+          archived: true,
+          noResponder: true,
+        }),
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      expect(String(error)).toContain(`is archived and cannot respond for group '${GROUP_ID}'`);
+    }),
+  );
 });

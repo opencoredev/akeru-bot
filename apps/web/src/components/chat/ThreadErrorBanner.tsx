@@ -8,7 +8,8 @@ import { openSettings } from "../../settingsDialogStore";
 import { Button } from "../ui/button";
 
 export function threadErrorFeedbackDraft(error: string): string {
-  return `A request failed in a bot chat.\n\nError details:\n${error}`;
+  const presentation = presentThreadError(error);
+  return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}`;
 }
 
 export function getThreadErrorBannerKey(threadKey: string, error: string | null): string | null {

@@ -2847,12 +2847,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Chat '${command.threadId}' is already active.`,
         });
       }
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
       // Resume answers with the same bot the provider reactor picks.
       yield* requireActiveResponder({
         readModel,
         command,
         groupId: thread.groupId,
-        botId: thread.respondingBotId ?? thread.botId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
       return {
         ...(yield* withEventBase({

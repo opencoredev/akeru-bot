@@ -101,6 +101,7 @@ export interface RoutineAdapterDraft {
 
 export interface RoutinePanelProps {
   readonly botName: string;
+  readonly listRequest?: number;
   readonly status: "loading" | "ready" | "error" | "unavailable";
   readonly error?: string | null;
   readonly routines?: readonly RoutineAdapterItem[];
@@ -809,6 +810,7 @@ export function RoutineDetail({
 
 export function RoutinePanel({
   botName,
+  listRequest = 0,
   status,
   error,
   routines = EMPTY_ROUTINES,
@@ -827,6 +829,9 @@ export function RoutinePanel({
   const deleteBusyRef = useRef(false);
   const [deleteError, setDeleteError] = useState(false);
   const [openRoutineId, setOpenRoutineId] = useState<string | null>(null);
+  useEffect(() => {
+    if (listRequest > 0) setOpenRoutineId(null);
+  }, [listRequest]);
   const openRoutine = routines.find((routine) => routine.id === openRoutineId) ?? null;
 
   // Opening a routine replaces the list under the pointer, so focus follows it
