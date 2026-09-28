@@ -164,6 +164,7 @@ describe("deriveRoutineReceipts", () => {
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed], i18n);
     expect(receipts.map((receipt) => receipt.text)).toEqual([
       "已创建例行任务“Daily digest”",
+      "“Daily digest” started a run",
       "“Daily digest”失败：The workspace is missing",
     ]);
   });
