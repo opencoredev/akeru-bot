@@ -957,44 +957,44 @@ export function BotPromptComposer({
                     <TooltipPopup side="top">{t("Attach file")}</TooltipPopup>
                   </Tooltip>
                 ) : (
-                <Menu>
-                  <MenuTrigger
-                    render={
-                      <button
-                        type="button"
-                        aria-label={t("Add to prompt")}
-                        disabled={readOnly}
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                    }
-                  >
-                    <PlusIcon className="size-5" />
-                  </MenuTrigger>
-                  <MenuPopup align="start" side="top" sideOffset={8}>
-                    <MenuItem onClick={() => fileInputRef.current?.click()}>
-                      <PaperclipIcon />
-                      {t("Attach file")}
-                    </MenuItem>
-                    {mentionBots.map((bot) => {
-                      const mention = botPromptMention(bot, mentionBots);
-                      return (
-                        <MenuItem
-                          key={bot.id}
-                          onClick={() => persistDraft(appendBotMention(draft, mention.source))}
-                        >
-                          <AtSignIcon />
-                          {t("Mention {name}", { name: bot.name })}
-                          {mention.detail ? ` (${mention.detail})` : ""}
-                          {bot.canTakeWork === false ? (
-                            <span className="ms-auto ps-3 text-xs text-muted-foreground">
-                              {t("Cannot take handed-off work")}
-                            </span>
-                          ) : null}
-                        </MenuItem>
-                      );
-                    })}
-                  </MenuPopup>
-                </Menu>
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={t("Add to prompt")}
+                          disabled={readOnly}
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      }
+                    >
+                      <PlusIcon className="size-5" />
+                    </MenuTrigger>
+                    <MenuPopup align="start" side="top" sideOffset={8}>
+                      <MenuItem onClick={() => fileInputRef.current?.click()}>
+                        <PaperclipIcon />
+                        {t("Attach file")}
+                      </MenuItem>
+                      {mentionBots.map((bot) => {
+                        const mention = botPromptMention(bot, mentionBots);
+                        return (
+                          <MenuItem
+                            key={bot.id}
+                            onClick={() => persistDraft(appendBotMention(draft, mention.source))}
+                          >
+                            <AtSignIcon />
+                            {t("Mention {name}", { name: bot.name })}
+                            {mention.detail ? ` (${mention.detail})` : ""}
+                            {bot.canTakeWork === false ? (
+                              <span className="ms-auto ps-3 text-xs text-muted-foreground">
+                                {t("Cannot take handed-off work")}
+                              </span>
+                            ) : null}
+                          </MenuItem>
+                        );
+                      })}
+                    </MenuPopup>
+                  </Menu>
                 )}
               </div>
               {showDictation ? (

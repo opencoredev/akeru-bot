@@ -241,15 +241,15 @@ export const WS_METHODS = {
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
 
-   computerGetState: "computer.getState",
-   computerOpen: "computer.open",
-   computerAcquire: "computer.acquire",
-   computerInput: "computer.input",
-   computerRelease: "computer.release",
-   computerClose: "computer.close",
-   computerStop: "computer.stop",
-   computerEvents: "computer.events",
- 
+  computerGetState: "computer.getState",
+  computerOpen: "computer.open",
+  computerAcquire: "computer.acquire",
+  computerInput: "computer.input",
+  computerRelease: "computer.release",
+  computerClose: "computer.close",
+  computerStop: "computer.stop",
+  computerEvents: "computer.events",
+
   // Preview methods
   previewOpen: "preview.open",
   previewNavigate: "preview.navigate",
@@ -823,49 +823,49 @@ export const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFee
   error: Schema.Union([ProviderUploadFeedbackError, EnvironmentAuthorizationError]),
 });
 
- const computerError = Schema.Union([ComputerError, EnvironmentAuthorizationError]);
- export const WsComputerGetStateRpc = Rpc.make(WS_METHODS.computerGetState, {
-   payload: ComputerTarget,
-   success: ComputerState,
-   error: computerError,
- });
- export const WsComputerOpenRpc = Rpc.make(WS_METHODS.computerOpen, {
-   payload: ComputerTarget,
-   success: ComputerState,
-   error: computerError,
- });
- export const WsComputerAcquireRpc = Rpc.make(WS_METHODS.computerAcquire, {
-   payload: ComputerTarget,
-   success: ComputerSession,
-   error: computerError,
- });
- export const WsComputerInputRpc = Rpc.make(WS_METHODS.computerInput, {
-   payload: ComputerInput,
-   success: Schema.Void,
-   error: computerError,
- });
- export const WsComputerReleaseRpc = Rpc.make(WS_METHODS.computerRelease, {
-   payload: ComputerSessionInput,
-   success: ComputerState,
-   error: computerError,
- });
- export const WsComputerCloseRpc = Rpc.make(WS_METHODS.computerClose, {
-   payload: ComputerTarget,
-   success: ComputerState,
-   error: computerError,
- });
- export const WsComputerStopRpc = Rpc.make(WS_METHODS.computerStop, {
-   payload: ComputerTarget,
-   success: ComputerState,
-   error: computerError,
- });
- export const WsComputerEventsRpc = Rpc.make(WS_METHODS.computerEvents, {
-   payload: ComputerTarget,
-   success: ComputerEvent,
-   error: computerError,
-   stream: true,
- });
- 
+const computerError = Schema.Union([ComputerError, EnvironmentAuthorizationError]);
+export const WsComputerGetStateRpc = Rpc.make(WS_METHODS.computerGetState, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerOpenRpc = Rpc.make(WS_METHODS.computerOpen, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerAcquireRpc = Rpc.make(WS_METHODS.computerAcquire, {
+  payload: ComputerTarget,
+  success: ComputerSession,
+  error: computerError,
+});
+export const WsComputerInputRpc = Rpc.make(WS_METHODS.computerInput, {
+  payload: ComputerInput,
+  success: Schema.Void,
+  error: computerError,
+});
+export const WsComputerReleaseRpc = Rpc.make(WS_METHODS.computerRelease, {
+  payload: ComputerSessionInput,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerCloseRpc = Rpc.make(WS_METHODS.computerClose, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerStopRpc = Rpc.make(WS_METHODS.computerStop, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerEventsRpc = Rpc.make(WS_METHODS.computerEvents, {
+  payload: ComputerTarget,
+  success: ComputerEvent,
+  error: computerError,
+  stream: true,
+});
+
 export const WsPreviewOpenRpc = Rpc.make(WS_METHODS.previewOpen, {
   payload: PreviewOpenInput,
   success: PreviewSessionSnapshot,
@@ -1115,19 +1115,19 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
-   WsShellRevealAttachmentRpc,
+  WsShellRevealAttachmentRpc,
   WsAssetsCreateUrlRpc,
   WsAttachmentsCreateUploadUrlRpc,
   WsAttachmentsDeleteRpc,
   WsProviderUploadFeedbackRpc,
-   WsComputerGetStateRpc,
-   WsComputerOpenRpc,
-   WsComputerAcquireRpc,
-   WsComputerInputRpc,
-   WsComputerReleaseRpc,
-   WsComputerCloseRpc,
-   WsComputerStopRpc,
-   WsComputerEventsRpc,
+  WsComputerGetStateRpc,
+  WsComputerOpenRpc,
+  WsComputerAcquireRpc,
+  WsComputerInputRpc,
+  WsComputerReleaseRpc,
+  WsComputerCloseRpc,
+  WsComputerStopRpc,
+  WsComputerEventsRpc,
   WsPreviewOpenRpc,
   WsPreviewNavigateRpc,
   WsPreviewResizeRpc,

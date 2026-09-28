@@ -27,11 +27,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import type { ReplyReadoutPreference } from "@t3tools/client-runtime/reply-playback";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
-import {
-  SettingResetButton,
-  SettingsRow,
-  SettingsSection,
-} from "./settingsLayout";
+import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
 import {

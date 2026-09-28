@@ -2012,7 +2012,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "The voice provider rejected the API key. Replace the key and test it again.":
     "语音提供商拒绝了此 API 密钥。请更换密钥后重新测试。",
   "Sandbox > Local execution": "沙盒 > 本地执行",
-  "Keyboard": "键盘",
+  Keyboard: "键盘",
   "Providers > Voice": "提供商 > 语音",
   "Privacy & data": "隐私与数据",
   "Advanced > Bot inbox": "高级 > 机器人收件箱",

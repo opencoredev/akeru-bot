@@ -77,11 +77,7 @@ export function BotBrowserPreview({
   if (!threadRef) {
     // Keep the panel's close action reachable if the thread drops while expanded.
     return expanded ? (
-      <BotBrowserPreviewFrame
-        botName={botName}
-        status="waiting"
-        trailingAction={trailingAction}
-      />
+      <BotBrowserPreviewFrame botName={botName} status="waiting" trailingAction={trailingAction} />
     ) : null;
   }
 

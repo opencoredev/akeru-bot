@@ -2089,7 +2089,7 @@ export const englishCatalog = {
   "The voice provider rejected the API key. Replace the key and test it again.":
     "The voice provider rejected the API key. Replace the key and test it again.",
   "Sandbox > Local execution": "Sandbox > Local execution",
-  "Keyboard": "Keyboard",
+  Keyboard: "Keyboard",
   "Providers > Voice": "Providers > Voice",
   "Privacy & data": "Privacy & data",
   "Advanced > Bot inbox": "Advanced > Bot inbox",

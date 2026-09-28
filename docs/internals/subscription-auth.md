@@ -93,7 +93,6 @@ Tests replace the client with `testUtils/scriptedHttpClient.ts` and drive timeou
 
 Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Claude, Grok, Kimi, and OpenCode Go resolve saved keys and custom endpoints through their Mastra model transports. Standard OpenCode receives saved API credentials when its adapter starts a provider process. The login, completion, and logout RPC paths stop affected sessions when the API key or endpoint changes. The next turn starts a new session with the current connection. Grok supports API keys at its default endpoint; its current transport rejects custom base URLs.
 
-
 The standard OpenCode CLI driver is no longer synthesized as a default instance. Explicit old
 OpenCode instances remain routable for existing settings and chats. OpenCode Go is the supported
 provider option in Settings.

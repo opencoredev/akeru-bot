@@ -121,10 +121,7 @@ export function BotToolsSection({
       }
     >
       {canDelegate ? null : (
-        <p
-          role="note"
-          className="flex items-start gap-2 px-4 py-3 text-xs text-muted-foreground"
-        >
+        <p role="note" className="flex items-start gap-2 px-4 py-3 text-xs text-muted-foreground">
           <InfoIcon className="mt-px size-3.5 shrink-0" />
           <span>
             This bot's provider cannot hand off work. It cannot send work to other bots or receive

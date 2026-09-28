@@ -167,5 +167,4 @@ describe("subscription providers", () => {
     expect(markup).not.toContain("Last failed request");
     expect(markup).not.toContain("Provider request failed.");
   });
-
 });

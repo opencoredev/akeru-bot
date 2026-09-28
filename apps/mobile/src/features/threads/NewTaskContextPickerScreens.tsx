@@ -114,4 +114,4 @@ export function NewTaskEnvironmentPickerRouteScreen() {
     </View>
   );
 }
-  const { t } = useMobileI18n();
+const { t } = useMobileI18n();

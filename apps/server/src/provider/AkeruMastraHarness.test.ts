@@ -272,30 +272,32 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
-  it.effect("does not give the agent task-list tools, which cost a model round trip per update", () =>
-    harnessTest(async (open) => {
-      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-no-tasks-"));
-      const harness = await open({
-        authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
-        memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
-        getThreadTools: () => ({}),
-        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
-      });
-      try {
-        // The controller keeps its agent private; the tool list is what the model sees.
-        const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
-        const requestContext = new RequestContext();
-        requestContext.setRaw("controller", { resourceId: "thread-tools" });
-        const toolIds = Object.keys(await agent.listTools({ requestContext }));
-        assert.isNotEmpty(toolIds);
-        for (const id of ["task_write", "task_update", "task_complete", "task_check"]) {
-          assert.notInclude(toolIds, id);
+  it.effect(
+    "does not give the agent task-list tools, which cost a model round trip per update",
+    () =>
+      harnessTest(async (open) => {
+        const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-no-tasks-"));
+        const harness = await open({
+          authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+          memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+          getThreadTools: () => ({}),
+          toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+        });
+        try {
+          // The controller keeps its agent private; the tool list is what the model sees.
+          const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
+          const requestContext = new RequestContext();
+          requestContext.setRaw("controller", { resourceId: "thread-tools" });
+          const toolIds = Object.keys(await agent.listTools({ requestContext }));
+          assert.isNotEmpty(toolIds);
+          for (const id of ["task_write", "task_update", "task_complete", "task_check"]) {
+            assert.notInclude(toolIds, id);
+          }
+        } finally {
+          await harness.close();
+          NodeFS.rmSync(directory, { recursive: true, force: true });
         }
-      } finally {
-        await harness.close();
-        NodeFS.rmSync(directory, { recursive: true, force: true });
-      }
-    }),
+      }),
   );
 
   it.effect("keeps /new thread observational memory isolated", () =>
