@@ -4,8 +4,8 @@
 
 Akeru Bot is a server runtime that owns agent sessions, workspaces, and version control, plus clients
 (web, desktop, mobile) that talk to it over one authenticated Effect RPC WebSocket. The server is the
-execution boundary: every provider process, terminal, git operation, and filesystem read happens
-there, never in the client.
+execution boundary: every provider process, bot command, git operation, and filesystem read
+happens there, never in the client.
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -19,7 +19,7 @@ there, never in the client.
 │ apps/server                                    │
 │  orchestration engine (event-sourced)          │
 │  provider driver registry (6 built-in drivers) │
-│  checkpointing, VCS, terminals, filesystem     │
+│  checkpointing, VCS, filesystem                │
 └──────────────────┬─────────────────────────────┘
                    │ per-driver transport
 ┌──────────────────▼─────────────────────────────┐
@@ -33,9 +33,8 @@ there, never in the client.
 The client/server contract is an Effect RPC group, not a hand-rolled push protocol. [`rpc.ts`][rpc]
 declares `WS_METHODS` and assembles `WsRpcGroup`; each member is either unary or a server stream
 (`stream: true`). Streaming members such as `orchestration.subscribeShell`,
-`orchestration.subscribeThread`, `subscribeServerConfig`, and `terminal.attach` replace what used to
-be a broadcast push bus: a client subscribes to what it needs and the server pushes only on that
-subscription.
+`orchestration.subscribeThread`, and `subscribeServerConfig` replace what used to be a broadcast push
+bus: a client subscribes to what it needs and the server pushes only on that subscription.
 
 [`ws.ts`][ws] serves the group. `websocketRpcRouteLayer` mounts `GET /ws`, authenticates the upgrade
 through `EnvironmentAuth.authenticateWebSocketUpgrade`, then hands the socket to

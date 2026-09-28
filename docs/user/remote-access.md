@@ -212,7 +212,7 @@ it, so no extra server-side setup is needed beyond SSH access.
 5. Confirm the launch.
 
 The desktop starts the remote server and opens the tunnel. The remote machine owns its own
-projects, chats, files, terminals, Git state, subscriptions, and provider sessions.
+projects, chats, files, Git state, subscriptions, and provider sessions.
 
 The remote host needs Node.js `^22.16 || ^23.11 || >=24.10`. If startup fails, check the
 non-interactive shell:
@@ -336,6 +336,16 @@ admin-scoped clients, and `akeru auth --help` covers the same operations from th
 - A pairing URL is a credential. Send it through a channel you trust and let it expire rather
   than posting it somewhere persistent.
 - The client connects directly to the server. No Akeru service relays the session.
+
+Web and desktop show saved servers under **Connections > Remote environments**. Mobile shows them
+under **Environments**. Removing a saved environment deletes it from that client. Revoke the server
+session under **Connections > Authorized clients** when the device must lose access. That section
+appears when the current environment is reachable remotely and this client can manage access.
+
+Prefer a private network such as Tailscale. Do not expose an HTTP server directly to the public
+internet. Use HTTPS and WSS across untrusted networks.
+
+See [Running Akeru Bot in the background](./background-service.md) for an unattended server.
 
 See [Run Akeru Bot in the background](./background-service.md) for an unattended server and
 [Keep the app and server in sync](./updating.md) for client-side update notices.

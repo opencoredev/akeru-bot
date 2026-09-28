@@ -7,7 +7,7 @@ Akeru. You do not need the Codex CLI for Akeru bot turns.
 
 1. Open **Settings > Providers**.
 2. Find **ChatGPT** and select **Connect**.
-3. Open the sign-in page and enter the displayed device code.
+3. Copy the displayed device code, then open the sign-in page and enter it.
 4. Approve access with the ChatGPT account that this environment should use.
 5. Return to Akeru and wait for the account status to update.
 
@@ -17,6 +17,14 @@ the refresh grant is rejected or **Check OAuth** reports a revoked login.
 
 ChatGPT image generation needs this account sign-in. An OpenAI API key for Codex chat does not
 connect the ChatGPT image provider.
+
+New bots use GPT-6 Sol when it is available to the connected account. You can choose another model
+in the bot's settings.
+
+To use a second ChatGPT account, add a Codex instance on the same provider page, then connect its
+account in that instance's **Instance account** section. Choose the instance when assigning a bot or
+selecting a model. Each instance keeps its own sign-in. Disconnecting one removes only its saved
+credential; deleting the instance removes its credential too.
 
 ## How Codex runs
 

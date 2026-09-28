@@ -3,7 +3,7 @@
 > For maintainers. Using Akeru Bot? See [remote access](../user/remote-access.md).
 
 A client connects to one Akeru Bot server over HTTP and WebSocket. The server owns providers,
-projects, threads, terminals, git, and filesystem access. Remote access changes how the client
+projects, threads, git, and filesystem access. Remote access changes how the client
 reaches the server. It does not split that runtime.
 
 ## Connection targets

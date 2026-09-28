@@ -13,8 +13,8 @@ Download the current installer from
 - Windows: Windows 10 or 11 x64 installer
 - Linux: x86_64 AppImage
 
-Open the app, add a project, then open **Settings > Providers** to connect an account. The desktop
-app manages the local server.
+Open the app and follow setup to connect an account and create a bot. You can also connect an account
+later under **Settings > Providers**. The desktop app manages the local server.
 
 ## Command-line server
 
@@ -50,11 +50,13 @@ Open **Settings > Providers**. Mobile lists these options under **Provider conne
 Select **Connect** and finish the provider's sign-in flow. ChatGPT, Grok, and Kimi use a device code.
 Claude asks you to paste the returned authorization code into Akeru. OpenCode Go asks you to paste an API key.
 
-The environment server owns the connection, so you connect once per environment. It stores provider
-credentials outside the workspace. Web, desktop, and mobile clients only receive connection
-status and sign-in progress.
+The environment server owns the connection. It currently saves one subscription account or API
+key per provider per environment. Reconnecting replaces that credential. Separate provider instances
+can have different runtime settings, but share the saved provider credential. The server stores
+credentials outside the workspace. Clients receive connection status, sign-in progress, and an
+account identifier when the provider supplies one; they never receive the credential.
 
-After sign-in, select **Check OAuth** to test an OAuth login or **Check key** to test an API key.
+After sign-in, select **Check** to test an OAuth login or **Check key** to test an API key.
 Use **Reconnect** after a revoked or expired login. Akeru cannot verify whether an xAI login includes
 SuperGrok or X Premium+.
 
@@ -75,7 +77,7 @@ you trust. API billing can be separate from your subscription.
 Select **Save** to store the key on the environment. **Cancel** discards the form. A saved key has not
 necessarily passed a provider request; select **Check key** to check access.
 
-Use **Reconnect key** to replace the key or change the endpoint. OpenCode Go uses **Reconnect**.
+Use **Replace key** to replace the key or change the endpoint.
 The form shows the saved endpoint but never shows the saved key. Enter the key again when you change
 the endpoint. Use **Use OAuth** to return to subscription login where supported. **Disconnect** removes
 the saved connection from the environment.
@@ -86,8 +88,8 @@ Codex, Claude, Grok, Kimi For Coding, and OpenCode Go use Akeru's custom Mastra-
 Akeru supplies the workspace, memory, plugins, approval rules, and subscription access for each
 chat.
 
-Standard OpenCode uses its provider adapter. Both paths keep provider-specific session and
-permission behavior behind the same Akeru chat interface.
+Claude and Grok use their provider adapters. OpenCode Go uses Akeru's Mastra-based runtime.
+Both paths keep provider-specific session and permission behavior behind the same Akeru chat interface.
 
 ## Next steps
 

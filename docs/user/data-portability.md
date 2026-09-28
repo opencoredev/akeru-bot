@@ -5,11 +5,11 @@ Open **Settings > General** and find **Data portability**.
 ## Export
 
 Select **Export** to download an `akeru.archive` file. The archive can contain safe server settings,
-MCP recipes, bots, groups, mapped project references, chat metadata, conversation text, proposed
-plans, and approval history.
+MCP recipes, bots, groups, mapped project references, chat metadata, conversation text, and
+approval history.
 
 The export excludes secrets, provider credentials, bot memory, routines, skill assignments,
-usage history, files, Git repositories, terminals, attachments, and checkpoints.
+usage history, files, Git repositories, attachments, and checkpoints.
 
 ## Import
 

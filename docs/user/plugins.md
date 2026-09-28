@@ -35,8 +35,10 @@ configured OAuth clients keep their existing registration.
 
 ## Enable tools for a bot
 
-Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
-for that bot. Changing the bot's provider starts a fresh provider session with the same enabled tools.
+Akeru enables a new plugin for every bot by default. To turn one off for a single bot, open the
+bot's settings and go to **Tools**. Each tool shows its connection status and a switch. Select
+**Save** to apply the change. Changing the bot's provider starts a fresh provider session with the
+same enabled tools.
 
 ## Composio integrations
 
