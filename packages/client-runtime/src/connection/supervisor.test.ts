@@ -1046,10 +1046,7 @@ describe("EnvironmentSupervisor", () => {
 
       yield* awaitState(supervisor.state, (state) => state.phase === "available");
       yield* supervisor.retryNow;
-      yield* awaitState(
-        supervisor.state,
-        (state) => state.phase === "connected" && state.desired,
-      );
+      yield* awaitState(supervisor.state, (state) => state.phase === "connected" && state.desired);
     }),
   );
 
