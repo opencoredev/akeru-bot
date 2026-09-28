@@ -2,4 +2,4 @@
 "akeru-bot": minor
 ---
 
-Add Tenki sandboxes with persistent Linux VMs, snapshot-backed pause and resume, and public previews. Connect a Tenki API key in Sandbox settings to use it for bots.
+Add Tenki sandboxes with persistent Linux VMs and snapshot-backed pause and resume. Connect a Tenki API key in Sandbox settings to use it for bots. Sandbox browser control is unavailable because Tenki previews are public.

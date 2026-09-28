@@ -368,10 +368,12 @@ export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemo
         exitCode: result.exitCode,
       };
     },
-    browserEndpoint: async (port) => ({
-      url: (await session.exposePort(port)).previewUrl,
-      requestHeaders: {},
-    }),
+    browserEndpoint: async () => {
+      // Public application previews must not expose the browser's unauthenticated MCP server.
+      throw new Error(
+        "Tenki sandbox browser requires an authenticated endpoint; public previews are not supported for browser control.",
+      );
+    },
     wake: async () => {
       await session.refresh();
       if (session.state === "PAUSING") await session.waitPaused();

@@ -7,6 +7,8 @@ Tenki runs coding agents in full Linux VMs and supports public previews, disk an
 and persistence until you clean up the sandbox. Connect it with your `TENKI_API_KEY`.
 Tenki previews are public: anyone with a preview URL can access it. Pausing preserves VM memory
 and disk but clears `/tmp`; keep durable files under `/home/tenki`.
+The sandbox browser is not available on Tenki: Akeru does not expose browser control through a public
+preview URL. This does not prevent agents from running commands in the VM.
 
 Select **Connect** and enter the provider credentials. The environment stores secret values outside
 `settings.json`. Clients receive only a redacted marker after a secret is saved.

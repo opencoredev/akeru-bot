@@ -152,13 +152,10 @@ describe("Tenki workspace", () => {
     });
   });
 
-  it("routes public previews without forwarding the control-plane credential", async () => {
+  it("does not publish unauthenticated browser control through a public preview", async () => {
     const { adapter, session } = mockSession();
-    expect(await adapter.browserEndpoint(3000)).toEqual({
-      url: "https://preview.example.test",
-      requestHeaders: {},
-    });
-    expect(session.exposePort).toHaveBeenCalledExactlyOnceWith(3000);
+    await expect(adapter.browserEndpoint(9223)).rejects.toThrow("authenticated endpoint");
+    expect(session.exposePort).not.toHaveBeenCalled();
   });
 
   it.each<[SessionState, string]>([
