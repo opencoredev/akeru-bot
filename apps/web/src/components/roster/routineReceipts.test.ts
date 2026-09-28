@@ -13,6 +13,7 @@ import {
   deriveRoutineReceipts,
   mergeBotConversationTimeline,
   mergeRoutineRunHistory,
+  routineReceiptLabelText,
 } from "./routineReceipts";
 
 const routine = {
@@ -221,5 +222,19 @@ describe("deriveRoutineReceipts", () => {
       ["routine-run-finished:run-5", "info"],
     ]);
     expect(receipts[2]?.text).toBe("“Daily digest” was canceled");
+  });
+});
+
+describe("routineReceiptLabelText", () => {
+  it("drops the sentence end the label adds back", () => {
+    const text = routineReceiptLabelText(
+      "Routine paused: routines are disabled in Akeru Bot settings.",
+    );
+    expect(createTranslator("en").translate("{text}. Open Routines", { text })).toBe(
+      "Routine paused: routines are disabled in Akeru Bot settings. Open Routines",
+    );
+    expect(routineReceiptLabelText("Did it run?  ")).toBe("Did it run");
+    expect(routineReceiptLabelText("例行任务已暂停。")).toBe("例行任务已暂停");
+    expect(routineReceiptLabelText("Daily digest ran")).toBe("Daily digest ran");
   });
 });

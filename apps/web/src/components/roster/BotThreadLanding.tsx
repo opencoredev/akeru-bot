@@ -84,6 +84,7 @@ import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import {
   deriveRoutineReceipts,
   mergeRoutineRunHistory,
+  routineReceiptLabelText,
   type RoutineReceipt,
 } from "./routineReceipts";
 import { resolveRoutedBot } from "./rosterRouteSelection";
@@ -112,7 +113,9 @@ function RoutineReceiptRow({
       {...(opensRoutines
         ? {
             type: "button" as const,
-            "aria-label": t("{text}. Open Routines", { text: receipt.text }),
+            "aria-label": t("{text}. Open Routines", {
+              text: routineReceiptLabelText(receipt.text),
+            }),
           }
         : {})}
       className={cn(

@@ -127,3 +127,11 @@ export function deriveRoutineReceipts(
       left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
   );
 }
+
+/**
+ * A receipt's text for a label that appends its own sentence break, such as
+ * "{text}. Open Routines", so text that already ends a sentence is not doubled.
+ */
+export function routineReceiptLabelText(text: string): string {
+  return text.trimEnd().replace(/[.!?。！？]+$/u, "");
+}
