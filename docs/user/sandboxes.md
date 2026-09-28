@@ -20,7 +20,9 @@ Akeru pauses remote sandboxes while bots are idle and reconnects to the saved pr
 bot work resumes.
 
 Ascii Box runs persistent Linux VMs. Stopping a VM saves a native lifecycle snapshot; resuming it
-restores that workspace. Public previews are enabled by default, so do not expose sensitive services.
+restores that workspace. Ascii Box supports public previews by default, so do not expose sensitive
+services. Akeru requests protected, token-authenticated access for its browser-control endpoint.
+New VMs do not inherit credentials from your Ascii account environment.
 Connect it with a Box API key. Ascii Box is now Boat; this integration uses the legacy Box API, which
 the provider supports until its announced sunset. See the [migration notice](https://docs.boat.dev/migrating-from-box).
 

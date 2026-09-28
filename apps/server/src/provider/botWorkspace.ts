@@ -278,7 +278,7 @@ async function create(
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
-    const { box } = await client.create({ createBoxRequest: { ttlSeconds: null } });
+    const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
     return ascii(client, box.id);
   }
   if (provider === "e2b") {
@@ -395,9 +395,10 @@ export function ascii(
         boxId,
         commandRequest: {
           command: options?.cwd ? `cd ${quote(options.cwd)} && ${invocation}` : invocation,
-          ...(options?.timeout !== undefined
-            ? { timeoutSeconds: Math.max(1, Math.min(600, Math.ceil(options.timeout / 1_000))) }
-            : {}),
+          timeoutSeconds: Math.max(
+            1,
+            Math.min(600, Math.ceil((options?.timeout ?? 600_000) / 1_000)),
+          ),
         },
       });
       if (result.type !== "command.finished")
@@ -409,9 +410,11 @@ export function ascii(
       };
     },
     browserEndpoint: async (port) => {
-      const result = await client.hostPort({ boxId, hostPortRequest: { port, _public: true } });
+      const result = await client.hostPort({ boxId, hostPortRequest: { port, _public: false } });
       if (!result.url || result.success === false)
         throw new Error("Ascii Box workspace did not return a preview URL.");
+      if (result.isProtected !== true || !new URL(result.url).searchParams.get("_token"))
+        throw new Error("Ascii Box workspace did not return a protected browser endpoint.");
       return { url: result.url, requestHeaders: {} };
     },
   };

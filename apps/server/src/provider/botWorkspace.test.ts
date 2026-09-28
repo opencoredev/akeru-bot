@@ -132,23 +132,49 @@ describe("Ascii Box", () => {
       timedOut: true,
     });
     expect((await session.run("sleep", ["2"])).exitCode).toBe(124);
+    expect(command).toHaveBeenLastCalledWith({
+      boxId: "ascii-id",
+      commandRequest: { command: "'sleep' '2'", timeoutSeconds: 600 },
+    });
+    await session.run("sleep", ["2"], { timeout: 900_000 });
+    expect(command).toHaveBeenLastCalledWith({
+      boxId: "ascii-id",
+      commandRequest: { command: "'sleep' '2'", timeoutSeconds: 600 },
+    });
   });
 
-  it("routes public previews without forwarding the API credential", async () => {
+  it("protects browser control without forwarding the API credential", async () => {
     const { client, session } = await setup();
-    const hostPort = vi
-      .spyOn(client, "hostPort")
-      .mockResolvedValue({ ok: true, type: "host_port", url: "https://preview.example" });
+    const hostPort = vi.spyOn(client, "hostPort").mockResolvedValue({
+      ok: true,
+      type: "host_port",
+      url: "https://preview.example/?_token=browser-token",
+      isProtected: true,
+    });
     expect(await session.browserEndpoint(9223)).toEqual({
-      url: "https://preview.example",
+      url: "https://preview.example/?_token=browser-token",
       requestHeaders: {},
     });
     expect(hostPort).toHaveBeenCalledWith({
       boxId: "ascii-id",
-      hostPortRequest: { port: 9223, _public: true },
+      hostPortRequest: { port: 9223, _public: false },
     });
     hostPort.mockResolvedValue({ ok: true, type: "host_port" });
     await expect(session.browserEndpoint(9223)).rejects.toThrow("preview URL");
+    hostPort.mockResolvedValue({
+      ok: true,
+      type: "host_port",
+      url: "https://preview.example",
+      isProtected: false,
+    });
+    await expect(session.browserEndpoint(9223)).rejects.toThrow("protected browser endpoint");
+    hostPort.mockResolvedValue({
+      ok: true,
+      type: "host_port",
+      url: "https://preview.example",
+      isProtected: true,
+    });
+    await expect(session.browserEndpoint(9223)).rejects.toThrow("protected browser endpoint");
   });
 
   it("creates once with the configured credential and reattaches by saved VM identity", async () => {
@@ -190,7 +216,7 @@ describe("Ascii Box", () => {
         environment: { BOX_API_KEY: "configured-key" },
       };
       const first = await createRemoteBotWorkspace(input);
-      expect(create).toHaveBeenCalledWith({ createBoxRequest: { ttlSeconds: null } });
+      expect(create).toHaveBeenCalledWith({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
       const client = create.mock.contexts[0] as import("@asciidev/box-sdk").BoxApi;
       expect((await client.createRequestOpts({})).headers.Authorization).toBe(
         "Bearer configured-key",
