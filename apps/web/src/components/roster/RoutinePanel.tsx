@@ -836,7 +836,7 @@ export function RoutinePanel({
   if (status === "unavailable") return null;
 
   return (
-    <section className="px-4 py-4">
+    <section className="mt-6">
       {openRoutine === null ? (
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium" ref={headingRef} tabIndex={-1}>
@@ -855,12 +855,9 @@ export function RoutinePanel({
         </div>
       ) : null}
       {status === "loading" ? (
-        <div
-          className="flex min-h-20 items-center justify-center text-xs text-muted-foreground"
-          aria-label={t("Loading routines")}
-        >
+        <p className="mt-2 text-xs text-muted-foreground" aria-label={t("Loading routines")}>
           {t("Loading")}
-        </div>
+        </p>
       ) : status === "error" ? (
         <p className="mt-2 text-xs text-destructive">{error || t("Could not load routines.")}</p>
       ) : openRoutine !== null ? (
@@ -891,26 +888,29 @@ export function RoutinePanel({
           />
         </div>
       ) : routines.length === 0 ? (
-        <div className="py-6 text-center">
-          <p className="text-sm font-medium">{t("No routines")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t("Routines are recurring tasks {botName} runs on a schedule.", { botName })}
-          </p>
-          {onCreate ? (
-            <Button className="mt-3" size="sm" onClick={() => setCreating(true)}>
-              <PlusIcon aria-hidden />
-              {t("New routine")}
-            </Button>
-          ) : null}
+        <>
           <p className="mt-2 text-xs text-muted-foreground">
             {!onCreate && createNeedsChat
               ? t(
                   "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.",
                   { botName },
                 )
-              : t("Or ask {botName} in chat to set one up.", { botName })}
+              : t("None yet. Ask {botName} to create one.", { botName })}
           </p>
-        </div>
+          {onCreate ? (
+            // A quiet row, not a call to action: its label lines up with the
+            // sheet's row labels and only the hover fill reaches past them.
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-mx-2 mt-1 w-[calc(100%+1rem)] justify-start px-2 text-muted-foreground"
+              onClick={() => setCreating(true)}
+            >
+              <PlusIcon aria-hidden />
+              {t("New routine")}
+            </Button>
+          ) : null}
+        </>
       ) : (
         <div className="mt-2 space-y-1.5" ref={listRef}>
           {routines.map((routine) => (

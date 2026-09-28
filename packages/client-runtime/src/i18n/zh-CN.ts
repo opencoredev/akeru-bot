@@ -1545,6 +1545,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "Routines are recurring tasks {botName} runs on a schedule.":
     "例行任务是 {botName} 按计划重复执行的任务。",
   "Or ask {botName} in chat to set one up.": "也可以在聊天中让 {botName} 帮你设置。",
+  "None yet. Ask {botName} to create one.": "还没有例行任务。可以让 {botName} 创建一个。",
   "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.":
     "例行任务会汇报到你与 {botName} 的聊天中。先给 {botName} 发一条消息开始聊天，再回到这里添加例行任务。",
   "Delete routine “{name}”?": "要删除例行任务“{name}”吗？",

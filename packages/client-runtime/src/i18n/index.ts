@@ -1611,6 +1611,7 @@ export const englishCatalog = {
   "Routines are recurring tasks {botName} runs on a schedule.":
     "Routines are recurring tasks {botName} runs on a schedule.",
   "Or ask {botName} in chat to set one up.": "Or ask {botName} in chat to set one up.",
+  "None yet. Ask {botName} to create one.": "None yet. Ask {botName} to create one.",
   "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.":
     "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.",
   "Delete routine “{name}”?": "Delete routine “{name}”?",

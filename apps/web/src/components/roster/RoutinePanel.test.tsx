@@ -220,7 +220,7 @@ describe("RoutinePanel", () => {
       <RoutinePanel botName="Scout" status="ready" routines={[]} onCreate={() => {}} />,
     );
     expect(ready).toContain("New routine");
-    expect(ready).toContain("Or ask Scout in chat to set one up.");
+    expect(ready).toContain("None yet. Ask Scout to create one.");
   });
 
   it("offers a header-level New routine button once the list is non-empty", () => {
@@ -350,14 +350,17 @@ describe("RoutinePanel", () => {
       />,
     );
     expect(withCreate).toContain("New routine");
-    expect(withCreate).toContain("ask Akeru in chat to set one up");
+    expect(withCreate).toContain("None yet. Ask Akeru to create one.");
+    // One muted line and a ghost row, not a centered card with a primary button.
+    expect(withCreate).not.toContain("text-center");
+    expect(withCreate).not.toContain("No routines");
 
     // Nothing to create with means no button that cannot do anything.
     const withoutCreate = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[]} />,
     );
     expect(withoutCreate).not.toContain("New routine");
-    expect(withoutCreate).toContain("ask Akeru in chat to set one up");
+    expect(withoutCreate).toContain("None yet. Ask Akeru to create one.");
   });
 
   it("keeps a saving routine form open, so one submit cannot become two routines", () => {
@@ -402,7 +405,7 @@ describe("RoutinePanel", () => {
     );
     expect(
       renderToStaticMarkup(<RoutinePanel botName="Akeru" status="ready" routines={[]} />),
-    ).toContain("ask Akeru in chat to set");
+    ).toContain("Ask Akeru to create one.");
     expect(
       renderToStaticMarkup(<RoutinePanel botName="Akeru" status="error" error="Request failed" />),
     ).toContain("Request failed");
