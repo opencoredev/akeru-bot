@@ -231,7 +231,9 @@ const preflightProvider = (input: {
     (status) => status.provider === subscriptionId,
   );
   const requestHealth = input.subscriptionHealth?.(provider.instanceId);
-  const health = requestHealth?.health ?? subscription?.health;
+  const health =
+    requestHealth?.health ??
+    (provider.auth.status === "unauthenticated" ? subscription?.health : undefined);
   if (health === "missing" || health === "revoked") {
     return {
       category: health === "revoked" ? "expired-login" : "missing-login",

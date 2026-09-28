@@ -224,6 +224,12 @@ const readyWorktreeProvider = {
   skills: [],
 };
 
+const readyDefaultProvider = {
+  ...readyWorktreeProvider,
+  instanceId: defaultModelSelection.instanceId,
+  driver: ProviderDriverKind.make("codex"),
+};
+
 const makeLiveToolActivityEvent = (
   sequence: number,
   kind: OrchestrationThreadActivity["kind"] = "tool.updated",
@@ -7721,6 +7727,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
         yield* buildAppUnderTest({
           layers: {
+            providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
             gitVcsDriver: {
               remoteExists,
               fetchRemote,
@@ -7873,6 +7880,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
         yield* buildAppUnderTest({
           layers: {
+            providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
             gitVcsDriver: {
               remoteExists,
               fetchRemote,
@@ -7976,6 +7984,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* buildAppUnderTest({
         layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
           gitVcsDriver: {
             createWorktree,
           },
@@ -8081,6 +8090,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* buildAppUnderTest({
         layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
           gitVcsDriver: {
             createWorktree,
           },
@@ -8506,6 +8516,7 @@ it.live(
                 yield* seedTransferBudgetHistory(harness, provider);
                 yield* buildAppUnderTest({
                   layers: {
+                    providerRegistry: { getProviders: Effect.succeed([readyWorktreeProvider]) },
                     orchestrationEngine: harness.engine,
                     projectionSnapshotQuery: harness.snapshotQuery,
                   },
