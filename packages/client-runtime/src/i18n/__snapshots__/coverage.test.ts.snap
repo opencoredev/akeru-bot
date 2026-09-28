@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1159,
+  "directMessageCount": 1158,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -330,6 +330,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotApprovalPrompt.tsx",
     "apps/web/src/components/roster/BotBrowserPreview.tsx",
     "apps/web/src/components/roster/BotChannelsSheet.tsx",
+    "apps/web/src/components/roster/BotChatMessageRows.tsx",
     "apps/web/src/components/roster/BotComposerModelControl.tsx",
     "apps/web/src/components/roster/BotConversationScrollArea.tsx",
     "apps/web/src/components/roster/BotDetailsPanel.tsx",
