@@ -136,25 +136,25 @@ describe("Akeru Remote diagnostics", () => {
   });
 
   it("formats free disk space for people", async () => {
-    const baseDir = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-disk-format-"));
-    const stateDir = Path.join(baseDir, "userdata");
-    FS.mkdirSync(stateDir, { recursive: true });
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-disk-format-"));
+    const stateDir = NodePath.join(baseDir, "userdata");
+    NodeFS.mkdirSync(stateDir, { recursive: true });
     const report = await runRemoteDoctor({ baseDir, repair: false });
     const disk = report.checks.find((check) => check.id === "disk");
     expect(disk?.message).toMatch(/\d+(\.\d+)? (B|KB|MB|GB|TB) available\./);
     expect(disk?.message).not.toContain("MiB");
-    FS.rmSync(baseDir, { recursive: true, force: true });
+    NodeFS.rmSync(baseDir, { recursive: true, force: true });
   });
 
   it("reports a missing optional account link as pass", async () => {
-    const baseDir = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-binding-optional-"));
-    const stateDir = Path.join(baseDir, "userdata");
-    FS.mkdirSync(stateDir, { recursive: true });
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-binding-optional-"));
+    const stateDir = NodePath.join(baseDir, "userdata");
+    NodeFS.mkdirSync(stateDir, { recursive: true });
     const report = await runRemoteDoctor({ baseDir, repair: false });
     const binding = report.checks.find((check) => check.id === "account-binding");
     expect(binding).toMatchObject({ status: "pass" });
     expect(binding?.message).toContain("not configured");
-    FS.rmSync(baseDir, { recursive: true, force: true });
+    NodeFS.rmSync(baseDir, { recursive: true, force: true });
   });
 
   it("reports a fresh home as not created yet instead of raw file errors", async () => {
