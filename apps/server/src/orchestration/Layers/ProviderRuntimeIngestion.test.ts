@@ -1036,7 +1036,7 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
-  it("releases a cancelled completed turn after partial usage", async () => {
+  it("keeps reported usage from a cancelled turn", async () => {
     const harness = await createHarness({ botOwned: true });
     const turnId = asTurnId("turn-cancelled-completed");
     await harness.reserveBotUsage(turnId);
@@ -1062,9 +1062,13 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
 
     const usage = await harness.summarizeBotUsage();
-    expect(usage.consumedTokens).toBe(0);
+    expect(usage.consumedTokens).toBe(150);
     expect(usage.reservedTokens).toBe(0);
-    expect(usage.entries[0]).toMatchObject({ state: "released" });
+    expect(usage.entries[0]).toMatchObject({
+      state: "reported",
+      inputTokens: 100,
+      outputTokens: 50,
+    });
   });
 
   it("does not charge a replacement reservation from stale turn events", async () => {
