@@ -200,7 +200,7 @@ describe("deriveRoutineReceipts", () => {
       completedAt: "2026-09-19T09:02:00.000Z",
     } as unknown as RoutineRun;
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
-    expect(receipts[1]?.text).toBe("“Daily digest” failed: The workspace is missing");
+    expect(receipts[2]?.text).toBe("“Daily digest” failed: The workspace is missing");
   });
 
   it("keeps queued and waiting runs out of chat and reports canceled runs neutrally", () => {
