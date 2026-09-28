@@ -131,7 +131,7 @@ Bot replies render richer Markdown directly in the chat. There is no separate da
   sentence.
 - **Links** open in your browser.
 - **Settings chips** open a section of Settings for the same environment as the chat. Hover a chip
-  to see which section it opens, for example **Open Settings > Voice**. A chip that points
+  to see which section it opens, for example **Open Settings > Providers > Voice**. A chip that points
   somewhere Akeru does not recognize stays plain text and never opens outside the app.
 
 While a reply is still streaming, Akeru waits for a table's header to finish before it shows the

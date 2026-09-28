@@ -4,7 +4,7 @@ A permission mode controls which actions a bot can take before it must ask you.
 
 The mode is set per chat from the mode control in the message composer. Changing it in one chat does
 not change any other chat. A chat created from inside another chat keeps that chat's mode. Otherwise,
-new chats use **Settings > General > Local execution** and use **Auto review** by default.
+new chats use **Settings > Sandbox > Local execution** and use **Auto review** by default.
 
 ## The modes
 

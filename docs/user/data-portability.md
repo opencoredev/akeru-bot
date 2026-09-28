@@ -1,6 +1,6 @@
 # Move Akeru data
 
-Open **Settings > General** and find **Data portability**.
+Open **Settings > Privacy & data** and find **Data portability**.
 
 ## Export
 

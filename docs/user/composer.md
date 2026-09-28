@@ -53,7 +53,7 @@ you switch chats or environments while a transcription is still running, that la
 discarded.
 
 Dictation needs a transcription provider for the connected environment. Turn on voice and connect
-a provider in **Settings > Voice**. Dictation is unavailable during an active voice call, while
+a provider in **Settings > Providers > Voice**. Dictation is unavailable during an active voice call, while
 disconnected, or if the browser or device cannot use a microphone. On mobile, recording stops when
 Akeru leaves the foreground.
 
