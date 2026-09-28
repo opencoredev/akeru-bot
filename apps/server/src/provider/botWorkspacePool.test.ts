@@ -2,6 +2,7 @@ import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace
 import { BotId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import type { AkeruBotWorkspace } from "./botWorkspace.ts";
 import {
   botRuntimeResourceScope,
   BotWorkspacePool,
@@ -15,6 +16,19 @@ function localWorkspace() {
     filesystem: new LocalFilesystem({ basePath: process.cwd() }),
     sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
   });
+}
+
+function remoteWorkspace(overrides: Partial<AkeruBotWorkspace> = {}): AkeruBotWorkspace {
+  return {
+    id: "akeru-persistent",
+    provider: "e2b",
+    workspace: localWorkspace(),
+    inspect: vi.fn(async () => "running" as const),
+    wake: vi.fn(async () => undefined),
+    sleep: vi.fn(async () => undefined),
+    destroy: vi.fn(async () => undefined),
+    ...overrides,
+  } as unknown as AkeruBotWorkspace;
 }
 
 describe("BotWorkspacePool", () => {
@@ -189,5 +203,59 @@ describe("BotWorkspacePool", () => {
     const lease = await pool.acquire("retry", create);
     await lease.release({ destroy: true });
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a remote workspace after initial wake failure and reattaches", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    await expect(pool.acquire("remote-initial", create)).rejects.toThrow("wake failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    const lease = await pool.acquire("remote-initial", create);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(lease.workspace).toBe(reattached);
+    await lease.release({ destroy: true });
+    expect(reattached.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("preserves a remote workspace after cached wake failure and reattaches", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      wake: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("wake failed")),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    const initial = await pool.acquire("remote-cached", create);
+    await initial.release();
+    await expect(pool.acquire("remote-cached", create)).rejects.toThrow("wake failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    const lease = await pool.acquire("remote-cached", create);
+    expect(lease.workspace).toBe(reattached);
+    await lease.release({ destroy: true });
+  });
+
+  it("preserves a remote workspace after sleep failure and reattaches", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      sleep: vi.fn().mockRejectedValueOnce(new Error("sleep failed")),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    const initial = await pool.acquire("remote-sleep", create);
+    await expect(initial.release()).rejects.toThrow("sleep failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    const lease = await pool.acquire("remote-sleep", create);
+    expect(lease.workspace).toBe(reattached);
+    await lease.release({ destroy: true });
+    expect(reattached.destroy).toHaveBeenCalledOnce();
   });
 });
