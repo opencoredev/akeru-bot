@@ -23,9 +23,10 @@ import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/qu
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-export function InboxPanel() {
+/** Open bot errors and approval requests for surfaces that still use the inbox. */
+export function InboxSection() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   const inboxQuery = useEnvironmentQuery(
@@ -36,8 +37,8 @@ export function InboxPanel() {
   const openItems = selectOpenBotInboxItems(inboxQuery.data ?? []);
 
   return (
-    <SettingsPageContainer>
       <SettingsSection
+        id="errors"
         title={t("Bot inbox")}
         headerAction={
           openItems.length > 0 ? (
@@ -101,7 +102,6 @@ export function InboxPanel() {
           })
         )}
       </SettingsSection>
-    </SettingsPageContainer>
   );
 }
 

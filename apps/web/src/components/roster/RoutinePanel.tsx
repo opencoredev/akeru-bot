@@ -134,6 +134,11 @@ function editDraft(routine: RoutineAdapterItem): RoutineAdapterDraft {
   };
 }
 
+/** Most environments have a single workspace, so the picker only appears when there is a choice. */
+export function showsWorkspacePicker(options: readonly RoutineAdapterProject[]) {
+  return options.length > 1;
+}
+
 function csv(value: string) {
   return value
     .split(",")
@@ -306,9 +311,9 @@ function RoutineFormDialog({
               }
             />
           </label>
-          {projectOptions.length > 0 ? (
+          {showsWorkspacePicker(projectOptions) ? (
             <label className="block space-y-1.5 text-sm">
-              <span>{t("Project")}</span>
+              <span>{t("Workspace")}</span>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={draft.projectId}

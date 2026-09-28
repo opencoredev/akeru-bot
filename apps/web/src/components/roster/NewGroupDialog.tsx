@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
-import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { BotAvatarView } from "./BotAvatarView";
@@ -25,6 +33,11 @@ export function canCreateGroup(
   );
 }
 
+/** Hint shown under the bot list until the group has enough members. */
+export function groupSelectionHint(selectedIds: readonly string[]): string | null {
+  return new Set(selectedIds).size >= 2 ? null : "Select at least two bots.";
+}
+
 export function NewGroupDialog({
   open,
   bots,
@@ -44,6 +57,7 @@ export function NewGroupDialog({
   );
   const [bossBotId, setBossBotId] = useState(selectedIds[0] ?? "");
   const selectedBots = activeBots.filter((bot) => selectedIds.includes(bot.id));
+  const selectionHint = groupSelectionHint(selectedIds);
 
   useEffect(() => {
     if (!selectedIds.includes(bossBotId)) setBossBotId(selectedIds[0] ?? "");
@@ -51,8 +65,12 @@ export function NewGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-lg overflow-hidden p-0" bottomStickOnMobile={false}>
+      <DialogPopup
+        className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden"
+        bottomStickOnMobile={false}
+      >
         <form
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canCreateGroup(name, selectedIds, bossBotId)) return;
@@ -63,10 +81,13 @@ export function NewGroupDialog({
             });
           }}
         >
-          <header className="border-b px-6 py-5">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t("New group")}</DialogTitle>
-          </header>
-          <div className="space-y-5 px-6 py-6">
+            <DialogDescription>
+              Choose the bots in this group and which one leads.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="space-y-5">
             <label className="block space-y-2 text-sm font-medium">
               {t("Name")}
               <Input
@@ -104,7 +125,9 @@ export function NewGroupDialog({
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">{t("Select at least two bots.")}</p>
+              {selectionHint ? (
+                <p className="text-xs text-muted-foreground">{selectionHint}</p>
+              ) : null}
             </fieldset>
             <label className="block space-y-2 text-sm font-medium">
               {t("Boss")}
@@ -123,15 +146,15 @@ export function NewGroupDialog({
                 </SelectPopup>
               </Select>
             </label>
-          </div>
-          <footer className="flex justify-end gap-2 border-t bg-muted px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          </DialogPanel>
+          <DialogFooter className="shrink-0">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t("Cancel")}
             </Button>
             <Button type="submit" disabled={!canCreateGroup(name, selectedIds, bossBotId)}>
               {t("Create group")}
             </Button>
-          </footer>
+          </DialogFooter>
         </form>
       </DialogPopup>
     </Dialog>
