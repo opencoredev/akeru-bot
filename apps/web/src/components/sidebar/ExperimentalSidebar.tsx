@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
+  Analytics01Icon,
   BubbleChatIcon,
   Calendar03Icon,
   HelpCircleIcon,
@@ -20,6 +21,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openProductFeedback } from "../../productFeedbackStore";
+import { openUsage } from "../../usageDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentSnapshotAtom } from "../../state/shell";
@@ -128,6 +130,7 @@ export function ExperimentalSidebar() {
               if (!onPlugins) openPlugins();
             }}
           />
+          <RailButton label="Usage" icon={Analytics01Icon} onClick={() => openUsage()} />
         </div>
         <div className="mt-auto flex flex-col items-center gap-1.5">
           <RailButton
