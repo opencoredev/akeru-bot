@@ -334,10 +334,12 @@ describe("environment entity projections", () => {
         .some((thread) => thread.id === childId),
     ).toBe(false);
     expect(
-      harness.registry.get(harness.threadShells.threadShellAtom({
-        environmentId: ENVIRONMENT_ID,
-        threadId: childId,
-      })),
+      harness.registry.get(
+        harness.threadShells.threadShellAtom({
+          environmentId: ENVIRONMENT_ID,
+          threadId: childId,
+        }),
+      ),
     ).not.toBeNull();
 
     const projectThreads = harness.registry.get(
