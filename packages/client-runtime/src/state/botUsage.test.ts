@@ -1,5 +1,6 @@
 import { BotId, EnvironmentId, WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -100,16 +101,7 @@ const connectedEnvironment = Effect.fn(function* () {
   };
 });
 
-/** Lets a mounted query's request finish before the call count is read. */
-const settle = Effect.sleep("10 millis");
-
-/**
- * The refresh this guards against was a `setTimeout`, so these two tests run on
- * the real clock: a test clock would step straight past a timer nobody adjusts
- * and pass whether the interval is there or not. Long enough to have fired twice
- * at the five-second cadence it used to carry.
- */
-const PAST_THE_OLD_POLL_INTERVAL = "6 seconds";
+const PAST_THE_OLD_POLL_INTERVAL_MS = 6_000;
 
 describe("bot usage environment atoms", () => {
   it.effect("keys usage queries by environment and bot and calls bot.usage", () =>
@@ -215,19 +207,19 @@ describe("bot usage environment atoms", () => {
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
-        const unmount = registry.mount(
-          atoms.summary({ environmentId, input: { botId: BotId.make("bot-no-poll") } }),
-        );
-        yield* Effect.addFinalizer(() => Effect.sync(unmount));
-        yield* settle;
-        expect(calls.count).toBe(1);
-
-        // A screen left open — blurred, or the app in the background — keeps the
-        // atom mounted. Well past the interval this used to carry, it must not
-        // have asked again.
-        yield* Effect.sleep(PAST_THE_OLD_POLL_INTERVAL);
-        yield* settle;
-        expect(calls.count).toBe(1);
+        vi.useFakeTimers();
+        try {
+          const unmount = registry.mount(
+            atoms.summary({ environmentId, input: { botId: BotId.make("bot-no-poll") } }),
+          );
+          yield* Effect.addFinalizer(() => Effect.sync(unmount));
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(PAST_THE_OLD_POLL_INTERVAL_MS));
+          expect(calls.count).toBe(1);
+        } finally {
+          vi.useRealTimers();
+        }
       }),
     ),
   );
@@ -241,22 +233,22 @@ describe("bot usage environment atoms", () => {
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
-        const unmount = registry.mount(
-          atoms.summary({ environmentId, input: { botId: BotId.make("bot-focus") } }),
-        );
-        yield* Effect.addFinalizer(() => Effect.sync(unmount));
-        yield* settle;
-        expect(calls.count).toBe(1);
-
-        // Backgrounded: no foreground signal, no request, however long it sits.
-        yield* Effect.sleep(PAST_THE_OLD_POLL_INTERVAL);
-        yield* settle;
-        expect(calls.count).toBe(1);
-
-        // Returning to the foreground past the stale window reads once.
-        registry.set(focusSignal, 1);
-        yield* settle;
-        expect(calls.count).toBe(2);
+        vi.useFakeTimers();
+        try {
+          const unmount = registry.mount(
+            atoms.summary({ environmentId, input: { botId: BotId.make("bot-focus") } }),
+          );
+          yield* Effect.addFinalizer(() => Effect.sync(unmount));
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(PAST_THE_OLD_POLL_INTERVAL_MS));
+          expect(calls.count).toBe(1);
+          registry.set(focusSignal, 1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(2);
+        } finally {
+          vi.useRealTimers();
+        }
       }),
     ),
   );
