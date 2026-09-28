@@ -76,7 +76,7 @@ describe("makeCatalogBackend", () => {
 });
 
 describe("migrateLegacyConnectionDatabase", () => {
-  it.effect("copies every legacy store and retires the old database", () =>
+  it.effect("fills missing records without replacing numeric-keyed current data", () =>
     Effect.gen(function* () {
       const fakeIndexedDB = yield* Effect.promise(() =>
         import("fake-indexeddb").then((module) => new module.IDBFactory()),
@@ -109,6 +109,8 @@ describe("migrateLegacyConnectionDatabase", () => {
             tx.addEventListener("error", () => reject(tx.error));
             tx.objectStore("catalog").put("legacy-catalog-doc", "document");
             tx.objectStore("shell").put("legacy-shell", "env-1");
+            tx.objectStore("shell").put("legacy-numeric", 1);
+            tx.objectStore("shell").put("legacy-second", 2);
           }),
       );
       legacy.close();
@@ -128,9 +130,19 @@ describe("migrateLegacyConnectionDatabase", () => {
           }),
       );
 
+      yield* Effect.promise(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const tx = migrated.transaction("shell", "readwrite");
+            tx.addEventListener("complete", () => resolve());
+            tx.addEventListener("error", () => reject(tx.error));
+            tx.objectStore("shell").put("current-numeric", 1);
+          }),
+      );
+
       yield* migrateLegacyConnectionDatabase(migrated);
 
-      const read = (store: string, key: string) =>
+      const read = (store: string, key: IDBValidKey) =>
         Effect.promise(
           () =>
             new Promise<unknown>((resolve, reject) => {
@@ -142,6 +154,8 @@ describe("migrateLegacyConnectionDatabase", () => {
 
       expect(yield* read("catalog", "document")).toBe("legacy-catalog-doc");
       expect(yield* read("shell", "env-1")).toBe("legacy-shell");
+      expect(yield* read("shell", 1)).toBe("current-numeric");
+      expect(yield* read("shell", 2)).toBe("legacy-second");
       migrated.close();
 
       // Legacy database is retired; reopening it yields a fresh empty DB.

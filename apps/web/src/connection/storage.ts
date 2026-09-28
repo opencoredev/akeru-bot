@@ -158,48 +158,7 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
   return yield* openDatabaseAt(DATABASE_NAME);
 });
 
-const databaseIsEmpty = Effect.fn("web.connectionStorage.databaseIsEmpty")(function* (
-  database: IDBDatabase,
-) {
-  return yield* Effect.callback<boolean, ConnectionTransientError>((resume) => {
-    const storeNames = Array.from(database.objectStoreNames);
-    if (storeNames.length === 0) {
-      resume(Effect.succeed(true));
-      return;
-    }
-    const transaction = database.transaction(storeNames, "readonly");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(
-          catalogError("inspect", transaction.error ?? "Unknown IndexedDB inspect error"),
-        ),
-      );
-    });
-    let pending = storeNames.length;
-    let sawEntry = false;
-    for (const storeName of storeNames) {
-      const request = transaction.objectStore(storeName).getKey(IDBKeyRange.lowerBound(""));
-      request.addEventListener("success", () => {
-        if (request.result !== undefined && request.result !== null) {
-          sawEntry = true;
-        }
-        pending -= 1;
-        if (pending === 0) {
-          resume(Effect.succeed(!sawEntry));
-        }
-      });
-      request.addEventListener("error", () => {
-        pending -= 1;
-        if (pending === 0) {
-          resume(Effect.succeed(!sawEntry));
-        }
-      });
-    }
-  });
-});
-
-/** Copy every object store record from `source` into `target` inside one
- * transaction, so the migration either lands completely or not at all. */
+/** Fill missing target records from `source` inside one transaction. */
 const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseContents")(function* (
   source: IDBDatabase,
   target: IDBDatabase,
@@ -251,7 +210,11 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
       resume(Effect.void);
     });
     for (const [storeName, key, value] of entries) {
-      transaction.objectStore(storeName).put(value, key);
+      const store = transaction.objectStore(storeName);
+      const existing = store.getKey(key);
+      existing.addEventListener("success", () => {
+        if (existing.result === undefined) store.put(value, key);
+      });
     }
   });
 });
@@ -265,16 +228,12 @@ const deleteLegacyDatabase = Effect.fn("web.connectionStorage.deleteLegacyDataba
   });
 });
 
-/** Move the persisted `t3code:connection-runtime` database forward when the
- * Akeru database is still empty. The legacy database is deleted only after
- * the copy commits, so a failed migration leaves the original data intact. */
+/** Fill missing Akeru records from the old database, then retire it only
+ * after the copy commits. A failed migration leaves the source for retry. */
 export const migrateLegacyConnectionDatabase = Effect.fn(
   "web.connectionStorage.migrateLegacyConnectionDatabase",
 )(function* (database: IDBDatabase) {
   if (typeof indexedDB === "undefined") return;
-  const isEmpty = yield* databaseIsEmpty(database);
-  if (!isEmpty) return;
-
   const legacyResult = yield* Effect.result(
     Effect.acquireRelease(openDatabaseAt(LEGACY_DATABASE_NAME), (legacy) =>
       Effect.sync(() => legacy.close()),
