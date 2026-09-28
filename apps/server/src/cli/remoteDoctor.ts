@@ -1,4 +1,5 @@
 import { RemoteDoctorReport } from "@t3tools/contracts";
+import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -36,7 +37,9 @@ export const remoteDoctorCommand = Command.make(
       const report = yield* Effect.sync(() => runRemoteDoctor({ baseDir, repair: flags.repair }));
       if (Option.isSome(flags.supportBundle)) {
         const bundlePath = Option.getOrThrow(flags.supportBundle);
-        yield* Effect.sync(() => writeRemoteSupportBundle(bundlePath, report));
+        const platform = yield* HostProcessPlatform;
+        const arch = yield* HostProcessArchitecture;
+        yield* Effect.sync(() => writeRemoteSupportBundle(bundlePath, report, { platform, arch }));
       }
       const output = flags.json
         ? yield* Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport))(report).pipe(

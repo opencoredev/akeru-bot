@@ -10,28 +10,28 @@ import {
   withMaintenance,
 } from "./updateGate.ts";
 
-it("closes the turn-start/update race in both directions", async () => {
-  expect(tryBeginTurnStart()).toBe(true);
-  expect(tryBeginMaintenance()).toBe(false);
-  finishTurnStart();
-  expect(tryBeginMaintenance()).toBe(true);
-  expect(tryBeginTurnStart()).toBe(false);
-  expect(
-    (
-      await Effect.runPromise(
-        Effect.exit(gateTurnStart(Effect.succeed("started"), () => "maintenance")),
-      )
-    )._tag,
-  ).toBe("Failure");
-  finishMaintenance();
-  await expect(
-    Effect.runPromise(gateTurnStart(Effect.succeed("started"), () => "maintenance")),
-  ).resolves.toBe("started");
-});
+it.effect("closes the turn-start/update race in both directions", () =>
+  Effect.gen(function* () {
+    expect(tryBeginTurnStart()).toBe(true);
+    expect(tryBeginMaintenance()).toBe(false);
+    finishTurnStart();
+    expect(tryBeginMaintenance()).toBe(true);
+    expect(tryBeginTurnStart()).toBe(false);
+    const blocked = yield* Effect.exit(
+      gateTurnStart(Effect.succeed("started"), () => "maintenance"),
+    );
+    expect(blocked._tag).toBe("Failure");
+    finishMaintenance();
+    expect(yield* gateTurnStart(Effect.succeed("started"), () => "maintenance")).toBe("started");
+  }),
+);
 
-it("releases maintenance after a defect", async () => {
-  expect(tryBeginMaintenance()).toBe(true);
-  await expect(Effect.runPromise(withMaintenance(Effect.die("boom")))).rejects.toBe("boom");
-  expect(tryBeginMaintenance()).toBe(true);
-  finishMaintenance();
-});
+it.effect("releases maintenance after a defect", () =>
+  Effect.gen(function* () {
+    expect(tryBeginMaintenance()).toBe(true);
+    const failed = yield* Effect.exit(withMaintenance(Effect.die("boom")));
+    expect(failed._tag).toBe("Failure");
+    expect(tryBeginMaintenance()).toBe(true);
+    finishMaintenance();
+  }),
+);

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { describe, expect } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Clock from "effect/Clock";
 import * as TestClock from "effect/testing/TestClock";
@@ -94,29 +95,28 @@ describe("ComputerGate", () => {
     expect(gate.status).toBe("stopped");
   });
 
-  it("revokes an in-flight input at lease expiry", async () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const pending = latch();
-        const gate = new ComputerGate(yield* Clock.Clock);
-        const session = yield* Effect.promise(() => gate.acquire("client"));
-        const entered = latch();
-        const input = gate.input("client", session.sessionId, 1, () => {
-          entered.resolve();
-          return pending.promise;
-        });
-        const rejected = expect(input).rejects.toMatchObject({ code: "revoked" });
-        yield* Effect.promise(() => entered.promise);
-        yield* TestClock.adjust("60 seconds");
-        yield* Effect.promise(() => rejected);
-        expect(gate.status).toBe("stopped");
-        let reopened = false;
-        const reopening = gate.open().then(() => {
-          reopened = true;
-        });
-        expect(reopened).toBe(false);
-        pending.resolve();
-        yield* Effect.promise(() => reopening);
-      }).pipe(Effect.provide(TestClock.layer())),
-    ));
+  it.effect("revokes an in-flight input at lease expiry", () =>
+    Effect.gen(function* () {
+      const pending = latch();
+      const gate = new ComputerGate(yield* Clock.Clock);
+      const session = yield* Effect.promise(() => gate.acquire("client"));
+      const entered = latch();
+      const input = gate.input("client", session.sessionId, 1, () => {
+        entered.resolve();
+        return pending.promise;
+      });
+      const rejected = expect(input).rejects.toMatchObject({ code: "revoked" });
+      yield* Effect.promise(() => entered.promise);
+      yield* TestClock.adjust("60 seconds");
+      yield* Effect.promise(() => rejected);
+      expect(gate.status).toBe("stopped");
+      let reopened = false;
+      const reopening = gate.open().then(() => {
+        reopened = true;
+      });
+      expect(reopened).toBe(false);
+      pending.resolve();
+      yield* Effect.promise(() => reopening);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
 });

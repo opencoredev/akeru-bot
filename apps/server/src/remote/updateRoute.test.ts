@@ -1,17 +1,17 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as FS from "node:fs";
-import * as OS from "node:os";
-import * as Path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 
 import { expect, it } from "vite-plus/test";
 
 import { hasActiveTurns } from "./updateRoute.ts";
 
 it("defers unattended updates while any bot turn is active", () => {
-  const root = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-update-route-"));
-  const dbPath = Path.join(root, "state.sqlite");
-  const db = new DatabaseSync(dbPath);
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-update-route-"));
+  const dbPath = NodePath.join(root, "state.sqlite");
+  const db = new NodeSqlite.DatabaseSync(dbPath);
   db.exec(`CREATE TABLE projection_thread_sessions (
     thread_id TEXT PRIMARY KEY,
     status TEXT NOT NULL,
@@ -29,5 +29,5 @@ it("defers unattended updates while any bot turn is active", () => {
   );
   db.close();
   expect(hasActiveTurns(dbPath)).toBe(true);
-  FS.rmSync(root, { recursive: true, force: true });
+  NodeFS.rmSync(root, { recursive: true, force: true });
 });

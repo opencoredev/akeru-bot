@@ -1,10 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off
-import * as FS from "node:fs";
-import * as OS from "node:os";
-import * as Path from "node:path";
-import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeSqlite from "node:sqlite";
 
 import {
   RemoteDoctorReport,
@@ -16,7 +15,7 @@ import * as Schema from "effect/Schema";
 const decodeReport = Schema.decodeUnknownSync(RemoteDoctorReport);
 
 const commandOk = (command: string, args: ReadonlyArray<string>) =>
-  spawnSync(command, args, { stdio: "ignore" }).status === 0;
+  NodeChildProcess.spawnSync(command, args, { stdio: "ignore" }).status === 0;
 
 const check = (
   id: string,
@@ -37,13 +36,13 @@ export function runRemoteDoctor(input: {
   readonly repair: boolean;
   readonly now?: Date;
 }): RemoteDoctorReportValue {
-  const stateDir = Path.join(input.baseDir, "userdata");
-  const bindingPath = Path.join(stateDir, "remote-directory.json");
-  const dbPath = Path.join(stateDir, "state.sqlite");
-  const runtimeStatePath = Path.join(input.baseDir, "runtime", "service-state.json");
-  const logPath = Path.join(stateDir, "logs", "boot-service.log");
-  const controlTokenPath = Path.join(stateDir, "remote-control-token");
-  const updateDeferredPath = Path.join(stateDir, "remote-update-deferred-at");
+  const stateDir = NodePath.join(input.baseDir, "userdata");
+  const bindingPath = NodePath.join(stateDir, "remote-directory.json");
+  const dbPath = NodePath.join(stateDir, "state.sqlite");
+  const runtimeStatePath = NodePath.join(input.baseDir, "runtime", "service-state.json");
+  const logPath = NodePath.join(stateDir, "logs", "boot-service.log");
+  const controlTokenPath = NodePath.join(stateDir, "remote-control-token");
+  const updateDeferredPath = NodePath.join(stateDir, "remote-update-deferred-at");
   const checks: Array<RemoteDiagnosticCheck> = [];
   const repairsApplied: Array<string> = [];
   const container = process.env.AKERU_REMOTE_CONTAINER === "1";
@@ -68,7 +67,7 @@ export function runRemoteDoctor(input: {
     ),
   );
   if (!container && commandOk("sh", ["-c", "command -v loginctl"])) {
-    const linger = spawnSync(
+    const linger = NodeChildProcess.spawnSync(
       "loginctl",
       ["show-user", process.env.USER ?? "", "-p", "Linger", "--value"],
       { encoding: "utf8" },
@@ -86,7 +85,7 @@ export function runRemoteDoctor(input: {
   }
 
   try {
-    const disk = FS.statfsSync(stateDir);
+    const disk = NodeFS.statfsSync(stateDir);
     const freeBytes = Number(disk.bavail) * Number(disk.bsize);
     checks.push(
       check(
@@ -101,9 +100,9 @@ export function runRemoteDoctor(input: {
     checks.push(check("disk", "fail", `Could not inspect Akeru storage: ${String(cause)}`));
   }
 
-  if (FS.existsSync(dbPath)) {
+  if (NodeFS.existsSync(dbPath)) {
     try {
-      const db = new DatabaseSync(dbPath, { readOnly: true });
+      const db = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
       const result = db.prepare("PRAGMA quick_check").get() as Record<string, unknown>;
       db.close();
       const healthy = Object.values(result)[0] === "ok";
@@ -122,14 +121,14 @@ export function runRemoteDoctor(input: {
   }
 
   let binding: Record<string, unknown> | undefined;
-  if (FS.existsSync(bindingPath)) {
+  if (NodeFS.existsSync(bindingPath)) {
     try {
-      if (input.repair && (FS.statSync(bindingPath).mode & 0o077) !== 0) {
-        FS.chmodSync(bindingPath, 0o600);
+      if (input.repair && (NodeFS.statSync(bindingPath).mode & 0o077) !== 0) {
+        NodeFS.chmodSync(bindingPath, 0o600);
         repairsApplied.push("binding-permissions");
       }
-      binding = JSON.parse(FS.readFileSync(bindingPath, "utf8")) as Record<string, unknown>;
-      const secure = (FS.statSync(bindingPath).mode & 0o077) === 0;
+      binding = JSON.parse(NodeFS.readFileSync(bindingPath, "utf8")) as Record<string, unknown>;
+      const secure = (NodeFS.statSync(bindingPath).mode & 0o077) === 0;
       checks.push(
         check(
           "binding-permissions",
@@ -140,7 +139,7 @@ export function runRemoteDoctor(input: {
           !secure,
         ),
       );
-      const ageMs = (input.now ?? new Date()).getTime() - FS.statSync(bindingPath).mtimeMs;
+      const ageMs = (input.now ?? new Date()).getTime() - NodeFS.statSync(bindingPath).mtimeMs;
       checks.push(
         check(
           "directory-heartbeat",
@@ -161,23 +160,27 @@ export function runRemoteDoctor(input: {
     checks.push(check("account-binding", "warning", "Optional account link is not configured."));
   }
 
-  if (!container && input.repair && !FS.existsSync(controlTokenPath)) {
-    FS.writeFileSync(controlTokenPath, `${randomBytes(32).toString("base64url")}\n`, {
-      mode: 0o600,
-    });
+  if (!container && input.repair && !NodeFS.existsSync(controlTokenPath)) {
+    NodeFS.writeFileSync(
+      controlTokenPath,
+      `${NodeCrypto.randomBytes(32).toString("base64url")}\n`,
+      {
+        mode: 0o600,
+      },
+    );
     repairsApplied.push("update-credential");
   } else if (
     !container &&
     input.repair &&
-    FS.existsSync(controlTokenPath) &&
-    (FS.statSync(controlTokenPath).mode & 0o077) !== 0
+    NodeFS.existsSync(controlTokenPath) &&
+    (NodeFS.statSync(controlTokenPath).mode & 0o077) !== 0
   ) {
-    FS.chmodSync(controlTokenPath, 0o600);
+    NodeFS.chmodSync(controlTokenPath, 0o600);
     repairsApplied.push("update-credential-permissions");
   }
   if (!container) {
     const updateCredentialSecure =
-      FS.existsSync(controlTokenPath) && (FS.statSync(controlTokenPath).mode & 0o077) === 0;
+      NodeFS.existsSync(controlTokenPath) && (NodeFS.statSync(controlTokenPath).mode & 0o077) === 0;
     checks.push(
       check(
         "update-credential",
@@ -190,11 +193,11 @@ export function runRemoteDoctor(input: {
     );
   }
 
-  const environmentId = FS.existsSync(Path.join(stateDir, "environment-id"))
-    ? FS.readFileSync(Path.join(stateDir, "environment-id"), "utf8").trim()
+  const environmentId = NodeFS.existsSync(NodePath.join(stateDir, "environment-id"))
+    ? NodeFS.readFileSync(NodePath.join(stateDir, "environment-id"), "utf8").trim()
     : "";
   if (typeof binding?.endpoint === "string") {
-    const response = spawnSync(
+    const response = NodeChildProcess.spawnSync(
       "curl",
       ["-fsSL", `${binding.endpoint}/.well-known/t3/environment`],
       { encoding: "utf8" },
@@ -252,7 +255,7 @@ export function runRemoteDoctor(input: {
     );
   } else
     try {
-      const state = JSON.parse(FS.readFileSync(runtimeStatePath, "utf8")) as {
+      const state = JSON.parse(NodeFS.readFileSync(runtimeStatePath, "utf8")) as {
         activeVersion?: string;
         update?: { status?: string };
       };
@@ -276,8 +279,8 @@ export function runRemoteDoctor(input: {
         check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
       );
     }
-  if (!container && FS.existsSync(updateDeferredPath)) {
-    const deferredAt = Date.parse(FS.readFileSync(updateDeferredPath, "utf8").trim());
+  if (!container && NodeFS.existsSync(updateDeferredPath)) {
+    const deferredAt = Date.parse(NodeFS.readFileSync(updateDeferredPath, "utf8").trim());
     const ageMs = (input.now ?? new Date()).getTime() - deferredAt;
     checks.push(
       check(
@@ -295,12 +298,12 @@ export function runRemoteDoctor(input: {
   }
   const releaseRoot = process.env.AKERU_REMOTE_RELEASE_ROOT;
   if (releaseRoot) {
-    const previous = Path.join(releaseRoot, "previous");
+    const previous = NodePath.join(releaseRoot, "previous");
     checks.push(
       check(
         "rollback-runtime",
-        FS.existsSync(previous) ? "pass" : "warning",
-        FS.existsSync(previous)
+        NodeFS.existsSync(previous) ? "pass" : "warning",
+        NodeFS.existsSync(previous)
           ? "A previous runtime is available for rollback."
           : "No previous runtime is available yet.",
       ),
@@ -323,13 +326,13 @@ export function runRemoteDoctor(input: {
   );
 
   if (input.repair) {
-    FS.mkdirSync(Path.dirname(logPath), { recursive: true, mode: 0o700 });
+    NodeFS.mkdirSync(NodePath.dirname(logPath), { recursive: true, mode: 0o700 });
     repairsApplied.push("log-directory");
   }
-  let logBytes = FS.existsSync(logPath) ? FS.statSync(logPath).size : 0;
+  let logBytes = NodeFS.existsSync(logPath) ? NodeFS.statSync(logPath).size : 0;
   if (input.repair && logBytes >= 100 * 1024 * 1024) {
-    FS.renameSync(logPath, `${logPath}.previous`);
-    FS.writeFileSync(logPath, "", { mode: 0o600 });
+    NodeFS.renameSync(logPath, `${logPath}.previous`);
+    NodeFS.writeFileSync(logPath, "", { mode: 0o600 });
     logBytes = 0;
     repairsApplied.push("log-rotation");
   }
@@ -367,10 +370,12 @@ export function renderRemoteDoctor(report: RemoteDoctorReportValue): string {
   ].join("\n");
 }
 
-export function writeRemoteSupportBundle(path: string, report: RemoteDoctorReportValue): void {
-  FS.writeFileSync(
-    path,
-    redact(`${JSON.stringify({ report, platform: OS.platform(), arch: OS.arch() }, null, 2)}\n`),
-    { mode: 0o600 },
-  );
+export function writeRemoteSupportBundle(
+  path: string,
+  report: RemoteDoctorReportValue,
+  host: { readonly platform: NodeJS.Platform; readonly arch: NodeJS.Architecture },
+): void {
+  NodeFS.writeFileSync(path, redact(`${JSON.stringify({ report, ...host }, null, 2)}\n`), {
+    mode: 0o600,
+  });
 }

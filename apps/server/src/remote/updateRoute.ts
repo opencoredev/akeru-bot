@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeSqlite from "node:sqlite";
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -20,7 +20,7 @@ function sameSecret(presented: string, expected: string): boolean {
 }
 
 export function hasActiveTurns(dbPath: string): boolean {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const db = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
   try {
     const row = db
       .prepare(

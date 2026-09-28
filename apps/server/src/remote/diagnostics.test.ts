@@ -1,8 +1,8 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off preferSchemaOverJson:off
-import * as FS from "node:fs";
-import * as OS from "node:os";
-import * as Path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 
 import { describe, expect, it } from "vite-plus/test";
 
@@ -10,8 +10,8 @@ import { runRemoteDoctor, writeRemoteSupportBundle } from "./diagnostics.ts";
 
 describe("Akeru Remote diagnostics", () => {
   it("repairs a fresh container without an update token", () => {
-    const baseDir = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-container-repair-"));
-    FS.mkdirSync(Path.join(baseDir, "userdata"), { recursive: true });
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-container-repair-"));
+    NodeFS.mkdirSync(NodePath.join(baseDir, "userdata"), { recursive: true });
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     process.env.AKERU_REMOTE_CONTAINER = "1";
     try {
@@ -19,16 +19,16 @@ describe("Akeru Remote diagnostics", () => {
     } finally {
       if (prior === undefined) delete process.env.AKERU_REMOTE_CONTAINER;
       else process.env.AKERU_REMOTE_CONTAINER = prior;
-      FS.rmSync(baseDir, { recursive: true, force: true });
+      NodeFS.rmSync(baseDir, { recursive: true, force: true });
     }
   });
 
   it("reports a healthy Compose container without systemd or launcher state", () => {
-    const baseDir = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-container-doctor-"));
-    const binDir = Path.join(baseDir, "bin");
-    FS.mkdirSync(Path.join(baseDir, "userdata"), { recursive: true });
-    FS.mkdirSync(binDir);
-    FS.writeFileSync(Path.join(binDir, "curl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-container-doctor-"));
+    const binDir = NodePath.join(baseDir, "bin");
+    NodeFS.mkdirSync(NodePath.join(baseDir, "userdata"), { recursive: true });
+    NodeFS.mkdirSync(binDir);
+    NodeFS.writeFileSync(NodePath.join(binDir, "curl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const priorContainer = process.env.AKERU_REMOTE_CONTAINER;
     const priorPath = process.env.PATH;
     process.env.AKERU_REMOTE_CONTAINER = "1";
@@ -45,20 +45,20 @@ describe("Akeru Remote diagnostics", () => {
       if (priorContainer === undefined) delete process.env.AKERU_REMOTE_CONTAINER;
       else process.env.AKERU_REMOTE_CONTAINER = priorContainer;
       process.env.PATH = priorPath;
-      FS.rmSync(baseDir, { recursive: true, force: true });
+      NodeFS.rmSync(baseDir, { recursive: true, force: true });
     }
   });
 
   it("reports storage health and repairs private binding permissions", () => {
-    const baseDir = FS.mkdtempSync(Path.join(OS.tmpdir(), "akeru-doctor-"));
-    const stateDir = Path.join(baseDir, "userdata");
-    FS.mkdirSync(Path.join(baseDir, "runtime"), { recursive: true });
-    FS.mkdirSync(stateDir, { recursive: true });
-    const db = new DatabaseSync(Path.join(stateDir, "state.sqlite"));
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-doctor-"));
+    const stateDir = NodePath.join(baseDir, "userdata");
+    NodeFS.mkdirSync(NodePath.join(baseDir, "runtime"), { recursive: true });
+    NodeFS.mkdirSync(stateDir, { recursive: true });
+    const db = new NodeSqlite.DatabaseSync(NodePath.join(stateDir, "state.sqlite"));
     db.exec("CREATE TABLE health(value TEXT)");
     db.close();
-    const bindingPath = Path.join(stateDir, "remote-directory.json");
-    FS.writeFileSync(
+    const bindingPath = NodePath.join(stateDir, "remote-directory.json");
+    NodeFS.writeFileSync(
       bindingPath,
       JSON.stringify({
         endpointKind: "custom-https",
@@ -68,8 +68,8 @@ describe("Akeru Remote diagnostics", () => {
       }),
       { mode: 0o644 },
     );
-    FS.writeFileSync(
-      Path.join(baseDir, "runtime", "service-state.json"),
+    NodeFS.writeFileSync(
+      NodePath.join(baseDir, "runtime", "service-state.json"),
       JSON.stringify({ activeVersion: "1.2.3", update: { status: "idle" } }),
     );
 
@@ -81,12 +81,12 @@ describe("Akeru Remote diagnostics", () => {
     expect(report.checks.find((check) => check.id === "database")?.status).toBe("pass");
     expect(report.checks.find((check) => check.id === "binding-permissions")?.status).toBe("pass");
     expect(report.repairsApplied).toContain("binding-permissions");
-    expect(FS.statSync(bindingPath).mode & 0o077).toBe(0);
+    expect(NodeFS.statSync(bindingPath).mode & 0o077).toBe(0);
 
-    const bundlePath = Path.join(baseDir, "support.json");
-    writeRemoteSupportBundle(bundlePath, report);
-    expect(FS.statSync(bundlePath).mode & 0o077).toBe(0);
-    expect(FS.readFileSync(bundlePath, "utf8")).not.toContain("super-secret");
-    FS.rmSync(baseDir, { recursive: true, force: true });
+    const bundlePath = NodePath.join(baseDir, "support.json");
+    writeRemoteSupportBundle(bundlePath, report, { platform: "linux", arch: "x64" });
+    expect(NodeFS.statSync(bundlePath).mode & 0o077).toBe(0);
+    expect(NodeFS.readFileSync(bundlePath, "utf8")).not.toContain("super-secret");
+    NodeFS.rmSync(baseDir, { recursive: true, force: true });
   });
 });
