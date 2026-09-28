@@ -186,6 +186,7 @@ export type UsageSandboxProvider = typeof UsageSandboxProvider.Type;
 
 const UsageCounters = Schema.Struct({
   ...Object.fromEntries(USAGE_3H_COUNTER_KEYS.map((key) => [key, UsageCounter])),
+  sandbox_turns_tenki: UsageCounter.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
   new_installations: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(0)),
   ),
