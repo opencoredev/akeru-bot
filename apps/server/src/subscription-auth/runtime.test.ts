@@ -51,10 +51,10 @@ describe("subscription runtime credentials", () => {
         subscriptionStatus("opencode-go", false),
       ]),
     ).toEqual({
-        providers: {
-          codex: { enabled: false },
-          claudeAgent: { enabled: false },
-          grok: { enabled: true },
+      providers: {
+        codex: { enabled: false },
+        claudeAgent: { enabled: false },
+        grok: { enabled: true },
         kimi: { enabled: false },
         opencodeGo: { enabled: false },
       },

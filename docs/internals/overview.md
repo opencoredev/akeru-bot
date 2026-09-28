@@ -195,17 +195,17 @@ suppression counts.
 Run `node scripts/effect-migration-metric.ts` for a production-source report. It is a
 reporting tool rather than a CI gate. The 2026-09-22 audit baseline for diagnostic suppressions was:
 
-| Rule | Suppressions |
-| --- | ---: |
-| `cryptoRandomUUID` | 1 |
-| `globalConsole` | 1 |
-| `globalDate` | 18 |
-| `globalFetch` | 12 |
-| `globalRandom` | 5 |
-| `globalTimers` | 4 |
-| `nodeBuiltinImport` | 35 |
-| `preferSchemaOverJson` | 1 |
-| `returnEffectInGen` | 2 |
+| Rule                   | Suppressions |
+| ---------------------- | -----------: |
+| `cryptoRandomUUID`     |            1 |
+| `globalConsole`        |            1 |
+| `globalDate`           |           18 |
+| `globalFetch`          |           12 |
+| `globalRandom`         |            5 |
+| `globalTimers`         |            4 |
+| `nodeBuiltinImport`    |           35 |
+| `preferSchemaOverJson` |            1 |
+| `returnEffectInGen`    |            2 |
 
 The same audit counted 58 runtime escapes and 76 Promise bridges. Each follow-up migration issue
 should report how many suppression tokens and boundary calls it removes against this baseline.

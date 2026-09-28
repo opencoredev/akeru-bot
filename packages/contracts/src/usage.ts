@@ -22,13 +22,7 @@ import { SubscriptionProviderId } from "./subscriptionAuth.ts";
  */
 export const USAGE_CONTRACT_VERSION = 5 as const;
 
-export const UsageProviderKind = Schema.Literals([
-  "claude",
-  "codex",
-  "grok",
-  "kimi",
-  "opencode",
-]);
+export const UsageProviderKind = Schema.Literals(["claude", "codex", "grok", "kimi", "opencode"]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 
 /**
@@ -179,13 +173,7 @@ export type UsagePlanLimitsStatus = typeof UsagePlanLimitsStatus.Type;
 
 /** Live plan meters for one Settings → Providers login. */
 export const UsageProviderPlanLimits = Schema.Struct({
-  provider: Schema.Literals([
-    "anthropic",
-    "openai-codex",
-    "xai",
-    "kimi-for-coding",
-    "opencode-go",
-  ]),
+  provider: Schema.Literals(["anthropic", "openai-codex", "xai", "kimi-for-coding", "opencode-go"]),
   status: UsagePlanLimitsStatus,
   plan: Schema.NullOr(TrimmedNonEmptyString),
   message: Schema.NullOr(TrimmedNonEmptyString),

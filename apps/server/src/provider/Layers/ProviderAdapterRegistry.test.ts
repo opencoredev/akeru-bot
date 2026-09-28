@@ -171,10 +171,6 @@ it.layer(layer)("ProviderAdapterRegistryLive", (it) => {
       ]);
 
       const providers = yield* registry.listProviders();
-      assert.deepStrictEqual(providers, [
-        CODEX_DRIVER,
-        CLAUDE_AGENT_DRIVER,
-        OPENCODE_DRIVER,
-      ]);
+      assert.deepStrictEqual(providers, [CODEX_DRIVER, CLAUDE_AGENT_DRIVER, OPENCODE_DRIVER]);
     }));
 });

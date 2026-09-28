@@ -1,13 +1,6 @@
 import type { UsageProviderKind } from "@t3tools/contracts";
 
-import {
-  ClaudeAI,
-  GrokIcon,
-  KimiIcon,
-  OpenCodeIcon,
-  type Icon,
-  OpenAI,
-} from "../Icons";
+import { ClaudeAI, GrokIcon, KimiIcon, OpenCodeIcon, type Icon, OpenAI } from "../Icons";
 
 type UsageProviderPresentation = {
   readonly label: string;

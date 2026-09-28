@@ -25,14 +25,7 @@ export const USAGE_BASE_COUNTER_KEYS = [
   "approvals_rejected",
 ] as const;
 
-export const USAGE_PROVIDER_IDS = [
-  "codex",
-  "claude",
-  "grok",
-  "kimi",
-  "opencode",
-  "other",
-] as const;
+export const USAGE_PROVIDER_IDS = ["codex", "claude", "grok", "kimi", "opencode", "other"] as const;
 
 export const USAGE_SANDBOX_IDS = [
   "none",
