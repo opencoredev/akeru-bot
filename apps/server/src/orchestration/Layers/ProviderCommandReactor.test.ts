@@ -4839,6 +4839,129 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  effectIt.effect("keeps a cancel when the stopped child cannot be interrupted", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: null,
+          interruptTurnEffect: () =>
+            Effect.fail(
+              new ProviderAdapterRequestError({
+                provider: ProviderDriverKind.make("codex"),
+                method: "thread.turn.interrupt",
+                detail: "No active session.",
+              }),
+            ),
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const later = "2026-01-01T00:00:01.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-stopped");
+      const delegationId = DelegationId.make("delegation-stopped-child");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-stopped-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-stopped-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Audit the docs site for broken links.",
+        expectedResult: "A list of broken links.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: true,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-stopped-child-create"),
+        delegation: queued,
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-stopped-child-running"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Running",
+            childThreadId,
+            childTurnId: null,
+            startedAt: now,
+            progress: null,
+          },
+        },
+      });
+
+      yield* harness.engine.dispatch({
+        type: "delegation.cancel",
+        commandId: CommandId.make("cmd-stopped-child-cancel"),
+        delegationId,
+        keep: false,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+
+      expect(harness.interruptTurn).toHaveBeenCalledWith({ threadId: childThreadId });
+      const delegation = (yield* Effect.promise(() => harness.readModel())).delegations.find(
+        (entry) => entry.delegationId === delegationId,
+      );
+      expect(delegation?.phase).toMatchObject({
+        _tag: "Canceled",
+        childThreadId,
+        completedAt: later,
+        canceledBy: "user",
+      });
+    }),
+  );
+
   effectIt.effect("hands a retry to the delegation runtime and reports a refused start", () =>
     Effect.gen(function* () {
       const dispatchDelegation = vi.fn((input: { readonly delegationId?: DelegationId }) =>
