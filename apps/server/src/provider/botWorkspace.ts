@@ -359,6 +359,18 @@ export function ascii(
   client: import("@asciidev/box-sdk").BoxApi,
   boxId: string,
 ): AkeruRemoteSession {
+  const waitUntilArchived = async () => {
+    const deadline = performance.now() + 300_000;
+    while (true) {
+      const { box } = await client.get({ boxId });
+      if (box.state === "archived") return;
+      if (box.state === "error") throw new Error("Ascii Box snapshot archival failed.");
+      if (performance.now() >= deadline) throw new Error("Ascii Box snapshot archival timed out.");
+      // The SDK lifecycle is promise-based; polling does not own an Effect runtime.
+      // @effect-diagnostics-next-line globalTimers:off
+      await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+    }
+  };
   return {
     providerId: boxId,
     inspect: async () => {
@@ -374,7 +386,8 @@ export function ascii(
     },
     wake: async () => {
       const { box } = await client.get({ boxId });
-      if (box.state === "archived")
+      if (box.state === "archiving") await waitUntilArchived();
+      if (box.state === "archived" || box.state === "archiving")
         await client.resume({ boxId, resumeRequest: { ttlSeconds: null } });
       const { waitUntilReady } = await import("@asciidev/box-sdk");
       await waitUntilReady(client, boxId);
@@ -382,6 +395,7 @@ export function ascii(
     // Stop takes a native lifecycle snapshot; never force-stop and discard VM changes.
     sleep: async () => {
       await client.stop({ boxId });
+      await waitUntilArchived();
     },
     destroy: async () => {
       await client.deleteBox({ boxId, xAsciiConfirmDelete: boxId });

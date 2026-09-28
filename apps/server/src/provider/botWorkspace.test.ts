@@ -62,15 +62,88 @@ describe("Ascii Box", () => {
       .spyOn(client, "resume")
       .mockResolvedValue({ ok: true, type: "box.resumed", id: "ascii-id", status: "ready" });
     const remove = vi.spyOn(client, "deleteBox").mockResolvedValue(deleted);
+    const current = await client.get({ boxId: "ascii-id" });
+    get.mockResolvedValueOnce({ ...current, box: { ...current.box, state: "archived" } });
     await session.sleep();
     expect(stop).toHaveBeenCalledWith({ boxId: "ascii-id" });
-    const current = await client.get({ boxId: "ascii-id" });
     get.mockResolvedValueOnce({ ...current, box: { ...current.box, state: "archived" } });
     await session.wake();
     expect(resume).toHaveBeenCalledWith({ boxId: "ascii-id", resumeRequest: { ttlSeconds: null } });
     expect(await session.inspect()).toBe("running");
     await session.destroy();
     expect(remove).toHaveBeenCalledWith({ boxId: "ascii-id", xAsciiConfirmDelete: "ascii-id" });
+  });
+
+  it.each(["sleep", "wake"] as const)(
+    "waits for native snapshot completion during %s",
+    async (action) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+      try {
+        const { client, get, session } = await setup();
+        const current = await client.get({ boxId: "ascii-id" });
+        const archiving = { ...current, box: { ...current.box, state: "archiving" as const } };
+        const archived = { ...current, box: { ...current.box, state: "archived" as const } };
+        const stop = vi.spyOn(client, "stop").mockResolvedValue({
+          ok: true,
+          type: "box.stopped",
+          id: "ascii-id",
+          status: "archiving",
+        });
+        const resume = vi
+          .spyOn(client, "resume")
+          .mockResolvedValue({ ok: true, type: "box.resumed", id: "ascii-id", status: "ready" });
+        if (action === "wake") get.mockResolvedValueOnce(archiving);
+        get.mockResolvedValueOnce(archiving).mockResolvedValueOnce(archived);
+        let completed = false;
+        const operation = session[action]().then(() => {
+          completed = true;
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(completed).toBe(false);
+        expect(resume).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2_000);
+        await operation;
+        if (action === "wake")
+          expect(resume).toHaveBeenCalledWith({
+            boxId: "ascii-id",
+            resumeRequest: { ttlSeconds: null },
+          });
+        else expect(stop).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("surfaces snapshot errors without force-stopping or deleting the VM", async () => {
+    const { client, get, session } = await setup();
+    const current = await client.get({ boxId: "ascii-id" });
+    get.mockResolvedValue({ ...current, box: { ...current.box, state: "error" } });
+    const stop = vi
+      .spyOn(client, "stop")
+      .mockResolvedValue({ ok: true, type: "box.stopped", id: "ascii-id", status: "archiving" });
+    const remove = vi.spyOn(client, "deleteBox");
+    await expect(session.sleep()).rejects.toThrow("snapshot archival failed");
+    expect(stop).toHaveBeenCalledWith({ boxId: "ascii-id" });
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("bounds snapshot waits without deleting the VM", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+    try {
+      const { client, get, session } = await setup();
+      const current = await client.get({ boxId: "ascii-id" });
+      get.mockResolvedValue({ ...current, box: { ...current.box, state: "archiving" } });
+      const resume = vi.spyOn(client, "resume");
+      const remove = vi.spyOn(client, "deleteBox");
+      const failure = expect(session.wake()).rejects.toThrow("snapshot archival timed out");
+      await vi.advanceTimersByTimeAsync(300_000);
+      await failure;
+      expect(resume).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
