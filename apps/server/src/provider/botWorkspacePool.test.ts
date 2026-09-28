@@ -21,14 +21,14 @@ function localWorkspace() {
 function remoteWorkspace(overrides: Partial<AkeruBotWorkspace> = {}): AkeruBotWorkspace {
   return {
     id: "akeru-persistent",
-    provider: "e2b",
+    provider: "tenki",
     workspace: localWorkspace(),
     inspect: vi.fn(async () => "running" as const),
     wake: vi.fn(async () => undefined),
     sleep: vi.fn(async () => undefined),
     destroy: vi.fn(async () => undefined),
     ...overrides,
-  } as unknown as AkeruBotWorkspace;
+  };
 }
 
 describe("BotWorkspacePool", () => {

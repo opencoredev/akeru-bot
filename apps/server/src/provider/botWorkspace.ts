@@ -306,7 +306,8 @@ async function create(
   if (provider === "tenki") {
     const { TenkiSandbox } = await import("@tenkicloud/sandbox");
     const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
-    return tenki(await client.create({ name: id, sticky: true }));
+    // Persist the VM identity before wake waits for readiness, which can fail transiently.
+    return tenki(await client.create({ name: id, sticky: true, waitReady: false }));
   }
   const { Box } = await import("@upstash/box");
   return upstash(await Box.create({ apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));

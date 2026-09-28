@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import type { Session, SessionState } from "@tenkicloud/sandbox";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createRemoteBotWorkspace, tenki, tenkiWorkspaceState } from "./botWorkspace.ts";
+import { BotWorkspacePool } from "./botWorkspacePool.ts";
 
 const sdk = vi.hoisted(() => ({ create: vi.fn(), get: vi.fn(), constructor: vi.fn() }));
 vi.mock("@tenkicloud/sandbox", () => ({
@@ -63,7 +64,11 @@ describe("Tenki workspace", () => {
     try {
       const first = await createRemoteBotWorkspace(input);
       expect(sdk.constructor).toHaveBeenLastCalledWith({ apiKey: "test-key" });
-      expect(sdk.create).toHaveBeenCalledExactlyOnceWith({ name: "bot-tenki", sticky: true });
+      expect(sdk.create).toHaveBeenCalledExactlyOnceWith({
+        name: "bot-tenki",
+        sticky: true,
+        waitReady: false,
+      });
       await first.sleep();
       expect(session.close).not.toHaveBeenCalled();
       const second = await createRemoteBotWorkspace(input);
@@ -75,6 +80,40 @@ describe("Tenki workspace", () => {
       await second.destroy();
       expect(session.close).toHaveBeenCalledOnce();
       expect(NodeFS.existsSync(identityFile)).toBe(false);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("retains a newly created VM's identity when readiness fails and retries the same VM", async () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-tenki-"));
+    const identityFile = NodePath.join(root, "identity.json");
+    const { session } = mockSession("CREATING");
+    sdk.create.mockClear().mockResolvedValue(session);
+    sdk.get.mockClear().mockResolvedValue(session);
+    session.waitReady.mockRejectedValueOnce(new Error("readiness unavailable"));
+    const pool = new BotWorkspacePool();
+    const create = () =>
+      createRemoteBotWorkspace({
+        sandbox: "tenki",
+        threadId: "thread",
+        workspaceId: "bot",
+        identityFile,
+        environment: { TENKI_API_KEY: "key" },
+      });
+    try {
+      await expect(pool.acquire("tenki", create)).rejects.toThrow("readiness unavailable");
+      expect(JSON.parse(NodeFS.readFileSync(identityFile, "utf8"))).toEqual({
+        provider: "tenki",
+        providerId: "tenki-session",
+      });
+      expect(session.close).not.toHaveBeenCalled();
+      session.state = "RUNNING";
+      const lease = await pool.acquire("tenki", create);
+      expect(sdk.create).toHaveBeenCalledTimes(1);
+      expect(sdk.get).toHaveBeenCalledExactlyOnceWith("tenki-session");
+      await lease.release({ destroy: true });
+      expect(session.close).toHaveBeenCalledOnce();
     } finally {
       NodeFS.rmSync(root, { recursive: true, force: true });
     }
