@@ -11,7 +11,6 @@ export interface ChatPaletteAction {
   readonly description?: string;
   readonly searchTerms: ReadonlyArray<string>;
   readonly shortcutCommand?: KeybindingCommand;
-  readonly destructive?: boolean;
   readonly run: () => Promise<void> | void;
 }
 

@@ -24,7 +24,8 @@ top right of that chat to act on it:
   also appears when a bot finishes replying in a chat you have opened before but are not looking
   at. Unread dots are kept on this device only.
 - **Settle chat** and **Un-settle chat**.
-- **Snooze** until a time you pick, and **Wake chat** to end the snooze early.
+- **Snooze** until a preset time, such as **In 1 hour** or **Tomorrow**, and **Wake chat** to end
+  the snooze early.
 - **Archive chat** and **Delete chat**. Delete asks for confirmation first. A chat cannot be
   archived while the bot is replying.
 

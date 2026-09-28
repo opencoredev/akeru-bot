@@ -23,7 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { registerChatPaletteActions, type ChatPaletteAction } from "../../chatActionsRegistry";
-import { useChatActions } from "../../hooks/useChatActions";
+import { type ChatActions, useChatActions } from "../../hooks/useChatActions";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
@@ -113,7 +113,7 @@ export function buildChatPaletteActions({
   readonly threadRef: ScopedThreadRef | null;
   readonly state: ChatMenuState | null;
   readonly newChat: NewChatControl | null;
-  readonly actions: ReturnType<typeof useChatActions>;
+  readonly actions: ChatActions;
   readonly t: ReturnType<typeof useI18n>["t"];
   readonly now: Date;
   readonly openRename: () => void;
@@ -241,7 +241,6 @@ export function buildChatPaletteActions({
     id: "delete",
     title: t("Delete chat"),
     searchTerms: ["delete", "remove"],
-    destructive: true,
     run: async () => {
       await actions.delete(threadRef);
     },

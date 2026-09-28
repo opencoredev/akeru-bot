@@ -38,15 +38,20 @@ function input(threadRef: ScopedThreadRef) {
   return { environmentId: threadRef.environmentId, input: { threadId: threadRef.threadId } };
 }
 
-/** Drops a bot's remembered chat path when it points at a chat that just left the shell list. */
-function forgetRemovedChatPath(threadRef: ScopedThreadRef): void {
-  const shell = readThreadShell(threadRef);
-  const botId = shell?.botId;
-  if (!botId) return;
-  const roster = useRosterStore.getState();
-  if (shouldForgetChatPath(roster.chatPathByBotId[botId], threadRef)) {
-    roster.forgetChatPath(botId);
-  }
+/**
+ * Captures, before a chat is archived or deleted, how to drop its bot's
+ * remembered path. Run the result once the command lands: the chat's shell,
+ * which names the bot, is gone by then.
+ */
+function chatPathForgetter(threadRef: ScopedThreadRef): () => void {
+  const botId = readThreadShell(threadRef)?.botId;
+  return () => {
+    if (!botId) return;
+    const roster = useRosterStore.getState();
+    if (shouldForgetChatPath(roster.chatPathByBotId[botId], threadRef)) {
+      roster.forgetChatPath(botId);
+    }
+  };
 }
 
 /**
@@ -153,9 +158,12 @@ export function useChatActions() {
         markThreadUnread(scopedThreadKey(threadRef), completedAt);
       },
       archive: async (threadRef: ScopedThreadRef) => {
-        forgetRemovedChatPath(threadRef);
+        const forgetChatPath = chatPathForgetter(threadRef);
         const archived = await report(t("Could not archive chat"), () => archive(input(threadRef)));
-        if (archived) refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+        if (archived) {
+          forgetChatPath();
+          refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+        }
         return archived;
       },
       unarchive: async (threadRef: ScopedThreadRef) => {
@@ -178,9 +186,12 @@ export function useChatActions() {
         if (shell?.session && shell.session.status !== "stopped") {
           await stopSession(input(threadRef));
         }
-        forgetRemovedChatPath(threadRef);
+        const forgetChatPath = chatPathForgetter(threadRef);
         const deleted = await report(t("Could not delete chat"), () => remove(input(threadRef)));
-        if (deleted) refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+        if (deleted) {
+          forgetChatPath();
+          refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+        }
         return deleted;
       },
     }),

@@ -11,14 +11,12 @@ export interface ArchivedChat {
   readonly threadId: ThreadId;
   readonly title: string;
   readonly archivedAt: string;
-  readonly createdAt: string;
 }
 
 /** Archived chats that belonged to one bot or group, newest archive first. */
 export interface ArchivedChatSection {
   readonly key: string;
   readonly kind: "bot" | "group" | "other";
-  readonly ownerId: string | null;
   /** The owner's name, or null when neither snapshot knows it any more. */
   readonly name: string | null;
   readonly chats: ReadonlyArray<ArchivedChat>;
@@ -56,7 +54,7 @@ export function buildArchivedChatSections(input: {
         : { kind: "other" as const, ownerId: null, name: undefined };
     const key = `${owner.kind}:${owner.ownerId ?? ""}`;
     const entry = sections.get(key) ?? {
-      section: { key, kind: owner.kind, ownerId: owner.ownerId, name: owner.name ?? null },
+      section: { key, kind: owner.kind, name: owner.name ?? null },
       chats: [],
     };
     entry.chats.push({
@@ -64,7 +62,6 @@ export function buildArchivedChatSections(input: {
       threadId: thread.id,
       title: thread.title,
       archivedAt: thread.archivedAt ?? thread.updatedAt,
-      createdAt: thread.createdAt,
     });
     sections.set(key, entry);
   }
