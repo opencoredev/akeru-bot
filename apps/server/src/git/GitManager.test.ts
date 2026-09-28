@@ -4657,6 +4657,14 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         "t3code/pr-84/feature/pr-legacy-fork",
       ]);
 
+      yield* runGit(repoDir, ["checkout", "feature/pr-legacy-fork"]);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "legacy-fork.txt"), "advanced fork head\n");
+      yield* runGit(repoDir, ["add", "legacy-fork.txt"]);
+      yield* runGit(repoDir, ["commit", "-m", "Advance fork PR branch"]);
+      const advancedHead = (yield* runGit(repoDir, ["rev-parse", "HEAD"])).stdout.trim();
+      yield* runGit(repoDir, ["push", "fork-seed", "feature/pr-legacy-fork"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+
       const { manager } = yield* makeManager({
         ghScenario: {
           pullRequest: {
@@ -4691,6 +4699,8 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         NodeFS.realpathSync.native(worktreePath),
       );
       expect(result.branch).toBe("t3code/pr-84/feature/pr-legacy-fork");
+      expect(result.isOnPullRequestHead).toBe(true);
+      expect((yield* runGit(worktreePath, ["rev-parse", "HEAD"])).stdout.trim()).toBe(advancedHead);
       const branches = (yield* runGit(repoDir, ["branch", "--list", "akeru/*"])).stdout.trim();
       expect(branches).toBe("");
       expect(

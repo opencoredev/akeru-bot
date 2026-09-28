@@ -1958,12 +1958,12 @@ export const make = Effect.gen(function* () {
         worktreePath: string,
         checkedOutBranch: string,
       ) {
-        if (checkedOutBranch !== localPullRequestBranch) {
-          // findLocalHeadBranch also accepts the legacy `t3code/pr-*` alias and
-          // a branch that merely shares the head's bare name — a fork PR opened
-          // from "main" matches the user's own local main. Those checkouts are
-          // somebody else's (or a legacy alias's) work, so they keep their
-          // tracking config and report the branch actually checked out.
+        const managedBranches = pullRequestWithRemoteInfo.isCrossRepository
+          ? pullRequestWorktreeBranchCandidates(pullRequest.number, pullRequest.headBranch)
+          : [localPullRequestBranch];
+        if (!managedBranches.includes(checkedOutBranch)) {
+          // A branch that merely shares the head's bare name may belong to the
+          // user, so only managed aliases can be refreshed for fork PRs.
           yield* ensureExistingWorktreeUpstream(worktreePath);
           return {
             pullRequest,
@@ -2041,7 +2041,7 @@ export const make = Effect.gen(function* () {
 
         return {
           pullRequest,
-          branch: localPullRequestBranch,
+          branch: checkedOutBranch,
           worktreePath,
           isOnPullRequestHead: refreshed.onTarget,
         };
