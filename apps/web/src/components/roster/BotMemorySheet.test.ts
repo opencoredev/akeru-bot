@@ -31,6 +31,8 @@ vi.mock("../ui/sheet", async () => {
     React.createElement("div", null, children);
   return {
     Sheet: Wrapper,
+    SheetDescription: Wrapper,
+    SheetFooter: Wrapper,
     SheetHeader: Wrapper,
     SheetPanel: Wrapper,
     SheetPopup: Wrapper,
@@ -126,6 +128,9 @@ describe("BotMemorySheet", () => {
       }),
     );
     expect(markup).toContain("Thread observation");
+    expect(markup).toContain("Condensed 2 times to stay short.");
+    expect(markup).toContain("About you");
+    expect(markup).not.toContain("generations");
     expect(markup).toContain("The user prefers short answers.");
     expect(markup).toContain("Use the release checklist.");
     expect(markup).toContain("The group ships on Fridays.");

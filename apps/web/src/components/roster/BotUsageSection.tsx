@@ -46,8 +46,7 @@ export function BotUsageSection({
     : false;
 
   return (
-    <div className="space-y-2" aria-label={t("Bot usage")}>
-      <div className="text-sm font-medium">{t("Usage")}</div>
+    <div aria-label={t("Bot usage")}>
       <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm">
         {usage.error ? (
           <span className="text-muted-foreground">{t("Usage unavailable")}</span>

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   botBrowserPreviewRuntimeTabId,
+  hasBotBrowserPage,
   resolveBotBrowserPreviewStatus,
 } from "./botBrowserPreview.logic";
 
@@ -52,6 +53,15 @@ describe("bot browser preview", () => {
     expect(resolveBotBrowserPreviewStatus({ ...base, failed: true, hasWebContents: false })).toBe(
       "failed",
     );
+  });
+
+  it("hides the inline preview until the bot has a page", () => {
+    expect(hasBotBrowserPage("unsupported")).toBe(false);
+    expect(hasBotBrowserPage("connecting")).toBe(false);
+    expect(hasBotBrowserPage("waiting")).toBe(false);
+    expect(hasBotBrowserPage("loading")).toBe(true);
+    expect(hasBotBrowserPage("ready")).toBe(true);
+    expect(hasBotBrowserPage("failed")).toBe(true);
   });
 
   it("uses the environment and thread in each browser surface id", () => {

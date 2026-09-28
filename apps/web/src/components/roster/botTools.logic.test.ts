@@ -1,8 +1,8 @@
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { McpServerId, type McpServer, type ProviderAccessStatus } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { loadDirectoryCatalog } from "../../../../../plugins";
-import { buildBotToolItems, planBotToolToggle } from "./BotToolsSheet";
+import { botToolStatus, buildBotToolItems, planBotToolToggle } from "./botTools.logic";
 
 const exa = loadDirectoryCatalog().find((plugin) => plugin.id === "exa");
 if (!exa || exa.kind !== "mcp-url") throw new TypeError("Exa URL fixture is missing.");
@@ -30,6 +30,7 @@ describe("bot plugin exclusions", () => {
         kind: "plugin",
         name: "Exa",
         workspaceEnabled: true,
+        pluginId: "exa",
       },
     ]);
   });
@@ -62,5 +63,36 @@ describe("bot plugin exclusions", () => {
 
     expect(planBotToolToggle([], exaId, false)).toEqual([exaId]);
     expect(planBotToolToggle([exaId, otherId], exaId, true)).toEqual([otherId]);
+  });
+});
+
+describe("bot tool status", () => {
+  const access = (
+    health: ProviderAccessStatus["health"],
+    match: { readonly serverId?: string; readonly pluginId?: string },
+  ): ProviderAccessStatus => ({
+    id: "access",
+    label: "Access",
+    accessMethod: "mcp",
+    health,
+    apiAccess: "not-applicable",
+    nextAction: "None",
+    dependentBots: [],
+    dependentRoutines: [],
+    ...match,
+  });
+  const item = { id: McpServerId.make("builtin-exa"), pluginId: "exa" };
+
+  it("reports nothing when the environment has no health for the tool", () => {
+    expect(botToolStatus(item, [])).toBeNull();
+    expect(botToolStatus(item, [access("healthy", { pluginId: "other" })])).toBeNull();
+  });
+
+  it("maps access health to connected, needs setup, and error", () => {
+    expect(botToolStatus(item, [access("healthy", { pluginId: "exa" })])).toBe("connected");
+    expect(botToolStatus(item, [access("expired", { serverId: "builtin-exa" })])).toBe(
+      "needs-setup",
+    );
+    expect(botToolStatus(item, [access("failed", { pluginId: "exa" })])).toBe("error");
   });
 });

@@ -259,6 +259,7 @@ interface AssistantMessageRowProps {
   /** The replying bot, or null when it is no longer available. */
   readonly author: Pick<Bot, "avatar" | "name"> | null;
   readonly testId: string;
+  readonly arrived?: boolean;
   /** First reply in a run from the same author: shows the avatar and name. */
   readonly startsGroup: boolean;
   readonly cwd: string | undefined;
@@ -283,6 +284,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   message,
   author,
   testId,
+  arrived,
   startsGroup,
   cwd,
   threadRef,
@@ -304,6 +306,8 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   if (!author) {
     return (
       <div
+        id={`chat-message-${message.id}`}
+        tabIndex={-1}
         className={`group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`}
         data-testid={testId}
       >
@@ -323,10 +327,13 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
   return (
     <div
+      id={`chat-message-${message.id}`}
+      tabIndex={-1}
       className={cn(
         "group/message flex items-start gap-3",
         startsGroup ? "mt-3 first:mt-0" : "mt-1",
         ROW_VISIBILITY_CLASS,
+        arrived && "motion-message-enter",
       )}
       data-testid={testId}
     >
@@ -431,6 +438,7 @@ export function assistantRowPropsEqual(
 export const UserMessageRow = memo(function UserMessageRow({
   message,
   testId,
+  arrived,
   startsGroup,
   replyLabel,
   showChannelOrigin,
@@ -442,6 +450,7 @@ export const UserMessageRow = memo(function UserMessageRow({
 }: {
   readonly message: OrchestrationMessage;
   readonly testId: string;
+  readonly arrived?: boolean;
   readonly startsGroup: boolean;
   readonly replyLabel: string;
   readonly showChannelOrigin: boolean;
@@ -458,10 +467,13 @@ export const UserMessageRow = memo(function UserMessageRow({
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
   return (
     <div
+      id={`chat-message-${message.id}`}
+      tabIndex={-1}
       className={cn(
         "group/message flex items-end justify-end gap-1",
         startsGroup ? "mt-3 first:mt-0" : "mt-1",
         ROW_VISIBILITY_CLASS,
+        arrived && "motion-message-enter",
       )}
       data-testid={testId}
     >

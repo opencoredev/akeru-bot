@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { BotToolsSheet } from "./BotToolsSheet";
+import { BotToolsSection } from "./BotToolsSection";
 
 vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
@@ -12,10 +12,9 @@ vi.stubGlobal("document", { body: null });
 
 const render = (canDelegate?: boolean) =>
   renderToStaticMarkup(
-    createElement(BotToolsSheet, {
-      open: true,
-      onOpenChange: () => {},
+    createElement(BotToolsSection, {
       servers: [],
+      accessStatuses: [],
       disabledIds: [],
       onDisabledIdsChange: () => {},
       ...(canDelegate === undefined ? {} : { canDelegate }),

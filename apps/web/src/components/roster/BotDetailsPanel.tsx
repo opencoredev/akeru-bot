@@ -7,49 +7,30 @@ import {
   PanelRightIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import * as Schema from "effect/Schema";
 
 import { openComputerViewer } from "../../computerViewerStore";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
-import { primaryServerKeybindingsAtom } from "../../state/server";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { usePrimarySettings } from "../../hooks/useSettings";
+import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../../state/server";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { cn } from "../../lib/utils";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotBrowserPreview } from "./BotBrowserPreview";
+import { resolveBotModelLabel } from "./botModelLabel";
 import { botPersonalityToneLabel, canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, botSandboxLabel } from "./botSandbox";
 import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import type { Bot } from "./types";
-
-type BotDetailsPanelState = {
-  readonly desktopOpen: boolean;
-  readonly mobileOpen: boolean;
-};
-
-type BotDetailsPanelAction =
-  | { readonly type: "toggle-desktop" }
-  | { readonly type: "open-desktop" }
-  | { readonly type: "toggle-mobile" }
-  | { readonly type: "set-mobile"; readonly open: boolean };
-
-export function reduceBotDetailsPanelState(
-  state: BotDetailsPanelState,
-  action: BotDetailsPanelAction,
-): BotDetailsPanelState {
-  if (action.type === "toggle-desktop") {
-    return { ...state, desktopOpen: !state.desktopOpen };
-  }
-  if (action.type === "open-desktop") return { ...state, desktopOpen: true };
-  if (action.type === "toggle-mobile") {
-    return { ...state, mobileOpen: !state.mobileOpen };
-  }
-  return { ...state, mobileOpen: action.open };
-}
+import { useDetailsPanelState } from "./useDetailsPanelState";
 
 export {
   parseBotUsageCapInput,
@@ -71,12 +52,15 @@ export function BotOverview({
   /** Opens the live computer viewer. Omitted until the bot has a chat to attach it to. */
   readonly onOpenComputer?: () => void;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
-  readonly routinePanelRef: Ref<HTMLDivElement>;
   readonly routinePanelRequest?: number;
+  readonly routinePanelRef?: Ref<HTMLDivElement>;
   /** Why the bot's model cannot run right now. The model stays on the bot. */
   readonly modelUnavailable?: string | null;
 }) {
   const { t } = useI18n();
+  const providers = useAtomValue(primaryServerProvidersAtom);
+  const settings = usePrimarySettings();
+  const modelLabel = resolveBotModelLabel(bot.engine, settings, providers);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
       <div className="flex flex-col items-center text-center">
@@ -121,9 +105,7 @@ export function BotOverview({
         <div className="flex items-center justify-between gap-4 py-3">
           <dt className="text-muted-foreground">{t("Model")}</dt>
           <dd className="min-w-0 max-w-44 text-right">
-            <span className="block truncate font-medium">
-              {bot.engine?.model ?? t("App default")}
-            </span>
+            <span className="block truncate font-medium">{modelLabel}</span>
             {modelUnavailable ? (
               <span className="block text-xs text-warning" data-model-unavailable="">
                 {t("Unavailable: {reason}", { reason: modelUnavailable })}
@@ -164,11 +146,14 @@ export function BotDetailsPanel({
 }) {
   const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
-    desktopOpen: true,
-    mobileOpen: false,
-  });
+  const [desktopOpen, setDesktopOpen] = useLocalStorage(
+    `akeru:bot-details-open:${bot.id}`,
+    false,
+    Schema.Boolean,
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [browserExpanded, setBrowserExpanded] = useState(false);
+  const desktopPanel = useDetailsPanelState(desktopOpen);
   const desktopRoutineRef = useRef<HTMLDivElement>(null);
   const mobileRoutineRef = useRef<HTMLDivElement>(null);
   const handledRoutineRequest = useRef(0);
@@ -178,23 +163,24 @@ export function BotDetailsPanel({
   useEffect(() => {
     if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
     const mobile = window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches;
-    if (mobile && !panelState.mobileOpen) {
-      dispatchPanel({ type: "set-mobile", open: true });
+    if (mobile && !mobileOpen) {
+      setMobileOpen(true);
       return;
     }
-    if (!mobile && !panelState.desktopOpen) {
-      dispatchPanel({ type: "open-desktop" });
+    if (!mobile && !desktopOpen) {
+      setDesktopOpen(true);
       return;
     }
     if (browserExpanded) {
       setBrowserExpanded(false);
       return;
     }
-    handledRoutineRequest.current = routinePanelRequest;
     const panel = mobile ? mobileRoutineRef.current : desktopRoutineRef.current;
-    panel?.scrollIntoView({ block: "start" });
-    panel?.querySelector<HTMLElement>("h3[tabindex]")?.focus();
-  }, [browserExpanded, panelState.desktopOpen, panelState.mobileOpen, routinePanelRequest]);
+    if (!panel || (!mobile && desktopPanel.state !== "open")) return;
+    handledRoutineRequest.current = routinePanelRequest;
+    panel.scrollIntoView({ block: "start" });
+    panel.querySelector<HTMLElement>("h3[tabindex]")?.focus();
+  }, [browserExpanded, desktopOpen, desktopPanel.state, mobileOpen, routinePanelRequest, setDesktopOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -209,16 +195,16 @@ export function BotDetailsPanel({
 
       event.preventDefault();
       event.stopPropagation();
-      dispatchPanel({
-        type: window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches
-          ? "toggle-mobile"
-          : "toggle-desktop",
-      });
+      if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
+        setMobileOpen((open) => !open);
+      } else {
+        setDesktopOpen((open) => !open);
+      }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings]);
+  }, [keybindings, setDesktopOpen]);
 
   const content = (
     active: boolean,
@@ -237,8 +223,8 @@ export function BotDetailsPanel({
       />
       {!browserExpanded || !canExpandBrowser ? (
         <>
-          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-            <h2 className="text-sm font-medium">{t("Bot")}</h2>
+          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4 min-[981px]:h-0">
+            <h2 className="text-sm font-medium min-[981px]:sr-only">{t("Bot")}</h2>
             <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
               {closeButton}
             </div>
@@ -270,45 +256,50 @@ export function BotDetailsPanel({
   return (
     <>
       <aside
-        aria-hidden={!panelState.desktopOpen}
+        aria-hidden={!desktopOpen}
         aria-label={t("{name} bot sidebar", { name: bot.name })}
         data-testid="bot-details-panel"
-        className={
-          panelState.desktopOpen
-            ? browserExpanded
-              ? "hidden h-full w-[min(48rem,52vw)] shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
-              : "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
-            : "hidden"
-        }
-      >
-        {content(
-          panelState.desktopOpen,
-          desktopRoutineRef,
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-expanded="true"
-                  aria-label={t("Collapse {name} bot sidebar", { name: bot.name })}
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => dispatchPanel({ type: "toggle-desktop" })}
-                >
-                  <AppIcon icon={PanelRightCloseIcon} />
-                </Button>
-              }
-            />
-            <TooltipPopup side="left">
-              {shortcutLabel
-                ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
-                : t("Collapse")}
-            </TooltipPopup>
-          </Tooltip>,
-          true,
+        data-details-panel=""
+        data-state={desktopPanel.state}
+        onTransitionEnd={desktopPanel.onTransitionEnd}
+        className={cn(
+          "hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background min-[981px]:flex",
+          browserExpanded ? "[--details-width:min(48rem,52vw)]" : "[--details-width:22rem]",
         )}
+      >
+        <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
+          {content(
+            desktopPanel.state === "open",
+            desktopRoutineRef,
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-expanded="true"
+                    aria-label={`Collapse ${bot.name} bot sidebar`}
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => setDesktopOpen(false)}
+                  >
+                    <AppIcon icon={PanelRightCloseIcon} />
+                  </Button>
+                }
+              />
+              <TooltipPopup side="left">
+                Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
+              </TooltipPopup>
+            </Tooltip>,
+            true,
+          )}
+        </div>
       </aside>
-      {!panelState.desktopOpen ? (
-        <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex">
+      {!desktopOpen ? (
+        <div
+          className={cn(
+            "fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex",
+            desktopPanel.toggled && "motion-fade-in",
+          )}
+        >
           <Tooltip>
             <TooltipTrigger
               render={
@@ -317,7 +308,7 @@ export function BotDetailsPanel({
                   aria-label={t("Open {name} bot sidebar", { name: bot.name })}
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => dispatchPanel({ type: "toggle-desktop" })}
+                  onClick={() => setDesktopOpen(true)}
                 >
                   <AppIcon icon={PanelRightIcon} />
                 </Button>
@@ -336,15 +327,12 @@ export function BotDetailsPanel({
           aria-label={t("Open {name} bot sidebar", { name: bot.name })}
           size="icon-sm"
           variant="ghost"
-          onClick={() => dispatchPanel({ type: "set-mobile", open: true })}
+          onClick={() => setMobileOpen(true)}
         >
           <AppIcon icon={PanelRightIcon} />
         </Button>
       </div>
-      <Sheet
-        open={panelState.mobileOpen}
-        onOpenChange={(open) => dispatchPanel({ type: "set-mobile", open })}
-      >
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetPopup
           className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
           showCloseButton={false}
@@ -352,7 +340,7 @@ export function BotDetailsPanel({
         >
           <SheetTitle className="sr-only">{t("{name} overview", { name: bot.name })}</SheetTitle>
           {content(
-            panelState.mobileOpen,
+            mobileOpen,
             mobileRoutineRef,
             <SheetClose
               aria-label={t("Close bot sidebar")}

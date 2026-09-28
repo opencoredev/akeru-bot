@@ -3,9 +3,12 @@ import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
+import * as Schema from "effect/Schema";
 import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { cn } from "../../lib/utils";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { ensureLocalApi } from "../../localApi";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
@@ -22,21 +25,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { GroupMemberStack } from "./GroupMemberStack";
 import { groupBotMembers, groupContainsBot, groupPersonMembers } from "./roster.logic";
 import type { Bot, Group } from "./types";
+import { useDetailsPanelState } from "./useDetailsPanelState";
 
-type PanelState = {
-  readonly desktopOpen: boolean;
-  readonly mobileOpen: boolean;
-};
-type PanelAction =
-  | { readonly type: "toggle-desktop" }
-  | { readonly type: "toggle-mobile" }
-  | { readonly type: "set-mobile"; readonly open: boolean };
-
-function reducePanelState(state: PanelState, action: PanelAction): PanelState {
-  if (action.type === "toggle-desktop") return { ...state, desktopOpen: !state.desktopOpen };
-  if (action.type === "toggle-mobile") return { ...state, mobileOpen: !state.mobileOpen };
-  return { ...state, mobileOpen: action.open };
-}
+/** One preference for every group: closed until opened, and it stays how you left it. */
+const GROUP_DETAILS_OPEN_KEY = "akeru:group-details-open";
 
 type Translate = (message: string, params?: Record<string, string | number>) => string;
 
@@ -373,32 +365,29 @@ function GroupEditor({
           </section>
         ) : null}
       </div>
-      {/* A plain row: SettingsRow reserves a 10rem control column that wraps this title in the sidebar. */}
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium whitespace-nowrap">{t("Delete group")}</h3>
-        <Button
-          disabled={busy}
-          variant="destructive"
-          onClick={async () => {
-            const confirmed = await ensureLocalApi().dialogs.confirm(
-              t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
-              { variant: "destructive", confirmLabel: t("Delete group") },
-            );
-            if (!confirmed) return;
-            const success = await run(
-              () =>
-                deleteGroup({
-                  environmentId,
-                  input: { groupId: GroupId.make(group.id) },
-                }),
-              t("Could not delete group"),
-            );
-            if (success) onDeleted();
-          }}
-        >
-          {t("Delete")}
-        </Button>
-      </div>
+      <Button
+        className="mt-6 w-full"
+        disabled={busy}
+        variant="destructive-outline"
+        onClick={async () => {
+          const confirmed = await ensureLocalApi().dialogs.confirm(
+            t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
+            { variant: "destructive", confirmLabel: t("Delete group") },
+          );
+          if (!confirmed) return;
+          const success = await run(
+            () =>
+              deleteGroup({
+                environmentId,
+                input: { groupId: GroupId.make(group.id) },
+              }),
+            t("Could not delete group"),
+          );
+          if (success) onDeleted();
+        }}
+      >
+        {t("Delete group")}
+      </Button>
     </div>
   );
 }
@@ -411,10 +400,13 @@ export function GroupDetailsPanel(props: {
 }) {
   const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const [panelState, dispatchPanel] = useReducer(reducePanelState, {
-    desktopOpen: true,
-    mobileOpen: false,
-  });
+  const [desktopOpen, setDesktopOpen] = useLocalStorage(
+    GROUP_DETAILS_OPEN_KEY,
+    false,
+    Schema.Boolean,
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const desktopPanel = useDetailsPanelState(desktopOpen);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
 
   useEffect(() => {
@@ -429,15 +421,15 @@ export function GroupDetailsPanel(props: {
       if (resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle") return;
       event.preventDefault();
       event.stopPropagation();
-      dispatchPanel({
-        type: window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches
-          ? "toggle-mobile"
-          : "toggle-desktop",
-      });
+      if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
+        setMobileOpen((open) => !open);
+      } else {
+        setDesktopOpen((open) => !open);
+      }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings]);
+  }, [keybindings, setDesktopOpen]);
 
   const content = (closeButton?: ReactNode) => (
     <>
@@ -454,45 +446,51 @@ export function GroupDetailsPanel(props: {
   return (
     <>
       <aside
-        aria-hidden={!panelState.desktopOpen}
+        aria-hidden={!desktopOpen}
         aria-label={t("{name} group sidebar", { name: props.group.name })}
         data-testid="group-details-panel"
-        className={
-          panelState.desktopOpen
-            ? "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
-            : "hidden"
-        }
+        data-details-panel=""
+        data-state={desktopPanel.state}
+        onTransitionEnd={desktopPanel.onTransitionEnd}
+        className="hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background [--details-width:22rem] min-[981px]:flex"
       >
-        {content(
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-expanded="true"
-                  aria-label={t("Collapse {name} group sidebar", { name: props.group.name })}
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => dispatchPanel({ type: "toggle-desktop" })}
-                >
-                  <AppIcon icon={PanelRightCloseIcon} />
-                </Button>
-              }
-            />
-            <TooltipPopup side="left">
-              {shortcutLabel
-                ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
-                : t("Collapse")}
-            </TooltipPopup>
-          </Tooltip>,
-        )}
+        <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
+          {content(
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-expanded="true"
+                    aria-label={t("Collapse {name} group sidebar", { name: props.group.name })}
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => setDesktopOpen((open) => !open)}
+                  >
+                    <AppIcon icon={PanelRightCloseIcon} />
+                  </Button>
+                }
+              />
+              <TooltipPopup side="left">
+                {shortcutLabel
+                  ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
+                  : t("Collapse")}
+              </TooltipPopup>
+            </Tooltip>,
+          )}
+        </div>
       </aside>
-      {!panelState.desktopOpen ? (
-        <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex">
+      {!desktopOpen ? (
+        <div
+          className={cn(
+            "fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex",
+            desktopPanel.toggled && "motion-fade-in",
+          )}
+        >
           <Button
             aria-label={t("Open {name} group sidebar", { name: props.group.name })}
             size="icon-sm"
             variant="ghost"
-            onClick={() => dispatchPanel({ type: "toggle-desktop" })}
+            onClick={() => setDesktopOpen((open) => !open)}
           >
             <AppIcon icon={PanelRightIcon} />
           </Button>
@@ -503,15 +501,12 @@ export function GroupDetailsPanel(props: {
           aria-label={t("Open {name} group sidebar", { name: props.group.name })}
           size="icon-sm"
           variant="ghost"
-          onClick={() => dispatchPanel({ type: "set-mobile", open: true })}
+          onClick={() => setMobileOpen(true)}
         >
           <AppIcon icon={PanelRightIcon} />
         </Button>
       </div>
-      <Sheet
-        open={panelState.mobileOpen}
-        onOpenChange={(open) => dispatchPanel({ type: "set-mobile", open })}
-      >
+      <Sheet open={mobileOpen} onOpenChange={(open) => setMobileOpen(open)}>
         <SheetPopup
           className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
           showCloseButton={false}

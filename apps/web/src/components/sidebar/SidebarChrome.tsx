@@ -358,6 +358,17 @@ function ComputerUseControl() {
   return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
 }
 
+/** Status that must stay visible whatever chrome hosts it: computer use and update notices. */
+export function SidebarStatusStack({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex flex-col gap-2 empty:hidden", className)}>
+      <ComputerUseControl />
+      <SidebarProviderUpdatePill />
+      <SidebarUpdateArchitectureWarning />
+    </div>
+  );
+}
+
 /**
  * A footer destination. Expanded, it reads as a labeled row — four unlabeled
  * icons asked the user to remember which glyph meant Usage and which meant

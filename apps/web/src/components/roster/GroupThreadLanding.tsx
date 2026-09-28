@@ -26,6 +26,7 @@ import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
+import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotUserInputPrompt } from "./BotUserInputPrompt";
@@ -52,11 +53,14 @@ import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngin
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
+import { cn } from "../../lib/utils";
+import { useMessageArrivals } from "./messageArrival";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+import { useEnableBotAutoReview } from "./useServerRoster";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
@@ -118,9 +122,14 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const voiceCall = useOptionalVoiceCall();
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const enableAutoReview = useEnableBotAutoReview();
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const botActivity = useMemo(
+    () => deriveBotActivity(activities, runtime.latestTurn),
+    [activities, runtime.latestTurn],
+  );
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
@@ -163,6 +172,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const entries = useMemo(
     () => buildBotConversationEntries(messages, today, todayLabel, locale),
     [messages, today, todayLabel, locale],
+  );
+  const arrivedMessageIds = useMessageArrivals(
+    { owner: groupId, thread: runtime.linkedThreadRef?.threadId ?? null },
+    messages.map((message) => message.id),
   );
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
@@ -211,7 +224,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             <span className="truncate text-sm font-medium">{group.name}</span>
           </div>
         </WorkspacePageHeader>
-        <BotConversationScrollArea>
+        <BotConversationScrollArea
+          followKey={messages.findLast((message) => message.role === "user")?.id}
+        >
           {timeline.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
               <div className="flex -space-x-3">
@@ -253,6 +268,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     {separator ? <ConversationSeparator label={separator} /> : null}
                     <AssistantMessageRow
                       message={message}
+                      arrived={arrivedMessageIds.has(message.id)}
                       author={respondingBot ?? null}
                       testId="group-provider-message"
                       startsGroup={startsGroup}
@@ -282,6 +298,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   {separator ? <ConversationSeparator label={separator} /> : null}
                   <UserMessageRow
                     message={message}
+                    arrived={arrivedMessageIds.has(message.id)}
                     testId="group-user-message"
                     startsGroup={startsGroup}
                     replyLabel={current ? "you" : "participant"}
@@ -310,7 +327,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         </BotConversationScrollArea>
         <BotInboxAlertStack
           items={inboxItems}
-          onOpenDetails={() => openSettings("inbox", null, environmentId)}
+          onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
         />
         <ThreadRuntimeWarningBanner warning={runtimeWarning} />
         <ThreadErrorBanner
@@ -368,7 +385,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 pendingCount={approvalState.pendingCount}
                 responding={approvalState.responding}
                 error={approvalState.responseError}
-                onRespond={(decision) => approvalState.respond(pendingApproval.requestId, decision)}
+                onRespond={async (decision) => {
+                  const answered = await approvalState.respond(pendingApproval.requestId, decision);
+                  if (answered && decision === "acceptAlways" && boss) {
+                    await enableAutoReview(boss.id);
+                  }
+                  return answered;
+                }}
               />
             ) : waitingForUserInput ? (
               <BotUserInputPrompt
@@ -390,6 +413,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               />
             ) : null
           }
+          quietSurface={pendingApproval !== null || pendingUserInput !== null}
           {...(waitingForUserInput ? { placeholder: t("Write a custom answer…") } : {})}
           disabled={
             pendingApproval !== null ||

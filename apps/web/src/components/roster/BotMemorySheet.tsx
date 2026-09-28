@@ -5,17 +5,20 @@ import type {
   AkeruMemoryDocumentTarget,
   ScopedThreadRef,
 } from "@t3tools/contracts";
+import { BrainIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { BotDurableMemory } from "./BotDurableMemory";
+import { memoryDocumentCopy } from "./botMemoryCopy";
 import { BotMemoryTransfer } from "./BotMemoryTransfer";
+import { BotSideSheet, BotSideSheetEmpty, BotSideSheetSection } from "./BotSideSheet";
 
 import { useI18n } from "../../i18n";
 import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { Sheet, SheetHeader, SheetPanel, SheetPopup, SheetTitle } from "../ui/sheet";
+import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 
@@ -27,21 +30,6 @@ export function memoryErrorMessage(error: unknown) {
 function failureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
   return memoryErrorMessage(squashAtomCommandFailure(result));
 }
-
-const documentCopy: Record<
-  AkeruMemoryDocumentTarget,
-  { readonly title: string; readonly description: MessageKey }
-> = {
-  user: { title: "USER.md", description: "Stable details this bot has learned about you." },
-  memory: {
-    title: "MEMORY.md",
-    description: "Durable notes and working preferences owned by this bot.",
-  },
-  group: {
-    title: "GROUP.md",
-    description: "This bot's private memory for the active group chat.",
-  },
-};
 
 function MemoryDocumentEditor({
   document,
@@ -60,33 +48,33 @@ function MemoryDocumentEditor({
   useEffect(() => setDraft(document.content), [document.content, document.updatedAt]);
   const changed = draft !== document.content;
   const overLimit = draft.length > document.charLimit;
-  const copy = documentCopy[document.target];
+  const copy = memoryDocumentCopy[document.target];
   const { t, formatNumber } = useI18n();
 
   return (
-    <section className="space-y-2 rounded-lg border border-border p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-medium">{copy.title}</h3>
-          <p className="text-xs text-muted-foreground">{t(copy.description)}</p>
-        </div>
+    <BotSideSheetSection
+      title={copy.title}
+      description={copy.description}
+      action={
         <span
           className={
             overLimit
-              ? "shrink-0 whitespace-nowrap text-xs text-destructive"
-              : "shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+              ? "whitespace-nowrap text-xs tabular-nums text-destructive"
+              : "whitespace-nowrap text-xs tabular-nums text-muted-foreground"
           }
+          aria-label={`${draft.length} of ${document.charLimit} characters used`}
         >
           {formatNumber(draft.length)} / {formatNumber(document.charLimit)}
         </span>
-      </div>
+      }
+    >
       <Textarea
-        aria-label={t("Edit {name}", { name: copy.title })}
-        className="min-h-36 font-mono text-xs"
+        aria-label={`Edit ${copy.title.toLowerCase()}`}
+        className="min-h-32"
+        placeholder="Nothing saved yet. Add a note in plain text or Markdown."
         value={draft}
         onChange={(event) => setDraft(event.currentTarget.value)}
         disabled={busy}
-        spellCheck={false}
       />
       <div className="flex justify-end gap-2">
         <Button
@@ -105,7 +93,7 @@ function MemoryDocumentEditor({
           {t("Save")}
         </Button>
       </div>
-    </section>
+    </BotSideSheetSection>
   );
 }
 
@@ -169,132 +157,133 @@ export function BotMemorySheet({
     return result._tag !== "Failure";
   };
 
+  const current = query.data?.conversation.current ?? null;
+  const summary = current?.activeObservations.trim() ?? "";
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetPopup className="max-w-2xl" side="right">
-        <SheetHeader>
-          <SheetTitle>{t("Memory")}</SheetTitle>
-        </SheetHeader>
-        <SheetPanel className="space-y-5">
-          {!threadRef ? (
-            <p className="text-sm text-muted-foreground">
-              {t("Start a conversation to manage memory.")}
-            </p>
-          ) : null}
-          {(error ?? query.error) ? (
-            <div
-              role="alert"
-              className="rounded-lg bg-destructive/8 p-3 text-sm text-destructive-foreground"
-            >
-              {error ?? query.error}
-            </div>
-          ) : null}
-          {query.isPending && !query.data ? (
-            <p className="text-sm text-muted-foreground">{t("Loading memory…")}</p>
-          ) : null}
-          {query.data ? (
-            <>
-              <div
-                key={`${threadRef?.environmentId}:${threadRef?.threadId}:${query.data.botId}`}
-                className="space-y-3"
-                data-testid="memory-documents"
+    <BotSideSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Memory"
+      description="What this bot remembers between chats. Edit anything that is wrong or out of date."
+    >
+      {!threadRef ? (
+        <BotSideSheetEmpty
+          icon={BrainIcon}
+          title="No memory yet"
+          description="Start a chat with this bot to see and edit what it remembers."
+        />
+      ) : null}
+      {(error ?? query.error) ? (
+        <div
+          role="alert"
+          className="rounded-lg bg-destructive/8 p-3 text-sm text-destructive-foreground"
+        >
+          {error ?? query.error}
+        </div>
+      ) : null}
+      {query.isPending && !query.data ? (
+        <div className="flex justify-center py-12">
+          <Spinner aria-label="Loading memory" />
+        </div>
+      ) : null}
+      {query.data ? (
+        <>
+          <div
+            key={`${threadRef?.environmentId}:${threadRef?.threadId}:${query.data.botId}`}
+            className="space-y-6"
+            data-testid="memory-documents"
+          >
+            <MemoryDocumentEditor document={query.data.user} busy={busy} onSave={save} />
+            <MemoryDocumentEditor document={query.data.memory} busy={busy} onSave={save} />
+            {query.data.group ? (
+              <MemoryDocumentEditor document={query.data.group} busy={busy} onSave={save} />
+            ) : null}
+          </div>
+
+          <BotSideSheetSection
+            className="border-t pt-6"
+            title="Chat summary"
+            description="Notes the bot writes on its own as this chat grows, so it can recall earlier parts of a long conversation. They only apply to this chat."
+            action={
+              <Button
+                size="sm"
+                variant={clearPending ? "destructive" : "outline"}
+                disabled={busy || !current}
+                onClick={() => {
+                  if (!clearPending) return setClearPending(true);
+                  if (!threadRef) return;
+                  setBusy(true);
+                  setError(null);
+                  void clearObservations({
+                    environmentId: threadRef.environmentId,
+                    input: { threadId: threadRef.threadId },
+                  }).then((result) => {
+                    setBusy(false);
+                    if (result._tag === "Failure") {
+                      const message = failureMessage(result);
+                      setError(message);
+                      toastManager.add({
+                        type: "error",
+                        title: "Could not clear the chat summary",
+                        description: message,
+                      });
+                    } else setClearPending(false);
+                  });
+                }}
               >
-                <MemoryDocumentEditor document={query.data.user} busy={busy} onSave={save} />
-                <MemoryDocumentEditor document={query.data.memory} busy={busy} onSave={save} />
-                {query.data.group ? (
-                  <MemoryDocumentEditor document={query.data.group} busy={busy} onSave={save} />
+                {clearPending ? "Confirm clear" : "Clear summary"}
+              </Button>
+            }
+          >
+            {current && summary.length > 0 ? (
+              <div className="space-y-3 text-sm">
+                <p className="whitespace-pre-wrap rounded-lg bg-secondary px-3 py-2">{summary}</p>
+                {current.generationCount > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Condensed {current.generationCount.toLocaleString()}{" "}
+                    {current.generationCount === 1 ? "time" : "times"} to stay short.
+                  </p>
+                ) : null}
+                {previousObservations.length > 0 ? (
+                  <details>
+                    <summary className="cursor-pointer text-xs text-muted-foreground">
+                      Earlier summaries ({previousObservations.length})
+                    </summary>
+                    <div className="mt-2 space-y-3">
+                      {previousObservations.map((item) => (
+                        <p
+                          className="whitespace-pre-wrap text-xs text-muted-foreground"
+                          key={`${item.generationCount}-${item.updatedAt}`}
+                        >
+                          {item.activeObservations}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
                 ) : null}
               </div>
-
-              <section className="space-y-3 rounded-lg border border-border p-3">
-                <div>
-                  <h3 className="text-sm font-medium">{t("Observational memory")}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      "Automatic summaries of this chat only. Clearing them keeps the bot, its notes, and durable facts.",
-                    )}
-                  </p>
-                </div>
-                {query.data.conversation.current ? (
-                  <div className="space-y-2 text-sm">
-                    <p className="text-xs text-muted-foreground">
-                      {plural(query.data.conversation.current.generationCount, {
-                        one: "{count} generation",
-                        other: "{count} generations",
-                      })}
-                    </p>
-                    <p className="whitespace-pre-wrap">
-                      {query.data.conversation.current.activeObservations}
-                    </p>
-                    {previousObservations.length > 0 ? (
-                      <details>
-                        <summary className="cursor-pointer text-xs text-muted-foreground">
-                          {t("Previous observations ({count})", {
-                            count: previousObservations.length,
-                          })}
-                        </summary>
-                        <div className="mt-2 space-y-3">
-                          {previousObservations.map((item) => (
-                            <p
-                              className="whitespace-pre-wrap text-xs text-muted-foreground"
-                              key={`${item.generationCount}-${item.updatedAt}`}
-                            >
-                              {item.activeObservations}
-                            </p>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t("No observations yet.")}</p>
-                )}
-                <Button
-                  size="sm"
-                  variant={clearPending ? "destructive" : "outline"}
-                  disabled={busy || !query.data.conversation.current}
-                  onClick={() => {
-                    if (!clearPending) return setClearPending(true);
-                    if (!threadRef) return;
-                    setBusy(true);
-                    setError(null);
-                    void clearObservations({
-                      environmentId: threadRef.environmentId,
-                      input: { threadId: threadRef.threadId },
-                    }).then((result) => {
-                      setBusy(false);
-                      if (result._tag === "Failure") {
-                        const message = failureMessage(result) ?? t("Memory request failed.");
-                        setError(message);
-                        toastManager.add({
-                          type: "error",
-                          title: t("Could not clear memory"),
-                          description: message,
-                        });
-                      } else setClearPending(false);
-                    });
-                  }}
-                >
-                  {clearPending ? t("Clear observations") : t("Clear")}
-                </Button>
-              </section>
-              {threadRef ? (
-                <BotDurableMemory
-                  key={`durable:${threadRef.environmentId}:${threadRef.threadId}`}
-                  threadRef={threadRef}
-                  botId={query.data.botId}
-                />
-              ) : null}
-              {threadRef ? (
-                <BotMemoryTransfer
-                  key={`${threadRef.environmentId}:${threadRef.threadId}`}
-                  threadRef={threadRef}
-                />
-              ) : null}
-            </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nothing yet. The bot starts a summary once the chat gets long.
+              </p>
+            )}
+          </BotSideSheetSection>
+          {threadRef ? (
+            <BotDurableMemory
+              key={`durable:${threadRef.environmentId}:${threadRef.threadId}`}
+              threadRef={threadRef}
+              botId={query.data.botId}
+            />
           ) : null}
-        </SheetPanel>
-      </SheetPopup>
-    </Sheet>
+          {threadRef ? (
+            <BotMemoryTransfer
+              key={`${threadRef.environmentId}:${threadRef.threadId}`}
+              threadRef={threadRef}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </BotSideSheet>
   );
 }

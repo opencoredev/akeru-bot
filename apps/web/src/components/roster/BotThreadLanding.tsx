@@ -31,6 +31,7 @@ import { Spinner } from "../ui/spinner";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
+import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
@@ -67,10 +68,12 @@ import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
+import { useMessageArrivals } from "./messageArrival";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
+import { useEnableBotAutoReview } from "./useServerRoster";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import {
@@ -172,9 +175,14 @@ export function BotThreadLanding({
   );
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
+  const enableAutoReview = useEnableBotAutoReview();
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+  const botActivity = useMemo(
+    () => deriveBotActivity(activities, runtime.latestTurn),
+    [activities, runtime.latestTurn],
+  );
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
@@ -393,6 +401,10 @@ export function BotThreadLanding({
       }),
     [entries, routineReceipts, delegations],
   );
+  const arrivedMessageIds = useMessageArrivals(
+    { owner: botId, thread: runtime.linkedThreadRef?.threadId ?? null },
+    messages.map((message) => message.id),
+  );
   const available = bot?.archivedAt === null;
   const playbackKey = useReplyPlaybackThread({
     environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
@@ -487,7 +499,9 @@ export function BotThreadLanding({
               />
             </div>
           </WorkspacePageHeader>
-          <BotConversationScrollArea>
+          <BotConversationScrollArea
+            followKey={messages.findLast((message) => message.role === "user")?.id}
+          >
             {nextRoutineCursor ? (
               <button
                 type="button"
@@ -543,6 +557,7 @@ export function BotThreadLanding({
                           {message.role === "assistant" ? (
                             <AssistantMessageRow
                               message={message}
+                              arrived={arrivedMessageIds.has(message.id)}
                               author={bot}
                               testId="bot-provider-message"
                               startsGroup={startsGroup || startsAfterReceipt}
@@ -566,6 +581,7 @@ export function BotThreadLanding({
                           ) : (
                             <UserMessageRow
                               message={message}
+                              arrived={arrivedMessageIds.has(message.id)}
                               testId="bot-user-message"
                               startsGroup={startsGroup || startsAfterReceipt}
                               replyLabel="you"
@@ -639,7 +655,7 @@ export function BotThreadLanding({
           </BotConversationScrollArea>
           <BotInboxAlertStack
             items={inboxItems}
-            onOpenDetails={() => openSettings("inbox", null, environmentId)}
+            onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
           />
           <ThreadRuntimeWarningBanner warning={runtimeWarning} />
           <ThreadErrorBanner
@@ -692,9 +708,16 @@ export function BotThreadLanding({
                   pendingCount={approvalState.pendingCount}
                   responding={approvalState.responding}
                   error={approvalState.responseError}
-                  onRespond={(decision) =>
-                    approvalState.respond(pendingApproval.requestId, decision)
-                  }
+                  onRespond={async (decision) => {
+                    const answered = await approvalState.respond(
+                      pendingApproval.requestId,
+                      decision,
+                    );
+                    if (answered && decision === "acceptAlways" && bot) {
+                      await enableAutoReview(bot.id);
+                    }
+                    return answered;
+                  }}
                 />
               ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
                 <MemoryApprovalPrompt
@@ -704,6 +727,7 @@ export function BotThreadLanding({
                 />
               ) : null
             }
+            quietSurface={pendingApproval !== null}
             disabled={
               pendingApproval !== null ||
               runtime.respondingRequestIds.length > 0 ||
@@ -729,7 +753,7 @@ export function BotThreadLanding({
             </p>
           ) : runtime.bootstrapped && runtime.defaultProject === null ? (
             <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-              {t("Add a project before you message a bot.")}
+              {t("Your workspace is still loading. Try again in a moment.")}
             </p>
           ) : null}
         </div>

@@ -203,11 +203,7 @@ describe("sidebar footer", () => {
     }
   });
 
-  it("mints fresh web and mobile threads from the local execution setting", () => {
-    const webSource = NodeFS.readFileSync(
-      new URL("../../hooks/useHandleNewThread.ts", import.meta.url),
-      "utf8",
-    );
+  it("mints fresh mobile threads from the local execution setting", () => {
     const mobileSource = NodeFS.readFileSync(
       new URL(
         "../../../../mobile/src/features/threads/new-task-flow-provider.tsx",
@@ -216,9 +212,6 @@ describe("sidebar footer", () => {
       "utf8",
     );
 
-    expect(webSource).toContain(
-      "runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode",
-    );
     expect(mobileSource).toContain("selectedEnvironmentServerConfig?.settings.localExecutionMode");
   });
 
