@@ -1160,7 +1160,7 @@ describe("AgentControllerLive", () => {
         turnId: expect.any(String),
         failed: false,
       });
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("reads Akeru subscription credentials through Mastra AuthStorage", () =>
@@ -2944,7 +2944,7 @@ describe("AgentControllerLive", () => {
       assert.equal(session.model, "gpt-5.6-sol");
       yield* controller.stopSession({ threadId: codexThreadId });
       expect(bridge.startSession).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("runs Codex turns through Mastra Session.sendMessage and normalizes events", () => {
@@ -5624,7 +5624,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.harnessOptions[0]?.toolRuntime.toolsForThread(String(codexThreadId))).toEqual(
         [],
       );
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("creates a credentialed remote workspace for a delegated sandbox grant", () => {
@@ -5713,7 +5713,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
       expect(makeBotBrowser).toHaveBeenCalledOnce();
       yield* controller.stopSession({ threadId: codexThreadId });
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
@@ -5765,7 +5765,7 @@ describe("AgentControllerLive", () => {
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
         expect(firstDestroy).toHaveBeenCalledOnce();
-      }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+      }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
 
       expect(secondStop).toHaveBeenCalledOnce();
       expect(secondDestroy).not.toHaveBeenCalled();
@@ -5857,7 +5857,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.createSession.mock.calls[1]?.[0]).toMatchObject({ workspace: remote });
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
@@ -5909,7 +5909,7 @@ describe("AgentControllerLive", () => {
         NodeFS.rmSync(firstCwd, { recursive: true, force: true });
         NodeFS.rmSync(secondCwd, { recursive: true, force: true });
       }
-    }).pipe(Effect.provide(layer), Effect.provide(NodeServices.layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("runs Claude through the Akeru Mastra harness", () => {
