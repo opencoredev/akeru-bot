@@ -50,6 +50,12 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Run bots in an Upstash Box with your API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
+  ascii: {
+    id: "ascii",
+    label: "Ascii Box",
+    description: "Run bots in a persistent Linux VM. Public previews are enabled by default.",
+    fields: [{ name: "BOX_API_KEY", label: "API key", secret: true }],
+  },
 };
 
 export const SANDBOX_PROVIDER_DEFINITIONS = Object.values(SANDBOX_PROVIDER_DEFINITION_BY_ID);

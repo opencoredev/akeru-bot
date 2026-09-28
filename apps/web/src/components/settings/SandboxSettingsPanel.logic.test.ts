@@ -34,6 +34,28 @@ describe("sandbox settings", () => {
     ).toBe(false);
   });
 
+  it("connects Ascii Box with a sensitive key and clears the default on disconnect", () => {
+    const settings = DEFAULT_SERVER_SETTINGS.sandbox;
+    expect(canSaveSandboxProviderConnection({ settings, provider: "ascii", draft: {} })).toBe(
+      false,
+    );
+    const connected = saveSandboxProviderConnection({
+      settings,
+      provider: "ascii",
+      draft: { BOX_API_KEY: " ascii-secret " },
+    });
+    expect(connected.providers.ascii.environment).toEqual([
+      { name: "BOX_API_KEY", value: "ascii-secret", sensitive: true },
+    ]);
+    expect(selectableSandboxProviders(connected)).toContain("ascii");
+    const disconnected = disconnectSandboxProvider(
+      { ...connected, defaultProvider: "ascii" },
+      "ascii",
+    );
+    expect(disconnected.defaultProvider).toBe("local");
+    expect(selectableSandboxProviders(disconnected)).not.toContain("ascii");
+  });
+
   it("keeps a redacted key and falls back to local on disconnect", () => {
     const connected = {
       ...saveSandboxProviderConnection({

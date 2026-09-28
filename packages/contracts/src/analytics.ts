@@ -41,6 +41,7 @@ export const USAGE_SANDBOX_IDS = [
   "vercel",
   "akeru_cloud",
   "upstash",
+  "ascii",
   "other",
 ] as const;
 
@@ -177,6 +178,7 @@ export const UsageSandboxProvider = Schema.Literals([
   "daytona",
   "vercel",
   "upstash",
+  "ascii",
   "mixed",
   "other",
 ]);

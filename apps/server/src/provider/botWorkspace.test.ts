@@ -4,9 +4,11 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
+import { DateTime } from "effect";
 import { assert, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  ascii,
   createBotWorkspace,
   createRemoteBotWorkspace,
   daytona,
@@ -18,6 +20,224 @@ import {
   vercel,
   vercelWorkspaceState,
 } from "./botWorkspace.ts";
+
+describe("Ascii Box", () => {
+  const deleted = {
+    ok: true,
+    type: "box.deleting",
+    operation: {
+      id: "deletion",
+      kind: "box",
+      targetId: "ascii-id",
+      reason: "explicit",
+      status: "pending",
+      attemptCount: 0,
+      requestedAt: DateTime.toDate(DateTime.makeUnsafe(0)),
+      completedAt: null,
+    },
+  } satisfies import("@asciidev/box-sdk").DeletionOperationResponse;
+  async function setup() {
+    const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
+    const client = new BoxApi(new Configuration({ accessToken: "test-key" }));
+    const get = vi.spyOn(client, "get").mockResolvedValue({
+      type: "box.info",
+      box: {
+        id: "ascii-id",
+        name: "test",
+        state: "idle",
+        desktopAvailable: false,
+        snapshotAvailable: true,
+      },
+      ok: true,
+    });
+    return { client, get, session: ascii(client, "ascii-id") };
+  }
+
+  it("stops with a native snapshot, resumes, and deletes with confirmation", async () => {
+    const { client, get, session } = await setup();
+    const stop = vi
+      .spyOn(client, "stop")
+      .mockResolvedValue({ ok: true, type: "box.stopped", id: "ascii-id", status: "archived" });
+    const resume = vi
+      .spyOn(client, "resume")
+      .mockResolvedValue({ ok: true, type: "box.resumed", id: "ascii-id", status: "ready" });
+    const remove = vi.spyOn(client, "deleteBox").mockResolvedValue(deleted);
+    await session.sleep();
+    expect(stop).toHaveBeenCalledWith({ boxId: "ascii-id" });
+    const current = await client.get({ boxId: "ascii-id" });
+    get.mockResolvedValueOnce({ ...current, box: { ...current.box, state: "archived" } });
+    await session.wake();
+    expect(resume).toHaveBeenCalledWith({ boxId: "ascii-id", resumeRequest: { ttlSeconds: null } });
+    expect(await session.inspect()).toBe("running");
+    await session.destroy();
+    expect(remove).toHaveBeenCalledWith({ boxId: "ascii-id", xAsciiConfirmDelete: "ascii-id" });
+  });
+
+  it.each([
+    "init",
+    "provisioning",
+    "provisioned",
+    "cloning",
+    "archiving",
+    "archived",
+    "error",
+  ] as const)("does not report %s VMs as running", async (state) => {
+    const { client, get, session } = await setup();
+    const current = await client.get({ boxId: "ascii-id" });
+    get.mockResolvedValue({ ...current, box: { ...current.box, state } });
+    expect(await session.inspect()).toBe(state === "error" ? "missing" : "sleeping");
+  });
+
+  it("distinguishes missing VMs from credential or transport errors", async () => {
+    const { ResponseError } = await import("@asciidev/box-sdk");
+    const { get, session } = await setup();
+    get.mockRejectedValue(new ResponseError(new Response(null, { status: 404 })));
+    expect(await session.inspect()).toBe("missing");
+    get.mockRejectedValue(new Error("unauthorized"));
+    await expect(session.inspect()).rejects.toThrow("unauthorized");
+  });
+
+  it("quotes commands, absolute working directories and environment values", async () => {
+    const { client, session } = await setup();
+    const command = vi.spyOn(client, "command").mockResolvedValue({
+      ok: true,
+      type: "command.finished",
+      success: false,
+      exitCode: 7,
+      stdout: "out",
+      stderr: "err",
+      timedOut: false,
+    });
+    expect(
+      await session.run("printf", ["a'b"], {
+        cwd: "/workspace/my files",
+        env: { VALUE: "x; echo unsafe" },
+        timeout: 1501,
+      }),
+    ).toEqual({ exitCode: 7, stdout: "out", stderr: "err" });
+    expect(command).toHaveBeenCalledWith({
+      boxId: "ascii-id",
+      commandRequest: {
+        command: "cd '/workspace/my files' && env 'VALUE=x; echo unsafe' 'printf' 'a'\\''b'",
+        timeoutSeconds: 2,
+      },
+    });
+    command.mockResolvedValue({
+      ok: true,
+      type: "command.finished",
+      success: false,
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      timedOut: true,
+    });
+    expect((await session.run("sleep", ["2"])).exitCode).toBe(124);
+  });
+
+  it("routes public previews without forwarding the API credential", async () => {
+    const { client, session } = await setup();
+    const hostPort = vi
+      .spyOn(client, "hostPort")
+      .mockResolvedValue({ ok: true, type: "host_port", url: "https://preview.example" });
+    expect(await session.browserEndpoint(9223)).toEqual({
+      url: "https://preview.example",
+      requestHeaders: {},
+    });
+    expect(hostPort).toHaveBeenCalledWith({
+      boxId: "ascii-id",
+      hostPortRequest: { port: 9223, _public: true },
+    });
+    hostPort.mockResolvedValue({ ok: true, type: "host_port" });
+    await expect(session.browserEndpoint(9223)).rejects.toThrow("preview URL");
+  });
+
+  it("creates once with the configured credential and reattaches by saved VM identity", async () => {
+    const { BoxApi } = await import("@asciidev/box-sdk");
+    const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
+    const box = {
+      id: "ascii-id",
+      name: "test",
+      state: "idle" as const,
+      desktopAvailable: false,
+      snapshotAvailable: true,
+    };
+    const create = vi.spyOn(BoxApi.prototype, "create").mockResolvedValue({
+      ok: true,
+      type: "box.created",
+      status: "provisioning",
+      ttlSeconds: null,
+      box,
+    });
+    const get = vi
+      .spyOn(BoxApi.prototype, "get")
+      .mockResolvedValue({ ok: true, type: "box.info", box });
+    const remove = vi.spyOn(BoxApi.prototype, "deleteBox").mockResolvedValue(deleted);
+    const command = vi.spyOn(BoxApi.prototype, "command").mockResolvedValue({
+      ok: true,
+      type: "command.finished",
+      success: true,
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+    });
+    try {
+      const input = {
+        threadId: "thread",
+        sandbox: "ascii" as const,
+        workspaceId: "workspace",
+        identityFile: NodePath.join(root, "identity.json"),
+        environment: { BOX_API_KEY: "configured-key" },
+      };
+      const first = await createRemoteBotWorkspace(input);
+      expect(create).toHaveBeenCalledWith({ createBoxRequest: { ttlSeconds: null } });
+      const client = create.mock.contexts[0] as import("@asciidev/box-sdk").BoxApi;
+      expect((await client.createRequestOpts({})).headers.Authorization).toBe(
+        "Bearer configured-key",
+      );
+      expect(first.providerId).toBe("ascii-id");
+      get.mockRejectedValueOnce(new Error("VM unavailable"));
+      await expect(createRemoteBotWorkspace(input)).rejects.toThrow("missing or unavailable");
+      expect(create).toHaveBeenCalledOnce();
+      const second = await createRemoteBotWorkspace(input);
+      expect(create).toHaveBeenCalledOnce();
+      expect(get).toHaveBeenCalledWith({ boxId: "ascii-id" });
+      await second.wake();
+      await second.destroy();
+      expect(remove).toHaveBeenCalledOnce();
+      await expect(NodeFS.promises.stat(input.identityFile)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      create.mockRestore();
+      get.mockRestore();
+      remove.mockRestore();
+      command.mockRestore();
+      await NodeFS.promises.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a missing credential before creating a VM", async () => {
+    const { BoxApi } = await import("@asciidev/box-sdk");
+    const create = vi.spyOn(BoxApi.prototype, "create");
+    const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
+    try {
+      await expect(
+        createRemoteBotWorkspace({
+          threadId: "thread",
+          sandbox: "ascii",
+          workspaceId: "workspace",
+          identityFile: NodePath.join(root, "identity.json"),
+          environment: {},
+        }),
+      ).rejects.toThrow("BOX_API_KEY");
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      create.mockRestore();
+      await NodeFS.promises.rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 function remoteSession(providerId: string): AkeruRemoteSession {
   return {
@@ -34,7 +254,7 @@ function remoteSession(providerId: string): AkeruRemoteSession {
 describe("createBotWorkspace", () => {
   it("classifies every managed provider", () => {
     expect(isRemoteBotSandbox("local")).toBe(false);
-    for (const sandbox of ["e2b", "daytona", "vercel", "upstash"] as const) {
+    for (const sandbox of ["e2b", "daytona", "vercel", "upstash", "ascii"] as const) {
       expect(isRemoteBotSandbox(sandbox)).toBe(true);
     }
   });
