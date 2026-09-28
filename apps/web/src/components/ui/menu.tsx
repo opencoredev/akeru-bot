@@ -56,7 +56,7 @@ function MenuPopup({
       >
         <MenuPrimitive.Popup
           className={cn(
-            "dropdown-glass relative flex origin-(--transform-origin) rounded-lg shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] outline-none focus:outline-none dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
+            "relative flex origin-(--transform-origin) rounded-xl border border-border/80 bg-card shadow-[0_18px_48px_-24px_rgb(0_0_0/55%)] outline-none focus:outline-none dark:shadow-[0_22px_56px_-24px_rgb(0_0_0/80%)]",
             !hasExplicitWidthClass && "min-w-32",
             className,
           )}
@@ -86,7 +86,7 @@ function MenuItem({
   return (
     <MenuPrimitive.Item
       className={cn(
-        "[&>svg]:-mx-0.5 flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1 text-base text-foreground outline-none data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-highlighted:bg-accent data-inset:ps-8 data-[variant=destructive]:text-destructive-foreground data-highlighted:text-accent-foreground data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current [&>svg]:pointer-events-none [&>svg]:shrink-0",
+        "[&>svg]:-mx-0.5 flex min-h-9 cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-base text-foreground outline-none data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-highlighted:bg-secondary data-inset:ps-8 data-[variant=destructive]:text-destructive-foreground data-highlighted:text-foreground data-disabled:opacity-64 sm:min-h-8 sm:text-sm [&>svg:not([class*='opacity-'])]:opacity-70 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current [&>svg]:pointer-events-none [&>svg]:shrink-0",
         className,
       )}
       data-inset={inset}

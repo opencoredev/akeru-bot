@@ -21,9 +21,9 @@ const selectTriggerVariants = cva(
     variants: {
       variant: {
         default:
-          "w-full min-w-36 border-transparent bg-secondary text-foreground ring-ring/70 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 focus-visible:ring-2 aria-invalid:ring-2 aria-invalid:ring-destructive/40 [:hover,[data-pressed]]:bg-accent/80 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='text-'])]:text-icon-muted",
+          "w-full min-w-36 border-transparent bg-secondary text-foreground ring-foreground/20 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 focus-visible:ring-2 aria-invalid:ring-2 aria-invalid:ring-destructive/40 [:hover,[data-pressed]]:bg-secondary/75 [&_svg:not([class*='opacity-'])]:opacity-70 [&_svg:not([class*='text-'])]:text-icon-muted",
         ghost:
-          "border-transparent text-secondary-label focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent [:hover,[data-pressed]]:text-foreground",
+          "border-transparent text-secondary-label focus-visible:ring-2 focus-visible:ring-foreground/20 data-pressed:bg-secondary [:hover,[data-pressed]]:bg-secondary [:hover,[data-pressed]]:text-foreground",
       },
       size: {
         compact:
@@ -140,7 +140,7 @@ function SelectPopup({
         sideOffset={sideOffset}
       >
         <SelectPrimitive.Popup
-          className="origin-(--transform-origin) rounded-lg text-foreground outline-none"
+          className="origin-(--transform-origin) rounded-xl text-foreground outline-none"
           data-slot="select-popup"
           {...props}
         >
@@ -152,7 +152,7 @@ function SelectPopup({
           </SelectPrimitive.ScrollUpArrow>
           <div
             className={cn(
-              "dropdown-glass relative h-full rounded-lg shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
+              "relative h-full rounded-xl border border-border/80 bg-card shadow-[0_18px_48px_-24px_rgb(0_0_0/55%)] dark:shadow-[0_22px_56px_-24px_rgb(0_0_0/80%)]",
               matchTriggerWidth && "min-w-(--anchor-width)",
               popupClassName,
             )}
@@ -187,7 +187,7 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "flex min-h-8 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-pointer items-center rounded-md px-2.5 py-1 text-base outline-none data-selected:bg-foreground/[0.08] data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 sm:min-h-7.5 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "flex min-h-9 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-pointer items-center rounded-lg px-2.5 py-1.5 text-base outline-none data-selected:bg-secondary data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-highlighted:bg-secondary data-highlighted:text-foreground data-disabled:opacity-64 sm:min-h-8 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       data-slot="select-item"

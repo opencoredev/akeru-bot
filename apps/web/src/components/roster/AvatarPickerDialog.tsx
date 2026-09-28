@@ -122,7 +122,7 @@ export function AvatarPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{t("Avatar")}</DialogTitle>
+          <DialogTitle>{t("Change avatar")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           <ToggleGroup
@@ -208,7 +208,7 @@ export function AvatarPickerDialog({
                   : t("Could not read image")}
             </p>
           ) : null}
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("Cancel")}
           </Button>
           <Button onClick={() => void handleSave()} disabled={draftAvatar === null || saving}>

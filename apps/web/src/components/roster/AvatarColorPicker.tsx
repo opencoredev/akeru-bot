@@ -197,7 +197,7 @@ export function AvatarColorPicker({
           style={{ backgroundColor: preset }}
           className={cn(
             "size-8 cursor-pointer rounded-full border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            color === preset && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+            color === preset && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
           )}
         />
       ))}
@@ -211,7 +211,7 @@ export function AvatarColorPicker({
               aria-pressed={!presetSelected}
               className={cn(
                 "size-8 cursor-pointer rounded-full border border-foreground/15 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                !presetSelected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                !presetSelected && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
               )}
               style={{
                 background:
