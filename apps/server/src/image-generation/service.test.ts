@@ -113,6 +113,7 @@ describe("image provider rows", () => {
       (row) => row.provider === "grok",
     );
     expect(grok?.health).toBe("failed");
+    expect(grok?.healthTest?.status).toBe("failed");
     expect(grok?.lastFailure?.message).toBe("provider 500");
     expect(grok?.repairAction).toBe("Run health test");
   });
@@ -196,6 +197,21 @@ describe("imageGeneration settings patch normalization", () => {
     };
     const out = normalizeImageGenerationPatch(current, { grokEnabled: true });
     expect(out.defaultProvider).toBe("grok");
+  });
+
+  it("restores a selectable provider after all providers were disabled", () => {
+    const current: ImageGenerationSettings = {
+      chatgptEnabled: false,
+      grokEnabled: false,
+      defaultProvider: null,
+      fallbackOrder: [],
+    };
+    const out = normalizeImageGenerationPatch(current, { grokEnabled: true });
+    expect(out).toEqual({
+      grokEnabled: true,
+      defaultProvider: "grok",
+      fallbackOrder: ["grok"],
+    });
   });
 
   it("keeps a valid default and order untouched", () => {

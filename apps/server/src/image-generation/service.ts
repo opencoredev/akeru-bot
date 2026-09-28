@@ -111,11 +111,14 @@ export function imageProviderStatuses(input: {
       operations: ["generate"],
       ...(requestHealth?.lastFailedRequest ? { lastFailure: requestHealth.lastFailedRequest } : {}),
       ...(repairAction ? { repairAction } : {}),
-      healthTest: requestHealth?.lastSuccessfulRequestAt
-        ? { status: "passed" as const, checkedAt: requestHealth.lastSuccessfulRequestAt }
-        : requestHealth?.lastFailedRequest
+      healthTest:
+        requestHealth?.lastFailedRequest &&
+        (!requestHealth.lastSuccessfulRequestAt ||
+          requestHealth.lastFailedRequest.at >= requestHealth.lastSuccessfulRequestAt)
           ? { status: "failed" as const, checkedAt: requestHealth.lastFailedRequest.at }
-          : { status: "not-run" as const },
+          : requestHealth?.lastSuccessfulRequestAt
+            ? { status: "passed" as const, checkedAt: requestHealth.lastSuccessfulRequestAt }
+            : { status: "not-run" as const },
     };
   });
 }
@@ -144,6 +147,9 @@ export function normalizeImageGenerationPatch(
   // when the caller supplies an order — a persisted order can otherwise keep
   // selecting a provider the patch just disabled.
   const fallbackOrder = merged.fallbackOrder.filter(enabled);
+  for (const provider of IMAGE_PROVIDER_IDS) {
+    if (enabled(provider) && !fallbackOrder.includes(provider)) fallbackOrder.push(provider);
+  }
   const normalized: ImageGenerationSettings = {
     chatgptEnabled: merged.chatgptEnabled,
     grokEnabled: merged.grokEnabled,
