@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import {
   DEFAULT_SERVER_SETTINGS,
   defaultInstanceIdForDriver,
+  ProviderInstanceId,
   ProviderDriverKind,
   type SubscriptionProviderStatus,
 } from "@t3tools/contracts";
@@ -50,7 +51,6 @@ describe("subscription runtime credentials", () => {
       subscriptionProviderSettingsPatch(DEFAULT_SERVER_SETTINGS, [
         subscriptionStatus("openai-codex", false),
         subscriptionStatus("anthropic", false),
-        subscriptionStatus("cursor", true),
         subscriptionStatus("xai", true),
         subscriptionStatus("kimi-for-coding", false),
         subscriptionStatus("opencode-go", false),
@@ -146,6 +146,23 @@ describe("subscription runtime credentials", () => {
       XAI_API_KEY: "provider-wide-key",
       KEEP: "instance-value",
     });
+  });
+
+  it("injects the key bound to the selected Grok instance", async () => {
+    const { secretsDir, auth } = await fixture();
+    const personal = await auth.startLogin("xai", { authMode: "api-key" });
+    await auth.completeLogin(personal.loginId, "personal-key");
+    const work = await auth.startLogin("xai", {
+      authMode: "api-key",
+      instanceId: ProviderInstanceId.make("grok_work"),
+    });
+    await auth.completeLogin(work.loginId, "work-key");
+    expect((await runtimeEnvironment(secretsDir, "xai", {}, "grok_work")).XAI_API_KEY).toBe(
+      "work-key",
+    );
+    expect((await runtimeEnvironment(secretsDir, "xai", {}, "grok")).XAI_API_KEY).toBe(
+      "personal-key",
+    );
   });
 
   it("does not override a directly supplied adapter environment", async () => {

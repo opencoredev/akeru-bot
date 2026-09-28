@@ -76,6 +76,9 @@ export const deriveProviderInstanceConfigMap = (
   const merged: Record<string, ProviderInstanceConfig> = { ...settings.providerInstances };
 
   for (const driver of BUILT_IN_DRIVERS) {
+    // Standard OpenCode is retained only for explicit legacy instances.
+    // New environments use the separate OpenCode Go driver.
+    if (driver.driverKind === "opencode") continue;
     const instanceId = defaultInstanceIdForDriver(driver.driverKind);
     if (instanceId in merged) {
       // Explicit `providerInstances` entry for this slot — user-authored

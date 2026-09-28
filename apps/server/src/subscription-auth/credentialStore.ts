@@ -48,9 +48,15 @@ const ApiKeyCredentialSchema = Schema.Struct({
 
 const SubscriptionCredentialSchema = Schema.Union([OAuthCredentialSchema, ApiKeyCredentialSchema]);
 
+export type SubscriptionCredential = typeof SubscriptionCredentialSchema.Type;
+
+/** Validates entries stored under non-provider keys, such as per-instance accounts. */
+export const isSubscriptionCredential = Schema.is(SubscriptionCredentialSchema);
+
 /**
  * Known provider entries are validated. Other keys, such as Mastra's
- * `apikey:<provider>` records, pass through untouched and survive rewrites.
+ * `apikey:<provider>` records and `instance:<provider>:<instanceId>` accounts,
+ * pass through untouched and survive rewrites. Retired Cursor entries still decode.
  */
 export const SubscriptionAuthDataSchema = Schema.StructWithRest(
   Schema.Struct({
