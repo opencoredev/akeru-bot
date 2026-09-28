@@ -239,4 +239,29 @@ describe("BotWorkspacePool", () => {
     await retry.release({ destroy: true });
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  it("preserves a remote workspace when waking after idle fails", async () => {
+    const pool = new BotWorkspacePool();
+    const local = localWorkspace();
+    const wake = vi.fn(async () => local.init());
+    const destroy = vi.fn(async () => local.destroy());
+    const create = vi.fn(async () => ({
+      id: local.id,
+      provider: "ascii" as const,
+      workspace: local,
+      inspect: async () => "running" as const,
+      wake,
+      sleep: () => local.stop(),
+      destroy,
+    }));
+    const lease = await pool.acquire("remote-idle-wake", create);
+    await lease.release();
+    wake.mockRejectedValueOnce(new Error("resume timed out"));
+    await expect(pool.acquire("remote-idle-wake", create)).rejects.toThrow("resume timed out");
+    expect(destroy).not.toHaveBeenCalled();
+    const retry = await pool.acquire("remote-idle-wake", create);
+    expect(create).toHaveBeenCalledTimes(2);
+    await retry.release({ destroy: true });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
 });
