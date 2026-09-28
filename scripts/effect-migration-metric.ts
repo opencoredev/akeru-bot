@@ -7,8 +7,12 @@
  */
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
-const sourceRoot = NodePath.join(process.cwd(), "apps/server/src");
+const sourceRoot = NodePath.join(
+  NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
+  "../apps/server/src",
+);
 const runtimeEscape = /\bEffect\.run(?:Promise|Sync|Fork)\s*\(/g;
 const promiseBridge = /\bEffect\.(?:tryPromise|promise)\s*\(/g;
 const suppression = /@effect-diagnostics(?:-next-line)?\s+([^\n]+)/g;
