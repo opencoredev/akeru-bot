@@ -526,7 +526,9 @@ export function TerminalViewport({
             delete reportWindow.__akeruTerminalLatencyReport;
           }
         });
-        console.info(`[terminal] latency enabled for ${threadId}; call window.__akeruTerminalLatencyReport()`);
+        console.info(
+          `[terminal] latency enabled for ${threadId}; call window.__akeruTerminalLatencyReport()`,
+        );
       }
       const terminalOptions: GhosttyTerminalSurfaceOptions = {
         theme: terminalThemeFromApp(mount),

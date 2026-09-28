@@ -458,9 +458,7 @@ const make = Effect.gen(function* () {
                 WHERE reservation_id = ${current.reservationId}
               `;
               const released = yield* selectEntryByReservation(sql, current.reservationId);
-              return [
-                yield* decodeEntry(released[0]!),
-              ];
+              return [yield* decodeEntry(released[0]!)];
             }
             if (current.state === "reserved") {
               return [

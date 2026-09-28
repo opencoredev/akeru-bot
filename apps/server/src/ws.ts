@@ -3216,19 +3216,22 @@ const makeWsRpcLayer = (
               };
               const providers = yield* providerRegistry.getProviders;
               const driver = bot.value.engine
-                ? providers.find((provider) => provider.instanceId === bot.value.engine?.provider)
-                    ?.driver ?? bot.value.engine.provider
+                ? (providers.find((provider) => provider.instanceId === bot.value.engine?.provider)
+                    ?.driver ?? bot.value.engine.provider)
                 : undefined;
               const connection = driver === undefined ? undefined : driverConnection[driver];
               const planLimits = yield* Effect.promise(() =>
                 readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
               ).pipe(Effect.catchCause(() => Effect.succeed([])));
-              const plan = connection === undefined
-                ? undefined
-                : planLimits.find((limits) => limits.provider === connection);
-              const window = plan?.status === "ok"
-                ? plan.windows.find((candidate) => candidate.kind === "session") ?? plan.windows[0]
-                : undefined;
+              const plan =
+                connection === undefined
+                  ? undefined
+                  : planLimits.find((limits) => limits.provider === connection);
+              const window =
+                plan?.status === "ok"
+                  ? (plan.windows.find((candidate) => candidate.kind === "session") ??
+                    plan.windows[0])
+                  : undefined;
               const subscriptionPool = window
                 ? {
                     status: "available" as const,

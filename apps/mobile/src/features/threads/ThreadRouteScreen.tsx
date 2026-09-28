@@ -907,9 +907,7 @@ function ThreadRouteContent(
           botName={headerBotName}
           subtitle={headerSubtitle}
           onBack={
-            layout.usesSplitView
-              ? (props.onReturnToThread ?? undefined)
-              : () => navigation.goBack()
+            layout.usesSplitView ? (props.onReturnToThread ?? undefined) : () => navigation.goBack()
           }
           workspaceActions={workspaceActions}
           onWorkspaceAction={handleWorkspaceAction}
@@ -949,10 +947,7 @@ function ThreadBotHeader(props: {
     [onWorkspaceAction],
   );
   return (
-    <View
-      className="bg-screen px-4 pb-2"
-      style={{ paddingTop: Math.max(insets.top, 12) + 4 }}
-    >
+    <View className="bg-screen px-4 pb-2" style={{ paddingTop: Math.max(insets.top, 12) + 4 }}>
       <View className="flex-row items-center gap-3">
         {props.onBack ? (
           <Pressable
@@ -971,14 +966,20 @@ function ThreadBotHeader(props: {
           </Pressable>
         ) : null}
         <View className="flex-1 flex-row justify-center">
-          <View className="max-w-full flex-row items-center gap-2 rounded-full bg-card py-1.5 pl-2 pr-4" style={{
-            elevation: 3,
-            shadowColor: "#000000",
-            shadowOffset: { height: 3, width: 0 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-          }}>
-            <BotAvatarView avatar={props.botAvatar ?? seededBlobAvatar(props.avatarSeed)} size={26} />
+          <View
+            className="max-w-full flex-row items-center gap-2 rounded-full bg-card py-1.5 pl-2 pr-4"
+            style={{
+              elevation: 3,
+              shadowColor: "#000000",
+              shadowOffset: { height: 3, width: 0 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+            }}
+          >
+            <BotAvatarView
+              avatar={props.botAvatar ?? seededBlobAvatar(props.avatarSeed)}
+              size={26}
+            />
             <View className="min-w-0 shrink">
               <AppText className="text-[16px] font-t3-bold text-foreground" numberOfLines={1}>
                 {props.botName}
@@ -1003,12 +1004,7 @@ function ThreadBotHeader(props: {
               className="size-11 items-center justify-center rounded-full bg-subtle"
               hitSlop={6}
             >
-              <SymbolView
-                name="ellipsis"
-                size={20}
-                tintColor={foregroundColor}
-                type="monochrome"
-              />
+              <SymbolView name="ellipsis" size={20} tintColor={foregroundColor} type="monochrome" />
             </Pressable>
           </ControlPillMenu>
         ) : props.onBack ? (

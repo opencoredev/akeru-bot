@@ -3,7 +3,12 @@ export interface TerminalLatencySample {
   readonly keypressToGlyphMs?: number;
   readonly byteArrivalToGlyphMs: number;
 }
-export interface TerminalLatencyPercentiles { readonly count: number; readonly p50: number; readonly p95: number; readonly p99: number; }
+export interface TerminalLatencyPercentiles {
+  readonly count: number;
+  readonly p50: number;
+  readonly p95: number;
+  readonly p99: number;
+}
 export function percentile(values: readonly number[], fraction: number): number {
   if (values.length === 0) return Number.NaN;
   const sorted = [...values].sort((a, b) => a - b);
@@ -11,18 +16,33 @@ export function percentile(values: readonly number[], fraction: number): number 
   return sorted[index]!;
 }
 export function summarizeLatency(values: readonly number[]): TerminalLatencyPercentiles {
-  return { count: values.length, p50: percentile(values, 0.5), p95: percentile(values, 0.95), p99: percentile(values, 0.99) };
+  return {
+    count: values.length,
+    p50: percentile(values, 0.5),
+    p95: percentile(values, 0.95),
+    p99: percentile(values, 0.99),
+  };
 }
 export function summarizeTerminalLatency(samples: readonly TerminalLatencySample[]) {
   return {
-    keypressToGlyph: summarizeLatency(samples.flatMap((s) => s.keypressToGlyphMs === undefined ? [] : [s.keypressToGlyphMs])),
+    keypressToGlyph: summarizeLatency(
+      samples.flatMap((s) => (s.keypressToGlyphMs === undefined ? [] : [s.keypressToGlyphMs])),
+    ),
     byteArrivalToGlyph: summarizeLatency(samples.map((s) => s.byteArrivalToGlyphMs)),
   };
 }
-export function formatLatencyReport(label: string, samples: readonly TerminalLatencySample[]): string {
+export function formatLatencyReport(
+  label: string,
+  samples: readonly TerminalLatencySample[],
+): string {
   const summary = summarizeTerminalLatency(samples);
-  const format = (value: TerminalLatencyPercentiles) => `p50=${value.p50.toFixed(2)}ms p95=${value.p95.toFixed(2)}ms p99=${value.p99.toFixed(2)}ms n=${value.count}`;
-  return [label, `keypress-to-glyph: ${format(summary.keypressToGlyph)}`, `byte-arrival-to-glyph: ${format(summary.byteArrivalToGlyph)}`].join("\n");
+  const format = (value: TerminalLatencyPercentiles) =>
+    `p50=${value.p50.toFixed(2)}ms p95=${value.p95.toFixed(2)}ms p99=${value.p99.toFixed(2)}ms n=${value.count}`;
+  return [
+    label,
+    `keypress-to-glyph: ${format(summary.keypressToGlyph)}`,
+    `byte-arrival-to-glyph: ${format(summary.byteArrivalToGlyph)}`,
+  ].join("\n");
 }
 
 export interface TerminalLatencyProbe {
@@ -35,8 +55,14 @@ export interface TerminalLatencyCallbacks {
   readonly onByteArrival: (output: string) => void;
   readonly onGlyphPaint: () => void;
 }
-const disabledCallbacks: TerminalLatencyCallbacks = { onKeypress: () => {}, onByteArrival: () => {}, onGlyphPaint: () => {} };
-export function terminalLatencyCallbacks(probe: TerminalLatencyProbe | undefined): TerminalLatencyCallbacks {
+const disabledCallbacks: TerminalLatencyCallbacks = {
+  onKeypress: () => {},
+  onByteArrival: () => {},
+  onGlyphPaint: () => {},
+};
+export function terminalLatencyCallbacks(
+  probe: TerminalLatencyProbe | undefined,
+): TerminalLatencyCallbacks {
   if (probe === undefined) return disabledCallbacks;
   return {
     onKeypress: (encodedInput) => probe.onKeypress?.(performance.now(), encodedInput),
@@ -52,20 +78,35 @@ const ECHO_WINDOW_MS = 250;
 
 /** Correlates printable key echoes while bounding all diagnostic state. */
 export class TerminalLatencyRecorder implements TerminalLatencyProbe {
-  private readonly pendingKeys: Array<{ readonly keypressAt: number; readonly expected: string; byteAt?: number }> = [];
-  private readonly pendingPaints: Array<{ readonly keypressAt?: number; readonly byteAt: number }> = [];
+  private readonly pendingKeys: Array<{
+    readonly keypressAt: number;
+    readonly expected: string;
+    byteAt?: number;
+  }> = [];
+  private readonly pendingPaints: Array<{ readonly keypressAt?: number; readonly byteAt: number }> =
+    [];
   private readonly samplesBuffer: TerminalLatencySample[] = [];
-  get samples(): readonly TerminalLatencySample[] { return this.samplesBuffer; }
+  get samples(): readonly TerminalLatencySample[] {
+    return this.samplesBuffer;
+  }
 
   onKeypress(time: number, encodedInput: string): void {
-    const expected = [...encodedInput].length === 1 && encodedInput >= " " && encodedInput <= "~" ? encodedInput : "";
+    const expected =
+      [...encodedInput].length === 1 && encodedInput >= " " && encodedInput <= "~"
+        ? encodedInput
+        : "";
     if (expected === "") return;
     if (this.pendingKeys.length >= MAX_PENDING_KEYS) this.pendingKeys.shift();
     this.pendingKeys.push({ keypressAt: time, expected });
   }
   onByteArrival(time: number, output: string): void {
     const printable = [...output].filter((char) => char >= " " && char <= "~");
-    const candidates = this.pendingKeys.filter((key) => key.byteAt === undefined && time - key.keypressAt <= ECHO_WINDOW_MS && printable.includes(key.expected));
+    const candidates = this.pendingKeys.filter(
+      (key) =>
+        key.byteAt === undefined &&
+        time - key.keypressAt <= ECHO_WINDOW_MS &&
+        printable.includes(key.expected),
+    );
     const key = candidates.length === 1 ? candidates[0] : undefined;
     if (key) key.byteAt = time;
     else {
@@ -83,8 +124,21 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
     const pending = this.pendingPaints.shift();
     if (!pending) return;
     if (this.samplesBuffer.length >= MAX_SAMPLES) this.samplesBuffer.shift();
-    this.samplesBuffer.push({ byteArrivalToGlyphMs: Math.max(0, time - pending.byteAt), ...(pending.keypressAt === undefined ? {} : { keypressToGlyphMs: Math.max(0, time - pending.keypressAt) }) });
+    this.samplesBuffer.push({
+      byteArrivalToGlyphMs: Math.max(0, time - pending.byteAt),
+      ...(pending.keypressAt === undefined
+        ? {}
+        : { keypressToGlyphMs: Math.max(0, time - pending.keypressAt) }),
+    });
   }
-  reset(): void { this.pendingKeys.length = 0; this.pendingPaints.length = 0; this.samplesBuffer.length = 0; }
-  report(label = "terminal"): string { const result = formatLatencyReport(label, this.samplesBuffer); this.reset(); return result; }
+  reset(): void {
+    this.pendingKeys.length = 0;
+    this.pendingPaints.length = 0;
+    this.samplesBuffer.length = 0;
+  }
+  report(label = "terminal"): string {
+    const result = formatLatencyReport(label, this.samplesBuffer);
+    this.reset();
+    return result;
+  }
 }

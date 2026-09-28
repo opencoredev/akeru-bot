@@ -3411,9 +3411,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
-            getProviders: Effect.succeed([
-              { instanceId: "codex-work", driver: "codex" } as never,
-            ]),
+            getProviders: Effect.succeed([{ instanceId: "codex-work", driver: "codex" } as never]),
           },
           projectionBots: {
             getById: ({ botId: requestedBotId }) =>

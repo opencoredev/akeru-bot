@@ -226,7 +226,9 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-cancelled");
-      yield* ledger.reserve(reserveInput("cancelled", { botId, maximumTokens: 500, capLimit: 500 }));
+      yield* ledger.reserve(
+        reserveInput("cancelled", { botId, maximumTokens: 500, capLimit: 500 }),
+      );
       yield* ledger.finalizeForTurn({
         botId,
         threadId: ThreadId.make("thread-1"),
@@ -276,10 +278,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
         createdAt: "2026-08-30T20:02:00.000Z",
       });
       const summary = yield* ledger.summarize(botId);
-      assert.deepEqual(
-        summary.entries.map((entry) => entry.category).sort(),
-        ["routine", "tool"],
-      );
+      assert.deepEqual(summary.entries.map((entry) => entry.category).sort(), ["routine", "tool"]);
       assert.equal(summary.consumedTokens, 60);
       const cost = priceUsage(
         parseRateTable({ "gpt-5.6-sol": { input_cost_per_token: 1, output_cost_per_token: 2 } }),

@@ -781,47 +781,51 @@ const make = (options?: AgentControllerLiveOptions) =>
       onToolStart: async (input, session) => {
         if (!session.botId) return;
         await runPromise(
-          botUsageLedger.reserve({
-            reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
-            sourceKey: `tool:${input.toolCallId}`,
-            botId: session.botId,
-            threadId: ThreadId.make(input.threadId),
-            turnId: sessions.get(input.threadId)?.activeTurn?.turnId ?? null,
-            category: "tool",
-            maximumTokens: 1,
-            capLimit: Number.MAX_SAFE_INTEGER,
-            provider: sessions.get(input.threadId)?.provider ?? null,
-            model: sessions.get(input.threadId)?.model ?? null,
-            createdAt: nowIso(),
-          }).pipe(
-            Effect.tap(() => Effect.sync(() => toolUsageReservations.add(input.toolCallId))),
-            Effect.catchCause((cause) =>
-              Effect.logWarning("failed to reserve tool usage", {
-                toolCallId: input.toolCallId,
-                cause,
-              }),
+          botUsageLedger
+            .reserve({
+              reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
+              sourceKey: `tool:${input.toolCallId}`,
+              botId: session.botId,
+              threadId: ThreadId.make(input.threadId),
+              turnId: sessions.get(input.threadId)?.activeTurn?.turnId ?? null,
+              category: "tool",
+              maximumTokens: 1,
+              capLimit: Number.MAX_SAFE_INTEGER,
+              provider: sessions.get(input.threadId)?.provider ?? null,
+              model: sessions.get(input.threadId)?.model ?? null,
+              createdAt: nowIso(),
+            })
+            .pipe(
+              Effect.tap(() => Effect.sync(() => toolUsageReservations.add(input.toolCallId))),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("failed to reserve tool usage", {
+                  toolCallId: input.toolCallId,
+                  cause,
+                }),
+              ),
             ),
-          ),
         );
       },
       onToolFinish: async (input, session) => {
         if (!session.botId || !toolUsageReservations.delete(input.toolCallId)) return;
         await runPromise(
-          botUsageLedger.settle({
-            reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
-            state: "reported",
-            inputTokens: 0,
-            outputTokens: 0,
-            reasoningTokens: null,
-            settledAt: nowIso(),
-          }).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("failed to settle tool usage", {
-                toolCallId: input.toolCallId,
-                cause,
-              }),
+          botUsageLedger
+            .settle({
+              reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
+              state: "reported",
+              inputTokens: 0,
+              outputTokens: 0,
+              reasoningTokens: null,
+              settledAt: nowIso(),
+            })
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("failed to settle tool usage", {
+                  toolCallId: input.toolCallId,
+                  cause,
+                }),
+              ),
             ),
-          ),
         );
       },
       onProgress: ({ threadId, toolId, toolCallId, summary, authorizationUrl }) => {

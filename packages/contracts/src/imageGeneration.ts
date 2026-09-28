@@ -57,9 +57,7 @@ export const ImageProviderStatus = Schema.Struct({
   ),
   /** ISO time of the last successful image generation. Absent until M7. */
   lastGenerationAt: Schema.optional(IsoDateTime),
-  lastFailure: Schema.optional(
-    Schema.Struct({ at: IsoDateTime, message: TrimmedNonEmptyString }),
-  ),
+  lastFailure: Schema.optional(Schema.Struct({ at: IsoDateTime, message: TrimmedNonEmptyString })),
   repairAction: Schema.optional(TrimmedNonEmptyString),
   healthTest: Schema.optional(
     Schema.Struct({

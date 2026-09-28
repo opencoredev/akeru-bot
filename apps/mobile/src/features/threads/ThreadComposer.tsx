@@ -855,7 +855,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
             >
               <ProviderIcon provider={currentModelOption?.providerDriver} size={15} />
-              <Text className="shrink text-xs font-t3-medium text-foreground-muted" numberOfLines={1}>
+              <Text
+                className="shrink text-xs font-t3-medium text-foreground-muted"
+                numberOfLines={1}
+              >
                 {currentModelOption?.label ?? "Model"}
               </Text>
             </Pressable>

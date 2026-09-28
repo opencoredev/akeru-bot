@@ -81,7 +81,7 @@ export function buildHomeListFilterMenu(props: {
         {
           type: "action",
           title: "All projects",
-        subtitle: "Show chats from every project",
+          subtitle: "Show chats from every project",
           state: props.selectedProjectKey === null ? "on" : "off",
           onPress: () => props.onProjectChange(null),
         },

@@ -193,15 +193,7 @@ function eyeTransform(shape: BotBlobShape, state: BotAvatarState, index: 0 | 1):
   return `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${eye.rotate}) scale(${face.scale.toFixed(3)} ${(EYE_HEIGHT[state] * face.scale).toFixed(3)})`;
 }
 
-function Eyes({
-  shape,
-  state,
-  ink,
-}: {
-  shape: BotBlobShape;
-  state: BotAvatarState;
-  ink: string;
-}) {
+function Eyes({ shape, state, ink }: { shape: BotBlobShape; state: BotAvatarState; ink: string }) {
   return (
     <>
       {([0, 1] as const).map((index) => (
@@ -232,11 +224,7 @@ export function BotAvatarView(props: {
 }) {
   if (props.avatar?.kind === "image" && props.avatar.assetPath.length > 0) {
     return (
-      <BotImageAvatar
-        assetPath={props.avatar.assetPath}
-        size={props.size}
-        state={props.state}
-      />
+      <BotImageAvatar assetPath={props.avatar.assetPath} size={props.size} state={props.state} />
     );
   }
   return <BotBlobAvatar avatar={props.avatar} size={props.size} state={props.state} />;

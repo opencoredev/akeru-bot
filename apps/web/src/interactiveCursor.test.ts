@@ -13,11 +13,11 @@ describe("interactive pointer cursor", () => {
     expect(rule).toContain(":where(");
     expect(rule).toContain("a[href]");
     expect(rule).toContain("button");
-    expect(rule).toContain("[role=\"button\"]");
-    expect(rule).toContain("[role=\"tab\"]");
-    expect(rule).toContain("[role=\"option\"]");
+    expect(rule).toContain('[role="button"]');
+    expect(rule).toContain('[role="tab"]');
+    expect(rule).toContain('[role="option"]');
     expect(rule).toContain("summary");
     expect(rule).toContain("label");
-    expect(rule).toContain(":not(:disabled, [aria-disabled=\"true\"], [data-disabled])");
+    expect(rule).toContain(':not(:disabled, [aria-disabled="true"], [data-disabled])');
   });
 });

@@ -15,7 +15,11 @@ import {
 } from "./renderer";
 import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
 import { isMonospaceFamily } from "../../appearanceFonts";
-import { terminalLatencyCallbacks, type TerminalLatencyProbe, type TerminalLatencyCallbacks } from "../latency";
+import {
+  terminalLatencyCallbacks,
+  type TerminalLatencyProbe,
+  type TerminalLatencyCallbacks,
+} from "../latency";
 
 export const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 6;

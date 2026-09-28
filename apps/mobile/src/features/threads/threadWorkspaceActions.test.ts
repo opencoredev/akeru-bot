@@ -2,10 +2,7 @@
 import * as NodeFS from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  buildThreadWorkspaceActions,
-  runThreadWorkspaceAction,
-} from "./threadWorkspaceActions";
+import { buildThreadWorkspaceActions, runThreadWorkspaceAction } from "./threadWorkspaceActions";
 
 /** Mirrors how ThreadRouteScreen gates each entry for one chat. */
 function actionsFor(input: {

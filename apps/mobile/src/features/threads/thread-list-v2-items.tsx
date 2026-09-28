@@ -670,7 +670,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const botName = bot?.name ?? providerBotName(props.providerDriver) ?? "Bot";
   const botAvatar = bot?.avatar ?? seededBlobAvatar(props.providerDriver ?? `${thread.id}`);
   const avatarState =
-    status === "working" ? "working" : status === "approval" || status === "input" ? "needs-you" : "idle";
+    status === "working"
+      ? "working"
+      : status === "approval" || status === "input"
+        ? "needs-you"
+        : "idle";
   const online = status === "working" || status === "approval" || status === "input";
   // Preview line: live state first, then where the work lives.
   const previewText =
@@ -705,10 +709,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             {botName}
           </Text>
           <View className="min-w-0 shrink-[2] rounded-lg bg-subtle px-2 py-[3px]">
-            <Text
-              className={cn("text-[13px] font-t3-medium", metaMutedClass)}
-              numberOfLines={1}
-            >
+            <Text className={cn("text-[13px] font-t3-medium", metaMutedClass)} numberOfLines={1}>
               {displayThreadTitle}
             </Text>
           </View>
