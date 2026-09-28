@@ -530,6 +530,16 @@ describe("resolveLatestRosterMessage", () => {
     });
   });
 
+  it("ignores a newer fallback that flattens to empty and keeps the older answer", () => {
+    expect(
+      resolveLatestRosterMessage(
+        { text: "![chart](chart.png)", at: "2026-08-20T10:05:00.000Z" },
+        messages([{ role: "assistant", text: "Older answer", at: "2026-08-20T10:02:00.000Z" }]),
+      ),
+    ).toEqual({ text: "Older answer", at: "2026-08-20T10:02:00.000Z" });
+    expect(resolveLatestRosterMessage({ text: "![chart](chart.png)", at: "x" }, [])).toBeNull();
+  });
+
   it("ignores messages from parent-linked child threads", () => {
     expect(
       resolveLatestRosterMessage(
@@ -579,6 +589,26 @@ describe("flattenMarkdownPreview", () => {
     expect(flattenMarkdownPreview("rename user_id to 2 * 3 = 6")).toBe(
       "rename user_id to 2 * 3 = 6",
     );
+  });
+
+  it("keeps asterisks inside code spans and URLs literal", () => {
+    expect(flattenMarkdownPreview("`a*b*c` stays literal")).toBe("a*b*c stays literal");
+    expect(flattenMarkdownPreview("see https://example.com/a*b*c and _em_")).toBe(
+      "see https://example.com/a*b*c and em",
+    );
+    expect(flattenMarkdownPreview("mail <mailto:a*b@c.example> here")).toBe(
+      "mail mailto:a*b@c.example here",
+    );
+  });
+
+  it("flattens whitespace-heavy messages without rescanning every line", () => {
+    // The old `^\s*` line prefixes rescanned remaining blank lines on every
+    // match attempt: 8,000 newlines took ~330 ms. The [ \t] version is linear,
+    // so 20,000 newlines finish in single-digit milliseconds; 50 ms is a wide
+    // margin that still fails on the quadratic shape.
+    const start = performance.now();
+    expect(flattenMarkdownPreview(`${"\n".repeat(20_000)}done`)).toBe("done");
+    expect(performance.now() - start).toBeLessThan(50);
   });
 });
 

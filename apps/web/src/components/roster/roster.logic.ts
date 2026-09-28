@@ -235,21 +235,33 @@ export interface RosterLastMessage {
  * collapses to single spaces. Links keep their label; images drop out.
  */
 export function flattenMarkdownPreview(markdown: string): string {
-  return markdown
+  // Code spans and URLs keep their literal text, so pull them out before the
+  // emphasis pass eats their asterisks, then put them back before collapsing
+  // whitespace. Line-prefix whitespace stays [ \t] so multiline regexes never
+  // rescan blank lines quadratically.
+  const protectedTokens: string[] = [];
+  const stash = (literal: string) => {
+    protectedTokens.push(literal);
+    return `\u0000${protectedTokens.length - 1}\u0000`;
+  };
+  const flattened = markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
     .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
-    .replace(/^\s*(?:`{3,}|~{3,})[^\n]*$/gm, "")
-    .replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/gm, "")
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/^\s*(?:>\s?)+/gm, "")
-    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, "")
-    .replace(/`+([^`]+?)`+/g, "$1")
+    .replace(/^[ \t]*(?:`{3,}|~{3,})[^\n]*$/gm, "")
+    .replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, "")
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")
+    .replace(/^[ \t]*(?:>[ \t]?)+/gm, "")
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, "")
+    .replace(/`+([^`]+?)`+/g, (_, code: string) => stash(code))
+    .replace(/\b(?:https?|mailto):\S+/g, (url) => stash(url));
+  return flattened
     .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, "$2")
     .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "$1")
     .replace(/\*(?=\S)([^*]+?)(?<=\S)\*/g, "$1")
     .replace(/(^|[^\w])_(?=\S)([^_]+?)(?<=\S)_(?!\w)/g, "$1$2")
+    .replace(/\u0000(\d+)\u0000/g, (_, index: string) => protectedTokens[Number(index)] ?? "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -273,12 +285,15 @@ export function resolveLatestRosterMessage(
       break;
     }
   }
+  // A fallback that flattens to nothing (an image-only attachment, say) must
+  // not beat an older visible answer on timestamp alone.
   const flatFallback = fallback
     ? { ...fallback, text: flattenMarkdownPreview(fallback.text) }
     : null;
-  if (!latest) return flatFallback;
-  if (!flatFallback) return latest;
-  return latest.at >= flatFallback.at ? latest : flatFallback;
+  const usableFallback = flatFallback && flatFallback.text.length > 0 ? flatFallback : null;
+  if (!latest) return usableFallback;
+  if (!usableFallback) return latest;
+  return latest.at >= usableFallback.at ? latest : usableFallback;
 }
 
 export interface RosterSection {
