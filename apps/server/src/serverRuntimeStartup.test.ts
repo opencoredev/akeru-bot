@@ -1,4 +1,4 @@
-import { inspect } from "node:util";
+import * as NodeUtil from "node:util";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotId, DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
@@ -398,7 +398,7 @@ it.effect("channel restore logs never carry provider errors or secrets", () => {
 
     assert.lengthOf(logs, 3);
     // inspect walks Error messages and causes, which JSON.stringify would drop.
-    const logged = inspect(logs, { depth: 20 });
+    const logged = NodeUtil.inspect(logs, { depth: 20 });
     assert.include(logged, "failed to restore external channel");
     assert.include(logged, "external channel startup restore failed");
     assert.notInclude(logged, secret);

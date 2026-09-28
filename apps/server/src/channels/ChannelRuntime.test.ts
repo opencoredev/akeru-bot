@@ -1,5 +1,5 @@
 import * as NodeCrypto from "node:crypto";
-import { inspect } from "node:util";
+import * as NodeUtil from "node:util";
 
 import {
   BotId,
@@ -3484,7 +3484,7 @@ describe("channel runtime", () => {
           lastError: channelFailureMessage("credentials"),
           failureCategory: "credentials",
         });
-        expect(inspect(annotated)).not.toContain("invalid-token");
+        expect(NodeUtil.inspect(annotated)).not.toContain("invalid-token");
         expect(channelBindingsForRuntime([annotated!])[0]?.status).toBe("connected");
         expect(stops).toBe(0);
 
@@ -3620,7 +3620,7 @@ describe("channel runtime", () => {
           lastError: "The channel connection stopped. Reconnect to resume.",
           failureCategory: "network",
         });
-        expect(inspect(binding)).not.toContain("discord-token");
+        expect(NodeUtil.inspect(binding)).not.toContain("discord-token");
         yield* reconnectChannel(harness.dependencies, BOT_ID, "discord");
         expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
           status: "connected",
@@ -3743,8 +3743,8 @@ describe("channel runtime", () => {
           connectedAt: null,
           failureCategory: "restore",
         });
-        expect(inspect(restored)).not.toContain("telegram-token");
-        expect(inspect(restored)).not.toContain("Unauthorized");
+        expect(NodeUtil.inspect(restored)).not.toContain("telegram-token");
+        expect(NodeUtil.inspect(restored)).not.toContain("Unauthorized");
       }),
     );
   });
