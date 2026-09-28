@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { DatabaseSync } from "node:sqlite";
+import * as NodeSqlite from "node:sqlite";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { MessageList } from "@mastra/core/agent";
@@ -540,7 +540,7 @@ describe("AkeruMastraHarness", () => {
     });
 
   const queuedObservations = (directory: string) => {
-    const db = new DatabaseSync(
+    const db = new NodeSqlite.DatabaseSync(
       NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
     );
     try {
@@ -595,7 +595,7 @@ describe("AkeruMastraHarness", () => {
 
       // Force the backed-off row eligible again; the next drain retries and
       // removes it on success.
-      const db = new DatabaseSync(
+      const db = new NodeSqlite.DatabaseSync(
         NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
       );
       db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
@@ -643,7 +643,7 @@ describe("AkeruMastraHarness", () => {
       // force eligibility so the test does not wait on wall-clock backoff.
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await (attempt === 0 ? harness.observeAfterTurn!(input) : harness.drainObservationQueue!());
-        const db = new DatabaseSync(queuePath);
+        const db = new NodeSqlite.DatabaseSync(queuePath);
         db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
           "2000-01-01T00:00:00.000Z",
         );
@@ -804,7 +804,7 @@ describe("AkeruMastraHarness", () => {
     // The failed attempt was released with a backoff; a restart within that
     // window finds the row not yet eligible, so make it due before reopening.
     {
-      const db = new DatabaseSync(
+      const db = new NodeSqlite.DatabaseSync(
         NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
       );
       db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(

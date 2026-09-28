@@ -1,7 +1,7 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 import * as NodeCrypto from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeSqlite from "node:sqlite";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
@@ -1073,7 +1073,7 @@ export async function createAkeruMastraHarness(
   const OBSERVATION_QUEUE_SCHEMA_VERSION = 1;
   const OBSERVATION_CLAIM_LEASE_MS = 5 * 60_000;
   const OBSERVATION_RETRY_BACKOFF_MS = 30_000;
-  const observationQueueDb = new DatabaseSync(`${options.memoryDbPath}.queue.sqlite`);
+  const observationQueueDb = new NodeSqlite.DatabaseSync(`${options.memoryDbPath}.queue.sqlite`);
   observationQueueDb.exec("PRAGMA busy_timeout = 5000");
   const observationQueueVersion = (
     observationQueueDb.prepare("PRAGMA user_version").get() as { user_version: number }
