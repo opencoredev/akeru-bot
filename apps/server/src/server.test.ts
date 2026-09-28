@@ -923,6 +923,7 @@ const buildAppUnderTest = (options?: {
             ...options?.layers?.projectionBots,
           } satisfies ProjectionBots.ProjectionBotRepositoryShape),
           Layer.mock(BotUsageLedger)({
+            pricingTotals: () => Effect.succeed({ complete: true, models: [] }),
             summarize: (botId) =>
               Effect.succeed({
                 botId,

@@ -82,6 +82,18 @@ export type BotUsageLedgerError =
   | PersistenceDecodeError;
 
 export interface BotUsageLedgerShape {
+  readonly pricingTotals: (botId: BotId) => Effect.Effect<
+    {
+      readonly complete: boolean;
+      readonly models: ReadonlyArray<{
+        readonly model: string;
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+        readonly reasoningTokens: number;
+      }>;
+    },
+    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
+  >;
   readonly reserve: (
     input: ReserveBotUsageInput,
   ) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
@@ -622,6 +634,46 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const pricingTotals: BotUsageLedgerShape["pricingTotals"] = (botId) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<{
+        readonly model: string | null;
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+        readonly reasoningTokens: number;
+        readonly incompleteEntries: number;
+      }>`
+        SELECT model,
+          COALESCE(SUM(CASE WHEN state = 'reported' THEN input_tokens ELSE 0 END), 0) AS "inputTokens",
+          COALESCE(SUM(CASE WHEN state = 'reported' THEN output_tokens ELSE 0 END), 0) AS "outputTokens",
+          COALESCE(SUM(CASE WHEN state = 'reported' THEN reasoning_tokens ELSE 0 END), 0) AS "reasoningTokens",
+          COALESCE(SUM(CASE WHEN state = 'unavailable' OR
+            (state = 'reported' AND (input_tokens IS NULL OR output_tokens IS NULL))
+            THEN 1 ELSE 0 END), 0) AS "incompleteEntries"
+        FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
+        GROUP BY model
+      `;
+      return {
+        complete: rows.every(
+          (row) =>
+            row.incompleteEntries === 0 &&
+            (row.model !== null || row.inputTokens + row.outputTokens === 0),
+        ),
+        models: rows.flatMap((row) =>
+          row.model !== null && row.inputTokens + row.outputTokens > 0
+            ? [
+                {
+                  model: row.model,
+                  inputTokens: row.inputTokens,
+                  outputTokens: row.outputTokens,
+                  reasoningTokens: row.reasoningTokens,
+                },
+              ]
+            : [],
+        ),
+      };
+    }).pipe(Effect.mapError(toPersistenceSqlError("BotUsageLedger.pricingTotals")));
+
   const reconcileInterruptedReservations = writeLock.withPermit(
     sql
       .withTransaction(
@@ -674,6 +726,7 @@ const make = Effect.gen(function* () {
     finalizeForTurn,
     recordMeasurement,
     summarize,
+    pricingTotals,
   } satisfies BotUsageLedgerShape;
 });
 

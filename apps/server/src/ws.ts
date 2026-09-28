@@ -3180,25 +3180,31 @@ const makeWsRpcLayer = (
                     }),
                 ),
               );
-              const pricedEntries = summary.entries.filter(
-                (entry) =>
-                  entry.state === "reported" && entry.model !== null && entry.inputTokens !== null,
-              );
-              const priced = yield* Effect.forEach(pricedEntries, (entry) =>
+              const pricingTotals = yield* botUsageLedger
+                .pricingTotals(input.botId)
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new AkeruBotUsageReadError({ botId: input.botId, detail: cause.message }),
+                  ),
+                );
+              const priced = yield* Effect.forEach(pricingTotals.models, (entry) =>
                 usage.priceStepUsage({
-                  model: entry.model!,
+                  model: entry.model,
                   totals: {
-                    uncachedInputTokens: entry.inputTokens!,
+                    uncachedInputTokens: entry.inputTokens,
                     cachedInputTokens: 0,
                     cacheCreationTokens: 0,
-                    outputTokens: entry.outputTokens ?? 0,
-                    reasoningTokens: Math.min(entry.reasoningTokens ?? 0, entry.outputTokens ?? 0),
+                    outputTokens: entry.outputTokens,
+                    reasoningTokens: Math.min(entry.reasoningTokens, entry.outputTokens),
                   },
                   reportedCostUsd: null,
                 }),
               );
               const estimatedCost =
-                pricedEntries.length > 0 && priced.every((entry) => entry.costSource !== "unpriced")
+                pricingTotals.complete &&
+                pricingTotals.models.length > 0 &&
+                priced.every((entry) => entry.costSource !== "unpriced")
                   ? {
                       status: "available" as const,
                       usd: priced.reduce((total, entry) => total + entry.costUsd, 0),

@@ -506,6 +506,70 @@ it.layer(layer)("BotUsageLedger", (it) => {
       assert.equal(parent.consumedTokens, 0);
     }),
   );
+
+  it.effect("prices all ledger rows while keeping the visible history bounded", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-lifetime-cost");
+      for (let index = 0; index < 201; index++) {
+        yield* ledger.recordMeasurement({
+          reservationId: AkeruUsageReservationId.make(`measurement-${index}`),
+          sourceKey: `measurement-${index}`,
+          botId,
+          threadId: null,
+          turnId: null,
+          category: "tool",
+          inputTokens: 10,
+          outputTokens: 5,
+          reasoningTokens: null,
+          provider: ProviderDriverKind.make("codex"),
+          model: "gpt-5.6-sol",
+          createdAt: "2026-08-30T20:00:00.000Z",
+        });
+      }
+      yield* ledger.recordMeasurement({
+        reservationId: AkeruUsageReservationId.make("zero-unpriced"),
+        sourceKey: "zero-unpriced",
+        botId,
+        threadId: null,
+        turnId: null,
+        category: "tool",
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: null,
+        provider: null,
+        model: null,
+        createdAt: "2026-08-30T20:00:00.000Z",
+      });
+      const summary = yield* ledger.summarize(botId);
+      const pricing = yield* ledger.pricingTotals(botId);
+      assert.equal(summary.entries.length, 200);
+      assert.equal(pricing.complete, true);
+      assert.deepEqual(pricing.models, [
+        {
+          model: "gpt-5.6-sol",
+          inputTokens: 2010,
+          outputTokens: 1005,
+          reasoningTokens: 0,
+        },
+      ]);
+      yield* ledger.recordMeasurement({
+        reservationId: AkeruUsageReservationId.make("unknown-priced"),
+        sourceKey: "unknown-priced",
+        botId,
+        threadId: null,
+        turnId: null,
+        category: "tool",
+        inputTokens: 10,
+        outputTokens: 0,
+        reasoningTokens: null,
+        provider: null,
+        model: null,
+        createdAt: "2026-08-30T20:00:00.000Z",
+      });
+      assert.equal((yield* ledger.pricingTotals(botId)).complete, false);
+    }),
+  );
 });
 
 it("reconciles persisted reservations when the ledger restarts", () =>

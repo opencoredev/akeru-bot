@@ -382,6 +382,7 @@ function makeUsageLedger() {
       finalizeForTurn: unused,
       recordMeasurement: unused,
       summarize: unused,
+      pricingTotals: unused,
     }),
   };
 }
