@@ -1184,7 +1184,15 @@ describe("delegation cards in the feed", () => {
       retryOfDelegationId: original.delegationId,
       phase: canceledPhase,
     };
+    const before = buildThreadFeed(feedThread(messages), { delegations: [original] });
     const feed = buildThreadFeed(feedThread(messages), { delegations: [original, retry] });
+    const oldCard = before.find((entry) => entry.id === "delegation:d-1");
+    const updatedCard = feed.find((entry) => entry.id === "delegation:d-1");
+    expect(oldCard?.type).toBe("delegation");
+    expect(updatedCard?.type).toBe("delegation");
+    if (oldCard && updatedCard) {
+      expect(threadFeedEntriesEqual(oldCard, updatedCard)).toBe(false);
+    }
     const actions = Object.fromEntries(
       feed.flatMap((entry) => (entry.type === "delegation" ? [[entry.id, entry.actions]] : [])),
     );

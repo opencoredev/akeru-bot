@@ -1642,7 +1642,12 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
   if (previous.id !== next.id || previous.createdAt !== next.createdAt) return false;
   switch (previous.type) {
     case "delegation":
-      return next.type === "delegation" && previous.delegation === next.delegation;
+      return (
+        next.type === "delegation" &&
+        previous.delegation === next.delegation &&
+        previous.actions.length === next.actions.length &&
+        previous.actions.every((action, index) => action === next.actions[index])
+      );
     case "message":
       return (
         next.type === "message" &&
