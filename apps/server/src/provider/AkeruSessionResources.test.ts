@@ -135,7 +135,7 @@ describe("AkeruSessionResources", () => {
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
   });
 
-  it.each(["local", "vercel", "e2b", "daytona", "upstash"] as const)(
+  it.each(["local", "vercel", "e2b", "daytona", "upstash", "tenki"] as const)(
     "acquires only usable connector browser attachments in %s workspaces",
     async (botSandbox) => {
       for (const transport of ["stdio", "url"] as const) {

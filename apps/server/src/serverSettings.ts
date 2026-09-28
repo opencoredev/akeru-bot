@@ -191,6 +191,7 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         daytona: redactSandboxProviderConnection(settings.sandbox.providers.daytona),
         vercel: redactSandboxProviderConnection(settings.sandbox.providers.vercel),
         upstash: redactSandboxProviderConnection(settings.sandbox.providers.upstash),
+        tenki: redactSandboxProviderConnection(settings.sandbox.providers.tenki),
       },
     },
     browserProvider: {

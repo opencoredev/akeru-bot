@@ -1,7 +1,12 @@
 # Configure sandboxes
 
-Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, or Upstash Box. Local workspaces
+Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, Upstash Box, or Tenki. Local workspaces
 need no credential and are always available.
+
+Tenki runs coding agents in full Linux VMs and supports public previews, disk and memory snapshots,
+and persistence until you clean up the sandbox. Connect it with your `TENKI_API_KEY`.
+Tenki previews are public: anyone with a preview URL can access it. Pausing preserves VM memory
+and disk but clears `/tmp`; keep durable files under `/home/tenki`.
 
 Select **Connect** and enter the provider credentials. The environment stores secret values outside
 `settings.json`. Clients receive only a redacted marker after a secret is saved.

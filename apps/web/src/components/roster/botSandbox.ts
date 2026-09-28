@@ -14,6 +14,7 @@ export const BOT_SANDBOX_OPTIONS = [
   { value: "daytona", label: "Daytona" },
   { value: "vercel", label: "Vercel Sandbox" },
   { value: "upstash", label: "Upstash Box" },
+  { value: "tenki", label: "Tenki" },
 ] as const;
 
 export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"];

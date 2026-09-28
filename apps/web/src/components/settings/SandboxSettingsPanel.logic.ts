@@ -50,6 +50,12 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Run bots in an Upstash Box with your API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
+  tenki: {
+    id: "tenki",
+    label: "Tenki",
+    description: "Run bots in a Tenki sandbox with your API key.",
+    fields: [{ name: "TENKI_API_KEY", label: "API key", secret: true }],
+  },
 };
 
 export const SANDBOX_PROVIDER_DEFINITIONS = Object.values(SANDBOX_PROVIDER_DEFINITION_BY_ID);
