@@ -83,6 +83,7 @@ export class AkeruSessionResources {
   private readonly browserDestroyRequests = new Set<string>();
   private readonly browserReconnects = new Map<string, Promise<void>>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
+  private readonly tenkiThreads = new Set<string>();
   private controllingThreadId: string | undefined;
   private shuttingDown = false;
 
@@ -273,6 +274,7 @@ export class AkeruSessionResources {
         }
       }
 
+      if (input.botSandbox === "tenki") this.tenkiThreads.add(key);
       return {
         workspace:
           userComputerWorkspaceLease?.workspace.workspace ?? workspaceLease.workspace.workspace,
@@ -285,8 +287,9 @@ export class AkeruSessionResources {
   }
 
   getConnectorTools(threadId: string): ToolsInput {
+    const browserTools = this.threadBrowsers.get(threadId)?.tools;
     const tools: ToolsInput = {
-      ...this.threadBrowsers.get(threadId)?.tools,
+      ...(!this.tenkiThreads.has(threadId) ? browserTools : undefined),
       ...this.mcpManagers.get(threadId)?.getTools(),
     };
     return Object.fromEntries(
@@ -354,6 +357,7 @@ export class AkeruSessionResources {
     const failures: unknown[] = [];
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);
+    this.tenkiThreads.delete(threadId);
     if (manager) await manager.disconnect().catch((cause) => failures.push(cause));
     const computerUseTemporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
     this.computerUseTemporaryDirectories.delete(threadId);

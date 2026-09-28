@@ -8,6 +8,7 @@ import { McpServerId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import { createBotBrowserTools } from "./botBrowser.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 import { createBotBrowser } from "./botBrowser.ts";
 import {
@@ -265,6 +266,39 @@ describe("AkeruSessionResources", () => {
       await resources.shutdown();
     }
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("does not advertise browser tools for Tenki while retaining MCP tools", async () => {
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => ({
+        ...browser(),
+        tools: createBotBrowserTools({
+          call: async () => "",
+          attachment: async () => undefined,
+          reconnect: async () => undefined,
+          close: async () => undefined,
+        }),
+      }),
+      makeMcpManager: () =>
+        mcpManager({ connected: true, toolCount: 1 }, { exa_search: {}, other_tool: {} }) as never,
+      toMcpServerConfigs: () => ({}),
+    });
+    try {
+      await resources.acquire({
+        ...remoteInput,
+        botSandbox: "tenki",
+        threadId: "tenki-tools",
+        mcpServers: [exaServer],
+      });
+      expect(resources.getConnectorTools("tenki-tools")).toEqual({
+        exa_search: {},
+        other_tool: {},
+      });
+    } finally {
+      await resources.shutdown();
+    }
   });
 
   it("coalesces concurrent acquisition for the same thread", async () => {
