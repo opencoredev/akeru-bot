@@ -1,10 +1,13 @@
 import { availableLanguages, useI18n } from "../../i18n";
 import { Button } from "../ui/button";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingsRow, SettingResetButton } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
 export function LanguageSetting() {
   const { t, preference, setPreference, catalogFailed, retryCatalog } = useI18n();
+  const selectedLabel =
+    availableLanguages.find((language) => language.id === preference)?.label ?? t("System default");
   return (
     <SettingsRow
       {...searchableSetting("language", t)}
@@ -34,20 +37,30 @@ export function LanguageSetting() {
         />
       }
       control={
-        <select
-          id="language-preference"
-          aria-describedby="language-description"
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm sm:w-48"
+        <Select
           value={preference}
-          onChange={(event) => setPreference(event.currentTarget.value)}
+          onValueChange={(value) => {
+            if (typeof value === "string") setPreference(value);
+          }}
         >
-          <option value="system">{t("System default")}</option>
-          {availableLanguages.map(({ id, label }) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            id="language-preference"
+            aria-describedby="language-description"
+            className="w-full sm:w-48"
+          >
+            <SelectValue>{selectedLabel}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            <SelectItem hideIndicator value="system">
+              {t("System default")}
+            </SelectItem>
+            {availableLanguages.map(({ id, label }) => (
+              <SelectItem hideIndicator key={id} value={id}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
       }
     />
   );

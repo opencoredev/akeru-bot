@@ -12,10 +12,8 @@ describe("language setting", () => {
     expect(html).toContain('id="language-preference"');
     expect(html).toContain('aria-describedby="language-description"');
     expect(html).toContain('aria-label="Reset Language to default"');
-    expect(html).toContain('value="system" selected=""');
-    expect(html).toContain('value="en"');
-    expect(html).toContain('value="zh-CN"');
-    expect(html.match(/<option /g)).toHaveLength(3);
+    // The shared select renders its trigger with the current choice; the list opens on demand.
+    expect(html).toContain("System default");
     expect(html).toContain("Language applies only to this device.");
   });
 
@@ -38,9 +36,6 @@ describe("language setting", () => {
     expect(html).toContain("Système de test");
     expect(html).toContain('aria-label="Réinitialiser Langue de test"');
     expect(html).toContain('id="language"');
-    expect(html).toContain('value="system"');
-    expect(html).toContain('value="en"');
-    expect(html).toContain('value="zh-CN"');
-    expect(html).not.toContain('value="fr"');
+    expect(html).not.toContain(">fr<");
   });
 });
