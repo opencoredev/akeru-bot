@@ -3,7 +3,8 @@
 ## Chat activity and replies
 
 While a bot works, its status names the current step when the provider reports it, such as thinking,
-running a command, or adding a routine. The timer shows how long the current turn has been running.
+running a command, or adding a routine. When a provider stops sending output, the status says so and
+shows how long it has been quiet.
 
 To reply to a specific message, use **Reply** on that message. The sent reply keeps a short reference
 above your text. Select the referenced person's name to jump back to the original message when it
