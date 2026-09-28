@@ -28,6 +28,26 @@ describe("terminal latency harness", () => {
       { keypressToGlyphMs: 28, byteArrivalToGlyphMs: 25 },
     ]);
   });
+  it("correlates ordered echoes that arrive in one output chunk", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onKeypress(1, "a");
+    r.onKeypress(2, "b");
+    r.onByteArrival(3, "ab");
+    r.onGlyphPaint(5);
+    r.onGlyphPaint(6);
+    expect(r.samples).toEqual([
+      { keypressToGlyphMs: 4, byteArrivalToGlyphMs: 2 },
+      { keypressToGlyphMs: 4, byteArrivalToGlyphMs: 3 },
+    ]);
+  });
+  it("does not guess which repeated key produced a shared echo", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onKeypress(1, "a");
+    r.onKeypress(2, "a");
+    r.onByteArrival(3, "aa");
+    r.onGlyphPaint(5);
+    expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 2 }]);
+  });
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     for (let i = 0; i < 700; i++) {

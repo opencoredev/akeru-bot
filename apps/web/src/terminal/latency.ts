@@ -101,15 +101,21 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
   }
   onByteArrival(time: number, output: string): void {
     const printable = [...output].filter((char) => char >= " " && char <= "~");
-    const candidates = this.pendingKeys.filter(
-      (key) =>
-        key.byteAt === undefined &&
-        time - key.keypressAt <= ECHO_WINDOW_MS &&
-        printable.includes(key.expected),
+    const eligible = this.pendingKeys.filter(
+      (key) => key.byteAt === undefined && time - key.keypressAt <= ECHO_WINDOW_MS,
     );
-    const key = candidates.length === 1 ? candidates[0] : undefined;
-    if (key) key.byteAt = time;
-    else {
+    const candidates = eligible.filter(
+      (key) =>
+        eligible.filter((other) => other.expected === key.expected).length === 1 &&
+        printable.filter((char) => char === key.expected).length === 1,
+    );
+    const positions = candidates.map((key) => printable.indexOf(key.expected));
+    if (
+      candidates.length > 0 &&
+      positions.every((position, index) => index === 0 || position > positions[index - 1]!)
+    ) {
+      for (const key of candidates) key.byteAt = time;
+    } else {
       if (this.pendingPaints.length >= MAX_PENDING_PAINTS) this.pendingPaints.shift();
       this.pendingPaints.push({ byteAt: time });
     }
