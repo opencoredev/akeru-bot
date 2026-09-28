@@ -71,10 +71,7 @@ export interface ReviseEntityMemoryInput extends InsertEntityMemoryInput {
 
 export interface ApplyEntityMemoryMutationInput {
   readonly access: AkeruMemoryThreadAccess;
-  readonly mutation: Extract<
-    AkeruMemoryMutation,
-    { readonly operation: `fact.${string}` }
-  >;
+  readonly mutation: Extract<AkeruMemoryMutation, { readonly operation: `fact.${string}` }>;
   readonly memoryId: AkeruMemoryId;
   readonly updatedAt: string;
   /** Shared-scope policy for a mutation that lands a fact on a shared scope. */

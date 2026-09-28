@@ -581,7 +581,9 @@ export const AkeruMemoryFactRead = Schema.Struct({
 });
 export type AkeruMemoryFactRead = typeof AkeruMemoryFactRead.Type;
 
-export const AkeruMemoryFactsListResult = Schema.Struct({ facts: Schema.Array(AkeruMemoryFactRead) });
+export const AkeruMemoryFactsListResult = Schema.Struct({
+  facts: Schema.Array(AkeruMemoryFactRead),
+});
 export type AkeruMemoryFactsListResult = typeof AkeruMemoryFactsListResult.Type;
 
 export class AkeruMemoryOperationError extends Schema.TaggedErrorClass<AkeruMemoryOperationError>()(

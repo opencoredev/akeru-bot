@@ -289,7 +289,9 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     sql`
       DELETE FROM akeru_memory_derived_copies
       WHERE tenant_id = ${tenantId} AND root_id = ${rootId}
-    `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateDerivedCopies")));
+    `.pipe(
+      Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateDerivedCopies")),
+    );
 
   const insert: EntityMemoryRepositoryShape["insert"] = (input) =>
     writeLock.withPermit(
@@ -682,20 +684,25 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 ? input.access.userId
                 : selected.scope === "bot-user"
                   ? input.access.userId
-                : selected.scope === "thread" && input.access.groupId !== null
-                  ? input.access.groupId
-                  : selected.scope === "thread" && input.access.botId !== null
-                    ? input.access.botId
-                    : input.access.projectId;
+                  : selected.scope === "thread" && input.access.groupId !== null
+                    ? input.access.groupId
+                    : selected.scope === "thread" && input.access.botId !== null
+                      ? input.access.botId
+                      : input.access.projectId;
       const expectedAffected =
         selected.visibility === "shared"
-          ? new Set([...input.access.groupMemberBotIds, ...(authorBotId === null ? [] : [authorBotId])])
+          ? new Set([
+              ...input.access.groupMemberBotIds,
+              ...(authorBotId === null ? [] : [authorBotId]),
+            ])
           : new Set(authorBotId === null ? [] : [authorBotId]);
       if (
         !sourcePartition ||
         String(revision.entityId) !== String(expectedEntityId) ||
         revision.initiatingUserId !== input.access.userId ||
-        revision.authorBotId !== null && authorBotId !== null && revision.authorBotId !== authorBotId ||
+        (revision.authorBotId !== null &&
+          authorBotId !== null &&
+          revision.authorBotId !== authorBotId) ||
         revision.affectedBotIds.some((botId) => !expectedAffected.has(botId)) ||
         revision.affectedBotIds.length !== expectedAffected.size
       ) {
@@ -883,9 +890,16 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               });
             }
             const requestedResolutions = input.resolutions ?? [];
-            const resolutions = new Map(requestedResolutions.map((resolution) => [String(resolution.rootId), resolution.decision]));
+            const resolutions = new Map(
+              requestedResolutions.map((resolution) => [
+                String(resolution.rootId),
+                resolution.decision,
+              ]),
+            );
             if (resolutions.size !== requestedResolutions.length) {
-              return yield* new EntityMemoryImportError({ detail: "Each memory conflict may be resolved only once." });
+              return yield* new EntityMemoryImportError({
+                detail: "Each memory conflict may be resolved only once.",
+              });
             }
             const conflicts = preview.items.filter((item) => item.classification === "conflicting");
             for (const conflict of conflicts) {
@@ -896,8 +910,15 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               }
             }
             for (const resolution of resolutions.keys()) {
-              if (!preview.items.some((item) => String(item.rootId) === resolution && item.classification === "conflicting")) {
-                return yield* new EntityMemoryImportError({ detail: `Resolution targets a non-conflicting memory: ${resolution}.` });
+              if (
+                !preview.items.some(
+                  (item) =>
+                    String(item.rootId) === resolution && item.classification === "conflicting",
+                )
+              ) {
+                return yield* new EntityMemoryImportError({
+                  detail: `Resolution targets a non-conflicting memory: ${resolution}.`,
+                });
               }
             }
             for (const item of preview.items) {
@@ -910,7 +931,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 .sort((left, right) => left.revision - right.revision);
               const decision = resolutions.get(String(item.rootId));
               if (item.classification === "conflicting" && decision === "keep-local") continue;
-              const additions = item.classification === "conflicting" ? incoming : incoming.slice(local.length);
+              const additions =
+                item.classification === "conflicting" ? incoming : incoming.slice(local.length);
               if (additions.length > 0) {
                 yield* invalidateDerivedCopies(input.access.tenantId, item.rootId);
               }
@@ -957,34 +979,32 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
 
   const deleteRootInner = (input: DeleteEntityMemoryInput) =>
     Effect.gen(function* () {
-        yield* getCurrent(input);
-        const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
-        const rows = yield* sql
-          .unsafe<EntityMemoryDbRow>(
-            `SELECT ${selectColumns} FROM akeru_memory_revisions
+      yield* getCurrent(input);
+      const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
+      const rows = yield* sql
+        .unsafe<EntityMemoryDbRow>(
+          `SELECT ${selectColumns} FROM akeru_memory_revisions
          WHERE tenant_id = ? AND root_id = ?`,
-            [input.access.tenantId, input.rootId],
-          )
-          .pipe(
-            Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:history")),
-          );
-        const revisions = yield* Effect.forEach(rows, decodeRow);
-        if (
-          revisions.some(
-            (revision) =>
-              !partitions.some(
-                (partition) =>
-                  partition.tenantId === revision.partition.tenantId &&
-                  partition.scope === revision.partition.scope &&
-                  partition.partitionId === revision.partition.partitionId &&
-                  partition.visibility === revision.visibility,
-              ),
-          )
-        ) {
-          return yield* new AkeruMemoryAccessDenied({
-            reason: "Every historical revision must be authorized before permanent deletion.",
-          });
-        }
+          [input.access.tenantId, input.rootId],
+        )
+        .pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:history")));
+      const revisions = yield* Effect.forEach(rows, decodeRow);
+      if (
+        revisions.some(
+          (revision) =>
+            !partitions.some(
+              (partition) =>
+                partition.tenantId === revision.partition.tenantId &&
+                partition.scope === revision.partition.scope &&
+                partition.partitionId === revision.partition.partitionId &&
+                partition.visibility === revision.visibility,
+            ),
+        )
+      ) {
+        return yield* new AkeruMemoryAccessDenied({
+          reason: "Every historical revision must be authorized before permanent deletion.",
+        });
+      }
       yield* sql`
         DELETE FROM akeru_memory_revisions
         WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
@@ -992,7 +1012,9 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       yield* sql`
         DELETE FROM akeru_memory_derived_copies
         WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}
-      `.pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:derived-copies")));
+      `.pipe(
+        Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:derived-copies")),
+      );
     });
 
   const deleteRoot: EntityMemoryRepositoryShape["deleteRoot"] = (input) =>
@@ -1074,11 +1096,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             break;
           }
           case "fact.scope": {
-            const partition = targetScopePartition(
-              input.access,
-              input.mutation.scope,
-              partitions,
-            );
+            const partition = targetScopePartition(input.access, input.mutation.scope, partitions);
             if (!partition) {
               return yield* new AkeruMemoryAccessDenied({
                 reason: `The ${input.mutation.scope} memory scope is not available to this thread.`,

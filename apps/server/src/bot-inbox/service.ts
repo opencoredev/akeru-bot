@@ -134,11 +134,9 @@ export class BotInboxService {
       // (browser-dead) carry no timestamp and always reopen; recurring kinds
       // (connector, approval, routine) must not resurrect on every sync.
       const failureAt = incident.lastFailedRequestAt;
-      const storedFailureAt =
-        existing.resolvedFailureAt ?? existing.lastFailedRequestAt ?? null;
+      const storedFailureAt = existing.resolvedFailureAt ?? existing.lastFailedRequestAt ?? null;
       const timestampedReopenAllowed =
-        incident.kind === "browser-dead" ||
-        incident.kind === "silence-watchdog-failure";
+        incident.kind === "browser-dead" || incident.kind === "silence-watchdog-failure";
       if (failureAt === undefined) {
         if (!timestampedReopenAllowed) return existing;
       } else if (storedFailureAt !== null) {

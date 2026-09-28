@@ -1176,9 +1176,7 @@ const buildAppUnderTest = (options?: {
               Layer.provide(SqlitePersistenceMemory),
               Layer.tap((context) =>
                 options.durableMemory?.seed
-                  ? options.durableMemory.seed(
-                      Context.get(context, EntityMemoryRepository),
-                    )
+                  ? options.durableMemory.seed(Context.get(context, EntityMemoryRepository))
                   : Effect.void,
               ),
             )
@@ -7053,16 +7051,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           withWsRpcClient(wsUrl, (client) =>
             client[WS_METHODS.memoryArchiveExport]({ threadId, target, complete: true }),
           ),
-        ).pipe(
-          Effect.map((result) => result.revisions.map(({ revision }) => revision.id).sort()),
-        );
+        ).pipe(Effect.map((result) => result.revisions.map(({ revision }) => revision.id).sort()));
       assert.deepEqual(yield* exportIds("thread"), [seededThreadRevision.id]);
       assert.deepEqual(yield* exportIds("bot"), [botRevision.id]);
       assert.deepEqual(yield* exportIds("project"), []);
-      assert.deepEqual(
-        yield* exportIds("all"),
-        [botRevision.id, seededThreadRevision.id].sort(),
-      );
+      assert.deepEqual(yield* exportIds("all"), [botRevision.id, seededThreadRevision.id].sort());
 
       const preview = yield* Effect.scoped(
         withWsRpcClient(readWsUrl, (client) =>
@@ -7113,9 +7106,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               target: "thread",
               archive,
               previewHash: conflictedPreview.previewHash,
-              resolutions: [
-                { rootId: seededThreadRevision.rootId, decision: "use-archive" },
-              ],
+              resolutions: [{ rootId: seededThreadRevision.rootId, decision: "use-archive" }],
             }),
           ),
         ),
@@ -7129,9 +7120,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             target: "thread",
             archive,
             previewHash: conflictedPreview.previewHash,
-            resolutions: [
-              { rootId: seededThreadRevision.rootId, decision: "use-archive" },
-            ],
+            resolutions: [{ rootId: seededThreadRevision.rootId, decision: "use-archive" }],
           }),
         ),
       );
@@ -7333,7 +7322,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               }),
           },
           projectionBots: {
-            upsert: (bot) => Effect.sync(() => void botWrites.push((bot as unknown as { readonly id: string }).id)),
+            upsert: (bot) =>
+              Effect.sync(
+                () => void botWrites.push((bot as unknown as { readonly id: string }).id),
+              ),
           },
           projectionSnapshotQuery: {
             getShellSnapshot: () =>

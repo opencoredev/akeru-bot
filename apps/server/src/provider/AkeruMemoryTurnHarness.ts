@@ -149,7 +149,11 @@ export class AkeruMemoryTurnHarness {
     this.store = store;
   }
 
-  async admit({ access, input, privateBotMemory }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
+  async admit({
+    access,
+    input,
+    privateBotMemory,
+  }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
     const reservation = await this.store.reserveReviewCadence(access.botId, input);
     try {
       const promptSnapshot = await this.store.readPromptSnapshot(access);

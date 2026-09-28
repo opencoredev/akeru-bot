@@ -419,16 +419,29 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const rootId = AkeruMemoryRootId.make("derived-write-root");
       yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
         VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
-      yield* repository.insert({ access: botAccess, revision: makeRevision("derived-write-root", "bot:user", { rootId }) });
-      assert.deepEqual(yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`, []);
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("derived-write-root", "bot:user", { rootId }),
+      });
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
       yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
         VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale-2")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
       yield* repository.revise({
         access: botAccess,
         expectedRevision: 1,
-        revision: makeRevision("derived-write-root-2", "bot:user", { rootId, revision: 2, supersedesId: AkeruMemoryId.make("derived-write-root") }),
+        revision: makeRevision("derived-write-root-2", "bot:user", {
+          rootId,
+          revision: 2,
+          supersedesId: AkeruMemoryId.make("derived-write-root"),
+        }),
       });
-      assert.deepEqual(yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`, []);
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
     }),
   );
 
@@ -474,9 +487,13 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         limit: 10,
       });
       assert.equal(rows.length, 0);
-      const ftsRows = yield* sql<{ readonly memory_id: string }>`SELECT memory_id FROM akeru_memory_fts WHERE memory_id = ${"active"}`;
+      const ftsRows = yield* sql<{
+        readonly memory_id: string;
+      }>`SELECT memory_id FROM akeru_memory_fts WHERE memory_id = ${"active"}`;
       assert.deepEqual(ftsRows, []);
-      const derivedRows = yield* sql<{ readonly root_id: string }>`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`;
+      const derivedRows = yield* sql<{
+        readonly root_id: string;
+      }>`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`;
       assert.deepEqual(derivedRows, []);
       const current = yield* repository.getCurrent({ access: botAccess, rootId });
       assert.equal(current.deletionState, "tombstoned");
@@ -794,12 +811,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         revisions: [{ ...first, fact: "A divergent history." }],
       });
       assert.equal(divergent.items[0]?.classification, "conflicting");
-      const unresolved = yield* repository.applyImport({
-        access: botAccess,
-        partitions,
-        revisions: [{ ...first, fact: "A divergent history." }],
-        previewHash: divergent.previewHash,
-      }).pipe(Effect.exit);
+      const unresolved = yield* repository
+        .applyImport({
+          access: botAccess,
+          partitions,
+          revisions: [{ ...first, fact: "A divergent history." }],
+          previewHash: divergent.previewHash,
+        })
+        .pipe(Effect.exit);
       assert.isTrue(unresolved._tag === "Failure");
       yield* repository.applyImport!({
         access: botAccess,
@@ -1364,10 +1383,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         })
         .pipe(Effect.exit);
       assert.isTrue(wrongBot._tag === "Failure");
-      assert.equal(
-        (yield* repository.getCurrent({ access: botAccess, rootId })).revision,
-        1,
-      );
+      assert.equal((yield* repository.getCurrent({ access: botAccess, rootId })).revision, 1);
     }),
   );
 });

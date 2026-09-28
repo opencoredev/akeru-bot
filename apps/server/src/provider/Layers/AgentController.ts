@@ -2470,12 +2470,10 @@ const make = (options?: AgentControllerLiveOptions) =>
                 yield* Effect.promise(() =>
                   settings.privateBotMemory
                     ? botMemoryStore.readPromptSnapshot(nextMemoryAccess)
-                    : botMemoryStore
-                        .readPromptSnapshot(nextMemoryAccess)
-                        .then((snapshot) => ({
-                          ...snapshot,
-                          memory: { ...snapshot.memory, content: "", charCount: 0 },
-                        })),
+                    : botMemoryStore.readPromptSnapshot(nextMemoryAccess).then((snapshot) => ({
+                        ...snapshot,
+                        memory: { ...snapshot.memory, content: "", charCount: 0 },
+                      })),
                 ),
               )
             : "";

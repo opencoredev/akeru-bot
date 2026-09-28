@@ -106,9 +106,7 @@ describe("bot inbox incidents", () => {
     expect(service.resolveById(item.id)).toBe(true);
     service.ensureOpen(failing);
 
-    expect(service.list()).toEqual([
-      expect.objectContaining({ id: item.id, status: "resolved" }),
-    ]);
+    expect(service.list()).toEqual([expect.objectContaining({ id: item.id, status: "resolved" })]);
   });
 
   it("reopens an acknowledged incident when a newer failure arrives", () => {
@@ -147,9 +145,7 @@ describe("bot inbox incidents", () => {
     expect(service.resolveById(item.id)).toBe(true);
     service.ensureOpen(incident);
 
-    expect(service.list()).toEqual([
-      expect.objectContaining({ id: item.id, status: "resolved" }),
-    ]);
+    expect(service.list()).toEqual([expect.objectContaining({ id: item.id, status: "resolved" })]);
   });
 
   it("reopens through resolveById when a newer failure timestamp arrives", () => {

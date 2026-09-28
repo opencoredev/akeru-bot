@@ -878,15 +878,25 @@ const makeWsRpcLayer = (
               if (target === "thread") return thread.id === anchor.threadId;
               if (!projectIds.has(thread.projectId)) return false;
               if (target !== "bot") return true;
-              return (thread.respondingBotId ?? thread.botId) === (anchor.respondingBotId ?? anchor.botId);
+              return (
+                (thread.respondingBotId ?? thread.botId) ===
+                (anchor.respondingBotId ?? anchor.botId)
+              );
             });
-            return Effect.forEach(threads, (thread) =>
-              agentController.readConversationMemory
-                ? agentController.readConversationMemory(thread.id).pipe(
-                    Effect.map((snapshot) => ({ threadId: thread.id, snapshot })),
-                    Effect.mapError((cause) => memoryOperationError("archive.export", cause)),
-                  )
-                : Effect.fail(memoryOperationError("archive.export", "Observational memory is unavailable.")),
+            return Effect.forEach(
+              threads,
+              (thread) =>
+                agentController.readConversationMemory
+                  ? agentController.readConversationMemory(thread.id).pipe(
+                      Effect.map((snapshot) => ({ threadId: thread.id, snapshot })),
+                      Effect.mapError((cause) => memoryOperationError("archive.export", cause)),
+                    )
+                  : Effect.fail(
+                      memoryOperationError(
+                        "archive.export",
+                        "Observational memory is unavailable.",
+                      ),
+                    ),
               { concurrency: 4 },
             ).pipe(Effect.mapError((cause) => memoryOperationError("archive.export", cause)));
           }),
@@ -3230,61 +3240,77 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.memoryArchiveExport,
             entityMemoryRepository === null
-              ? Effect.fail(memoryOperationError("archive.export", "Durable memory is unavailable."))
+              ? Effect.fail(
+                  memoryOperationError("archive.export", "Durable memory is unavailable."),
+                )
               : Effect.all({
-              access: resolveMemoryAccess("archive.export", input.threadId),
-              conversations: resolveMemoryAccess("archive.export", input.threadId).pipe(
-                Effect.flatMap((access) => readArchiveConversations(access, input.target)),
-              ),
-              createdAt: nowIso,
-            }).pipe(
-              Effect.flatMap(({ access, conversations, createdAt }) =>
-                exportAkeruMemory({
-                  repository: entityMemoryRepository,
-                  access,
-                  target: input.target,
-                  complete: input.complete && conversations.length > 0,
-                  createdAt,
-                  conversations,
-                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.export", cause))),
-              ),
-            ),
+                  access: resolveMemoryAccess("archive.export", input.threadId),
+                  conversations: resolveMemoryAccess("archive.export", input.threadId).pipe(
+                    Effect.flatMap((access) => readArchiveConversations(access, input.target)),
+                  ),
+                  createdAt: nowIso,
+                }).pipe(
+                  Effect.flatMap(({ access, conversations, createdAt }) =>
+                    exportAkeruMemory({
+                      repository: entityMemoryRepository,
+                      access,
+                      target: input.target,
+                      complete: input.complete && conversations.length > 0,
+                      createdAt,
+                      conversations,
+                    }).pipe(
+                      Effect.mapError((cause) => memoryOperationError("archive.export", cause)),
+                    ),
+                  ),
+                ),
             { "rpc.aggregate": "memory" },
           ),
         [WS_METHODS.memoryArchivePreviewImport]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryArchivePreviewImport,
             entityMemoryRepository === null
-              ? Effect.fail(memoryOperationError("archive.previewImport", "Durable memory is unavailable."))
+              ? Effect.fail(
+                  memoryOperationError("archive.previewImport", "Durable memory is unavailable."),
+                )
               : resolveMemoryAccess("archive.previewImport", input.threadId).pipe(
-              Effect.flatMap((access) =>
-                previewAkeruMemoryImport({
-                  repository: entityMemoryRepository,
-                  access,
-                  target: input.target,
-                  archive: input.archive,
-                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.previewImport", cause))),
-              ),
-            ),
+                  Effect.flatMap((access) =>
+                    previewAkeruMemoryImport({
+                      repository: entityMemoryRepository,
+                      access,
+                      target: input.target,
+                      archive: input.archive,
+                    }).pipe(
+                      Effect.mapError((cause) =>
+                        memoryOperationError("archive.previewImport", cause),
+                      ),
+                    ),
+                  ),
+                ),
             { "rpc.aggregate": "memory" },
           ),
         [WS_METHODS.memoryArchiveApplyImport]: (input) =>
           observeRpcEffect(
             WS_METHODS.memoryArchiveApplyImport,
             entityMemoryRepository === null
-              ? Effect.fail(memoryOperationError("archive.applyImport", "Durable memory is unavailable."))
+              ? Effect.fail(
+                  memoryOperationError("archive.applyImport", "Durable memory is unavailable."),
+                )
               : resolveMemoryAccess("archive.applyImport", input.threadId).pipe(
-              Effect.flatMap((access) =>
-                applyAkeruMemoryImport({
-                  repository: entityMemoryRepository,
-                  access,
-                  target: input.target,
-                  archive: input.archive,
-                  previewHash: input.previewHash,
-                  resolutions: input.resolutions,
-                }).pipe(Effect.mapError((cause) => memoryOperationError("archive.applyImport", cause))),
-              ),
-            ),
+                  Effect.flatMap((access) =>
+                    applyAkeruMemoryImport({
+                      repository: entityMemoryRepository,
+                      access,
+                      target: input.target,
+                      archive: input.archive,
+                      previewHash: input.previewHash,
+                      resolutions: input.resolutions,
+                    }).pipe(
+                      Effect.mapError((cause) =>
+                        memoryOperationError("archive.applyImport", cause),
+                      ),
+                    ),
+                  ),
+                ),
             { "rpc.aggregate": "memory" },
           ),
         [WS_METHODS.memoryFactsList]: (input) =>
@@ -3355,9 +3381,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.memoryFactMutate,
             entityMemoryRepository === null
-              ? Effect.fail(
-                  memoryOperationError("facts.mutate", "Durable memory is unavailable."),
-                )
+              ? Effect.fail(memoryOperationError("facts.mutate", "Durable memory is unavailable."))
               : Effect.all({
                   access: resolveMemoryAccess("facts.mutate", input.threadId),
                   memoryId: randomUUID.pipe(
@@ -3405,9 +3429,7 @@ const makeWsRpcLayer = (
                         memoryId,
                         updatedAt,
                         sharedProjectApproval:
-                          settings.memory.sharedProjectMemory === "auto"
-                            ? "approved"
-                            : "pending",
+                          settings.memory.sharedProjectMemory === "auto" ? "approved" : "pending",
                       })
                       .pipe(
                         Effect.map((revision) =>
@@ -3415,9 +3437,7 @@ const makeWsRpcLayer = (
                             ? { kind: "deleted" as const, memoryId: mutation.memoryId }
                             : { kind: "revision" as const, revision },
                         ),
-                        Effect.mapError((cause) =>
-                          memoryOperationError("facts.mutate", cause),
-                        ),
+                        Effect.mapError((cause) => memoryOperationError("facts.mutate", cause)),
                       );
                   }),
                 ),

@@ -29,9 +29,7 @@ export function syncConnectorIncidents(
             (status.health === "expired"
               ? "The OAuth access token expired."
               : "The provider rejected the request."),
-          ...(status.lastFailedRequest
-            ? { lastFailedRequestAt: status.lastFailedRequest.at }
-            : {}),
+          ...(status.lastFailedRequest ? { lastFailedRequestAt: status.lastFailedRequest.at } : {}),
           nextAction: `${status.reconnectAction} in Settings, then send a provider request.`,
         });
         continue;
@@ -87,9 +85,7 @@ export function syncAccessIncidents(
           taskOrRoutine: `${item.label} access`,
           lastFailure: item.lastFailedRequest?.message ?? "The connector request failed.",
           nextAction: item.nextAction,
-          ...(item.lastFailedRequest
-            ? { lastFailedRequestAt: item.lastFailedRequest.at }
-            : {}),
+          ...(item.lastFailedRequest ? { lastFailedRequestAt: item.lastFailedRequest.at } : {}),
         });
       } else if (unresolvedIncidentKeys.has(incidentKey)) {
         botInbox.resolve(incidentKey);
