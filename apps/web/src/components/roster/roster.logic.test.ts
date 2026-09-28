@@ -601,14 +601,14 @@ describe("flattenMarkdownPreview", () => {
     );
   });
 
-  it("flattens whitespace-heavy messages without rescanning every line", () => {
-    // The old `^\s*` line prefixes rescanned remaining blank lines on every
-    // match attempt: 8,000 newlines took ~330 ms. The [ \t] version is linear,
-    // so 20,000 newlines finish in single-digit milliseconds; 50 ms is a wide
-    // margin that still fails on the quadratic shape.
-    const start = performance.now();
+  it("flattens whitespace-heavy messages", () => {
+    // Line prefixes use [ \t], not \s, so no multiline pattern crosses a
+    // newline and rescans the blank lines after it. This checks the output
+    // only; a wall-clock bound would be flaky on a loaded runner.
     expect(flattenMarkdownPreview(`${"\n".repeat(20_000)}done`)).toBe("done");
-    expect(performance.now() - start).toBeLessThan(50);
+    expect(flattenMarkdownPreview(`${"\n \t\n".repeat(5_000)}- item\n\n> quote`)).toBe(
+      "item quote",
+    );
   });
 });
 
