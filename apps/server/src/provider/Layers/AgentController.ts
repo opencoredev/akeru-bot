@@ -2276,7 +2276,8 @@ const make = (options?: AgentControllerLiveOptions) =>
           existing?.workspaceResourceKey ?? existingLegacy?.workspaceResourceKey;
         yield* stopSessionWithResources(
           { threadId },
-          previousWorkspaceResourceKey !== workspaceResourceKey,
+          previousWorkspaceResourceKey !== undefined &&
+            botWorkspaceIdentity(previousWorkspaceResourceKey) !== workspaceId,
         );
       }
       if (delegatedAccess && !usesMastraCode(resolved.provider)) {
