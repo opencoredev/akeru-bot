@@ -204,6 +204,7 @@ function harness(
   // surface as OrchestrationCommandInvariantError instead of passing silently.
   const dispatch = vi.fn(async (command: OrchestrationCommand) => {
     commands.push(command);
+    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- The async runtime callback crosses into the Effect decider and projector.
     await Effect.runPromise(
       Effect.gen(function* () {
         const decided = yield* decideOrchestrationCommand({
@@ -702,6 +703,7 @@ describe("AkeruDelegationRuntime", () => {
     const test = harness();
     const children: Array<PromiseWithResolvers<AkeruDelegationChildOutcome>> = [];
     const watchErrors: unknown[] = [];
+    const firstCompleted = Promise.withResolvers<void>();
     let raceArmed = false;
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => {
@@ -718,12 +720,13 @@ describe("AkeruDelegationRuntime", () => {
           turnId: CHILD_TURN_ID,
           summary: "Finished first.",
         });
-        for (let i = 0; i < 100 && test.state.delegations[0]?.phase._tag !== "Completed"; i++) {
-          await Effect.runPromise(Effect.yieldNow);
-        }
+        await firstCompleted.promise;
         return stale as OrchestrationReadModel;
       },
-      dispatch: test.dispatch,
+      dispatch: async (command) => {
+        await test.dispatch(command);
+        if (test.state.delegations[0]?.phase._tag === "Completed") firstCompleted.resolve();
+      },
       awaitChild: () => {
         const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
         children.push(child);
