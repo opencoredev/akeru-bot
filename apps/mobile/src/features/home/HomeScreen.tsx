@@ -64,6 +64,7 @@ interface HomeScreenProps {
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
   readonly onAddConnection: () => void;
+  readonly onRetryEnvironments: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
@@ -655,9 +656,11 @@ export function HomeScreen(props: HomeScreenProps) {
   });
 
   if (!hasAnyThreads) {
-    const emptyAction = !props.catalogState.hasReadyEnvironment
-      ? { label: "Add environment", onPress: props.onAddConnection }
-      : { label: "New chat", onPress: props.onStartNewTask };
+    const emptyAction = emptyState.retry
+      ? { label: t("Try again"), onPress: props.onRetryEnvironments }
+      : !props.catalogState.hasReadyEnvironment
+        ? { label: "Add environment", onPress: props.onAddConnection }
+        : { label: "New chat", onPress: props.onStartNewTask };
     return (
       <View className="flex-1 bg-screen">
         <View

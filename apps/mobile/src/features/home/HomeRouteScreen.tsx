@@ -13,6 +13,7 @@ import { useSavedRemoteConnections } from "../../state/use-remote-environment-re
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
+import { useConnectionController } from "../connection/useConnectionController";
 import { checkForAppUpdateOnLaunch, startAppUpdateForegroundRecheck } from "../updates/app-updates";
 import { HomeScreen } from "./HomeScreen";
 import { HomeHeader } from "./HomeHeader";
@@ -32,6 +33,7 @@ export function HomeRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
+  const { retryEnvironment } = useConnectionController();
 
   useEffect(() => {
     void checkForAppUpdateOnLaunch();
@@ -172,6 +174,11 @@ export function HomeRouteScreen() {
               params: { screen: "SettingsEnvironmentNew" },
             })
           }
+          onRetryEnvironments={() => {
+            for (const environment of workspaceEnvironments) {
+              void retryEnvironment(environment.environmentId);
+            }
+          }}
           onArchiveThread={archiveThread}
           onDeleteThread={confirmDeleteThread}
           onSettleThread={settleThread}

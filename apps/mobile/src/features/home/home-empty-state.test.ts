@@ -36,4 +36,36 @@ describe("deriveHomeEmptyState", () => {
       { title: "No chats yet", loading: false },
     );
   });
+
+  it("offers a retry when the first snapshot fails on a connected environment", () => {
+    expect(
+      deriveHomeEmptyState({
+        catalogState: workspaceState({
+          hasLoadedShellSnapshot: false,
+          shellSnapshotError: "Could not synchronize environment data.",
+        }),
+        projectCount: 0,
+      }),
+    ).toEqual({
+      title: "Could not load chats",
+      detail:
+        "Could not synchronize environment data. Akeru keeps trying. Try again to reconnect now.",
+      loading: false,
+      retry: true,
+    });
+  });
+
+  it("offers a retry when the environment is unavailable", () => {
+    expect(
+      deriveHomeEmptyState({
+        catalogState: workspaceState({
+          hasLoadedShellSnapshot: false,
+          hasReadyEnvironment: false,
+          connectionState: "error",
+          connectionError: "Server unreachable.",
+        }),
+        projectCount: 0,
+      }),
+    ).toMatchObject({ title: "Environment unavailable", loading: false, retry: true });
+  });
 });
