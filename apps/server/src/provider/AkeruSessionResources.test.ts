@@ -439,6 +439,11 @@ describe("AkeruSessionResources", () => {
       resources.acquire({ ...remoteInput, threadId: "failed-reconnect" }),
     ).rejects.toThrow("reconnect failed");
     expect(firstBrowser.close).toHaveBeenCalledOnce();
+    expect(
+      (resources as unknown as { browserThreadBots: Map<string, string> }).browserThreadBots.has(
+        "failed-reconnect",
+      ),
+    ).toBe(false);
 
     await resources.acquire({ ...remoteInput, threadId: "replacement" });
     expect(makeBotBrowser).toHaveBeenCalledTimes(2);

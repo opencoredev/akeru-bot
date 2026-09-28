@@ -464,6 +464,7 @@ export class AkeruSessionResources {
       if (key !== resourceKey) continue;
       this.browserResourceKeys.delete(threadId);
       this.threadBrowsers.delete(threadId);
+      this.browserThreadBots.delete(threadId);
     }
     await browser.close().catch(() => undefined);
   }
