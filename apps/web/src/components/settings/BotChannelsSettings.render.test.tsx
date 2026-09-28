@@ -21,7 +21,12 @@ const fixtures = vi.hoisted(() => ({
     }>;
   }>,
   projects: [
-    { id: "project-uuid", title: "Selected workspace", workspaceRoot: "/Users/leo/code/selected" },
+    {
+      id: "project-uuid",
+      title: "Selected workspace",
+      workspaceRoot: "/Users/leo/code/selected",
+      deletedAt: null,
+    },
   ],
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
@@ -29,8 +34,14 @@ const fixtures = vi.hoisted(() => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: string) => (atom === "bots" ? fixtures.bots : fixtures.projects),
+  useAtomValue: (atom: string) =>
+    atom === "bots"
+      ? fixtures.bots
+      : atom === "snapshot"
+        ? { projects: fixtures.projects, threads: [] }
+        : fixtures.projects,
 }));
+vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
 vi.mock("../../state/bots", () => ({
   environmentBotsAtom: () => "bots",
   botEnvironment: { channels: {} },

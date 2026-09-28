@@ -57,7 +57,6 @@ describe("bot browser preview", () => {
 
   it("hides the inline preview until the bot has a page", () => {
     expect(hasBotBrowserPage("unsupported")).toBe(false);
-    expect(hasBotBrowserPage("connecting")).toBe(false);
     expect(hasBotBrowserPage("waiting")).toBe(false);
     expect(hasBotBrowserPage("loading")).toBe(true);
     expect(hasBotBrowserPage("ready")).toBe(true);

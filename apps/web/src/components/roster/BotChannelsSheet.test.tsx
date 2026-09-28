@@ -63,7 +63,15 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../ui/sheet", () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
-  return { Sheet: Pass, SheetHeader: Pass, SheetPanel: Pass, SheetPopup: Pass, SheetTitle: Pass };
+  return {
+    Sheet: Pass,
+    SheetDescription: Pass,
+    SheetFooter: Pass,
+    SheetHeader: Pass,
+    SheetPanel: Pass,
+    SheetPopup: Pass,
+    SheetTitle: Pass,
+  };
 });
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
@@ -283,7 +291,7 @@ describe("BotChannelsSheet health and repair", () => {
     fixtures.scopes = [];
     own("failed", "credentials");
     const html = render();
-    expect(html).toContain("This client does not have permission to manage channels.");
+    expect(html).toContain("Channels are managed on the host");
     expect(html).not.toContain("Fixture line");
   });
 });

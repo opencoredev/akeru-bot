@@ -406,9 +406,8 @@ describe("RoutinePanel", () => {
     expect(
       renderToStaticMarkup(<RoutinePanel botName="Akeru" status="error" error="Request failed" />),
     ).toContain("Request failed");
-    expect(renderToStaticMarkup(<RoutinePanel botName="Akeru" status="unavailable" />)).toContain(
-      "Routines are not available for this environment.",
-    );
+    // An environment that cannot run routines shows nothing to act on.
+    expect(renderToStaticMarkup(<RoutinePanel botName="Akeru" status="unavailable" />)).toBe("");
   });
 });
 

@@ -64,6 +64,6 @@ describe("MessageReactions", () => {
     );
 
     expect((markup.match(/data-reaction-emoji/g) ?? []).length).toBe(1);
-    expect(markup).toContain("👍 2");
+    expect(markup).toMatch(/👍<span[^>]*>2<\/span>/);
   });
 });

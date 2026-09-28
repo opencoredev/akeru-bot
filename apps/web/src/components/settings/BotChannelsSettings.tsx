@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import {
   BotId,
   type ChannelConnectionId,
@@ -13,6 +14,7 @@ import { resolveChannelSettingsAccess } from "../../channelAccess";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { useEnvironmentSessionState } from "../../state/session";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Spinner } from "../ui/spinner";
@@ -138,6 +140,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
   const bots = useAtomValue(environmentBotsAtom(targetEnvironmentId));
+  const snapshot = useAtomValue(environmentSnapshotAtom(targetEnvironmentId));
   const activeBots = useMemo(() => bots.filter((bot) => bot.archivedAt === null), [bots]);
   const connections = useEnvironmentSettings(
     targetEnvironmentId,
@@ -213,13 +216,29 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       }
     }
 
-    if (nextBotId !== UNASSIGNED) {
+    // Channel bindings name an explicit project. Settings has no picker yet, so it uses the
+    // project the bot works in most recently, or another live one.
+    const projectId =
+      nextBotId === UNASSIGNED || !snapshot
+        ? null
+        : defaultProjectIdForBot(snapshot, BotId.make(nextBotId));
+    if (nextBotId !== UNASSIGNED && projectId === null) {
+      setBusyConnectionId(null);
+      toastManager.add({
+        type: "error",
+        title: "Could not assign channel",
+        description: "Add a project before you connect a channel.",
+      });
+      return;
+    }
+    if (nextBotId !== UNASSIGNED && projectId !== null) {
       const result = await attach({
         environmentId,
         input: {
           botId: BotId.make(nextBotId),
           connectionId: connection.id,
           provider: connection.provider,
+          projectId,
         },
       });
       if (result._tag === "Failure") {
@@ -229,7 +248,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
-                ...(assignedBinding?.projectId ? { projectId: assignedBinding.projectId } : {}),
+                projectId: assignedBinding?.projectId ?? projectId,
                 provider: connection.provider,
               },
             })

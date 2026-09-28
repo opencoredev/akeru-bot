@@ -20,6 +20,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BotIcon,
+  ChevronDownIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,

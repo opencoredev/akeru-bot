@@ -938,6 +938,25 @@ export function BotPromptComposer({
               className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between"
             >
               <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+                {mentionBots.length === 0 ? (
+                  // Attaching is the only prompt action here, so the button opens the picker.
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={t("Attach file")}
+                          disabled={readOnly}
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => fileInputRef.current?.click()}
+                        />
+                      }
+                    >
+                      <PlusIcon className="size-5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">{t("Attach file")}</TooltipPopup>
+                  </Tooltip>
+                ) : (
                 <Menu>
                   <MenuTrigger
                     render={
@@ -976,6 +995,7 @@ export function BotPromptComposer({
                     })}
                   </MenuPopup>
                 </Menu>
+                )}
               </div>
               {showDictation ? (
                 <div

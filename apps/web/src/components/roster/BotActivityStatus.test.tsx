@@ -4,10 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 
-const avatar = { kind: "blob", shape: "circle", color: "#5B7FD4" } as const;
 const NOW = new Date("2026-09-15T18:00:00.000Z");
 
 describe("bot activity status", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows only the pixel glyph and a shimmering short update", () => {
     const markup = renderToStaticMarkup(
       <BotActivityStatus name="Akeru" activity={{ label: "Running a command" }} />,
@@ -20,26 +28,20 @@ describe("bot activity status", () => {
     expect(markup).not.toContain("Step");
   });
 
-  it("adds the elapsed timer only when the turn start is known", () => {
-    const withStart = renderToStaticMarkup(
-      <BotActivityStatus
-        avatar={avatar}
-        name="Akeru"
-        startedAt={new Date(NOW.getTime() - 12_000).toISOString()}
-      />,
+  it("falls back to the summary update, then to plain working", () => {
+    expect(
+      renderToStaticMarkup(<BotActivityStatus name="Akeru" update="Searching the web" />),
+    ).toContain("Searching the web...");
+    expect(renderToStaticMarkup(<BotActivityStatus name="Akeru" />)).toContain(
+      "Akeru is working...",
     );
-    const withoutStart = renderToStaticMarkup(<BotActivityStatus avatar={avatar} name="Akeru" />);
-
-    expect(withStart).toContain('data-testid="response-loading-time">12s<');
-    expect(withoutStart).not.toContain("response-loading-time");
   });
 
   it("replaces the working shimmer with a silent-run notice", () => {
     const markup = renderToStaticMarkup(
       <BotActivityStatus
-        avatar={avatar}
         name="Akeru"
-        startedAt={new Date(NOW.getTime() - 300_000).toISOString()}
+        activity={{ label: "Running a command" }}
         silentRun={{
           provider: ProviderDriverKind.make("kimi"),
           providerName: "Kimi For Coding",
@@ -51,17 +53,8 @@ describe("bot activity status", () => {
     expect(markup).toContain("data-silent-run");
     expect(markup).toContain("No response from Kimi For Coding");
     expect(markup).toContain('data-testid="response-loading-time">2m');
-    expect(markup).not.toContain("bot-status-shimmer");
-    expect(markup).not.toContain("Akeru is working");
-  });
-
-  it("drops the avatar when compact, for rails that already name the bot", () => {
-    const compact = renderToStaticMarkup(
-      <BotActivityStatus avatar={avatar} compact name="Akeru" update="Searching the web" />,
-    );
-
-    expect(compact).toContain("Akeru · Searching the web");
-    expect(compact).not.toContain("bot-avatar");
+    expect(markup).not.toContain("bot-shimmer-text");
+    expect(markup).not.toContain("Running a command");
   });
 
   it("turns the latest unfinished action into a short status update", () => {

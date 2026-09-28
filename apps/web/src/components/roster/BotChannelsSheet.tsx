@@ -245,6 +245,15 @@ export function BotChannelsSheet({
       ) : (
         <div className="space-y-3">
           {connections.map((connection) => {
+            const {
+              owner,
+              binding,
+              ownedByCurrentBot,
+              needsProject,
+              projectId,
+              canMove,
+              repairAction,
+            } = channelState(connection);
             return (
               <div key={connection.id} className="flex flex-col gap-3 rounded-lg border p-3">
                 <div className="min-w-0 space-y-1">

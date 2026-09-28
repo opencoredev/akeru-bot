@@ -62,8 +62,8 @@ describe("BotThreadLanding message formatting", () => {
       "utf8",
     );
 
-    expect(botSource).toContain("<BotConversationScrollArea>");
-    expect(groupSource).toContain("<BotConversationScrollArea>");
+    expect(botSource).toContain("<BotConversationScrollArea");
+    expect(groupSource).toContain("<BotConversationScrollArea");
     expect(botSource).not.toContain("justify-end gap-4");
     expect(groupSource).not.toContain("justify-end gap-4");
   });

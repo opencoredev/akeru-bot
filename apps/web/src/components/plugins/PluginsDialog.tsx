@@ -69,12 +69,15 @@ import {
 const ALL_CATEGORIES_VALUE = "all-categories";
 const PRIMARY_FILTERS = ["All", "Featured", "Installed"] as const satisfies readonly PluginFilter[];
 
-const CATALOG = loadDirectoryCatalog().filter(isListedIntegration);
+// The directory lists only integrations.sh entries, but an installed plugin that later
+// drops off that list (for example, pending vendor verification) must stay manageable.
+const FULL_CATALOG = loadDirectoryCatalog();
+const CATALOG = FULL_CATALOG.filter(isListedIntegration);
 export const PLUGIN_DIRECTORY_FILTERS = buildPluginFilters(CATALOG);
 
 export function resolvePluginDialogServers(
   servers: readonly McpServer[],
-  catalog: readonly PluginDirectoryDefinition[] = CATALOG,
+  catalog: readonly PluginDirectoryDefinition[] = FULL_CATALOG,
 ): {
   readonly installedPlugins: readonly PluginDirectoryDefinition[];
   readonly customServers: readonly McpServer[];

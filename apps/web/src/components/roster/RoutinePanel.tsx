@@ -832,6 +832,9 @@ export function RoutinePanel({
     previousOpenId.current = openRoutineId;
   }, [openRoutineId]);
 
+  // The environment cannot run routines, so there is nothing to show or act on.
+  if (status === "unavailable") return null;
+
   return (
     <section className="px-4 py-4">
       {openRoutine === null ? (
@@ -860,10 +863,6 @@ export function RoutinePanel({
         </div>
       ) : status === "error" ? (
         <p className="mt-2 text-xs text-destructive">{error || t("Could not load routines.")}</p>
-      ) : status === "unavailable" ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("Routines are not available for this environment.")}
-        </p>
       ) : openRoutine !== null ? (
         <div ref={detailRef}>
           <RoutineDetail

@@ -79,7 +79,7 @@ export function BotBrowserPreview({
     return expanded ? (
       <BotBrowserPreviewFrame
         botName={botName}
-        status="connecting"
+        status="waiting"
         trailingAction={trailingAction}
       />
     ) : null;

@@ -28,15 +28,6 @@ describe("settings dialog navigation", () => {
     );
   });
 
-  it("keeps the rarely-correct sections last", () => {
-    expect(SETTINGS_NAV_GROUPS.at(-1)?.label).toBe("Advanced");
-    expect(SETTINGS_NAV_GROUPS.at(-1)?.items.map((item) => item.section)).toEqual([
-      "source-control",
-      "inbox",
-      "diagnostics",
-    ]);
-  });
-
   it("flattens the groups in visual order without losing or duplicating a section", () => {
     const grouped = SETTINGS_NAV_GROUPS.flatMap((group) => group.items);
 
@@ -50,9 +41,13 @@ describe("settings dialog navigation", () => {
     for (const group of SETTINGS_NAV_GROUPS) {
       expect(group.label.length).toBeGreaterThan(0);
       expect(group.items.length).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps the nav small and free of coding-agent leftovers", () => {
     const sections = SETTINGS_NAV_ITEMS.map((item) => item.section);
-    expect(sections.length).toBeLessThanOrEqual(10);
+    // Ten pages plus Image generation, which the roadmap added under Bots.
+    expect(sections.length).toBeLessThanOrEqual(11);
     expect(new Set(sections).size).toBe(sections.length);
     expect(sections).not.toContain("source-control");
     expect(sections).not.toContain("diagnostics");

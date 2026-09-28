@@ -56,7 +56,10 @@ vi.mock("@effect/atom-react", () => ({
 
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: atoms.providers,
-  serverEnvironment: { imageProviders: () => Symbol("imageProviders") },
+  serverEnvironment: {
+    imageProviders: () => Symbol("imageProviders"),
+    subscriptionAuth: () => Symbol("subscriptionAuth"),
+  },
 }));
 vi.mock("../../state/mcpServers", () => ({ environmentMcpServersAtom: () => atoms.mcpServers }));
 vi.mock("../../state/bots", () => ({ botEnvironment: { update: atoms.update } }));

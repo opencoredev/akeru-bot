@@ -80,6 +80,8 @@ export function parseReplyPrompt(text: string): ParsedReplyPrompt | null {
     quotedText: quotedLines.join("\n").trim(),
     body: lines.slice(index + 1).join("\n"),
   };
+}
+
 export function findReplySourceMessageId(
   messages: ReadonlyArray<{ readonly id: string; readonly text: string }>,
   replyIndex: number,

@@ -110,9 +110,21 @@ export function NewBotDialog({
                   maxLength={80}
                   placeholder="Name your bot"
                   required
+                  aria-describedby="new-bot-name-help"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
+                <span
+                  id="new-bot-name-help"
+                  className={cn(
+                    "text-xs font-normal",
+                    trimmedName.length === 0 ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {trimmedName.length === 0
+                    ? t("Enter a name to create this bot.")
+                    : t("This is how the bot appears in your roster.")}
+                </span>
               </label>
 
               <section
@@ -177,8 +189,13 @@ export function NewBotDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting || trimmedName.length === 0}>
-              {submitting ? t("Creating") : "Create bot"}
+            <Button
+              type="submit"
+              aria-describedby={trimmedName.length === 0 ? "new-bot-name-help" : undefined}
+              className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+              disabled={submitting || trimmedName.length === 0}
+            >
+              {submitting ? t("Creating") : t("Create bot")}
             </Button>
           </DialogFooter>
         </form>

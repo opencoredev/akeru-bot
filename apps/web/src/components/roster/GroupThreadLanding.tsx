@@ -53,7 +53,6 @@ import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngin
 import { buildBotStepMeters } from "./botStepMeter.logic";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
-import { cn } from "../../lib/utils";
 import { useMessageArrivals } from "./messageArrival";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";

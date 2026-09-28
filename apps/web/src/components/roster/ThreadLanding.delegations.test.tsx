@@ -81,6 +81,7 @@ vi.mock("../../providerInstances", () => ({
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update"), channels: { send: Symbol("send") } },
   environmentPeopleAtom: () => mocks.peopleAtom,
+  environmentBotsAtom: () => Symbol("bots"),
 }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),

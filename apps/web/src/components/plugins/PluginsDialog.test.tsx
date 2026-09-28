@@ -102,16 +102,20 @@ describe("Plugins dialog content", () => {
   });
 
   it("surfaces the named blocker when a pending brokered plugin is toggled on", () => {
-    const gmail = COMPOSIO_APPS[0];
-    if (gmail.connection.type !== "brokered") throw new TypeError("Gmail must be brokered.");
-    expect(pluginBrokeredBlockerNotice(gmail)).toEqual({
+    const brokered = catalog.find(
+      (plugin) => plugin.connection.type === "brokered" && plugin.connection.pendingBlocker,
+    );
+    if (!brokered || brokered.connection.type !== "brokered") {
+      throw new TypeError("The directory must keep a pending brokered plugin.");
+    }
+    expect(pluginBrokeredBlockerNotice(brokered)).toEqual({
       type: "warning",
-      title: "Gmail is not available yet",
-      description: gmail.connection.pendingBlocker,
+      title: `${brokered.title} is not available yet`,
+      description: brokered.connection.pendingBlocker,
     });
     expect(
       pluginBrokeredBlockerNotice({
-        ...gmail,
+        ...brokered,
         connection: { type: "brokered", broker: { name: "Composio", url: "https://composio.dev" } },
       }),
     ).toBeNull();

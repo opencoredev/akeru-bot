@@ -29,10 +29,9 @@ describe("BotMemorySheet", () => {
   it("imports backups through an app button instead of a raw file input", () => {
     const source = NodeFS.readFileSync(new URL("./BotMemoryTransfer.tsx", import.meta.url), "utf8");
     expect(source).toContain('type="file"');
-    expect(source).toContain('className="hidden"');
-    expect(source).toContain("fileInput.current?.click()");
-    expect(source).toContain("Load backup");
-    expect(source).toContain("{fileName}");
+    expect(source).toContain('className="sr-only"');
+    expect(source).toContain("fileInputRef.current?.click()");
+    expect(source).toContain('t("Import memory archive")');
   });
 
   it("keeps durable facts in their own section apart from chat memory", () => {

@@ -87,7 +87,8 @@ describe("message controls", () => {
       "My reply\nwith another line",
     );
     expect(parseReplyPrompt(sent)).toEqual({
-      reference: { label: "Akeru", text: "First line\n\nThird line" },
+      label: "Akeru",
+      quotedText: "First line\n\nThird line",
       body: "My reply\nwith another line",
     });
     expect(parseReplyPrompt("> A regular quote\n\nMy reply")).toBeNull();

@@ -127,7 +127,7 @@ describe("ChatMarkdown settings chips", () => {
     );
 
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Advanced &gt; Diagnostics");
+    expect(html).toContain("Open Settings &gt; Advanced &gt; Bot inbox");
     expect(html).not.toContain('target="_blank"');
   });
 });
@@ -478,15 +478,15 @@ describe("ChatMarkdown bot chat forms", () => {
     const html = render(ALL_FORMS);
     expect(html).toContain('href="https://example.com/docs"');
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Voice");
+    expect(html).toContain("Open Settings &gt; Providers &gt; Voice");
   });
 
   it.each([
-    ["channels", "Bot channels"],
+    ["channels", "Channels"],
     ["browser", "Browser"],
     ["plugins", "Plugins"],
     ["sandbox", "Sandbox"],
-    ["privacy", "Privacy"],
+    ["privacy", "Privacy &amp; data"],
   ])("renders a Settings chip for %s", (id, label) => {
     const html = render(`[Open](grokbot://app/v1/settings?id=${id})`);
     expect(html).toContain("chat-markdown-settings-link");

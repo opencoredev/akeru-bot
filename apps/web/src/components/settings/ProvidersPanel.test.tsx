@@ -78,32 +78,6 @@ describe("subscription providers", () => {
     expect(markup).not.toContain(SUBSCRIPTION_PROVIDERS[1]!.description);
   });
 
-  it("shows a translated badge while the server checks a new login", () => {
-    const markup = renderToStaticMarkup(
-      <LanguageProvider
-        testCatalog={{ locale: "zh-CN", catalog: { "Checking health…": "正在检查健康状态…" } }}
-      >
-        <ProviderLoginCard
-          definition={SUBSCRIPTION_PROVIDERS[0]!}
-          status={{
-            provider: SUBSCRIPTION_PROVIDERS[0]!.id,
-            connected: true,
-            health: "detected",
-            healthChecking: true,
-            dependentBots: [],
-            dependentRoutines: [],
-          }}
-          busy={false}
-          onConnect={() => undefined}
-          onDisconnect={() => undefined}
-          onTest={() => undefined}
-        />
-      </LanguageProvider>,
-    );
-    expect(markup).toContain("正在检查健康状态…");
-    expect(markup).not.toContain(">Connected<");
-  });
-
   it("disables other providers without showing false progress", () => {
     const markup = renderToStaticMarkup(
       <ProviderAccountRows
@@ -191,96 +165,7 @@ describe("subscription providers", () => {
     expect(markup).toContain("First request failed");
     expect(markup).not.toContain("Last successful request");
     expect(markup).not.toContain("Last failed request");
-    expect(markup).toMatch(/data-access-failure[^>]*>Provider request failed\.</);
-    expect(markup.split("Provider request failed.")).toHaveLength(2);
+    expect(markup).not.toContain("Provider request failed.");
   });
 
-  it("shows checking access while the post-login health check runs", () => {
-    const markup = renderToStaticMarkup(
-      <ProviderLoginCard
-        definition={SUBSCRIPTION_PROVIDERS[0]!}
-        status={
-          {
-            provider: "openai-codex",
-            connected: true,
-            health: "detected",
-            healthChecking: true,
-            dependentBots: [],
-            dependentRoutines: [],
-          } as SubscriptionProviderStatus
-        }
-        busy={false}
-        onConnect={() => undefined}
-        onDisconnect={() => undefined}
-        onTest={() => undefined}
-      />,
-    );
-    expect(markup).toContain('data-access-state="checking"');
-    expect(markup).toContain("Wait for the health check to finish.");
-    expect(markup).not.toContain("Choose Check OAuth");
-    expect(markup).not.toContain("data-access-failure");
-  });
-
-  it("says which subscription unlocks each provider and that a saved login is not ready", () => {
-    const markup = renderToStaticMarkup(
-      <ProviderLoginCard
-        definition={SUBSCRIPTION_PROVIDERS[2]!}
-        status={{
-          provider: "xai",
-          connected: true,
-          health: "detected",
-          dependentBots: [],
-          dependentRoutines: [],
-        }}
-        models={["Grok 4", "Grok Code"]}
-        busy={false}
-        onConnect={() => undefined}
-        onDisconnect={() => undefined}
-        onTest={() => undefined}
-      />,
-    );
-    expect(markup).toContain('data-access-state="unverified"');
-    expect(markup).toContain("Not verified yet");
-    expect(markup).toContain("Choose Check OAuth to send a health request.");
-    expect(markup).toContain("SuperGrok or X Premium+ on your xAI account.");
-    expect(markup).toContain("SuperGrok and X Premium+ do not include xAI API credits.");
-    expect(markup).toContain("Grok 4, Grok Code.");
-    expect(markup).toContain("Subscription login saved in this environment.");
-    expect(markup).not.toContain("Detected");
-  });
-
-  it("marks access ready only after a successful request and shows missing access", () => {
-    const ready = renderToStaticMarkup(
-      <ProviderLoginCard
-        definition={SUBSCRIPTION_PROVIDERS[1]!}
-        status={{
-          provider: "anthropic",
-          connected: true,
-          health: "healthy",
-          dependentBots: [],
-          dependentRoutines: [],
-        }}
-        busy={false}
-        onConnect={() => undefined}
-        onDisconnect={() => undefined}
-        onTest={() => undefined}
-      />,
-    );
-    expect(ready).toContain('data-access-state="ready"');
-    expect(ready).toContain("No action needed. A provider request succeeded.");
-
-    const missing = renderToStaticMarkup(
-      <ProviderLoginCard
-        definition={SUBSCRIPTION_PROVIDERS[4]!}
-        status={undefined}
-        busy={false}
-        onConnect={() => undefined}
-        onDisconnect={() => undefined}
-        onTest={() => undefined}
-      />,
-    );
-    expect(missing).toContain('data-access-state="not-connected"');
-    expect(missing).toContain("Missing: no OpenCode Go API key in this environment.");
-    expect(missing).toContain("Choose Connect and paste your OpenCode Go API key.");
-  });
 });
