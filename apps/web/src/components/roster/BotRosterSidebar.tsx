@@ -15,11 +15,9 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
-  EnvironmentId,
   GroupId,
   PLACEHOLDER_THREAD_TITLE,
   type ScopedThreadRef,
-  ThreadId,
 } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
@@ -56,7 +54,7 @@ import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages } from "../../state/entities";
+import { useLatestGroupThreadId, useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -81,7 +79,6 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
-import { findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
 import { useChatUnread } from "../chat/useChatUnread";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
@@ -414,16 +411,10 @@ function formatRosterFullTimestamp(isoDate: string): string {
 /** The group's current chat: its newest chat on the primary environment. */
 function useGroupChatRef(groupId: string): ScopedThreadRef | null {
   const environmentId = usePrimaryEnvironmentId();
-  const threadShells = useThreadShells();
-  const target = environmentId
-    ? findLatestGroupThreadTarget(groupId, environmentId, threadShells)
-    : null;
+  const threadId = useLatestGroupThreadId(environmentId, groupId);
   return useMemo(
-    () =>
-      target
-        ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
-        : null,
-    [target?.environmentId, target?.threadId],
+    () => (environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null),
+    [environmentId, threadId],
   );
 }
 
