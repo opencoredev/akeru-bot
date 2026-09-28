@@ -15,6 +15,23 @@ describe("isHostedPairingLink", () => {
     expect(isHostedPairingLink("https://box.local:3773/pair#token=abc")).toBe(false);
     expect(isHostedPairingLink("https://box.local:3773/?host=other#token=abc")).toBe(false);
   });
+
+  it("treats a link naming the page's own origin as ordinary pairing", () => {
+    expect(
+      isHostedPairingLink(
+        "http://localhost:6563/pair?host=http%3A%2F%2Flocalhost%3A6563#token=abc",
+      ),
+    ).toBe(false);
+    expect(
+      isHostedPairingLink("http://localhost:6563/pair?host=ws%3A%2F%2Flocalhost%3A6563%2F"),
+    ).toBe(false);
+    expect(isHostedPairingLink("https://box.local/pair?host=box.local#token=abc")).toBe(false);
+    expect(
+      isHostedPairingLink(
+        "http://localhost:6563/pair?host=http%3A%2F%2Flocalhost%3A3773#token=abc",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("readHostedPairingLink", () => {

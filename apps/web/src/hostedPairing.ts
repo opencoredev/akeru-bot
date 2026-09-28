@@ -1,6 +1,7 @@
 import {
   readHashParams,
   readHostedPairingRequest,
+  resolveRemotePairingTarget,
   type HostedPairingRequest,
 } from "@t3tools/shared/remote";
 
@@ -11,10 +12,23 @@ import type { PairingPanelStatus } from "./components/auth/PairingPanel";
  * Akeru web origin, such as a tunnel, to save the remote server named by `host`
  * in this browser. A link with a host but no token still counts, so the page
  * can say what is missing instead of pairing with the origin that served it.
+ * A link whose host is the page's own origin is ordinary pairing: the browser
+ * signs in to this origin and the app opens here.
  */
 export function isHostedPairingLink(href: string): boolean {
   const url = new URL(href);
-  return url.pathname === "/pair" && url.searchParams.has("host");
+  return url.pathname === "/pair" && url.searchParams.has("host") && !namesPageOrigin(url);
+}
+
+function namesPageOrigin(url: URL): boolean {
+  const host = url.searchParams.get("host")?.trim() ?? "";
+  if (!host) return false;
+  try {
+    const { httpBaseUrl } = resolveRemotePairingTarget({ host, pairingCode: "origin-check" });
+    return new URL(httpBaseUrl).origin === url.origin;
+  } catch {
+    return false;
+  }
 }
 
 /**
