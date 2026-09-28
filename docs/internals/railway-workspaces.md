@@ -13,3 +13,5 @@ Commands use the existing shell quoting and map cwd, environment, and millisecon
 Browser endpoint resolution fails explicitly because Railway previews require CLI tunnels. Private network addresses must not be returned as client-accessible preview URLs. There is no automatic tunnel process or local/remote origin assumption in this adapter.
 
 Browser-dependent MCP connectors are rejected before a Railway workspace lease is acquired, so unsupported browser setup cannot invoke destructive acquisition-failure cleanup on a durable VM.
+
+Railway session-setup and workspace-wake failures never destroy the VM. Multiple credential-scoped clients may refer to one durable identity, so a failed new client must not invalidate another active session. Explicit workspace destruction remains destructive. The retirement confirmation stores only a Railway save/disconnect action and applies it to current settings, preserving unrelated changes received while the dialog is open.
