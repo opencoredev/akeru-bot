@@ -14,11 +14,13 @@ import {
 } from "./desktopOnboarding.logic";
 
 const BOT_ID = "bot-ada";
+const HANDOFF = JSON.stringify({ environmentId: "onboarding-environment", botId: BOT_ID });
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   selectBot: vi.fn(),
   toast: vi.fn(),
+  environmentId: "onboarding-environment",
   rosterLoaded: true,
   serverBots: [{ id: "bot-ada" }],
   preview: null as ComponentProps<typeof OnboardingPreview> | null,
@@ -42,7 +44,7 @@ vi.mock("../../state/bots", () => ({
 }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 vi.mock("../../state/environments", () => ({
-  usePrimaryEnvironmentId: () => "onboarding-environment",
+  usePrimaryEnvironmentId: () => mocks.environmentId,
 }));
 vi.mock("../../state/shell", () => ({
   environmentShell: { stateValueAtom: () => "shell" },
@@ -188,6 +190,7 @@ beforeEach(() => {
   mocks.preview = null;
   mocks.previewMounted = false;
   mocks.rosterLoaded = true;
+  mocks.environmentId = "onboarding-environment";
   mocks.serverBots = [{ id: BOT_ID }];
   mocks.navigate.mockResolvedValue(undefined);
   storage = new Map([
@@ -232,7 +235,7 @@ describe("onboarding handoff", () => {
 
     expect(storage.get(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY)).toBe("1");
     expect(storage.has(DESKTOP_ONBOARDING_STORAGE_KEY)).toBe(false);
-    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(BOT_ID);
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
 
     await advance(desktopOnboardingHandoffDurationMs(false));
     expect(mocks.selectBot).toHaveBeenCalledWith(BOT_ID);
@@ -286,7 +289,7 @@ describe("onboarding handoff", () => {
     expect(mocks.previewMounted).toBe(false);
     expect(mocks.preview).toBeNull();
     expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(BOT_ID);
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
 
     mocks.rosterLoaded = true;
     await act(async () => root.render(<DesktopOnboarding />));
@@ -304,15 +307,43 @@ describe("onboarding handoff", () => {
     expect(mocks.navigate).toHaveBeenCalledOnce();
   });
 
+  it("keeps a pending chat through another environment and a delayed roster", async () => {
+    storage.set(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
+    storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, HANDOFF);
+    storage.delete(DESKTOP_ONBOARDING_STORAGE_KEY);
+    mocks.environmentId = "other-environment";
+    mocks.serverBots = [];
+    await mount();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
+
+    mocks.environmentId = "onboarding-environment";
+    mocks.rosterLoaded = false;
+    await act(async () => root.render(<DesktopOnboarding />));
+    mocks.rosterLoaded = true;
+    await act(async () => root.render(<DesktopOnboarding />));
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
+
+    mocks.serverBots = [{ id: BOT_ID }];
+    await act(async () => root.render(<DesktopOnboarding />));
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith({
+      to: "/bots/$botId",
+      params: { botId: BOT_ID },
+      replace: true,
+    });
+    expect(storage.has(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(false);
+  });
+
   it("keeps the handoff when navigation fails so reload can retry", async () => {
     storage.set(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
-    storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, BOT_ID);
+    storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, HANDOFF);
     storage.delete(DESKTOP_ONBOARDING_STORAGE_KEY);
     mocks.navigate.mockRejectedValueOnce(new Error("route failed"));
 
     await mount();
     expect(mocks.navigate).toHaveBeenCalledOnce();
-    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(BOT_ID);
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
     expect(mocks.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Could not reopen your new chat. Reload to try again." }),
     );

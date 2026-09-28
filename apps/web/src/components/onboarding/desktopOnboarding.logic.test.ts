@@ -174,12 +174,18 @@ describe("desktop onboarding", () => {
       setItem: (key: string, value: string) => values.set(key, value),
     };
 
-    markDesktopOnboardingHandoffStarted(storage, "bot-ada");
+    markDesktopOnboardingHandoffStarted(storage, "environment-1", "bot-ada");
 
     expect(values.get("akeru:desktop-onboarding:v1")).toBeUndefined();
     expect(values.get("akeru:desktop-onboarding-completed:v1")).toBe("1");
-    expect(readDesktopOnboardingHandoff(storage)).toBe("bot-ada");
-    expect(readDesktopOnboardingHandoff(storage)).toBe("bot-ada");
+    expect(readDesktopOnboardingHandoff(storage)).toEqual({
+      environmentId: "environment-1",
+      botId: "bot-ada",
+    });
+    expect(readDesktopOnboardingHandoff(storage)).toEqual({
+      environmentId: "environment-1",
+      botId: "bot-ada",
+    });
     clearDesktopOnboardingHandoff(storage);
     expect(readDesktopOnboardingHandoff(storage)).toBeNull();
   });

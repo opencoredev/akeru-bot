@@ -24,13 +24,14 @@ export function markDesktopOnboardingCompleted(
  * the moment the first message goes out, so a reload mid-handoff neither
  * reopens setup (and resends) nor loses the chat the user was being taken to.
  */
-export const DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v1";
+export const DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v2";
 export function markDesktopOnboardingHandoffStarted(
   storage: Pick<Storage, "removeItem" | "setItem">,
+  environmentId: string,
   botId: string,
 ): void {
   markDesktopOnboardingCompleted(storage);
-  storage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, botId);
+  storage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, JSON.stringify({ environmentId, botId }));
 }
 
 /** Clears the pending handoff once its chat route has opened. */
@@ -39,9 +40,29 @@ export function clearDesktopOnboardingHandoff(storage: Pick<Storage, "removeItem
 }
 
 /** Reads a pending handoff; the caller clears it after the chat opens. */
-export function readDesktopOnboardingHandoff(storage: Pick<Storage, "getItem">): string | null {
-  const botId = storage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
-  return botId && botId.trim().length > 0 ? botId : null;
+export function readDesktopOnboardingHandoff(
+  storage: Pick<Storage, "getItem">,
+): { readonly environmentId: string; readonly botId: string } | null {
+  const value = storage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
+  if (!value) return null;
+  try {
+    const handoff: unknown = JSON.parse(value);
+    if (
+      typeof handoff === "object" &&
+      handoff !== null &&
+      "environmentId" in handoff &&
+      typeof handoff.environmentId === "string" &&
+      handoff.environmentId.trim() &&
+      "botId" in handoff &&
+      typeof handoff.botId === "string" &&
+      handoff.botId.trim()
+    ) {
+      return { environmentId: handoff.environmentId, botId: handoff.botId };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export type DesktopOnboardingStep = "subscription" | "goal" | "identity" | "message";

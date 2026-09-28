@@ -757,7 +757,8 @@ function OnboardingSurface({
   const finish = (firstMessage: string) => {
     setMessage(firstMessage);
     setHandoff("sending");
-    if (draft.botId) markDesktopOnboardingHandoffStarted(window.localStorage, draft.botId);
+    if (draft.botId)
+      markDesktopOnboardingHandoffStarted(window.localStorage, environmentId, draft.botId);
     else markDesktopOnboardingCompleted(window.localStorage);
     for (const stage of desktopOnboardingHandoffStages(instantHandoff)) {
       if (stage.phase === "sending") continue;
@@ -1040,14 +1041,16 @@ export function DesktopOnboarding({
   // here with setup already complete. Finish the trip to that chat once.
   useEffect(() => {
     if (!environmentId || !rosterLoaded) return;
-    const botId = readDesktopOnboardingHandoff(window.localStorage);
-    if (!botId || attemptedHandoffRef.current === botId) return;
-    attemptedHandoffRef.current = botId;
-    if (!serverBots.some((bot) => bot.id === botId)) {
-      clearDesktopOnboardingHandoff(window.localStorage);
-      toastManager.add({ type: "error", title: "Your new bot is no longer available." });
+    const handoff = readDesktopOnboardingHandoff(window.localStorage);
+    if (
+      !handoff ||
+      handoff.environmentId !== environmentId ||
+      attemptedHandoffRef.current === handoff.botId ||
+      !serverBots.some((bot) => bot.id === handoff.botId)
+    )
       return;
-    }
+    const botId = handoff.botId;
+    attemptedHandoffRef.current = botId;
     useRosterStore.getState().selectBot(botId);
     void navigate({ to: "/bots/$botId", params: { botId }, replace: true }).then(
       () => clearDesktopOnboardingHandoff(window.localStorage),
