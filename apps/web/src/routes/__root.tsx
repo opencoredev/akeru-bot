@@ -17,7 +17,7 @@ import { SurfaceNavigationCoordinator } from "../components/SurfaceNavigationCoo
 import { ComputerViewerDialog } from "../components/computer/ComputerViewerDialog";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { PolicyNotice } from "../components/privacy/PolicyNotice";
-import { TranslatedRootRouteErrorView } from "./RootRouteErrorView";
+import { TranslatedRootRouteErrorView } from "./-RootRouteErrorView";
 import { useI18n } from "../i18n";
 import {
   AnchoredToastProvider,

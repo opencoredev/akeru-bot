@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { botRoutePanelKeys } from "./botRoutePanelKeys";
+import { botRoutePanelKeys } from "./-botRoutePanelKeys";
 
 describe("bot route panel keys", () => {
   it("gives sibling panels separate identities for the same bot", () => {

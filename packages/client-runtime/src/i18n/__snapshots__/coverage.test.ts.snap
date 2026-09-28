@@ -486,7 +486,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/ui/sidebar.tsx",
     "apps/web/src/components/ui/toast.tsx",
     "apps/web/src/hooks/useChatActions.ts",
-    "apps/web/src/routes/RootRouteErrorView.tsx",
+    "apps/web/src/routes/-RootRouteErrorView.tsx",
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",
     "packages/client-runtime/src/botInbox.ts",

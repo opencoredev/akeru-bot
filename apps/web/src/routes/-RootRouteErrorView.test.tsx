@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { Button } from "../components/ui/button";
-import { errorDetails, errorMessage, RootRouteErrorView } from "./RootRouteErrorView";
+import { errorDetails, errorMessage, RootRouteErrorView } from "./-RootRouteErrorView";
 
 interface ActionElementProps {
   readonly children?: ReactNode;
