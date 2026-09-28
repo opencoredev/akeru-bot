@@ -422,6 +422,7 @@ function ThreadRouteContent(
           botAvatar={headerIdentity?.isGroup ? null : (headerIdentity?.bots[0]?.avatar ?? null)}
           botName={headerBotName}
           headerIdentity={headerIdentity}
+          subtitle={headerSubtitle}
           onBack={
             layout.usesSplitView
               ? undefined
@@ -501,6 +502,7 @@ function ThreadBotHeader(props: {
   readonly botAvatar: BotAvatar | null;
   readonly botName: string;
   readonly headerIdentity: ReturnType<typeof resolveThreadIdentity> | null;
+  readonly subtitle: string;
   readonly onBack?: (() => void) | undefined;
 }) {
   const insets = useSafeAreaInsets();
