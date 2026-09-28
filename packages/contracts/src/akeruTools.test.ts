@@ -15,20 +15,37 @@ import {
 describe("Akeru tool contracts", () => {
   it("includes the M2-T6 catalog ids and rejects invalid inputs", () => {
     for (const id of [
-      "WebSearch", "WebFetch", "GenerateImage", "AddMcpServer",
-      "UninstallMcpServer", "RemoveMcpAccount", "RenameMcpAccount", "SetMcpInstructions",
+      "WebSearch",
+      "WebFetch",
+      "GenerateImage",
+      "AddMcpServer",
+      "UninstallMcpServer",
+      "RemoveMcpAccount",
+      "RenameMcpAccount",
+      "SetMcpInstructions",
     ] as const) {
       expect(AKERU_TOOL_CATALOG.some((tool) => tool.id === id)).toBe(true);
     }
     expect(() => decodeAkeruToolInput("WebSearch", { query: "" })).toThrow();
     expect(() => decodeAkeruToolInput("WebFetch", { url: "file:///secret" })).toThrow();
-    expect(() => decodeAkeruToolInput("GenerateImage", { operation: "generate", prompt: "" })).toThrow();
-    expect(() => decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "stdio" })).toThrow();
-    expect(() => decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "url" })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("GenerateImage", { operation: "generate", prompt: "" }),
+    ).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "stdio" }),
+    ).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "url" }),
+    ).toThrow();
     expect(() => decodeAkeruToolInput("RenameMcpAccount", { serverId: "x" })).toThrow();
-    expect(() => decodeAkeruToolInput("AddMcpServer", {
-      serverId: "x", name: "x", transport: "url", url: "https://user:pass@example.com",
-    })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", {
+        serverId: "x",
+        name: "x",
+        transport: "url",
+        url: "https://user:pass@example.com",
+      }),
+    ).toThrow();
   });
   it("validates copy direction and rejects incomplete input", () => {
     expect(copyDirectionForTool("CopyToBox")).toEqual({
