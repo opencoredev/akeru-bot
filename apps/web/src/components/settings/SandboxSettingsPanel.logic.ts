@@ -150,3 +150,16 @@ export function disconnectSandboxProvider(
     providers: { ...settings.providers, [provider]: { environment: [] } },
   };
 }
+
+export type RailwayConnectionChange =
+  | { readonly kind: "disconnect" }
+  | { readonly kind: "save"; readonly draft: Readonly<Record<string, string>> };
+
+export function applyRailwayConnectionChange(
+  settings: SandboxSettings,
+  change: RailwayConnectionChange,
+) {
+  return change.kind === "disconnect"
+    ? disconnectSandboxProvider(settings, "railway")
+    : saveSandboxProviderConnection({ settings, provider: "railway", draft: change.draft });
+}

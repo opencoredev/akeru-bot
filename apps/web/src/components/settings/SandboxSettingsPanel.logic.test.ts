@@ -2,6 +2,7 @@ import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  applyRailwayConnectionChange,
   canSaveSandboxProviderConnection,
   disconnectSandboxProvider,
   isSandboxProviderConnected,
@@ -10,6 +11,32 @@ import {
 } from "./SandboxSettingsPanel.logic";
 
 describe("sandbox settings", () => {
+  it("applies pending Railway actions to the latest settings without reverting another client", () => {
+    const latest = {
+      ...saveSandboxProviderConnection({
+        settings: DEFAULT_SERVER_SETTINGS.sandbox,
+        provider: "e2b",
+        draft: { E2B_API_KEY: "new-e2b-key" },
+      }),
+      defaultProvider: "e2b" as const,
+    };
+    for (const change of [
+      { kind: "disconnect" },
+      { kind: "save", draft: { RAILWAY_API_TOKEN: "rotated", RAILWAY_ENVIRONMENT_ID: "env" } },
+    ] as const) {
+      const next = applyRailwayConnectionChange(latest, change);
+      expect(next.defaultProvider).toBe("e2b");
+      expect(next.providers.e2b).toEqual(latest.providers.e2b);
+      expect(next.providers.railway.environment).toEqual(
+        change.kind === "disconnect"
+          ? []
+          : [
+              { name: "RAILWAY_API_TOKEN", value: "rotated", sensitive: true },
+              { name: "RAILWAY_ENVIRONMENT_ID", value: "env", sensitive: false },
+            ],
+      );
+    }
+  });
   it("requires Railway credentials and resets the default on disconnect", () => {
     expect(
       canSaveSandboxProviderConnection({

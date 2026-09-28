@@ -81,7 +81,7 @@ export class BotWorkspacePool {
           try {
             await workspace.wake();
           } catch (error) {
-            await workspace.destroy().catch(() => undefined);
+            if (workspace.provider !== "railway") await workspace.destroy().catch(() => undefined);
             throw error;
           }
           return workspace;
@@ -113,7 +113,9 @@ export class BotWorkspacePool {
       }
       if (entry.references === 0) {
         void entry.workspace
-          .then((failedWorkspace) => failedWorkspace.destroy())
+          .then((failedWorkspace) => {
+            if (failedWorkspace.provider !== "railway") return failedWorkspace.destroy();
+          })
           .catch(() => undefined);
       }
       throw error;

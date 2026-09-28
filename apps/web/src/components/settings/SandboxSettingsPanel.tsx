@@ -23,6 +23,8 @@ import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsL
 import { searchableSetting } from "./settingsSearch";
 import {
   canSaveSandboxProviderConnection,
+  applyRailwayConnectionChange,
+  type RailwayConnectionChange,
   type CloudSandboxProvider,
   disconnectSandboxProvider,
   isSandboxProviderConnected,
@@ -70,7 +72,7 @@ function EnvironmentSandboxSettingsPanel({
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [railwayChange, setRailwayChange] = useState<SandboxSettings | null>(null);
+  const [railwayChange, setRailwayChange] = useState<RailwayConnectionChange | null>(null);
 
   const persist = async (next: SandboxSettings) => {
     setSaving(true);
@@ -105,7 +107,7 @@ function EnvironmentSandboxSettingsPanel({
       draft,
     });
     if (editingProvider === "railway" && isSandboxProviderConnected(sandbox, "railway")) {
-      setRailwayChange(next);
+      setRailwayChange({ kind: "save", draft: { ...draft } });
       return;
     }
     if (await persist(next)) closeConnection();
@@ -185,7 +187,7 @@ function EnvironmentSandboxSettingsPanel({
                         disabled={saving}
                         onClick={() => {
                           const next = disconnectSandboxProvider(sandbox, definition.id);
-                          if (definition.id === "railway") setRailwayChange(next);
+                          if (definition.id === "railway") setRailwayChange({ kind: "disconnect" });
                           else void persist(next);
                         }}
                       >
@@ -280,7 +282,10 @@ function EnvironmentSandboxSettingsPanel({
             <Button
               disabled={saving}
               onClick={async () => {
-                if (railwayChange && (await persist(railwayChange))) {
+                if (
+                  railwayChange &&
+                  (await persist(applyRailwayConnectionChange(sandbox, railwayChange)))
+                ) {
                   setRailwayChange(null);
                   closeConnection();
                 }

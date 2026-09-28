@@ -567,9 +567,12 @@ describe("AkeruSessionResources", () => {
     const makeRemoteWorkspace = vi.fn((input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
       createRemoteBotWorkspace({ ...input, openSession }),
     );
+    const failedManager = mcpManager({ connected: true, toolCount: 0 });
+    failedManager.init.mockRejectedValueOnce(new Error("MCP init failed after rotation"));
     const resources = new AkeruSessionResources({
       stateDir: directory,
       makeRemoteWorkspace,
+      makeMcpManager: () => failedManager as never,
       toMcpServerConfigs: () => ({}),
     });
     const input = (token: string) => {
@@ -595,7 +598,6 @@ describe("AkeruSessionResources", () => {
     const first = input("old-token");
     const second = input("new-token");
     await resources.acquire(first);
-    await resources.release(first.threadId);
     await resources.acquire(second);
     expect(openSession).toHaveBeenNthCalledWith(1, undefined);
     expect(openSession).toHaveBeenNthCalledWith(2, "railway-vm");
@@ -623,6 +625,12 @@ describe("AkeruSessionResources", () => {
     ).rejects.toThrow("Railway CLI tunnel");
     expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
     expect(destroy).not.toHaveBeenCalled();
+    expect(NodeFS.readFileSync(identityFile, "utf8")).toBe(identity);
+    await expect(
+      resources.acquire({ ...input("another-token"), mcpServers: [exaServer] }),
+    ).rejects.toThrow("MCP init failed after rotation");
+    expect(destroy).not.toHaveBeenCalled();
+    expect(resources.getWorkspace(first.threadId)).toBeDefined();
     expect(NodeFS.readFileSync(identityFile, "utf8")).toBe(identity);
     await resources.shutdown();
     const restarted = new AkeruSessionResources({

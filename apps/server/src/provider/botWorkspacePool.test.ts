@@ -18,6 +18,30 @@ function localWorkspace() {
 }
 
 describe("BotWorkspacePool", () => {
+  it("never destroys a durable Railway VM on initial or subsequent wake failure", async () => {
+    const pool = new BotWorkspacePool();
+    const destroy = vi.fn(async () => undefined);
+    const wake = vi.fn(async () => undefined);
+    const create = async () => ({
+      id: "shared-railway",
+      provider: "railway" as const,
+      workspace: localWorkspace(),
+      inspect: async () => "running" as const,
+      wake,
+      sleep: async () => undefined,
+      destroy,
+    });
+    const active = await pool.acquire("old-credentials", create);
+    wake.mockRejectedValueOnce(new Error("new credentials unavailable"));
+    await expect(pool.acquire("new-credentials", create)).rejects.toThrow(
+      "new credentials unavailable",
+    );
+    expect(destroy).not.toHaveBeenCalled();
+    await active.release();
+    wake.mockRejectedValueOnce(new Error("wake failed"));
+    await expect(pool.acquire("old-credentials", create)).rejects.toThrow("wake failed");
+    expect(destroy).not.toHaveBeenCalled();
+  });
   it("keeps Railway identities across credential changes without reusing credential-bound clients", () => {
     const key = (token: string, scope = "bot-one") =>
       botWorkspaceResourceKey({
