@@ -1772,6 +1772,8 @@ const make = Effect.gen(function* () {
               usage.inputTokens ??
               Math.max(0, (usage.lastUsedTokens ?? usage.usedTokens) - outputTokens),
             outputTokens,
+            cachedInputTokens: usage.lastCachedInputTokens ?? usage.cachedInputTokens ?? 0,
+            cacheCreationTokens: usage.lastCacheCreationTokens ?? usage.cacheCreationTokens ?? 0,
             reasoningTokens: usage.lastReasoningOutputTokens ?? usage.reasoningOutputTokens ?? null,
             settledAt: now,
           })

@@ -80,6 +80,7 @@ import Migration0064 from "./Migrations/064_ExternalChannelProviders.ts";
 import Migration0065 from "./Migrations/065_ProjectionThreadUserInputLifecycleIndex.ts";
 import Migration0066 from "./Migrations/066_BotPersonalityTone.ts";
 import Migration0067 from "./Migrations/067_BotImageProvider.ts";
+import Migration0072 from "./Migrations/072_AkeruBotUsageCacheTokens.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -159,6 +160,7 @@ export const migrationEntries = [
   [65, "ProjectionThreadUserInputLifecycleIndex", Migration0065],
   [66, "BotPersonalityTone", Migration0066],
   [67, "BotImageProvider", Migration0067],
+  [72, "AkeruBotUsageCacheTokens", Migration0072],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

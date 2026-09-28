@@ -58,6 +58,8 @@ type SettleBotUsageDetails =
   | {
       readonly state: "reported";
       readonly inputTokens: number;
+      readonly cachedInputTokens?: number;
+      readonly cacheCreationTokens?: number;
       readonly outputTokens: number;
       readonly reasoningTokens: number | null;
     }
@@ -88,6 +90,8 @@ export interface BotUsageLedgerShape {
       readonly models: ReadonlyArray<{
         readonly model: string;
         readonly inputTokens: number;
+        readonly cachedInputTokens: number;
+        readonly cacheCreationTokens: number;
         readonly outputTokens: number;
         readonly reasoningTokens: number;
       }>;
@@ -128,6 +132,8 @@ export interface BotUsageLedgerShape {
     readonly turnId: TurnId | null;
     readonly category: AkeruUsageCategory;
     readonly inputTokens: number;
+    readonly cachedInputTokens?: number;
+    readonly cacheCreationTokens?: number;
     readonly outputTokens: number;
     readonly reasoningTokens: number | null;
     readonly provider: ProviderDriverKind | null;
@@ -155,6 +161,8 @@ const UsageRow = Schema.Struct({
   reservedTokens: Schema.Number,
   heldTokens: Schema.Number,
   inputTokens: Schema.NullOr(Schema.Number),
+  cachedInputTokens: Schema.Number,
+  cacheCreationTokens: Schema.Number,
   outputTokens: Schema.NullOr(Schema.Number),
   reasoningTokens: Schema.NullOr(Schema.Number),
   provider: Schema.NullOr(Schema.String),
@@ -171,6 +179,7 @@ const entryColumns = (sql: SqlClient.SqlClient) =>
   thread_id AS "threadId", turn_id AS "turnId", category, state,
   reserved_tokens AS "reservedTokens", held_tokens AS "heldTokens",
   input_tokens AS "inputTokens",
+  cached_input_tokens AS "cachedInputTokens", cache_creation_tokens AS "cacheCreationTokens",
   output_tokens AS "outputTokens", reasoning_tokens AS "reasoningTokens",
   provider, model, unavailable_reason AS "unavailableReason",
   created_at AS "createdAt", settled_at AS "settledAt"
@@ -234,9 +243,17 @@ const make = Effect.gen(function* () {
     if (input.state === "reported") {
       yield* validateTokens("BotUsageLedger.settle", [
         input.inputTokens,
+        input.cachedInputTokens ?? 0,
+        input.cacheCreationTokens ?? 0,
         input.outputTokens,
         ...(input.reasoningTokens === null ? [] : [input.reasoningTokens]),
       ]);
+      if ((input.cachedInputTokens ?? 0) + (input.cacheCreationTokens ?? 0) > input.inputTokens) {
+        return yield* new PersistenceSqlError({
+          operation: "BotUsageLedger.settle",
+          detail: "Cache tokens cannot exceed total input tokens.",
+        });
+      }
     }
     if (current.state === "released" || current.state === "unavailable") {
       return yield* decodeEntry(current);
@@ -278,6 +295,8 @@ const make = Effect.gen(function* () {
         state = ${input.state},
         held_tokens = ${nextHeld},
         input_tokens = ${input.state === "reported" ? input.inputTokens : null},
+        cached_input_tokens = ${input.state === "reported" ? (input.cachedInputTokens ?? 0) : 0},
+        cache_creation_tokens = ${input.state === "reported" ? (input.cacheCreationTokens ?? 0) : 0},
         output_tokens = ${input.state === "reported" ? input.outputTokens : null},
         reasoning_tokens = ${input.state === "reported" ? input.reasoningTokens : null},
         unavailable_reason = ${input.state === "unavailable" ? input.reason : null},
@@ -467,7 +486,8 @@ const make = Effect.gen(function* () {
                 yield* sql`
                   UPDATE akeru_bot_usage_entries
                   SET state = 'released', held_tokens = 0,
-                      input_tokens = NULL, output_tokens = NULL, reasoning_tokens = NULL,
+              input_tokens = NULL, output_tokens = NULL, reasoning_tokens = NULL,
+              cached_input_tokens = 0, cache_creation_tokens = 0,
                       unavailable_reason = NULL, settled_at = ${input.settledAt}
                   WHERE reservation_id = ${current.reservationId}
                 `;
@@ -518,9 +538,20 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             yield* validateTokens("BotUsageLedger.recordMeasurement", [
               input.inputTokens,
+              input.cachedInputTokens ?? 0,
+              input.cacheCreationTokens ?? 0,
               input.outputTokens,
               ...(input.reasoningTokens === null ? [] : [input.reasoningTokens]),
             ]);
+            if (
+              (input.cachedInputTokens ?? 0) + (input.cacheCreationTokens ?? 0) >
+              input.inputTokens
+            ) {
+              return yield* new PersistenceSqlError({
+                operation: "BotUsageLedger.recordMeasurement",
+                detail: "Cache tokens cannot exceed total input tokens.",
+              });
+            }
             const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
             if (prior[0]) return yield* decodeEntry(prior[0]);
             const measuredTokens = input.inputTokens + input.outputTokens;
@@ -537,11 +568,13 @@ const make = Effect.gen(function* () {
             yield* sql`
           INSERT INTO akeru_bot_usage_entries (
             reservation_id, source_key, bot_id, thread_id, turn_id, category, state,
-            reserved_tokens, held_tokens, input_tokens, output_tokens, reasoning_tokens, provider,
+            reserved_tokens, held_tokens, input_tokens, cached_input_tokens, cache_creation_tokens,
+            output_tokens, reasoning_tokens, provider,
             model, unavailable_reason, created_at, settled_at
           ) VALUES (
             ${input.reservationId}, ${input.sourceKey}, ${input.botId}, ${input.threadId},
             ${input.turnId}, ${input.category}, 'reported', 0, 0, ${input.inputTokens},
+            ${input.cachedInputTokens ?? 0}, ${input.cacheCreationTokens ?? 0},
             ${input.outputTokens}, ${input.reasoningTokens}, ${input.provider}, ${input.model},
             NULL, ${input.createdAt}, ${input.createdAt}
           )
@@ -575,6 +608,8 @@ const make = Effect.gen(function* () {
       `;
       const measurements = yield* sql<{
         readonly inputTokens: number;
+        readonly cachedInputTokens: number;
+        readonly cacheCreationTokens: number;
         readonly outputTokens: number;
         readonly observerTokens: number;
         readonly reflectorTokens: number;
@@ -639,12 +674,16 @@ const make = Effect.gen(function* () {
       const rows = yield* sql<{
         readonly model: string | null;
         readonly inputTokens: number;
+        readonly cachedInputTokens: number;
+        readonly cacheCreationTokens: number;
         readonly outputTokens: number;
         readonly reasoningTokens: number;
         readonly incompleteEntries: number;
       }>`
         SELECT model,
           COALESCE(SUM(CASE WHEN state = 'reported' THEN input_tokens ELSE 0 END), 0) AS "inputTokens",
+          COALESCE(SUM(CASE WHEN state = 'reported' THEN cached_input_tokens ELSE 0 END), 0) AS "cachedInputTokens",
+          COALESCE(SUM(CASE WHEN state = 'reported' THEN cache_creation_tokens ELSE 0 END), 0) AS "cacheCreationTokens",
           COALESCE(SUM(CASE WHEN state = 'reported' THEN output_tokens ELSE 0 END), 0) AS "outputTokens",
           COALESCE(SUM(CASE WHEN state = 'reported' THEN reasoning_tokens ELSE 0 END), 0) AS "reasoningTokens",
           COALESCE(SUM(CASE WHEN state = 'unavailable' OR
@@ -665,6 +704,8 @@ const make = Effect.gen(function* () {
                 {
                   model: row.model,
                   inputTokens: row.inputTokens,
+                  cachedInputTokens: row.cachedInputTokens,
+                  cacheCreationTokens: row.cacheCreationTokens,
                   outputTokens: row.outputTokens,
                   reasoningTokens: row.reasoningTokens,
                 },

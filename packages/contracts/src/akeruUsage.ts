@@ -37,6 +37,8 @@ export const AkeruUsageEntry = Schema.Struct({
   state: AkeruUsageState,
   reservedTokens: NonNegativeInt,
   inputTokens: Schema.NullOr(NonNegativeInt),
+  cachedInputTokens: Schema.optional(NonNegativeInt),
+  cacheCreationTokens: Schema.optional(NonNegativeInt),
   outputTokens: Schema.NullOr(NonNegativeInt),
   reasoningTokens: Schema.NullOr(NonNegativeInt),
   provider: Schema.NullOr(ProviderDriverKind),

@@ -106,9 +106,14 @@ export function usageRecordFromEntry(
     model: entry.model,
     sessionId: entry.threadId ?? entry.botId,
     totals: {
-      uncachedInputTokens: entry.inputTokens ?? 0,
-      cachedInputTokens: 0,
-      cacheCreationTokens: 0,
+      uncachedInputTokens: Math.max(
+        0,
+        (entry.inputTokens ?? 0) -
+          (entry.cachedInputTokens ?? 0) -
+          (entry.cacheCreationTokens ?? 0),
+      ),
+      cachedInputTokens: entry.cachedInputTokens ?? 0,
+      cacheCreationTokens: entry.cacheCreationTokens ?? 0,
       outputTokens,
       reasoningTokens: Math.min(entry.reasoningTokens ?? 0, outputTokens),
     },

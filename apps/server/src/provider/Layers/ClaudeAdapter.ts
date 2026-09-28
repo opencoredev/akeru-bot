@@ -636,6 +636,8 @@ function claudeTotalProcessedTokens(value: unknown): number | undefined {
 function makeClaudeTokenUsageSnapshot(input: {
   readonly activeTokens: number;
   readonly inputTokens?: number;
+  readonly cachedInputTokens?: number;
+  readonly cacheCreationTokens?: number;
   readonly outputTokens?: number;
   readonly contextWindow?: number;
   readonly totalProcessedTokens?: number;
@@ -655,6 +657,8 @@ function makeClaudeTokenUsageSnapshot(input: {
     (maxTokens !== undefined ? Math.min(activeTokens, maxTokens) : activeTokens);
   const totalProcessedTokens = finiteNonNegativeInteger(input.totalProcessedTokens);
   const inputTokens = finiteNonNegativeInteger(input.inputTokens);
+  const cachedInputTokens = finiteNonNegativeInteger(input.cachedInputTokens);
+  const cacheCreationTokens = finiteNonNegativeInteger(input.cacheCreationTokens);
   const outputTokens = finiteNonNegativeInteger(input.outputTokens);
 
   return {
@@ -664,6 +668,8 @@ function makeClaudeTokenUsageSnapshot(input: {
       ? { totalProcessedTokens }
       : {}),
     ...(inputTokens !== undefined && inputTokens > 0 ? { inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(cacheCreationTokens !== undefined ? { cacheCreationTokens } : {}),
     ...(outputTokens !== undefined && outputTokens > 0 ? { outputTokens } : {}),
     ...(maxTokens !== undefined ? { maxTokens } : {}),
     ...(input.compactsAutomatically !== undefined
@@ -696,6 +702,8 @@ function normalizeClaudeActiveTokenUsage(
   return makeClaudeTokenUsageSnapshot({
     activeTokens,
     inputTokens,
+    cachedInputTokens: finiteNonNegativeInteger(activeUsage.cache_read_input_tokens) ?? 0,
+    cacheCreationTokens: finiteNonNegativeInteger(activeUsage.cache_creation_input_tokens) ?? 0,
     outputTokens,
     ...(contextWindow !== undefined ? { contextWindow } : {}),
     ...(totalProcessedTokens !== undefined ? { totalProcessedTokens } : {}),

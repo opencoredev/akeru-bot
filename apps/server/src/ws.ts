@@ -3192,9 +3192,12 @@ const makeWsRpcLayer = (
                 usage.priceStepUsage({
                   model: entry.model,
                   totals: {
-                    uncachedInputTokens: entry.inputTokens,
-                    cachedInputTokens: 0,
-                    cacheCreationTokens: 0,
+                    uncachedInputTokens: Math.max(
+                      0,
+                      entry.inputTokens - entry.cachedInputTokens - entry.cacheCreationTokens,
+                    ),
+                    cachedInputTokens: entry.cachedInputTokens,
+                    cacheCreationTokens: entry.cacheCreationTokens,
                     outputTokens: entry.outputTokens,
                     reasoningTokens: Math.min(entry.reasoningTokens, entry.outputTokens),
                   },
