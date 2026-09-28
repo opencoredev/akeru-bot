@@ -14,6 +14,7 @@ import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import * as ChannelCommand from "../channels/ChannelCommand.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
@@ -56,7 +57,8 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
     const botUsageLedger = yield* BotUsageLedger;
     const config = yield* ServerConfig.ServerConfig;
-    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
     const startup = yield* Effect.serviceOption(ServerRuntimeStartup.ServerRuntimeStartup);
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
@@ -284,6 +286,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 subscriptionHealth: (instanceId) =>
                   subscriptionAuth.providerInstanceRequestHealth(instanceId),
                 now: yield* Clock.currentTimeMillis,
+                requireSettledCatalog: true,
               });
               if (verdict) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
@@ -296,7 +299,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 });
               }
             }
-            if (bot?.usageCap) {
+            if (bot?.usageCap && (!groupId || normalizedCommand.respondingBotId !== undefined)) {
               const usage = yield* botUsageLedger
                 .summarize(bot.botId)
                 .pipe(
