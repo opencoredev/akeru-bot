@@ -342,6 +342,7 @@ interface ProviderInstanceCardProps {
    * omit it.
    */
   readonly headerAction?: ReactNode | undefined;
+  readonly accountContent?: ReactNode;
   readonly hiddenModels: ReadonlyArray<string>;
   readonly favoriteModels: ReadonlyArray<string>;
   readonly modelOrder: ReadonlyArray<string>;
@@ -384,6 +385,7 @@ export function ProviderInstanceCard({
   onUpdate,
   onDelete,
   headerAction,
+  accountContent,
   hiddenModels,
   favoriteModels,
   modelOrder,
@@ -599,7 +601,7 @@ export function ProviderInstanceCard({
   ) : null;
 
   return (
-    <div className="rounded-xl transition-colors hover:bg-muted/20">
+    <div data-settings-row="" className="rounded-xl">
       <div className="px-3 py-3 sm:px-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1 space-y-1">
@@ -620,9 +622,9 @@ export function ProviderInstanceCard({
                             ? "text-warning hover:text-warning"
                             : "text-muted-foreground hover:text-foreground",
                         )}
-                        aria-label="Update available — view details"
+                        aria-label="Update available, view details"
                       >
-                        <ArrowUpCircleIcon className="size-3.5 [animation:bounce_2.4s_ease-in-out_infinite] motion-reduce:animate-none" />
+                        <ArrowUpCircleIcon className="size-3.5" />
                       </Button>
                     }
                   />
@@ -728,6 +730,7 @@ export function ProviderInstanceCard({
       <Collapsible open={isExpanded} onOpenChange={onExpandedChange}>
         <CollapsibleContent>
           <div className="space-y-5 px-3 pb-4 pt-2 sm:px-4">
+            {accountContent}
             <div>
               <label htmlFor={`provider-instance-${instanceId}-display-name`} className="block">
                 <span className="text-xs font-medium text-foreground">Display name</span>

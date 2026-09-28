@@ -115,6 +115,23 @@ export function useRelativeTimeTick(intervalMs = 1_000) {
   return nowMs;
 }
 
+/**
+ * A section whose direct children are all `SettingsRow`s reads as one grouped
+ * card with hairline dividers, filled with `--settings-surface` so it lifts
+ * slightly off the page card. Sections that mix in custom content (tables,
+ * provider cards, diagnostics) keep the open layout so cards never nest.
+ */
+const GROUPED_ROWS_CLASS = cn(
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:space-y-0",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:rounded-xl",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:border",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:border-border/70",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:bg-settings-surface",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:divide-y",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))]:divide-border/50",
+  "[&:has(>[data-settings-row]):not(:has(>:not([data-settings-row])))>[data-settings-row]]:rounded-none",
+);
+
 export function SettingsSection({
   title,
   icon,
@@ -135,16 +152,20 @@ export function SettingsSection({
       {...sectionProps}
       ref={targetRef}
       tabIndex={sectionProps.id ? -1 : sectionProps.tabIndex}
-      className={cn("space-y-3", className)}
+      className={cn("space-y-2", className)}
     >
-      <div className="flex min-h-8 items-center justify-between gap-4 px-3 sm:px-4">
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-[-0.025em] text-foreground">
+      <div className="flex min-h-7 items-center justify-between gap-4 px-3 sm:px-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-[-0.01em] text-foreground">
           {icon}
           {title}
         </h2>
         <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
       </div>
-      <div className="relative space-y-1 overflow-visible text-foreground">{children}</div>
+      <div
+        className={cn("relative space-y-1 overflow-visible text-foreground", GROUPED_ROWS_CLASS)}
+      >
+        {children}
+      </div>
     </section>
   );
 }
@@ -173,6 +194,7 @@ export function SettingsRow({
       {...rowProps}
       ref={targetRef}
       tabIndex={rowProps.id ? -1 : rowProps.tabIndex}
+      data-settings-row=""
       className={cn("rounded-xl px-3 sm:px-4", children ? "pt-3 pb-1" : "py-3", className)}
     >
       <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] sm:items-center sm:gap-8">
@@ -237,7 +259,7 @@ export function SettingResetButton({
 export function SettingsPageContainer({
   children,
   className,
-  width = "readable",
+  width = "wide",
 }: {
   children: ReactNode;
   className?: string;
@@ -260,7 +282,7 @@ export function SettingsPageContainer({
         className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto [--topbar-scroll-fade-height:1.5rem] sm:[--topbar-scroll-fade-height:1.5rem]"
         data-settings-page-scroll
       >
-        <WorkspacePageContainer width={width} className={cn("gap-12", className)}>
+        <WorkspacePageContainer width={width} className={cn("gap-8 pt-3 pb-16 sm:pt-4", className)}>
           {children}
         </WorkspacePageContainer>
       </div>

@@ -29,7 +29,6 @@ import type { ReplyReadoutPreference } from "@t3tools/client-runtime/reply-playb
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import {
   SettingResetButton,
-  SettingsPageContainer,
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
@@ -72,7 +71,8 @@ function commandError(result: AtomCommandResult<unknown, unknown>): string {
   return error instanceof Error ? error.message : "The request failed.";
 }
 
-export function VoiceSettingsPanel() {
+/** Voice rows for the Providers page, which supplies the page container. */
+export function VoiceSettingsSection() {
   const { t } = useI18n();
   const voice = usePrimarySettings((settings) => settings.voice);
   const updateSettings = useUpdatePrimarySettings();
@@ -104,7 +104,7 @@ export function VoiceSettingsPanel() {
   );
 
   return (
-    <SettingsPageContainer>
+    <>
       <SettingsSection id="voice" title="Voice">
         <SettingsRow
           {...searchableSetting("voice-enabled", t)}
@@ -149,7 +149,7 @@ export function VoiceSettingsPanel() {
           onKeySaved={() => setKeyRevision((revision) => revision + 1)}
         />
       ) : null}
-    </SettingsPageContainer>
+    </>
   );
 }
 

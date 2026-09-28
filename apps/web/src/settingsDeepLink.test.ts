@@ -7,19 +7,20 @@ import { SETTINGS_SECTIONS } from "./settingsDialogStore";
 describe("settings deep links", () => {
   it.each([
     ["general", "general", null, "General"],
-    ["local-execution", "general", "local-execution", "General > Local execution"],
+    ["local-execution", "sandbox", "local-execution", "Sandbox > Local execution"],
     ["appearance", "appearance", null, "Appearance"],
-    ["keybindings", "keybindings", null, "Keybindings"],
+    ["keybindings", "keybindings", null, "Keyboard"],
     ["providers", "providers", null, "Providers"],
-    ["channels", "channels", null, "Bot channels"],
-    ["voice", "voice", null, "Voice"],
-    ["browser", "browser", null, "Browser"],
+    ["channels", "channels", null, "Channels"],
+    ["voice", "providers", "voice", "Providers > Voice"],
+    ["image-generation", "image-generation", null, "Image generation"],
+    ["browser", "browser", "browser", "Browser"],
     ["plugins", "plugins", null, "Plugins"],
     ["sandbox", "sandbox", null, "Sandbox"],
-    ["privacy", "privacy", null, "Privacy"],
+    ["privacy", "privacy", null, "Privacy & data"],
     ["connections", "connections", null, "Connections"],
-    ["source-control", "source-control", null, "Source control"],
-    ["bot-inbox", "inbox", null, "Bot inbox"],
+    ["source-control", "general", null, "General"],
+    ["bot-inbox", "advanced", "errors", "Advanced > Bot inbox"],
     ["diagnostics", "diagnostics", null, "Diagnostics"],
   ] as const)("maps %s to %s and target %s", (id, section, targetId, label) => {
     expect(parseSettingsDeepLink(`grokbot://app/v1/settings?id=${id}`)).toEqual({

@@ -1,11 +1,30 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { SETTINGS_NAV_GROUPS, SETTINGS_NAV_ITEMS } from "./SettingsDialog";
+import {
+  DEFAULT_SETTINGS_SECTION,
+  SETTINGS_SECTIONS,
+  settingsSectionFromPathname,
+  useSettingsDialogStore,
+} from "~/settingsDialogStore";
+import { SETTINGS_NAV_GROUPS, SETTINGS_NAV_ITEMS, settingsSectionLabel } from "./SettingsDialog";
 
 describe("settings dialog navigation", () => {
-  it("shows Bot channels as a navigation tab", () => {
-    expect(SETTINGS_NAV_ITEMS).toContainEqual(
-      expect.objectContaining({ section: "channels", label: "Bot channels" }),
+  it("lists General first and lands there by default", () => {
+    expect(DEFAULT_SETTINGS_SECTION).toBe("general");
+    expect(SETTINGS_NAV_GROUPS[0]?.label).toBe("App");
+    expect(SETTINGS_NAV_ITEMS[0]?.section).toBe("general");
+    expect(settingsSectionFromPathname("/settings")).toBe("general");
+    expect(settingsSectionFromPathname("/settings/unknown")).toBe("general");
+
+    useSettingsDialogStore.getState().openSettings();
+    expect(useSettingsDialogStore.getState().section).toBe("general");
+    useSettingsDialogStore.getState().closeSettings();
+  });
+
+  it("shows Channels in the Bots group", () => {
+    const bots = SETTINGS_NAV_GROUPS.find((group) => group.label === "Bots");
+    expect(bots?.items).toContainEqual(
+      expect.objectContaining({ section: "channels", label: "Channels" }),
     );
   });
 
@@ -31,6 +50,17 @@ describe("settings dialog navigation", () => {
     for (const group of SETTINGS_NAV_GROUPS) {
       expect(group.label.length).toBeGreaterThan(0);
       expect(group.items.length).toBeGreaterThan(0);
+  it("keeps the nav small and free of coding-agent leftovers", () => {
+    const sections = SETTINGS_NAV_ITEMS.map((item) => item.section);
+    expect(sections.length).toBeLessThanOrEqual(10);
+    expect(new Set(sections).size).toBe(sections.length);
+    expect(sections).not.toContain("source-control");
+    expect(sections).not.toContain("diagnostics");
+  });
+
+  it("labels every page, listed or not", () => {
+    for (const section of SETTINGS_SECTIONS) {
+      expect(settingsSectionLabel(section)).not.toBe(section);
     }
   });
 });

@@ -1,7 +1,7 @@
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { SubscriptionProviderId } from "@t3tools/contracts";
 
-import { ClaudeAI, OpenCodeIcon, type Icon } from "../Icons";
+import { ClaudeAI, GrokIcon, KimiIcon, OpenAI, OpenCodeIcon, type Icon } from "../Icons";
 
 export interface SubscriptionProviderDefinition {
   readonly id: SubscriptionProviderId;
@@ -23,7 +23,7 @@ export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] =
     label: "ChatGPT",
     subscription: "Plus, Pro, Business, Enterprise, or Edu",
     description: "Use your ChatGPT subscription with Codex models.",
-    icon: "/provider-icons/openai.svg",
+    icon: OpenAI,
   },
   {
     id: "anthropic",
@@ -37,14 +37,14 @@ export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] =
     label: "Grok",
     subscription: "Shared xAI login",
     description: "Connect an xAI login for Grok. Akeru cannot verify SuperGrok or X Premium+.",
-    icon: "/provider-icons/xai.svg",
+    icon: GrokIcon,
   },
   {
     id: "kimi-for-coding",
     label: "Kimi For Coding",
     subscription: "Kimi For Coding plan",
     description: "Use Kimi coding models through your Moonshot subscription.",
-    icon: "/provider-icons/kimi-for-coding.svg",
+    icon: KimiIcon,
   },
   {
     id: "opencode-go",

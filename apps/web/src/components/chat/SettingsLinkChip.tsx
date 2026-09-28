@@ -3,6 +3,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useI18n } from "../../i18n";
+import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import type { SettingsDeepLinkDestination } from "../../settingsDeepLink";
 import { cn } from "../../lib/utils";
@@ -44,7 +45,8 @@ export function SettingsLinkChip({
             onClick={(event: MouseEvent<HTMLAnchorElement>) => {
               event.preventDefault();
               event.stopPropagation();
-              openSettings(destination.section, destination.targetId, environmentId);
+              if (destination.section === "plugins") openPlugins();
+              else openSettings(destination.section, destination.targetId, environmentId);
             }}
           >
             <AppIcon icon={Settings02Icon} className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />

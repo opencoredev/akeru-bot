@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { SettingsRoutePage } from "../components/settings/SettingsRoutePage";
+import { DEFAULT_SETTINGS_SECTION } from "../settingsDialogStore";
 
 export const Route = createFileRoute("/settings")({
   beforeLoad: async ({ context, location }) => {
@@ -10,7 +11,7 @@ export const Route = createFileRoute("/settings")({
     if (location.pathname === "/settings") {
       throw redirect({
         to: "/settings/$section",
-        params: { section: "general" },
+        params: { section: DEFAULT_SETTINGS_SECTION },
         replace: true,
       });
     }

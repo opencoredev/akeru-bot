@@ -25,19 +25,19 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
   e2b: {
     id: "e2b",
     label: "E2B",
-    description: "Run bots in an E2B sandbox with your API key.",
+    description: "Cloud workspaces managed by E2B. Requires an API key.",
     fields: [{ name: "E2B_API_KEY", label: "API key", secret: true }],
   },
   daytona: {
     id: "daytona",
     label: "Daytona",
-    description: "Run bots in a Daytona sandbox with your API key.",
+    description: "Cloud workspaces managed by Daytona. Requires an API key.",
     fields: [{ name: "DAYTONA_API_KEY", label: "API key", secret: true }],
   },
   vercel: {
     id: "vercel",
     label: "Vercel Sandbox",
-    description: "Run bots in your Vercel team and project.",
+    description: "Cloud workspaces in your Vercel team and project.",
     fields: [
       { name: "VERCEL_TOKEN", label: "Token", secret: true },
       { name: "VERCEL_TEAM_ID", label: "Team ID", secret: false },
@@ -47,7 +47,7 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
   upstash: {
     id: "upstash",
     label: "Upstash Box",
-    description: "Run bots in an Upstash Box with your API key.",
+    description: "Cloud workspaces managed by Upstash Box. Requires an API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
 };

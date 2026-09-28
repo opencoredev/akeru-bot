@@ -71,7 +71,7 @@ describe("searchSettings", () => {
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
     expect(searchSettings("local execution")[0]).toMatchObject({
       id: "local-execution",
-      to: "/settings/general",
+      to: "/settings/sandbox",
     });
     expect(searchSettings("xyzzy")).toEqual([]);
   });
@@ -111,14 +111,48 @@ describe("searchSettings", () => {
 
   it("serves anchor props to panels from the catalog", () => {
     expect(searchableSetting("word-wrap")).toEqual({ id: "word-wrap", title: "Word wrap" });
-    expect(searchableSetting("archive")).toEqual({ id: "archive", title: "Archived chats" });
+    expect(searchableSetting("diagnostics")).toEqual({ id: "diagnostics", title: "Diagnostics" });
   });
 
-  it("routes sandbox and browser sharing to General settings", () => {
+  it("routes sandbox and browser sharing to the Sandbox page", () => {
     expect(searchSettings("sandbox and browser sharing")[0]).toMatchObject({
       id: "sandbox-browser-sharing",
-      to: "/settings/general",
+      to: "/settings/sandbox",
     });
+  });
+
+  it("routes voice to the Providers page without offering a fallback model control", () => {
+    expect(searchSettings("voice provider")[0]).toMatchObject({
+      id: "voice-provider",
+      to: "/settings/providers",
+    });
+    expect(searchSettings("fallback model")).not.toContainEqual(
+      expect.objectContaining({ id: "text-generation-model" }),
+    );
+  });
+
+  it("routes bot errors and troubleshooting to diagnostics on the Advanced page", () => {
+    expect(searchSettings("errors")[0]).toMatchObject({
+      id: "diagnostics",
+      to: "/settings/advanced",
+    });
+    expect(searchSettings("diagnostics")[0]).toMatchObject({
+      id: "diagnostics",
+      to: "/settings/advanced",
+    });
+  });
+
+  it("drops coding-agent leftovers from the index", () => {
+    const ids: ReadonlyArray<string> = SETTINGS_SEARCH_ITEMS.map((item) => item.id);
+    for (const id of [
+      "hide-whitespace-changes",
+      "skills-in-slash-menu",
+      "add-project-starts-in",
+      "source-control",
+      "archive",
+    ]) {
+      expect(ids).not.toContain(id);
+    }
   });
 
   it("routes sandbox provider settings to Sandbox settings", () => {
@@ -147,7 +181,7 @@ describe("searchSettings", () => {
     expect(searchSettings("environment identification")[0]).toMatchObject({
       id: "environment-identification",
       to: "/settings/appearance",
-      targetId: "appearance",
+      targetId: "display",
     });
   });
 
