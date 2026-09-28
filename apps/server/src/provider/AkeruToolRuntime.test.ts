@@ -18,7 +18,6 @@ import {
   type AkeruToolReceipt,
   type AkeruWorkerStatus,
 } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
 
 import { createAkeruToolRuntime, type AkeruToolSession } from "./AkeruToolRuntime.ts";
 import { AkeruWorkerError } from "./AkeruWorkerRuntime.ts";
@@ -220,13 +219,11 @@ describe("AkeruToolRuntime", () => {
       const backend: NonNullable<AkeruToolSession["workers"]> = {
         ...workers(0),
         spawn: () =>
-          Effect.runPromise(
-            Effect.fail(
-              new AkeruWorkerError({
-                reason: "concurrency_limit",
-                detail: "This turn already has 3 running workers.",
-              }),
-            ),
+          Promise.reject(
+            new AkeruWorkerError({
+              reason: "concurrency_limit",
+              detail: "This turn already has 3 running workers.",
+            }),
           ),
       };
       const runtime = createAkeruToolRuntime({
