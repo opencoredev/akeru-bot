@@ -214,7 +214,9 @@ describe("channel presentation", () => {
 
 describe("channelFailureReason", () => {
   it("names the provider and the rejected credential", () => {
-    expect(channelFailureReason("credentials", "telegram")).toBe("Telegram rejected the bot token.");
+    expect(channelFailureReason("credentials", "telegram")).toBe(
+      "Telegram rejected the bot token.",
+    );
     expect(channelFailureReason("credentials", "slack")).toBe(
       "Slack rejected the bot token or app token.",
     );

@@ -1226,10 +1226,14 @@ export const zhCNCatalog: TranslationCatalog = {
   "Discord rejected the bot token.": "Discord 拒绝了机器人令牌。",
   "WhatsApp rejected the access token.": "WhatsApp 拒绝了访问令牌。",
   "Photon rejected the connection credentials.": "Photon 拒绝了连接凭据。",
-  "Could not reach {provider}. Check the network and try again.": "无法连接到 {provider}。请检查网络后重试。",
-  "The project for this channel is unavailable. Choose another project.": "此频道的项目不可用。请选择其他项目。",
-  "A reply may not have reached {provider}. Check the chat before replying again.": "回复可能未送达 {provider}。请先检查聊天再回复。",
-  "{provider} did not reconnect after a restart. Reconnect to resume.": "{provider} 重启后未能重新连接。请重新连接以恢复。",
+  "Could not reach {provider}. Check the network and try again.":
+    "无法连接到 {provider}。请检查网络后重试。",
+  "The project for this channel is unavailable. Choose another project.":
+    "此频道的项目不可用。请选择其他项目。",
+  "A reply may not have reached {provider}. Check the chat before replying again.":
+    "回复可能未送达 {provider}。请先检查聊天再回复。",
+  "{provider} did not reconnect after a restart. Reconnect to resume.":
+    "{provider} 重启后未能重新连接。请重新连接以恢复。",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "任何能给此机器人发消息的人，都能让它使用已启用的工具在所选项目中工作。",
   "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":

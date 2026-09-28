@@ -4343,57 +4343,61 @@ describe("channel runtime", () => {
       },
     ] as const;
     for (const credentials of rejectedAttachSaves) {
-      it.effect(`keeps the chosen bot on a ${credentials.provider} connection it could not attach`, () =>
-        Effect.gen(function* () {
-          const connectionId = ChannelConnectionId.make(`${credentials.provider}-rejected`);
-          let rejected = true;
-          const harness = makeHarness({
-            startTransport: async () => {
-              if (rejected) throw new Error("401 Unauthorized");
-              return {
-                externalIdentity: "@akeru",
-                runtime: { post: async () => undefined, shutdown: async () => undefined },
-              };
-            },
-          });
-          yield* saveChannelConnection(harness.dependencies, {
-            type: "channel.connection.save",
-            commandId: CommandId.make(`save-${credentials.provider}-rejected`),
-            connectionId,
-            name: "Rejected line",
-            ...credentials,
-          });
-
-          yield* expectProviderFailure(
-            attachChannelConnection(
-              harness.dependencies,
-              BOT_ID,
+      it.effect(
+        `keeps the chosen bot on a ${credentials.provider} connection it could not attach`,
+        () =>
+          Effect.gen(function* () {
+            const connectionId = ChannelConnectionId.make(`${credentials.provider}-rejected`);
+            let rejected = true;
+            const harness = makeHarness({
+              startTransport: async () => {
+                if (rejected) throw new Error("401 Unauthorized");
+                return {
+                  externalIdentity: "@akeru",
+                  runtime: { post: async () => undefined, shutdown: async () => undefined },
+                };
+              },
+            });
+            yield* saveChannelConnection(harness.dependencies, {
+              type: "channel.connection.save",
+              commandId: CommandId.make(`save-${credentials.provider}-rejected`),
               connectionId,
-              PROJECT_ID,
-              credentials.provider,
-            ),
-            "401 Unauthorized",
-          );
+              name: "Rejected line",
+              ...credentials,
+            });
 
-          expect(harness.readModel().bots[0]?.channelBindings).toEqual([
-            expect.objectContaining({
+            yield* expectProviderFailure(
+              attachChannelConnection(
+                harness.dependencies,
+                BOT_ID,
+                connectionId,
+                PROJECT_ID,
+                credentials.provider,
+              ),
+              "401 Unauthorized",
+            );
+
+            expect(harness.readModel().bots[0]?.channelBindings).toEqual([
+              expect.objectContaining({
+                connectionId,
+                projectId: PROJECT_ID,
+                status: "failed",
+                connectedAt: null,
+                failureCategory: "credentials",
+              }),
+            ]);
+
+            rejected = false;
+            yield* reconnectChannel(harness.dependencies, BOT_ID, credentials.provider);
+            expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
               connectionId,
-              projectId: PROJECT_ID,
-              status: "failed",
-              connectedAt: null,
-              failureCategory: "credentials",
-            }),
-          ]);
-
-          rejected = false;
-          yield* reconnectChannel(harness.dependencies, BOT_ID, credentials.provider);
-          expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
-            connectionId,
-            status: "connected",
-          });
-          expect(harness.readModel().bots[0]?.channelBindings[0]?.failureCategory).toBeUndefined();
-          yield* stopChannelsForBot(BOT_ID);
-        }),
+              status: "connected",
+            });
+            expect(
+              harness.readModel().bots[0]?.channelBindings[0]?.failureCategory,
+            ).toBeUndefined();
+            yield* stopChannelsForBot(BOT_ID);
+          }),
       );
     }
 

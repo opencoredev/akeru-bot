@@ -1279,10 +1279,14 @@ export const englishCatalog = {
   "Discord rejected the bot token.": "Discord rejected the bot token.",
   "WhatsApp rejected the access token.": "WhatsApp rejected the access token.",
   "Photon rejected the connection credentials.": "Photon rejected the connection credentials.",
-  "Could not reach {provider}. Check the network and try again.": "Could not reach {provider}. Check the network and try again.",
-  "The project for this channel is unavailable. Choose another project.": "The project for this channel is unavailable. Choose another project.",
-  "A reply may not have reached {provider}. Check the chat before replying again.": "A reply may not have reached {provider}. Check the chat before replying again.",
-  "{provider} did not reconnect after a restart. Reconnect to resume.": "{provider} did not reconnect after a restart. Reconnect to resume.",
+  "Could not reach {provider}. Check the network and try again.":
+    "Could not reach {provider}. Check the network and try again.",
+  "The project for this channel is unavailable. Choose another project.":
+    "The project for this channel is unavailable. Choose another project.",
+  "A reply may not have reached {provider}. Check the chat before replying again.":
+    "A reply may not have reached {provider}. Check the chat before replying again.",
+  "{provider} did not reconnect after a restart. Reconnect to resume.":
+    "{provider} did not reconnect after a restart. Reconnect to resume.",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
   "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":

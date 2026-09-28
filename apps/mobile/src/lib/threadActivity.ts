@@ -1491,7 +1491,11 @@ export function buildThreadFeed(
   // Date per comparison.
   timed.sort((left, right) => compareFeedTimes(left.at, right.at));
 
-  return mergeDelegationCards(groupAdjacentActivities(timed.map((item) => item.entry)), messages, options?.delegations ?? []);
+  return mergeDelegationCards(
+    groupAdjacentActivities(timed.map((item) => item.entry)),
+    messages,
+    options?.delegations ?? [],
+  );
 }
 
 /** Same ordering as `Order.Date`: stable ties, unparsable times first. */
