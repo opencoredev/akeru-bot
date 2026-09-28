@@ -264,6 +264,10 @@ offers **Open app**. It does not sign the browser in to the address that served 
 also paste the whole link into **Settings > Connections > Add environment** on web or desktop, or
 scan it with the mobile app. The token still works only once.
 
+Keep the token after `#`. The page refuses a link that carries `token=` in the query string,
+because the browser has already sent that token to the address that served the page. Get a new
+link instead of moving the token by hand.
+
 The browser must reach the `host` server directly. When the page is served over HTTPS, the server
 must be served over HTTPS too, or the browser blocks the request.
 

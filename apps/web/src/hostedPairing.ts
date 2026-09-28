@@ -1,4 +1,8 @@
-import { readHostedPairingRequest, type HostedPairingRequest } from "@t3tools/shared/remote";
+import {
+  readHashParams,
+  readHostedPairingRequest,
+  type HostedPairingRequest,
+} from "@t3tools/shared/remote";
 
 import type { PairingPanelStatus } from "./components/auth/PairingPanel";
 
@@ -13,10 +17,16 @@ export function isHostedPairingLink(href: string): boolean {
   return url.pathname === "/pair" && url.searchParams.has("host");
 }
 
-/** The server and token a hosted pairing link carries, or null when either is missing. */
+/**
+ * The server and token a hosted pairing link carries, or null when either is
+ * missing. The token must sit in the fragment: a `?token=` query value already
+ * reached the page-serving origin in the request, so it is never submitted.
+ */
 export function readHostedPairingLink(href: string): HostedPairingRequest | null {
   const url = new URL(href);
-  return url.pathname === "/pair" ? readHostedPairingRequest(url) : null;
+  if (url.pathname !== "/pair" || url.searchParams.has("token")) return null;
+  const request = readHostedPairingRequest(url);
+  return request && readHashParams(url).get("token")?.trim() === request.token ? request : null;
 }
 
 export type HostedPairingOutcome =

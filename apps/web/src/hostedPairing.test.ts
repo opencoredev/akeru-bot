@@ -29,6 +29,15 @@ describe("readHostedPairingLink", () => {
   it("returns null when the token is missing", () => {
     expect(readHostedPairingLink("https://tunnel.example.com/pair?host=box.local")).toBeNull();
   });
+
+  it("refuses a token sent in the query string", () => {
+    expect(
+      readHostedPairingLink("https://tunnel.example.com/pair?host=box.local&token=abc"),
+    ).toBeNull();
+    expect(
+      readHostedPairingLink("https://tunnel.example.com/pair?host=box.local&token=abc#token=def"),
+    ).toBeNull();
+  });
 });
 
 describe("runHostedPairing", () => {
