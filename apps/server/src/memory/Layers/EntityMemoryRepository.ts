@@ -309,15 +309,18 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           ),
         catch: toPersistenceSqlError("EntityMemoryRepository.invalidateObservations:clear"),
       });
-    }).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateObservations")));
+    }).pipe(
+      Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.invalidateObservations")),
+    );
 
   const recordDerivedCopies: NonNullable<EntityMemoryRepositoryShape["recordDerivedCopies"]> = (
     input,
   ) =>
-    sql.withTransaction(
-      Effect.forEach(
-        input.revisions,
-        (revision) => sql`
+    sql
+      .withTransaction(
+        Effect.forEach(
+          input.revisions,
+          (revision) => sql`
           INSERT INTO akeru_memory_derived_copies
             (tenant_id, root_id, revision_id, thread_id, created_at)
           VALUES (${input.tenantId}, ${revision.rootId}, ${revision.id}, ${input.threadId}, datetime('now'))
@@ -325,9 +328,16 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             revision_id = excluded.revision_id,
             created_at = excluded.created_at
         `,
-        { discard: true },
-      ).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies"))),
-    ).pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies:transaction")));
+          { discard: true },
+        ).pipe(
+          Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies")),
+        ),
+      )
+      .pipe(
+        Effect.mapError(
+          toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies:transaction"),
+        ),
+      );
 
   const insert: EntityMemoryRepositoryShape["insert"] = (input) =>
     writeLock.withPermit(

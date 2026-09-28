@@ -77,27 +77,33 @@ const BotMemoryErrorReason = Schema.Union([
 
 export type BotMemoryErrorCode = typeof BotMemoryErrorReason.Type._tag;
 
-export class BotMemoryError extends Schema.TaggedErrorClass<BotMemoryError>()(
-  "BotMemoryError",
-  {
-    reason: BotMemoryErrorReason,
-    message: Schema.String,
-    details: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  },
-) {
-  get code(): BotMemoryErrorCode { return this.reason._tag; }
+export class BotMemoryError extends Schema.TaggedErrorClass<BotMemoryError>()("BotMemoryError", {
+  reason: BotMemoryErrorReason,
+  message: Schema.String,
+  details: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+}) {
+  get code(): BotMemoryErrorCode {
+    return this.reason._tag;
+  }
 }
 
 export const makeBotMemoryError = (
   code: BotMemoryErrorCode,
   message: string,
   details?: Readonly<Record<string, unknown>>,
-) => new BotMemoryError({ reason: { _tag: code }, message, ...(details === undefined ? {} : { details }) });
+) =>
+  new BotMemoryError({
+    reason: { _tag: code },
+    message,
+    ...(details === undefined ? {} : { details }),
+  });
 
 export const toBotMemoryError = (cause: unknown): BotMemoryError =>
   Schema.is(BotMemoryError)(cause)
     ? cause
-    : makeBotMemoryError("io-error", cause instanceof Error ? cause.message : String(cause), { cause });
+    : makeBotMemoryError("io-error", cause instanceof Error ? cause.message : String(cause), {
+        cause,
+      });
 
 export interface BotMemoryAccess {
   readonly botId: BotId;
@@ -450,10 +456,17 @@ const readLockRecord = async (lockPath: string): Promise<BotMemoryLockRecord | n
   if (raw === null) return null;
   try {
     const record = JSON.parse(raw) as Partial<BotMemoryLockRecord>;
-    if (typeof record.pid !== "number" || !Number.isInteger(record.pid)
-      || typeof record.token !== "string" || typeof record.heartbeatAtMs !== "number") return null;
+    if (
+      typeof record.pid !== "number" ||
+      !Number.isInteger(record.pid) ||
+      typeof record.token !== "string" ||
+      typeof record.heartbeatAtMs !== "number"
+    )
+      return null;
     return record as BotMemoryLockRecord;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 };
 
 const isProcessAlive = (pid: number): boolean => {
@@ -491,20 +504,24 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
       throw makeBotMemoryError("lock-lost", "The memory file lock was taken by another owner.");
     }
   };
-  const release = (handle: NodeFSP.FileHandle) => Effect.promise(async () => {
-    const owned = await handle.stat().catch(() => null);
-    await handle.close().catch(() => undefined);
-    if (!owned) return;
-    const current = await NodeFS.lstat(lockPath).catch(() => null);
-    if (current && current.ino === owned.ino && current.dev === owned.dev) {
-      await NodeFS.unlink(lockPath).catch(() => undefined);
-    }
-  });
+  const release = (handle: NodeFSP.FileHandle) =>
+    Effect.promise(async () => {
+      const owned = await handle.stat().catch(() => null);
+      await handle.close().catch(() => undefined);
+      if (!owned) return;
+      const current = await NodeFS.lstat(lockPath).catch(() => null);
+      if (current && current.ino === owned.ino && current.dev === owned.dev) {
+        await NodeFS.unlink(lockPath).catch(() => undefined);
+      }
+    });
   const open = Effect.tryPromise({
     try: async () => {
       const handle = await NodeFS.open(lockPath, "wx", 0o600);
       try {
-        await handle.writeFile(JSON.stringify(record(DateTime.toEpochMillis(DateTime.nowUnsafe()))), "utf8");
+        await handle.writeFile(
+          JSON.stringify(record(DateTime.toEpochMillis(DateTime.nowUnsafe()))),
+          "utf8",
+        );
         await handle.sync();
         return handle;
       } catch (cause) {
@@ -513,72 +530,100 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
         throw cause;
       }
     },
-    catch: (cause) => (cause as NodeJS.ErrnoException).code === "EEXIST"
-      ? makeBotMemoryError("lock-timeout", "Timed out waiting for the memory file lock.")
-      : makeBotMemoryError("io-error", "Could not acquire the memory file lock.", { cause }),
+    catch: (cause) =>
+      (cause as NodeJS.ErrnoException).code === "EEXIST"
+        ? makeBotMemoryError("lock-timeout", "Timed out waiting for the memory file lock.")
+        : makeBotMemoryError("io-error", "Could not acquire the memory file lock.", { cause }),
   });
   const acquire = open.pipe(
-    Effect.catchReason("BotMemoryError", "lock-timeout", () => Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      yield* Effect.tryPromise({
-        try: async () => {
-          await assertNotSymlink(lockPath);
-          const existing = await readLockRecord(lockPath);
-          let abandoned: boolean;
-          if (existing) {
-            abandoned = now - existing.heartbeatAtMs > LOCK_STALE_AFTER_MS
-              && !isProcessAlive(existing.pid);
-          } else {
-            // A writer that crashed between creating the lock and syncing its record
-            // leaves an empty or partial file. Live owners rewrite it every heartbeat,
-            // so an unreadable record older than the stale threshold has no owner.
-            const stat = await NodeFS.lstat(lockPath).catch(() => null);
-            abandoned = stat !== null && now - stat.mtimeMs > LOCK_STALE_AFTER_MS;
-          }
-          if (abandoned) {
-            const stalePath = `${lockPath}.stale-${NodeCrypto.randomUUID()}`;
-            await NodeFS.rename(lockPath, stalePath).then(
-              () => NodeFS.unlink(stalePath),
-              (cause: NodeJS.ErrnoException) => { if (cause.code !== "ENOENT") throw cause; },
-            );
-          }
-        },
-        catch: toBotMemoryError,
-      });
-      return yield* makeBotMemoryError("lock-timeout", "Timed out waiting for the memory file lock.");
-    })),
+    Effect.catchReason("BotMemoryError", "lock-timeout", () =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* Effect.tryPromise({
+          try: async () => {
+            await assertNotSymlink(lockPath);
+            const existing = await readLockRecord(lockPath);
+            let abandoned: boolean;
+            if (existing) {
+              abandoned =
+                now - existing.heartbeatAtMs > LOCK_STALE_AFTER_MS && !isProcessAlive(existing.pid);
+            } else {
+              // A writer that crashed between creating the lock and syncing its record
+              // leaves an empty or partial file. Live owners rewrite it every heartbeat,
+              // so an unreadable record older than the stale threshold has no owner.
+              const stat = await NodeFS.lstat(lockPath).catch(() => null);
+              abandoned = stat !== null && now - stat.mtimeMs > LOCK_STALE_AFTER_MS;
+            }
+            if (abandoned) {
+              const stalePath = `${lockPath}.stale-${NodeCrypto.randomUUID()}`;
+              await NodeFS.rename(lockPath, stalePath).then(
+                () => NodeFS.unlink(stalePath),
+                (cause: NodeJS.ErrnoException) => {
+                  if (cause.code !== "ENOENT") throw cause;
+                },
+              );
+            }
+          },
+          catch: toBotMemoryError,
+        });
+        return yield* makeBotMemoryError(
+          "lock-timeout",
+          "Timed out waiting for the memory file lock.",
+        );
+      }),
+    ),
     Effect.retry({
       schedule: Schedule.spaced("15 millis").pipe(Schedule.upTo({ duration: LOCK_WAIT_LIMIT_MS })),
       while: (error) => error.reason._tag === "lock-timeout",
     }),
   );
   const handle = yield* Effect.acquireRelease(acquire, release);
-  yield* Effect.forkScoped(Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    // Overwrite in place, then trim: truncating first would briefly expose an empty
-    // record that makes verifyOwnership report a lost lock. Records never shrink.
-    yield* Effect.promise(() => handle.write(JSON.stringify(record(now)), 0, "utf8")
-      .then(({ bytesWritten }) => handle.truncate(bytesWritten))
-      .then(() => handle.sync())
-      .catch(() => undefined));
-  }).pipe(Effect.repeat(Schedule.fixed("10 seconds"))));
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      // Overwrite in place, then trim: truncating first would briefly expose an empty
+      // record that makes verifyOwnership report a lost lock. Records never shrink.
+      yield* Effect.promise(() =>
+        handle
+          .write(JSON.stringify(record(now)), 0, "utf8")
+          .then(({ bytesWritten }) => handle.truncate(bytesWritten))
+          .then(() => handle.sync())
+          .catch(() => undefined),
+      );
+    }).pipe(Effect.repeat(Schedule.fixed("10 seconds"))),
+  );
   return { verifyOwnership } satisfies BotMemoryFileLock;
 });
 
-async function withFileLock<A>(memoryRoot: string, filePath: string, use: (lock: BotMemoryFileLock) => Promise<A>): Promise<A> {
-  return Effect.runPromise(Effect.scoped(Effect.gen(function* () {
-    const lock = yield* acquireBotMemoryFileLock(memoryRoot, filePath);
-    return yield* Effect.promise(() => use(lock));
-  })));
+async function withFileLock<A>(
+  memoryRoot: string,
+  filePath: string,
+  use: (lock: BotMemoryFileLock) => Promise<A>,
+): Promise<A> {
+  return Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const lock = yield* acquireBotMemoryFileLock(memoryRoot, filePath);
+        return yield* Effect.promise(() => use(lock));
+      }),
+    ),
+  );
 }
 
-async function writeMemoryFile(memoryRoot: string, filePath: string, contents: string, verifyOwnership?: () => Promise<void>): Promise<void> {
+async function writeMemoryFile(
+  memoryRoot: string,
+  filePath: string,
+  contents: string,
+  verifyOwnership?: () => Promise<void>,
+): Promise<void> {
   await ensurePrivateDirectory(memoryRoot, NodePath.dirname(filePath));
   await assertNotSymlink(filePath);
   await verifyOwnership?.();
-  await Effect.runPromise(writeFileStringAtomically({ filePath, contents, mode: 0o600 }).pipe(
-    Effect.provide(NodeServices.layer),
-  ));
+  await Effect.runPromise(
+    writeFileStringAtomically({ filePath, contents, mode: 0o600 }).pipe(
+      Effect.provide(NodeServices.layer),
+    ),
+  );
 }
 
 export class BotMemoryStore {
@@ -740,7 +785,12 @@ export class BotMemoryStore {
           : before.reviewInputs,
         settledTurnIds: [...(before.settledTurnIds ?? []), reservation.id].slice(-20),
       };
-      await writeMemoryFile(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`, lock.verifyOwnership);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return this.toReviewCadence(next);
     });
   }
@@ -764,7 +814,12 @@ export class BotMemoryStore {
           : before.reviewInputs,
       };
       delete (next as { reviewClaim?: unknown }).reviewClaim;
-      await writeMemoryFile(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`, lock.verifyOwnership);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return this.toReviewCadence(next);
     });
   }
@@ -784,7 +839,12 @@ export class BotMemoryStore {
           leaseExpiresAtMs: now + this.reviewClaimLeaseMs,
         },
       };
-      await writeMemoryFile(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`, lock.verifyOwnership);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return true;
     });
   }
@@ -897,7 +957,8 @@ export class BotMemoryStore {
         );
       }
       const changed = content !== renderEntries(before.entries);
-      if (changed) await writeMemoryFile(this.memoryRoot, resolved.filePath, content, lock.verifyOwnership);
+      if (changed)
+        await writeMemoryFile(this.memoryRoot, resolved.filePath, content, lock.verifyOwnership);
       const updated = changed ? await this.readResolved(resolved) : before;
       return {
         document: this.toDocument(resolved, updated),
@@ -955,7 +1016,11 @@ export class BotMemoryStore {
     const locks = new Map<string, BotMemoryFileLock>();
     const lock = async (index: number): Promise<A> => {
       const document = documents[index];
-      if (document) return withFileLock(this.memoryRoot, document.filePath, async (held) => { locks.set(document.filePath, held); return lock(index + 1); });
+      if (document)
+        return withFileLock(this.memoryRoot, document.filePath, async (held) => {
+          locks.set(document.filePath, held);
+          return lock(index + 1);
+        });
       const originals = new Map<
         AkeruMemoryDocumentTarget,
         { readonly resolved: ResolvedDocument; readonly content: string | null }
@@ -978,7 +1043,12 @@ export class BotMemoryStore {
             throw makeBotMemoryError("access-denied", "Memory target is outside this transaction.");
           const { normalized } = this.validateDocumentReplacement(access, target, content);
           touched.add(target);
-          await writeMemoryFile(this.memoryRoot, original.resolved.filePath, normalized, locks.get(original.resolved.filePath)?.verifyOwnership);
+          await writeMemoryFile(
+            this.memoryRoot,
+            original.resolved.filePath,
+            normalized,
+            locks.get(original.resolved.filePath)?.verifyOwnership,
+          );
         });
       } catch (cause) {
         const failures: unknown[] = [];
@@ -988,7 +1058,12 @@ export class BotMemoryStore {
             if (original.content === null)
               await NodeFS.rm(original.resolved.filePath, { force: true });
             else
-              await writeMemoryFile(this.memoryRoot, original.resolved.filePath, original.content, locks.get(original.resolved.filePath)?.verifyOwnership);
+              await writeMemoryFile(
+                this.memoryRoot,
+                original.resolved.filePath,
+                original.content,
+                locks.get(original.resolved.filePath)?.verifyOwnership,
+              );
           } catch (rollbackCause) {
             failures.push(rollbackCause);
           }

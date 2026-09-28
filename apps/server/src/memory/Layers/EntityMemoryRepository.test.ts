@@ -539,9 +539,13 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const observedThreadId = "clear-fails-thread";
       yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
         VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("clear-fails-active")}, ${observedThreadId}, ${"2026-08-30T22:00:00.000Z"})`;
-      const unregister = registerEntityMemoryResource(observedThreadId, observedThreadId, async () => {
-        throw new Error("observational memory store unavailable");
-      });
+      const unregister = registerEntityMemoryResource(
+        observedThreadId,
+        observedThreadId,
+        async () => {
+          throw new Error("observational memory store unavailable");
+        },
+      );
       const exit = yield* repository
         .tombstone({
           access: botAccess,

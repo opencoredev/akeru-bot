@@ -6,7 +6,12 @@ import type {
 
 import * as Effect from "effect/Effect";
 
-import { toBotMemoryError, makeBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
+import {
+  toBotMemoryError,
+  makeBotMemoryError,
+  type BotMemoryAccess,
+  type BotMemoryStore,
+} from "./BotMemory.ts";
 
 export interface LegacyMemoryMigrationReport {
   readonly migrated: number;
@@ -71,23 +76,30 @@ async function migrateSet(input: {
           );
           continue;
         }
-        const result = await Effect.runPromise(Effect.tryPromise({
-          try: () => input.store.mutate({
-            ...input.access,
-            target,
-            operations: [{ action: "add", content: revision.fact }],
-          }),
-          catch: toBotMemoryError,
-        }).pipe(Effect.catchReasons("BotMemoryError", {
-          "limit-exceeded": (_reason, error) => Effect.sync(() => {
-            archived.push(archiveEntry(revision, error.message));
-            return null;
-          }),
-          "unsafe-content": (_reason, error) => Effect.sync(() => {
-            archived.push(archiveEntry(revision, error.message));
-            return null;
-          }),
-        })));
+        const result = await Effect.runPromise(
+          Effect.tryPromise({
+            try: () =>
+              input.store.mutate({
+                ...input.access,
+                target,
+                operations: [{ action: "add", content: revision.fact }],
+              }),
+            catch: toBotMemoryError,
+          }).pipe(
+            Effect.catchReasons("BotMemoryError", {
+              "limit-exceeded": (_reason, error) =>
+                Effect.sync(() => {
+                  archived.push(archiveEntry(revision, error.message));
+                  return null;
+                }),
+              "unsafe-content": (_reason, error) =>
+                Effect.sync(() => {
+                  archived.push(archiveEntry(revision, error.message));
+                  return null;
+                }),
+            }),
+          ),
+        );
         if (result?.changed) migrated += 1;
       }
       if (archived.length > 0) {

@@ -34,7 +34,11 @@ async function takeLockFromOwner(lockPath: string) {
   await NodeFS.unlink(lockPath);
   await NodeFS.writeFile(
     lockPath,
-    JSON.stringify({ pid: process.pid, token: "other-owner", heartbeatAtMs: DateTime.toEpochMillis(DateTime.nowUnsafe()) }),
+    JSON.stringify({
+      pid: process.pid,
+      token: "other-owner",
+      heartbeatAtMs: DateTime.toEpochMillis(DateTime.nowUnsafe()),
+    }),
     { mode: 0o600 },
   );
 }
@@ -640,11 +644,17 @@ describe("BotMemoryStore", () => {
   it("releases the lock when its scoped fiber is interrupted", async () => {
     const store = await fixture();
     const filePath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md");
-    const fiber = Effect.runFork(Effect.scoped(Effect.gen(function* () {
-      yield* Effect.promise(() => NodeFS.mkdir(NodePath.dirname(filePath), { recursive: true }));
-      yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
-      return yield* Effect.never;
-    })));
+    const fiber = Effect.runFork(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            NodeFS.mkdir(NodePath.dirname(filePath), { recursive: true }),
+          );
+          yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
+          return yield* Effect.never;
+        }),
+      ),
+    );
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     await Effect.runPromise(Fiber.interrupt(fiber));
     await expect(NodeFS.stat(`${filePath}.lock`)).rejects.toMatchObject({ code: "ENOENT" });
@@ -663,7 +673,10 @@ describe("BotMemoryStore", () => {
 
       await store.replaceDocument(privateAccess(), "memory", "Recovered notes.");
 
-      assert.equal((await store.readDocument(privateAccess(), "memory")).content, "Recovered notes.");
+      assert.equal(
+        (await store.readDocument(privateAccess(), "memory")).content,
+        "Recovered notes.",
+      );
       await expect(NodeFS.stat(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
     },
   );
@@ -796,9 +809,7 @@ describe("BotMemoryStore", () => {
     });
 
     assert.equal((await store.readDocument(access, "group")).content, "Kept group note.");
-    await expect(
-      NodeFS.stat(NodePath.join(store.memoryRoot, "archive")),
-    ).resolves.toBeDefined();
+    await expect(NodeFS.stat(NodePath.join(store.memoryRoot, "archive"))).resolves.toBeDefined();
     assert.deepEqual(
       await NodeFS.readdir(
         NodePath.join(store.memoryRoot, "archive", "bots", access.botId, "groups", access.groupId!),

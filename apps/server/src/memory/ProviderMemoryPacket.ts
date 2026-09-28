@@ -23,8 +23,7 @@ export function buildProviderMemoryPacket(
 ): MemoryPacket {
   const candidates = revisions
     .filter(
-      (revision) =>
-        revision.approvalState === "approved" && revision.deletionState === "active",
+      (revision) => revision.approvalState === "approved" && revision.deletionState === "active",
     )
     .toSorted(
       (left, right) =>

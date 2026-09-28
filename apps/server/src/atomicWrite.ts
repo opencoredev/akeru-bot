@@ -20,7 +20,11 @@ export const writeFileStringAtomically = (input: {
       });
       const tempPath = path.join(tempDirectory, "contents.tmp");
 
-      yield* fs.writeFileString(tempPath, input.contents, input.mode === undefined ? undefined : { mode: input.mode });
+      yield* fs.writeFileString(
+        tempPath,
+        input.contents,
+        input.mode === undefined ? undefined : { mode: input.mode },
+      );
       yield* fs.rename(tempPath, input.filePath);
     }),
   );

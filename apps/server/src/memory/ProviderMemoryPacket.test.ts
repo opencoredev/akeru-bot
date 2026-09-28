@@ -56,7 +56,10 @@ it("builds one deterministic packet for every provider transport", () => {
     revision("forgotten", { deletionState: "tombstoned" }),
   ]);
 
-  assert.deepEqual(packet.facts.map((fact) => fact.memoryId), ["pinned", "older"]);
+  assert.deepEqual(
+    packet.facts.map((fact) => fact.memoryId),
+    ["pinned", "older"],
+  );
   assert.notInclude(packet.rendered, "forgotten");
   assert.equal(packet.estimatedTokens, Math.ceil(packet.rendered.length / 4));
   assert.equal(
