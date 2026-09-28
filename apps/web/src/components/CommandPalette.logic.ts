@@ -4,7 +4,7 @@ import * as Result from "effect/Result";
 import { type ReactNode } from "react";
 
 export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands...";
+export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands and chats...";
 
 export interface CommandPaletteActionItem {
   readonly value: string;

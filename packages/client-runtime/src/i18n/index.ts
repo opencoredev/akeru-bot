@@ -2545,7 +2545,7 @@ export const englishCatalog = {
   "Unable to run command": "Unable to run command",
   "An unexpected error occurred.": "An unexpected error occurred.",
   Select: "Select",
-  "Search commands...": "Search commands...",
+  "Search commands and chats...": "Search commands and chats...",
   "Remote health": "Remote health",
   "Health checks for this environment": "Health checks for this environment",
   "Refresh remote health": "Refresh remote health",

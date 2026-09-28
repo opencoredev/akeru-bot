@@ -2450,7 +2450,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "Unable to run command": "无法运行命令",
   "An unexpected error occurred.": "发生了意外错误。",
   Select: "选择",
-  "Search commands...": "搜索命令...",
+  "Search commands and chats...": "搜索命令和聊天...",
   "Remote health": "远程健康状态",
   "Health checks for this environment": "此环境的健康检查",
   "Refresh remote health": "刷新远程健康状态",

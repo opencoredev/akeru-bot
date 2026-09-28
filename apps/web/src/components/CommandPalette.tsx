@@ -279,7 +279,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       aria-label={t("Command palette")}
       autoHighlight="always"
       footerActionLabel={t("Select")}
-      inputProps={{ placeholder: t("Search commands...") }}
+      inputProps={{ placeholder: t("Search commands and chats...") }}
       mode="none"
       onItemHighlighted={(value) => {
         setHighlightedItemValue(typeof value === "string" ? value : null);
