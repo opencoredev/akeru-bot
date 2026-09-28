@@ -69,6 +69,13 @@ describe("stabilizeStreamingMarkdown", () => {
     expect(stabilizeStreamingMarkdown(text)).toBe("Intro\n\n");
   });
 
+  it("shows completed pipe prose that cannot become a multi-column table", () => {
+    expect(stabilizeStreamingMarkdown("| value |\n")).toBe("| value |\n");
+    expect(stabilizeStreamingMarkdown("| File | State |\n| just prose |\n")).toBe(
+      "| File | State |\n| just prose |\n",
+    );
+  });
+
   it("shows a table once its delimiter row is complete and holds the row in flight", () => {
     const head = "| File | State |\n| --- | --- |\n";
     expect(stabilizeStreamingMarkdown(head)).toBe(head);

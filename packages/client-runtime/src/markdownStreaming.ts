@@ -81,6 +81,14 @@ export function stabilizeStreamingMarkdown(text: string): string {
     delimiterIndex <= blockEnd &&
     !(lastIsPartial && delimiterIndex === lastIndex) &&
     TABLE_DELIMITER_PATTERN.test(lines[delimiterIndex] ?? "");
-  if (!delimiterComplete) return withholdFrom(lines, blockStart);
+  if (!delimiterComplete) {
+    const firstRow = lines[blockStart] ?? "";
+    const hasMultipleColumns = firstRow.split("|").length >= 4;
+    if (!hasMultipleColumns && !lastIsPartial) return text;
+    if (delimiterIndex < blockEnd || (delimiterIndex === blockEnd && !lastIsPartial)) {
+      return text;
+    }
+    return withholdFrom(lines, blockStart);
+  }
   return lastIsPartial ? withholdFrom(lines, lastIndex) : text;
 }
