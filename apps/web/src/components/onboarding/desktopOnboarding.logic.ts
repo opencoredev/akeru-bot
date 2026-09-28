@@ -8,6 +8,7 @@ import {
 import type { BotAnimationState } from "../roster/BotAvatarView";
 import type { BotAvatar, BotBlobShape } from "../roster/types";
 import { BLOB_COLORS, BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
+import { normalizeDesktopOnboardingGoal } from "./goalPlan.logic";
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
@@ -37,17 +38,10 @@ export function clearDesktopOnboardingHandoff(storage: Pick<Storage, "removeItem
   storage.removeItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
 }
 
-/**
- * Reads and clears a handoff a reload interrupted, so the app routes to its
- * chat exactly once.
- */
-export function takeDesktopOnboardingHandoff(
-  storage: Pick<Storage, "getItem" | "removeItem">,
-): string | null {
+/** Reads a pending handoff; the caller clears it after the chat opens. */
+export function readDesktopOnboardingHandoff(storage: Pick<Storage, "getItem">): string | null {
   const botId = storage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
-  if (botId === null) return null;
-  clearDesktopOnboardingHandoff(storage);
-  return botId.trim().length > 0 ? botId : null;
+  return botId && botId.trim().length > 0 ? botId : null;
 }
 
 export type DesktopOnboardingStep = "subscription" | "goal" | "identity" | "message";
@@ -77,6 +71,7 @@ export interface DesktopOnboardingDraft {
   readonly providerId: SubscriptionProviderId;
   /** What the user wants done, in their words. Empty until they answer. */
   readonly goal: string;
+  readonly goalPhase: "ask" | "plan";
   readonly name: string;
   readonly avatar: Extract<BotAvatar, { kind: "blob" }>;
   readonly botId: string | null;
@@ -86,6 +81,7 @@ export const DEFAULT_DESKTOP_ONBOARDING_DRAFT: DesktopOnboardingDraft = {
   step: "subscription",
   providerId: "openai-codex",
   goal: "",
+  goalPhase: "ask",
   name: "",
   avatar: { kind: "blob", shape: "squircle", color: "#8B6FC9" },
   botId: null,
@@ -217,7 +213,8 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
     const parsed = JSON.parse(value) as Record<string, unknown>;
     const avatar = parsed.avatar as Record<string, unknown> | undefined;
     const step = parsed.step === "use-case" ? "goal" : parsed.step;
-    const goal = storedGoal(parsed);
+    const legacy = parsed.step === "use-case" || "useCaseId" in parsed || "customUseCase" in parsed;
+    const goal = legacy ? normalizeDesktopOnboardingGoal(storedGoal(parsed)) : storedGoal(parsed);
     if (
       !isStep(step) ||
       !isProviderId(parsed.providerId) ||
@@ -236,6 +233,12 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
       step,
       providerId: parsed.providerId,
       goal,
+      goalPhase:
+        parsed.goalPhase === "ask" || parsed.goalPhase === "plan"
+          ? parsed.goalPhase
+          : step === "goal"
+            ? "ask"
+            : "plan",
       name: parsed.name,
       avatar: { kind: "blob", shape: avatar.shape, color: avatar.color },
       botId: parsed.botId,

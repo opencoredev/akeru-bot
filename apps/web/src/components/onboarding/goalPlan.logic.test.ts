@@ -174,6 +174,12 @@ describe("saved goals", () => {
 });
 
 describe("first message", () => {
+  it("keeps labeled details from a new goal", () => {
+    const brief = desktopOnboardingBotBrief("Build a dashboard\nProject: Client portal");
+    expect(brief.description).toContain("Project: Client portal");
+    expect(brief.prompt).toContain("Project: Client portal");
+  });
+
   it("hands the bot the goal in the user's own words", () => {
     const goal = "Reconcile the card statement against our receipts every month";
     const brief = desktopOnboardingBotBrief(`  ${goal}\n`);
@@ -195,15 +201,6 @@ describe("first message", () => {
     const brief = desktopOnboardingBotBrief("Plan my week");
     expect(brief.prompt).toContain("as it comes up");
     expect(brief.prompt).not.toContain("single most useful question");
-  });
-
-  it("hands over the goal the user was shown, not the one a stale draft saved", () => {
-    // A draft written while setup still asked follow-ups. Both screens show
-    // the answer alone, so the bot has to be given the answer alone too.
-    const stale = "Write my posts\nChannels: LinkedIn and X\nCadence: Three a week";
-    expect(desktopOnboardingBotBrief(stale).description).toBe("Write my posts");
-    expect(desktopOnboardingBotBrief(stale).prompt).not.toContain("Cadence:");
-    expect(desktopOnboardingGoalPlan(stale)).toEqual(desktopOnboardingGoalPlan("Write my posts"));
   });
 });
 

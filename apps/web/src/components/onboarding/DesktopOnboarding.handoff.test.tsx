@@ -18,6 +18,9 @@ const BOT_ID = "bot-ada";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   selectBot: vi.fn(),
+  toast: vi.fn(),
+  rosterLoaded: true,
+  serverBots: [{ id: "bot-ada" }],
   preview: null as ComponentProps<typeof OnboardingPreview> | null,
   previewMounted: false,
 }));
@@ -27,14 +30,17 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }))
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };
-    if (atom === "bots") return [{ id: "bot-ada" }];
+    if (atom === "rosterLoaded") return mocks.rosterLoaded;
+    if (atom === "bots") return mocks.serverBots;
     return [];
   },
 }));
 vi.mock("../../state/bots", () => ({
   botEnvironment: { create: "create" },
   environmentBotsAtom: () => "bots",
+  environmentRosterLoadedAtom: () => "rosterLoaded",
 }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => "onboarding-environment",
 }));
@@ -181,6 +187,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.preview = null;
   mocks.previewMounted = false;
+  mocks.rosterLoaded = true;
+  mocks.serverBots = [{ id: BOT_ID }];
   mocks.navigate.mockResolvedValue(undefined);
   storage = new Map([
     [
@@ -272,10 +280,16 @@ describe("onboarding handoff", () => {
     // Reload: the app starts over with setup complete and the handoff pending.
     await act(async () => root.unmount());
     mocks.preview = null;
+    mocks.rosterLoaded = false;
     await mount();
 
     expect(mocks.previewMounted).toBe(false);
     expect(mocks.preview).toBeNull();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(BOT_ID);
+
+    mocks.rosterLoaded = true;
+    await act(async () => root.render(<DesktopOnboarding />));
     expect(mocks.selectBot).toHaveBeenCalledExactlyOnceWith(BOT_ID);
     expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith({
       to: "/bots/$botId",
@@ -288,5 +302,24 @@ describe("onboarding handoff", () => {
     await act(async () => root.unmount());
     await mount();
     expect(mocks.navigate).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the handoff when navigation fails so reload can retry", async () => {
+    storage.set(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
+    storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, BOT_ID);
+    storage.delete(DESKTOP_ONBOARDING_STORAGE_KEY);
+    mocks.navigate.mockRejectedValueOnce(new Error("route failed"));
+
+    await mount();
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(BOT_ID);
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Could not reopen your new chat. Reload to try again." }),
+    );
+
+    await act(async () => root.unmount());
+    await mount();
+    expect(mocks.navigate).toHaveBeenCalledTimes(2);
+    expect(storage.has(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(false);
   });
 });

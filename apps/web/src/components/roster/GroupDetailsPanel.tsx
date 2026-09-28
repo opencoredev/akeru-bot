@@ -1,13 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
-import { BotIcon, Trash2Icon } from "lucide-react";
+import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { ensureLocalApi } from "../../localApi";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
-import { botEnvironment } from "../../state/bots";
+import { botEnvironment, environmentPeopleAtom } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { SettingsRow } from "../settings/settingsLayout";
@@ -19,7 +19,7 @@ import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { GroupMemberStack } from "./GroupMemberStack";
-import { groupBotMembers, groupContainsBot } from "./roster.logic";
+import { groupBotMembers, groupContainsBot, groupPersonMembers } from "./roster.logic";
 import type { Bot, Group } from "./types";
 
 type PanelState = {
@@ -91,11 +91,17 @@ function GroupEditor({
   const setBoss = useAtomCommand(botEnvironment.groups.setBoss, {
     reportFailure: false,
   });
+  const unassignPerson = useAtomCommand(botEnvironment.groups.unassignPerson, {
+    reportFailure: false,
+  });
+  const leaveGroup = useAtomCommand(botEnvironment.groups.leave, { reportFailure: false });
+  const currentPersonId = useAtomValue(environmentPeopleAtom(environmentId)).current?.id;
   const [name, setName] = useState(group.name);
   const [newMemberId, setNewMemberId] = useState("");
   const [busy, setBusy] = useState(false);
   const activeBots = bots.filter((bot) => bot.archivedAt === null);
   const members = groupBotMembers(group, activeBots);
+  const people = groupPersonMembers(group);
   const availableBots = activeBots.filter((bot) => !groupContainsBot(group, bot.id));
   const removalHintId = useId();
   const addHintId = useId();
@@ -292,6 +298,63 @@ function GroupEditor({
             </p>
           ) : null}
         </section>
+        {people.length > 0 ? (
+          <section className="space-y-2" aria-labelledby="group-people-heading">
+            <h3 id="group-people-heading" className="text-sm font-medium">
+              People
+            </h3>
+            <div className="space-y-1 rounded-lg border p-2">
+              {people.map((person) => {
+                const current = person.personId === currentPersonId;
+                return (
+                  <div
+                    key={person.personId}
+                    className="flex min-h-9 items-center gap-2 rounded-md px-1"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {current ? "You" : person.displayName}
+                    </span>
+                    <Button
+                      aria-label={
+                        current
+                          ? `Leave ${group.name}`
+                          : `Remove ${person.displayName} from ${group.name}`
+                      }
+                      disabled={busy}
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void run(
+                          () =>
+                            current
+                              ? leaveGroup({
+                                  environmentId,
+                                  input: {
+                                    groupId: GroupId.make(group.id),
+                                    personId: person.personId,
+                                  },
+                                })
+                              : unassignPerson({
+                                  environmentId,
+                                  input: {
+                                    groupId: GroupId.make(group.id),
+                                    personId: person.personId,
+                                  },
+                                }),
+                          current
+                            ? "Could not leave group"
+                            : `Could not remove ${person.displayName}`,
+                        )
+                      }
+                    >
+                      {current ? <LogOutIcon /> : <Trash2Icon />}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
       </div>
       <div className="mt-6 -mx-2">
         <SettingsRow

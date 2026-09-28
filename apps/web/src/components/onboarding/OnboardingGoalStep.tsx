@@ -15,7 +15,6 @@ import {
   desktopOnboardingGoalPlan,
   desktopOnboardingGoalThinkingMs,
   desktopOnboardingGoalThinkingStatus,
-  normalizeDesktopOnboardingGoal,
 } from "./goalPlan.logic";
 
 /** The step headline: the question while it asks, the plan once it has one. */
@@ -167,15 +166,8 @@ export function OnboardingGoalStep({
   readonly onContinue: () => void;
 }) {
   const reducedMotion = useReducedMotion() === true;
-  // A draft saved while setup asked follow-up questions carries their answers
-  // underneath the real one. Those questions are gone, so the goal is read
-  // back once, without them, and edited from here as this step's own state.
-  const [goal, setGoal] = useState(() => normalizeDesktopOnboardingGoal(draft.goal));
-  // Coming back from the next step lands on the plan that was agreed to, not
-  // on the question it was already answered with.
-  const [phase, setPhase] = useState<GoalPhase>(() =>
-    normalizeDesktopOnboardingGoal(draft.goal).trim() ? "plan" : "ask",
-  );
+  const [goal, setGoal] = useState(draft.goal);
+  const [phase, setPhase] = useState<GoalPhase>(draft.goalPhase);
   const [thinkingStatus, setThinkingStatus] = useState(
     () => DESKTOP_ONBOARDING_GOAL_THINKING_BEATS[0]?.status ?? "",
   );
@@ -187,7 +179,7 @@ export function OnboardingGoalStep({
   const writeGoal = useCallback(
     (value: string) => {
       setGoal(value);
-      onChange({ ...draftRef.current, goal: value });
+      onChange({ ...draftRef.current, goal: value, goalPhase: "ask" });
     },
     [onChange],
   );
@@ -211,6 +203,7 @@ export function OnboardingGoalStep({
    * see motion.
    */
   const workOutPlan = useCallback(() => {
+    onChange({ ...draftRef.current, goalPhase: "plan" });
     const hold = desktopOnboardingGoalThinkingMs(reducedMotion);
     if (hold === 0) {
       setPhase("plan");
@@ -231,12 +224,13 @@ export function OnboardingGoalStep({
         setPhase("plan");
       }, hold),
     );
-  }, [clearThinking, reducedMotion]);
+  }, [clearThinking, onChange, reducedMotion]);
 
   const editGoal = useCallback(() => {
     clearThinking();
+    onChange({ ...draftRef.current, goalPhase: "ask" });
     setPhase("ask");
-  }, [clearThinking]);
+  }, [clearThinking, onChange]);
 
   const goBack = useCallback(() => {
     if (phase === "plan") {

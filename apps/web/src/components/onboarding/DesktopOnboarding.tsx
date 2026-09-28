@@ -24,7 +24,7 @@ import { createPortal } from "react-dom";
 
 import { isElectron } from "../../env";
 import { randomUUID } from "../../lib/utils";
-import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { botEnvironment, environmentBotsAtom, environmentRosterLoadedAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -47,6 +47,7 @@ import { writeBotDraft } from "../roster/botDraftStore";
 import { DEFAULT_BOT_RUNTIME_MODE } from "../roster/botSandbox";
 import { BLOB_SHAPES } from "../roster/roster.logic";
 import { useRosterStore } from "../roster/rosterStore";
+import { toastManager } from "../ui/toast";
 import { OnboardingGoalStep } from "./OnboardingGoalStep";
 import { OnboardingPreview } from "./OnboardingPreview";
 import {
@@ -72,7 +73,7 @@ import {
   clearDesktopOnboardingHandoff,
   markDesktopOnboardingCompleted,
   markDesktopOnboardingHandoffStarted,
-  takeDesktopOnboardingHandoff,
+  readDesktopOnboardingHandoff,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -771,7 +772,11 @@ function OnboardingSurface({
           };
           void navigate({ to: "/bots/$botId", params: { botId: draft.botId }, replace: true }).then(
             opened,
-            opened,
+            () =>
+              toastManager.add({
+                type: "error",
+                title: `Could not open ${draft.name}'s chat. Open it from the roster or reload to retry.`,
+              }),
           );
         }, stage.atMs),
       );
@@ -989,8 +994,10 @@ export function DesktopOnboarding({
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const atomKey = environmentId ?? NO_ENVIRONMENT;
-  const rosterLoaded = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
+  const shellLive = useAtomValue(environmentShell.stateValueAtom(atomKey)).status === "live";
+  const rosterLoaded = useAtomValue(environmentRosterLoadedAtom(atomKey)) && shellLive;
   const serverBots = useAtomValue(environmentBotsAtom(atomKey));
+  const attemptedHandoffRef = useRef<string | null>(null);
   const [draft] = useState(readDraft);
   const [completed] = useState(
     () => window.localStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY) === "1",
@@ -1032,11 +1039,25 @@ export function DesktopOnboarding({
   // A reload between sending the first message and opening its chat lands
   // here with setup already complete. Finish the trip to that chat once.
   useEffect(() => {
-    const botId = takeDesktopOnboardingHandoff(window.localStorage);
-    if (!botId) return;
+    if (!environmentId || !rosterLoaded) return;
+    const botId = readDesktopOnboardingHandoff(window.localStorage);
+    if (!botId || attemptedHandoffRef.current === botId) return;
+    attemptedHandoffRef.current = botId;
+    if (!serverBots.some((bot) => bot.id === botId)) {
+      clearDesktopOnboardingHandoff(window.localStorage);
+      toastManager.add({ type: "error", title: "Your new bot is no longer available." });
+      return;
+    }
     useRosterStore.getState().selectBot(botId);
-    void navigate({ to: "/bots/$botId", params: { botId }, replace: true });
-  }, [navigate]);
+    void navigate({ to: "/bots/$botId", params: { botId }, replace: true }).then(
+      () => clearDesktopOnboardingHandoff(window.localStorage),
+      () =>
+        toastManager.add({
+          type: "error",
+          title: "Could not reopen your new chat. Reload to try again.",
+        }),
+    );
+  }, [environmentId, navigate, rosterLoaded, serverBots]);
 
   useEffect(() => {
     if (!rosterLoaded || serverBots.length === 0 || initialDraftRef.current !== null) return;

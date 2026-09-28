@@ -294,17 +294,18 @@ describe("onboarding goal step", () => {
       ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
       step: "goal",
       goal: "Write my LinkedIn posts",
+      goalPhase: "plan",
     };
     expect(heading(render())).toBe("I'll start by…");
   });
 
-  it("drops the answers to questions setup no longer asks", () => {
+  it("keeps labeled instructions typed in a new goal", () => {
     draft = {
       ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
       step: "goal",
       goal: "Write my LinkedIn posts\nChannels: LinkedIn and X\nCadence: Three a week",
     };
-    press(render(), "Edit");
-    expect(field(render())?.props.value).toBe("Write my LinkedIn posts");
+    expect(field(render())?.props.value).toBe(draft.goal);
+    expect(heading(render())).toBe("What do you want help with?");
   });
 });

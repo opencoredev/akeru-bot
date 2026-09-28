@@ -22,7 +22,7 @@ import {
   markDesktopOnboardingCompleted,
   markDesktopOnboardingHandoffStarted,
   clearDesktopOnboardingHandoff,
-  takeDesktopOnboardingHandoff,
+  readDesktopOnboardingHandoff,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -178,12 +178,10 @@ describe("desktop onboarding", () => {
 
     expect(values.get("akeru:desktop-onboarding:v1")).toBeUndefined();
     expect(values.get("akeru:desktop-onboarding-completed:v1")).toBe("1");
-    expect(takeDesktopOnboardingHandoff(storage)).toBe("bot-ada");
-    expect(takeDesktopOnboardingHandoff(storage)).toBeNull();
-
-    markDesktopOnboardingHandoffStarted(storage, "bot-ada");
+    expect(readDesktopOnboardingHandoff(storage)).toBe("bot-ada");
+    expect(readDesktopOnboardingHandoff(storage)).toBe("bot-ada");
     clearDesktopOnboardingHandoff(storage);
-    expect(takeDesktopOnboardingHandoff(storage)).toBeNull();
+    expect(readDesktopOnboardingHandoff(storage)).toBeNull();
   });
 
   it("does not restart after the completed user deletes every bot", () => {
@@ -239,6 +237,7 @@ describe("desktop onboarding", () => {
       step: "goal",
       providerId: "anthropic",
       goal: "Triaging my inbox and drafting replies I approve",
+      goalPhase: "ask",
       name: "Nova",
       avatar: DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar,
       botId: null,
@@ -303,6 +302,27 @@ describe("desktop onboarding", () => {
         JSON.stringify({ ...draft, goal: "a".repeat(DESKTOP_ONBOARDING_GOAL_MAX_LENGTH + 1) }),
       ),
     ).toBeNull();
+  });
+
+  it("preserves labeled instructions in new goals and question state after reload", () => {
+    const draft = {
+      ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+      step: "goal" as const,
+      goal: "Build a dashboard\nProject: Client portal",
+    };
+    expect(parseDesktopOnboardingDraft(JSON.stringify(draft))).toEqual(draft);
+    expect(parseDesktopOnboardingDraft(JSON.stringify({ ...draft, goalPhase: "plan" }))).toEqual({
+      ...draft,
+      goalPhase: "plan",
+    });
+  });
+
+  it("strips obsolete follow-up answers only from identified legacy drafts", () => {
+    const legacy = {
+      ...legacyDraft(),
+      goal: "Write my posts\nChannels: LinkedIn and X\nCadence: Three a week",
+    };
+    expect(parseDesktopOnboardingDraft(JSON.stringify(legacy))?.goal).toBe("Write my posts");
   });
 
   it("maps each state to its visible step", () => {

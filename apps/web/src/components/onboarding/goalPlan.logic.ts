@@ -409,7 +409,7 @@ export interface GoalPlan {
  * happened to be picked.
  */
 export function desktopOnboardingGoalPlan(goal: string): GoalPlan {
-  const answer = condense(normalizeDesktopOnboardingGoal(goal)).toLowerCase();
+  const answer = condense(goal).toLowerCase();
   const id = classifyDesktopOnboardingGoal(answer);
   const topic = GOAL_TOPICS.find((candidate) => candidate.id === id) ?? GENERAL_TOPIC;
   const mentions = mentionsIn(answer, topic.signals);
@@ -449,11 +449,8 @@ const LEGACY_FOLLOW_UP_LABELS: readonly string[] = [
 ];
 
 /**
- * A saved goal as this step should show it. A draft written while setup asked
- * follow-up questions carries their answers on labelled lines underneath the
- * real one; those questions are gone, so their answers are dropped rather than
- * handed back as text the user never has to justify again. Anything else the
- * user typed, including their own line breaks, is left alone.
+ * Converts a goal saved by the former follow-up flow. Call only while parsing
+ * a draft identified as legacy; fresh goals may contain these same labels.
  */
 export function normalizeDesktopOnboardingGoal(goal: string): string {
   const lines = goal.split("\n");
@@ -471,15 +468,14 @@ export function normalizeDesktopOnboardingGoal(goal: string): string {
  * on the work rather than on another round of questions, and says plainly
  * that the details come up when they matter.
  *
- * The goal is normalized here as well as on screen, so a draft still carrying
- * answers to the old follow-up questions hands the bot the same goal the user
- * was shown rather than the longer one that happens to be saved.
+ * Legacy drafts are normalized when read, so this receives exactly the goal
+ * the user saw and preserves all new instructions they entered.
  */
 export function desktopOnboardingBotBrief(goal: string): {
   readonly description: string;
   readonly prompt: string;
 } {
-  const description = condense(normalizeDesktopOnboardingGoal(goal));
+  const description = condense(goal);
   const plan = desktopOnboardingGoalPlan(description);
   const steps = plan.steps.map((step) => `- ${step}`).join("\n");
   return {
