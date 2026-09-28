@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { countSource } from "./effect-migration-metric";
+import { countSource } from "./effect-migration-metric.js";
 
 describe("effect migration metric counting", () => {
   it("counts call sites and every rule in file and next-line directives", () => {

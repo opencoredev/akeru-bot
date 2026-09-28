@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off
 /**
  * Print the Effect migration audit signals for the server source tree.
  *
@@ -21,8 +22,10 @@ export type MigrationMetric = {
 export const countSource = (source: string): MigrationMetric => {
   const suppressions = new Map<string, number>();
   for (const [, directive] of source.matchAll(suppression)) {
+    if (directive === undefined) continue;
     for (const rule of directive.matchAll(/([A-Za-z]+):off/g)) {
-      suppressions.set(rule[1], (suppressions.get(rule[1]) ?? 0) + 1);
+      const name = rule[1];
+      if (name !== undefined) suppressions.set(name, (suppressions.get(name) ?? 0) + 1);
     }
   }
   return {
