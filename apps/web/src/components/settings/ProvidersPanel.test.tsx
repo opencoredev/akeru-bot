@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { LanguageProvider } from "../../i18n";
 import { ProviderAccountRows, ProviderApiKeyForm, SUBSCRIPTION_PROVIDERS } from "./ProvidersPanel";
+import { accountConnectionState } from "./providerStatus";
 
 describe("subscription providers", () => {
   it("offers Kimi subscription login without Cursor", () => {
@@ -166,5 +167,37 @@ describe("subscription providers", () => {
     expect(markup).not.toContain("Last successful request");
     expect(markup).not.toContain("Last failed request");
     expect(markup).not.toContain("Provider request failed.");
+  });
+
+  it("explains which subscription unlocks the provider and flags a running health check", () => {
+    const status: SubscriptionProviderStatus = {
+      provider: "openai-codex",
+      connected: true,
+      health: "detected",
+      healthChecking: true,
+      dependentBots: [],
+      dependentRoutines: [],
+    };
+    const markup = renderToStaticMarkup(
+      <ProviderAccountRows
+        definition={SUBSCRIPTION_PROVIDERS[0]!}
+        status={status}
+        models={["GPT-6 Sol"]}
+        busy={false}
+        onConnect={() => undefined}
+        onApiKey={() => undefined}
+        onDisconnect={() => undefined}
+        onTest={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("data-access-state");
+    expect(markup).toContain("Access details");
+    expect(markup).toContain("GPT-6 Sol");
+    expect(accountConnectionState(status, false)).toEqual({
+      tone: "pending",
+      label: "Checking access",
+      detail: null,
+    });
   });
 });

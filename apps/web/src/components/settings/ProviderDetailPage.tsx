@@ -14,6 +14,7 @@ import {
 import { SettingsDetailHeader, SettingsLinkRow, SettingsMessageRow } from "./settingsDetailLayout";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { subscriptionProviderTargetId } from "./subscriptionProviders";
 
 /**
  * The live snapshot for a catalog entry's default instance. A provider can
@@ -158,6 +159,7 @@ function ConnectedProvidersList({ environmentId }: { readonly environmentId: Env
           return (
             <SettingsLinkRow
               key={entry.slug}
+              {...(entry.account ? { id: subscriptionProviderTargetId(entry.account.id) } : {})}
               link={{ to: "/settings/providers/$providerId", params: { providerId: entry.slug } }}
               icon={entry.icon}
               title={entry.label}

@@ -14,10 +14,13 @@ export function ProviderAccessDetails({
   provider,
   status,
   models,
+  showFailure = true,
 }: {
   readonly provider: SubscriptionProviderId;
   readonly status: ProviderAccessStatusInput | undefined;
   readonly models?: ReadonlyArray<string> | undefined;
+  /** Off where the row already names the problem, so the raw provider text is not repeated. */
+  readonly showFailure?: boolean;
 }) {
   const { t } = useI18n();
   const guide = providerAccessGuide(provider, status, { models, t });
@@ -39,7 +42,7 @@ export function ProviderAccessDetails({
       <p data-access-state={guide.state}>
         <span className="font-medium text-foreground">{guide.stateLabel}.</span> {guide.nextStep}
       </p>
-      {guide.failure ? (
+      {showFailure && guide.failure ? (
         <p data-access-failure className="text-destructive">
           {guide.failure}
         </p>

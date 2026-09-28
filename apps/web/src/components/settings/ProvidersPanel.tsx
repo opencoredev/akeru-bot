@@ -21,11 +21,15 @@ import {
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
 
+import { useAtomValue } from "@effect/atom-react";
+import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
+
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { ProviderAccessDetails } from "./ProviderAccessDetails";
 import { accountConnectionState } from "./providerStatus";
 import { SettingsMessageRow } from "./settingsDetailLayout";
 import { SignInCodeCopy } from "./SignInCodeCopy";
@@ -77,9 +81,12 @@ export function ProviderAccountRows({
   onDisconnect,
   onTest,
   onApiKey,
+  models,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
+  /** Model names this environment serves for the provider, for the access guide. */
+  readonly models?: ReadonlyArray<string>;
   readonly busy: boolean;
   readonly disabled?: boolean;
   readonly onConnect: () => void;
@@ -169,6 +176,17 @@ export function ProviderAccountRows({
               Add key
             </Button>
           )
+        }
+      />
+      <SettingsRow
+        title="Access"
+        description={
+          <ProviderAccessDetails
+            provider={definition.id}
+            status={status}
+            models={models}
+            showFailure={false}
+          />
         }
       />
       {connected ? (
@@ -633,6 +651,7 @@ export function ProviderAccountSection({
   readonly instanceId?: ProviderInstanceId;
 }) {
   const accounts = useSubscriptionAccounts(environmentId, instanceId);
+  const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
   const status = instanceId
     ? accounts.statusQuery.data?.accounts.find(
         (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
@@ -705,6 +724,7 @@ export function ProviderAccountSection({
         <ProviderAccountRows
           definition={definition}
           status={status}
+          models={providerAccessModelNames(serverProviders, definition.id)}
           busy={accounts.busyProvider === definition.id}
           disabled={accounts.busyProvider !== null}
           onApiKey={() => accounts.openApiKey(definition)}

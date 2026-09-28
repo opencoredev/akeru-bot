@@ -81,6 +81,7 @@ function IconTile({ icon, size }: { readonly icon: Icon | string; readonly size:
  * group into a single card, like plain `SettingsRow`s.
  */
 export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
+  id,
   link,
   icon,
   title,
@@ -88,6 +89,8 @@ export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
   tone,
   statusLabel,
 }: {
+  /** Anchor so other pages can open Settings on this row. */
+  readonly id?: string;
   readonly link: ValidateLinkOptions<TRouter, TOptions>;
   readonly icon: Icon | string;
   readonly title: string;
@@ -98,6 +101,7 @@ export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
   return (
     <Link
       {...(link as LinkComponentProps)}
+      {...(id ? { id } : {})}
       data-settings-row=""
       className="group relative flex min-h-14 items-center gap-3 rounded-xl px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
     >
