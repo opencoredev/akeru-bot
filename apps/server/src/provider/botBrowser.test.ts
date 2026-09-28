@@ -342,6 +342,7 @@ describe("sandbox bot browser", () => {
       let failureReceipt!: () => void;
       const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
       const onFailure = vi.fn((_error: unknown) => failureReceipt());
+      const onReady = vi.fn();
       const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
         if (command === "uname") {
           return {
@@ -383,6 +384,7 @@ describe("sandbox bot browser", () => {
         cacheDir: "/tmp/unused-remote-browser-cache",
         browserEndpoint: async () => ({ url: "https://remote.example", requestHeaders: {} }),
         onFailure,
+        onReady,
       });
       try {
         const attachment = await browser.attachment();
@@ -393,10 +395,12 @@ describe("sandbox bot browser", () => {
           failure === "rejected" ? "monitor connection lost" : "monitor timed out",
         );
         await expect(browser.attachment()).resolves.toEqual(attachment);
+        const readyBeforeSuccessfulTool = onReady.mock.calls.length;
         await expect(executeTool(browser.tools.browser_snapshot, {})).resolves.toEqual({
           snapshot: "ok",
           truncated: false,
         });
+        expect(onReady).toHaveBeenCalledTimes(readyBeforeSuccessfulTool + 1);
         expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
       } finally {
         await browser.close();

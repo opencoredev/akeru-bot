@@ -297,6 +297,7 @@ class LightpandaRpc implements BotBrowserRpc {
       if (name === "goto" || name === "click" || name === "fill") {
         await this.rememberCurrentUrl().catch(() => undefined);
       }
+      this.input.onReady?.();
       return rpcResultText(result);
     } catch (error) {
       this.input.onFailure?.(error);
