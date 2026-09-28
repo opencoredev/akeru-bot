@@ -14,7 +14,7 @@ import {
   SettingsIcon,
   SunIcon,
 } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -119,7 +119,6 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
   const { setOpen } = props;
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme, setAppearanceMode } = useTheme();
@@ -251,9 +250,11 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     ...(chatItems.length > 0 ? [{ value: "chat", label: t("This chat"), items: chatItems }] : []),
     { value: "actions", label: t("Actions"), items: actionItems },
   ];
-  const chatSearch = useChatSearchItems(deferredQuery);
+  // Rows follow the query the input shows, so Enter never runs a row from an
+  // earlier query. Message search debounces its own RPC.
+  const chatSearch = useChatSearchItems(query);
   const filteredGroups = [
-    ...filterCommandPaletteGroups({ groups, query: deferredQuery }),
+    ...filterCommandPaletteGroups({ groups, query }),
     ...(chatSearch.items.length > 0
       ? [{ value: "chats", label: t("Chats"), items: chatSearch.items }]
       : []),
