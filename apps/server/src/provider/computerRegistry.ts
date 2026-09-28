@@ -190,8 +190,11 @@ export class ComputerRegistry {
           const listener = (event: ComputerEvent) => {
             if (!active) return;
             Queue.offerUnsafe(queue, event);
-            if (event._tag === "state" &&
-                (event.state.status === "stopped" || event.state.status === "unavailable")) close();
+            if (
+              event._tag === "state" &&
+              (event.state.status === "stopped" || event.state.status === "unavailable")
+            )
+              close();
           };
           let connections = registry.connections.get(clientId);
           if (!connections) registry.connections.set(clientId, (connections = new Set()));
@@ -218,7 +221,10 @@ export class ComputerRegistry {
               const generation = computer.gate.generation;
               const frame = decodeFrame(await computer.capture());
               if (Buffer.byteLength(frame.data, "base64") > COMPUTER_FRAME_MAX_BYTES) {
-                throw new ComputerError({ code: "adapter", message: "Computer frame exceeds transport budget." });
+                throw new ComputerError({
+                  code: "adapter",
+                  message: "Computer frame exceeds transport budget.",
+                });
               }
               if (
                 active &&

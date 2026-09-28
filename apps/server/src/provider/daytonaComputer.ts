@@ -63,8 +63,10 @@ export class DaytonaComputer {
       throw new Error("Redacted computer screenshot exceeds the transport budget.");
     }
     const bytes = Buffer.from(redacted.data);
-    if (bytes.readUInt32BE(16) !== display.displays?.[0]?.width ||
-        bytes.readUInt32BE(20) !== display.displays?.[0]?.height) {
+    if (
+      bytes.readUInt32BE(16) !== display.displays?.[0]?.width ||
+      bytes.readUInt32BE(20) !== display.displays?.[0]?.height
+    ) {
       throw new Error("Computer screenshot dimensions do not match the display.");
     }
     const data = bytes.toString("base64");

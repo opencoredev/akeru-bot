@@ -60,7 +60,10 @@ export class WorkspaceComputer implements BotBrowserRpc {
       await this.desktop.open();
       await this.launch();
       if (generation !== this.gate.generation) {
-        throw new ComputerError({ code: "revoked", message: "Computer initialization was revoked." });
+        throw new ComputerError({
+          code: "revoked",
+          message: "Computer initialization was revoked.",
+        });
       }
     })().catch((cause: unknown) => {
       this.initialization = undefined;
@@ -97,7 +100,10 @@ export class WorkspaceComputer implements BotBrowserRpc {
     const generation = this.gate.generation;
     const frame = await this.desktop.capture();
     await this.checkRunning();
-    if (generation !== this.gate.generation || (this.gate.status !== "ready" && this.gate.status !== "human")) {
+    if (
+      generation !== this.gate.generation ||
+      (this.gate.status !== "ready" && this.gate.status !== "human")
+    ) {
       throw new ComputerError({ code: "revoked", message: "Computer frame was invalidated." });
     }
     return frame;

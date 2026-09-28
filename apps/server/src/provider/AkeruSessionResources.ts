@@ -238,7 +238,9 @@ export class AkeruSessionResources {
           threadId: input.resourceScope,
           workspace: workspaceLease.workspace.workspace,
           cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
-          ...(workspaceLease.workspace.computer ? { makeRpc: () => workspaceLease.workspace.computer! } : {}),
+          ...(workspaceLease.workspace.computer
+            ? { makeRpc: () => workspaceLease.workspace.computer! }
+            : {}),
           ...(workspaceLease.workspace.browserEndpoint
             ? { browserEndpoint: workspaceLease.workspace.browserEndpoint }
             : {}),
@@ -264,7 +266,10 @@ export class AkeruSessionResources {
       }
 
       if (workspaceLease.workspace.computer && input.exclusiveComputer) {
-        this.computerRegistrations.set(key, computerRegistry.register(key, workspaceLease.workspace.computer, null));
+        this.computerRegistrations.set(
+          key,
+          computerRegistry.register(key, workspaceLease.workspace.computer, null),
+        );
       }
 
       this.resourceBrowsers.set(input.workspaceResourceKey, browser);

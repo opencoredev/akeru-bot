@@ -410,7 +410,8 @@ export function daytona(
     },
     async () => {
       const preview = await sandbox.getPreviewLink(9222);
-      if (!preview.url || !preview.token) throw new Error("Daytona browser endpoint is unavailable.");
+      if (!preview.url || !preview.token)
+        throw new Error("Daytona browser endpoint is unavailable.");
       return { url: preview.url, requestHeaders: { "x-daytona-preview-token": preview.token } };
     },
     inspect,

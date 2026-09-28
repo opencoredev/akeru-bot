@@ -125,10 +125,7 @@ describe("Akeru Remote administration", () => {
 
       const { privateKey, publicKey } = NodeCrypto.generateKeyPairSync("ed25519");
       const manifestKeyFile = NodePath.join(root, "manifest.pub");
-      NodeFS.writeFileSync(
-        manifestKeyFile,
-        publicKey.export({ type: "spki", format: "pem" }),
-      );
+      NodeFS.writeFileSync(manifestKeyFile, publicKey.export({ type: "spki", format: "pem" }));
       const digest = NodeCrypto.createHash("sha256").update(archive).digest("hex");
       const manifest = Buffer.from(`${digest}  ${archiveName}\n`);
       const signature = NodeCrypto.sign(

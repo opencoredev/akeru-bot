@@ -10,17 +10,27 @@ export class ComputerGate {
   private epoch = 0;
   private stopped = false;
   private owner:
-    | { clientId: string; sessionId: string; expiresAt: number; sequence: number; revoked: Promise<void> }
+    | {
+        clientId: string;
+        sessionId: string;
+        expiresAt: number;
+        sequence: number;
+        revoked: Promise<void>;
+      }
     | undefined;
   private readonly clock: Clock.Clock;
   private readonly listeners = new Set<() => void>();
   private cancelExpiry: (() => void) | undefined;
   private revokeInput: (() => void) | undefined;
-  constructor(clock: Clock.Clock = Effect.runSync(Clock.Clock)) { this.clock = clock; }
+  constructor(clock: Clock.Clock = Effect.runSync(Clock.Clock)) {
+    this.clock = clock;
+  }
 
   subscribe(listener: () => void) {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   private fail(code: ComputerError["code"]): never {
@@ -38,13 +48,21 @@ export class ComputerGate {
 
   private scheduleOwnerExpiry(owner: { readonly expiresAt: number }) {
     this.cancelExpiry?.();
-    const fiber = Effect.runFork(this.clock.sleep(Duration.millis(
-      Math.max(0, owner.expiresAt - this.clock.currentTimeMillisUnsafe()),
-    )).pipe(Effect.andThen(Effect.sync(() => {
-      this.cancelExpiry = undefined;
-      if (this.owner === owner) this.stop();
-    }))));
-    this.cancelExpiry = () => { Effect.runFork(Fiber.interrupt(fiber)); };
+    const fiber = Effect.runFork(
+      this.clock
+        .sleep(Duration.millis(Math.max(0, owner.expiresAt - this.clock.currentTimeMillisUnsafe())))
+        .pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              this.cancelExpiry = undefined;
+              if (this.owner === owner) this.stop();
+            }),
+          ),
+        ),
+    );
+    this.cancelExpiry = () => {
+      Effect.runFork(Fiber.interrupt(fiber));
+    };
   }
 
   private ordered<T>(operation: () => Promise<T>): Promise<T> {
@@ -73,7 +91,9 @@ export class ComputerGate {
     this.checkExpiry();
     if (this.stopped) this.fail("closed");
     if (this.owner) this.fail("busy");
-    const revoked = new Promise<void>((resolve) => { this.revokeInput = resolve; });
+    const revoked = new Promise<void>((resolve) => {
+      this.revokeInput = resolve;
+    });
     const owner = {
       revoked,
       clientId,

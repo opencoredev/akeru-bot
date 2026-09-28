@@ -642,13 +642,20 @@ const makeWsRpcLayer = (
         computerClients.add(key);
         return key;
       };
-      yield* Effect.addFinalizer(() => Effect.sync(() => {
-        for (const client of computerClients) computerRegistry.disconnect(client);
-      }));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          for (const client of computerClients) computerRegistry.disconnect(client);
+        }),
+      );
       const isComputerError = Schema.is(ComputerError);
       const computerOperation = <A>(client: string, operation: () => Promise<A>) =>
-        Effect.tryPromise({ try: operation, catch: (cause) => isComputerError(cause) ? cause : new ComputerError({ code: "adapter", message: "Computer operation failed." }) })
-          .pipe(Effect.onInterrupt(() => Effect.sync(() => computerRegistry.disconnect(client))));
+        Effect.tryPromise({
+          try: operation,
+          catch: (cause) =>
+            isComputerError(cause)
+              ? cause
+              : new ComputerError({ code: "adapter", message: "Computer operation failed." }),
+        }).pipe(Effect.onInterrupt(() => Effect.sync(() => computerRegistry.disconnect(client))));
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
       const botUsageLedger = yield* BotUsageLedger;
@@ -3689,7 +3696,6 @@ const makeWsRpcLayer = (
                   : yield* usage
                       .readPlanLimits(connection)
                       .pipe(Effect.catchCause(() => Effect.succeed([])));
-
               const plan = planLimits[0];
               const window =
                 plan?.status === "ok"
@@ -4091,14 +4097,40 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "terminal" },
           ),
-        [WS_METHODS.computerGetState]: (input) => Effect.sync(() => computerRegistry.state(input.threadId)),
-        [WS_METHODS.computerOpen]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => computerRegistry.open(input.threadId)),
-        [WS_METHODS.computerAcquire]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => computerRegistry.acquire(input.threadId, computerClient(metadata.client.id))),
-        [WS_METHODS.computerInput]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => computerRegistry.input(input, computerClient(metadata.client.id))),
-        [WS_METHODS.computerRelease]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => computerRegistry.release(input, computerClient(metadata.client.id))),
-        [WS_METHODS.computerClose]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => computerRegistry.close(input.threadId, computerClient(metadata.client.id))),
-        [WS_METHODS.computerStop]: (input, metadata) => computerOperation(computerClient(metadata.client.id), () => Promise.resolve(computerRegistry.stop(input.threadId))),
-        [WS_METHODS.computerEvents]: (input, metadata) => observeRpcStreamEffect(WS_METHODS.computerEvents, Effect.succeed(computerRegistry.events(input.threadId, computerClient(metadata.client.id))), { "rpc.aggregate": "computer" }),
+        [WS_METHODS.computerGetState]: (input) =>
+          Effect.sync(() => computerRegistry.state(input.threadId)),
+        [WS_METHODS.computerOpen]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            computerRegistry.open(input.threadId),
+          ),
+        [WS_METHODS.computerAcquire]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            computerRegistry.acquire(input.threadId, computerClient(metadata.client.id)),
+          ),
+        [WS_METHODS.computerInput]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            computerRegistry.input(input, computerClient(metadata.client.id)),
+          ),
+        [WS_METHODS.computerRelease]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            computerRegistry.release(input, computerClient(metadata.client.id)),
+          ),
+        [WS_METHODS.computerClose]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            computerRegistry.close(input.threadId, computerClient(metadata.client.id)),
+          ),
+        [WS_METHODS.computerStop]: (input, metadata) =>
+          computerOperation(computerClient(metadata.client.id), () =>
+            Promise.resolve(computerRegistry.stop(input.threadId)),
+          ),
+        [WS_METHODS.computerEvents]: (input, metadata) =>
+          observeRpcStreamEffect(
+            WS_METHODS.computerEvents,
+            Effect.succeed(
+              computerRegistry.events(input.threadId, computerClient(metadata.client.id)),
+            ),
+            { "rpc.aggregate": "computer" },
+          ),
         [WS_METHODS.previewOpen]: (input) =>
           observeRpcEffect(WS_METHODS.previewOpen, previewManager.open(input), {
             "rpc.aggregate": "preview",

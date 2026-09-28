@@ -24,13 +24,13 @@ Provider credentials and raw CDP URLs stay server-side. Connection identity is p
 
 ## Capability
 
-| Workspace | Graphical computer | Notes |
-| --- | --- | --- |
-| Local | No | Isolated bot computer viewer is unavailable. The macOS Computer Use plugin is a separate host-desktop path. |
-| Daytona | Desktop adapter | Native `computerUse` plus workspace Chromium. Live credentials are required before claiming a real desktop run. |
-| E2B | No | Generic sandboxes are not treated as desktops. |
-| Vercel Sandbox | No | No private desktop API is wired. |
-| Upstash Box | No | The pinned SDK path does not provision the newer managed browser. |
+| Workspace      | Graphical computer | Notes                                                                                                           |
+| -------------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Local          | No                 | Isolated bot computer viewer is unavailable. The macOS Computer Use plugin is a separate host-desktop path.     |
+| Daytona        | Desktop adapter    | Native `computerUse` plus workspace Chromium. Live credentials are required before claiming a real desktop run. |
+| E2B            | No                 | Generic sandboxes are not treated as desktops.                                                                  |
+| Vercel Sandbox | No                 | No private desktop API is wired.                                                                                |
+| Upstash Box    | No                 | The pinned SDK path does not provision the newer managed browser.                                               |
 
 Codex and Kimi register this computer through Mastra session resources. Claude, Grok, and OpenCode stay unavailable until they use the same gated browser tools. Shell processes can still send desktop input outside the gate; that residual risk is documented rather than silently claimed exclusive. Unbrokered MCP browser credentials are withheld from the graphical computer.
 

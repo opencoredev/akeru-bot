@@ -6,7 +6,9 @@ import { ComputerGate } from "./computerGate.ts";
 
 function latch() {
   let resolve!: () => void;
-  const promise = new Promise<void>(done => { resolve = done; });
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -15,9 +17,14 @@ describe("ComputerGate", () => {
     const gate = new ComputerGate();
     const entered = latch();
     const finish = latch();
-    const active = gate.bot(async () => { entered.resolve(); await finish.promise; });
+    const active = gate.bot(async () => {
+      entered.resolve();
+      await finish.promise;
+    });
     await entered.promise;
-    const queued = gate.bot(async () => { throw new Error("must not execute"); });
+    const queued = gate.bot(async () => {
+      throw new Error("must not execute");
+    });
     const rejected = expect(queued).rejects.toMatchObject({ code: "revoked" });
     const acquisition = gate.acquire("client");
     await expect(gate.bot(async () => undefined)).rejects.toMatchObject({ code: "busy" });
@@ -60,9 +67,14 @@ describe("ComputerGate", () => {
     const session = await gate.acquire("one");
     const entered = latch();
     const finish = latch();
-    const active = gate.input("one", session.sessionId, 1, async () => { entered.resolve(); await finish.promise; });
+    const active = gate.input("one", session.sessionId, 1, async () => {
+      entered.resolve();
+      await finish.promise;
+    });
     await entered.promise;
-    const queued = gate.input("one", session.sessionId, 2, async () => { throw new Error("must not execute"); });
+    const queued = gate.input("one", session.sessionId, 2, async () => {
+      throw new Error("must not execute");
+    });
     const rejected = expect(queued).rejects.toMatchObject({ code: "revoked" });
     const activeRejected = expect(active).rejects.toMatchObject({ code: "revoked" });
     gate.stop();
@@ -74,29 +86,37 @@ describe("ComputerGate", () => {
   it("adapter failures revoke control and are sanitized", async () => {
     const gate = new ComputerGate();
     const session = await gate.acquire("one");
-    await expect(gate.input("one", session.sessionId, 1, async () => { throw new Error("private text"); })).rejects.toMatchObject({ code: "adapter", message: "Computer operation rejected: adapter." });
+    await expect(
+      gate.input("one", session.sessionId, 1, async () => {
+        throw new Error("private text");
+      }),
+    ).rejects.toMatchObject({ code: "adapter", message: "Computer operation rejected: adapter." });
     expect(gate.status).toBe("stopped");
   });
 
-
   it("revokes an in-flight input at lease expiry", async () =>
-    Effect.runPromise(Effect.gen(function* () {
-      const pending = latch();
-      const gate = new ComputerGate(yield* Clock.Clock);
-      const session = yield* Effect.promise(() => gate.acquire("client"));
-      const entered = latch();
-      const input = gate.input("client", session.sessionId, 1, () => { entered.resolve(); return pending.promise; });
-      const rejected = expect(input).rejects.toMatchObject({ code: "revoked" });
-      yield* Effect.promise(() => entered.promise);
-      yield* TestClock.adjust("60 seconds");
-      yield* Effect.promise(() => rejected);
-      expect(gate.status).toBe("stopped");
-      let reopened = false;
-      const reopening = gate.open().then(() => { reopened = true; });
-      expect(reopened).toBe(false);
-      pending.resolve();
-      yield* Effect.promise(() => reopening);
-    }).pipe(Effect.provide(TestClock.layer()))),
-  );
-
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const pending = latch();
+        const gate = new ComputerGate(yield* Clock.Clock);
+        const session = yield* Effect.promise(() => gate.acquire("client"));
+        const entered = latch();
+        const input = gate.input("client", session.sessionId, 1, () => {
+          entered.resolve();
+          return pending.promise;
+        });
+        const rejected = expect(input).rejects.toMatchObject({ code: "revoked" });
+        yield* Effect.promise(() => entered.promise);
+        yield* TestClock.adjust("60 seconds");
+        yield* Effect.promise(() => rejected);
+        expect(gate.status).toBe("stopped");
+        let reopened = false;
+        const reopening = gate.open().then(() => {
+          reopened = true;
+        });
+        expect(reopened).toBe(false);
+        pending.resolve();
+        yield* Effect.promise(() => reopening);
+      }).pipe(Effect.provide(TestClock.layer())),
+    ));
 });

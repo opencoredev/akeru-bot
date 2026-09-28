@@ -66,25 +66,27 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
             { status: 409, headers: { "retry-after": "3600" } },
           );
         }
-        return yield* withMaintenance(Effect.gen(function* () {
-          if (yield* Effect.sync(() => hasActiveTurns(config.dbPath))) {
-            return HttpServerResponse.jsonUnsafe(
-              { error: "active_work", retryAfterSeconds: 3600 },
-              { status: 409, headers: { "retry-after": "3600" } },
-            );
-          }
-          return yield* updater.update({ targetVersion }).pipe(
-          Effect.map((result) => HttpServerResponse.jsonUnsafe(result, { status: 202 })),
-            Effect.catchTag("ServerSelfUpdateError", (error) =>
-              Effect.succeed(
-                HttpServerResponse.jsonUnsafe(
-                  { error: "update_failed", reason: error.reason },
-                  { status: 500 },
+        return yield* withMaintenance(
+          Effect.gen(function* () {
+            if (yield* Effect.sync(() => hasActiveTurns(config.dbPath))) {
+              return HttpServerResponse.jsonUnsafe(
+                { error: "active_work", retryAfterSeconds: 3600 },
+                { status: 409, headers: { "retry-after": "3600" } },
+              );
+            }
+            return yield* updater.update({ targetVersion }).pipe(
+              Effect.map((result) => HttpServerResponse.jsonUnsafe(result, { status: 202 })),
+              Effect.catchTag("ServerSelfUpdateError", (error) =>
+                Effect.succeed(
+                  HttpServerResponse.jsonUnsafe(
+                    { error: "update_failed", reason: error.reason },
+                    { status: 500 },
+                  ),
                 ),
               ),
-            ),
-          );
-        }));
+            );
+          }),
+        );
       }),
     ),
   ),

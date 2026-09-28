@@ -250,31 +250,32 @@ export function runRemoteDoctor(input: {
         "Docker Compose manages image updates and paired data-snapshot rollback.",
       ),
     );
-  } else try {
-    const state = JSON.parse(FS.readFileSync(runtimeStatePath, "utf8")) as {
-      activeVersion?: string;
-      update?: { status?: string };
-    };
-    const pending = state.update?.status === "pending";
-    checks.push(
-      check(
-        "update-state",
-        pending ? "warning" : "pass",
-        pending
-          ? "A transactional update is pending."
-          : `Runtime ${state.activeVersion ?? "unknown"} has no pending update.`,
-        false,
-        {
-          activeVersion: state.activeVersion ?? "unknown",
-          updateStatus: state.update?.status ?? "none",
-        },
-      ),
-    );
-  } catch (cause) {
-    checks.push(
-      check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
-    );
-  }
+  } else
+    try {
+      const state = JSON.parse(FS.readFileSync(runtimeStatePath, "utf8")) as {
+        activeVersion?: string;
+        update?: { status?: string };
+      };
+      const pending = state.update?.status === "pending";
+      checks.push(
+        check(
+          "update-state",
+          pending ? "warning" : "pass",
+          pending
+            ? "A transactional update is pending."
+            : `Runtime ${state.activeVersion ?? "unknown"} has no pending update.`,
+          false,
+          {
+            activeVersion: state.activeVersion ?? "unknown",
+            updateStatus: state.update?.status ?? "none",
+          },
+        ),
+      );
+    } catch (cause) {
+      checks.push(
+        check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
+      );
+    }
   if (!container && FS.existsSync(updateDeferredPath)) {
     const deferredAt = Date.parse(FS.readFileSync(updateDeferredPath, "utf8").trim());
     const ageMs = (input.now ?? new Date()).getTime() - deferredAt;

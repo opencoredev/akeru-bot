@@ -7,11 +7,15 @@ describe("WorkspaceComputer", () => {
     const computer = new WorkspaceComputer(
       "workspace",
       {
-        open: async () => { calls.push("desktop.open"); },
+        open: async () => {
+          calls.push("desktop.open");
+        },
         input: async () => undefined,
         capture: async () => ({ mimeType: "image/png", data: "Zg==", width: 1, height: 1 }),
       },
-      async () => { calls.push("launch"); },
+      async () => {
+        calls.push("launch");
+      },
       async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
       async () => "running",
     );

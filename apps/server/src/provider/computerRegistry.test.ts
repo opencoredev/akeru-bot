@@ -178,7 +178,9 @@ describe("ComputerRegistry", () => {
         );
         registry.register("thread-stream-init", instance, null);
         const thread = ThreadId.make("thread-stream-init");
-        const collected = yield* Stream.runCollect(registry.events(thread, "viewer")).pipe(Effect.forkChild);
+        const collected = yield* Stream.runCollect(registry.events(thread, "viewer")).pipe(
+          Effect.forkChild,
+        );
         yield* Effect.promise(() => opening.promise);
         yield* TestClock.adjust("2 seconds");
         // No capture may run while desktop.open is still pending.
@@ -220,7 +222,9 @@ describe("ComputerRegistry", () => {
         registry.register("thread-dc", instance, null);
         const thread = ThreadId.make("thread-dc");
         yield* Effect.promise(() => registry.open(thread));
-        const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(Effect.forkChild);
+        const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
+          Effect.forkChild,
+        );
         const session = yield* Effect.promise(() => registry.acquire(thread, "owner"));
         yield* Effect.promise(() => Effect.runPromise(Effect.sleep("50 millis")));
         yield* TestClock.adjust("2 seconds");
@@ -255,7 +259,9 @@ describe("ComputerRegistry", () => {
         registry.register("thread-expiry", instance, null);
         const thread = ThreadId.make("thread-expiry");
         yield* Effect.promise(() => registry.open(thread));
-        const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(Effect.forkChild);
+        const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
+          Effect.forkChild,
+        );
         yield* Effect.promise(() => registry.acquire(thread, "owner"));
         expect(registry.state(thread).status).toBe("human");
         yield* TestClock.adjust("60 seconds");
@@ -274,9 +280,7 @@ describe("ComputerRegistry", () => {
     registry.register("stream-thread", instance, null);
     await registry.open(thread);
     const events = registry.events(thread, "stream-client");
-    const collected = Effect.runPromise(
-      Stream.take(events, 2).pipe(Stream.runCollect),
-    );
+    const collected = Effect.runPromise(Stream.take(events, 2).pipe(Stream.runCollect));
     await Effect.runPromise(Effect.sleep("20 millis"));
     registry.stop(thread);
     const values = await collected;
