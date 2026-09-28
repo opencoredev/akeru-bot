@@ -275,7 +275,7 @@ export function flattenMarkdownPreview(markdown: string): string {
   }
   if (flattened.length === 0 && !complete) {
     flattened = stripMarkdownRoughly(
-      markdown.slice(offset).trimStart().slice(0, MARKDOWN_PREVIEW_ROUGH_LIMIT),
+      markdown.slice(offset, offset + MARKDOWN_PREVIEW_ROUGH_LIMIT).trimStart(),
     );
   }
   if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
@@ -334,13 +334,50 @@ function markdownPreviewChunkEnd(
  * next to words may survive or go.
  */
 function stripMarkdownRoughly(markdown: string): string {
-  return markdown
-    .replace(/!\[[^\]]*(?:\](?:\([^)]*\)?|\[[^\]]*\]?)?)?/g, " ")
+  return withoutImagesRoughly(markdown)
     .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
     .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
     .replace(/`+|~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Text with every `![` image dropped through the end of its balanced bracket
+ * group and any balanced parenthesis or reference group after it, honoring
+ * backslash escapes. An image with no balanced close drops the rest of the
+ * text, so alt text never leaks even when some ordinary words go with it.
+ */
+function withoutImagesRoughly(markdown: string): string {
+  let result = "";
+  let offset = 0;
+  for (;;) {
+    const start = markdown.indexOf("![", offset);
+    if (start === -1) return result + markdown.slice(offset);
+    result += `${markdown.slice(offset, start)} `;
+    const labelEnd = balancedGroupEnd(markdown, start + 1, "[", "]");
+    if (labelEnd === null) return result;
+    const next = markdown[labelEnd];
+    if (next === "(" || next === "[") {
+      const targetEnd = balancedGroupEnd(markdown, labelEnd, next, next === "(" ? ")" : "]");
+      if (targetEnd === null) return result;
+      offset = targetEnd;
+    } else {
+      offset = labelEnd;
+    }
+  }
+}
+
+/** Index just past the close matching the `open` at `start`, or null. */
+function balancedGroupEnd(text: string, start: number, open: string, close: string): number | null {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "\\") index += 1;
+    else if (char === open) depth += 1;
+    else if (char === close && --depth === 0) return index + 1;
+  }
+  return null;
 }
 
 function flattenMarkdownText(markdown: string): string {

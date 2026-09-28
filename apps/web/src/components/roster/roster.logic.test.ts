@@ -697,6 +697,31 @@ describe("flattenMarkdownPreview", () => {
     expect(flattenMarkdownPreview(`Opening paragraph.\n\n${line}`)).toBe("Opening paragraph.");
   });
 
+  it("drops nested and escaped image alt text in the rough preview", () => {
+    const tail = "z".repeat(20_000);
+    const nested = flattenMarkdownPreview(
+      `Intro ![public [x] SECRET](chart.png) then answer${tail}`,
+    );
+    expect(nested).toMatch(/^Intro then answerz/);
+    expect(nested).not.toContain("SECRET");
+    const escaped = flattenMarkdownPreview(
+      `Intro ![public \\] SECRET](chart.png) then answer${tail}`,
+    );
+    expect(escaped).toMatch(/^Intro then answerz/);
+    expect(escaped).not.toContain("SECRET");
+    // With no balanced close in the window, the rest of the window goes.
+    expect(flattenMarkdownPreview(`Intro ![open [SECRET ${tail}`)).toBe("Intro");
+    expect(flattenMarkdownPreview(`Intro ![alt](chart.png (SECRET ${tail}`)).toBe("Intro");
+  });
+
+  it("bounds the rough preview to a prefix of the message", () => {
+    // Leading whitespace counts against the window instead of being scanned.
+    expect(flattenMarkdownPreview(`${" ".repeat(30_000)}word`)).toBe("");
+    expect(flattenMarkdownPreview(`${" ".repeat(1_990)}word ${"z".repeat(20_000)}`)).toBe(
+      `word ${"z".repeat(5)}`,
+    );
+  });
+
   it("flattens whitespace-heavy messages", () => {
     // Line prefixes use [ \t], not \s, so no multiline pattern crosses a
     // newline and rescans the blank lines after it. This checks the output
