@@ -681,6 +681,20 @@ describe("flattenMarkdownPreview", () => {
     expect(flattenMarkdownPreview(`\`${code}\` done`)).toBe(`${code.trim()} done`);
     const fenced = `\`\`\`\n${"line\n\n".repeat(200)}\`\`\`\n\n**after**`;
     expect(flattenMarkdownPreview(fenced)).not.toContain("`");
+    // A long alt text with a line break once put the old cut inside the image.
+    const wrapped = `Intro ![${"alt ".repeat(4_100)}\ncontinued](chart.png) then answer`;
+    expect(flattenMarkdownPreview(wrapped)).toBe("Intro then answer");
+  });
+
+  it("previews one enormous line without parsing all of it", () => {
+    const alt = "alt ".repeat(10_000);
+    const line = `Intro **bold** \`code\` [label](https://example.com) ![${alt}](chart.png) then answer`;
+    expect(flattenMarkdownPreview(line)).toBe("Intro bold code label");
+    const words = `**Start** ${"word ".repeat(10_000)}`;
+    const preview = flattenMarkdownPreview(words);
+    expect(preview).toMatch(/^Start word word/);
+    expect(preview.length).toBeLessThanOrEqual(2_000);
+    expect(flattenMarkdownPreview(`Opening paragraph.\n\n${line}`)).toBe("Opening paragraph.");
   });
 
   it("flattens whitespace-heavy messages", () => {

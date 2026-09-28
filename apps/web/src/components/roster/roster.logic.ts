@@ -259,13 +259,24 @@ export function flattenMarkdownPreview(markdown: string): string {
   // flattened text is long enough. Parsing costs several milliseconds per long
   // answer. Cuts fall on blank lines outside code fences, so they never land
   // inside a link, image, or code span and leak raw syntax into the preview.
+  // A message longer than the parse limit only parses blocks that end inside
+  // it; past the last such block, a cheap strip of the next few thousand
+  // characters stands in, so one enormous line cannot stall a roster render.
+  const complete = markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT;
+  const source = complete ? markdown : markdown.slice(0, MARKDOWN_PREVIEW_PARSE_LIMIT);
   let flattened = "";
   let offset = 0;
-  while (offset < markdown.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
-    const end = markdownPreviewChunkEnd(markdown, offset);
-    const chunk = flattenMarkdownText(markdown.slice(offset, end));
+  while (offset < source.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
+    const end = markdownPreviewChunkEnd(source, offset, complete);
+    if (end === null) break;
+    const chunk = flattenMarkdownText(source.slice(offset, end));
     if (chunk.length > 0) flattened = flattened.length > 0 ? `${flattened} ${chunk}` : chunk;
     offset = end;
+  }
+  if (flattened.length === 0 && !complete) {
+    flattened = stripMarkdownRoughly(
+      markdown.slice(offset).trimStart().slice(0, MARKDOWN_PREVIEW_ROUGH_LIMIT),
+    );
   }
   if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
   markdownPreviewCache.set(markdown, flattened);
@@ -274,17 +285,23 @@ export function flattenMarkdownPreview(markdown: string): string {
 
 const MARKDOWN_PREVIEW_TEXT_TARGET = 280;
 const MARKDOWN_PREVIEW_CHUNK_TARGET = 600;
-// A single block longer than this (one enormous paragraph) is cut at a line
-// end anyway, so one pathological message cannot stall a roster render.
-const MARKDOWN_PREVIEW_CHUNK_LIMIT = 16_000;
+const MARKDOWN_PREVIEW_PARSE_LIMIT = 20_000;
+const MARKDOWN_PREVIEW_ROUGH_LIMIT = 2_000;
 const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 /**
- * End of the next chunk starting at `offset`: at least the chunk target long,
- * ending on a blank line that is not inside a fenced code block.
+ * End of the next chunk starting at `offset`: a blank line outside a fenced
+ * code block, preferably at least the chunk target long. When `complete` is
+ * false the source is a cut prefix, so its end is not a block boundary and the
+ * result is the last blank line seen, or null when there is none.
  */
-function markdownPreviewChunkEnd(markdown: string, offset: number): number {
+function markdownPreviewChunkEnd(
+  markdown: string,
+  offset: number,
+  complete: boolean,
+): number | null {
   let fence: string | null = null;
+  let lastBoundary: number | null = null;
   let lineStart = offset;
   while (lineStart < markdown.length) {
     const newline = markdown.indexOf("\n", lineStart);
@@ -293,8 +310,9 @@ function markdownPreviewChunkEnd(markdown: string, offset: number): number {
     const marker = MARKDOWN_FENCE.exec(line)?.[1];
     if (fence === null) {
       if (marker !== undefined) fence = marker;
-      else if (line.trim().length === 0 && lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_TARGET) {
-        return lineEnd;
+      else if (newline !== -1 && line.trim().length === 0) {
+        if (lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_TARGET) return lineEnd;
+        lastBoundary = lineEnd;
       }
     } else if (
       marker !== undefined &&
@@ -304,10 +322,25 @@ function markdownPreviewChunkEnd(markdown: string, offset: number): number {
     ) {
       fence = null;
     }
-    if (lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_LIMIT) return lineEnd;
     lineStart = lineEnd;
   }
-  return markdown.length;
+  return complete ? markdown.length : lastBoundary;
+}
+
+/**
+ * Rough plain text for the tail of a message too long to parse: drops image
+ * syntax and alt text, keeps link labels, and removes code ticks, emphasis,
+ * and line markers. It is only a fallback, so literal brackets or underscores
+ * next to words may survive or go.
+ */
+function stripMarkdownRoughly(markdown: string): string {
+  return markdown
+    .replace(/!\[[^\]]*(?:\](?:\([^)]*\)?|\[[^\]]*\]?)?)?/g, " ")
+    .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
+    .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
+    .replace(/`+|~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function flattenMarkdownText(markdown: string): string {
