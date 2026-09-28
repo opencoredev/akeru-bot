@@ -60,6 +60,7 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProviderInstanceId,
   ProviderUploadFeedbackError,
   RoutineReadError,
   RoutineThreadReadError,
@@ -1965,12 +1966,29 @@ const makeWsRpcLayer = (
                 const thread = yield* projectionSnapshotQuery
                   .getThreadShellById(normalizedCommand.threadId)
                   .pipe(Effect.map(Option.getOrUndefined));
-                const providerId =
-                  normalizedCommand.modelSelection?.instanceId ??
-                  thread?.modelSelection.instanceId ??
-                  thread?.session?.providerName;
-                const model =
-                  normalizedCommand.modelSelection?.model ?? thread?.modelSelection.model ?? "";
+                const bootstrapThread = normalizedCommand.bootstrap?.createThread;
+                const groupId = thread?.groupId ?? bootstrapThread?.groupId;
+                const group = groupId
+                  ? yield* projectionGroups
+                      .getById({ groupId })
+                      .pipe(Effect.map(Option.getOrUndefined))
+                  : undefined;
+                const botId =
+                  normalizedCommand.respondingBotId ??
+                  (groupId ? group?.bossBotId : (thread?.botId ?? bootstrapThread?.botId));
+                const bot = botId
+                  ? yield* projectionBots.getById({ botId }).pipe(Effect.map(Option.getOrUndefined))
+                  : undefined;
+                const selection = bot?.engine
+                  ? {
+                      instanceId: ProviderInstanceId.make(bot.engine.provider),
+                      model: bot.engine.model,
+                    }
+                  : (normalizedCommand.modelSelection ??
+                    thread?.modelSelection ??
+                    bootstrapThread?.modelSelection);
+                const providerId = selection?.instanceId ?? thread?.session?.providerName;
+                const model = selection?.model ?? "";
                 if (providerId && model) {
                   const verdict = preflightProvider({
                     providers: yield* providerRegistry.getProviders,
@@ -1992,12 +2010,7 @@ const makeWsRpcLayer = (
                     });
                   }
                 }
-                const botId =
-                  normalizedCommand.respondingBotId ?? thread?.respondingBotId ?? thread?.botId;
                 if (botId) {
-                  const bot = yield* projectionBots
-                    .getById({ botId })
-                    .pipe(Effect.map(Option.getOrUndefined));
                   if (bot?.usageCap) {
                     const usage = yield* botUsageLedger.summarize(botId);
                     if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {

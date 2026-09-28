@@ -16,6 +16,7 @@ import {
   EnvironmentId,
   EventId,
   GitCommandError,
+  GroupId,
   KeybindingRule,
   MessageId,
   ExternalLauncherCommandNotFoundError,
@@ -7647,6 +7648,186 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         dispatchedCommands.map((command) => command.type),
         ["thread.archive", "thread.session.stop"],
       );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("checks a new chat's bootstrap model before creating its thread", () =>
+    Effect.gen(function* () {
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 1 }),
+      );
+      yield* buildAppUnderTest({
+        layers: { orchestrationEngine: { dispatch, readEvents: () => Stream.empty } },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const error = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-bootstrap-unavailable-provider"),
+            threadId: ThreadId.make("thread-bootstrap-unavailable-provider"),
+            message: {
+              messageId: MessageId.make("msg-bootstrap-unavailable-provider"),
+              role: "user",
+              text: "Start chat",
+              attachments: [],
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                title: "New chat",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: "main",
+                worktreePath: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            },
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }).pipe(Effect.flip),
+        ),
+      );
+      assert.equal(error._tag, "OrchestrationDispatchCommandError");
+      if (error._tag === "OrchestrationDispatchCommandError") {
+        assert.equal(error.unavailability, "temporary-failure");
+      }
+      assert.equal(dispatch.mock.calls.length, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("checks a new bot chat's usage cap before creating its thread", () =>
+    Effect.gen(function* () {
+      const botId = BotId.make("bot-bootstrap-capped");
+      const bot = {
+        ...makeChannelTestBot(),
+        botId,
+        imageProvider: null,
+        usageCap: { unit: "tokens" as const, limit: 100 },
+      } satisfies ProjectionBots.ProjectionBot;
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 1 }),
+      );
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+          projectionBots: { getById: () => Effect.succeed(Option.some(bot)) },
+          botUsageLedger: {
+            summarize: () =>
+              Effect.succeed({
+                botId,
+                consumedTokens: 100,
+                reservedTokens: 0,
+                measurements: {
+                  input: { tokens: 100, unavailableEntries: 0 },
+                  output: { tokens: 0, unavailableEntries: 0 },
+                  observer: { tokens: 0, unavailableEntries: 0 },
+                  reflector: { tokens: 0, unavailableEntries: 0 },
+                },
+                entries: [],
+              }),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const error = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-bootstrap-capped-bot"),
+            threadId: ThreadId.make("thread-bootstrap-capped-bot"),
+            message: {
+              messageId: MessageId.make("msg-bootstrap-capped-bot"),
+              role: "user",
+              text: "Start chat",
+              attachments: [],
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                botId,
+                title: "Capped bot chat",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: "main",
+                worktreePath: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            },
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }).pipe(Effect.flip),
+        ),
+      );
+      assert.equal(error._tag, "OrchestrationDispatchCommandError");
+      if (error._tag === "OrchestrationDispatchCommandError") {
+        assert.equal(error.unavailability, "usage-cap");
+      }
+      assert.equal(dispatch.mock.calls.length, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("checks the responding group bot's engine before dispatch", () =>
+    Effect.gen(function* () {
+      const botId = BotId.make("bot-group-claude");
+      const groupId = GroupId.make("group-model-preflight");
+      const bot = {
+        ...makeChannelTestBot(),
+        botId,
+        engine: { provider: "claudeAgent", model: "claude-sonnet" },
+        imageProvider: null,
+        groupId,
+      } satisfies ProjectionBots.ProjectionBot;
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 1 }),
+      );
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+          projectionSnapshotQuery: {
+            getThreadShellById: () =>
+              Effect.succeed(
+                Option.some(makeDefaultOrchestrationThreadShell({ groupId, botId: null })),
+              ),
+          },
+          projectionBots: { getById: () => Effect.succeed(Option.some(bot)) },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const error = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-group-model-preflight"),
+            threadId: defaultThreadId,
+            message: {
+              messageId: MessageId.make("msg-group-model-preflight"),
+              role: "user",
+              text: "Ask Claude",
+              attachments: [],
+            },
+            respondingBotId: botId,
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }).pipe(Effect.flip),
+        ),
+      );
+      assert.equal(error._tag, "OrchestrationDispatchCommandError");
+      if (error._tag === "OrchestrationDispatchCommandError") {
+        assert.equal(error.unavailability, "temporary-failure");
+      }
+      assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
