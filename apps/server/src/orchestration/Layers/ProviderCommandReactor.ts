@@ -2621,9 +2621,19 @@ const make = Effect.gen(function* () {
   const recoverStartupProviderWork = Effect.fn("recoverStartupProviderWork")(function* () {
     const throughSequence = yield* orchestrationEngine.latestSequence;
     const initialReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
-    const pendingTurnStarts = projectionSnapshotQuery.listPendingTurnStarts
-      ? yield* projectionSnapshotQuery.listPendingTurnStarts()
-      : [];
+    // A delegated child's turn reports only to the in-memory watch that started it, and no watch
+    // survives a restart. Startup fails the owning delegation, so replaying or resuming the child
+    // would run work that nothing observes and the card cannot show.
+    const delegatedChildThreadIds = new Set(
+      initialReadModel.threads
+        .filter((thread) => (thread.parentDelegationId ?? null) !== null)
+        .map((thread) => String(thread.id)),
+    );
+    const pendingTurnStarts = (
+      projectionSnapshotQuery.listPendingTurnStarts
+        ? yield* projectionSnapshotQuery.listPendingTurnStarts()
+        : []
+    ).filter((pending) => !delegatedChildThreadIds.has(String(pending.threadId)));
     const pendingThreadIds = new Set(pendingTurnStarts.map((pending) => String(pending.threadId)));
     yield* releaseStrandedDelegationResults(initialReadModel.delegations, pendingTurnStarts);
 
@@ -2647,6 +2657,7 @@ const make = Effect.gen(function* () {
       (thread) =>
         thread.deletedAt === null &&
         thread.archivedAt === null &&
+        !delegatedChildThreadIds.has(String(thread.id)) &&
         thread.session?.status === "starting" &&
         (thread.latestTurn === null ||
           thread.latestTurn.state === "error" ||
@@ -2680,6 +2691,7 @@ const make = Effect.gen(function* () {
         thread.deletedAt === null &&
         thread.archivedAt === null &&
         !pendingThreadIds.has(String(thread.id)) &&
+        !delegatedChildThreadIds.has(String(thread.id)) &&
         !liveThreadIds.has(String(thread.id)) &&
         thread.latestTurn?.state === "running" &&
         thread.session !== null &&

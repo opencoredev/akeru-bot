@@ -216,6 +216,7 @@ describe("ProviderCommandReactor", () => {
     readonly turnStartBeforeReactor?: boolean;
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
+    readonly delegatedChild?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
     readonly commitDuringSequenceRead?: 1 | 2;
     readonly titleUpdatesBeforeStartupCommit?: number;
@@ -766,6 +767,12 @@ describe("ProviderCommandReactor", () => {
         threadId: ThreadId.make("thread-1"),
         projectId: asProjectId("project-1"),
         ...(input?.botEngine !== undefined ? { botId: BotId.make("bot-1") } : {}),
+        ...(input?.delegatedChild === true
+          ? {
+              parentThreadId: ThreadId.make("thread-parent"),
+              parentDelegationId: DelegationId.make("delegation-before-restart"),
+            }
+          : {}),
         title: "Thread",
         modelSelection: modelSelection,
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -1120,6 +1127,22 @@ describe("ProviderCommandReactor", () => {
       input: "recover this persisted request",
     });
   });
+
+  it.each([
+    ["pending turn start", { turnStartBeforeReactor: true }],
+    ["pending resume", { resumeBeforeReactor: true }],
+    ["running turn", { runningTurnBeforeReactor: true }],
+  ] as const)(
+    "does not restart a delegated child's %s after reactor startup",
+    async (_name, recovery) => {
+      const harness = await createHarness({ ...recovery, delegatedChild: true });
+
+      await harness.drain();
+
+      expect(harness.startSession).not.toHaveBeenCalled();
+      expect(harness.sendTurn).not.toHaveBeenCalled();
+    },
+  );
 
   it("marks an interrupted turn resumable when automatic recovery fails", async () => {
     const harness = await createHarness({
