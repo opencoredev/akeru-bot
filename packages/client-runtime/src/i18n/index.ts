@@ -363,6 +363,7 @@ export const englishCatalog = {
   Close: "Close",
   Search: "Search",
   "New chat": "New chat",
+  "Untitled chat": "Untitled chat",
   "{count} chat": "{count} chat",
   "{count} chats": "{count} chats",
   "Opens filters, archived chats, and settings": "Opens filters, archived chats, and settings",

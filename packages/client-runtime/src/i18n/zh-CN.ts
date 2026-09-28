@@ -346,6 +346,7 @@ export const zhCNCatalog: TranslationCatalog = {
   Close: "关闭",
   Search: "搜索",
   "New chat": "新聊天",
+  "Untitled chat": "未命名聊天",
   "{count} chat": "{count} 个聊天",
   "{count} chats": "{count} 个聊天",
   "Opens filters, archived chats, and settings": "打开筛选、已归档聊天和设置",

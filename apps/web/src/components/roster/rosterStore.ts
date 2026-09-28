@@ -172,6 +172,12 @@ interface RosterStore {
   lastMessageByBotId: Record<string, RosterLastMessage>;
   selectedBotId: string | null;
   chatPathByBotId: Record<string, string>;
+  /**
+   * The older chat the user opened for a bot, by thread id. Session-only: the
+   * bot's view falls back to its newest chat when this is unset or no longer
+   * one of the bot's active chats.
+   */
+  openChatByBotId: Record<string, string>;
   pinnedItems: RosterItemRef[];
   unassignedItems: RosterItemRef[];
   environmentId: string | null;
@@ -184,6 +190,8 @@ interface RosterStore {
   recordLastMessage: (botId: string, message: RosterLastMessage) => void;
   recordChatPath: (botId: string, path: string) => void;
   forgetChatPath: (botId: string) => void;
+  /** Opens one of the bot's chats; null returns the bot to its newest chat. */
+  openBotChat: (botId: string, threadId: string | null) => void;
   replaceRoster: (input: {
     environmentId: string;
     bots: Bot[];
@@ -251,6 +259,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
   lastMessageByBotId: {},
   selectedBotId: persisted?.selectedBotId ?? null,
   chatPathByBotId: persisted?.chatPathByBotId ?? {},
+  openChatByBotId: {},
   pinnedItems: persisted?.pinnedItems ?? [],
   unassignedItems: persisted?.unassignedItems ?? [],
   environmentId: null,
@@ -399,6 +408,15 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     saveState(get());
   },
 
+  openBotChat: (botId, threadId) => {
+    const current = get().openChatByBotId[botId];
+    if ((current ?? null) === threadId) return;
+    const openChatByBotId = { ...get().openChatByBotId };
+    if (threadId === null) delete openChatByBotId[botId];
+    else openChatByBotId[botId] = threadId;
+    set({ openChatByBotId });
+  },
+
   replaceRoster: (input) => {
     const switchingEnvironment = get().environmentId !== input.environmentId;
     const scopedPersisted = switchingEnvironment
@@ -445,6 +463,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
       chatPathByBotId: switchingEnvironment
         ? (targetPersisted?.chatPathByBotId ?? {})
         : get().chatPathByBotId,
+      openChatByBotId: switchingEnvironment ? {} : get().openChatByBotId,
       pinnedItems: targetPinnedItems.filter(liveItem),
       unassignedItems: targetUnassignedItems.filter(liveItem),
       selectedBotId,

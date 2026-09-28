@@ -412,6 +412,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotBrowserPreview.tsx",
     "apps/web/src/components/roster/BotChannelsSheet.tsx",
     "apps/web/src/components/roster/BotChatMessageRows.tsx",
+    "apps/web/src/components/roster/BotChatsSection.tsx",
     "apps/web/src/components/roster/BotComposerModelControl.tsx",
     "apps/web/src/components/roster/BotConversationScrollArea.tsx",
     "apps/web/src/components/roster/BotDetailsPanel.tsx",

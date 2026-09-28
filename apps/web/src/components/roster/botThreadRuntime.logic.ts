@@ -124,34 +124,50 @@ export function buildGroupTurnStartInput(input: {
   };
 }
 
+type BotChatCandidate = {
+  environmentId: string;
+  id: string;
+  botId?: string | null | undefined;
+  parentThreadId?: string | null | undefined;
+  updatedAt: string;
+  archivedAt: string | null;
+  deletedAt?: string | null | undefined;
+};
+
+function isActiveBotChat(botId: string, environmentId: string, thread: BotChatCandidate): boolean {
+  return (
+    thread.environmentId === environmentId &&
+    thread.botId === botId &&
+    thread.archivedAt === null &&
+    thread.parentThreadId == null &&
+    thread.deletedAt == null
+  );
+}
+
+function compareNewestFirst(left: BotChatCandidate, right: BotChatCandidate): number {
+  return right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id);
+}
+
+/** The bot's own active chats in one environment, newest first. Child work is left out. */
+export function listBotChats<TThread extends BotChatCandidate>(
+  botId: string,
+  environmentId: string,
+  threads: readonly TThread[],
+): TThread[] {
+  return threads
+    .filter((thread) => isActiveBotChat(botId, environmentId, thread))
+    .toSorted(compareNewestFirst);
+}
+
 export function findLatestBotThreadTarget(
   botId: string,
   environmentId: string,
-  threads: readonly {
-    environmentId: string;
-    id: string;
-    botId?: string | null | undefined;
-    parentThreadId?: string | null | undefined;
-    updatedAt: string;
-    archivedAt: string | null;
-    deletedAt?: string | null | undefined;
-  }[],
+  threads: readonly BotChatCandidate[],
 ): { environmentId: string; threadId: string } | null {
-  let latest: (typeof threads)[number] | undefined;
+  let latest: BotChatCandidate | undefined;
   for (const thread of threads) {
-    if (
-      thread.environmentId !== environmentId ||
-      thread.botId !== botId ||
-      thread.archivedAt !== null ||
-      thread.parentThreadId != null ||
-      thread.deletedAt != null
-    ) {
-      continue;
-    }
-    if (
-      latest === undefined ||
-      (thread.updatedAt.localeCompare(latest.updatedAt) || thread.id.localeCompare(latest.id)) > 0
-    ) {
+    if (!isActiveBotChat(botId, environmentId, thread)) continue;
+    if (latest === undefined || compareNewestFirst(thread, latest) < 0) {
       latest = thread;
     }
   }
@@ -196,7 +212,8 @@ export function pickBotChatTarget(
 }
 
 /**
- * The bot's chat from the primary environment's shell list, per
+ * The bot's chat from the primary environment's shell list: the chat the user
+ * opened while it is still one of the bot's active chats, else the chat per
  * `pickBotChatTarget`. The shell list leaves out child work, so pair this with
  * `isBotOwnChatShell` on the target's shell before treating it as the bot's chat.
  */
@@ -205,7 +222,15 @@ export function resolveBotThreadTarget(
   environmentId: string,
   threads: Parameters<typeof findLatestBotThreadTarget>[2],
   rememberedPath: string | null | undefined,
+  openThreadId: string | null = null,
 ) {
+  const opened =
+    openThreadId === null
+      ? undefined
+      : threads.find(
+          (thread) => thread.id === openThreadId && isActiveBotChat(botId, environmentId, thread),
+        );
+  if (opened) return { environmentId: opened.environmentId, threadId: opened.id };
   const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
   const remembered =
     parsed?.kind === "thread" && parsed.environmentId === environmentId ? parsed : null;

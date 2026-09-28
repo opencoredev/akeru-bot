@@ -12,8 +12,8 @@ can be identified.
 
 ## Chat actions
 
-On web and desktop, each bot or group shows one chat: its newest one. Open the **⋯** menu at the
-top right of that chat to act on it:
+On web and desktop, the roster keeps one row per bot or group, and a bot opens its newest chat.
+Open the **⋯** menu at the top right of the open chat to act on it:
 
 - **New chat** starts a fresh chat with the bot. It is available once the current chat has a
   message. The earlier chat stays active and keeps its history; its bot opens the new chat from now
@@ -38,6 +38,20 @@ Tomorrow**, with its wake time.
 On mobile, the chat list keeps its own menu for each chat, and you can swipe left on a chat for
 archive and delete.
 Date labels in bot and group chats follow your device's local day and update when the day changes.
+
+## Older chats
+
+On web and desktop, the bot's side panel lists its eight most recent chats under **Chats**, newest
+first, with how long ago each one was active. The chat you are looking at is highlighted. Select a
+chat to open it in place of the newest one. Sending a message there makes it the newest chat again.
+Select the newest chat, or start a **New chat** from the same list, to go back to the bot's usual
+view. **New chat** appears once the open chat has a message. Archived chats stay in **Settings >
+Archived chats**.
+
+The open chat is remembered for this session only. Reloading the page, or archiving or deleting the
+open chat, returns the bot to its newest chat.
+
+On mobile, the chat list shows every chat, so older chats are already one tap away.
 
 ## Active and settled chats
 

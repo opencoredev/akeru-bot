@@ -17,6 +17,7 @@ import {
   findUnhandledMcpAuthorization,
   isBotOwnChatShell,
   joinOrStartThreadCreate,
+  listBotChats,
   nextRetainedChat,
   pickBotChatTarget,
   preferRetainedChatTarget,
@@ -525,6 +526,50 @@ describe("shouldTitlePlaceholderChat", () => {
     expect(shouldTitlePlaceholderChat("new", "Trip plans", "new")).toBe(false);
     expect(shouldTitlePlaceholderChat("new", undefined, "new")).toBe(true);
     expect(shouldTitlePlaceholderChat("other", undefined, "new")).toBe(false);
+  });
+});
+
+describe("opening an older bot chat", () => {
+  const chat = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({
+    environmentId: "env-a",
+    id,
+    botId: "bot-ren",
+    parentThreadId: null as string | null,
+    updatedAt,
+    archivedAt: null as string | null,
+    ...extra,
+  });
+  const threads = [
+    chat("chat-old", "2026-08-01T00:00:00.000Z"),
+    chat("chat-new", "2026-08-03T00:00:00.000Z"),
+    chat("chat-mid", "2026-08-02T00:00:00.000Z"),
+    chat("chat-archived", "2026-08-04T00:00:00.000Z", { archivedAt: "2026-08-05T00:00:00.000Z" }),
+    chat("chat-child", "2026-08-06T00:00:00.000Z", { parentThreadId: "chat-new" }),
+    chat("chat-other", "2026-08-07T00:00:00.000Z", { botId: "bot-mira" }),
+    chat("chat-elsewhere", "2026-08-08T00:00:00.000Z", { environmentId: "env-b" }),
+  ];
+
+  it("lists only the bot's active direct chats, newest first", () => {
+    expect(listBotChats("bot-ren", "env-a", threads).map((thread) => thread.id)).toEqual([
+      "chat-new",
+      "chat-mid",
+      "chat-old",
+    ]);
+  });
+
+  it("shows the opened chat instead of the newest one", () => {
+    expect(resolveBotThreadTarget("bot-ren", "env-a", threads, undefined, "chat-old")).toEqual({
+      environmentId: "env-a",
+      threadId: "chat-old",
+    });
+  });
+
+  it("falls back to the newest chat when the opened one is not an active chat of the bot", () => {
+    for (const openThreadId of ["chat-archived", "chat-child", "chat-other", "missing", null]) {
+      expect(
+        resolveBotThreadTarget("bot-ren", "env-a", threads, undefined, openThreadId)?.threadId,
+      ).toBe("chat-new");
+    }
   });
 });
 

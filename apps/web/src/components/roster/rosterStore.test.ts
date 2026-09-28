@@ -45,6 +45,7 @@ beforeEach(() => {
     lastMessageByBotId: {},
     selectedBotId: null,
     chatPathByBotId: {},
+    openChatByBotId: {},
     pinnedItems: [],
     unassignedItems: [],
     environmentId: null,
@@ -58,6 +59,7 @@ afterEach(() => {
     lastMessageByBotId: initialState.lastMessageByBotId,
     selectedBotId: initialState.selectedBotId,
     chatPathByBotId: initialState.chatPathByBotId,
+    openChatByBotId: initialState.openChatByBotId,
     pinnedItems: initialState.pinnedItems,
     unassignedItems: initialState.unassignedItems,
     environmentId: initialState.environmentId,
@@ -102,6 +104,21 @@ describe("bot selection", () => {
     expect(useRosterStore.getState().chatPathByBotId).toEqual({
       mori: "/draft/draft-2",
     });
+  });
+
+  it("opens an older chat and returns to the newest one", () => {
+    useRosterStore.getState().openBotChat("akeru", "thread-old");
+    expect(useRosterStore.getState().openChatByBotId).toEqual({ akeru: "thread-old" });
+
+    useRosterStore.getState().openBotChat("akeru", null);
+    expect(useRosterStore.getState().openChatByBotId).toEqual({});
+  });
+
+  it("drops opened chats when the roster switches environment", () => {
+    useRosterStore.getState().replaceRoster({ environmentId: "env-one", bots: [], groups: [] });
+    useRosterStore.getState().openBotChat("akeru", "thread-old");
+    useRosterStore.getState().replaceRoster({ environmentId: "env-two", bots: [], groups: [] });
+    expect(useRosterStore.getState().openChatByBotId).toEqual({});
   });
 });
 

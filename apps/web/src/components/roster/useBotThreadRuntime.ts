@@ -94,6 +94,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
+  const openThreadId = useRosterStore((state) => state.openChatByBotId[botId] ?? null);
   const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
   const primaryThreadShells = useMemo(
     () =>
@@ -116,7 +117,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const target = preferRetainedChatTarget(
     retainedThreadRef.current,
     primaryEnvironmentId
-      ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
+      ? resolveBotThreadTarget(
+          botId,
+          primaryEnvironmentId,
+          primaryThreadShells,
+          rememberedPath,
+          openThreadId,
+        )
       : null,
     primaryThreadShells,
   );
@@ -274,9 +281,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       if (result._tag === "Failure") return null;
       const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
       retainedThreadRef.current = { ownerId: botId, threadRef, linked: false };
-      useRosterStore
-        .getState()
-        .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      const roster = useRosterStore.getState();
+      roster.recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      // A new chat is the newest one, so the bot stops showing an older chat.
+      roster.openBotChat(botId, null);
       return threadRef;
     },
     [
