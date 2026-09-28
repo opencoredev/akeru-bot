@@ -116,17 +116,7 @@ export class BotInboxService {
 
     const existing = this.items[existingIndex]!;
     if (existing.status === "resolved") {
-      const { resolvedAt: _resolvedAt, acknowledgedAt: _acknowledgedAt, ...active } = existing;
-      const reopened: BotInboxItem = {
-        ...active,
-        ...incident,
-        status: "open",
-        lastSeenAt: this.now(),
-        occurrenceCount: existing.occurrenceCount + 1,
-      };
-      this.items[existingIndex] = reopened;
-      this.save();
-      return reopened;
+      return existing;
     }
     if (
       existing.kind === incident.kind &&
