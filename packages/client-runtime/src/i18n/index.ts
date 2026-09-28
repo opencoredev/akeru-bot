@@ -2567,6 +2567,31 @@ export const englishCatalog = {
   Backup: "Backup",
   "Your workspace is still loading. Try again in a moment.":
     "Your workspace is still loading. Try again in a moment.",
+  "Remove the saved credentials from this environment.":
+    "Remove the saved credentials from this environment.",
+  "{count} more": "{count} more",
+  "{names} uses this account.": "{names} uses this account.",
+  "{names} use this account.": "{names} use this account.",
+  "Connected account": "Connected account",
+  "API key saved on this environment": "API key saved on this environment",
+  "Account identity unavailable": "Account identity unavailable",
+  Subscription: "Subscription",
+  Check: "Check",
+  "Saved · {baseUrl}": "Saved · {baseUrl}",
+  "Pay per request instead of using the subscription.":
+    "Pay per request instead of using the subscription.",
+  "Replace key": "Replace key",
+  "Copy this code, then open the sign-in page and enter it.":
+    "Copy this code, then open the sign-in page and enter it.",
+  "Finish signing in to {provider} in the browser.":
+    "Finish signing in to {provider} in the browser.",
+  "Open sign-in page": "Open sign-in page",
+  "Connect to an environment to manage this account.":
+    "Connect to an environment to manage this account.",
+  "Replace API key": "Replace API key",
+  "Add API key": "Add API key",
+  "Checking account": "Checking account",
+  "Instance account": "Instance account",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;

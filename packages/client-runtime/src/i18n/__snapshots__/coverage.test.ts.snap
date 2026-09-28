@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1758,
+  "directMessageCount": 1782,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -141,6 +141,12 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "entry.planHint)} />",
       "entry.planHint)}",
       "entry.planHint)}",
+    ],
+    "apps/web/src/components/settings/ProvidersPanel.tsx": [
+      "definition.subscription)}",
+      "problem)}</span> : undefined",
+      "definition.description)",
+      "problem)}</span> : undefined",
     ],
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx": [
       "definition.description)}",
@@ -458,6 +464,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/ProviderAccessDetails.tsx",
     "apps/web/src/components/settings/ProviderDetailPage.tsx",
     "apps/web/src/components/settings/ProviderInstancesSection.tsx",
+    "apps/web/src/components/settings/ProvidersPanel.tsx",
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx",
     "apps/web/src/components/settings/SettingsDialog.tsx",
     "apps/web/src/components/settings/SettingsPanels.logic.ts",

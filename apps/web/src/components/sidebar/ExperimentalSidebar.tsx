@@ -132,7 +132,7 @@ export function ExperimentalSidebar() {
               if (!onPlugins) openPlugins();
             }}
           />
-          <RailButton label="Usage" icon={Analytics01Icon} onClick={() => openUsage()} />
+          <RailButton label={t("Usage")} icon={Analytics01Icon} onClick={() => openUsage()} />
         </div>
         <div className="mt-auto flex flex-col items-center gap-1.5">
           <RailButton
