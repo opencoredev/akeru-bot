@@ -2016,4 +2016,27 @@ export const zhCNCatalog: TranslationCatalog = {
   "Providers > Voice": "提供商 > 语音",
   "Privacy & data": "隐私与数据",
   "Advanced > Bot inbox": "高级 > 机器人收件箱",
+  "Filter chats": "筛选聊天",
+  "Copy message": "复制消息",
+  "Change avatar": "更换头像",
+  "Let people reach {name} from messaging apps like Slack or Telegram.":
+    "让大家通过 Slack 或 Telegram 等消息应用联系 {name}。",
+  "No environment connected": "未连接环境",
+  "Connect to an Akeru Bot environment to set up channels.": "连接 Akeru Bot 环境后才能设置频道。",
+  "Channels are managed on the host": "频道由主机管理",
+  "This device can chat with {name} but can't change its channels. Open Akeru Bot on the computer that runs it to connect a channel.":
+    "此设备可以与 {name} 聊天，但不能修改其频道。请在运行环境的电脑上打开 Akeru Bot 来连接频道。",
+  "No channels set up yet": "尚未设置频道",
+  "Add a Slack, Telegram, Discord, WhatsApp, or iMessage connection first. Then assign it to this bot here.":
+    "请先添加 Slack、Telegram、Discord、WhatsApp 或 iMessage 连接，再在此处分配给这个机器人。",
+  Backup: "备份",
+  "Your workspace is still loading. Try again in a moment.": "工作区仍在加载中，请稍后重试。",
+  "Background work": "后台工作",
+  "Paste the pairing credential from the desktop app to connect.":
+    "粘贴桌面应用提供的配对凭据以连接。",
+  "Paste the pairing token from your link to connect.": "粘贴链接中的配对令牌以连接。",
+  "This environment accepts desktop pairing and one-time pairing tokens.":
+    "此环境支持桌面配对和一次性配对令牌。",
+  "The desktop app manages this environment. Open it there, or paste a credential it issued.":
+    "桌面应用管理此环境。请在桌面应用中打开，或粘贴它提供的凭据。",
 };

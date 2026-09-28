@@ -2093,6 +2093,32 @@ export const englishCatalog = {
   "Providers > Voice": "Providers > Voice",
   "Privacy & data": "Privacy & data",
   "Advanced > Bot inbox": "Advanced > Bot inbox",
+  "Filter chats": "Filter chats",
+  "Copy message": "Copy message",
+  "Change avatar": "Change avatar",
+  "Let people reach {name} from messaging apps like Slack or Telegram.":
+    "Let people reach {name} from messaging apps like Slack or Telegram.",
+  "No environment connected": "No environment connected",
+  "Connect to an Akeru Bot environment to set up channels.":
+    "Connect to an Akeru Bot environment to set up channels.",
+  "Channels are managed on the host": "Channels are managed on the host",
+  "This device can chat with {name} but can't change its channels. Open Akeru Bot on the computer that runs it to connect a channel.":
+    "This device can chat with {name} but can't change its channels. Open Akeru Bot on the computer that runs it to connect a channel.",
+  "No channels set up yet": "No channels set up yet",
+  "Add a Slack, Telegram, Discord, WhatsApp, or iMessage connection first. Then assign it to this bot here.":
+    "Add a Slack, Telegram, Discord, WhatsApp, or iMessage connection first. Then assign it to this bot here.",
+  Backup: "Backup",
+  "Your workspace is still loading. Try again in a moment.":
+    "Your workspace is still loading. Try again in a moment.",
+  "Background work": "Background work",
+  "Paste the pairing credential from the desktop app to connect.":
+    "Paste the pairing credential from the desktop app to connect.",
+  "Paste the pairing token from your link to connect.":
+    "Paste the pairing token from your link to connect.",
+  "This environment accepts desktop pairing and one-time pairing tokens.":
+    "This environment accepts desktop pairing and one-time pairing tokens.",
+  "The desktop app manages this environment. Open it there, or paste a credential it issued.":
+    "The desktop app manages this environment. Open it there, or paste a credential it issued.",
 } as const;
 
 export type MessageKey = keyof typeof englishCatalog;
