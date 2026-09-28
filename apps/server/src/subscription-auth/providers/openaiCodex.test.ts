@@ -84,7 +84,9 @@ describe("OpenAI Codex device login", () => {
       const { client, requests } = scriptedHttpClient((request) =>
         request.url.endsWith("/deviceauth/token")
           ? Response.json({ authorization_code: "code", code_verifier: "verifier" })
-          : Response.json(tokens({ "https://api.openai.com/auth": { chatgpt_account_id: "acct" } })),
+          : Response.json(
+              tokens({ "https://api.openai.com/auth": { chatgpt_account_id: "acct" } }),
+            ),
       );
       const result = yield* CodexOAuth.pollDeviceLogin(pending).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
@@ -194,7 +196,9 @@ describe("OpenAI Codex device login", () => {
         refresh: "old-refresh",
         expires: 0,
       }).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.flip);
-      expect(error.message).toBe('OpenAI Codex token refresh failed: 401 {"error":"invalid_grant"}');
+      expect(error.message).toBe(
+        'OpenAI Codex token refresh failed: 401 {"error":"invalid_grant"}',
+      );
     }),
   );
 });

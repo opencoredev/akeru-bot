@@ -177,58 +177,66 @@ const startDeviceLogin = Effect.fn("kimi.startDeviceLogin")(function* () {
   } satisfies KimiDeviceLoginPending;
 });
 
-const pollTokenOnce = Effect.fn("kimi.pollTokenOnce")(function* (
-  pending: KimiDeviceLoginPending,
-): Effect.fn.Return<
-  DeviceCodePollOutcome<OAuthCredentials>,
-  SubscriptionAuthRequestError,
-  HttpClient.HttpClient
-> {
-  const response = yield* postToken("Kimi For Coding token request", pending.deviceId, {
-    device_code: pending.deviceCode,
-    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-  });
-  const body = yield* responseJson(response);
-  const ok = response.status >= 200 && response.status < 300;
-  if (ok && hasAccessToken(body)) {
-    return yield* credentialsFromTokenResponse(body, "poll", pending.deviceId).pipe(
-      Effect.map((result): DeviceCodePollOutcome<OAuthCredentials> => ({
-        status: "complete",
-        result,
-      })),
-      Effect.catchTag("SubscriptionAuthResponseError", (error) =>
-        Effect.succeed<DeviceCodePollOutcome<OAuthCredentials>>({
-          status: "failed",
-          error: error.message,
-        }),
-      ),
-    );
-  }
+const pollTokenOnce = Effect.fn("kimi.pollTokenOnce")(
+  function* (
+    pending: KimiDeviceLoginPending,
+  ): Effect.fn.Return<
+    DeviceCodePollOutcome<OAuthCredentials>,
+    SubscriptionAuthRequestError,
+    HttpClient.HttpClient
+  > {
+    const response = yield* postToken("Kimi For Coding token request", pending.deviceId, {
+      device_code: pending.deviceCode,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    });
+    const body = yield* responseJson(response);
+    const ok = response.status >= 200 && response.status < 300;
+    if (ok && hasAccessToken(body)) {
+      return yield* credentialsFromTokenResponse(body, "poll", pending.deviceId).pipe(
+        Effect.map(
+          (result): DeviceCodePollOutcome<OAuthCredentials> => ({
+            status: "complete",
+            result,
+          }),
+        ),
+        Effect.catchTag("SubscriptionAuthResponseError", (error) =>
+          Effect.succeed<DeviceCodePollOutcome<OAuthCredentials>>({
+            status: "failed",
+            error: error.message,
+          }),
+        ),
+      );
+    }
 
-  const data = isTokenErrorBody(body) ? body : {};
-  const error = data.error;
-  if (error === "authorization_pending") return { status: "pending" };
-  if (error === "slow_down") {
+    const data = isTokenErrorBody(body) ? body : {};
+    const error = data.error;
+    if (error === "authorization_pending") return { status: "pending" };
+    if (error === "slow_down") {
+      return {
+        status: "slow_down",
+        intervalSeconds: isPositiveFinite(data.interval) ? data.interval : undefined,
+      };
+    }
+    if (error === "expired_token") {
+      return {
+        status: "failed",
+        error: "Kimi For Coding authorization expired. Restart the login.",
+      };
+    }
+    if (error === "access_denied") {
+      return { status: "failed", error: "Kimi For Coding login was denied." };
+    }
+    const description =
+      typeof data.error_description === "string" ? `: ${data.error_description}` : "";
     return {
-      status: "slow_down",
-      intervalSeconds: isPositiveFinite(data.interval) ? data.interval : undefined,
+      status: "failed",
+      error: `Kimi For Coding token request failed: ${response.status}${
+        typeof error === "string" ? ` ${error}${description}` : ""
+      }`,
     };
-  }
-  if (error === "expired_token") {
-    return { status: "failed", error: "Kimi For Coding authorization expired. Restart the login." };
-  }
-  if (error === "access_denied") {
-    return { status: "failed", error: "Kimi For Coding login was denied." };
-  }
-  const description =
-    typeof data.error_description === "string" ? `: ${data.error_description}` : "";
-  return {
-    status: "failed",
-    error: `Kimi For Coding token request failed: ${response.status}${
-      typeof error === "string" ? ` ${error}${description}` : ""
-    }`,
-  };
-}, withOAuthTimeout("Kimi For Coding token request", REQUEST_TIMEOUT));
+  },
+  withOAuthTimeout("Kimi For Coding token request", REQUEST_TIMEOUT),
+);
 
 const pollDeviceLogin = Effect.fn("kimi.pollDeviceLogin")(function* (
   pending: KimiDeviceLoginPending,
@@ -258,7 +266,9 @@ const pollDeviceLogin = Effect.fn("kimi.pollDeviceLogin")(function* (
 /** Transport failures, timeouts, 429, and 5xx retry after 1s, 2s, then 4s. */
 const refreshRetrySchedule = Schedule.exponential("1 second").pipe(
   Schedule.setInputType<SubscriptionAuthRequestError | { readonly retryable?: never }>(),
-  Schedule.while(({ input, attempt }) => attempt <= REFRESH_MAX_RETRIES && input.retryable === true),
+  Schedule.while(
+    ({ input, attempt }) => attempt <= REFRESH_MAX_RETRIES && input.retryable === true,
+  ),
 );
 
 /** Refresh a Kimi For Coding OAuth token, retrying transient upstream failures. */

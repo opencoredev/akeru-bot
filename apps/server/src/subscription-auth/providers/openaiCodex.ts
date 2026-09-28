@@ -195,79 +195,85 @@ const startDeviceLogin = Effect.fn("codex.startDeviceLogin")(function* () {
  * immediately for credentials. Flow-level conditions are `failed` results;
  * only transport failures and timeouts reach the error channel.
  */
-const pollDeviceLogin = Effect.fn("codex.pollDeviceLogin")(function* (
-  pending: CodexDeviceLoginPending,
-): Effect.fn.Return<
-  CodexDevicePollResult,
-  SubscriptionAuthRequestError | SubscriptionAuthResponseError,
-  HttpClient.HttpClient
-> {
-  if ((yield* Clock.currentTimeMillis) >= pending.deadlineAt) {
-    return {
-      status: "failed",
-      error: "OpenAI Codex device authorization timed out after 15 minutes",
-    };
-  }
+const pollDeviceLogin = Effect.fn("codex.pollDeviceLogin")(
+  function* (
+    pending: CodexDeviceLoginPending,
+  ): Effect.fn.Return<
+    CodexDevicePollResult,
+    SubscriptionAuthRequestError | SubscriptionAuthResponseError,
+    HttpClient.HttpClient
+  > {
+    if ((yield* Clock.currentTimeMillis) >= pending.deadlineAt) {
+      return {
+        status: "failed",
+        error: "OpenAI Codex device authorization timed out after 15 minutes",
+      };
+    }
 
-  const label = "OpenAI Codex device authorization failed";
-  const response = yield* postJson(label, DEVICE_TOKEN_URL, {
-    device_auth_id: pending.deviceAuthId,
-    user_code: pending.userCode,
-  });
-  if (response.status === 403 || response.status === 404) {
-    return { status: "pending", nextPollMs: pending.intervalMs };
-  }
-  const device = yield* ensureOk(label)(response).pipe(
-    Effect.flatMap(responseJson),
-    Effect.flatMap(
-      decodeOAuthBody(
-        DeviceTokenResponse,
-        "OpenAI Codex device token response missing required fields",
+    const label = "OpenAI Codex device authorization failed";
+    const response = yield* postJson(label, DEVICE_TOKEN_URL, {
+      device_auth_id: pending.deviceAuthId,
+      user_code: pending.userCode,
+    });
+    if (response.status === 403 || response.status === 404) {
+      return { status: "pending", nextPollMs: pending.intervalMs };
+    }
+    const device = yield* ensureOk(label)(response).pipe(
+      Effect.flatMap(responseJson),
+      Effect.flatMap(
+        decodeOAuthBody(
+          DeviceTokenResponse,
+          "OpenAI Codex device token response missing required fields",
+        ),
       ),
-    ),
-  );
+    );
 
-  const tokenResponse = yield* postTokenForm("Token exchange failed", {
-    grant_type: "authorization_code",
-    client_id: CLIENT_ID,
-    code: device.authorization_code,
-    code_verifier: device.code_verifier,
-    redirect_uri: DEVICE_REDIRECT_URI,
-  });
-  if (tokenResponse.status < 200 || tokenResponse.status >= 300) {
-    return { status: "failed", error: "Token exchange failed" };
-  }
-  const credentials = yield* responseJson(tokenResponse).pipe(
-    Effect.flatMap((body) => credentialsFromTokenResponse(body, "Token exchange failed")),
-  );
-  return { status: "complete", credentials };
-}, (effect) =>
-  effect.pipe(
-    Effect.catchTag("SubscriptionAuthResponseError", (error) =>
-      Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
+    const tokenResponse = yield* postTokenForm("Token exchange failed", {
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      code: device.authorization_code,
+      code_verifier: device.code_verifier,
+      redirect_uri: DEVICE_REDIRECT_URI,
+    });
+    if (tokenResponse.status < 200 || tokenResponse.status >= 300) {
+      return { status: "failed", error: "Token exchange failed" };
+    }
+    const credentials = yield* responseJson(tokenResponse).pipe(
+      Effect.flatMap((body) => credentialsFromTokenResponse(body, "Token exchange failed")),
+    );
+    return { status: "complete", credentials };
+  },
+  (effect) =>
+    effect.pipe(
+      Effect.catchTag("SubscriptionAuthResponseError", (error) =>
+        Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
+      ),
+      Effect.catchIf(
+        (error) => error.status !== undefined,
+        (error) =>
+          Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
+      ),
+      withOAuthTimeout("OpenAI Codex device authorization poll", REQUEST_TIMEOUT),
     ),
-    Effect.catchIf(
-      (error) => error.status !== undefined,
-      (error) => Effect.succeed<CodexDevicePollResult>({ status: "failed", error: error.message }),
-    ),
-    withOAuthTimeout("OpenAI Codex device authorization poll", REQUEST_TIMEOUT),
-  ),
 );
 
 /** Refresh an OpenAI Codex OAuth token, preserving the ChatGPT account id. */
-const refreshToken = Effect.fn("codex.refreshToken")(function* (credentials: OAuthCredentials) {
-  const label = "OpenAI Codex token refresh failed";
-  const body = yield* postTokenForm(label, {
-    grant_type: "refresh_token",
-    refresh_token: credentials.refresh,
-    client_id: CLIENT_ID,
-  }).pipe(Effect.flatMap(ensureOk(label)), Effect.flatMap(responseJson));
-  return yield* credentialsFromTokenResponse(
-    body,
-    "OpenAI Codex token refresh response missing fields",
-    typeof credentials.accountId === "string" ? credentials.accountId : undefined,
-  );
-}, withOAuthTimeout("OpenAI Codex token refresh", REQUEST_TIMEOUT));
+const refreshToken = Effect.fn("codex.refreshToken")(
+  function* (credentials: OAuthCredentials) {
+    const label = "OpenAI Codex token refresh failed";
+    const body = yield* postTokenForm(label, {
+      grant_type: "refresh_token",
+      refresh_token: credentials.refresh,
+      client_id: CLIENT_ID,
+    }).pipe(Effect.flatMap(ensureOk(label)), Effect.flatMap(responseJson));
+    return yield* credentialsFromTokenResponse(
+      body,
+      "OpenAI Codex token refresh response missing fields",
+      typeof credentials.accountId === "string" ? credentials.accountId : undefined,
+    );
+  },
+  withOAuthTimeout("OpenAI Codex token refresh", REQUEST_TIMEOUT),
+);
 
 /** Effect API for the OpenAI Codex flow; requires an `HttpClient`. */
 export const CodexOAuth = { startDeviceLogin, pollDeviceLogin, refreshToken } as const;

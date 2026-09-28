@@ -43,9 +43,7 @@ describe("Anthropic OAuth", () => {
 
   it.effect("reports a rejected refresh with its status", () =>
     Effect.gen(function* () {
-      const { client } = scriptedHttpClient(
-        () => new Response("invalid_grant", { status: 400 }),
-      );
+      const { client } = scriptedHttpClient(() => new Response("invalid_grant", { status: 400 }));
       const error = yield* AnthropicOAuth.refreshToken("refresh").pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,

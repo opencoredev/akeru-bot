@@ -97,15 +97,14 @@ describe("Kimi For Coding OAuth", () => {
       expect(
         yield* pollWith(Response.json({ error: "slow_down", interval: 12 }, { status: 400 })),
       ).toMatchObject({ status: "pending", nextPollMs: 16_800 });
-      expect(
-        yield* pollWith(Response.json({ error: "expired_token" }, { status: 400 })),
-      ).toEqual({
+      expect(yield* pollWith(Response.json({ error: "expired_token" }, { status: 400 }))).toEqual({
         status: "failed",
         error: "Kimi For Coding authorization expired. Restart the login.",
       });
-      expect(
-        yield* pollWith(Response.json({ error: "access_denied" }, { status: 400 })),
-      ).toEqual({ status: "failed", error: "Kimi For Coding login was denied." });
+      expect(yield* pollWith(Response.json({ error: "access_denied" }, { status: 400 }))).toEqual({
+        status: "failed",
+        error: "Kimi For Coding login was denied.",
+      });
       expect(
         yield* pollWith(
           Response.json({ error: "invalid_client", error_description: "bad" }, { status: 401 }),
@@ -156,9 +155,7 @@ describe("Kimi For Coding OAuth", () => {
 
   it.effect("gives up after three refresh retries", () =>
     Effect.gen(function* () {
-      const { client, requests } = scriptedHttpClient(
-        () => new Response("busy", { status: 503 }),
-      );
+      const { client, requests } = scriptedHttpClient(() => new Response("busy", { status: 503 }));
       const fiber = yield* KimiOAuth.refreshToken("refresh", DEVICE_ID).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
