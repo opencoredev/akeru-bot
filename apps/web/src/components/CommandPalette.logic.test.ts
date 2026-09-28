@@ -7,6 +7,7 @@ import { activeChatPaletteActions, registerChatPaletteActions } from "../chatAct
 import {
   buildChatCommandPaletteItems,
   buildChatSearchCommandPaletteItems,
+  buildEnvironmentOwnerNames,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
@@ -170,6 +171,33 @@ describe("chat actions in the command palette", () => {
   });
 });
 
+describe("buildEnvironmentOwnerNames", () => {
+  const ownerName = buildEnvironmentOwnerNames([
+    {
+      environmentId: "env-a",
+      bots: [{ id: "bot-1", name: "Akeru" }],
+      groups: [{ id: "group-1", name: "Launch" }],
+    },
+    {
+      environmentId: "env-b",
+      bots: [{ id: "bot-1", name: "Home Akeru" }],
+      groups: [{ id: "group-2", name: "Family" }],
+    },
+  ]);
+
+  it("names a chat's bot or group from the chat's own environment", () => {
+    expect(ownerName("env-b", { botId: "bot-1" })).toBe("Home Akeru");
+    expect(ownerName("env-b", { groupId: "group-2" })).toBe("Family");
+    expect(ownerName("env-a", { botId: "bot-1" })).toBe("Akeru");
+  });
+
+  it("returns null when that environment has no such owner", () => {
+    expect(ownerName("env-a", { groupId: "group-2" })).toBeNull();
+    expect(ownerName("env-c", { botId: "bot-1" })).toBeNull();
+    expect(ownerName("env-a", {})).toBeNull();
+  });
+});
+
 describe("buildChatSearchCommandPaletteItems", () => {
   const chat = (
     threadId: string,
@@ -192,7 +220,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
     chat("draft", "New chat", "2026-08-04T00:00:00.000Z"),
     chat("remote", "Trip receipts", "2026-08-05T00:00:00.000Z", {
       environmentId: "env-b",
-      ownerName: null,
+      ownerName: "Home Akeru",
       unavailableIn: "Home server",
     }),
   ];
@@ -251,7 +279,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
   it("disables chats in another environment and names it", () => {
     const remote = build("receipts")[0];
     expect(remote?.disabled).toBe(true);
-    expect(remote?.description).toBe("In Home server");
+    expect(remote?.description).toBe("Home Akeru · In Home server");
   });
 
   it("opens the chosen chat", async () => {

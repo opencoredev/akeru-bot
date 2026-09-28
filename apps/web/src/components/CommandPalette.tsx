@@ -26,6 +26,7 @@ import { activeChatPaletteActions } from "../chatActionsRegistry";
 import {
   buildChatCommandPaletteItems,
   buildChatSearchCommandPaletteItems,
+  buildEnvironmentOwnerNames,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
@@ -42,6 +43,7 @@ import { openProductFeedback } from "~/productFeedbackStore";
 import { openPlugins } from "~/pluginsDialogStore";
 import { openUsage } from "~/usageDialogStore";
 import { primaryServerKeybindingsAtom } from "../state/server";
+import { allEnvironmentRostersAtom } from "../state/bots";
 import { useThreadShells } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useThreadSearch } from "../state/queries";
@@ -319,6 +321,7 @@ function useChatSearchItems(query: string): {
   const shells = useThreadShells();
   const bots = useRosterStore((state) => state.bots);
   const groups = useRosterStore((state) => state.groups);
+  const rosters = useAtomValue(allEnvironmentRostersAtom);
   const searchQuery = query.startsWith(">") ? "" : query;
   const connectedEnvironmentIds = useMemo(
     () =>
@@ -337,6 +340,7 @@ function useChatSearchItems(query: string): {
     const botById = new Map(bots.map((bot) => [bot.id, bot] as const));
     const groupById = new Map(groups.map((group) => [group.id, group] as const));
     const latestGroupThreadIds = findLatestGroupThreadIds(shells);
+    const ownerNameIn = buildEnvironmentOwnerNames(rosters);
     return shells.flatMap((shell): CommandPaletteChat[] => {
       if (
         shell.archivedAt !== null ||
@@ -356,7 +360,7 @@ function useChatSearchItems(query: string): {
         return [
           {
             ...base,
-            ownerName: null,
+            ownerName: ownerNameIn(shell.environmentId, shell),
             unavailableIn: labelById.get(shell.environmentId) ?? shell.environmentId,
           },
         ];
@@ -375,7 +379,7 @@ function useChatSearchItems(query: string): {
       }
       return [];
     });
-  }, [bots, connectedEnvironmentIds, environments, groups, primaryEnvironmentId, shells]);
+  }, [bots, connectedEnvironmentIds, environments, groups, primaryEnvironmentId, rosters, shells]);
 
   const items = buildChatSearchCommandPaletteItems({
     query: searchQuery,

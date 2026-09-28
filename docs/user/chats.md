@@ -61,8 +61,8 @@ message match, the matching text. Selecting a bot's chat opens it in that bot's 
 from the bot's **Chats** list does. A group chat opens the group.
 
 Search covers every environment this client is connected to. Chats in another environment are
-listed with that environment's name but cannot be opened from here; open them from a client
-connected to that environment. Start your query with `>` to search actions only.
+listed after the ones you can open, with their bot or group and that environment's name, but cannot
+be opened from here; open them from a client connected to that environment. Start your query with `>` to search actions only.
 
 ## Active and settled chats
 

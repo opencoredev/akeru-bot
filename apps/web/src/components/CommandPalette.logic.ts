@@ -126,6 +126,39 @@ export interface CommandPaletteChatMatch {
 export const COMMAND_PALETTE_CHAT_LIMIT = 8;
 
 /**
+ * Looks up a bot or group name in the roster of the environment a chat lives
+ * in. Ids are scoped per environment, so a primary-environment name is never
+ * used for another environment's chat.
+ */
+export function buildEnvironmentOwnerNames(
+  rosters: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly bots: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+    readonly groups: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  }>,
+): (
+  environmentId: string,
+  owner: {
+    readonly botId?: string | null | undefined;
+    readonly groupId?: string | null | undefined;
+  },
+) => string | null {
+  const names = new Map<string, string>();
+  const key = (environmentId: string, kind: "bot" | "group", id: string) =>
+    `${environmentId}\u0000${kind}\u0000${id}`;
+  for (const roster of rosters) {
+    for (const bot of roster.bots) names.set(key(roster.environmentId, "bot", bot.id), bot.name);
+    for (const group of roster.groups) {
+      names.set(key(roster.environmentId, "group", group.id), group.name);
+    }
+  }
+  return (environmentId, owner) =>
+    (owner.botId ? names.get(key(environmentId, "bot", owner.botId)) : undefined) ??
+    (owner.groupId ? names.get(key(environmentId, "group", owner.groupId)) : undefined) ??
+    null;
+}
+
+/**
  * The palette's Chats results for a typed query: chats whose title contains the
  * query first, tighter matches ahead, then chats the server matched by message,
  * in its order, with the matching snippet as the description. Chats in another
