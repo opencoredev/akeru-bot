@@ -700,7 +700,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               ? [
                   {
                     type: "http" as const,
-                    name: "t3-code",
+                    name: "akeru",
                     url: mcpSession.endpoint,
                     headers: [
                       {
@@ -718,6 +718,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               serverConfig.secretsDir,
               "xai",
               options?.environment,
+              boundInstanceId,
             ).pipe(
               Effect.provideService(FileSystem.FileSystem, fileSystem),
               Effect.provideService(Path.Path, path),

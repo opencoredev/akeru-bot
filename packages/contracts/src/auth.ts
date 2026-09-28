@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema";
 
 import { AuthSessionId, ClientSurface, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -72,27 +73,44 @@ export type ServerAuthSessionMethod = typeof ServerAuthSessionMethod.Type;
 
 export const AuthOrchestrationReadScope = "orchestration:read" as const;
 export const AuthOrchestrationOperateScope = "orchestration:operate" as const;
-export const AuthTerminalOperateScope = "terminal:operate" as const;
-export const AuthReviewWriteScope = "review:write" as const;
 export const AuthAccessReadScope = "access:read" as const;
 export const AuthAccessWriteScope = "access:write" as const;
 export const AuthEnvironmentScope = Schema.Literals([
   AuthOrchestrationReadScope,
   AuthOrchestrationOperateScope,
-  AuthTerminalOperateScope,
-  AuthReviewWriteScope,
   AuthAccessReadScope,
   AuthAccessWriteScope,
 ]);
 export type AuthEnvironmentScope = typeof AuthEnvironmentScope.Type;
-export const AuthEnvironmentScopes = Schema.Array(AuthEnvironmentScope);
+
+/**
+ * Scopes that older builds granted and that still appear in stored sessions,
+ * pairing links, access tokens, and requests from older clients. They grant
+ * nothing now. Scope lists accept them and drop them on decode.
+ */
+export const AuthRetiredEnvironmentScopes = ["review:write", "terminal:operate"] as const;
+const AuthRetiredEnvironmentScope = Schema.Literals(AuthRetiredEnvironmentScopes);
+const isAuthEnvironmentScope = Schema.is(AuthEnvironmentScope);
+
+export const AuthEnvironmentScopes = Schema.Array(
+  Schema.Union([AuthEnvironmentScope, AuthRetiredEnvironmentScope]),
+).pipe(
+  Schema.decodeTo(
+    Schema.Array(AuthEnvironmentScope),
+    SchemaTransformation.transform<
+      ReadonlyArray<AuthEnvironmentScope>,
+      ReadonlyArray<AuthEnvironmentScope | (typeof AuthRetiredEnvironmentScopes)[number]>
+    >({
+      decode: (scopes) => scopes.filter(isAuthEnvironmentScope),
+      encode: (scopes) => scopes,
+    }),
+  ),
+);
 export type AuthEnvironmentScopes = typeof AuthEnvironmentScopes.Type;
 
 export const AuthStandardClientScopes = [
   AuthOrchestrationReadScope,
   AuthOrchestrationOperateScope,
-  AuthTerminalOperateScope,
-  AuthReviewWriteScope,
 ] as const;
 export const AuthAdministrativeScopes = [
   ...AuthStandardClientScopes,

@@ -294,9 +294,9 @@ export function getCustomModelOptionsByInstance(
 }
 
 /**
- * Drop the opencode "plan" agent option from a stored model selection.
- * Used when legacy plan mode is turned off so server-side text-generation
- * tasks (title, branch, PR) cannot keep dispatching the plan agent.
+ * Drop the opencode "plan" agent option from a stored model selection so
+ * server-side text-generation tasks cannot keep dispatching the retired plan
+ * agent.
  */
 export function withoutPlanAgentSelection(
   selection: ModelSelection | null | undefined,
@@ -313,18 +313,13 @@ export function withoutPlanAgentSelection(
   return createModelSelection(selection.instanceId, selection.model, options);
 }
 
-// The dropdown hides the opencode "plan" agent while legacy plan mode is off,
-// but the persisted text-generation selections are only healed when the toggle
-// flips. Users who already have plan mode off and a stored "plan" selection
-// never trip the toggle handler, so resolve the heal once per settings load.
+// Plan mode is retired and the dropdown never offers the opencode "plan"
+// agent, but selections persisted before the retirement can still carry it.
+// Resolve the heal once per settings load.
 export function resolvePlanAgentHealPatch(input: {
-  readonly planModeEnabled: boolean;
   readonly textGenerationModelSelection: ModelSelection | null | undefined;
   readonly sourceControlWriterModelSelection: ModelSelection | null | undefined;
 }): ServerSettingsPatch | null {
-  if (input.planModeEnabled) {
-    return null;
-  }
   const healedText = withoutPlanAgentSelection(input.textGenerationModelSelection);
   const healedSourceControl = withoutPlanAgentSelection(input.sourceControlWriterModelSelection);
   const patch: ServerSettingsPatch = {
@@ -369,7 +364,6 @@ export function resolveAppModelSelectionState(
       model,
       models: entry.models,
       modelOptions: selectedEntry ? selection.options : undefined,
-      planModeEnabled: settings.planModeEnabled,
     });
 
     return createModelSelection(entry.instanceId, model, modelOptionsForDispatch);

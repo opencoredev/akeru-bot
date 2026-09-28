@@ -6,19 +6,19 @@ import { useMemo } from "react";
 
 import {
   highlightCodeSnippet,
-  type ReviewDiffTheme,
-  type ReviewHighlightedToken,
-} from "../review/shikiReviewHighlighter";
+  type CodeHighlightTheme,
+  type HighlightedCodeToken,
+} from "./codeHighlighter";
 
 const MARKDOWN_CODE_HIGHLIGHT_IDLE_TTL_MS = 5 * 60_000;
 
-export type MarkdownHighlightedCode = ReadonlyArray<ReadonlyArray<ReviewHighlightedToken>>;
+export type MarkdownHighlightedCode = ReadonlyArray<ReadonlyArray<HighlightedCodeToken>>;
 
 export interface MarkdownCodeHighlightInput {
   readonly code: string;
   readonly enabled: boolean;
   readonly language: string;
-  readonly theme: ReviewDiffTheme;
+  readonly theme: CodeHighlightTheme;
 }
 
 type MarkdownCodeHighlighter = (
@@ -67,7 +67,7 @@ export function useMarkdownCodeHighlight(input: {
   readonly code: string;
   readonly enabled: boolean;
   readonly language: string | null | undefined;
-  readonly theme: ReviewDiffTheme;
+  readonly theme: CodeHighlightTheme;
 }): MarkdownHighlightedCode | null {
   const normalizedLanguage = input.language?.trim() || "text";
   const enabled = input.enabled && Boolean(input.language?.trim());

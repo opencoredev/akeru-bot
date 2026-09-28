@@ -125,12 +125,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       );
 
       expect(verified.sessionId.length).toBeGreaterThan(0);
-      expect(verified.scopes).toEqual([
-        "orchestration:read",
-        "orchestration:operate",
-        "terminal:operate",
-        "review:write",
-      ]);
+      expect(verified.scopes).toEqual(["orchestration:read", "orchestration:operate"]);
       expect(verified.subject).toBe("one-time-token");
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
   );
@@ -249,8 +244,6 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       expect(verified.scopes).toEqual([
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);

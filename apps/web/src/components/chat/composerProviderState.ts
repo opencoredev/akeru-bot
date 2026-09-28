@@ -18,7 +18,6 @@ export type ComposerProviderStateInput = {
   models: ReadonlyArray<ServerProviderModel>;
   promptInjectionState?: ComposerPromptInjectionState;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
-  planModeEnabled: boolean;
 };
 
 export type ComposerPromptInjectionState = "none" | "ultrathink";
@@ -37,15 +36,8 @@ export function getComposerPromptInjectionState(prompt: string): ComposerPromptI
 }
 
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {
-  const {
-    provider,
-    model,
-    models,
-    modelOptions,
-    promptInjectionState = "none",
-    planModeEnabled,
-  } = input;
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const { provider, model, models, modelOptions, promptInjectionState = "none" } = input;
+  const caps = getProviderModelCapabilities(models, model, provider);
   const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
   const primarySelectDescriptor = descriptors.find(
     (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>

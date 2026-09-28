@@ -1,50 +1,18 @@
-import { MOBILE_CODE_SURFACE, MOBILE_TYPOGRAPHY } from "./typography";
-import {
-  DEFAULT_TERMINAL_FONT_SIZE,
-  MAX_TERMINAL_FONT_SIZE,
-  MIN_TERMINAL_FONT_SIZE,
-  TERMINAL_FONT_SIZE_STEP,
-  normalizeTerminalFontSize,
-} from "../features/terminal/terminalPreferences";
+import { MOBILE_TYPOGRAPHY } from "./typography";
 
 export const DEFAULT_BASE_FONT_SIZE = MOBILE_TYPOGRAPHY.body.fontSize;
 export const MIN_BASE_FONT_SIZE = 11;
 export const MAX_BASE_FONT_SIZE = 22;
 export const BASE_FONT_SIZE_STEP = 1;
 
-export const DEFAULT_CODE_FONT_SIZE = MOBILE_CODE_SURFACE.fontSize;
-export const MIN_CODE_FONT_SIZE = 8;
-export const MAX_CODE_FONT_SIZE = 18;
-export const CODE_FONT_SIZE_STEP = 1;
-
-/**
- * User-configurable appearance preferences as stored. `null` overrides mean
- * "automatic": the value is derived from the base font size.
- */
+/** User-configurable appearance preferences as stored. */
 export interface AppearancePreferences {
   readonly baseFontSize: number;
-  readonly terminalFontSize: number | null;
-  readonly codeFontSize: number | null;
-  readonly codeWordBreak: boolean;
 }
 
-/** Effective appearance values after applying base-size derivation. */
+/** Effective appearance values. */
 export interface ResolvedAppearance {
   readonly baseFontSize: number;
-  readonly terminalFontSize: number;
-  readonly codeFontSize: number;
-  readonly codeWordBreak: boolean;
-  readonly isTerminalFontSizeCustom: boolean;
-  readonly isCodeFontSizeCustom: boolean;
-}
-
-export interface ResolvedMobileCodeSurface {
-  readonly fontSize: number;
-  readonly lineNumberFontSize: number;
-  readonly rowHeight: number;
-  readonly gutterWidth: number;
-  readonly codePadding: number;
-  readonly textVerticalInset: number;
 }
 
 export interface ResolvedMarkdownFontSizes {
@@ -75,37 +43,10 @@ export function normalizeBaseFontSize(value: number | null | undefined): number 
   return Math.min(MAX_BASE_FONT_SIZE, Math.max(MIN_BASE_FONT_SIZE, Math.round(value)));
 }
 
-export function normalizeCodeFontSize(value: number | null | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_CODE_FONT_SIZE;
-  }
-
-  return Math.min(MAX_CODE_FONT_SIZE, Math.max(MIN_CODE_FONT_SIZE, Math.round(value)));
-}
-
-export function normalizeCodeWordBreak(value: boolean | null | undefined): boolean {
-  return value === true;
-}
-
-/** Terminal size derived from base: 10.5pt at base 16, snapped to 0.5pt steps. */
-export function deriveTerminalFontSize(baseFontSize: number): number {
-  const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
-  return normalizeTerminalFontSize(Math.round(DEFAULT_TERMINAL_FONT_SIZE * scale * 2) / 2);
-}
-
-/** Code/diff size derived from base: 12pt at base 16. */
-export function deriveCodeFontSize(baseFontSize: number): number {
-  const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
-  return normalizeCodeFontSize(Math.round(DEFAULT_CODE_FONT_SIZE * scale));
-}
-
 interface StoredAppearancePreferences {
   readonly baseFontSize?: number | null | undefined;
   /** Legacy key from before base font size existed; migrated to baseFontSize. */
   readonly markdownFontSize?: number | null | undefined;
-  readonly terminalFontSize?: number | null | undefined;
-  readonly codeFontSize?: number | null | undefined;
-  readonly codeWordBreak?: boolean | null | undefined;
 }
 
 export function resolveAppearancePreferences(
@@ -113,42 +54,11 @@ export function resolveAppearancePreferences(
 ): AppearancePreferences {
   return {
     baseFontSize: normalizeBaseFontSize(stored?.baseFontSize ?? stored?.markdownFontSize),
-    terminalFontSize:
-      typeof stored?.terminalFontSize === "number" && Number.isFinite(stored.terminalFontSize)
-        ? normalizeTerminalFontSize(stored.terminalFontSize)
-        : null,
-    codeFontSize:
-      typeof stored?.codeFontSize === "number" && Number.isFinite(stored.codeFontSize)
-        ? normalizeCodeFontSize(stored.codeFontSize)
-        : null,
-    codeWordBreak: normalizeCodeWordBreak(stored?.codeWordBreak),
   };
 }
 
 export function resolveAppearance(preferences: AppearancePreferences): ResolvedAppearance {
-  return {
-    baseFontSize: preferences.baseFontSize,
-    terminalFontSize:
-      preferences.terminalFontSize ?? deriveTerminalFontSize(preferences.baseFontSize),
-    codeFontSize: preferences.codeFontSize ?? deriveCodeFontSize(preferences.baseFontSize),
-    codeWordBreak: preferences.codeWordBreak,
-    isTerminalFontSizeCustom: preferences.terminalFontSize !== null,
-    isCodeFontSizeCustom: preferences.codeFontSize !== null,
-  };
-}
-
-export function resolveMobileCodeSurface(codeFontSize: number): ResolvedMobileCodeSurface {
-  const fontSize = normalizeCodeFontSize(codeFontSize);
-  const scale = fontSize / DEFAULT_CODE_FONT_SIZE;
-
-  return {
-    fontSize,
-    lineNumberFontSize: Math.max(8, Math.round(MOBILE_CODE_SURFACE.lineNumberFontSize * scale)),
-    rowHeight: Math.max(14, Math.round(MOBILE_CODE_SURFACE.rowHeight * scale)),
-    gutterWidth: MOBILE_CODE_SURFACE.gutterWidth,
-    codePadding: MOBILE_CODE_SURFACE.codePadding,
-    textVerticalInset: MOBILE_CODE_SURFACE.textVerticalInset,
-  };
+  return { baseFontSize: preferences.baseFontSize };
 }
 
 export function resolveMarkdownFontSizes(baseFontSize: number): ResolvedMarkdownFontSizes {
@@ -239,22 +149,3 @@ export function stepBaseFontSize(current: number, direction: -1 | 1): number {
   const next = direction === -1 ? current - BASE_FONT_SIZE_STEP : current + BASE_FONT_SIZE_STEP;
   return normalizeBaseFontSize(next);
 }
-
-export function stepTerminalFontSize(current: number, direction: -1 | 1): number {
-  const next =
-    direction === -1 ? current - TERMINAL_FONT_SIZE_STEP : current + TERMINAL_FONT_SIZE_STEP;
-  return normalizeTerminalFontSize(next);
-}
-
-export function stepCodeFontSize(current: number, direction: -1 | 1): number {
-  const next = direction === -1 ? current - CODE_FONT_SIZE_STEP : current + CODE_FONT_SIZE_STEP;
-  return normalizeCodeFontSize(next);
-}
-
-export {
-  DEFAULT_TERMINAL_FONT_SIZE,
-  MAX_TERMINAL_FONT_SIZE,
-  MIN_TERMINAL_FONT_SIZE,
-  TERMINAL_FONT_SIZE_STEP,
-  normalizeTerminalFontSize,
-};

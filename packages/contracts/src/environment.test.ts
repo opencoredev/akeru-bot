@@ -14,17 +14,17 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
-  it("treats a missing pull-request capability as unsupported under version skew", () => {
-    expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined();
-  });
-
-  it("preserves an advertised pull-request capability", () => {
-    expect(
-      decodeDescriptor({
-        ...descriptor,
-        capabilities: { ...descriptor.capabilities, pullRequests: true },
-      }).capabilities.pullRequests,
-    ).toBe(true);
+  it("ignores the retired pull-request capabilities that older servers still advertise", () => {
+    const decoded = decodeDescriptor({
+      ...descriptor,
+      capabilities: {
+        ...descriptor.capabilities,
+        pullRequests: true,
+        threadPullRequestLinking: true,
+      },
+    });
+    expect(decoded.capabilities).not.toHaveProperty("pullRequests");
+    expect(decoded.capabilities).not.toHaveProperty("threadPullRequestLinking");
   });
 
   it("treats a missing attachment upload capability as unsupported", () => {

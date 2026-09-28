@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
-import { isTerminalFocused } from "../../lib/terminalFocus";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -90,7 +89,7 @@ export function BotComposerModelControl({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
       const command = resolveShortcutCommand(event, keybindings, {
-        context: { terminalFocus: isTerminalFocused(), modelPickerOpen: pickerOpen },
+        context: { modelPickerOpen: pickerOpen },
       });
       if (command !== "modelPicker.toggle") return;
       event.preventDefault();

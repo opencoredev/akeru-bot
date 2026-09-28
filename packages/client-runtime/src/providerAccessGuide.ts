@@ -226,7 +226,6 @@ export function providerAccessGuide(
     readonly t?: ProviderAccessTranslate | undefined;
   } = {},
 ): ProviderAccessGuide | null {
-  if (provider === "cursor") return null;
   const t = options.t ?? englishTranslate;
   const copy = PROVIDER_COPY[provider];
   const state = providerAccessState(status);

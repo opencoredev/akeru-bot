@@ -2,8 +2,8 @@
 /**
  * Live plan windows from Settings → Providers logins.
  *
- * Claude and Codex follow OpenUsage. Grok uses the CLI billing credits endpoint.
- * Kimi is attempted last.
+ * Claude and Codex follow OpenUsage.
+ * Grok uses the CLI billing credits endpoint. Kimi is attempted last.
  *
  * @module usagePlanLimits
  */
@@ -86,7 +86,7 @@ function isoFromUnknown(value: unknown): string | null {
   return number === null ? null : isoFromEpoch(number);
 }
 
-/** Codex often sends seconds; some providers send epoch milliseconds. */
+/** Accepts epoch milliseconds or seconds (Codex often sends seconds). */
 function isoFromEpoch(value: number): string {
   const millis = Math.abs(value) < 1e11 ? value * 1000 : value;
   return DateTime.formatIso(DateTime.makeUnsafe(millis));

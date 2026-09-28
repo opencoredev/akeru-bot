@@ -58,7 +58,7 @@ const config: ShowcaseConfig = {
       simulator: "iPhone Test",
       appearance: "dark",
       theme: "akeru-classic",
-      scenes: ["thread", "review"],
+      scenes: ["thread", "threads"],
       storeAsset: appleSpec,
     },
     {
@@ -67,7 +67,7 @@ const config: ShowcaseConfig = {
       avd: "Pixel_Test",
       appearance: "light",
       theme: "akeru-classic",
-      scenes: ["thread", "terminal"],
+      scenes: ["thread", "environments"],
       storeAsset: googleSpec,
     },
   ],
@@ -80,14 +80,14 @@ it("parses repeatable capture filters", () => {
     "--device",
     "phone",
     "--scene",
-    "review",
+    "environments",
     "--appearance",
     "both",
     "--skip-build",
   ]);
   assert.deepStrictEqual([...options.platforms], ["ios"]);
   assert.deepStrictEqual([...options.deviceIds], ["phone"]);
-  assert.deepStrictEqual([...options.scenes], ["review"]);
+  assert.deepStrictEqual([...options.scenes], ["environments"]);
   assert.deepStrictEqual([...options.appearances], ["light", "dark"]);
   assert.equal(options.skipBuild, true);
 });
@@ -145,7 +145,7 @@ it("uses platform-correct default Android SDK roots", () => {
 });
 
 it("plans only scenes supported by each selected device", () => {
-  const options = parseShowcaseCliArgs(["--platform", "all", "--scene", "terminal"]);
+  const options = parseShowcaseCliArgs(["--platform", "all", "--scene", "environments"]);
   const captures = planShowcaseCaptures(config, options);
   assert.deepStrictEqual(
     captures.map((capture) => ({
@@ -153,7 +153,7 @@ it("plans only scenes supported by each selected device", () => {
       appearance: capture.appearance,
       scenes: capture.scenes,
     })),
-    [{ id: "pixel", appearance: "light", scenes: ["terminal"] }],
+    [{ id: "pixel", appearance: "light", scenes: ["environments"] }],
   );
 });
 
@@ -340,10 +340,6 @@ it("seeds a playful multi-environment project spectrum", () => {
       `${project.title} has no active thread`,
     );
   }
-  assert.equal(
-    SHOWCASE_PROJECTS.every((project) => project.favicon.includes("<svg")),
-    true,
-  );
 });
 
 it("reads multiline JSON from the pairing CLI", () => {

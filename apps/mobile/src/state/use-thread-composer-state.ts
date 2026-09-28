@@ -9,7 +9,7 @@ import {
   MessageId,
   type EnvironmentId,
   type ModelSelection,
-  type ProviderInteractionMode,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
   type RuntimeMode,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -29,7 +29,6 @@ import {
   pasteComposerClipboard,
   pickComposerImages,
 } from "../lib/composerImages";
-import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
 import { useMobileI18n } from "../lib/i18n";
@@ -40,7 +39,6 @@ import {
   type ThreadFeedDelegations,
 } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
-import { appAtomRegistry } from "../state/atom-registry";
 import {
   appendComposerDraftAttachments,
   appendComposerDraftText,
@@ -63,21 +61,6 @@ import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
-
-export function appendReviewCommentToDraft(input: {
-  readonly environmentId: EnvironmentId;
-  readonly threadId: ThreadId;
-  readonly text: string;
-  readonly attachments?: ReadonlyArray<DraftComposerImageAttachment>;
-}): void {
-  const threadKey = scopedThreadKey(input.environmentId, input.threadId);
-  const existing = appAtomRegistry.get(composerDraftsAtom)[threadKey]?.text ?? "";
-  const separator = existing.trim().length > 0 && !existing.endsWith("\n") ? "\n\n" : "";
-  setComposerDraftText(threadKey, `${existing}${separator}${input.text}`);
-  if (input.attachments && input.attachments.length > 0) {
-    appendComposerDraftAttachments(threadKey, input.attachments);
-  }
-}
 
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;
@@ -200,9 +183,18 @@ export function useThreadComposerState() {
   const selectedDraft = useComposerDraftSettings(selectedThreadKey);
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadDetail ?? selectedThreadShell;
+<<<<<<< HEAD
   const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
   const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
   const interactionMode = selectedDraft.interactionMode ?? selectedThread?.interactionMode ?? null;
+||||||| parent of 21db1a319 (feat: retire review, terminal, source control, plan mode and project UI)
+  const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
+  const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
+  const interactionMode = selectedDraft?.interactionMode ?? selectedThread?.interactionMode ?? null;
+=======
+  const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
+  const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
+>>>>>>> 21db1a319 (feat: retire review, terminal, source control, plan mode and project UI)
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
@@ -323,7 +315,7 @@ export function useThreadComposerState() {
       attachments,
       modelSelection: draft.modelSelection ?? thread.modelSelection,
       runtimeMode: draft.runtimeMode ?? thread.runtimeMode,
-      interactionMode: draft.interactionMode ?? thread.interactionMode,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey);
@@ -455,16 +447,6 @@ export function useThreadComposerState() {
     [selectedThreadKey],
   );
 
-  const onUpdateInteractionMode = useCallback(
-    (value: ProviderInteractionMode) => {
-      if (!selectedThreadKey) {
-        return;
-      }
-      updateComposerDraftSettings(selectedThreadKey, { interactionMode: value });
-    },
-    [selectedThreadKey],
-  );
-
   const selectedThreadWaitingOnChildren = selectedThreadFeedDelegations.waitingOnChildren;
 
   return {
@@ -474,7 +456,6 @@ export function useThreadComposerState() {
     activeWorkStartedAt,
     modelSelection,
     runtimeMode,
-    interactionMode,
     onChangeDraftMessage,
     onPickDraftImages,
     onPasteIntoDraft,
@@ -483,6 +464,5 @@ export function useThreadComposerState() {
     onSendMessage,
     onUpdateModelSelection,
     onUpdateRuntimeMode,
-    onUpdateInteractionMode,
   };
 }

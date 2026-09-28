@@ -37,7 +37,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
-import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
+import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { CheckpointReactorLive } from "./CheckpointReactor.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
@@ -328,25 +328,26 @@ describe("CheckpointReactor", () => {
     const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
       prefix: "t3-checkpoint-reactor-test-",
     });
-    const vcsStatusBroadcasterLayer = Layer.succeed(VcsStatusBroadcaster, {
-      getStatus: () => Effect.die("getStatus should not be called in this test"),
-      refreshLocalStatus: (cwd: string) =>
+    const gitVcsDriverLayer = Layer.mock(GitVcsDriver.GitVcsDriver)({
+      statusDetailsLocal: (cwd: string) =>
         Effect.sync(() => {
           options?.gitStatusRefreshCalls?.push(cwd);
         }).pipe(
           Effect.andThen(options?.gitStatusRefresh ?? Effect.void),
           Effect.as({
             isRepo: true,
-            hasPrimaryRemote: false,
-            isDefaultRef: true,
-            refName:
-              options?.localStatusRefName !== undefined ? options.localStatusRefName : "main",
+            hasOriginRemote: false,
+            isDefaultBranch: true,
+            branch: options?.localStatusRefName !== undefined ? options.localStatusRefName : "main",
+            upstreamRef: null,
             hasWorkingTreeChanges: false,
             workingTree: { files: [], insertions: 0, deletions: 0 },
+            hasUpstream: false,
+            aheadCount: 0,
+            behindCount: 0,
+            aheadOfDefaultCount: 0,
           }),
         ),
-      refreshStatus: () => Effect.die("refreshStatus should not be called in this test"),
-      streamStatus: () => Stream.empty,
     });
 
     const layer = CheckpointReactorLive.pipe(
@@ -354,7 +355,7 @@ describe("CheckpointReactor", () => {
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(RuntimeReceiptBusTest),
       Layer.provideMerge(Layer.succeed(AgentController, provider.service)),
-      Layer.provideMerge(vcsStatusBroadcasterLayer),
+      Layer.provideMerge(gitVcsDriverLayer),
       Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistry.layer))),
       Layer.provideMerge(
         WorkspaceEntries.layer.pipe(

@@ -364,7 +364,6 @@ function BotSettingsForm({
                   onPromptChange={() => {}}
                   modelOptions={draft.modelOptions}
                   allowPromptInjectedEffort={false}
-                  planModeEnabled={draft.settings.planModeEnabled}
                   onModelOptionsChange={draft.selectModelOptions}
                 />
               }

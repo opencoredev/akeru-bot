@@ -264,7 +264,6 @@ export function useBotProfileDraft(
       prompt: "",
       modelOptions,
       allowPromptInjectedEffort: false,
-      planModeEnabled: settings.planModeEnabled,
     });
   const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
   const usageCapDirty =

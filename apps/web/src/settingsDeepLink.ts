@@ -29,7 +29,6 @@ const destinations: Readonly<
   sandbox: { section: "sandbox", label: "Sandbox" },
   privacy: { section: "privacy", label: "Privacy" },
   connections: { section: "connections", label: "Connections" },
-  "source-control": { section: "source-control", label: "Source control" },
   "bot-inbox": { section: "inbox", label: "Bot inbox" },
   diagnostics: { section: "diagnostics", label: "Diagnostics" },
 };

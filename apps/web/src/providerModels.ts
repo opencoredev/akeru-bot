@@ -81,20 +81,16 @@ export function getProviderModelCapabilities(
   models: ReadonlyArray<ServerProviderModel>,
   model: string | null | undefined,
   provider: ProviderDriverKind,
-  planModeEnabled = true,
 ): ModelCapabilities {
   const slug = normalizeModelSlug(model, provider);
   const caps =
     models.find((candidate) => candidate.slug === slug)?.capabilities ?? EMPTY_CAPABILITIES;
-  if (planModeEnabled) {
-    return caps;
-  }
   return withoutPlanAgentOption(caps);
 }
 
-// The opencode "plan" agent is only reachable while legacy plan mode is on.
-// With it off, drop the option so it cannot be selected or dispatched, and
-// drop the descriptor entirely when nothing remains selectable. currentValue
+// Plan mode is retired, so the opencode "plan" agent is never selectable.
+// Drop the option so it cannot be selected or dispatched, and drop the
+// descriptor entirely when nothing remains selectable. currentValue
 // is re-resolved against the surviving options so a stale or defaulted "plan"
 // value cannot leak back into dispatch.
 function withoutPlanAgentOption(caps: ModelCapabilities): ModelCapabilities {

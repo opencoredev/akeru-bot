@@ -43,7 +43,6 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
 import { isPreviewFocused } from "../../lib/previewFocus";
-import { isTerminalFocused } from "../../lib/terminalFocus";
 import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
@@ -52,7 +51,6 @@ import { useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { AkeruWordmark } from "../AkeruWordmark";
 import {
@@ -770,12 +768,6 @@ export default function BotRosterSidebar() {
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
   );
-  const terminalOpen = useTerminalUiStateStore((state) =>
-    activeBotThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, activeBotThreadRef)
-          .terminalOpen
-      : false,
-  );
   const previewOpen = useRightPanelStore((state) =>
     activeBotThreadRef
       ? selectActiveRightPanel(state.byThreadKey, activeBotThreadRef) === "preview"
@@ -1036,8 +1028,6 @@ export default function BotRosterSidebar() {
       if (event.defaultPrevented || event.repeat) return;
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
-          terminalFocus: isTerminalFocused(),
-          terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
           modelPickerOpen: isModelPickerOpen(),
@@ -1055,7 +1045,7 @@ export default function BotRosterSidebar() {
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, previewOpen, shortcutBots, terminalOpen]);
+  }, [keybindings, navigate, previewOpen, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);

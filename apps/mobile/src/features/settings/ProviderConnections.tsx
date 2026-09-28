@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, TextInput, View } from "react-native";
 import type {
   EnvironmentId,
+  ProviderInstanceId,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
@@ -81,6 +82,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const test = useAtomCommand(serverEnvironment.testSubscriptionAuth, { reportFailure: false });
   const [flow, setFlow] = useState<SubscriptionAuthStartResult | null>(null);
   const [keyProvider, setKeyProvider] = useState<SubscriptionProviderId | null>(null);
+  const [activeInstanceId, setActiveInstanceId] = useState<ProviderInstanceId | undefined>();
   const [code, setCode] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -92,6 +94,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       if (progress.status === "connected") {
         setFlow(null);
         setCode("");
+        setActiveInstanceId(undefined);
         query.refresh();
         return true;
       }
@@ -149,26 +152,36 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     }
   };
 
-  const openKey = (provider: SubscriptionProviderId) => {
+  const openKey = (provider: SubscriptionProviderId, instanceId?: ProviderInstanceId) => {
     setError(null);
     setCode("");
+    setActiveInstanceId(instanceId);
     setBaseUrl(
       providerSupportsBaseUrl(provider)
-        ? (query.data?.providers.find((status) => status.provider === provider)?.baseUrl ?? "")
+        ? ((instanceId
+            ? query.data?.accounts.find(
+                (status) => status.provider === provider && status.instanceId === instanceId,
+              )
+            : query.data?.providers.find((status) => status.provider === provider)
+          )?.baseUrl ?? "")
         : "",
     );
     setKeyProvider(provider);
   };
 
-  const connect = async (provider: SubscriptionProviderId) => {
+  const connect = async (provider: SubscriptionProviderId, instanceId?: ProviderInstanceId) => {
     if (provider === "opencode-go") {
-      openKey(provider);
+      openKey(provider, instanceId);
       return;
     }
     setError(null);
     setCode("");
+    setActiveInstanceId(instanceId);
     setBusy(true);
-    const result = await start({ environmentId, input: { provider } });
+    const result = await start({
+      environmentId,
+      input: { provider, ...(instanceId ? { instanceId } : {}) },
+    });
     setBusy(false);
     if (result._tag === "Failure") {
       setError(commandError(result, t));
@@ -186,7 +199,13 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setError(validation);
     if (validation) return;
     setBusy(true);
-    const started = await start({ environmentId, input: apiKeyStartInput(keyProvider, baseUrl) });
+    const started = await start({
+      environmentId,
+      input: {
+        ...apiKeyStartInput(keyProvider, baseUrl),
+        ...(activeInstanceId ? { instanceId: activeInstanceId } : {}),
+      },
+    });
     if (started._tag !== "Success") {
       setBusy(false);
       if (started._tag === "Failure") setError(commandError(started, t));
@@ -201,6 +220,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       setKeyProvider(null);
       setCode("");
       setBaseUrl("");
+      setActiveInstanceId(undefined);
       query.refresh();
     } else {
       if (result._tag === "Failure") setError(commandError(result, t));
@@ -230,6 +250,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setKeyProvider(null);
     setCode("");
     setBaseUrl("");
+    setActiveInstanceId(undefined);
     setError(null);
     if (login) {
       const result = await cancel({ environmentId, input: { loginId: login.loginId } });
@@ -237,12 +258,16 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     }
   };
 
-  const runAction = async (provider: SubscriptionProviderId, action: "disconnect" | "test") => {
+  const runAction = async (
+    provider: SubscriptionProviderId,
+    action: "disconnect" | "test",
+    instanceId?: ProviderInstanceId,
+  ) => {
     setError(null);
     setBusy(true);
     const result = await (action === "disconnect" ? logout : test)({
       environmentId,
-      input: { provider },
+      input: { provider, ...(instanceId ? { instanceId } : {}) },
     });
     setBusy(false);
     if (result._tag === "Success") query.refresh();
@@ -372,12 +397,26 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
             {query.isPending ? (
               <Text className="text-sm text-foreground-muted">{t("Loading connections…")}</Text>
             ) : null}
-            {PROVIDER_CONNECTIONS.map((provider) => {
-              const status = query.data?.providers.find((entry) => entry.provider === provider.id);
+            {PROVIDER_CONNECTIONS.flatMap((provider) => [
+              {
+                provider,
+                status: query.data?.providers.find((entry) => entry.provider === provider.id),
+                instanceId: undefined as ProviderInstanceId | undefined,
+              },
+              ...(query.data?.accounts
+                .filter((entry) => entry.provider === provider.id)
+                .map((status) => ({ provider, status, instanceId: status.instanceId })) ?? []),
+            ]).map(({ provider, status, instanceId }) => {
               const apiKey = providerUsesApiKey(status);
               return (
-                <View key={provider.id} className="gap-2 border-b border-border-subtle py-3">
-                  <Text className="text-base font-t3-medium text-foreground">{provider.label}</Text>
+                <View
+                  key={`${provider.id}:${instanceId ?? "default"}`}
+                  className="gap-2 border-b border-border-subtle py-3"
+                >
+                  <Text className="text-base font-t3-medium text-foreground">
+                    {provider.label}
+                    {instanceId ? ` · ${instanceId}` : ""}
+                  </Text>
                   <Text className="text-sm text-foreground-muted">
                     {status ? t(providerConnectionLabel(status)) : t("Status unavailable")}
                   </Text>
@@ -401,13 +440,13 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                           : t("Connect")
                       }
                       disabled={busy || query.isPending}
-                      onPress={() => void connect(provider.id)}
+                      onPress={() => void connect(provider.id, instanceId)}
                     />
                     {provider.id !== "opencode-go" ? (
                       <Action
                         label={apiKey ? t("Reconnect key") : t("API key")}
                         disabled={busy || query.isPending}
-                        onPress={() => openKey(provider.id)}
+                        onPress={() => openKey(provider.id, instanceId)}
                       />
                     ) : null}
                     {status?.connected ? (
@@ -415,12 +454,12 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                         <Action
                           label={apiKey ? t("Check key") : t("Check OAuth")}
                           disabled={busy}
-                          onPress={() => void runAction(provider.id, "test")}
+                          onPress={() => void runAction(provider.id, "test", instanceId)}
                         />
                         <Action
                           label={t("Disconnect")}
                           disabled={busy}
-                          onPress={() => void runAction(provider.id, "disconnect")}
+                          onPress={() => void runAction(provider.id, "disconnect", instanceId)}
                         />
                       </>
                     ) : null}

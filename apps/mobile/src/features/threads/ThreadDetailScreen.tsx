@@ -14,7 +14,6 @@ import type {
   OrchestrationBot,
   OrchestrationThreadShell,
   ProviderApprovalDecision,
-  ProviderInteractionMode,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
   ThreadId,
@@ -143,7 +142,6 @@ export interface ThreadDetailScreenProps {
   readonly onReconnectEnvironment: () => void;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateThreadRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onUpdateThreadInteractionMode: (interactionMode: ProviderInteractionMode) => void;
   readonly onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -888,7 +886,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 onReconnectEnvironment={props.onReconnectEnvironment}
                 onUpdateModelSelection={props.onUpdateThreadModelSelection}
                 onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
-                onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                 onExpandedChange={setComposerExpanded}
                 onEditorFocusChange={handleOwnedInputFocusChange}
               />
