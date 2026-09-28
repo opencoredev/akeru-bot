@@ -22,7 +22,8 @@ top right of that chat to act on it:
 - **Pin chat** and **Unpin chat**.
 - **Mark unread** puts a dot on the bot or group in the roster until you open the chat again. A dot
   also appears when a bot finishes replying in a chat you have opened before but are not looking
-  at. Unread dots are kept on this device only.
+  at, including an open chat whose window or tab is in the background. Unread dots are kept on
+  this device only.
 - **Settle chat** and **Un-settle chat**.
 - **Snooze** until a preset time, such as **In 1 hour** or **Tomorrow**, and **Wake chat** to end
   the snooze early.

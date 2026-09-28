@@ -59,7 +59,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { resolveChatMenuState, type ChatMenuState } from "./chatActions.logic";
+import { resolveChatMenuState, type ChatMenuState, watchChatVisits } from "./chatActions.logic";
 
 /** Starts a fresh chat with the open bot. Groups keep a single chat, so they pass none. */
 export interface NewChatControl {
@@ -68,9 +68,10 @@ export interface NewChatControl {
 }
 
 /**
- * Marks the open chat as seen up to its latest finished turn. It runs when the
- * chat opens and when a turn finishes, not after Mark unread, so the chat stays
- * unread until the user leaves and comes back.
+ * Marks the open chat as seen while the page is visible and focused. It runs
+ * when the chat opens, when a turn finishes, and when the page comes back into
+ * view, not after Mark unread, so the chat stays unread until the user leaves
+ * the chat or the window and comes back.
  */
 export function useMarkChatVisited(threadRef: ScopedThreadRef | null): void {
   const shell = useThreadShell(threadRef);
@@ -78,7 +79,14 @@ export function useMarkChatVisited(threadRef: ScopedThreadRef | null): void {
   const markThreadVisited = useUiStateStore((state) => state.markThreadVisited);
   const threadKey = threadRef ? scopedThreadKey(threadRef) : null;
   useEffect(() => {
-    if (threadKey && completedAt) markThreadVisited(threadKey, completedAt);
+    if (!threadKey) return;
+    return watchChatVisits({
+      page: document,
+      window,
+      completedAt,
+      now: () => new Date(),
+      markVisited: (visitedAt) => markThreadVisited(threadKey, visitedAt),
+    });
   }, [completedAt, markThreadVisited, threadKey]);
 }
 

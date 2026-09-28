@@ -58,7 +58,8 @@ export function resolveChatMenuState(input: {
 /**
  * True when the chat finished a turn after this browser last showed it. A chat
  * this browser has never shown has no visit to compare against, so it never
- * reads as unread.
+ * reads as unread. Opening a chat records a visit even before its first turn
+ * finishes, so a first reply that lands after the user left still counts.
  */
 export function hasUnseenCompletion(
   completedAt: string | null | undefined,
@@ -70,6 +71,51 @@ export function hasUnseenCompletion(
   const visitedMs = Date.parse(lastVisitedAt);
   if (Number.isNaN(visitedMs)) return true;
   return completedMs > visitedMs;
+}
+
+/** The page surface a chat visit listens to. `document` and `window` satisfy it. */
+export interface ChatVisitPage {
+  readonly visibilityState: DocumentVisibilityState;
+  hasFocus(): boolean;
+  addEventListener(type: "visibilitychange", listener: () => void): void;
+  removeEventListener(type: "visibilitychange", listener: () => void): void;
+}
+
+export interface ChatVisitWindow {
+  addEventListener(type: "focus", listener: () => void): void;
+  removeEventListener(type: "focus", listener: () => void): void;
+}
+
+/**
+ * Records a visit to the open chat whenever the user can see it: now if the
+ * page is visible and focused, otherwise as soon as it becomes so. The visit
+ * is the current time, never earlier than the latest finished turn, so a chat
+ * opened before its first reply still reads as unread once that reply lands
+ * after the user left. Returns the cleanup for the listeners.
+ */
+export function watchChatVisits(input: {
+  readonly page: ChatVisitPage;
+  readonly window: ChatVisitWindow;
+  readonly completedAt: string | null;
+  readonly now: () => Date;
+  readonly markVisited: (visitedAt: string) => void;
+}): () => void {
+  const { page, window, completedAt, now, markVisited } = input;
+  const markIfSeen = () => {
+    if (page.visibilityState !== "visible" || !page.hasFocus()) return;
+    const nowMs = now().getTime();
+    const completedMs = completedAt ? Date.parse(completedAt) : Number.NaN;
+    markVisited(
+      new Date(Number.isNaN(completedMs) ? nowMs : Math.max(nowMs, completedMs)).toISOString(),
+    );
+  };
+  markIfSeen();
+  page.addEventListener("visibilitychange", markIfSeen);
+  window.addEventListener("focus", markIfSeen);
+  return () => {
+    page.removeEventListener("visibilitychange", markIfSeen);
+    window.removeEventListener("focus", markIfSeen);
+  };
 }
 
 /**

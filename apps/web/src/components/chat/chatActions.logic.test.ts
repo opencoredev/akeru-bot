@@ -1,11 +1,12 @@
 import type { OrchestrationThreadShell } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   type ChatActionSupport,
   hasUnseenCompletion,
   resolveChatMenuState,
   shouldForgetChatPath,
+  watchChatVisits,
 } from "./chatActions.logic";
 
 const NOW = "2026-09-27T12:00:00.000Z";
@@ -167,6 +168,88 @@ describe("hasUnseenCompletion", () => {
   it("never marks a chat this browser has not shown as unread", () => {
     expect(hasUnseenCompletion("2026-09-27T10:01:00.000Z", undefined)).toBe(false);
     expect(hasUnseenCompletion(null, "2026-09-27T10:00:00.000Z")).toBe(false);
+  });
+});
+
+function fakePage(initial: { visible: boolean; focused: boolean }) {
+  const listeners = { visibilitychange: new Set<() => void>(), focus: new Set<() => void>() };
+  const state = { ...initial };
+  return {
+    state,
+    listeners,
+    page: {
+      get visibilityState(): DocumentVisibilityState {
+        return state.visible ? "visible" : "hidden";
+      },
+      hasFocus: () => state.focused,
+      addEventListener: (_type: "visibilitychange", listener: () => void) =>
+        listeners.visibilitychange.add(listener),
+      removeEventListener: (_type: "visibilitychange", listener: () => void) =>
+        listeners.visibilitychange.delete(listener),
+    },
+    window: {
+      addEventListener: (_type: "focus", listener: () => void) => listeners.focus.add(listener),
+      removeEventListener: (_type: "focus", listener: () => void) =>
+        listeners.focus.delete(listener),
+    },
+  };
+}
+
+describe("watchChatVisits", () => {
+  it("records a visit before the first reply, so a reply that lands after leaving is unread", () => {
+    const fake = fakePage({ visible: true, focused: true });
+    const markVisited = vi.fn();
+    const stop = watchChatVisits({
+      page: fake.page,
+      window: fake.window,
+      completedAt: null,
+      now: () => new Date("2026-09-27T10:00:00.000Z"),
+      markVisited,
+    });
+    expect(markVisited).toHaveBeenCalledWith("2026-09-27T10:00:00.000Z");
+    stop();
+    // The user opened another bot; the first reply finished later.
+    expect(hasUnseenCompletion("2026-09-27T10:01:00.000Z", markVisited.mock.calls[0]![0])).toBe(
+      true,
+    );
+  });
+
+  it("never records a visit earlier than the latest finished turn", () => {
+    const fake = fakePage({ visible: true, focused: true });
+    const markVisited = vi.fn();
+    watchChatVisits({
+      page: fake.page,
+      window: fake.window,
+      completedAt: "2026-09-27T10:01:00.000Z",
+      now: () => new Date("2026-09-27T10:00:59.000Z"),
+      markVisited,
+    });
+    expect(markVisited).toHaveBeenCalledWith("2026-09-27T10:01:00.000Z");
+  });
+
+  it("leaves a completion unread while the page is hidden or unfocused, then marks it on return", () => {
+    const fake = fakePage({ visible: false, focused: false });
+    const markVisited = vi.fn();
+    const stop = watchChatVisits({
+      page: fake.page,
+      window: fake.window,
+      completedAt: "2026-09-27T10:01:00.000Z",
+      now: () => new Date("2026-09-27T10:05:00.000Z"),
+      markVisited,
+    });
+    expect(markVisited).not.toHaveBeenCalled();
+
+    fake.state.visible = true;
+    for (const listener of fake.listeners.visibilitychange) listener();
+    expect(markVisited).not.toHaveBeenCalled();
+
+    fake.state.focused = true;
+    for (const listener of fake.listeners.focus) listener();
+    expect(markVisited).toHaveBeenCalledExactlyOnceWith("2026-09-27T10:05:00.000Z");
+
+    stop();
+    expect(fake.listeners.visibilitychange.size).toBe(0);
+    expect(fake.listeners.focus.size).toBe(0);
   });
 });
 
