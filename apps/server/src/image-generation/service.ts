@@ -8,9 +8,9 @@
  * under `image:<provider>` keys so an image failure cannot masquerade as a
  * chat-driver failure or vice versa.
  *
- * The health test performs one real, cheap request against the provider's API.
- * It is the only thing that can move a provider to `healthy` — a connected
- * credential reports `detected` until a request succeeds. There is no
+ * The connection test performs one cheap request against the provider's account
+ * API. It does not prove image access; a connected credential remains
+ * `detected` until an image is generated. There is no
  * generation producer yet (milestone decision D5), so `lastGenerationAt` is
  * always absent and surfaces as "never generated" to clients.
  */
@@ -31,20 +31,17 @@ import {
 } from "../subscription-auth/service.ts";
 
 const IMAGE_PROVIDER_META: Readonly<
-  Record<
-    ImageProviderId,
-    { label: string; subscription: SubscriptionProviderId; modelsUrl: string }
-  >
+  Record<ImageProviderId, { label: string; subscription: SubscriptionProviderId; probeUrl: string }>
 > = {
   chatgpt: {
     label: "ChatGPT",
     subscription: "openai-codex",
-    modelsUrl: "https://api.openai.com/v1/models",
+    probeUrl: "https://chatgpt.com/backend-api/wham/usage",
   },
   grok: {
     label: "Grok",
     subscription: "xai",
-    modelsUrl: "https://api.x.ai/v1/models",
+    probeUrl: "https://api.x.ai/v1/models",
   },
 };
 
@@ -116,9 +113,11 @@ export function imageProviderStatuses(input: {
         (!requestHealth.lastSuccessfulRequestAt ||
           requestHealth.lastFailedRequest.at >= requestHealth.lastSuccessfulRequestAt)
           ? { status: "failed" as const, checkedAt: requestHealth.lastFailedRequest.at }
-          : requestHealth?.lastSuccessfulRequestAt
-            ? { status: "passed" as const, checkedAt: requestHealth.lastSuccessfulRequestAt }
-            : { status: "not-run" as const },
+          : requestHealth?.lastCredentialProbeAt
+            ? { status: "passed" as const, checkedAt: requestHealth.lastCredentialProbeAt }
+            : requestHealth?.lastSuccessfulRequestAt
+              ? { status: "passed" as const, checkedAt: requestHealth.lastSuccessfulRequestAt }
+              : { status: "not-run" as const },
     };
   });
 }
@@ -186,10 +185,8 @@ export function imageGenerationSettingsPatch(
 }
 
 /**
- * One real request per provider. ChatGPT goes through the OAuth access token
- * (`openai-codex` credential); Grok uses the `xai` token, which may be OAuth
- * or API key — `getAccessToken` handles both. A non-OK response or network
- * error records a failure and never reports healthy.
+ * One account request per provider. The result verifies the credential path,
+ * not image generation. Only a completed image can mark generation healthy.
  */
 export async function runImageProviderHealthTest(input: {
   readonly provider: ImageProviderId;
@@ -245,14 +242,28 @@ export async function runImageProviderHealthTest(input: {
     return;
   }
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "User-Agent": "akeru-bot/0.0.37",
+  };
+  if (provider === "chatgpt") {
+    const access = await subscriptionAuth.getOpenAICodexAccess().catch(() => undefined);
+    if (!access) {
+      subscriptionAuth.recordImageRequestFailure(
+        provider,
+        "ChatGPT images need a ChatGPT account sign-in; an OpenAI API key is not used.",
+      );
+      return;
+    }
+    headers.Authorization = `Bearer ${access.accessToken}`;
+    headers["ChatGPT-Account-ID"] = access.accountId;
+  }
+
   try {
-    const response = await fetchFn(meta.modelsUrl, {
+    const response = await fetchFn(meta.probeUrl, {
       redirect: "error",
       signal: AbortSignal.timeout(HEALTH_TEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "User-Agent": "akeru-bot/0.0.37",
-      },
+      headers,
     });
     if (!response.ok) {
       subscriptionAuth.recordImageRequestFailure(
@@ -263,7 +274,7 @@ export async function runImageProviderHealthTest(input: {
       );
       return;
     }
-    subscriptionAuth.recordImageRequestSuccess(provider);
+    subscriptionAuth.recordImageCredentialProbeSuccess(provider);
   } catch (cause) {
     subscriptionAuth.recordImageRequestFailure(
       provider,

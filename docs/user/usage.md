@@ -38,7 +38,8 @@ Web and desktop charts stay still when idle. Hover over a chart to inspect a val
 
 On mobile, **Settings > General > Usage** lists the bots in each connected environment below the plan
 limits. Open a bot to see its input, output, Observer, and Reflector tokens, its cap, an estimated
-cost, subscription pool use, and reserved tokens.
+cost, subscription pool use, and reserved tokens. Archived bots remain in the list with an
+**archived** label so you can review their earlier usage.
 
 A measurement a provider did not report reads **Unavailable** rather than zero, and a measurement
 that is only partly reported shows a trailing `+` so the number reads as a floor. A notice names the

@@ -259,7 +259,7 @@ describe("imageGeneration settings schema", () => {
 });
 
 describe("image provider health test", () => {
-  it("records healthy only after a real request succeeds", async () => {
+  it("keeps generation unverified after an account probe succeeds", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
     const service = new SubscriptionAuthService(authPath);
@@ -274,13 +274,53 @@ describe("image provider health test", () => {
     const grok = rows(service, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
-    expect(grok?.health).toBe("healthy");
+    expect(grok?.health).toBe("detected");
     expect(grok?.healthTest?.status).toBe("passed");
+  });
+
+  it("probes a ChatGPT sign-in on the ChatGPT backend", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: "chatgpt-access",
+          refresh: "chatgpt-refresh",
+          expires: Date.now() + 60_000,
+          accountId: "acct-123",
+        },
+      }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
+    await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
+    expect(fetchFn).toHaveBeenCalledWith(
+      "https://chatgpt.com/backend-api/wham/usage",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer chatgpt-access",
+          "ChatGPT-Account-ID": "acct-123",
+        }),
+      }),
+    );
+    expect(rows(service, { ...baseSettings, chatgptEnabled: true })[0]?.health).toBe("detected");
   });
 
   it("records a failure and never reports healthy on a rejected request", async () => {
     const { authPath } = fixture();
-    seedApiKey(authPath, "openai-codex");
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: "chatgpt-access",
+          refresh: "chatgpt-refresh",
+          expires: Date.now() + 60_000,
+          accountId: "acct-123",
+        },
+      }),
+    );
     const service = new SubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
     await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });

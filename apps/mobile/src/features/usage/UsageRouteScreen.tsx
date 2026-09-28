@@ -182,16 +182,15 @@ function EnvironmentBotUsageSection(props: {
 }) {
   const navigation = useNavigation();
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
-  const activeBots = bots.filter((bot) => bot.archivedAt === null);
-  if (activeBots.length === 0) return null;
+  if (bots.length === 0) return null;
 
   return (
     <SettingsSection title={props.multipleEnvironments ? `Bots · ${props.label}` : "Bots"} card>
-      {activeBots.map((bot) => (
+      {bots.map((bot) => (
         <SettingsRow
           key={bot.id}
           icon="person.crop.circle"
-          label={bot.name}
+          label={bot.archivedAt === null ? bot.name : `${bot.name} (archived)`}
           onPress={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",

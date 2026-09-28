@@ -134,6 +134,7 @@ export interface ProviderStatus {
 
 interface ProviderHealthRecord {
   lastSuccessfulRequestAt?: string;
+  lastCredentialProbeAt?: string;
   lastFailedRequest?: { at: string; message: string };
   nextRetryAt?: string;
   healthTest?: { status: "passed" | "failed"; checkedAt: string };
@@ -147,6 +148,11 @@ export interface RequestHealthStatus {
   readonly lastFailedRequest?: { readonly at: string; readonly message: string };
   readonly nextRetryAt?: string;
 }
+
+type ImageRequestHealthStatus = Omit<RequestHealthStatus, "health"> & {
+  readonly health: RequestHealthStatus["health"] | "detected";
+  readonly lastCredentialProbeAt?: string;
+};
 
 type ProviderHealthData = Record<string, ProviderHealthRecord | undefined>;
 
@@ -370,6 +376,16 @@ export class SubscriptionAuthService {
     this.recordHealthSuccess(`image:${provider}`, at);
   }
 
+  recordImageCredentialProbeSuccess(
+    provider: "chatgpt" | "grok",
+    at = new Date().toISOString(),
+  ): void {
+    this.reloadHealth();
+    const key = `image:${provider}`;
+    this.health[key] = { ...this.health[key], lastCredentialProbeAt: at };
+    this.saveHealth();
+  }
+
   recordImageRequestFailure(
     provider: "chatgpt" | "grok",
     message: string,
@@ -380,8 +396,13 @@ export class SubscriptionAuthService {
   }
 
   /** Image-provider request health, keyed separately from the chat driver. */
-  imageRequestHealth(provider: "chatgpt" | "grok"): RequestHealthStatus | undefined {
-    return this.requestHealth(`image:${provider}`);
+  imageRequestHealth(provider: "chatgpt" | "grok"): ImageRequestHealthStatus | undefined {
+    const key = `image:${provider}`;
+    const requestHealth = this.requestHealth(key);
+    const lastCredentialProbeAt = this.health[key]?.lastCredentialProbeAt;
+    if (requestHealth)
+      return { ...requestHealth, ...(lastCredentialProbeAt ? { lastCredentialProbeAt } : {}) };
+    return lastCredentialProbeAt ? { health: "detected", lastCredentialProbeAt } : undefined;
   }
 
   private recordHealthFailure(
@@ -743,7 +764,7 @@ export class SubscriptionAuthService {
           return { status: "failed", error: "Login cancelled. Start again." };
         this.pendingLogins.delete(loginId);
         this.savePending();
-        this.setCredential(provider, result.credentials);
+        this.setCredential(provider, result.credentials, true);
         return { status: "connected" };
       case "failed":
         this.pendingLogins.delete(loginId);
@@ -774,6 +795,7 @@ export class SubscriptionAuthService {
         ...(baseUrl ? { baseUrl } : {}),
       };
       delete this.health[login.provider];
+      this.clearImageHealth(login.provider);
       this.save();
       this.saveHealth();
       for (const [id, pending] of this.pendingLogins) {
@@ -819,14 +841,25 @@ export class SubscriptionAuthService {
     delete this.data[provider];
     this.reloadHealth();
     delete this.health[provider];
+    this.clearImageHealth(provider);
     this.save();
     this.saveHealth();
   }
 
-  private setCredential(provider: SubscriptionProviderId, credentials: OAuthCredentials): void {
-    if (this.data[provider]?.type === "api-key") {
+  private clearImageHealth(provider: SubscriptionProviderId): void {
+    if (provider === "openai-codex") delete this.health["image:chatgpt"];
+    if (provider === "xai") delete this.health["image:grok"];
+  }
+
+  private setCredential(
+    provider: SubscriptionProviderId,
+    credentials: OAuthCredentials,
+    replacement = false,
+  ): void {
+    if (replacement || this.data[provider]?.type === "api-key") {
       this.reloadHealth();
       delete this.health[provider];
+      this.clearImageHealth(provider);
       this.saveHealth();
     }
     this.data[provider] = { type: "oauth", ...credentials };

@@ -18,6 +18,26 @@ function fixture() {
 }
 
 describe("subscription auth storage", () => {
+  it("clears only the matching image health when a credential changes", async () => {
+    const { authPath } = fixture();
+    const service = new SubscriptionAuthService(authPath);
+    const chatgpt = await service.startLogin("openai-codex", { authMode: "api-key" });
+    const grok = await service.startLogin("xai", { authMode: "api-key" });
+    await service.completeLogin(chatgpt.loginId, "chatgpt-key");
+    await service.completeLogin(grok.loginId, "grok-key");
+    service.recordImageRequestFailure("chatgpt", "Old ChatGPT failure");
+    service.recordImageRequestFailure("grok", "Old Grok failure");
+
+    const replacement = await service.startLogin("xai", { authMode: "api-key" });
+    await service.completeLogin(replacement.loginId, "new-grok-key");
+    expect(service.imageRequestHealth("grok")).toBeUndefined();
+    expect(service.imageRequestHealth("chatgpt")?.lastFailedRequest?.message).toBe(
+      "Old ChatGPT failure",
+    );
+
+    service.logout("openai-codex");
+    expect(service.imageRequestHealth("chatgpt")).toBeUndefined();
+  });
   it("keeps API keys away from subscription plan endpoints except default OpenCode Go", async () => {
     const { authPath } = fixture();
     const service = new SubscriptionAuthService(authPath);
