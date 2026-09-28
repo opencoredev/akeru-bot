@@ -13,12 +13,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import {
-  BotId,
-  GroupId,
-  PLACEHOLDER_THREAD_TITLE,
-  type ScopedThreadRef,
-} from "@t3tools/contracts";
+import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE, type ScopedThreadRef } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,
@@ -294,7 +289,11 @@ export function RosterPanelHeader({
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-): { message: RosterLastMessage | null; taskTitle: string | null; threadRef: ScopedThreadRef | null } {
+): {
+  message: RosterLastMessage | null;
+  taskTitle: string | null;
+  threadRef: ScopedThreadRef | null;
+} {
   const candidate = useBotThreadCandidate(botId);
   const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
