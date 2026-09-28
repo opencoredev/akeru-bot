@@ -1,5 +1,6 @@
 import type {
   ProviderInstanceConfig,
+  ProviderInstanceId,
   ServerProvider,
   ServerProviderUnavailability,
 } from "@t3tools/contracts";
@@ -64,6 +65,10 @@ export const preflightProvider = (input: {
   readonly model: string;
   readonly providerInstanceConfig?: ProviderInstanceConfig;
   readonly subscriptionStatuses?: ReadonlyArray<ProviderStatus>;
+  readonly subscriptionStatusForInstance?: (
+    provider: SubscriptionProviderId,
+    instanceId: ProviderInstanceId,
+  ) => ProviderStatus;
   readonly subscriptionHealth?: (instanceId: string) =>
     | {
         readonly health: string;
@@ -96,9 +101,10 @@ export const preflightProvider = (input: {
     };
   }
   const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER[provider.driver];
-  const subscription = input.subscriptionStatuses?.find(
-    (status) => status.provider === subscriptionId,
-  );
+  const subscription = subscriptionId
+    ? (input.subscriptionStatusForInstance?.(subscriptionId, provider.instanceId) ??
+      input.subscriptionStatuses?.find((status) => status.provider === subscriptionId))
+    : undefined;
   const requestHealth = input.subscriptionHealth?.(provider.instanceId);
   const sharedCredential =
     subscriptionId !== undefined &&
