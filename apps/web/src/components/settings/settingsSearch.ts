@@ -264,6 +264,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     keywords: ["background activity", "battery", "performance"],
   },
   {
+    // The bot inbox section carries this anchor; old inbox and error links map here.
+    id: "errors",
+    title: "Bot inbox",
+    to: "/settings/advanced",
+    keywords: ["inbox", "memory approvals", "failures", "incidents"],
+  },
+  {
     id: "diagnostics",
     title: "Diagnostics",
     to: "/settings/advanced",
