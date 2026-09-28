@@ -255,9 +255,9 @@ describe("channel inbound persistence across restart", () => {
             );
             expect(messages.map((message) => message.text)).toEqual([input.text, input.text]);
             expect(new Set(messages.map((message) => message.id)).size).toBe(2);
-            expect(
-              (yield* after.readModel).threads.map((entry) => entry.projectId),
-            ).toEqual([TARGET_PROJECT_ID]);
+            expect((yield* after.readModel).threads.map((entry) => entry.projectId)).toEqual([
+              TARGET_PROJECT_ID,
+            ]);
             expect(yield* readReceipt(turns[1]!.commandId!)).toMatchObject({
               status: "accepted",
               aggregateId: threadId,

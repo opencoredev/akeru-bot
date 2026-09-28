@@ -9,13 +9,13 @@ through a hosted Akeru service.
 
 Pick the route that matches how the second device can reach the server machine.
 
-| Route | Best for | Encrypted endpoint |
-| --- | --- | --- |
-| Tailscale | Any two devices, anywhere | Yes, HTTPS through Tailscale Serve |
-| SSH forwarding | The desktop app on a machine with SSH access to the server host | Yes, inside the SSH tunnel |
-| User-managed tunnel | You already run a reverse proxy or tunnel with HTTPS | Yes, if your proxy terminates TLS |
-| LAN | Both devices on the same trusted network | No |
-| Docker | A server host where you prefer containers | Yes, through the bundled Tailscale sidecar |
+| Route               | Best for                                                        | Encrypted endpoint                         |
+| ------------------- | --------------------------------------------------------------- | ------------------------------------------ |
+| Tailscale           | Any two devices, anywhere                                       | Yes, HTTPS through Tailscale Serve         |
+| SSH forwarding      | The desktop app on a machine with SSH access to the server host | Yes, inside the SSH tunnel                 |
+| User-managed tunnel | You already run a reverse proxy or tunnel with HTTPS            | Yes, if your proxy terminates TLS          |
+| LAN                 | Both devices on the same trusted network                        | No                                         |
+| Docker              | A server host where you prefer containers                       | Yes, through the bundled Tailscale sidecar |
 
 Akeru does not include a hosted account, relay, or device list. Pair clients directly to the
 server.
@@ -262,6 +262,7 @@ Both devices on the same trusted network can pair directly over HTTP.
    ```
 
    Or let the desktop app advertise a LAN endpoint under **Settings > Connections**.
+
 2. Create a pairing link for that endpoint, or run `akeru pair` on the server machine and open
    the printed LAN URL on the other device.
 

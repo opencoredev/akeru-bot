@@ -2642,8 +2642,7 @@ const make = Effect.gen(function* () {
     event: ChannelSessionDomainEvent,
   ) {
     const { session, threadId } = event.payload;
-    if (!channelRuntime || (session.status !== "error" && session.status !== "stopped"))
-      return;
+    if (!channelRuntime || (session.status !== "error" && session.status !== "stopped")) return;
     const thread = yield* resolveThreadDetail(threadId);
     if (
       thread?.session?.updatedAt !== session.updatedAt ||
