@@ -22,6 +22,7 @@ import {
   resolveBlobEyes,
   resolveBlobOutline,
   resolveBotPresence,
+  flattenMarkdownPreview,
   resolveLatestRosterMessage,
   resolveRosterBotId,
   resolveRosterIndicator,
@@ -513,6 +514,22 @@ describe("resolveLatestRosterMessage", () => {
     ).toEqual(fallback);
   });
 
+  it("flattens markdown and skips messages that flatten to nothing", () => {
+    expect(
+      resolveLatestRosterMessage(
+        { text: "**Handoff** note", at: "2026-08-20T10:00:00.000Z" },
+        messages([
+          { role: "assistant", text: "Q3 came to **$1,200**", at: "2026-08-20T10:01:00.000Z" },
+          { role: "assistant", text: "![chart](chart.png)", at: "2026-08-20T10:02:00.000Z" },
+        ]),
+      ),
+    ).toEqual({ text: "Q3 came to $1,200", at: "2026-08-20T10:01:00.000Z" });
+    expect(resolveLatestRosterMessage({ text: "**Handoff** note", at: "x" }, [])).toEqual({
+      text: "Handoff note",
+      at: "x",
+    });
+  });
+
   it("ignores messages from parent-linked child threads", () => {
     expect(
       resolveLatestRosterMessage(
@@ -522,6 +539,46 @@ describe("resolveLatestRosterMessage", () => {
         ]).map((message) => ({ ...message, parentThreadId: "parent-thread" })),
       ),
     ).toEqual({ text: "Own conversation", at: "2026-08-20T10:00:00.000Z" });
+  });
+});
+
+describe("flattenMarkdownPreview", () => {
+  it("strips emphasis, code, and strikethrough but keeps the words", () => {
+    expect(
+      flattenMarkdownPreview("**September at Akeru** was _busy_, *very* ~~slow~~ `fast`"),
+    ).toBe("September at Akeru was busy, very slow fast");
+  });
+
+  it("keeps link labels and drops images", () => {
+    expect(
+      flattenMarkdownPreview(
+        "See [the report](https://example.com/r) ![chart](chart.png) and <https://akeru.dev>",
+      ),
+    ).toBe("See the report and https://akeru.dev");
+  });
+
+  it("drops headings, list and quote markers, fences, and rules onto one line", () => {
+    expect(
+      flattenMarkdownPreview(
+        [
+          "## Summary",
+          "> Quoted note",
+          "- first",
+          "* [x] second",
+          "1. third",
+          "---",
+          "```ts",
+          "const total = 1;",
+          "```",
+        ].join("\n"),
+      ),
+    ).toBe("Summary Quoted note first second third const total = 1;");
+  });
+
+  it("leaves snake_case identifiers and lone symbols alone", () => {
+    expect(flattenMarkdownPreview("rename user_id to 2 * 3 = 6")).toBe(
+      "rename user_id to 2 * 3 = 6",
+    );
   });
 });
 

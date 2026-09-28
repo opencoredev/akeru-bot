@@ -228,6 +228,32 @@ export interface RosterLastMessage {
   at: string;
 }
 
+/**
+ * One-line plain text for a roster preview. Chat messages are markdown, and a
+ * preview row shows only the words: emphasis, code ticks and fences, link and
+ * image syntax, headings, and list or quote markers go, and whitespace
+ * collapses to single spaces. Links keep their label; images drop out.
+ */
+export function flattenMarkdownPreview(markdown: string): string {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
+    .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
+    .replace(/^\s*(?:`{3,}|~{3,})[^\n]*$/gm, "")
+    .replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/gm, "")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*(?:>\s?)+/gm, "")
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, "")
+    .replace(/`+([^`]+?)`+/g, "$1")
+    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, "$2")
+    .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "$1")
+    .replace(/\*(?=\S)([^*]+?)(?<=\S)\*/g, "$1")
+    .replace(/(^|[^\w])_(?=\S)([^_]+?)(?<=\S)_(?!\w)/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function resolveLatestRosterMessage(
   fallback: RosterLastMessage | null,
   messages: ReadonlyArray<{
@@ -240,19 +266,19 @@ export function resolveLatestRosterMessage(
   let latest: RosterLastMessage | null = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (
-      message &&
-      message.parentThreadId == null &&
-      message.role !== "system" &&
-      message.text.trim().length > 0
-    ) {
-      latest = { text: message.text, at: message.createdAt };
+    if (!message || message.parentThreadId != null || message.role === "system") continue;
+    const text = flattenMarkdownPreview(message.text);
+    if (text.length > 0) {
+      latest = { text, at: message.createdAt };
       break;
     }
   }
-  if (!latest) return fallback;
-  if (!fallback) return latest;
-  return latest.at >= fallback.at ? latest : fallback;
+  const flatFallback = fallback
+    ? { ...fallback, text: flattenMarkdownPreview(fallback.text) }
+    : null;
+  if (!latest) return flatFallback;
+  if (!flatFallback) return latest;
+  return latest.at >= flatFallback.at ? latest : flatFallback;
 }
 
 export interface RosterSection {

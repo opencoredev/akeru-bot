@@ -548,15 +548,11 @@ const BotRosterRow = memo(function BotRosterRow({
                   </time>
                 ) : null}
               </span>
-              {taskTitle || latestMessage ? (
-                // The chat title leads the preview line, so the bot name on the
-                // first line keeps the full width.
+              {latestMessage || taskTitle ? (
+                // Messenger preview: the last thing said. A chat with no
+                // messages yet shows its title instead.
                 <span className="truncate text-sm text-sidebar-muted-foreground">
-                  {taskTitle ? (
-                    <span className="font-medium text-sidebar-foreground/80">{taskTitle}</span>
-                  ) : null}
-                  {taskTitle && latestMessage ? " · " : null}
-                  {latestMessage?.text}
+                  {latestMessage ? latestMessage.text : taskTitle}
                 </span>
               ) : null}
             </span>
