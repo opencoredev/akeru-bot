@@ -1,7 +1,11 @@
 import { CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
-import { botInboxKindLabel, selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import {
+  botInboxKindLabel,
+  selectOpenBotInboxItems,
+  type BotInboxItem,
+} from "@t3tools/client-runtime/bot-inbox";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
@@ -52,10 +56,7 @@ export function InboxPanel() {
         ) : inboxQuery.error ? (
           <SettingsRow title={t("Could not load errors")} description={inboxQuery.error} />
         ) : openItems.length === 0 ? (
-          <SettingsRow
-            title={t("No errors")}
-            description={t("Bot failures appear here.")}
-          />
+          <SettingsRow title={t("No errors")} description={t("Bot failures appear here.")} />
         ) : (
           openItems.map((item) => (
             <InboxIncidentRow
