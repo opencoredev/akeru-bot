@@ -554,15 +554,21 @@ describe("image generation", () => {
   it("orders candidates by request, bot, default, then fallback and skips disabled providers", () => {
     const settings = { ...baseSettings, chatgptEnabled: true, grokEnabled: true };
     expect(imageProviderCandidates({ settings, botProvider: "grok" })).toEqual(["grok", "chatgpt"]);
-    expect(imageProviderCandidates({ settings, requested: "chatgpt", botProvider: "grok" })).toEqual([
-      "chatgpt",
-    ]);
     expect(
-      imageProviderCandidates({ settings: { ...settings, grokEnabled: false }, botProvider: "grok" }),
+      imageProviderCandidates({ settings, requested: "chatgpt", botProvider: "grok" }),
+    ).toEqual(["chatgpt"]);
+    expect(
+      imageProviderCandidates({
+        settings: { ...settings, grokEnabled: false },
+        botProvider: "grok",
+      }),
     ).toEqual(["chatgpt"]);
     expect(() => imageProviderCandidates({ settings: baseSettings })).toThrow("No image provider");
     expect(() =>
-      imageProviderCandidates({ settings: { ...baseSettings, chatgptEnabled: true }, requested: "grok" }),
+      imageProviderCandidates({
+        settings: { ...baseSettings, chatgptEnabled: true },
+        requested: "grok",
+      }),
     ).toThrow("turned off");
   });
 

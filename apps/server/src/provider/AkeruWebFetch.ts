@@ -126,8 +126,7 @@ async function resolvePinnedAddress(
 ): Promise<PinnedAddress> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = NodeNet.isIP(host);
-  const records =
-    literal !== 0 ? [{ address: host, family: literal }] : await lookup(host);
+  const records = literal !== 0 ? [{ address: host, family: literal }] : await lookup(host);
   if (records.length === 0) throw new Error(`WebFetch could not resolve ${host}.`);
   if (records.some((record) => !allowAddress(record.address))) {
     throw new Error("WebFetch rejects private, loopback, and local addresses.");
@@ -219,10 +218,7 @@ function requestHop(
     );
     // `timeout` only covers idle sockets. The deadline also bounds a server
     // that trickles bytes to hold the request open.
-    const deadline = setTimeout(
-      () => request.destroy(new Error("WebFetch timed out.")),
-      timeoutMs,
-    );
+    const deadline = setTimeout(() => request.destroy(new Error("WebFetch timed out.")), timeoutMs);
     request.on("close", () => clearTimeout(deadline));
     request.on("timeout", () => request.destroy(new Error("WebFetch timed out.")));
     request.on("error", reject);

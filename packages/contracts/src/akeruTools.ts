@@ -63,7 +63,9 @@ const WebSearchInput = Schema.Struct({
   query: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
   domains: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
-const WebFetchInput = Schema.Struct({ url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)) });
+const WebFetchInput = Schema.Struct({
+  url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)),
+});
 const GenerateImageInput = Schema.Struct({
   prompt: TrimmedNonEmptyString.check(Schema.isMaxLength(4_000)),
   provider: Schema.optional(Schema.Literals(["chatgpt", "grok"])),
@@ -460,7 +462,9 @@ export const AKERU_TOOL_CATALOG = [
   define("UninstallMcpServer", "bot-workspace", "Remove an MCP server.", { approval: "delete" }),
   define("RemoveMcpAccount", "bot-workspace", "Remove an MCP account.", { approval: "delete" }),
   define("RenameMcpAccount", "bot-workspace", "Rename an MCP account.", { approval: "secrets" }),
-  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", { approval: "secrets" }),
+  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", {
+    approval: "secrets",
+  }),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {

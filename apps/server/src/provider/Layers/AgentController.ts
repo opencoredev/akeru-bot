@@ -2928,7 +2928,10 @@ const make = (options?: AgentControllerLiveOptions) =>
                     const directory = NodePath.join(config.attachmentsDir, "generated-images");
                     NodeFS.mkdirSync(directory, { recursive: true });
                     const extension = image.mimeType.slice("image/".length);
-                    const path = NodePath.join(directory, `${NodeCrypto.randomUUID()}.${extension}`);
+                    const path = NodePath.join(
+                      directory,
+                      `${NodeCrypto.randomUUID()}.${extension}`,
+                    );
                     NodeFS.writeFileSync(path, image.bytes);
                     return {
                       provider: image.provider,

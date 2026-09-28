@@ -460,13 +460,15 @@ describe("AkeruToolRuntime", () => {
       catalogHandlers: { WebFetch: async ({ input }) => fetch(input) },
     });
     expect(runtime.toolsForThread("thread-webfetch").map((tool) => tool.id)).toContain("WebFetch");
-    await expect(runtime.execute({
-      threadId: "thread-webfetch",
-      toolId: "WebFetch",
-      toolCallId: "tool-webfetch",
-      input: { url: "https://example.com" },
-      approvalMode: "require-grant",
-    })).resolves.toEqual({ text: "ok" });
+    await expect(
+      runtime.execute({
+        threadId: "thread-webfetch",
+        toolId: "WebFetch",
+        toolCallId: "tool-webfetch",
+        input: { url: "https://example.com" },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ text: "ok" });
     expect(fetch).toHaveBeenCalledOnce();
   });
 

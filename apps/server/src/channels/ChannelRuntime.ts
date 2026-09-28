@@ -1782,9 +1782,7 @@ const attachChannelConnection = (
           (candidate) => candidate.id === projectId && candidate.deletedAt === null,
         );
         if (!project)
-          return yield* failWith(
-            "The selected project is unavailable. Choose another project.",
-          );
+          return yield* failWith("The selected project is unavailable. Choose another project.");
         const inUse = model.bots.some(
           (bot) =>
             bot.id !== botId &&

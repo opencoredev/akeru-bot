@@ -206,7 +206,7 @@ function harness(
     commands.push(command);
     await Effect.runPromise(
       Effect.gen(function* () {
-            const decided = yield* decideOrchestrationCommand({
+        const decided = yield* decideOrchestrationCommand({
           command:
             command.type === "thread.turn.start"
               ? {
@@ -739,10 +739,7 @@ describe("AkeruDelegationRuntime", () => {
 
     await runtime.send(parent(), request() as never);
     await runtime.send(parent(), request({ task: "Second task." }) as never);
-    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual([
-      "Running",
-      "Running",
-    ]);
+    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Running", "Running"]);
 
     raceArmed = true;
     await runtime.parentFinished({
@@ -795,10 +792,7 @@ describe("AkeruDelegationRuntime", () => {
 
     await runtime.send(parent(), request() as never);
     await runtime.send(parent(), request({ task: "Second task." }) as never);
-    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual([
-      "Running",
-      "Running",
-    ]);
+    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Running", "Running"]);
 
     // The first child's Failed write is rejected; the rejection must surface
     // through onWatchError without stopping the second child's settlement.

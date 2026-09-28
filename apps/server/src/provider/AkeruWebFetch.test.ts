@@ -16,9 +16,9 @@ const servers: NodeHttp.Server[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    servers.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   );
 });
 
@@ -70,16 +70,15 @@ describe("Akeru WebFetch", () => {
   });
 
   it("rejects a hostname whose lookup returns a private address", async () => {
-    const webFetch = createAkeruWebFetch({ lookup: async () => [{ address: "10.0.0.2", family: 4 }] });
+    const webFetch = createAkeruWebFetch({
+      lookup: async () => [{ address: "10.0.0.2", family: 4 }],
+    });
     await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("private");
   });
 
   it("pins the validated address so a rebinding resolver never reaches the connection", async () => {
     const port = await listen((_request, response) => response.end("pinned page"));
-    const answers = [
-      [{ address: "127.0.0.1", family: 4 }],
-      [{ address: "10.0.0.9", family: 4 }],
-    ];
+    const answers = [[{ address: "127.0.0.1", family: 4 }], [{ address: "10.0.0.9", family: 4 }]];
     const lookups: string[] = [];
     const webFetch = createAkeruWebFetch({
       lookup: async (hostname) => {
