@@ -1861,6 +1861,22 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
             assert.deepStrictEqual(spawnedCommands, [firstMissing]);
+            const initialCheckedAt = initialCodex?.checkedAt;
+            const reprobed = yield* registry.streamChanges.pipe(
+              Stream.filter((providers) =>
+                providers.some(
+                  (provider) =>
+                    provider.instanceId === "codex" &&
+                    provider.checkedAt !== initialCheckedAt &&
+                    provider.status === "error" &&
+                    spawnedCommands.includes(secondMissing),
+                ),
+              ),
+              Stream.take(1),
+              Stream.runCollect,
+              Effect.forkScoped({ startImmediately: true }),
+            );
+            yield* TestClock.adjust("1 millis");
 
             // Drive a settings change. The Hydration layer's
             // `SettingsWatcherLive` consumes this via `streamChanges`,
@@ -1876,26 +1892,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               },
             });
 
-            // Poll until the injected process boundary observes the new
-            // executable. This verifies the public settings-to-probe behavior
-            // without depending on timestamps assigned by TestClock.
-            const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < 60; attempts += 1) {
-                const providers = yield* registry.getProviders;
-                const codex = providers.find((provider) => provider.instanceId === "codex");
-                if (
-                  codex !== undefined &&
-                  codex.status === "error" &&
-                  spawnedCommands.includes(secondMissing)
-                ) {
-                  return providers;
-                }
-                yield* TestClock.adjust("50 millis");
-                yield* Effect.yieldNow;
-              }
-              return yield* registry.getProviders;
-            });
-
+            const [refreshed] = yield* Fiber.join(reprobed);
+            assert.ok(refreshed);
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
             assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
             assert.strictEqual(reprobedCodex?.status, "error");
