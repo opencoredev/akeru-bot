@@ -86,6 +86,10 @@ vi.mock("../../state/bots", () => ({
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+vi.mock("./detailsPanelOpen", () => ({
+  useBotDetailsOpen: () => [false, () => undefined],
+  useGroupDetailsOpen: () => [false, () => undefined],
+}));
 vi.mock("../chat/ChatActionsMenu", () => ({
   ChatActionsMenu: () => null,
   useMarkChatVisited: () => undefined,

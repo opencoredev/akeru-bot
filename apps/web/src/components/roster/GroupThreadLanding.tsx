@@ -65,6 +65,7 @@ import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { useEnableBotAutoReview } from "./useServerRoster";
+import { useGroupDetailsOpen } from "./detailsPanelOpen";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
@@ -98,6 +99,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
   useMarkChatVisited(runtime.linkedThreadRef);
+  const [detailsPanelOpen] = useGroupDetailsOpen();
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
@@ -223,7 +225,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       data-testid="group-thread-landing"
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <WorkspacePageHeader className="border-b border-border">
+        <WorkspacePageHeader className="border-b border-border" detailsPanelOpen={detailsPanelOpen}>
           <div className="flex min-w-0 items-center gap-2">
             <GroupMemberStack group={group} bots={bots} />
             <span className="truncate text-sm font-medium">{group.name}</span>
