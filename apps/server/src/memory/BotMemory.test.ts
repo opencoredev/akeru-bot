@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 
 import { afterEach, assert, describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import { vi } from "vite-plus/test";
@@ -641,24 +642,30 @@ describe("BotMemoryStore", () => {
     assert.equal((await store.readDocument(access, "memory")).content, "Newer notes.");
   });
 
-  it("releases the lock when its scoped fiber is interrupted", async () => {
-    const store = await fixture();
-    const filePath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md");
-    const fiber = Effect.runFork(
-      Effect.scoped(
-        Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            NodeFS.mkdir(NodePath.dirname(filePath), { recursive: true }),
-          );
-          yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
-          return yield* Effect.never;
-        }),
-      ),
-    );
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
-    await Effect.runPromise(Fiber.interrupt(fiber));
-    await expect(NodeFS.stat(`${filePath}.lock`)).rejects.toMatchObject({ code: "ENOENT" });
-  });
+  it.effect("releases the lock when its scoped fiber is interrupted", () =>
+    Effect.gen(function* () {
+      const store = yield* Effect.promise(() => fixture());
+      const filePath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md");
+      const acquired = yield* Deferred.make<void>();
+      const fiber = yield* Effect.forkChild(
+        Effect.scoped(
+          Effect.gen(function* () {
+            yield* Effect.promise(() =>
+              NodeFS.mkdir(NodePath.dirname(filePath), { recursive: true }),
+            );
+            yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
+            yield* Deferred.succeed(acquired, undefined);
+            return yield* Effect.never;
+          }),
+        ),
+      );
+      yield* Deferred.await(acquired);
+      yield* Fiber.interrupt(fiber);
+      yield* Effect.promise(() =>
+        expect(NodeFS.stat(`${filePath}.lock`)).rejects.toMatchObject({ code: "ENOENT" }),
+      );
+    }),
+  );
 
   it.each(["", '{"pid":'])(
     "quarantines an abandoned partial lock record (%j) past the stale threshold",
