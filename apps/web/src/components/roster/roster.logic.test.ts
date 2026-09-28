@@ -601,6 +601,35 @@ describe("flattenMarkdownPreview", () => {
     );
   });
 
+  it("never confuses literal text with internal markers", () => {
+    expect(flattenMarkdownPreview("marker \u00010\u0001 stays")).toBe("marker \u00010\u0001 stays");
+    expect(flattenMarkdownPreview("`code` then \u00010\u0001")).toBe("code then \u00010\u0001");
+  });
+
+  it("keeps link and image syntax inside code spans literal", () => {
+    expect(flattenMarkdownPreview("`[docs](https://example.com)`")).toBe(
+      "[docs](https://example.com)",
+    );
+    expect(flattenMarkdownPreview("`![chart](chart.png)`")).toBe("![chart](chart.png)");
+  });
+
+  it("drops emphasis around a bare URL", () => {
+    expect(flattenMarkdownPreview("**https://example.com**")).toBe("https://example.com");
+    expect(flattenMarkdownPreview("see _https://example.com/a_b_ now")).toBe(
+      "see https://example.com/a_b now",
+    );
+  });
+
+  it("previews a long answer from its opening lines", () => {
+    const opening = "**Done.** Updated the [report](https://example.com/r).";
+    expect(flattenMarkdownPreview(`${opening}\n\n${"- more detail\n".repeat(500)}`)).toMatch(
+      /^Done\. Updated the report\. more detail/,
+    );
+    expect(flattenMarkdownPreview(`${"![shot](a.png)\n".repeat(100)}\nfinally words`)).toBe(
+      "finally words",
+    );
+  });
+
   it("flattens whitespace-heavy messages", () => {
     // Line prefixes use [ \t], not \s, so no multiline pattern crosses a
     // newline and rescans the blank lines after it. This checks the output

@@ -5,6 +5,9 @@ import {
   type GroupPersonMembership,
 } from "@t3tools/contracts";
 import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { threadJumpIndexFromCommand } from "../../keybindings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
@@ -228,42 +231,97 @@ export interface RosterLastMessage {
   at: string;
 }
 
+type MarkdownNode = ReturnType<typeof fromMarkdown> | MarkdownNodeChild;
+type MarkdownNodeChild = ReturnType<typeof fromMarkdown>["children"][number];
+
+const markdownPreviewOptions = {
+  extensions: [gfm()],
+  mdastExtensions: [gfmFromMarkdown()],
+};
+const markdownPreviewCache = new Map<string, string>();
+const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
+
 /**
  * One-line plain text for a roster preview. Chat messages are markdown, and a
  * preview row shows only the words: emphasis, code ticks and fences, link and
  * image syntax, headings, and list or quote markers go, and whitespace
- * collapses to single spaces. Links keep their label; images drop out.
+ * collapses to single spaces. Links keep their label; images drop out; code
+ * and URLs stay literal. The text is parsed with the same micromark/GFM stack
+ * the chat renders with, and results are cached by text so a roster render
+ * never reparses an unchanged message.
  */
 export function flattenMarkdownPreview(markdown: string): string {
-  // Code spans and URLs keep their literal text, so pull them out before the
-  // emphasis pass eats their asterisks, then put them back before collapsing
-  // whitespace. Line-prefix whitespace stays [ \t] so multiline regexes never
-  // rescan blank lines quadratically.
-  const protectedTokens: string[] = [];
-  const stash = (literal: string) => {
-    protectedTokens.push(literal);
-    return `\u0000${protectedTokens.length - 1}\u0000`;
-  };
-  const flattened = markdown
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
-    .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
-    .replace(/^[ \t]*(?:`{3,}|~{3,})[^\n]*$/gm, "")
-    .replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, "")
-    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")
-    .replace(/^[ \t]*(?:>[ \t]?)+/gm, "")
-    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, "")
-    .replace(/`+([^`]+?)`+/g, (_, code: string) => stash(code))
-    .replace(/\b(?:https?|mailto):\S+/g, (url) => stash(url));
-  return flattened
-    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, "$2")
-    .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "$1")
-    .replace(/\*(?=\S)([^*]+?)(?<=\S)\*/g, "$1")
-    .replace(/(^|[^\w])_(?=\S)([^_]+?)(?<=\S)_(?!\w)/g, "$1$2")
-    .replace(/\u0000(\d+)\u0000/g, (_, index: string) => protectedTokens[Number(index)] ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const cached = markdownPreviewCache.get(markdown);
+  if (cached !== undefined) return cached;
+  // A row shows one line, so parse only a prefix cut at a line or word
+  // boundary. Parsing costs several milliseconds per long answer; only a
+  // prefix with no visible words (a big image block, say) pays for the rest.
+  const prefix = markdownPreviewPrefix(markdown);
+  let flattened = flattenMarkdownText(prefix);
+  if (flattened.length === 0 && prefix.length < markdown.length) {
+    flattened = flattenMarkdownText(markdown);
+  }
+  if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
+  markdownPreviewCache.set(markdown, flattened);
+  return flattened;
+}
+
+const MARKDOWN_PREVIEW_PARSE_LIMIT = 600;
+
+function markdownPreviewPrefix(markdown: string): string {
+  if (markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT) return markdown;
+  const lineEnd = markdown.lastIndexOf("\n", MARKDOWN_PREVIEW_PARSE_LIMIT);
+  if (lineEnd > 0) return markdown.slice(0, lineEnd);
+  const wordEnd = markdown.lastIndexOf(" ", MARKDOWN_PREVIEW_PARSE_LIMIT);
+  return markdown.slice(0, wordEnd > 0 ? wordEnd : MARKDOWN_PREVIEW_PARSE_LIMIT);
+}
+
+function flattenMarkdownText(markdown: string): string {
+  const parts: string[] = [];
+  collectPreviewText(fromMarkdown(markdown, markdownPreviewOptions), parts);
+  return parts.join("").replace(/\s+/g, " ").trim();
+}
+
+function collectPreviewText(node: MarkdownNode, parts: string[]): void {
+  switch (node.type) {
+    case "text":
+    case "inlineCode":
+    case "code":
+    case "html":
+      parts.push(node.value);
+      break;
+    case "image":
+    case "imageReference":
+    case "definition":
+    case "break":
+    case "thematicBreak":
+      parts.push(" ");
+      break;
+    default:
+      if ("children" in node) {
+        for (const child of node.children) collectPreviewText(child, parts);
+      }
+  }
+  // Block boundaries become spaces so adjacent paragraphs or list items never
+  // glue their words together.
+  if (node.type !== "text" && !isPhrasingNode(node)) parts.push(" ");
+}
+
+function isPhrasingNode(node: MarkdownNode): boolean {
+  switch (node.type) {
+    case "text":
+    case "inlineCode":
+    case "emphasis":
+    case "strong":
+    case "delete":
+    case "link":
+    case "linkReference":
+    case "footnoteReference":
+    case "html":
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function resolveLatestRosterMessage(

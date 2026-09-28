@@ -698,9 +698,18 @@ importers:
       lucide-react:
         specifier: ^0.564.0
         version: 0.564.0(react@19.2.6)
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.0.3
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0
       mermaid:
         specifier: ^11.17.2
         version: 11.17.2
+      micromark-extension-gfm:
+        specifier: ^3.0.0
+        version: 3.0.0
       motion:
         specifier: ^13.1.1
         version: 13.1.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
