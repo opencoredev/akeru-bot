@@ -529,12 +529,7 @@ const BotRosterRow = memo(function BotRosterRow({
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 shrink truncate text-sm font-semibold">{bot.name}</span>
-                {taskTitle ? (
-                  <span className="min-w-0 shrink-[2] truncate rounded-md border border-sidebar-foreground/10 bg-sidebar-foreground/6 px-1.5 py-px text-[11px] text-sidebar-muted-foreground">
-                    {taskTitle}
-                  </span>
-                ) : null}
+                <span className="min-w-0 truncate text-sm font-semibold">{bot.name}</span>
                 <span className="min-w-2 flex-1" />
                 {unread ? <UnreadDot /> : null}
                 {latestMessage ? (
@@ -560,9 +555,15 @@ const BotRosterRow = memo(function BotRosterRow({
                   </time>
                 ) : null}
               </span>
-              {latestMessage ? (
+              {taskTitle || latestMessage ? (
+                // The chat title leads the preview line, so the bot name on the
+                // first line keeps the full width.
                 <span className="truncate text-sm text-sidebar-muted-foreground">
-                  {latestMessage.text}
+                  {taskTitle ? (
+                    <span className="font-medium text-sidebar-foreground/80">{taskTitle}</span>
+                  ) : null}
+                  {taskTitle && latestMessage ? " · " : null}
+                  {latestMessage?.text}
                 </span>
               ) : null}
             </span>
