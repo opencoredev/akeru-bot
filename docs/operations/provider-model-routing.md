@@ -54,14 +54,14 @@ jq -c 'select(.name | test("sendTurn|send-turn")) | {
 }' "$TRACE_FILE" | tail -5
 ```
 
-| Provider         | Saved model example              | Wire assertion                                                              |
-| ---------------- | -------------------------------- | --------------------------------------------------------------------------- |
-| Codex            | `gpt-5.6-sol`, effort `high`     | `provider.kind: codex`, `provider.model: gpt-5.6-sol`                       |
-| Claude           | `claude-opus-4-6`, effort `max`  | `provider.kind: claudeAgent`, `provider.model: claude-opus-4-6`             |
-| Grok             | `grok-4`                         | `provider.kind: grok`, `provider.model: grok-4`                             |
-| Kimi For Coding  | `k2-thinking`                    | `provider.kind: kimi`, `provider.model: k2-thinking`                        |
-| OpenCode         | `anthropic/claude-sonnet-4-5`    | `provider.kind: opencode`, model slug must keep its `provider/` prefix      |
-| OpenCode Go      | `gpt-5.6-luna`                   | `provider.kind: opencodeGo`, `provider.model: gpt-5.6-luna`                 |
+| Provider        | Saved model example             | Wire assertion                                                         |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| Codex           | `gpt-5.6-sol`, effort `high`    | `provider.kind: codex`, `provider.model: gpt-5.6-sol`                  |
+| Claude          | `claude-opus-4-6`, effort `max` | `provider.kind: claudeAgent`, `provider.model: claude-opus-4-6`        |
+| Grok            | `grok-4`                        | `provider.kind: grok`, `provider.model: grok-4`                        |
+| Kimi For Coding | `k2-thinking`                   | `provider.kind: kimi`, `provider.model: k2-thinking`                   |
+| OpenCode        | `anthropic/claude-sonnet-4-5`   | `provider.kind: opencode`, model slug must keep its `provider/` prefix |
+| OpenCode Go     | `gpt-5.6-luna`                  | `provider.kind: opencodeGo`, `provider.model: gpt-5.6-luna`            |
 
 For the two OpenCode adapters, also confirm the request itself: standard OpenCode turns log the
 `session.promptAsync` call with `model: { providerID, modelID }`; OpenCode Go turns go through the

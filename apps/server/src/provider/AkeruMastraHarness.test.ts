@@ -619,11 +619,9 @@ describe("AkeruMastraHarness", () => {
       .mockRejectedValue(new Error("observer down"));
     // Effect's default logger writes warnings through console.log.
     const warnings: ReadonlyArray<unknown>[] = [];
-    const warn = vi
-      .spyOn(console, "log")
-      .mockImplementation((...args: unknown[]) => {
-        warnings.push(args);
-      });
+    const warn = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      warnings.push(args);
+    });
     const dropped: Array<{
       readonly threadId: string;
       readonly turnId?: string;
@@ -644,9 +642,7 @@ describe("AkeruMastraHarness", () => {
       // Each drain performs one attempt, then releases the row with a backoff;
       // force eligibility so the test does not wait on wall-clock backoff.
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        await (attempt === 0
-          ? harness.observeAfterTurn!(input)
-          : harness.drainObservationQueue!());
+        await (attempt === 0 ? harness.observeAfterTurn!(input) : harness.drainObservationQueue!());
         const db = new DatabaseSync(queuePath);
         db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
           "2000-01-01T00:00:00.000Z",
@@ -662,9 +658,7 @@ describe("AkeruMastraHarness", () => {
       assert.isTrue(
         warnings.some((args) =>
           args.some(
-            (part) =>
-              typeof part === "string" &&
-              part.includes("dropped a failed observation"),
+            (part) => typeof part === "string" && part.includes("dropped a failed observation"),
           ),
         ),
       );
@@ -840,10 +834,7 @@ describe("AkeruMastraHarness", () => {
     const finished: ReadonlyArray<unknown>[] = [];
     const observe = vi
       .spyOn(ObservationalMemory.prototype, "observe")
-      .mockImplementation(async (input: {
-        threadId: string;
-        hooks?: ObserveHooks;
-      }) => {
+      .mockImplementation(async (input: { threadId: string; hooks?: ObserveHooks }) => {
         await input.hooks?.onObservationStart?.({ threadId: input.threadId });
         await input.hooks?.onObservationEnd?.({
           threadId: input.threadId,

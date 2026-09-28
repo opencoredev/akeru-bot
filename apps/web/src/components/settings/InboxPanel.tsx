@@ -1,7 +1,11 @@
 import { CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
-import { botInboxKindLabel, selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import {
+  botInboxKindLabel,
+  selectOpenBotInboxItems,
+  type BotInboxItem,
+} from "@t3tools/client-runtime/bot-inbox";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";

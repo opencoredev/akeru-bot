@@ -45,7 +45,11 @@ export const startSilenceWatchdog = (input: {
           yield* Deferred.succeed(stopped, void 0);
           return;
         }
-        if ((yield* Ref.get(paused)) === 0 && elapsed >= SILENCE_WATCHDOG_BEAT_MS && !(yield* Ref.get(beatSent))) {
+        if (
+          (yield* Ref.get(paused)) === 0 &&
+          elapsed >= SILENCE_WATCHDOG_BEAT_MS &&
+          !(yield* Ref.get(beatSent))
+        ) {
           yield* input.callbacks.onBeat;
           yield* Ref.set(beatSent, true);
         }

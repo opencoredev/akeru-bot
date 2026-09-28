@@ -1149,16 +1149,21 @@ const make = (options?: AgentControllerLiveOptions) =>
         // example right after a server restart), so the activity must not
         // depend on an active provider session; the row's recorded turnId is
         // the authority and the active turn is only a fallback.
-        onObservationDropped: async ({ threadId, turnId, resourceId, modelId, attempts, error }) => {
+        onObservationDropped: async ({
+          threadId,
+          turnId,
+          resourceId,
+          modelId,
+          attempts,
+          error,
+        }) => {
           if (!Option.isSome(orchestrationEngine)) return;
           const active = sessions.get(threadId);
           const droppedAt = nowIso();
           await runPromise(
             orchestrationEngine.value.dispatch({
               type: "thread.activity.append",
-              commandId: CommandId.make(
-                `server:observation-dropped:${NodeCrypto.randomUUID()}`,
-              ),
+              commandId: CommandId.make(`server:observation-dropped:${NodeCrypto.randomUUID()}`),
               threadId: ThreadIdBrand(threadId),
               activity: {
                 id: EventId.make(`observation-dropped:${NodeCrypto.randomUUID()}`),
@@ -2875,7 +2880,8 @@ const make = (options?: AgentControllerLiveOptions) =>
                 Effect.gen(function* () {
                   if (!hasLegacyPending(key, pendingMemory)) return;
                   pendingMemory.turnId = String(result.turnId);
-                  if (input.hiddenWake === true) legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
+                  if (input.hiddenWake === true)
+                    legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                   pendingMemory.dispatchReturned = true;
                   for (const event of pendingMemory.earlyEvents) {
                     if (String(event.turnId) !== pendingMemory.turnId) continue;
@@ -3503,11 +3509,16 @@ const make = (options?: AgentControllerLiveOptions) =>
           Stream.map((event) => {
             if (event.type !== "turn.started") return event;
             const key = String(event.threadId);
-            const hiddenWake = event.turnId === undefined
-              ? false
-              : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
-                legacyPending(key).some((pending) => !pending.dispatchReturned && pending.hiddenWake);
-            return hiddenWake ? { ...event, payload: { ...event.payload, hiddenWake: true } } : event;
+            const hiddenWake =
+              event.turnId === undefined
+                ? false
+                : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
+                  legacyPending(key).some(
+                    (pending) => !pending.dispatchReturned && pending.hiddenWake,
+                  );
+            return hiddenWake
+              ? { ...event, payload: { ...event.payload, hiddenWake: true } }
+              : event;
           }),
           Stream.tap((event) =>
             Effect.gen(function* () {

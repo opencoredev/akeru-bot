@@ -269,9 +269,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
 
     const readModel = () => Effect.runPromise(snapshotQuery.getSnapshot());
     const serverConfig = await runtime!.runPromise(Effect.service(ServerConfig));
-    const botInbox = new BotInboxService(
-      NodePath.join(serverConfig.secretsDir, "bot-inbox.json"),
-    );
+    const botInbox = new BotInboxService(NodePath.join(serverConfig.secretsDir, "bot-inbox.json"));
     const botInboxList = () => {
       botInbox.reload();
       return botInbox.list();
@@ -346,7 +344,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     await harness.drain();
 
     const watchdog = await harness.watchdogActivities();
-    expect(watchdog.filter((a) => a.id === `silence-watchdog:failure:thread-1:${turnId}`)).toHaveLength(1);
+    expect(
+      watchdog.filter((a) => a.id === `silence-watchdog:failure:thread-1:${turnId}`),
+    ).toHaveLength(1);
     expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
     const incidents = harness.botInboxList().filter((i) => i.kind === "silence-watchdog-failure");
     expect(incidents).toHaveLength(1);
@@ -387,7 +387,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     await harness.drain();
 
     await harness.adjustClock(FAILURE_MS - 5_000);
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(0);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(0);
   });
 
   it("pauses on approval wait and resumes on request.resolved", async () => {
@@ -411,7 +413,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
 
     await harness.adjustClock(FAILURE_MS + 30_000);
     await harness.drain();
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(0);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(0);
     expect(harness.interruptCalls).toEqual([]);
 
     harness.emit({
@@ -428,7 +432,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
 
     await harness.adjustClock(FAILURE_MS);
     await harness.drain();
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(1);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(1);
     expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
   });
 
@@ -462,7 +468,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
 
     await harness.adjustClock(FAILURE_MS + 30_000);
     await harness.drain();
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(0);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(0);
 
     harness.emit({
       type: "user-input.resolved",
@@ -478,7 +486,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
 
     await harness.adjustClock(FAILURE_MS);
     await harness.drain();
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(1);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(1);
     expect(harness.interruptCalls).toEqual([{ threadId: asThreadId("thread-1"), turnId }]);
   });
 
@@ -556,7 +566,9 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     expect(watchdog.filter((a) => a.id.includes(":beat:"))).toHaveLength(0);
     await harness.adjustClock(FAILURE_MS);
     await harness.drain();
-    expect((await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:"))).toHaveLength(1);
+    expect(
+      (await harness.watchdogActivities()).filter((a) => a.id.includes(":failure:")),
+    ).toHaveLength(1);
   });
 
   it("dedupes open incidents across silent turns and resolves on a later success", async () => {
@@ -566,15 +578,19 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     await harness.drain();
     await harness.adjustClock(FAILURE_MS);
     await harness.drain();
-    expect(harness.botInboxList().filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open")).toHaveLength(1);
+    expect(
+      harness
+        .botInboxList()
+        .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open"),
+    ).toHaveLength(1);
 
     harness.emitTurnStarted("turn-second-silent");
     await harness.drain();
     await harness.adjustClock(FAILURE_MS);
     await harness.drain();
-    const openIncidents = harness.botInboxList().filter(
-      (i) => i.kind === "silence-watchdog-failure" && i.status === "open",
-    );
+    const openIncidents = harness
+      .botInboxList()
+      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open");
     expect(openIncidents).toHaveLength(2);
 
     harness.emitTurnStarted("turn-success");
@@ -590,13 +606,13 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     });
     await harness.drain();
 
-    const remainingOpen = harness.botInboxList().filter(
-      (i) => i.kind === "silence-watchdog-failure" && i.status === "open",
-    );
+    const remainingOpen = harness
+      .botInboxList()
+      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "open");
     expect(remainingOpen).toHaveLength(0);
-    const resolved = harness.botInboxList().filter(
-      (i) => i.kind === "silence-watchdog-failure" && i.status === "resolved",
-    );
+    const resolved = harness
+      .botInboxList()
+      .filter((i) => i.kind === "silence-watchdog-failure" && i.status === "resolved");
     expect(resolved).toHaveLength(2);
   });
 });

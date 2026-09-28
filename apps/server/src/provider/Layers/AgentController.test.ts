@@ -254,7 +254,14 @@ function makeBridge() {
   let markNextDispatchAdmissionReached: (() => void) | undefined;
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
-      makeProviderSession(threadId, String(input.provider) === "codex" ? "codex" : String(input.provider) === "opencode" ? "opencode" : "claudeAgent"),
+      makeProviderSession(
+        threadId,
+        String(input.provider) === "codex"
+          ? "codex"
+          : String(input.provider) === "opencode"
+            ? "opencode"
+            : "claudeAgent",
+      ),
     ),
   );
   const sendTurn = vi.fn<ProviderServiceShape["sendTurn"]>((input) =>
@@ -2806,8 +2813,7 @@ describe("AgentControllerLive", () => {
         OrchestrationEngine.OrchestrationEngineService.of({
           readEvents: () => Stream.empty,
           readThreadEvents: () => Stream.empty,
-          getThreadReplayStats: () =>
-            Effect.die("unused"),
+          getThreadReplayStats: () => Effect.die("unused"),
           dispatch: (command) =>
             Effect.sync(() => {
               dispatched.push(command);
@@ -2977,7 +2983,11 @@ describe("AgentControllerLive", () => {
           Effect.forkChild({ startImmediately: true }),
         );
         yield* Effect.yieldNow;
-        yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project.", hiddenWake: true });
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Check the project.",
+          hiddenWake: true,
+        });
         mastra.emit({
           type: "message_update",
           message: assistantMessage("I'll check first.", "opening"),
@@ -3002,7 +3012,9 @@ describe("AgentControllerLive", () => {
         mastra.finishSend();
         yield* Effect.yieldNow;
         yield* Fiber.interrupt(eventsFiber);
-        expect(events.find((event) => event.type === "turn.started")?.payload.hiddenWake).toBe(true);
+        expect(events.find((event) => event.type === "turn.started")?.payload.hiddenWake).toBe(
+          true,
+        );
 
         assert.deepEqual(
           events.filter((event) => event.type === "item.completed").map((event) => event.itemId),
@@ -5753,11 +5765,31 @@ describe("AgentControllerLive", () => {
     });
 
     it.effect.each([
-      { provider: "codex", instanceId: "codex-isolated", issue: "This Codex instance needs OPENAI_API_KEY" },
-      { provider: "claudeAgent", instanceId: "claudeAgent-isolated", issue: "This Claude instance needs an API key or auth token" },
-      { provider: "grok", instanceId: "grok-isolated", issue: "This Grok instance needs XAI_API_KEY" },
-      { provider: "kimi", instanceId: "kimi-isolated", issue: "Custom Kimi credentials are not supported" },
-      { provider: "opencodeGo", instanceId: "opencodeGo-isolated", issue: "This OpenCode Go instance needs OPENCODE_API_KEY" },
+      {
+        provider: "codex",
+        instanceId: "codex-isolated",
+        issue: "This Codex instance needs OPENAI_API_KEY",
+      },
+      {
+        provider: "claudeAgent",
+        instanceId: "claudeAgent-isolated",
+        issue: "This Claude instance needs an API key or auth token",
+      },
+      {
+        provider: "grok",
+        instanceId: "grok-isolated",
+        issue: "This Grok instance needs XAI_API_KEY",
+      },
+      {
+        provider: "kimi",
+        instanceId: "kimi-isolated",
+        issue: "Custom Kimi credentials are not supported",
+      },
+      {
+        provider: "opencodeGo",
+        instanceId: "opencodeGo-isolated",
+        issue: "This OpenCode Go instance needs OPENCODE_API_KEY",
+      },
     ] as const)(
       "fails closed for $provider when no credential transport is configured",
       ({ provider, instanceId: instanceSlug, issue: expectedIssue }) => {
@@ -5921,12 +5953,12 @@ describe("AgentControllerLive", () => {
             yield* controller.sendTurn({ threadId, input: `Use ${model}.` });
           }
 
-          expect(sessionsByThread.get(String(codexWorkThread))?.model.switch).toHaveBeenCalledWith(
-            { modelId: "openai/gpt-5.6-sol" },
-          );
-          expect(sessionsByThread.get(String(codexReviewThread))?.model.switch).toHaveBeenCalledWith(
-            { modelId: "openai/gpt-5.6-codex-mini" },
-          );
+          expect(sessionsByThread.get(String(codexWorkThread))?.model.switch).toHaveBeenCalledWith({
+            modelId: "openai/gpt-5.6-sol",
+          });
+          expect(
+            sessionsByThread.get(String(codexReviewThread))?.model.switch,
+          ).toHaveBeenCalledWith({ modelId: "openai/gpt-5.6-codex-mini" });
           expect(sessionsByThread.get(String(codexWorkThread))?.sendMessage).toHaveBeenCalledWith({
             content: "Use gpt-5.6-sol.",
           });
