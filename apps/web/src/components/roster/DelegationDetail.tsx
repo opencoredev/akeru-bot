@@ -146,7 +146,9 @@ export function DelegationDetail({
                 {messages.map((message) => (
                   <li key={message.id} data-role={message.role}>
                     <div className="text-xs font-medium text-muted-foreground">
-                      {message.role === "assistant" ? childName : (parentBot?.name ?? t("Unknown bot"))}
+                      {message.role === "assistant"
+                        ? childName
+                        : (parentBot?.name ?? t("Unknown bot"))}
                     </div>
                     <ChatMarkdown
                       className="mt-0.5"

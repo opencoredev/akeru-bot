@@ -301,7 +301,9 @@ function timelineOrder(rendered: unknown): string[] {
   const order: string[] = [];
   visitElements(rendered, (element) => {
     if (element.type === DelegationCard) {
-      order.push(`card:${(element.props as Parameters<typeof DelegationCard>[0]).delegation.delegationId}`);
+      order.push(
+        `card:${(element.props as Parameters<typeof DelegationCard>[0]).delegation.delegationId}`,
+      );
       return false;
     }
     const key = element.key?.replace(/^message:/, "");
@@ -358,7 +360,10 @@ describe("thread landing delegations", () => {
       ...mocks.snapshot!,
       delegations: [
         delegation("first", "thread-parent", { parentTurnId: "turn-1", anchorMessageId: "user-1" }),
-        delegation("second", "thread-parent", { parentTurnId: "turn-2", anchorMessageId: "user-2" }),
+        delegation("second", "thread-parent", {
+          parentTurnId: "turn-2",
+          anchorMessageId: "user-2",
+        }),
         delegation("third", "thread-parent", { parentTurnId: "turn-3", anchorMessageId: "user-3" }),
       ],
     };

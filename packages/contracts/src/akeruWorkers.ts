@@ -70,5 +70,4 @@ export const AkeruWorkerStatus = Schema.Struct({
 });
 export type AkeruWorkerStatus = typeof AkeruWorkerStatus.Type;
 
-export const isAkeruWorkerTerminal = (phase: AkeruWorkerPhase): boolean =>
-  phase._tag !== "Running";
+export const isAkeruWorkerTerminal = (phase: AkeruWorkerPhase): boolean => phase._tag !== "Running";

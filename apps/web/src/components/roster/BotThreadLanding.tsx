@@ -44,9 +44,7 @@ import {
   UserMessageRow,
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
-import {
-  channelOriginForAssistantMessage,
-} from "@t3tools/client-runtime/channel-origin-presentation";
+import { channelOriginForAssistantMessage } from "@t3tools/client-runtime/channel-origin-presentation";
 import {
   buildBotConversationEntries,
   isBotConversationWorking,
