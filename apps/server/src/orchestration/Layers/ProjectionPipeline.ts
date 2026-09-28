@@ -2290,6 +2290,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         eventTypes: projectorEventTypes([
           "thread.created",
           "thread.message-sent",
+          "thread.channel-delivery-set",
           "thread.message-reaction-set",
           "thread.reverted",
         ]),
