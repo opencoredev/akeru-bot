@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  BotIcon,
   ChartNoAxesColumnIcon,
+  ImageIcon,
+  LanguagesIcon,
   MessageCircleIcon,
   MoonIcon,
   PaletteIcon,
@@ -14,7 +17,11 @@ import { useAtomValue } from "@effect/atom-react";
 
 import { useTheme } from "../hooks/useTheme";
 import { isPreviewFocused } from "../lib/previewFocus";
+import { activeComposerModelPicker } from "../composerModelPickerRegistry";
+import { useI18n } from "../i18n";
 import {
+  buildLanguageCommandPaletteAction,
+  buildModelPickerCommandPaletteAction,
   COMMAND_PALETTE_INPUT_PLACEHOLDER,
   filterCommandPaletteGroups,
   ITEM_ICON_CLASS,
@@ -99,6 +106,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme, setAppearanceMode } = useTheme();
+  const { t } = useI18n();
 
   // Names the mode you would switch to, so the row reads as a verb.
   const nextAppearance = resolvedTheme === "dark" ? "light" : "dark";
@@ -131,6 +139,14 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         });
       },
     },
+    buildModelPickerCommandPaletteAction({
+      composerHandle: activeComposerModelPicker(),
+      scheduleAfterClose: (openModelPicker) => {
+        window.requestAnimationFrame(openModelPicker);
+      },
+      title: t("Change model"),
+      icon: <BotIcon className={ITEM_ICON_CLASS} />,
+    }),
     {
       value: "action:plugins",
       searchTerms: ["plugins", "mcp", "tools", "executor", "composio"],
@@ -158,6 +174,28 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         openProductFeedback();
       },
     },
+    {
+      value: "action:image-generation-settings",
+      searchTerms: [
+        t("Image generation settings"),
+        "image generation",
+        "images",
+        "pictures",
+        "chatgpt",
+        "grok",
+        "settings",
+      ],
+      title: t("Image generation settings"),
+      icon: <ImageIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openSettings("image-generation");
+      },
+    },
+    buildLanguageCommandPaletteAction({
+      translate: t,
+      openSettings,
+      icon: <LanguagesIcon className={ITEM_ICON_CLASS} />,
+    }),
     {
       value: "action:settings",
       searchTerms: ["settings", "preferences", "configuration", "keybindings"],
