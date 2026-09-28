@@ -129,7 +129,8 @@ export const COMMAND_PALETTE_CHAT_LIMIT = 8;
  * The palette's Chats results for a typed query: chats whose title contains the
  * query first, tighter matches ahead, then chats the server matched by message,
  * in its order, with the matching snippet as the description. Chats in another
- * environment are listed but disabled, because this client cannot open them.
+ * environment are listed but disabled, because this client cannot open them,
+ * and only after every chat it can open, so they never crowd one out.
  * A leading ">" asks for actions only, so it yields no chats.
  */
 export function buildChatSearchCommandPaletteItems(input: {
@@ -175,26 +176,32 @@ export function buildChatSearchCommandPaletteItems(input: {
     return [{ chat, snippet: match.snippet.trim() || null }];
   });
 
-  return [...titleMatches, ...messageMatches].slice(0, limit).map(({ chat, snippet }) => {
-    const description = [
-      chat.ownerName,
-      chat.unavailableIn === null ? null : input.unavailableLabel(chat.unavailableIn),
-      snippet,
-    ]
-      .filter((part): part is string => part !== null && part.length > 0)
-      .join(" · ");
-    return {
-      value: `chat-search:${chatKey(chat)}`,
-      searchTerms: [titleOf(chat), snippet ?? ""],
-      title: titleOf(chat) || input.untitledLabel,
-      ...(description ? { description } : {}),
-      icon: input.icon,
-      ...(chat.unavailableIn === null ? {} : { disabled: true }),
-      run: async () => {
-        await input.openChat(chat);
-      },
-    };
-  });
+  const ranked = [...titleMatches, ...messageMatches];
+  return [
+    ...ranked.filter((entry) => entry.chat.unavailableIn === null),
+    ...ranked.filter((entry) => entry.chat.unavailableIn !== null),
+  ]
+    .slice(0, limit)
+    .map(({ chat, snippet }) => {
+      const description = [
+        chat.ownerName,
+        chat.unavailableIn === null ? null : input.unavailableLabel(chat.unavailableIn),
+        snippet,
+      ]
+        .filter((part): part is string => part !== null && part.length > 0)
+        .join(" · ");
+      return {
+        value: `chat-search:${chatKey(chat)}`,
+        searchTerms: [titleOf(chat), snippet ?? ""],
+        title: titleOf(chat) || input.untitledLabel,
+        ...(description ? { description } : {}),
+        icon: input.icon,
+        ...(chat.unavailableIn === null ? {} : { disabled: true }),
+        run: async () => {
+          await input.openChat(chat);
+        },
+      };
+    });
 }
 
 export function normalizeSearchText(value: string): string {

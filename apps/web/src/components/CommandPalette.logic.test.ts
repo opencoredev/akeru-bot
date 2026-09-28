@@ -218,9 +218,9 @@ describe("buildChatSearchCommandPaletteItems", () => {
 
   it("ranks prefix title matches ahead of looser ones, newest first among equals", () => {
     expect(build("trip").map((item) => item.value)).toEqual([
-      "chat-search:env-b:remote",
       "chat-search:env-a:trip",
       "chat-search:env-a:trip-old",
+      "chat-search:env-b:remote",
     ]);
   });
 
@@ -232,12 +232,12 @@ describe("buildChatSearchCommandPaletteItems", () => {
       { environmentId: "env-a", threadId: "unknown", snippet: "not a listed chat" },
     ]);
     expect(items.map((item) => item.value)).toEqual([
-      "chat-search:env-b:remote",
       "chat-search:env-a:trip",
       "chat-search:env-a:trip-old",
       "chat-search:env-a:budget",
+      "chat-search:env-b:remote",
     ]);
-    expect(items.at(-1)?.description).toBe("Akeru · the trip costs");
+    expect(items[2]?.description).toBe("Akeru · the trip costs");
   });
 
   it("matches a placeholder-titled chat only by message and shows it as untitled", () => {
@@ -259,6 +259,34 @@ describe("buildChatSearchCommandPaletteItems", () => {
     const item = build("budget", [], openChat)[0];
     await item?.run();
     expect(openChat).toHaveBeenCalledWith(chats[2]);
+  });
+
+  it("keeps chats this client can open ahead of newer ones it cannot", () => {
+    const remote = Array.from({ length: 8 }, (_, index) =>
+      chat(`r${index}`, `Plan ${index}`, `2026-08-1${index}T00:00:00.000Z`, {
+        environmentId: "env-b",
+        unavailableIn: "Home server",
+      }),
+    );
+    const local = [
+      chat("local-title", "Plan local", "2026-08-01T00:00:00.000Z"),
+      chat("local-message", "Budget", "2026-08-01T00:00:00.000Z"),
+    ];
+    const items = buildChatSearchCommandPaletteItems({
+      query: "plan",
+      chats: [...remote, ...local],
+      matches: [{ environmentId: "env-a", threadId: "local-message", snippet: "the plan" }],
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => environment,
+      icon: null,
+      openChat: async () => undefined,
+    });
+    expect(items).toHaveLength(8);
+    expect(items.slice(0, 2).map((item) => [item.value, item.disabled])).toEqual([
+      ["chat-search:env-a:local-title", undefined],
+      ["chat-search:env-a:local-message", undefined],
+    ]);
+    expect(items.slice(2).every((item) => item.disabled)).toBe(true);
   });
 
   it("caps the results", () => {
