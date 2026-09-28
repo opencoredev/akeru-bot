@@ -5,7 +5,12 @@ describe("web reply playback synthesis", () => {
   it("uses the configured synthesis capability", () => {
     const session = createWebReplyPlaybackSession({
       environmentId: "environment" as never,
-      voice: { enabled: true, provider: "composed", synthesisProvider: "openai", synthesisVoices: { openai: "alloy" } },
+      voice: {
+        enabled: true,
+        provider: "composed",
+        synthesisProvider: "openai",
+        synthesisVoices: { openai: "alloy" },
+      },
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });

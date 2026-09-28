@@ -27,7 +27,12 @@ export function storedReplySynthesisCapability(
   voice: VoiceSettingsSnapshot = {},
 ): StoredReplySynthesisCapability {
   if (voice.enabled === false) {
-    return { available: false, provider: "unavailable", voice: "unavailable", reason: "Voice is disabled in Settings." };
+    return {
+      available: false,
+      provider: "unavailable",
+      voice: "unavailable",
+      reason: "Voice is disabled in Settings.",
+    };
   }
   if (voice.provider === undefined) {
     return {
@@ -46,9 +51,19 @@ export function storedReplySynthesisCapability(
     };
   }
   const provider = voice.synthesisProvider ?? "openai";
-  const selectedVoice = provider === "openai" ? (voice.synthesisVoices?.openai ?? voice.openaiVoice ?? "alloy") : provider ? voice.synthesisVoices?.[provider] : undefined;
+  const selectedVoice =
+    provider === "openai"
+      ? (voice.synthesisVoices?.openai ?? voice.openaiVoice ?? "alloy")
+      : provider
+        ? voice.synthesisVoices?.[provider]
+        : undefined;
   if (!provider || !selectedVoice) {
-    return { available: false, provider: provider ?? "unavailable", voice: selectedVoice ?? "unavailable", reason: STORED_REPLY_SYNTHESIS_UNAVAILABLE };
+    return {
+      available: false,
+      provider: provider ?? "unavailable",
+      voice: selectedVoice ?? "unavailable",
+      reason: STORED_REPLY_SYNTHESIS_UNAVAILABLE,
+    };
   }
   return { available: true, provider, voice: selectedVoice };
 }

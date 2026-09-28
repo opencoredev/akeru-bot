@@ -14,8 +14,10 @@ describe("mobile reply playback synthesis", () => {
   });
 
   it("uses the server defaults when provider and voice are omitted", () => {
-    expect(
-      storedReplySynthesisCapability({ enabled: true, provider: "composed" }),
-    ).toEqual({ available: true, provider: "openai", voice: "alloy" });
+    expect(storedReplySynthesisCapability({ enabled: true, provider: "composed" })).toEqual({
+      available: true,
+      provider: "openai",
+      voice: "alloy",
+    });
   });
 });

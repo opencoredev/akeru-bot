@@ -16,19 +16,31 @@ export function useWebReplyPlaybackSession() {
   const settings = useAtomValue(primaryServerSettingsAtom);
   const synthesize = useAtomCommand(serverEnvironment.synthesizeVoice, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
-  return useMemo(() => createWebReplyPlaybackSession({
-    ...(environmentId ? { environmentId } : {}),
-    voice: settings.voice,
-    ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
-  }), [cancel, environmentId, settings.voice, synthesize]);
+  return useMemo(
+    () =>
+      createWebReplyPlaybackSession({
+        ...(environmentId ? { environmentId } : {}),
+        voice: settings.voice,
+        ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
+      }),
+    [cancel, environmentId, settings.voice, synthesize],
+  );
 }
 
-export function createWebReplyPlaybackSession(options: {
-  readonly environmentId?: string | null;
-  readonly voice?: Parameters<typeof storedReplySynthesisCapability>[0];
-  readonly synthesize?: (target: { environmentId: string; input: { operationId: string; text: string } }) => Promise<{ _tag: string; value?: { audioBase64: string; mimeType: "audio/mpeg" } }>;
-  readonly cancel?: (target: { environmentId: string; input: { operationId: string } }) => Promise<unknown>;
-} = {}) {
+export function createWebReplyPlaybackSession(
+  options: {
+    readonly environmentId?: string | null;
+    readonly voice?: Parameters<typeof storedReplySynthesisCapability>[0];
+    readonly synthesize?: (target: {
+      environmentId: string;
+      input: { operationId: string; text: string };
+    }) => Promise<{ _tag: string; value?: { audioBase64: string; mimeType: "audio/mpeg" } }>;
+    readonly cancel?: (target: {
+      environmentId: string;
+      input: { operationId: string };
+    }) => Promise<unknown>;
+  } = {},
+) {
   const environmentId = options.environmentId ?? null;
   return createReplyPlaybackSession({
     storage: {
@@ -41,15 +53,21 @@ export function createWebReplyPlaybackSession(options: {
     },
     synthesis: storedReplySynthesisCapability(options.voice),
     prepare: async (request, signal, events) => {
-      if (!environmentId || !options.synthesize || !options.cancel) throw new Error("Voice synthesis is unavailable.");
+      if (!environmentId || !options.synthesize || !options.cancel)
+        throw new Error("Voice synthesis is unavailable.");
       const id = operationId();
-      const abort = () => { void options.cancel?.({ environmentId, input: { operationId: id } }); };
+      const abort = () => {
+        void options.cancel?.({ environmentId, input: { operationId: id } });
+      };
       signal.addEventListener("abort", abort, { once: true });
       try {
         const parts: BlobPart[] = [];
         let mimeType = "audio/mpeg";
-        for (const result of await synthesizeVoiceChunks(request.text, signal, (text) => options.synthesize!({ environmentId, input: { operationId: id, text } }))) {
-          if (result._tag !== "Success" || !result.value) throw new Error("Voice synthesis failed.");
+        for (const result of await synthesizeVoiceChunks(request.text, signal, (text) =>
+          options.synthesize!({ environmentId, input: { operationId: id, text } }),
+        )) {
+          if (result._tag !== "Success" || !result.value)
+            throw new Error("Voice synthesis failed.");
           signal.throwIfAborted();
           const binary = atob(result.value.audioBase64);
           parts.push(Uint8Array.from(binary, (value) => value.charCodeAt(0)));

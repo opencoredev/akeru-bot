@@ -20,7 +20,12 @@ export function splitVoiceSynthesisText(text: string): ReadonlyArray<string> {
     const candidate = text.slice(offset, limit);
     const sentence = [...candidate.matchAll(/[.!?。！？](?=\s|$)/g)].at(-1)?.index;
     const whitespace = [...candidate.matchAll(/\s/g)].at(-1)?.index;
-    let end = sentence !== undefined ? offset + sentence + 1 : whitespace !== undefined ? offset + whitespace + 1 : limit;
+    let end =
+      sentence !== undefined
+        ? offset + sentence + 1
+        : whitespace !== undefined
+          ? offset + whitespace + 1
+          : limit;
     if (end <= offset) end = limit;
     if (end > offset && /[\uD800-\uDBFF]$/.test(text.slice(offset, end))) end -= 1;
     chunks.push(text.slice(offset, end));
@@ -132,7 +137,9 @@ export async function runComposedVoiceCall(scope: VoiceCallScope, adapters: Comp
     const response = await pinned.sendAndWait(text, signal);
     signal.throwIfAborted();
     // Provider requests are bounded; play long responses sequentially, never concurrently.
-    for (const speech of await synthesizeVoiceChunks(response, signal, (chunk) => pinned.synthesize(chunk, signal))) {
+    for (const speech of await synthesizeVoiceChunks(response, signal, (chunk) =>
+      pinned.synthesize(chunk, signal),
+    )) {
       await pinned.play(speech, signal);
       signal.throwIfAborted();
     }

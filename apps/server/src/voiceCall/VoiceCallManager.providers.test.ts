@@ -249,10 +249,27 @@ it.effect("releases a pending realtime call and key lock on request interruption
     assert.isTrue(aborted);
     assert.deepEqual(yield* manager.get, { status: "idle" });
     yield* manager.disconnect("openai");
-  }).pipe(Effect.provide(makeTest({ negotiate: async (_key, _sdp, _instructions, _voice, signal) => new Promise((_resolve, reject) => {
-    signal.addEventListener("abort", () => { aborted = true; reject(voiceFailure("cancelled")); }, { once: true });
-    began.resolve();
-  }) }, { provider: "openai" })));
+  }).pipe(
+    Effect.provide(
+      makeTest(
+        {
+          negotiate: async (_key, _sdp, _instructions, _voice, signal) =>
+            new Promise((_resolve, reject) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  aborted = true;
+                  reject(voiceFailure("cancelled"));
+                },
+                { once: true },
+              );
+              began.resolve();
+            }),
+        },
+        { provider: "openai" },
+      ),
+    ),
+  );
 });
 
 for (const cancellation of ["hangup", "cancel", "disconnect", "interrupt"] as const) {
@@ -270,7 +287,9 @@ for (const cancellation of ["hangup", "cancel", "disconnect", "interrupt"] as co
         )
         .pipe(Effect.result, Effect.forkChild);
       yield* Effect.promise(() => began.promise);
-      const duplicate = yield* Effect.result(manager.synthesize({ operationId: "audio", text: "Duplicate" }, "owner"));
+      const duplicate = yield* Effect.result(
+        manager.synthesize({ operationId: "audio", text: "Duplicate" }, "owner"),
+      );
       assert.equal(duplicate._tag, "Failure");
       if (duplicate._tag === "Failure") assert.equal(duplicate.failure.reason, "busy");
       assert.deepEqual(yield* manager.cancel("audio", "other"), { cancelled: false });

@@ -28,8 +28,12 @@ import {
   PreviewZoomFactor,
 } from "./preview.ts";
 import {
-  VoiceProvider, ChatGptRealtimeVoice, VoiceSettings, VoiceApiProvider,
-  VoiceTranscriptionProvider, VoiceSynthesisVoices,
+  VoiceProvider,
+  ChatGptRealtimeVoice,
+  VoiceSettings,
+  VoiceApiProvider,
+  VoiceTranscriptionProvider,
+  VoiceSynthesisVoices,
 } from "./voiceCall.ts";
 import { ImageGenerationSettings, ImageGenerationSettingsPatch } from "./imageGeneration.ts";
 import {

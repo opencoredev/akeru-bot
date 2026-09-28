@@ -20,9 +20,7 @@ import {
 describe("stored speech chunking", () => {
   it("splits at the synthesis input limit", () => {
     expect(splitVoiceSynthesisText("a".repeat(8_001)).map((chunk) => chunk.length)).toEqual([
-      4_000,
-      4_000,
-      1,
+      4_000, 4_000, 1,
     ]);
   });
 
@@ -36,7 +34,9 @@ describe("stored speech chunking", () => {
     const chunks = splitVoiceSynthesisText("a".repeat(3_999) + emoji + "b".repeat(10));
     expect(chunks[0]?.endsWith("\uD83D")).toBe(false);
     expect(chunks.join("")).toBe("a".repeat(3_999) + emoji + "b".repeat(10));
-    expect(splitVoiceSynthesisText("x".repeat(4_500)).map((chunk) => chunk.length)).toEqual([4_000, 500]);
+    expect(splitVoiceSynthesisText("x".repeat(4_500)).map((chunk) => chunk.length)).toEqual([
+      4_000, 500,
+    ]);
   });
 
   it("stops requesting chunks after cancellation", async () => {

@@ -19,9 +19,10 @@ const ReplyPlaybackContext = createContext<ReplyPlaybackSession | null>(null);
 export function ReplyPlaybackProvider({ children }: { readonly children: ReactNode }) {
   const { selectedThread } = useThreadSelection();
   const environmentId = selectedThread?.environmentId ?? null;
-  const settings = useAtomValue(
-    serverEnvironment.settingsValueAtom(environmentId ?? EnvironmentId.make("none")),
-  ) ?? DEFAULT_SERVER_SETTINGS;
+  const settings =
+    useAtomValue(
+      serverEnvironment.settingsValueAtom(environmentId ?? EnvironmentId.make("none")),
+    ) ?? DEFAULT_SERVER_SETTINGS;
   const synthesize = useAtomCommand(serverEnvironment.synthesizeVoice, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
   const session = useMemo(
@@ -37,20 +38,29 @@ export function ReplyPlaybackProvider({ children }: { readonly children: ReactNo
         prepare: async (request, signal, events) => {
           if (!environmentId) throw new Error("Voice synthesis is unavailable.");
           const operationId = `voice-${Date.now()}-${Math.random()}`;
-          const abort = () => { void cancel({ environmentId, input: { operationId } }); };
+          const abort = () => {
+            void cancel({ environmentId, input: { operationId } });
+          };
           signal.addEventListener("abort", abort, { once: true });
           try {
             const segments: Uint8Array[] = [];
             let mimeType = "audio/mpeg";
-            const results = await synthesizeVoiceChunks(request.text, signal, (text) => synthesize({ environmentId, input: { operationId, text } }));
+            const results = await synthesizeVoiceChunks(request.text, signal, (text) =>
+              synthesize({ environmentId, input: { operationId, text } }),
+            );
             for (const result of results) {
               if (result._tag !== "Success") throw new Error("Voice synthesis failed.");
               segments.push(decodeReplyAudioBase64(result.value.audioBase64));
               mimeType = result.value.mimeType;
             }
-            const bytes = new Uint8Array(segments.reduce((total, segment) => total + segment.length, 0));
+            const bytes = new Uint8Array(
+              segments.reduce((total, segment) => total + segment.length, 0),
+            );
             let offset = 0;
-            for (const segment of segments) { bytes.set(segment, offset); offset += segment.length; }
+            for (const segment of segments) {
+              bytes.set(segment, offset);
+              offset += segment.length;
+            }
             return createExpoReplyAudio(bytes, mimeType, events);
           } finally {
             signal.removeEventListener("abort", abort);
