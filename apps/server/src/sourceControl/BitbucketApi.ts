@@ -1063,10 +1063,12 @@ export const make = Effect.gen(function* () {
         const localBranchNames = yield* git.listLocalBranchNames(input.cwd);
         // Prefer the existing checkout, including a pre-rename
         // `t3code/pr-<n>/<head>` branch, before minting a fresh akeru/ branch.
-        const existingLocalBranch = pullRequestWorktreeBranchCandidates(
-          pullRequest.id,
-          remoteBranch,
-        ).find((candidate) => localBranchNames.includes(candidate));
+        const candidates = isCrossRepository
+          ? pullRequestWorktreeBranchCandidates(pullRequest.id, remoteBranch)
+          : [localBranch];
+        const existingLocalBranch = candidates.find((candidate) =>
+          localBranchNames.includes(candidate),
+        );
         const effectiveLocalBranch = existingLocalBranch ?? localBranch;
         const localBranchExists = existingLocalBranch !== undefined;
 
