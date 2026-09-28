@@ -56,6 +56,12 @@ describe("deriveRoutineReceipts", () => {
         tone: "info",
       },
       {
+        id: "routine-run-started:run-1",
+        createdAt: "2026-09-19T09:00:00.000Z",
+        text: '"Daily digest" started a run',
+        tone: "info",
+      },
+      {
         id: "routine-run-finished:run-1",
         createdAt: "2026-09-19T09:01:00.000Z",
         text: '"Daily digest" finished: 2 files changed',
@@ -64,7 +70,7 @@ describe("deriveRoutineReceipts", () => {
     ]);
   });
 
-  it("shows a started row only while a run is in flight", () => {
+  it("shows a started row while a run is in flight", () => {
     const running = {
       ...run,
       id: "run-2",
@@ -91,7 +97,7 @@ describe("deriveRoutineReceipts", () => {
       completedAt: "2026-09-19T09:02:00.000Z",
     } as unknown as RoutineRun;
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
-    expect(receipts[1]).toMatchObject({
+    expect(receipts[2]).toMatchObject({
       text: '"Daily digest" failed: The workspace is missing',
       tone: "error",
     });
@@ -128,8 +134,9 @@ describe("deriveRoutineReceipts", () => {
     );
     expect(receipts.map((receipt) => [receipt.id, receipt.tone])).toEqual([
       ["routine-created:routine-1", "info"],
+      ["routine-run-started:run-5", "info"],
       ["routine-run-finished:run-5", "info"],
     ]);
-    expect(receipts[1]?.text).toBe('"Daily digest" was canceled');
+    expect(receipts[2]?.text).toBe('"Daily digest" was canceled');
   });
 });

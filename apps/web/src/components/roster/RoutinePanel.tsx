@@ -115,7 +115,7 @@ export interface RoutinePanelProps {
   readonly onRunNow?: (routineId: string) => void;
   readonly onSetEnabled?: (routineId: string, enabled: boolean) => void;
   readonly onSetPaused?: (routineId: string, paused: boolean) => void;
-  readonly onDelete?: (routineId: string) => void;
+  readonly onDelete?: (routineId: string) => void | Promise<void>;
 }
 
 const EMPTY_ROUTINES: readonly RoutineAdapterItem[] = [];
@@ -295,13 +295,20 @@ function RoutineFormDialog({
 }) {
   const [draft, setDraft] = useState(() => initialDraft);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState(false);
   const save = async () => {
-    if (!onSubmit) return;
+    if (!onSubmit || savingRef.current) return;
+    savingRef.current = true;
+    setSaveError(false);
     setSaving(true);
     try {
       await onSubmit(draft);
       onClose();
+    } catch {
+      setSaveError(true);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -435,6 +442,11 @@ function RoutineFormDialog({
             />
           </label>
         </DialogPanel>
+        {saveError ? (
+          <p role="alert" className="px-6 text-sm text-destructive">
+            Could not save routine. Try again.
+          </p>
+        ) : null}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" disabled={saving} />}>Cancel</DialogClose>
           <Button
@@ -810,6 +822,10 @@ export function RoutinePanel({
   const [creating, setCreating] = useState(false);
   const [editorRoutine, setEditorRoutine] = useState<RoutineAdapterItem | null>(null);
   const [deleteRoutine, setDeleteRoutine] = useState<RoutineAdapterItem | null>(null);
+  const [deletingRoutineId, setDeletingRoutineId] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteBusyRef = useRef(false);
+  const [deleteError, setDeleteError] = useState(false);
   const [openRoutineId, setOpenRoutineId] = useState<string | null>(null);
   const openRoutine = routines.find((routine) => routine.id === openRoutineId) ?? null;
 
@@ -823,6 +839,12 @@ export function RoutinePanel({
   // on its way out of the projection. The delete names its survivor here, and
   // holds it past the close so the confirm dialog does not restore focus over it.
   const deletedFocusTarget = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (deletingRoutineId === null || routines.some((routine) => routine.id === deletingRoutineId))
+      return;
+    setOpenRoutineId(null);
+    setDeletingRoutineId(null);
+  }, [deletingRoutineId, routines]);
   useEffect(() => {
     if (openRoutineId !== null && previousOpenId.current === null) {
       detailRef.current?.querySelector<HTMLElement>("[data-routine-back]")?.focus();
@@ -956,7 +978,7 @@ export function RoutinePanel({
       ) : null}
       <AlertDialog
         open={deleteRoutine !== null}
-        onOpenChange={(open) => !open && setDeleteRoutine(null)}
+        onOpenChange={(open) => !open && !deleteBusyRef.current && setDeleteRoutine(null)}
       >
         <AlertDialogPopup
           // Cancelling belongs back on the Delete control it came from. Deleting does
@@ -971,24 +993,43 @@ export function RoutinePanel({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-            <AlertDialogClose
-              render={<Button variant="destructive" />}
+            <AlertDialogClose render={<Button variant="outline" disabled={deleteBusy} />}>
+              Cancel
+            </AlertDialogClose>
+            <Button
+              variant="destructive"
+              disabled={deleteBusy || !onDelete}
               onClick={() => {
-                if (deleteRoutine) {
-                  deletedFocusTarget.current = focusTargetAfterRoutineDelete(
-                    routines.map((item) => item.id),
-                    deleteRoutine.id,
-                  );
-                  onDelete?.(deleteRoutine.id);
-                }
-                setDeleteRoutine(null);
-                setOpenRoutineId(null);
+                if (!deleteRoutine || !onDelete || deleteBusyRef.current) return;
+                const id = deleteRoutine.id;
+                deleteBusyRef.current = true;
+                setDeleteBusy(true);
+                setDeleteError(false);
+                void Promise.resolve()
+                  .then(() => onDelete(id))
+                  .then(() => {
+                    deletedFocusTarget.current = focusTargetAfterRoutineDelete(
+                      routines.map((item) => item.id),
+                      id,
+                    );
+                    setDeletingRoutineId(id);
+                    setDeleteRoutine(null);
+                  })
+                  .catch(() => setDeleteError(true))
+                  .finally(() => {
+                    deleteBusyRef.current = false;
+                    setDeleteBusy(false);
+                  });
               }}
             >
-              Delete
-            </AlertDialogClose>
+              {deleteBusy ? "Deleting" : "Delete"}
+            </Button>
           </AlertDialogFooter>
+          {deleteError ? (
+            <p role="alert" className="text-sm text-destructive">
+              Could not delete routine. Try again.
+            </p>
+          ) : null}
         </AlertDialogPopup>
       </AlertDialog>
     </section>

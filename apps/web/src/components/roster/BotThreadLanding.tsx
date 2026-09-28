@@ -10,7 +10,6 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
 import { resolveAppModelSelectionState } from "../../modelSelection";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -25,7 +24,6 @@ import { useEnvironmentSessionState } from "../../state/session";
 import { openSettings } from "../../settingsDialogStore";
 import { SidebarInset } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
-import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
@@ -67,31 +65,12 @@ import { deriveRoutineReceipts, type RoutineReceipt } from "./routineReceipts";
 import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
-function openRoutinesPanel(botName: string): boolean {
-  const panel = document.querySelector<HTMLElement>('[data-testid="bot-details-panel"]');
-  const routinesControl = Array.from(
-    panel?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-  ).find((button) => button.textContent?.trim() === "Routines");
-  if (!panel || !routinesControl) return false;
-
-  routinesControl.click();
-  const openButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter(
-    (button) => button.getAttribute("aria-label") === `Open ${botName} bot sidebar`,
-  );
-  if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
-    openButtons.at(-1)?.click();
-  } else if (panel.getAttribute("aria-hidden") === "true") {
-    openButtons[0]?.click();
-  }
-  return true;
-}
-
 function RoutineReceiptRow({
   receipt,
-  botName,
+  onOpenRoutines,
 }: {
   readonly receipt: RoutineReceipt;
-  readonly botName: string;
+  readonly onOpenRoutines?: () => void;
 }) {
   const Icon =
     receipt.tone === "error"
@@ -109,11 +88,7 @@ function RoutineReceiptRow({
         error && "bg-destructive/8 text-destructive hover:bg-destructive/12 hover:text-destructive",
       )}
       data-testid="routine-receipt"
-      onClick={() => {
-        if (!openRoutinesPanel(botName)) {
-          toastManager.add({ type: "error", title: "Could not open Routines" });
-        }
-      }}
+      onClick={onOpenRoutines}
     >
       <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-5">
@@ -130,7 +105,13 @@ function RoutineReceiptRow({
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
-export function BotThreadLanding({ botId }: { readonly botId: string }) {
+export function BotThreadLanding({
+  botId,
+  onOpenRoutines,
+}: {
+  readonly botId: string;
+  readonly onOpenRoutines?: () => void;
+}) {
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
@@ -349,7 +330,10 @@ export function BotThreadLanding({ botId }: { readonly botId: string }) {
               timelineItems.map((item) => (
                 <Fragment key={item.kind === "receipt" ? item.receipt.id : item.entry.message.id}>
                   {item.kind === "receipt" ? (
-                    <RoutineReceiptRow botName={bot.name} receipt={item.receipt} />
+                    <RoutineReceiptRow
+                      receipt={item.receipt}
+                      {...(onOpenRoutines ? { onOpenRoutines } : {})}
+                    />
                   ) : (
                     (() => {
                       const { message, separator, startsGroup } = item.entry;

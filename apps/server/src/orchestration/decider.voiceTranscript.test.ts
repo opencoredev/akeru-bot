@@ -163,6 +163,19 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
     }),
   );
 
+  it.effect("rejects a different responder in a direct bot chat", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          ...appendCommand({ role: "user" }),
+          respondingBotId: BotId.make("bot-other"),
+        },
+        readModel: makeReadModel({ archived: true }),
+      }).pipe(Effect.flip);
+      expect(String(error)).toContain("cannot address a different bot");
+    }),
+  );
+
   it.effect("rejects user speech in a group chat whose boss was archived", () =>
     Effect.gen(function* () {
       const { respondingBotId: _omitted, ...command } = appendCommand({ role: "user" });

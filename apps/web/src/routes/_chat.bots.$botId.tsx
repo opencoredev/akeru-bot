@@ -45,6 +45,7 @@ function BotThreadRouteView() {
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [busyRoutineId, setBusyRoutineId] = useState<string | null>(null);
+  const [routinePanelRequest, setRoutinePanelRequest] = useState(0);
   /*
    * The roster store is not scoped to the active environment, so a bot found by
    * id alone can still belong to the environment we just left. Judging the id
@@ -157,12 +158,17 @@ function BotThreadRouteView() {
 
   return (
     <>
-      <BotThreadLanding key={panelKeys.thread} botId={botId} />
+      <BotThreadLanding
+        key={panelKeys.thread}
+        botId={botId}
+        onOpenRoutines={() => setRoutinePanelRequest((request) => request + 1)}
+      />
       {bot ? (
         <BotDetailsPanel
           key={panelKeys.details}
           bot={bot}
           threadRef={threadRef}
+          routinePanelRequest={routinePanelRequest}
           routinePanel={{
             status:
               snapshot === null
@@ -311,9 +317,9 @@ function BotThreadRouteView() {
                 );
               });
             },
-            onDelete: (routineId) => {
-              if (!environmentId) return;
-              startBusy(routineId, async () => {
+            onDelete: async (routineId) => {
+              if (!environmentId) throw new Error("The routine environment is unavailable.");
+              await withBusy(routineId, async () => {
                 const result = await deleteRoutine({
                   environmentId,
                   input: {

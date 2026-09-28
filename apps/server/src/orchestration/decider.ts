@@ -2434,11 +2434,24 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           thread.groupId === null || thread.groupId === undefined
             ? null
             : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+        if (
+          group === null &&
+          thread.botId !== null &&
+          command.respondingBotId !== undefined &&
+          command.respondingBotId !== thread.botId
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Chat '${thread.id}' cannot address a different bot.`,
+          });
+        }
         yield* requireActiveResponder({
           readModel,
           command,
           groupId: group?.id,
-          botId: command.respondingBotId ?? (group ? group.bossBotId : thread.botId),
+          botId: group
+            ? (command.respondingBotId ?? group.bossBotId)
+            : (thread.botId ?? command.respondingBotId),
         });
       } else if (command.respondingBotId !== undefined) {
         yield* requireBot({ readModel, command, botId: command.respondingBotId });
@@ -2879,10 +2892,20 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.approval.respond": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
+      });
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
       return {
         ...(yield* withEventBase({
@@ -2909,6 +2932,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
       const responseRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({

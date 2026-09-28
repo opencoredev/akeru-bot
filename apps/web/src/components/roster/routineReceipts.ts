@@ -33,18 +33,20 @@ export function deriveRoutineReceipts(
   for (const run of runs) {
     const routine = byRoutineId.get(run.routineId);
     if (!routine) continue;
+    if (run.startedAt !== null) {
+      receipts.push({
+        id: `routine-run-started:${run.id}`,
+        createdAt: run.startedAt,
+        text: `"${routine.job}" started a run`,
+        tone: "info",
+      });
+    }
     switch (run.status) {
       case "queued":
       case "waiting-for-approval":
         // Not started yet; the panel shows pending runs, the chat waits for real work.
         break;
       case "running":
-        receipts.push({
-          id: `routine-run-started:${run.id}`,
-          createdAt: run.startedAt ?? run.createdAt,
-          text: `"${routine.job}" started a run`,
-          tone: "info",
-        });
         break;
       case "canceled":
         receipts.push({

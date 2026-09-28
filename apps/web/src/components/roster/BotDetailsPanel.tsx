@@ -6,7 +6,7 @@ import {
   PanelRightIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useReducer, useState, type ReactNode } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
@@ -29,6 +29,7 @@ type BotDetailsPanelState = {
 
 type BotDetailsPanelAction =
   | { readonly type: "toggle-desktop" }
+  | { readonly type: "open-desktop" }
   | { readonly type: "toggle-mobile" }
   | { readonly type: "set-mobile"; readonly open: boolean };
 
@@ -39,6 +40,7 @@ export function reduceBotDetailsPanelState(
   if (action.type === "toggle-desktop") {
     return { ...state, desktopOpen: !state.desktopOpen };
   }
+  if (action.type === "open-desktop") return { ...state, desktopOpen: true };
   if (action.type === "toggle-mobile") {
     return { ...state, mobileOpen: !state.mobileOpen };
   }
@@ -55,10 +57,12 @@ function BotOverview({
   bot,
   onOpenSettings,
   routinePanel,
+  routinePanelRef,
 }: {
   readonly bot: Bot;
   readonly onOpenSettings?: () => void;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
+  readonly routinePanelRef: Ref<HTMLDivElement>;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
@@ -100,7 +104,12 @@ function BotOverview({
         </div>
       </dl>
 
-      <RoutinePanel botName={bot.name} {...(routinePanel ?? { status: "unavailable" as const })} />
+      <div ref={routinePanelRef}>
+        <RoutinePanel
+          botName={bot.name}
+          {...(routinePanel ?? { status: "unavailable" as const })}
+        />
+      </div>
     </div>
   );
 }
@@ -110,12 +119,14 @@ export function BotDetailsPanel({
   onOpenSettings,
   threadRef = null,
   routinePanel,
+  routinePanelRequest = 0,
 }: {
   readonly bot: Bot;
   /** Opens the full bot settings page. Omitted when no router is available. */
   readonly onOpenSettings?: () => void;
   readonly threadRef?: ScopedThreadRef | null;
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
+  readonly routinePanelRequest?: number;
 }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [panelState, dispatchPanel] = useReducer(reduceBotDetailsPanelState, {
@@ -123,7 +134,27 @@ export function BotDetailsPanel({
     mobileOpen: false,
   });
   const [browserExpanded, setBrowserExpanded] = useState(false);
+  const desktopRoutineRef = useRef<HTMLDivElement>(null);
+  const mobileRoutineRef = useRef<HTMLDivElement>(null);
+  const handledRoutineRequest = useRef(0);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
+
+  useEffect(() => {
+    if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
+    const mobile = window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches;
+    if (mobile && !panelState.mobileOpen) {
+      dispatchPanel({ type: "set-mobile", open: true });
+      return;
+    }
+    if (!mobile && !panelState.desktopOpen) {
+      dispatchPanel({ type: "open-desktop" });
+      return;
+    }
+    handledRoutineRequest.current = routinePanelRequest;
+    const panel = mobile ? mobileRoutineRef.current : desktopRoutineRef.current;
+    panel?.scrollIntoView({ block: "start" });
+    panel?.querySelector<HTMLElement>("h3[tabindex]")?.focus();
+  }, [panelState.desktopOpen, panelState.mobileOpen, routinePanelRequest]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -149,7 +180,12 @@ export function BotDetailsPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings]);
 
-  const content = (active: boolean, closeButton?: ReactNode, canExpandBrowser = false) => (
+  const content = (
+    active: boolean,
+    routinePanelRef: Ref<HTMLDivElement>,
+    closeButton?: ReactNode,
+    canExpandBrowser = false,
+  ) => (
     <>
       <BotBrowserPreview
         botName={bot.name}
@@ -169,6 +205,7 @@ export function BotDetailsPanel({
           </header>
           <BotOverview
             bot={bot}
+            routinePanelRef={routinePanelRef}
             {...(onOpenSettings ? { onOpenSettings } : {})}
             {...(routinePanel ? { routinePanel } : {})}
           />
@@ -193,6 +230,7 @@ export function BotDetailsPanel({
       >
         {content(
           panelState.desktopOpen,
+          desktopRoutineRef,
           <Tooltip>
             <TooltipTrigger
               render={
@@ -258,6 +296,7 @@ export function BotDetailsPanel({
           <SheetTitle className="sr-only">{bot.name} overview</SheetTitle>
           {content(
             panelState.mobileOpen,
+            mobileRoutineRef,
             <SheetClose
               aria-label="Close bot sidebar"
               render={<Button size="icon-sm" variant="ghost" />}
