@@ -1,4 +1,7 @@
-import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
+import {
+  AVAILABLE_CONNECTION_STATE,
+  type SupervisorConnectionState,
+} from "@t3tools/client-runtime/connection";
 
 import type { Bot } from "./types";
 
@@ -48,10 +51,12 @@ export type RosterLoadState =
 
 const ROSTER_LOADING: RosterLoadState = { kind: "loading" };
 const ROSTER_UNREACHABLE_MESSAGE = "The environment is not reachable.";
+const ROSTER_DISCONNECTED_MESSAGE = "The environment is not connected.";
 
 /**
- * Why the roster has not arrived. A failed first snapshot or a connection
- * that stopped trying reads as a failure the user can retry. A retrying
+ * Why the roster has not arrived. A failed first snapshot, a connection that
+ * stopped trying, or an environment that is not trying to connect reads as a
+ * failure the user can retry; retrying also reconnects. A retrying
  * connection gets its first two attempts before it counts as failed, matching
  * the landing's bootstrap gate.
  */
@@ -72,6 +77,11 @@ export function resolveRosterLoadState(input: {
       return failed();
     case "backoff":
       return connection.attempt > 2 ? failed() : ROSTER_LOADING;
+    case "available":
+      // The shared placeholder stands in until the supervisor reports.
+      return connection === AVAILABLE_CONNECTION_STATE
+        ? ROSTER_LOADING
+        : { kind: "failed", message: ROSTER_DISCONNECTED_MESSAGE };
     default:
       return ROSTER_LOADING;
   }

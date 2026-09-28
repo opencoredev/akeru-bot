@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The route/store integration guard reads source.
 import * as NodeFS from "node:fs";
 
+import { AVAILABLE_CONNECTION_STATE } from "@t3tools/client-runtime/connection";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -151,5 +152,14 @@ describe("resolveRosterLoadState", () => {
         connection: connection("backoff", 3, { message: "Server unreachable." }),
       }),
     ).toEqual({ kind: "failed", message: "Server unreachable." });
+  });
+
+  it("offers a retry when the environment is not trying to connect", () => {
+    expect(
+      resolveRosterLoadState({ shellError: null, connection: { ...AVAILABLE_CONNECTION_STATE } }),
+    ).toEqual({ kind: "failed", message: "The environment is not connected." });
+    expect(
+      resolveRosterLoadState({ shellError: null, connection: AVAILABLE_CONNECTION_STATE }),
+    ).toEqual({ kind: "loading" });
   });
 });
