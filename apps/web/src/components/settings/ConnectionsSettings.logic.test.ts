@@ -135,9 +135,9 @@ describe("isAdvertisedEndpointRemotelyReachable", () => {
       false,
     );
     expect(
-      isAdvertisedEndpointRemotelyReachable(
-        [makeEndpoint({ reachability: "loopback", id: "desktop-loopback:4780" })],
-      ),
+      isAdvertisedEndpointRemotelyReachable([
+        makeEndpoint({ reachability: "loopback", id: "desktop-loopback:4780" }),
+      ]),
     ).toBe(false);
   });
 });

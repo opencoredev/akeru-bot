@@ -146,13 +146,9 @@ export async function runRemoteDoctor(input: {
     ),
   );
   if (!container && (await commandOk("sh", ["-c", "command -v loginctl"]))) {
-    const linger = await Effect.runPromise(commandOutput("loginctl", [
-      "show-user",
-      process.env.USER ?? "",
-      "-p",
-      "Linger",
-      "--value",
-    ]));
+    const linger = await Effect.runPromise(
+      commandOutput("loginctl", ["show-user", process.env.USER ?? "", "-p", "Linger", "--value"]),
+    );
     const persistent = linger.ok && linger.stdout.trim() === "yes";
     checks.push(
       check(

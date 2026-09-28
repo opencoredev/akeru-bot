@@ -105,10 +105,7 @@ describe("provider MCP configuration", () => {
 
   it("reuses a server when transient HTTP header names only change casing", () => {
     const lowerCase = withMcpRuntimeHeaders({ ...servers[0]! }, { authorization: "Bearer token" });
-    const titleCase = withMcpRuntimeHeaders(
-      { ...servers[0]! },
-      { Authorization: "Bearer token" },
-    );
+    const titleCase = withMcpRuntimeHeaders({ ...servers[0]! }, { Authorization: "Bearer token" });
 
     expect(sameMcpServerConfigurations([lowerCase], [titleCase])).toBe(true);
   });
