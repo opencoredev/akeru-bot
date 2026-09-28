@@ -1,10 +1,10 @@
 import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-const hooks = vi.hoisted(() => ({ failed: false }));
+const hooks = vi.hoisted(() => ({ failedPath: null as string | null }));
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => [hooks.failed ? true : initial, () => {}],
+  useState: (initial: unknown) => [hooks.failedPath ?? initial, () => {}],
 }));
 vi.mock("expo-image", () => ({ Image: "Image" }));
 vi.mock("react-native", () => ({ View: "View" }));
@@ -47,7 +47,7 @@ const dataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
 
 describe("BotAvatarView", () => {
   it("renders a stored image avatar from its asset path", () => {
-    hooks.failed = false;
+    hooks.failedPath = null;
     const image = render({ kind: "image", assetPath: dataUrl, dithered: false }).find(
       (node) => node.type === "Image",
     );
@@ -58,22 +58,31 @@ describe("BotAvatarView", () => {
   });
 
   it("keeps a blob underneath the image so the slot is never empty", () => {
-    hooks.failed = false;
+    hooks.failedPath = null;
     const tree = render({ kind: "image", assetPath: dataUrl, dithered: false });
 
     expect(tree.some((node) => node.type === "Svg")).toBe(true);
   });
 
   it("falls back to the blob when the image cannot be decoded", () => {
-    hooks.failed = true;
+    hooks.failedPath = dataUrl;
     const tree = render({ kind: "image", assetPath: dataUrl, dithered: false });
 
     expect(tree.some((node) => node.type === "Image")).toBe(false);
     expect(tree.some((node) => node.type === "Svg")).toBe(true);
   });
 
+  it("tries a replacement image after the previous path failed", () => {
+    hooks.failedPath = dataUrl;
+    const replacement = "data:image/png;base64,cG5n";
+    const image = render({ kind: "image", assetPath: replacement, dithered: false }).find(
+      (node) => node.type === "Image",
+    );
+    expect(image?.props.source?.uri).toBe(replacement);
+  });
+
   it("falls back to the blob when an image avatar has no asset path", () => {
-    hooks.failed = false;
+    hooks.failedPath = null;
     const tree = render({ kind: "image", assetPath: "", dithered: false });
 
     expect(tree.some((node) => node.type === "Image")).toBe(false);
@@ -81,7 +90,7 @@ describe("BotAvatarView", () => {
   });
 
   it("still renders blob avatars", () => {
-    hooks.failed = false;
+    hooks.failedPath = null;
     const tree = render({ kind: "blob", shape: "hex", color: "#2E8EFF" });
 
     expect(tree.some((node) => node.type === "Image")).toBe(false);

@@ -984,6 +984,11 @@ function ThreadBotHeader(props: {
               <AppText className="text-[16px] font-t3-bold text-foreground" numberOfLines={1}>
                 {props.botName}
               </AppText>
+              {props.subtitle ? (
+                <AppText className="text-xs text-foreground-muted" numberOfLines={1}>
+                  {props.subtitle}
+                </AppText>
+              ) : null}
             </View>
           </View>
         </View>

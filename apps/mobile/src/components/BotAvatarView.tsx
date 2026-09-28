@@ -241,8 +241,8 @@ function BotImageAvatar(props: {
   readonly size: number;
   readonly state?: BotAvatarState;
 }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
+  const [failedPath, setFailedPath] = useState<string | null>(null);
+  if (failedPath === props.assetPath) {
     return <BotBlobAvatar avatar={null} size={props.size} state={props.state} />;
   }
   return (
@@ -253,7 +253,7 @@ function BotImageAvatar(props: {
         accessibilityIgnoresInvertColors
         cachePolicy="memory-disk"
         contentFit="cover"
-        onError={() => setFailed(true)}
+        onError={() => setFailedPath(props.assetPath)}
         style={{
           borderRadius: props.size / 2,
           height: props.size,
