@@ -97,11 +97,14 @@ export const preflightProvider = (input: {
     subscriptionId !== undefined &&
     instanceUsesSavedCredential(subscriptionId, input.providerInstanceConfig);
   const sharedHealth = sharedCredential ? subscription?.health : undefined;
+  const canRefreshExpiredLogin = sharedHealth === "expired" && subscription?.authMode === "oauth";
   const health =
-    sharedHealth === "revoked" || sharedHealth === "expired"
+    sharedHealth === "revoked" || (sharedHealth === "expired" && !canRefreshExpiredLogin)
       ? sharedHealth
       : (requestHealth?.health ??
-        (provider.auth.status === "unauthenticated" ? sharedHealth : undefined));
+        (provider.auth.status === "unauthenticated" && !canRefreshExpiredLogin
+          ? sharedHealth
+          : undefined));
   if (health === "missing" || health === "revoked") {
     return {
       category: health === "revoked" ? "expired-login" : "missing-login",
@@ -125,7 +128,11 @@ export const preflightProvider = (input: {
       return withRepair(category, detail);
     }
   }
-  if (provider.unavailability && provider.unavailability !== "temporary-failure") {
+  if (
+    provider.unavailability &&
+    provider.unavailability !== "temporary-failure" &&
+    !(canRefreshExpiredLogin && provider.unavailability === "expired-login")
+  ) {
     return withRepair(
       provider.unavailability,
       provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
@@ -133,7 +140,9 @@ export const preflightProvider = (input: {
   }
   if (
     !provider.installed ||
-    (provider.availability === "unavailable" && provider.status !== "error")
+    (provider.availability === "unavailable" &&
+      provider.status !== "error" &&
+      !(canRefreshExpiredLogin && provider.unavailability === "expired-login"))
   ) {
     return {
       category: "temporary-failure",
@@ -141,7 +150,7 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
-  if (provider.auth.status === "unauthenticated") {
+  if (provider.auth.status === "unauthenticated" && !canRefreshExpiredLogin) {
     return {
       category: "missing-login",
       detail: "Sign in to this provider before starting a chat.",

@@ -216,4 +216,38 @@ describe("preflightProvider", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("lets a saved OAuth login refresh its expired access token", () => {
+    const claude = provider({
+      auth: { status: "unauthenticated" },
+      availability: "unavailable",
+      unavailability: "expired-login",
+    });
+    const status = {
+      provider: "anthropic" as const,
+      connected: true,
+      authMode: "oauth" as const,
+      health: "expired" as const,
+      reconnectAction: "Reconnect Claude",
+      healthTest: { status: "not-run" as const },
+      dependentBots: [],
+      dependentRoutines: [],
+    };
+    expect(
+      preflightProvider({
+        providers: [claude],
+        providerId: "claude",
+        model: "claude-sonnet",
+        subscriptionStatuses: [status],
+      }),
+    ).toBeUndefined();
+    expect(
+      preflightProvider({
+        providers: [claude],
+        providerId: "claude",
+        model: "claude-sonnet",
+        subscriptionStatuses: [{ ...status, health: "revoked" }],
+      })?.category,
+    ).toBe("expired-login");
+  });
 });
