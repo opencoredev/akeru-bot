@@ -6,8 +6,6 @@ export const zhCNCatalog: TranslationCatalog = {
   "Add Environment": "添加环境",
   "Add attachment": "添加附件",
   "Add environment": "添加环境",
-  "Add new project": "添加新项目",
-  "Add project": "添加项目",
   "Add project starts in": "添加项目的起始目录",
   "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.":
     "Akeru Bot 在本地运行。提供商提示词和已启用的在线功能仍会将数据发送到其列出的服务。",

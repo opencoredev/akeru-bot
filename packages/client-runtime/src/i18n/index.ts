@@ -16,8 +16,6 @@ export const englishCatalog = {
   "Add Environment": "Add Environment",
   "Add attachment": "Add attachment",
   "Add environment": "Add environment",
-  "Add new project": "Add new project",
-  "Add project": "Add project",
   "Add project starts in": "Add project starts in",
   "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.":
     "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.",
