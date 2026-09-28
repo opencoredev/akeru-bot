@@ -84,7 +84,7 @@ export function resolveBotUsageCapForProvider(
   readonly valid: boolean;
   readonly value: Bot["usageCap"];
 } {
-  if (providerDriver === "cursor" || providerDriver === "grok") {
+  if (providerDriver === "grok") {
     return { available: false, valid: true, value: null };
   }
   return { available: true, ...parseBotUsageCapInput(input) };
