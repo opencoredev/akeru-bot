@@ -364,6 +364,7 @@ export const englishCatalog = {
   Search: "Search",
   "New chat": "New chat",
   "Untitled chat": "Untitled chat",
+  "In {environment}": "In {environment}",
   "{count} chat": "{count} chat",
   "{count} chats": "{count} chats",
   "Opens filters, archived chats, and settings": "Opens filters, archived chats, and settings",

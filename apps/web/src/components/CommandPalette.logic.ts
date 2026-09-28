@@ -1,4 +1,4 @@
-import { type KeybindingCommand } from "@t3tools/contracts";
+import { type KeybindingCommand, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ReactNode } from "react";
@@ -102,6 +102,99 @@ export function buildModelPickerCommandPaletteAction(input: {
       input.scheduleAfterClose(input.composerHandle.openModelPicker);
     },
   };
+}
+
+/** A chat the palette can find: its title, owner, and whether this client can open it. */
+export interface CommandPaletteChat {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly title: string;
+  readonly updatedAt: string;
+  /** Bot or group name shown under the title, when known. */
+  readonly ownerName: string | null;
+  /** Null when the chat lives in an environment this client's chat views do not show. */
+  readonly unavailableIn: string | null;
+}
+
+/** A server-side message match, already limited to one snippet per chat. */
+export interface CommandPaletteChatMatch {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly snippet: string;
+}
+
+export const COMMAND_PALETTE_CHAT_LIMIT = 8;
+
+/**
+ * The palette's Chats results for a typed query: chats whose title contains the
+ * query first, tighter matches ahead, then chats the server matched by message,
+ * in its order, with the matching snippet as the description. Chats in another
+ * environment are listed but disabled, because this client cannot open them.
+ * A leading ">" asks for actions only, so it yields no chats.
+ */
+export function buildChatSearchCommandPaletteItems(input: {
+  readonly query: string;
+  readonly chats: ReadonlyArray<CommandPaletteChat>;
+  readonly matches: ReadonlyArray<CommandPaletteChatMatch>;
+  readonly untitledLabel: string;
+  readonly unavailableLabel: (environmentLabel: string) => string;
+  readonly icon: ReactNode;
+  readonly openChat: (chat: CommandPaletteChat) => Promise<void>;
+  readonly limit?: number;
+}): CommandPaletteActionItem[] {
+  if (input.query.startsWith(">")) return [];
+  const normalizedQuery = normalizeSearchText(input.query);
+  if (normalizedQuery.length === 0) return [];
+  const limit = input.limit ?? COMMAND_PALETTE_CHAT_LIMIT;
+  const chatKey = (chat: { readonly environmentId: string; readonly threadId: string }) =>
+    `${chat.environmentId}:${chat.threadId}`;
+  const chatsByKey = new Map(input.chats.map((chat) => [chatKey(chat), chat] as const));
+
+  // A placeholder title says nothing about the chat, so only its messages can match.
+  const titleOf = (chat: CommandPaletteChat) =>
+    chat.title === PLACEHOLDER_THREAD_TITLE ? "" : chat.title.trim();
+  const titleMatches = input.chats
+    .map((chat, index) => ({
+      chat,
+      index,
+      rank: rankSearchFieldMatch(titleOf(chat), normalizedQuery),
+    }))
+    .filter((entry) => entry.rank !== Number.NEGATIVE_INFINITY)
+    .toSorted(
+      (left, right) =>
+        right.rank - left.rank ||
+        right.chat.updatedAt.localeCompare(left.chat.updatedAt) ||
+        left.index - right.index,
+    )
+    .map((entry) => ({ chat: entry.chat, snippet: null as string | null }));
+  const seen = new Set(titleMatches.map((entry) => chatKey(entry.chat)));
+  const messageMatches = input.matches.flatMap((match) => {
+    const chat = chatsByKey.get(chatKey(match));
+    if (!chat || seen.has(chatKey(chat))) return [];
+    seen.add(chatKey(chat));
+    return [{ chat, snippet: match.snippet.trim() || null }];
+  });
+
+  return [...titleMatches, ...messageMatches].slice(0, limit).map(({ chat, snippet }) => {
+    const description = [
+      chat.ownerName,
+      chat.unavailableIn === null ? null : input.unavailableLabel(chat.unavailableIn),
+      snippet,
+    ]
+      .filter((part): part is string => part !== null && part.length > 0)
+      .join(" · ");
+    return {
+      value: `chat-search:${chatKey(chat)}`,
+      searchTerms: [titleOf(chat), snippet ?? ""],
+      title: titleOf(chat) || input.untitledLabel,
+      ...(description ? { description } : {}),
+      icon: input.icon,
+      ...(chat.unavailableIn === null ? {} : { disabled: true }),
+      run: async () => {
+        await input.openChat(chat);
+      },
+    };
+  });
 }
 
 export function normalizeSearchText(value: string): string {

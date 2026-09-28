@@ -14,8 +14,9 @@ import {
   SettingsIcon,
   SunIcon,
 } from "lucide-react";
-import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "@effect/atom-react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { useTheme } from "../hooks/useTheme";
 import { isPreviewFocused } from "../lib/previewFocus";
@@ -24,11 +25,13 @@ import { useI18n } from "../i18n";
 import { activeChatPaletteActions } from "../chatActionsRegistry";
 import {
   buildChatCommandPaletteItems,
+  buildChatSearchCommandPaletteItems,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
   ITEM_ICON_CLASS,
   type CommandPaletteActionItem,
+  type CommandPaletteChat,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
@@ -39,6 +42,14 @@ import { openProductFeedback } from "~/productFeedbackStore";
 import { openPlugins } from "~/pluginsDialogStore";
 import { openUsage } from "~/usageDialogStore";
 import { primaryServerKeybindingsAtom } from "../state/server";
+import { useThreadShells } from "../state/entities";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { useThreadSearch } from "../state/queries";
+import {
+  findLatestBotThreadTarget,
+  findLatestGroupThreadTarget,
+} from "./roster/botThreadRuntime.logic";
+import { useRosterStore } from "./roster/rosterStore";
 import { resolveShortcutCommand } from "../keybindings";
 import { CommandDialog, CommandDialogPopup } from "./ui/command";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -239,7 +250,13 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     ...(chatItems.length > 0 ? [{ value: "chat", label: t("This chat"), items: chatItems }] : []),
     { value: "actions", label: t("Actions"), items: actionItems },
   ];
-  const filteredGroups = filterCommandPaletteGroups({ groups, query: deferredQuery });
+  const chatSearch = useChatSearchItems(deferredQuery);
+  const filteredGroups = [
+    ...filterCommandPaletteGroups({ groups, query: deferredQuery }),
+    ...(chatSearch.items.length > 0
+      ? [{ value: "chats", label: t("Chats"), items: chatSearch.items }]
+      : []),
+  ];
 
   function executeItem(item: CommandPaletteActionItem): void {
     if (item.disabled) return;
@@ -277,7 +294,109 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         highlightedItemValue={highlightedItemValue}
         keybindings={keybindings}
         onExecuteItem={executeItem}
+        {...(chatSearch.isPending ? { emptyStateMessage: t("Searching chats…") } : {})}
       />
     </CommandPaletteContent>
   );
+}
+
+/**
+ * The palette's Chats group for a typed query: chat titles from the loaded
+ * shells plus message matches from every connected environment. Bot chats open
+ * in the bot's view; a group opens its chat. Chats outside the environment this
+ * client shows are listed but cannot be opened here.
+ */
+function useChatSearchItems(query: string): {
+  readonly items: CommandPaletteActionItem[];
+  readonly isPending: boolean;
+} {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const { environments } = useEnvironments();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const shells = useThreadShells();
+  const bots = useRosterStore((state) => state.bots);
+  const groups = useRosterStore((state) => state.groups);
+  const searchQuery = query.startsWith(">") ? "" : query;
+  const connectedEnvironmentIds = useMemo(
+    () =>
+      environments
+        .filter((environment) => environment.connection.phase === "connected")
+        .map((environment) => environment.environmentId),
+    [environments],
+  );
+  const search = useThreadSearch(connectedEnvironmentIds, searchQuery);
+
+  const chats = useMemo((): CommandPaletteChat[] => {
+    const connected = new Set<string>(connectedEnvironmentIds);
+    const labelById = new Map<string, string>(
+      environments.map((environment) => [environment.environmentId, environment.label] as const),
+    );
+    const botById = new Map(bots.map((bot) => [bot.id, bot] as const));
+    const groupById = new Map(groups.map((group) => [group.id, group] as const));
+    return shells.flatMap((shell): CommandPaletteChat[] => {
+      if (
+        shell.archivedAt !== null ||
+        shell.parentThreadId != null ||
+        !connected.has(shell.environmentId)
+      ) {
+        return [];
+      }
+      const base = {
+        environmentId: shell.environmentId,
+        threadId: shell.id,
+        title: shell.title,
+        updatedAt: shell.updatedAt,
+      };
+      if (shell.environmentId !== primaryEnvironmentId) {
+        if (shell.botId == null && shell.groupId == null) return [];
+        return [
+          {
+            ...base,
+            ownerName: null,
+            unavailableIn: labelById.get(shell.environmentId) ?? shell.environmentId,
+          },
+        ];
+      }
+      const bot = shell.botId ? botById.get(shell.botId) : undefined;
+      if (bot && bot.archivedAt === null) {
+        return [{ ...base, ownerName: bot.name, unavailableIn: null }];
+      }
+      // A group shows only its newest chat, so older group chats cannot be opened.
+      const group = shell.groupId ? groupById.get(shell.groupId) : undefined;
+      if (
+        group &&
+        findLatestGroupThreadTarget(group.id, shell.environmentId, shells)?.threadId === shell.id
+      ) {
+        return [{ ...base, ownerName: group.name, unavailableIn: null }];
+      }
+      return [];
+    });
+  }, [bots, connectedEnvironmentIds, environments, groups, primaryEnvironmentId, shells]);
+
+  const items = buildChatSearchCommandPaletteItems({
+    query: searchQuery,
+    chats,
+    matches: search.matches,
+    untitledLabel: t("Untitled chat"),
+    unavailableLabel: (environment) => t("In {environment}", { environment }),
+    icon: <MessagesSquareIcon className={ITEM_ICON_CLASS} />,
+    openChat: async (chat) => {
+      const shell = shells.find(
+        (candidate) =>
+          candidate.environmentId === chat.environmentId && candidate.id === chat.threadId,
+      );
+      if (shell?.botId) {
+        const botId = shell.botId;
+        const newest = findLatestBotThreadTarget(botId, chat.environmentId, shells);
+        const roster = useRosterStore.getState();
+        roster.selectBot(botId);
+        roster.openBotChat(botId, newest?.threadId === chat.threadId ? null : chat.threadId);
+        await navigate({ to: "/bots/$botId", params: { botId } });
+      } else if (shell?.groupId) {
+        await navigate({ to: "/groups/$groupId", params: { groupId: shell.groupId } });
+      }
+    },
+  });
+  return { items, isPending: search.isPending };
 }

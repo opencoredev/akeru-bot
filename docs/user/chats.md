@@ -53,6 +53,17 @@ open chat, returns the bot to its newest chat.
 
 On mobile, the chat list shows every chat, so older chats are already one tap away.
 
+## Find a chat
+
+On web and desktop, open the command palette and type. Below the matching actions, **Chats** lists
+up to eight chats whose title or messages contain what you typed, with the bot's name and, for a
+message match, the matching text. Selecting a bot's chat opens it in that bot's view, as selecting it
+from the bot's **Chats** list does. A group chat opens the group.
+
+Search covers every environment this client is connected to. Chats in another environment are
+listed with that environment's name but cannot be opened from here; open them from a client
+connected to that environment. Start your query with `>` to search actions only.
+
 ## Active and settled chats
 
 Akeru settles a chat only when you select **Settle chat**. Inactivity does not move chats to the

@@ -6,9 +6,11 @@ import {
 import { activeChatPaletteActions, registerChatPaletteActions } from "../chatActionsRegistry";
 import {
   buildChatCommandPaletteItems,
+  buildChatSearchCommandPaletteItems,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
+  type CommandPaletteChat,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
@@ -165,5 +167,114 @@ describe("chat actions in the command palette", () => {
     });
     expect(snooze?.description).toBe("1:00 PM");
     expect(pin).not.toHaveProperty("description");
+  });
+});
+
+describe("buildChatSearchCommandPaletteItems", () => {
+  const chat = (
+    threadId: string,
+    title: string,
+    updatedAt: string,
+    extra: Partial<CommandPaletteChat> = {},
+  ): CommandPaletteChat => ({
+    environmentId: "env-a",
+    threadId,
+    title,
+    updatedAt,
+    ownerName: "Akeru",
+    unavailableIn: null,
+    ...extra,
+  });
+  const chats = [
+    chat("trip-old", "Old trip notes", "2026-08-01T00:00:00.000Z"),
+    chat("trip", "Trip plan", "2026-08-03T00:00:00.000Z"),
+    chat("budget", "Budget", "2026-08-02T00:00:00.000Z"),
+    chat("draft", "New chat", "2026-08-04T00:00:00.000Z"),
+    chat("remote", "Trip receipts", "2026-08-05T00:00:00.000Z", {
+      environmentId: "env-b",
+      ownerName: null,
+      unavailableIn: "Home server",
+    }),
+  ];
+  const build = (
+    query: string,
+    matches: Parameters<typeof buildChatSearchCommandPaletteItems>[0]["matches"] = [],
+    openChat = vi.fn(async () => undefined),
+  ) =>
+    buildChatSearchCommandPaletteItems({
+      query,
+      chats,
+      matches,
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => `In ${environment}`,
+      icon: null,
+      openChat,
+    });
+
+  it("returns nothing for an empty query or an actions-only query", () => {
+    expect(build("  ")).toEqual([]);
+    expect(build(">trip")).toEqual([]);
+  });
+
+  it("ranks prefix title matches ahead of looser ones, newest first among equals", () => {
+    expect(build("trip").map((item) => item.value)).toEqual([
+      "chat-search:env-b:remote",
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+    ]);
+  });
+
+  it("adds message matches after title matches, once per chat, with the snippet", () => {
+    const items = build("trip", [
+      { environmentId: "env-a", threadId: "trip", snippet: "trip again" },
+      { environmentId: "env-a", threadId: "budget", snippet: "the trip costs" },
+      { environmentId: "env-a", threadId: "budget", snippet: "second hit" },
+      { environmentId: "env-a", threadId: "unknown", snippet: "not a listed chat" },
+    ]);
+    expect(items.map((item) => item.value)).toEqual([
+      "chat-search:env-b:remote",
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+      "chat-search:env-a:budget",
+    ]);
+    expect(items.at(-1)?.description).toBe("Akeru · the trip costs");
+  });
+
+  it("matches a placeholder-titled chat only by message and shows it as untitled", () => {
+    expect(build("new chat")).toEqual([]);
+    const [item] = build("hello", [
+      { environmentId: "env-a", threadId: "draft", snippet: "hello there" },
+    ]);
+    expect(item?.title).toBe("Untitled chat");
+  });
+
+  it("disables chats in another environment and names it", () => {
+    const remote = build("receipts")[0];
+    expect(remote?.disabled).toBe(true);
+    expect(remote?.description).toBe("In Home server");
+  });
+
+  it("opens the chosen chat", async () => {
+    const openChat = vi.fn(async () => undefined);
+    const item = build("budget", [], openChat)[0];
+    await item?.run();
+    expect(openChat).toHaveBeenCalledWith(chats[2]);
+  });
+
+  it("caps the results", () => {
+    const many = Array.from({ length: 12 }, (_, index) =>
+      chat(`c${index}`, `Chat ${index}`, "2026-08-01T00:00:00.000Z"),
+    );
+    expect(
+      buildChatSearchCommandPaletteItems({
+        query: "chat",
+        chats: many,
+        matches: [],
+        untitledLabel: "Untitled chat",
+        unavailableLabel: (environment) => environment,
+        icon: null,
+        openChat: async () => undefined,
+      }),
+    ).toHaveLength(8);
   });
 });
