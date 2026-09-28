@@ -151,6 +151,7 @@ beforeAll(async () => {
     clear: () => {},
   });
   vi.stubGlobal("window", {
+    localStorage: globalThis.localStorage,
     matchMedia,
     addEventListener: () => {},
     removeEventListener: () => {},

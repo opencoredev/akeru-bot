@@ -556,6 +556,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => (key === CUSTOM_THEMES_STORAGE_KEY ? storedThemes : null),
         setItem,
+        removeItem: () => {},
       },
     });
     invalidateCustomThemes();
@@ -706,6 +707,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -784,6 +786,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -820,6 +823,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -902,6 +906,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -937,6 +942,7 @@ describe("theme files", () => {
           return storedThemes;
         },
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -968,6 +974,7 @@ describe("theme files", () => {
           throw new Error("storage unavailable");
         },
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -997,6 +1004,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: () => storedThemes,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -1035,6 +1043,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -1144,6 +1153,7 @@ describe("stored theme preferences", () => {
       localStorage: {
         getItem: (key: string) => (key === CUSTOM_THEMES_STORAGE_KEY ? storedThemes : null),
         setItem,
+        removeItem: () => {},
       },
     });
     invalidateCustomThemes();

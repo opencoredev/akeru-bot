@@ -20,7 +20,7 @@ import {
 } from "./CommandPalette.logic";
 
 describe("command palette product language", () => {
-  it("uses conversation language for history and search", () => {
+  it("uses chat language for history and search", () => {
     expect(
       buildRootGroups({
         actionItems: [],
@@ -35,9 +35,9 @@ describe("command palette product language", () => {
           },
         ],
       })[0]?.label,
-    ).toBe("Recent conversations");
+    ).toBe("Recent chats");
     expect(getCommandPaletteInputPlaceholder("root")).toBe(
-      "Search commands, projects, and conversations...",
+      "Search commands, projects, and chats...",
     );
   });
 });

@@ -114,7 +114,7 @@ afterEach(() => {
 });
 
 describe("formatPendingPrimaryActionLabel", () => {
-  it("returns 'Submitting...' while responding", () => {
+  it("returns 'Sending...' while responding", () => {
     expect(
       formatPendingPrimaryActionLabel({
         compact: false,
@@ -122,10 +122,10 @@ describe("formatPendingPrimaryActionLabel", () => {
         isResponding: true,
         questionIndex: 0,
       }),
-    ).toBe("Submitting...");
+    ).toBe("Sending...");
   });
 
-  it("returns 'Submitting...' while responding regardless of other flags", () => {
+  it("returns 'Sending...' while responding regardless of other flags", () => {
     expect(
       formatPendingPrimaryActionLabel({
         compact: true,
@@ -133,7 +133,7 @@ describe("formatPendingPrimaryActionLabel", () => {
         isResponding: true,
         questionIndex: 3,
       }),
-    ).toBe("Submitting...");
+    ).toBe("Sending...");
   });
 
   it("returns 'Submit' in compact mode on the last question", () => {
