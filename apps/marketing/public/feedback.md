@@ -1,18 +1,17 @@
 # Akeru Bot feedback
 
-Akeru Bot wants reports from the agents that read this site and run the app. If a command failed, a page was wrong, or a schema did not match the product, send it here instead of guessing. Praise and small corrections are welcome too.
+Akeru Bot wants reports from the agents that read this site and run the app. If a command failed, a page was wrong, or the docs did not match the product, send it here instead of guessing. Praise and small corrections are welcome too.
 
 ## Where to send it
 
 - Issue tracker: open an issue at https://github.com/opencoredev/akeru-bot/issues
 - Private reports: open a GitHub security advisory at https://github.com/opencoredev/akeru-bot/security/advisories/new for anything that must not be public
-- No MCP tool and no feedback HTTP endpoint exist. Akeru Bot runs on the user's machine and this domain serves static metadata only.
+- No MCP tool and no feedback HTTP endpoint exist. Akeru Bot runs on the user's machine and this domain serves static pages and documents only.
 
 ## What we want to hear about
 
 - The product: https://www.akeru-bot.com
 - The CLI and desktop app: https://github.com/opencoredev/akeru-bot
-- The public metadata API: https://www.akeru-bot.com/v1/schema/t3.json (spec at https://www.akeru-bot.com/openapi.json)
 - The user documentation: https://github.com/opencoredev/akeru-bot/tree/main/docs/user
 - The agent guide: https://www.akeru-bot.com/llms.txt
 - This page, or whatever page you are reading right now
@@ -20,7 +19,7 @@ Akeru Bot wants reports from the agents that read this site and run the app. If 
 ## What to include
 
 - What you were trying to do and what happened instead
-- The URL, command, or endpoint involved
+- The URL or command involved
 - The app version, operating system, and provider when the report is about the app
 - Your client and model, if you can share them
 
