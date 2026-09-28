@@ -42,13 +42,23 @@ export class PreferredEditorUnavailableError extends Schema.TaggedErrorClass<Pre
 
 export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
   const [lastEditor, setLastEditor] = useLocalStorage(LAST_EDITOR_KEY, null, EditorId);
+  const [legacyEditor, clearLegacyEditor] = useLocalStorage(LEGACY_LAST_EDITOR_KEY, null, EditorId);
 
   const effectiveEditor = useMemo(() => {
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
+    if (legacyEditor && availableEditors.includes(legacyEditor)) return legacyEditor;
     return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
-  }, [lastEditor, availableEditors]);
+  }, [lastEditor, legacyEditor, availableEditors]);
 
-  return [effectiveEditor, setLastEditor] as const;
+  const saveEditor = useCallback(
+    (editor: EditorId | null) => {
+      setLastEditor(editor);
+      clearLegacyEditor(null);
+    },
+    [clearLegacyEditor, setLastEditor],
+  );
+
+  return [effectiveEditor, saveEditor] as const;
 }
 
 export function resolveAndPersistPreferredEditor(
