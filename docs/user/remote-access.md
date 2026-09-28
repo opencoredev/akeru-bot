@@ -260,9 +260,15 @@ https://tunnel.example.com/pair?host=https://box.example.ts.net:3773#token=<toke
 ```
 
 Opening it on any Akeru web address saves the server named by `host` in that browser, then
-offers **Open app**. It does not sign the browser in to the address that served the page. You can
-also paste the whole link into **Settings > Connections > Add environment** on web or desktop, or
-scan it with the mobile app. The token still works only once.
+offers **Open app**. It does not sign the browser in to the address that served the page, so
+**Open app** shows the saved server only when this browser already uses that address. Otherwise
+the address asks you to pair it first. When `host` names the address that served the page, the
+link pairs that address directly and opens the app. You can also paste the whole link into
+**Settings > Connections > Add environment** on web or desktop, or scan it with the mobile app. The
+token still works only once.
+
+If the page said the link was incomplete, open the complete link in the same tab. The page reads
+the link again without a reload.
 
 Keep the token after `#`. The page refuses a link that carries `token=` in the query string,
 because the browser has already sent that token to the address that served the page. Get a new
