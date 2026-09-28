@@ -180,7 +180,14 @@ export function BotDetailsPanel({
     handledRoutineRequest.current = routinePanelRequest;
     panel.scrollIntoView({ block: "start" });
     panel.querySelector<HTMLElement>("h3[tabindex]")?.focus();
-  }, [browserExpanded, desktopOpen, desktopPanel.state, mobileOpen, routinePanelRequest, setDesktopOpen]);
+  }, [
+    browserExpanded,
+    desktopOpen,
+    desktopPanel.state,
+    mobileOpen,
+    routinePanelRequest,
+    setDesktopOpen,
+  ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
