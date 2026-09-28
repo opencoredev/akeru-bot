@@ -147,10 +147,7 @@ describe("botChatTimeline", () => {
   it("renders cards in an empty chat", () => {
     const entries = botChatTimeline({
       messages: [],
-      delegations: [
-        delegation("d-b", 5, "turn-1", null),
-        delegation("d-a", 5, "turn-1", null),
-      ],
+      delegations: [delegation("d-b", 5, "turn-1", null), delegation("d-a", 5, "turn-1", null)],
     });
 
     expect(keys(entries)).toEqual(["delegation:d-a", "delegation:d-b"]);
@@ -188,8 +185,8 @@ describe("botChatTimeline", () => {
       "message:user-2",
       "message:bot-2",
     ]);
-    expect(
-      entries.flatMap((entry) => (entry._tag === "Message" ? [entry.index] : [])),
-    ).toEqual([0, 1, 2, 3]);
+    expect(entries.flatMap((entry) => (entry._tag === "Message" ? [entry.index] : []))).toEqual([
+      0, 1, 2, 3,
+    ]);
   });
 });

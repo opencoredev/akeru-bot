@@ -28,7 +28,11 @@ export type BotChatTimelineEntry<
       readonly index: number;
     }
   | { readonly _tag: "Receipt"; readonly key: string; readonly receipt: TReceipt }
-  | { readonly _tag: "Delegation"; readonly key: string; readonly delegation: AkeruDelegationRecord };
+  | {
+      readonly _tag: "Delegation";
+      readonly key: string;
+      readonly delegation: AkeruDelegationRecord;
+    };
 
 export interface BotChatTimelineInput<
   TMessage extends BotChatTimelineMessage,
@@ -89,9 +93,7 @@ export function botChatTimeline<
         : positionByMessageId.get(delegation.anchorMessageId);
     const turnEnd = lastPositionByTurnId.get(delegation.parentTurnId);
     const position =
-      anchor !== undefined
-        ? Math.max(anchor, turnEnd ?? anchor)
-        : (turnEnd ?? rows.length - 1);
+      anchor !== undefined ? Math.max(anchor, turnEnd ?? anchor) : (turnEnd ?? rows.length - 1);
     const card: Entry = {
       _tag: "Delegation",
       key: `delegation:${delegation.delegationId}`,
