@@ -34,6 +34,7 @@ const archivedBot: OrchestrationBot = {
   disabledMcpServerIds: [],
   avatar: { kind: "dither", seed: BOT_ID },
   engine: null,
+  imageProvider: null,
   sandbox: "local",
   runtimeMode: "full-access",
   usageCap: null,
