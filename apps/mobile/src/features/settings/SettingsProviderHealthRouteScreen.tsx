@@ -207,43 +207,49 @@ function BotInbox({
   );
 }
 
+const LOCAL_EXECUTION_OPTIONS = [
+  { value: "auto", label: "Auto review" },
+  { value: "approval-required", label: "Ask first" },
+  { value: "full-access", label: "Full access" },
+] as const;
+
 function LocalExecution({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
-  const mode = settings?.defaultThreadEnvMode ?? "local";
+  const mode = settings?.localExecutionMode;
   return (
     <SettingsSection title={t("Local execution")} card>
       <View className="gap-3 p-4">
         <Text className="text-sm text-foreground-muted">
-          {t("Pick the default workspace mode for new chats on this environment.")}
+          {t("Auto review runs safe actions and asks before sensitive ones.")}
         </Text>
         <View className="flex-row gap-2">
-          {(["local", "worktree"] as const).map((value) => (
+          {LOCAL_EXECUTION_OPTIONS.map((option) => (
             <Pressable
-              key={value}
+              key={option.value}
               accessibilityRole="button"
-              accessibilityState={{ selected: mode === value }}
+              accessibilityState={{ selected: mode === option.value }}
               className={
-                mode === value
+                mode === option.value
                   ? "flex-1 rounded-[14px] bg-foreground px-4 py-3"
                   : "flex-1 rounded-[14px] bg-subtle px-4 py-3"
               }
               onPress={() => {
                 void updateSettings({
                   environmentId,
-                  input: { patch: { defaultThreadEnvMode: value } },
+                  input: { patch: { localExecutionMode: option.value } },
                 });
               }}
             >
               <Text
                 className={
-                  mode === value
+                  mode === option.value
                     ? "text-center text-sm font-t3-medium text-background"
                     : "text-center text-sm font-t3-medium text-foreground"
                 }
               >
-                {value === "local" ? t("Local") : t("New worktree")}
+                {t(option.label)}
               </Text>
             </Pressable>
           ))}

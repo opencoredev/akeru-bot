@@ -98,6 +98,7 @@ vi.mock("../../state/use-composer-path-search", () => ({
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update") },
   environmentBotsAtom: () => Symbol("bots"),
+  environmentGroupsAtom: () => Symbol("groups"),
 }));
 vi.mock("./thread-list-v2-items", () => ({ providerBotName: () => "Codex" }));
 vi.mock("../../state/server", () => ({
@@ -202,7 +203,6 @@ function renderMenu(draftMessage: string, config: ServerConfig | null = serverCo
     onSendMessage: vi.fn(),
     onUpdateModelSelection: vi.fn(),
     onUpdateRuntimeMode: vi.fn(),
-    onUpdateInteractionMode: vi.fn(),
     onReconnectEnvironment: vi.fn(),
   } satisfies ThreadComposerProps;
   const tree = (ThreadComposer as unknown as (props: ThreadComposerProps) => unknown)(props);
@@ -233,7 +233,7 @@ describe("ThreadComposer command menus", () => {
   it("lists app commands, provider commands, and skills after /", () => {
     expect(renderMenu("/")).toEqual({
       triggerKind: "slash-command",
-      labels: ["/model", "/plan", "/default", "/compact", "skill:deploy", "skill:review"],
+      labels: ["/model", "/compact", "skill:deploy", "skill:review"],
     });
   });
 
@@ -248,7 +248,7 @@ describe("ThreadComposer command menus", () => {
       emptyText: "Connect a provider to use skills.",
       labels: [],
     });
-    expect(renderMenu("/", noProvider).labels).toEqual(["/model", "/plan", "/default"]);
+    expect(renderMenu("/", noProvider).labels).toEqual(["/model"]);
   });
 
   it("shows no menu without a trigger", () => {

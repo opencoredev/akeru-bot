@@ -17,7 +17,6 @@ import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView"
 import { GroupAvatarStack } from "../../components/GroupAvatarStack";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
-import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
@@ -847,24 +846,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
         }
       >
-        {/* Settled history recedes: dimmed favicon + muted title. */}
+        {/* Settled history recedes: muted title. */}
         <View
           className={cn(
             "min-h-[44px] flex-row items-center gap-2.5 py-2",
             sidebarPane ? "px-3" : "px-5",
           )}
         >
-          {props.project ? (
-            <View className="opacity-40">
-              <ProjectFavicon
-                environmentId={thread.environmentId}
-                faviconPath={props.project.faviconPath}
-                size={15}
-                projectTitle={props.projectTitle ?? props.project.title}
-                workspaceRoot={props.project.workspaceRoot}
-              />
-            </View>
-          ) : null}
           <View className="min-w-0 flex-1">
             <Text
               className={cn(
