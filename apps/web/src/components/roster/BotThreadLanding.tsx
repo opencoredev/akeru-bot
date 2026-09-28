@@ -122,8 +122,8 @@ function RoutineReceiptRow({
         "mx-auto flex w-full max-w-3xl items-start gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground",
         opensRoutines &&
           "outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-        error && "bg-destructive/8 text-destructive",
-        error && opensRoutines && "hover:bg-destructive/12 hover:text-destructive",
+        error && "bg-destructive/8 text-destructive-foreground",
+        error && opensRoutines && "hover:bg-destructive/12 hover:text-destructive-foreground",
       )}
       data-testid="routine-receipt"
       onClick={opensRoutines ? onOpenRoutines : undefined}
