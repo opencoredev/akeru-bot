@@ -38,10 +38,11 @@ export function BotUserInputPrompt({
   return (
     <section
       aria-label={t("Question")}
-      className="mb-1.5 w-full rounded-t-[1.65rem] rounded-b-lg border border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]"
+      className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-border/70 border-b-transparent bg-card px-3.5 pt-3 pb-2.5"
       data-testid="bot-user-input-prompt"
     >
       <ComposerPendingUserInputPanel
+        className="!max-w-none !rounded-none !border-0 !bg-transparent !p-0"
         pendingUserInputs={pendingUserInputs}
         respondingRequestIds={respondingRequestIds}
         answers={answers}

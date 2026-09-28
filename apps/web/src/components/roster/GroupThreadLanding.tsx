@@ -367,14 +367,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           activitySlot={
             working && activeBot && !waitingForUserInput && pendingApproval === null ? (
               <BotActivityStatus
-                avatar={activeBot.avatar}
                 name={activeBot.name}
-                startedAt={
-                  runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
-                }
+                activity={botActivity}
                 update={workingUpdate}
                 silentRun={silentRun}
-                compact
               />
             ) : null
           }

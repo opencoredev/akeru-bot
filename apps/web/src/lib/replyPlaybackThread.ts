@@ -13,11 +13,15 @@ import { useOptionalReplyPlayback } from "../components/chat/ReplyPlaybackProvid
 const unavailableSynthesis = storedReplySynthesisCapability(undefined);
 const subscribeNothing = () => () => {};
 const getUnavailableSynthesis = () => unavailableSynthesis;
+const STORED_REPLY_SPEECH_AVAILABLE = false;
 
 export function replyPlaybackControlProps(
   session: ReplyPlaybackSession | null,
   message: ReplyPlaybackMessage,
 ) {
+  // The web session cannot synthesize stored replies yet, so every action would
+  // be a disabled button plus a disclaimer. Hide it until speech is wired up.
+  if (!STORED_REPLY_SPEECH_AVAILABLE) return undefined;
   const action = session?.actionFor(message);
   if (!session || !action) return undefined;
   return {

@@ -305,7 +305,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         return Promise.resolve(false);
       }
       if (!activeProject) {
-        setError(localFailure("Add a project before you message a bot."));
+        setError(localFailure("Your workspace is still loading. Try again in a moment."));
         return Promise.resolve(false);
       }
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);

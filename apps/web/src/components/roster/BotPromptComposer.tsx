@@ -40,10 +40,13 @@ import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { LoaderMeter } from "../chat/ResponseLoadingState";
 import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
+import { ReplyReference } from "../chat/ReplyReference";
+import type { MessageReplyTarget } from "../chat/MessageControls";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { useI18n } from "../../i18n";
 import { BotComposerModelControl } from "./BotComposerModelControl";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
 import { useRosterStore } from "./rosterStore";
 import {
@@ -188,6 +191,7 @@ export function BotPromptComposer({
   activitySlot = null,
   busy = false,
   pendingActionSlot = null,
+  quietSurface = false,
   placeholder,
   replyPreview,
   onCancelReply,
@@ -213,8 +217,9 @@ export function BotPromptComposer({
   busy?: boolean;
   /** Rendered above the prompt box so a pending decision reads as part of the composer. */
   pendingActionSlot?: ReactNode;
+  quietSurface?: boolean;
   placeholder?: string;
-  replyPreview?: { readonly label: string; readonly text: string } | null;
+  replyPreview?: MessageReplyTarget | null;
   onCancelReply?: () => void;
   /** Id of the element explaining why Send is off, announced with the Send button. */
   sendBlockedDescriptionId?: string | undefined;
@@ -620,8 +625,6 @@ export function BotPromptComposer({
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcutCommand = resolveShortcutCommand(event, keybindings, {
         context: {
-          terminalFocus: false,
-          terminalOpen: false,
           modelPickerOpen: false,
         },
       });
@@ -704,7 +707,7 @@ export function BotPromptComposer({
       data-chat-composer-form="true"
       data-state={composerState}
       aria-disabled={readOnly || undefined}
-      className="w-full px-4 pb-4 pt-2 sm:px-6 sm:pb-6"
+      className="w-full px-[max(1rem,calc((100%-48rem)/2))] pb-4 pt-2 sm:px-[max(1.5rem,calc((100%-48rem)/2))] sm:pb-6"
       onSubmit={(event) => {
         event.preventDefault();
         const prompt = draft.trim();
@@ -830,7 +833,10 @@ export function BotPromptComposer({
             data-testid="bot-prompt-composer"
             data-expanded={expanded || undefined}
             className={cn(
-              "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border border-white/10 bg-foreground/[0.12] shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out dark:bg-white/[0.16]",
+              "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out",
+              quietSurface
+                ? "border-border/70 bg-card"
+                : "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]",
               expanded && "min-h-28",
               pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
             )}
@@ -889,7 +895,7 @@ export function BotPromptComposer({
               aria-controls={mentionTrigger && activeMentionOptionId ? mentionListboxId : undefined}
               aria-activedescendant={(mentionTrigger && activeMentionOptionId) || undefined}
               className={cn(
-                "field-sizing-content max-h-56 w-full resize-none bg-transparent text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70",
+                "field-sizing-content max-h-56 w-full resize-none bg-transparent text-base leading-6 outline-none placeholder:text-muted-foreground/70",
                 expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
               )}
               onChange={(event) => {

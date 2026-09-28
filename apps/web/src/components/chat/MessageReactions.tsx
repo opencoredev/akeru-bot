@@ -32,15 +32,22 @@ export function MessageReactions({
 
   return (
     <div
-      className={cn("mt-1 flex flex-wrap gap-1", align === "end" && "justify-end")}
+      className={cn("mt-1.5 flex flex-wrap gap-1.5", align === "end" && "justify-end")}
       data-testid="message-reactions"
     >
       {[...counts].map(([emoji, count]) => {
         const mine = selectedEmoji === emoji;
-        const label = `${emoji}${count > 1 ? ` ${count}` : ""}`;
+        const label = (
+          <>
+            {emoji}
+            {count > 1 ? (
+              <span className="font-sans text-xs font-medium text-muted-foreground">{count}</span>
+            ) : null}
+          </>
+        );
         const className = cn(
-          "rounded-full border px-2 py-0.5 text-xs leading-5",
-          mine ? "border-primary/40 bg-primary/10" : "border-border bg-background",
+          "inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 py-1 text-lg leading-none [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]",
+          mine ? "border-primary/40 bg-primary/10" : "border-border/80 bg-background/70",
         );
         if (!onToggle || reactionOptionFromEmoji(emoji) === null) {
           return (

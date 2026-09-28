@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   buildReplyPrompt,
+  findReplySourceMessageId,
   MESSAGE_REACTION_OPTIONS,
   MessageControls,
   parseReplyPrompt,
@@ -80,7 +81,40 @@ describe("message controls", () => {
     expect(reactionOptionFromEmoji("🦑")).toBeNull();
   });
 
-  it("replaces the message actions icon with a checkmark after copying", () => {
+  it("recovers the referenced message and reply body without treating ordinary quotes as replies", () => {
+    const sent = buildReplyPrompt(
+      { messageId: "message-1", label: "Akeru", text: "First line\n\nThird line" },
+      "My reply\nwith another line",
+    );
+    expect(parseReplyPrompt(sent)).toEqual({
+      reference: { label: "Akeru", text: "First line\n\nThird line" },
+      body: "My reply\nwith another line",
+    });
+    expect(parseReplyPrompt("> A regular quote\n\nMy reply")).toBeNull();
+    expect(
+      findReplySourceMessageId(
+        [
+          { id: "source", text: "First line\n\nThird line" },
+          { id: "reply", text: sent },
+        ],
+        1,
+        sent,
+      ),
+    ).toBe("source");
+    expect(
+      findReplySourceMessageId(
+        [
+          { id: "source", text: "First line\n\nThird line" },
+          { id: "duplicate", text: "First line\n\nThird line" },
+          { id: "reply", text: sent },
+        ],
+        2,
+        sent,
+      ),
+    ).toBeNull();
+  });
+
+  it("replaces the copy icon with a checkmark after copying", () => {
     mocks.isCopied = true;
 
     const html = renderToStaticMarkup(
@@ -93,5 +127,23 @@ describe("message controls", () => {
     expect(html).not.toContain("Read aloud");
 
     mocks.isCopied = false;
+  });
+
+  it("copies directly instead of opening a one-item menu", () => {
+    const html = renderToStaticMarkup(createElement(MessageControls, { copyText: "Hello" }));
+
+    expect(html).toContain('aria-label="Copy message"');
+    expect(html).toContain("lucide-copy");
+    expect(html).not.toContain("More message actions");
+  });
+
+  it("pulls the first control onto the text edge when flush", () => {
+    const flush = renderToStaticMarkup(
+      createElement(MessageControls, { copyText: "Hello", flushStart: true }),
+    );
+    const inset = renderToStaticMarkup(createElement(MessageControls, { copyText: "Hello" }));
+
+    expect(flush).toContain("-ms-1.5");
+    expect(inset).not.toContain("-ms-1.5");
   });
 });

@@ -1,12 +1,13 @@
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
 import type { OrchestrationThreadActivity, TurnId } from "@t3tools/contracts";
+import type { CSSProperties } from "react";
 
 import { useI18n } from "../../i18n";
+import { cn } from "~/lib/utils";
 
 import { ResponseLoadingState } from "../chat/ResponseLoadingState";
-import { BotAvatarView } from "./BotAvatarView";
-import type { BotAvatar } from "./types";
+import type { BotActivity } from "./botActivityStatus.logic";
 
 const HIDDEN_ACTIVITY_KINDS = new Set([
   "checkpoint.captured",
@@ -63,36 +64,82 @@ export function botActivityUpdate(
   return label.length > 56 ? `${label.slice(0, 55).trimEnd()}…` : label;
 }
 
+// Eight cells of a 5x5 diamond, clockwise from the top. The comet head steps
+// around this ring; each cell's delay puts it one step behind the previous one.
+const GLYPH_CELLS = [
+  [2, 0],
+  [3, 1],
+  [4, 2],
+  [3, 3],
+  [2, 4],
+  [1, 3],
+  [0, 2],
+  [1, 1],
+] as const;
+
+/** The pixel comet from the thinking row. Opacity only, so it stays on the compositor. */
+export function PixelThinkingGlyph({ className }: { readonly className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={cn("bot-thinking-glyph size-3.5 shrink-0", className)}
+      viewBox="0 0 14 14"
+    >
+      {GLYPH_CELLS.map(([x, y], index) => (
+        <rect
+          fill="currentColor"
+          height="2"
+          key={`${x}-${y}`}
+          style={{ "--cell": index } as CSSProperties}
+          width="2"
+          x={x * 3}
+          y={y * 3}
+        />
+      ))}
+    </svg>
+  );
+}
+
+/** Text with a soft sheen sweeping across it while work is in progress. */
+function ShimmerText({ text, className }: { readonly text: string; readonly className?: string }) {
+  return (
+    <span className={cn("bot-shimmer-text", className)}>
+      {text}
+      <span aria-hidden="true" className="bot-shimmer-sheen">
+        <span className="bot-shimmer-sheen-text">{text}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The moving diamond and a short update. What the bot is doing in detail stays out of view.
+ * `activity` comes from the reported tool action; `update` is the older summary-based
+ * phrase and fills in when no tool action is known yet. A run the provider went quiet
+ * on replaces both with a stalled timer counting from the last output.
+ */
 export function BotActivityStatus({
-  avatar,
   name,
-  startedAt = null,
-  compact = false,
+  activity = null,
   update = null,
   silentRun = null,
 }: {
-  readonly avatar: BotAvatar;
   readonly name: string;
-  /** Turn start; when known the status shows a live elapsed timer. */
-  readonly startedAt?: string | null;
-  /** Drops the avatar for rails that already show who is working. */
-  readonly compact?: boolean;
+  readonly activity?: BotActivity | null;
   readonly update?: string | null;
-  /** A running turn the provider went quiet on; replaces the working label and timer. */
   readonly silentRun?: ThreadSilentRun | null;
 }) {
   const { t } = useI18n();
   if (silentRun) {
     return (
       <div
-        className="flex min-w-0 items-center gap-2.5 text-sm"
+        className="flex w-full min-w-0 items-center gap-3 py-1 text-sm"
         data-testid="bot-activity-status"
         data-silent-run=""
       >
-        {compact ? null : (
-          <BotAvatarView avatar={avatar} name={name} className="size-7 shrink-0" state="working" />
-        )}
-        {/* The timer counts from the last output, so it reads as how long it has been quiet. */}
+        <span className="flex w-7 shrink-0 justify-center">
+          <PixelThinkingGlyph className="text-muted-foreground" />
+        </span>
         <ResponseLoadingState
           createdAt={silentRun.lastActivityAt}
           label={t("No response from {provider}", { provider: silentRun.providerName })}
@@ -101,15 +148,22 @@ export function BotActivityStatus({
       </div>
     );
   }
+  const label = activity?.label ?? update ?? t("{name} is working", { name });
   return (
-    // ResponseLoadingState owns the live region; announcing from here too would nest them.
-    <div className="flex min-w-0 items-center gap-2.5 text-sm" data-testid="bot-activity-status">
-      {compact ? null : (
-        <BotAvatarView avatar={avatar} name={name} className="size-7 shrink-0" state="working" />
-      )}
-      <ResponseLoadingState
-        createdAt={startedAt}
-        label={update ? `${name} · ${update}` : t("{name} is working", { name })}
+    <div
+      aria-live="polite"
+      className="flex w-full min-w-0 items-center gap-3 py-1 text-sm"
+      data-testid="bot-activity-status"
+    >
+      {/* Same 28px column as a message avatar, so the text lines up with message text. */}
+      <span className="flex w-7 shrink-0 justify-center">
+        <PixelThinkingGlyph className="text-foreground" />
+      </span>
+      <span className="sr-only">{name}: </span>
+      <ShimmerText
+        className="min-w-0 truncate font-medium text-foreground"
+        key={label}
+        text={`${label}...`}
       />
     </div>
   );

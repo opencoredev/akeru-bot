@@ -690,14 +690,10 @@ export function BotThreadLanding({
             activitySlot={
               working && !waitingForUserInput && pendingApproval === null ? (
                 <BotActivityStatus
-                  avatar={bot.avatar}
                   name={bot.name}
-                  startedAt={
-                    runtime.latestTurn?.completedAt ? null : (runtime.latestTurn?.startedAt ?? null)
-                  }
+                  activity={botActivity}
                   update={workingUpdate}
                   silentRun={silentRun}
-                  compact
                 />
               ) : null
             }

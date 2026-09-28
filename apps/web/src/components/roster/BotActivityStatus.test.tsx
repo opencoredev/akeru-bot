@@ -8,28 +8,16 @@ const avatar = { kind: "blob", shape: "circle", color: "#5B7FD4" } as const;
 const NOW = new Date("2026-09-15T18:00:00.000Z");
 
 describe("bot activity status", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-  });
+  it("shows only the pixel glyph and a shimmering short update", () => {
+    const markup = renderToStaticMarkup(
+      <BotActivityStatus name="Akeru" activity={{ label: "Running a command" }} />,
+    );
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("announces through one live region owned by the loading state", () => {
-    const markup = renderToStaticMarkup(<BotActivityStatus avatar={avatar} name="Akeru" />);
-
-    expect((markup.match(/role="status"/g) ?? []).length).toBe(1);
-    expect((markup.match(/aria-live/g) ?? []).length).toBe(0);
-  });
-
-  it("shows a compact working label without tool details", () => {
-    const markup = renderToStaticMarkup(<BotActivityStatus avatar={avatar} name="Akeru" />);
-
-    expect(markup).toContain("Akeru is working");
-    expect(markup).toContain("bot-status-shimmer");
-    expect(markup).not.toContain("tool");
+    expect(markup).toContain("Running a command...");
+    expect(markup).toContain("bot-thinking-glyph");
+    expect(markup).toContain("bot-shimmer-text");
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain("Step");
   });
 
   it("adds the elapsed timer only when the turn start is known", () => {
