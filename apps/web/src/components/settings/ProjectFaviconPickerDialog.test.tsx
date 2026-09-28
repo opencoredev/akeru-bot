@@ -26,6 +26,7 @@ vi.mock("@effect/atom-react", () => ({
 
 vi.mock("~/state/server", () => ({
   primaryServerKeybindingsAtom: Symbol("keybindings"),
+  serverEnvironment: { configValueAtom: Symbol("serverConfig") },
 }));
 
 vi.mock("~/hooks/useTheme", () => ({
