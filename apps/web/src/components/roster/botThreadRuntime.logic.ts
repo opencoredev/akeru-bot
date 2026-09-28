@@ -264,38 +264,62 @@ export function isBotOwnChatShell(
   return shell === null || (shell.parentThreadId == null && shell.botId === botId);
 }
 
+type GroupThreadShell = {
+  environmentId: string;
+  id: string;
+  groupId?: string | null | undefined;
+  parentThreadId?: string | null | undefined;
+  updatedAt: string;
+  archivedAt: string | null;
+  deletedAt?: string | null | undefined;
+};
+
+const isActiveGroupChat = (thread: GroupThreadShell) =>
+  thread.groupId != null &&
+  thread.archivedAt === null &&
+  thread.parentThreadId == null &&
+  thread.deletedAt == null;
+
+const isNewerThread = (thread: GroupThreadShell, than: GroupThreadShell | undefined) =>
+  than === undefined ||
+  (thread.updatedAt.localeCompare(than.updatedAt) || thread.id.localeCompare(than.id)) > 0;
+
 export function findLatestGroupThreadTarget(
   groupId: string,
   environmentId: string,
-  threads: readonly {
-    environmentId: string;
-    id: string;
-    groupId?: string | null | undefined;
-    parentThreadId?: string | null | undefined;
-    updatedAt: string;
-    archivedAt: string | null;
-    deletedAt?: string | null | undefined;
-  }[],
+  threads: readonly GroupThreadShell[],
 ): { environmentId: string; threadId: string } | null {
-  let latest: (typeof threads)[number] | undefined;
+  let latest: GroupThreadShell | undefined;
   for (const thread of threads) {
     if (
-      thread.environmentId !== environmentId ||
-      thread.groupId !== groupId ||
-      thread.archivedAt !== null ||
-      thread.parentThreadId != null ||
-      thread.deletedAt != null
-    ) {
-      continue;
-    }
-    if (
-      latest === undefined ||
-      (thread.updatedAt.localeCompare(latest.updatedAt) || thread.id.localeCompare(latest.id)) > 0
+      thread.environmentId === environmentId &&
+      thread.groupId === groupId &&
+      isActiveGroupChat(thread) &&
+      isNewerThread(thread, latest)
     ) {
       latest = thread;
     }
   }
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
+}
+
+export const latestGroupThreadKey = (environmentId: string, groupId: string) =>
+  `${environmentId}\u0000${groupId}`;
+
+/**
+ * Every group's latest chat in one pass, keyed by `latestGroupThreadKey`, for
+ * callers that would otherwise run `findLatestGroupThreadTarget` per shell.
+ */
+export function findLatestGroupThreadIds(
+  threads: readonly GroupThreadShell[],
+): ReadonlyMap<string, string> {
+  const latest = new Map<string, GroupThreadShell>();
+  for (const thread of threads) {
+    if (thread.groupId == null || !isActiveGroupChat(thread)) continue;
+    const key = latestGroupThreadKey(thread.environmentId, thread.groupId);
+    if (isNewerThread(thread, latest.get(key))) latest.set(key, thread);
+  }
+  return new Map(Array.from(latest, ([key, thread]) => [key, thread.id] as const));
 }
 
 export function findUnhandledMcpAuthorization(

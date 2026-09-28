@@ -47,7 +47,8 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments"
 import { useThreadSearch } from "../state/queries";
 import {
   findLatestBotThreadTarget,
-  findLatestGroupThreadTarget,
+  findLatestGroupThreadIds,
+  latestGroupThreadKey,
 } from "./roster/botThreadRuntime.logic";
 import { useRosterStore } from "./roster/rosterStore";
 import { resolveShortcutCommand } from "../keybindings";
@@ -334,6 +335,7 @@ function useChatSearchItems(query: string): {
     );
     const botById = new Map(bots.map((bot) => [bot.id, bot] as const));
     const groupById = new Map(groups.map((group) => [group.id, group] as const));
+    const latestGroupThreadIds = findLatestGroupThreadIds(shells);
     return shells.flatMap((shell): CommandPaletteChat[] => {
       if (
         shell.archivedAt !== null ||
@@ -366,7 +368,7 @@ function useChatSearchItems(query: string): {
       const group = shell.groupId ? groupById.get(shell.groupId) : undefined;
       if (
         group &&
-        findLatestGroupThreadTarget(group.id, shell.environmentId, shells)?.threadId === shell.id
+        latestGroupThreadIds.get(latestGroupThreadKey(shell.environmentId, group.id)) === shell.id
       ) {
         return [{ ...base, ownerName: group.name, unavailableIn: null }];
       }

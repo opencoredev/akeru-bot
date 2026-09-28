@@ -13,10 +13,12 @@ import {
   buildGroupTurnStartInput,
   createBotTurnSubmissionQueue,
   findLatestBotThreadTarget,
+  findLatestGroupThreadIds,
   findLatestGroupThreadTarget,
   findUnhandledMcpAuthorization,
   isBotOwnChatShell,
   joinOrStartThreadCreate,
+  latestGroupThreadKey,
   listBotChats,
   nextRetainedChat,
   pickBotChatTarget,
@@ -395,6 +397,47 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toEqual({ environmentId: "env-a", threadId: "thread-new" });
+  });
+
+  it("finds every group's latest chat in one pass, per environment", () => {
+    const shell = (id: string, groupId: string | null, updatedAt: string, extra = {}) => ({
+      environmentId: "env-a",
+      id,
+      groupId,
+      updatedAt,
+      archivedAt: null as string | null,
+      ...extra,
+    });
+    const threads = [
+      shell("product-old", "group-product", "2026-08-26T00:00:00.000Z"),
+      shell("product-new", "group-product", "2026-08-27T00:00:00.000Z"),
+      shell("product-child", "group-product", "2026-08-28T00:00:00.000Z", {
+        parentThreadId: "product-new",
+      }),
+      shell("product-archived", "group-product", "2026-08-29T00:00:00.000Z", {
+        archivedAt: "2026-08-30T00:00:00.000Z",
+      }),
+      shell("product-remote", "group-product", "2026-08-25T00:00:00.000Z", {
+        environmentId: "env-b",
+      }),
+      shell("design", "group-design", "2026-08-20T00:00:00.000Z"),
+      shell("bot-chat", null, "2026-08-31T00:00:00.000Z"),
+    ];
+    const latest = findLatestGroupThreadIds(threads);
+    expect(Object.fromEntries(latest)).toEqual({
+      [latestGroupThreadKey("env-a", "group-product")]: "product-new",
+      [latestGroupThreadKey("env-b", "group-product")]: "product-remote",
+      [latestGroupThreadKey("env-a", "group-design")]: "design",
+    });
+    for (const [environmentId, groupId] of [
+      ["env-a", "group-product"],
+      ["env-b", "group-product"],
+      ["env-a", "group-design"],
+    ] as const) {
+      expect(latest.get(latestGroupThreadKey(environmentId, groupId))).toBe(
+        findLatestGroupThreadTarget(groupId, environmentId, threads)?.threadId,
+      );
+    }
   });
 
   it("does not target a parent-linked group child thread", () => {
