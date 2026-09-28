@@ -5,6 +5,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -16,6 +17,13 @@ import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
+import * as ServerConfig from "../config.ts";
+import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
+import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
+import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import { preflightProvider } from "../provider/providerPreflight.ts";
+import { SubscriptionAuthService } from "../subscription-auth/service.ts";
+import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
@@ -43,6 +51,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+    const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
+    const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
+    const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
+    const botUsageLedger = yield* BotUsageLedger;
+    const config = yield* ServerConfig.ServerConfig;
+    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
     const channelDeliveryStore = yield* Effect.serviceOption(
@@ -205,6 +219,80 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           const normalizedCommand = applyKnownGroupPerson(actorCommand, clientSessions);
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
+          }
+          if (normalizedCommand.type === "thread.turn.start") {
+            if (Option.isNone(providerRegistry)) {
+              return yield* failEnvironmentInternal(
+                "orchestration_dispatch_failed",
+                new Error("Provider registry is unavailable."),
+              );
+            }
+            const thread = yield* projectionSnapshotQuery
+              .getThreadShellById(normalizedCommand.threadId)
+              .pipe(
+                Effect.map(Option.getOrUndefined),
+                Effect.catch((cause) =>
+                  failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                ),
+              );
+            const bootstrapThread = normalizedCommand.bootstrap?.createThread;
+            const groupId = thread?.groupId ?? bootstrapThread?.groupId;
+            const group = groupId
+              ? yield* projectionGroups.getById({ groupId }).pipe(
+                  Effect.map(Option.getOrUndefined),
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                  ),
+                )
+              : undefined;
+            const botId =
+              normalizedCommand.respondingBotId ??
+              (groupId ? group?.bossBotId : (thread?.botId ?? bootstrapThread?.botId));
+            const bot = botId
+              ? yield* projectionBots.getById({ botId }).pipe(
+                  Effect.map(Option.getOrUndefined),
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                  ),
+                )
+              : undefined;
+            const selection = bot?.engine
+              ? {
+                  instanceId: ProviderInstanceId.make(bot.engine.provider),
+                  model: bot.engine.model,
+                }
+              : (normalizedCommand.modelSelection ??
+                thread?.modelSelection ??
+                bootstrapThread?.modelSelection);
+            const providerId = selection?.instanceId ?? thread?.session?.providerName;
+            const model = selection?.model ?? "";
+            if (providerId && model) {
+              const verdict = preflightProvider({
+                providers: yield* providerRegistry.value.getProviders,
+                providerId,
+                model,
+                subscriptionStatuses: subscriptionAuth.statuses(),
+                subscriptionHealth: (instanceId) =>
+                  subscriptionAuth.providerInstanceRequestHealth(instanceId),
+              });
+              if (verdict) {
+                yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
+                return yield* failEnvironmentInvalidRequest("invalid_command");
+              }
+            }
+            if (bot?.usageCap) {
+              const usage = yield* botUsageLedger
+                .summarize(bot.botId)
+                .pipe(
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                  ),
+                );
+              if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
+                yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
+                return yield* failEnvironmentInvalidRequest("invalid_command");
+              }
+            }
           }
           return yield* orchestrationEngine.dispatch(normalizedCommand, { actor }).pipe(
             Effect.tapError(() =>
