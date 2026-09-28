@@ -49,6 +49,8 @@ import {
   buildGroupTurnStartInput,
   createBotTurnSubmissionQueue,
   findLatestGroupThreadTarget,
+  nextRetainedChat,
+  type RetainedChat,
 } from "./botThreadRuntime.logic";
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -138,14 +140,19 @@ export function useGroupThreadRuntime(groupId: string) {
   );
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
-  const retainedThreadRef = useRef<{ groupId: string; threadRef: ScopedThreadRef | null }>({
-    groupId,
+  const retainedThreadRef = useRef<RetainedChat>({
+    ownerId: groupId,
     threadRef: null,
+    linked: false,
   });
-  if (retainedThreadRef.current.groupId !== groupId) {
-    retainedThreadRef.current = { groupId, threadRef: null };
+  if (retainedThreadRef.current.ownerId !== groupId) {
+    retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
-  if (linkedThreadRef) retainedThreadRef.current.threadRef = linkedThreadRef;
+  retainedThreadRef.current = nextRetainedChat(
+    retainedThreadRef.current,
+    linkedThreadRef,
+    bootstrapped,
+  );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
@@ -317,16 +324,15 @@ export function useGroupThreadRuntime(groupId: string) {
       setError(null);
       // Bind the queued send to the chat selected at submission; the ref moves on if the user
       // switches groups.
-      const queuedRetained = retainedThreadRef.current;
-      const queuedThreadRef = queuedRetained.threadRef;
+      const queuedThreadRef = retainedThreadRef.current.threadRef;
       return sendQueueRef.current.enqueue(async () => {
         setError(null);
         const createdAt = new Date().toISOString();
         // Leaving and returning to this group replaces the ref. A send queued before the
         // group had a chat joins the one an earlier send created there.
         const live = retainedThreadRef.current;
-        const retained = live.groupId === groupId ? live : queuedRetained;
-        const currentThreadRef = queuedThreadRef ?? queuedRetained.threadRef ?? retained.threadRef;
+        const currentThreadRef =
+          queuedThreadRef ?? (live.ownerId === groupId ? live.threadRef : null);
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
 
@@ -379,9 +385,13 @@ export function useGroupThreadRuntime(groupId: string) {
             setError(commandFailure(result));
             return false;
           }
-          retained.threadRef = scopeThreadRef(environmentId, threadId);
-          if (retainedThreadRef.current.groupId === groupId) {
-            retainedThreadRef.current.threadRef ??= retained.threadRef;
+          // Only rebind while the retained chat still belongs to this group.
+          if (retainedThreadRef.current.ownerId === groupId) {
+            retainedThreadRef.current = {
+              ownerId: groupId,
+              threadRef: scopeThreadRef(environmentId, threadId),
+              linked: false,
+            };
           }
           return true;
         } catch (cause) {

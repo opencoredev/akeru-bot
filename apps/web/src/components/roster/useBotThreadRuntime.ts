@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   BotId,
+  PLACEHOLDER_THREAD_TITLE,
   type ApprovalRequestId,
   EnvironmentId,
   type MessageId,
@@ -40,7 +41,9 @@ import {
   createBotTurnSubmissionQueue,
   findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
+  nextRetainedChat,
   resolveBotThreadTarget,
+  type RetainedChat,
 } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
 import { useBotChatTarget } from "./useBotThreadRef";
@@ -102,16 +105,22 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     : null;
   const { ref: rememberedThreadRef, shell: rememberedThread } = useBotChatTarget(botId, target);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
-  const retainedThreadRef = useRef<{ botId: string; threadRef: ScopedThreadRef | null }>({
-    botId,
+  // Holds a just-created chat until its shell arrives. A chat that was linked
+  // and then left the shell list was archived or deleted, so it is dropped
+  // rather than sent into.
+  const retainedThreadRef = useRef<RetainedChat>({
+    ownerId: botId,
     threadRef: null,
+    linked: false,
   });
-  if (retainedThreadRef.current.botId !== botId) {
-    retainedThreadRef.current = { botId, threadRef: null };
+  if (retainedThreadRef.current.ownerId !== botId) {
+    retainedThreadRef.current = { ownerId: botId, threadRef: null, linked: false };
   }
-  if (linkedThreadRef) {
-    retainedThreadRef.current.threadRef = linkedThreadRef;
-  }
+  retainedThreadRef.current = nextRetainedChat(
+    retainedThreadRef.current,
+    linkedThreadRef,
+    bootstrapped,
+  );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
@@ -224,53 +233,77 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     [linkedThreadRef, respondToUserInputCommand],
   );
 
-  const ensureTranscriptThread = useCallback(
-    async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
-      if (!activeProject || !botReady) return null;
-      return joinOrStartThreadCreate({
-        getRetained: () => retainedThreadRef.current.threadRef,
-        inFlight: ensureThreadRef,
-        start: async () => {
-          const threadId = newThreadId();
-          const result = await createThread({
-            environmentId: activeProject.environmentId,
-            input: {
-              threadId,
-              projectId: activeProject.id,
-              botId: BotId.make(botId),
-              title,
-              modelSelection:
-                effectiveModelSelection ??
-                activeProject.defaultModelSelection ??
-                appDefaultModelSelection,
-              runtimeMode: bot?.runtimeMode ?? settings.localExecutionMode,
-              interactionMode: DEFAULT_INTERACTION_MODE,
-              branch: null,
-              worktreePath: null,
-              createdAt: new Date().toISOString(),
-            },
-          });
-          if (result._tag === "Failure") return null;
-          const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
-          retainedThreadRef.current.threadRef = threadRef;
-          useRosterStore
-            .getState()
-            .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
-          return threadRef;
+  const createBotChat = useCallback(
+    async (title: string): Promise<ScopedThreadRef | null> => {
+      if (!activeProject) return null;
+      const threadId = newThreadId();
+      const result = await createThread({
+        environmentId: activeProject.environmentId,
+        input: {
+          threadId,
+          projectId: activeProject.id,
+          botId: BotId.make(botId),
+          title,
+          modelSelection:
+            effectiveModelSelection ??
+            activeProject.defaultModelSelection ??
+            appDefaultModelSelection,
+          runtimeMode: bot?.runtimeMode ?? settings.localExecutionMode,
+          interactionMode: DEFAULT_INTERACTION_MODE,
+          branch: null,
+          worktreePath: null,
+          createdAt: new Date().toISOString(),
         },
       });
+      if (result._tag === "Failure") return null;
+      const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
+      retainedThreadRef.current = { ownerId: botId, threadRef, linked: false };
+      useRosterStore
+        .getState()
+        .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      return threadRef;
     },
     [
       activeProject,
       appDefaultModelSelection,
       bot,
       botId,
-      botReady,
       createThread,
       effectiveModelSelection,
       settings.localExecutionMode,
     ],
   );
+
+  const ensureTranscriptThread = useCallback(
+    async (title = `Call with ${bot?.name ?? "bot"}`): Promise<ScopedThreadRef | null> => {
+      if (!activeProject || !botReady) return null;
+      return joinOrStartThreadCreate({
+        getRetained: () => retainedThreadRef.current.threadRef,
+        inFlight: ensureThreadRef,
+        start: () => createBotChat(title),
+      });
+    },
+    [activeProject, bot?.name, botReady, createBotChat],
+  );
+
+  // A fresh chat only makes sense once the current one has a message; an empty
+  // chat is already fresh, and creating another would leave it behind.
+  const canStartNewChat =
+    botReady &&
+    activeProject !== null &&
+    !sending &&
+    linkedThreadRef !== null &&
+    (messages?.length ?? 0) > 0;
+  const startNewChat = useCallback(async (): Promise<boolean> => {
+    if (!canStartNewChat) return false;
+    setError(null);
+    const threadRef = await createBotChat(PLACEHOLDER_THREAD_TITLE);
+    if (!threadRef) {
+      setError(localFailure("Could not start a new chat."));
+      return false;
+    }
+    return true;
+  }, [canStartNewChat, createBotChat]);
 
   const send = useCallback(
     async (
@@ -388,7 +421,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             return false;
           }
 
-          retainedThreadRef.current.threadRef = currentThreadRef;
+          if (retainedThreadRef.current.threadRef !== currentThreadRef) {
+            retainedThreadRef.current = {
+              ownerId: botId,
+              threadRef: currentThreadRef,
+              linked: false,
+            };
+          }
           useRosterStore
             .getState()
             .recordChatPath(
@@ -571,8 +610,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     resuming,
     selectPendingUserInputOption,
     advancePendingUserInput,
+    canStartNewChat,
     send,
     sendVoiceMessage,
     sending,
+    startNewChat,
   };
 }

@@ -6,6 +6,7 @@ import type {
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
+  ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
 
@@ -249,4 +250,33 @@ export function findUnhandledMcpAuthorization(
     }
   }
   return null;
+}
+
+/** The chat a bot or group sends into while its linked chat is not in the shell list. */
+export interface RetainedChat {
+  readonly ownerId: string;
+  readonly threadRef: ScopedThreadRef | null;
+  /** Whether the shell list has shown this chat since it was retained. */
+  readonly linked: boolean;
+}
+
+/**
+ * Keeps a just-created chat until its shell arrives. A chat the shell list has
+ * shown and then dropped was archived or deleted, so once the shells have
+ * loaded it is released and the next send starts a new chat instead.
+ */
+export function nextRetainedChat(
+  current: RetainedChat,
+  linkedThreadRef: ScopedThreadRef | null,
+  bootstrapped: boolean,
+): RetainedChat {
+  if (linkedThreadRef) {
+    return current.linked && current.threadRef === linkedThreadRef
+      ? current
+      : { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
+  }
+  if (current.linked && bootstrapped) {
+    return { ownerId: current.ownerId, threadRef: null, linked: false };
+  }
+  return current;
 }

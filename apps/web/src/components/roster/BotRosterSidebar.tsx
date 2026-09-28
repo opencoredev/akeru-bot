@@ -11,8 +11,16 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
+import {
+  BotId,
+  EnvironmentId,
+  GroupId,
+  PLACEHOLDER_THREAD_TITLE,
+  type ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,
@@ -73,6 +81,8 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
+import { findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
+import { useChatUnread } from "../chat/useChatUnread";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
@@ -94,6 +104,7 @@ import {
   rosterMarkerId,
   rosterZoneHeading,
   orderRosterBotsForShortcuts,
+  resolveAdjacentRosterBot,
   resolveRosterShortcutBot,
   type RosterItemRef,
   type RosterLastMessage,
@@ -286,7 +297,7 @@ export function RosterPanelHeader({
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-): { message: RosterLastMessage | null; taskTitle: string | null } {
+): { message: RosterLastMessage | null; taskTitle: string | null; threadRef: ScopedThreadRef | null } {
   const candidate = useBotThreadCandidate(botId);
   const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
@@ -300,7 +311,7 @@ function useLatestBotMessage(
   // title lands.
   const shellTitle = shell?.title ?? null;
   const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
-  return useMemo(() => ({ message, taskTitle }), [message, taskTitle]);
+  return useMemo(() => ({ message, taskTitle, threadRef }), [message, taskTitle, threadRef]);
 }
 
 type SortableRosterRowBag = Pick<
@@ -400,6 +411,34 @@ function formatRosterFullTimestamp(isoDate: string): string {
   return Number.isNaN(parsed.getTime()) ? "" : rosterFullTimestampFormatter.format(parsed);
 }
 
+/** The group's current chat: its newest chat on the primary environment. */
+function useGroupChatRef(groupId: string): ScopedThreadRef | null {
+  const environmentId = usePrimaryEnvironmentId();
+  const threadShells = useThreadShells();
+  const target = environmentId
+    ? findLatestGroupThreadTarget(groupId, environmentId, threadShells)
+    : null;
+  return useMemo(
+    () =>
+      target
+        ? scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId))
+        : null,
+    [target?.environmentId, target?.threadId],
+  );
+}
+
+function UnreadDot() {
+  const { t } = useI18n();
+  return (
+    <span
+      role="img"
+      aria-label={t("Unread")}
+      data-testid="roster-unread-dot"
+      className="size-2 shrink-0 rounded-full bg-sidebar-foreground"
+    />
+  );
+}
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
@@ -432,7 +471,12 @@ const BotRosterRow = memo(function BotRosterRow({
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
-  const { message: latestMessage, taskTitle } = useLatestBotMessage(bot.id, lastMessage);
+  const {
+    message: latestMessage,
+    taskTitle,
+    threadRef: chatRef,
+  } = useLatestBotMessage(bot.id, lastMessage);
+  const unread = useChatUnread(chatRef) && !isActive;
   return (
     <li
       role="listitem"
@@ -478,7 +522,10 @@ const BotRosterRow = memo(function BotRosterRow({
         >
           <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-12" : "size-10"} />
           {pinned ? (
-            <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
+            <span className="flex max-w-full items-center gap-1">
+              {unread ? <UnreadDot /> : null}
+              <span className="truncate text-xs font-medium">{bot.name}</span>
+            </span>
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-2">
@@ -489,6 +536,7 @@ const BotRosterRow = memo(function BotRosterRow({
                   </span>
                 ) : null}
                 <span className="min-w-2 flex-1" />
+                {unread ? <UnreadDot /> : null}
                 {latestMessage ? (
                   // The compact label collapses to a bare numeric date once a
                   // chat is over a week old ("1/15"), which reads like a count
@@ -628,6 +676,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
     (member) =>
       member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
   ).length;
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
   return (
     <li
       role="listitem"
@@ -673,6 +722,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
         >
           {group.name}
         </span>
+        {unread ? <UnreadDot /> : null}
       </button>
       <Menu>
         <MenuTrigger
@@ -856,6 +906,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
+  const botRouteActive = pathname.startsWith("/bots/");
   const searching = query.trim().length > 0;
   const pinnedKeys = useMemo(
     () => new Set(pinnedItems.map((item) => rosterItemKey(item))),
@@ -1105,7 +1156,13 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           modelPickerOpen: isModelPickerOpen(),
         },
       });
-      const bot = resolveRosterShortcutBot(command ?? "", shortcutBots);
+      const bot =
+        resolveRosterShortcutBot(command ?? "", shortcutBots) ??
+        resolveAdjacentRosterBot(
+          command ?? "",
+          shortcutBots,
+          botRouteActive ? useRosterStore.getState().selectedBotId : null,
+        );
       if (!bot) return;
 
       event.preventDefault();
@@ -1117,7 +1174,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, previewOpen, shortcutBots]);
+  }, [botRouteActive, keybindings, navigate, previewOpen, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);

@@ -385,6 +385,24 @@ export function resolveRosterShortcutBot(command: string, orderedBots: readonly 
   return index === null ? null : (orderedBots[index] ?? null);
 }
 
+/**
+ * The bot `thread.previous` or `thread.next` moves to, in shortcut order and
+ * wrapping at the ends. With no bot open (a group chat, say), previous starts
+ * from the last bot and next from the first.
+ */
+export function resolveAdjacentRosterBot(
+  command: string,
+  orderedBots: readonly Bot[],
+  selectedBotId: string | null,
+): Bot | null {
+  const step = command === "thread.previous" ? -1 : command === "thread.next" ? 1 : 0;
+  if (step === 0 || orderedBots.length === 0) return null;
+  const index = orderedBots.findIndex((bot) => bot.id === selectedBotId);
+  if (index === -1) return (step === 1 ? orderedBots[0] : orderedBots.at(-1)) ?? null;
+  const next = orderedBots[(index + step + orderedBots.length) % orderedBots.length] ?? null;
+  return next?.id === selectedBotId ? null : next;
+}
+
 export function isCurrentGroupPerson(
   authorPersonId: string | null | undefined,
   currentPersonId: string | null | undefined,

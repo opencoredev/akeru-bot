@@ -6,6 +6,7 @@ import {
   ImageIcon,
   LanguagesIcon,
   MessageCircleIcon,
+  MessagesSquareIcon,
   MoonIcon,
   PaletteIcon,
   PuzzleIcon,
@@ -19,7 +20,9 @@ import { useTheme } from "../hooks/useTheme";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { activeComposerModelPicker } from "../composerModelPickerRegistry";
 import { useI18n } from "../i18n";
+import { activeChatPaletteActions } from "../chatActionsRegistry";
 import {
+  buildChatCommandPaletteItems,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
@@ -215,7 +218,15 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       },
     },
   ];
+  // Read once per open: the palette mounts fresh each time it opens.
+  const [chatItems] = useState(() =>
+    buildChatCommandPaletteItems({
+      actions: activeChatPaletteActions(),
+      icon: <MessagesSquareIcon className={ITEM_ICON_CLASS} />,
+    }),
+  );
   const groups: CommandPaletteGroup[] = [
+    ...(chatItems.length > 0 ? [{ value: "chat", label: t("This chat"), items: chatItems }] : []),
     { value: "actions", label: t("Actions"), items: actionItems },
   ];
   const filteredGroups = filterCommandPaletteGroups({ groups, query: deferredQuery });

@@ -10,6 +10,7 @@ import {
   buildWhenVariableOptions,
   commandLabel,
   describeWhenExpression,
+  isRetiredCommand,
   keybindingConflictLabels,
   keybindingDisplayParts,
   keybindingFromKeyboardEvent,
@@ -341,6 +342,18 @@ describe("KeybindingsSettings.logic", () => {
     expect(options).not.toContain("terminal.toggle");
   });
 
+  it("offers the chat commands that run without a default shortcut and hides new local chat", () => {
+    const options = buildKeybindingCommandOptions([]);
+
+    expect(options).toEqual(
+      expect.arrayContaining(["chat.new", "thread.previous", "thread.next", "thread.settle"]),
+    );
+    expect(options).not.toContain("chat.newLocal");
+    expect(isRetiredCommand("chat.newLocal")).toBe(true);
+    expect(commandLabel("thread.previous")).toBe("Previous bot");
+    expect(commandLabel("thread.next")).toBe("Next bot");
+  });
+
   it("reports unknown when variables without rejecting parseable expressions", () => {
     const parsed = parseWhenExpressionDraft("!modelPickerOpen && modelPickerOpn");
 
@@ -401,7 +414,7 @@ describe("KeybindingsSettings.logic", () => {
           },
         },
         {
-          command: "chat.newLocal",
+          command: "thread.settle",
           shortcut: {
             key: "n",
             modKey: true,
@@ -419,13 +432,13 @@ describe("KeybindingsSettings.logic", () => {
       "",
     );
 
-    expect(rows[0]?.conflicts).toEqual(["New local chat"]);
+    expect(rows[0]?.conflicts).toEqual(["Settle chat"]);
     expect(
       keybindingConflictLabels(rows, {
         rowId: rows[0]?.id ?? "",
         key: "mod+n",
         when: "",
       }),
-    ).toEqual(["New local chat"]);
+    ).toEqual(["Settle chat"]);
   });
 });

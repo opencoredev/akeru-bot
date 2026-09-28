@@ -1,4 +1,11 @@
-import { BotId, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  BotId,
+  EnvironmentId,
+  GroupId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -10,6 +17,7 @@ import {
   findUnhandledMcpAuthorization,
   isBotOwnChatShell,
   joinOrStartThreadCreate,
+  nextRetainedChat,
   resolveBotThreadTarget,
 } from "./botThreadRuntime.logic";
 
@@ -398,5 +406,42 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("nextRetainedChat", () => {
+  const chat = (threadId: string) => ({
+    environmentId: EnvironmentId.make("env-1"),
+    threadId: ThreadId.make(threadId),
+  });
+
+  it("keeps a just-created chat until its shell arrives", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, null, true)).toBe(created);
+  });
+
+  it("follows the linked chat once the shell list shows it", () => {
+    const linked = chat("new");
+    const next = nextRetainedChat(
+      { ownerId: "bot-1", threadRef: null, linked: false },
+      linked,
+      true,
+    );
+    expect(next).toEqual({ ownerId: "bot-1", threadRef: linked, linked: true });
+    expect(nextRetainedChat(next, linked, true)).toBe(next);
+  });
+
+  it("releases a chat that left the shell list, so the next send starts a new one", () => {
+    const shown = { ownerId: "bot-1", threadRef: chat("archived"), linked: true };
+    expect(nextRetainedChat(shown, null, true)).toEqual({
+      ownerId: "bot-1",
+      threadRef: null,
+      linked: false,
+    });
+  });
+
+  it("holds a shown chat while the shell list is still loading", () => {
+    const shown = { ownerId: "bot-1", threadRef: chat("current"), linked: true };
+    expect(nextRetainedChat(shown, null, false)).toBe(shown);
   });
 });

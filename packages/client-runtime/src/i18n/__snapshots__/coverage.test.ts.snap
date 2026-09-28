@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1781,
+  "directMessageCount": 1805,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -366,6 +366,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/ConfirmDialogHost.tsx",
     "apps/web/src/components/auth/PairingPanel.tsx",
     "apps/web/src/components/auth/PairingRouteSurface.tsx",
+    "apps/web/src/components/chat/ChatActionsMenu.tsx",
     "apps/web/src/components/chat/ComposerBannerStack.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalActions.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalPanel.tsx",
@@ -480,6 +481,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
     "apps/web/src/components/ui/sidebar.tsx",
     "apps/web/src/components/ui/toast.tsx",
+    "apps/web/src/hooks/useChatActions.ts",
     "apps/web/src/routes/RootRouteErrorView.tsx",
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",

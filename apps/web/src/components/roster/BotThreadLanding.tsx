@@ -87,6 +87,7 @@ import {
 } from "./routineReceipts";
 import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
+import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 
 function RoutineReceiptRow({
   receipt,
@@ -165,6 +166,11 @@ export function BotThreadLanding({
     catalog: engineCatalog,
   } = useBotEngineAvailability(bot?.engine ?? null);
   const runtime = useBotThreadRuntime(botId, stickyEngine);
+  useMarkChatVisited(runtime.linkedThreadRef);
+  const newChat = useMemo(
+    () => ({ canStart: runtime.canStartNewChat, start: runtime.startNewChat }),
+    [runtime.canStartNewChat, runtime.startNewChat],
+  );
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
@@ -501,6 +507,9 @@ export function BotThreadLanding({
                 bot={bot}
                 disabled={runtime.sending || runtime.latestTurn?.state === "running"}
               />
+              {available ? (
+                <ChatActionsMenu threadRef={runtime.linkedThreadRef} newChat={newChat} />
+              ) : null}
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea

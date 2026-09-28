@@ -60,6 +60,7 @@ import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useMessageArrivals } from "./messageArrival";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
+import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
@@ -96,6 +97,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   );
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
+  useMarkChatVisited(runtime.linkedThreadRef);
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
@@ -225,6 +227,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           <div className="flex min-w-0 items-center gap-2">
             <GroupMemberStack group={group} bots={bots} />
             <span className="truncate text-sm font-medium">{group.name}</span>
+          </div>
+          <div data-chat-header-actions className="ml-auto flex items-center">
+            <ChatActionsMenu threadRef={runtime.linkedThreadRef} />
           </div>
         </WorkspacePageHeader>
         <BotConversationScrollArea
