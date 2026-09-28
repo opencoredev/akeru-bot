@@ -18,6 +18,17 @@ function localWorkspace() {
 }
 
 describe("BotWorkspacePool", () => {
+  it("keeps Railway identities across credential changes without reusing credential-bound clients", () => {
+    const key = (token: string, scope = "bot-one") =>
+      botWorkspaceResourceKey({
+        resourceScope: scope,
+        sandbox: "railway",
+        credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
+      });
+    expect(key("old")).not.toBe(key("new"));
+    expect(botWorkspaceIdentity(key("old"))).toBe(botWorkspaceIdentity(key("new")));
+    expect(botWorkspaceIdentity(key("old"))).not.toBe(botWorkspaceIdentity(key("old", "bot-two")));
+  });
   it("derives shared, isolated, and opaque identities", () => {
     expect(
       botRuntimeResourceScope({

@@ -165,15 +165,28 @@ describe("AkeruSessionResources", () => {
             command: "connector",
           };
           try {
+            const requiresBrowser =
+              (id === "builtin-executor" || id === "builtin-tinyfish") &&
+              (transport === "stdio" || botSandbox !== "local");
+            if (botSandbox === "railway" && requiresBrowser) {
+              await expect(
+                resources.acquire({
+                  ...remoteInput,
+                  botSandbox,
+                  threadId: "connector",
+                  mcpServers: [server, exaServer],
+                }),
+              ).rejects.toThrow("Railway CLI tunnel");
+              expect(acquireAttachment).not.toHaveBeenCalled();
+              expect(manager.init).not.toHaveBeenCalled();
+              continue;
+            }
             await resources.acquire({
               ...remoteInput,
               botSandbox,
               threadId: "connector",
               mcpServers: [server, exaServer],
             });
-            const requiresBrowser =
-              (id === "builtin-executor" || id === "builtin-tinyfish") &&
-              (transport === "stdio" || botSandbox !== "local");
             expect(acquireAttachment).toHaveBeenCalledTimes(requiresBrowser ? 1 : 0);
             expect(toMcpServerConfigs).toHaveBeenCalledWith(
               [server, exaServer],

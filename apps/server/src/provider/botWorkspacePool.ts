@@ -39,7 +39,9 @@ export function botWorkspaceCredentialFingerprint(
 }
 
 export function botWorkspaceIdentity(resourceKey: string): string {
-  return `akeru-${NodeCrypto.createHash("sha256").update(resourceKey).digest("hex").slice(0, 24)}`;
+  // Credentials select a live client, not a new durable Railway VM.
+  const identityKey = resourceKey.replace(/^railway:[^:]*:/, "railway:");
+  return `akeru-${NodeCrypto.createHash("sha256").update(identityKey).digest("hex").slice(0, 24)}`;
 }
 
 export interface BotWorkspaceLease {

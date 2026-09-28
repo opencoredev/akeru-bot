@@ -70,6 +70,7 @@ function EnvironmentSandboxSettingsPanel({
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [railwayChange, setRailwayChange] = useState<SandboxSettings | null>(null);
 
   const persist = async (next: SandboxSettings) => {
     setSaving(true);
@@ -103,6 +104,10 @@ function EnvironmentSandboxSettingsPanel({
       provider: editingProvider,
       draft,
     });
+    if (editingProvider === "railway" && isSandboxProviderConnected(sandbox, "railway")) {
+      setRailwayChange(next);
+      return;
+    }
     if (await persist(next)) closeConnection();
   };
 
@@ -178,9 +183,11 @@ function EnvironmentSandboxSettingsPanel({
                         size="xs"
                         variant="ghost-muted"
                         disabled={saving}
-                        onClick={() =>
-                          void persist(disconnectSandboxProvider(sandbox, definition.id))
-                        }
+                        onClick={() => {
+                          const next = disconnectSandboxProvider(sandbox, definition.id);
+                          if (definition.id === "railway") setRailwayChange(next);
+                          else void persist(next);
+                        }}
                       >
                         Disconnect
                       </Button>
@@ -193,7 +200,10 @@ function EnvironmentSandboxSettingsPanel({
         </SettingsSection>
       </SettingsPageContainer>
 
-      <Dialog open={editingProvider !== null} onOpenChange={(open) => !open && closeConnection()}>
+      <Dialog
+        open={editingProvider !== null && railwayChange === null}
+        onOpenChange={(open) => !open && closeConnection()}
+      >
         <DialogPopup>
           <DialogHeader>
             <DialogTitle>
@@ -231,6 +241,52 @@ function EnvironmentSandboxSettingsPanel({
             </Button>
             <Button disabled={!canSave || saving} onClick={() => void saveConnection()}>
               {saving ? "Connecting" : "Connect"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+      <Dialog
+        open={railwayChange !== null}
+        onOpenChange={(open) => !open && !saving && setRailwayChange(null)}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Retire Railway VMs before changing access</DialogTitle>
+            <DialogDescription>
+              Changing or removing credentials does not stop or delete Railway VMs. They can keep
+              accruing charges. Stop active bot sessions, then open your environment in the Railway
+              dashboard and destroy any VMs you no longer need before removing access. If you are
+              rotating a token, keep access to the same environment to reconnect to existing VMs.
+              Akeru preserves saved VM identities and will not silently create replacements.
+            </DialogDescription>
+          </DialogHeader>
+          <a
+            href="https://railway.com/dashboard"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm underline"
+          >
+            Open Railway dashboard
+          </a>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" disabled={saving} onClick={() => setRailwayChange(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={async () => {
+                if (railwayChange && (await persist(railwayChange))) {
+                  setRailwayChange(null);
+                  closeConnection();
+                }
+              }}
+            >
+              I have reviewed my VMs — continue
             </Button>
           </DialogFooter>
         </DialogPopup>
