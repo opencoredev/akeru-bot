@@ -255,27 +255,59 @@ const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
 export function flattenMarkdownPreview(markdown: string): string {
   const cached = markdownPreviewCache.get(markdown);
   if (cached !== undefined) return cached;
-  // A row shows one line, so parse only a prefix cut at a line or word
-  // boundary. Parsing costs several milliseconds per long answer; only a
-  // prefix with no visible words (a big image block, say) pays for the rest.
-  const prefix = markdownPreviewPrefix(markdown);
-  let flattened = flattenMarkdownText(prefix);
-  if (flattened.length === 0 && prefix.length < markdown.length) {
-    flattened = flattenMarkdownText(markdown);
+  // A row shows one line, so parse whole blocks from the top only until the
+  // flattened text is long enough. Parsing costs several milliseconds per long
+  // answer. Cuts fall on blank lines outside code fences, so they never land
+  // inside a link, image, or code span and leak raw syntax into the preview.
+  let flattened = "";
+  let offset = 0;
+  while (offset < markdown.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
+    const end = markdownPreviewChunkEnd(markdown, offset);
+    const chunk = flattenMarkdownText(markdown.slice(offset, end));
+    if (chunk.length > 0) flattened = flattened.length > 0 ? `${flattened} ${chunk}` : chunk;
+    offset = end;
   }
   if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
   markdownPreviewCache.set(markdown, flattened);
   return flattened;
 }
 
-const MARKDOWN_PREVIEW_PARSE_LIMIT = 600;
+const MARKDOWN_PREVIEW_TEXT_TARGET = 280;
+const MARKDOWN_PREVIEW_CHUNK_TARGET = 600;
+// A single block longer than this (one enormous paragraph) is cut at a line
+// end anyway, so one pathological message cannot stall a roster render.
+const MARKDOWN_PREVIEW_CHUNK_LIMIT = 16_000;
+const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
-function markdownPreviewPrefix(markdown: string): string {
-  if (markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT) return markdown;
-  const lineEnd = markdown.lastIndexOf("\n", MARKDOWN_PREVIEW_PARSE_LIMIT);
-  if (lineEnd > 0) return markdown.slice(0, lineEnd);
-  const wordEnd = markdown.lastIndexOf(" ", MARKDOWN_PREVIEW_PARSE_LIMIT);
-  return markdown.slice(0, wordEnd > 0 ? wordEnd : MARKDOWN_PREVIEW_PARSE_LIMIT);
+/**
+ * End of the next chunk starting at `offset`: at least the chunk target long,
+ * ending on a blank line that is not inside a fenced code block.
+ */
+function markdownPreviewChunkEnd(markdown: string, offset: number): number {
+  let fence: string | null = null;
+  let lineStart = offset;
+  while (lineStart < markdown.length) {
+    const newline = markdown.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? markdown.length : newline + 1;
+    const line = markdown.slice(lineStart, lineEnd);
+    const marker = MARKDOWN_FENCE.exec(line)?.[1];
+    if (fence === null) {
+      if (marker !== undefined) fence = marker;
+      else if (line.trim().length === 0 && lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_TARGET) {
+        return lineEnd;
+      }
+    } else if (
+      marker !== undefined &&
+      marker[0] === fence[0] &&
+      marker.length >= fence.length &&
+      line.trim() === marker
+    ) {
+      fence = null;
+    }
+    if (lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_LIMIT) return lineEnd;
+    lineStart = lineEnd;
+  }
+  return markdown.length;
 }
 
 function flattenMarkdownText(markdown: string): string {

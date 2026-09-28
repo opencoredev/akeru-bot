@@ -668,6 +668,21 @@ describe("flattenMarkdownPreview", () => {
     );
   });
 
+  it("never cuts a long message inside link, image, or code syntax", () => {
+    const alt = "long alt text ".repeat(55);
+    expect(flattenMarkdownPreview(`Intro ![${alt}](chart.png) then answer`)).toBe(
+      "Intro then answer",
+    );
+    const label = "label ".repeat(120);
+    expect(flattenMarkdownPreview(`See [${label}](https://example.com) now`)).toBe(
+      `See ${label.trim()} now`,
+    );
+    const code = "x ".repeat(400);
+    expect(flattenMarkdownPreview(`\`${code}\` done`)).toBe(`${code.trim()} done`);
+    const fenced = `\`\`\`\n${"line\n\n".repeat(200)}\`\`\`\n\n**after**`;
+    expect(flattenMarkdownPreview(fenced)).not.toContain("`");
+  });
+
   it("flattens whitespace-heavy messages", () => {
     // Line prefixes use [ \t], not \s, so no multiline pattern crosses a
     // newline and rescans the blank lines after it. This checks the output
