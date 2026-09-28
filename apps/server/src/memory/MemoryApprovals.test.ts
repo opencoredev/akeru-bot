@@ -331,7 +331,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
       assert.equal(first._tag, "MemoryApprovalError");
       botInbox.reload();
       assert.equal(
-        botInbox.list().find((item) => item.incidentKey === memoryApprovalIncidentKey(proposed.candidateId))
+        botInbox
+          .list()
+          .find((item) => item.incidentKey === memoryApprovalIncidentKey(proposed.candidateId))
           ?.status,
         "open",
       );
@@ -342,7 +344,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
       assert.equal(retry.status, "approved");
       botInbox.reload();
       assert.equal(
-        botInbox.list().find((item) => item.incidentKey === memoryApprovalIncidentKey(proposed.candidateId))
+        botInbox
+          .list()
+          .find((item) => item.incidentKey === memoryApprovalIncidentKey(proposed.candidateId))
           ?.status,
         "resolved",
       );

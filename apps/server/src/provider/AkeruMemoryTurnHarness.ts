@@ -195,11 +195,7 @@ export class AkeruMemoryTurnHarness {
           if (turn.reviewIncluded) {
             yield* Effect.promise(() =>
               store.renewReviewClaim(reservation).catch(() => false),
-            ).pipe(
-              Effect.repeat(Schedule.fixed("20 seconds")),
-              Effect.asVoid,
-              Effect.forkScoped,
-            );
+            ).pipe(Effect.repeat(Schedule.fixed("20 seconds")), Effect.asVoid, Effect.forkScoped);
           }
         }).pipe(Effect.provideService(Scope.Scope, scope)),
       );

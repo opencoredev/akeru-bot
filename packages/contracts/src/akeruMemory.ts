@@ -17,7 +17,9 @@ export const AKERU_MEMORY_PACKET_MAX_FACTS = 24;
 export const AKERU_MEMORY_PACKET_MAX_CHARS = 12_000;
 export const AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS = 3_000;
 export const AKERU_MEMORY_FACT_MAX_CHARS = 2_048;
-const AkeruMemoryFactText = TrimmedNonEmptyString.check(Schema.isMaxLength(AKERU_MEMORY_FACT_MAX_CHARS));
+const AkeruMemoryFactText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(AKERU_MEMORY_FACT_MAX_CHARS),
+);
 
 export const AKERU_USER_MEMORY_MAX_CHARS = 1_375;
 export const AKERU_BOT_MEMORY_MAX_CHARS = 2_200;

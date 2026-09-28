@@ -198,7 +198,9 @@ const make = Effect.gen(function* () {
           onNone: () => "Memory",
           onSome: (value) => value.title,
         }),
-        lastFailure: boundedSummary(`Save to ${SCOPE_LABELS[request.scope]} memory: ${request.fact}`),
+        lastFailure: boundedSummary(
+          `Save to ${SCOPE_LABELS[request.scope]} memory: ${request.fact}`,
+        ),
         nextAction: "Approve or reject this memory.",
         memoryApproval: request,
       }),
@@ -315,10 +317,11 @@ const make = Effect.gen(function* () {
   });
 
   const decide: MemoryApprovalsShape["decide"] = (input) =>
-    decideLock.withPermit(
-      Effect.gen(function* () {
-        const { access, decision } = input;
-        const rows = yield* sql`
+    decideLock
+      .withPermit(
+        Effect.gen(function* () {
+          const { access, decision } = input;
+          const rows = yield* sql`
           SELECT candidate_id AS candidateId, tenant_id AS tenantId,
             source_thread_id AS sourceThreadId, source_message_id AS sourceMessageId,
             author_bot_id AS authorBotId, fact_text AS fact, target_scope AS scope,
@@ -326,135 +329,137 @@ const make = Effect.gen(function* () {
           FROM akeru_memory_candidates
           WHERE tenant_id = ${access.tenantId} AND candidate_id = ${decision.candidateId}
         `.pipe(
-          Effect.flatMap(Effect.forEach((row) => decodeCandidateRow(row))),
-          Effect.mapError(failWith("Could not read the memory candidate")),
-        );
-        const candidate = rows[0];
-        if (candidate === undefined || candidate.sourceThreadId !== access.threadId) {
-          return yield* new MemoryApprovalError({
-            message: "This memory approval does not belong to this chat.",
-          });
-        }
-        if (candidate.status !== "pending") {
-          const existing = yield* readReceipt(access.tenantId, candidate.candidateId);
-          if (existing !== null) {
-            yield* reconcileResolved(candidate, existing);
-            return existing;
+            Effect.flatMap(Effect.forEach((row) => decodeCandidateRow(row))),
+            Effect.mapError(failWith("Could not read the memory candidate")),
+          );
+          const candidate = rows[0];
+          if (candidate === undefined || candidate.sourceThreadId !== access.threadId) {
+            return yield* new MemoryApprovalError({
+              message: "This memory approval does not belong to this chat.",
+            });
           }
-          return yield* new MemoryApprovalError({
-            message: "This memory approval was already decided.",
-          });
-        }
+          if (candidate.status !== "pending") {
+            const existing = yield* readReceipt(access.tenantId, candidate.candidateId);
+            if (existing !== null) {
+              yield* reconcileResolved(candidate, existing);
+              return existing;
+            }
+            return yield* new MemoryApprovalError({
+              message: "This memory approval was already decided.",
+            });
+          }
 
-        const createdAt = yield* nowIso;
-        let fact =
-          decision.decision === "approve" ? (decision.fact ?? candidate.fact) : candidate.fact;
-        if (fact.length > AKERU_MEMORY_FACT_MAX_CHARS) {
-          return yield* new MemoryApprovalError({ message: "Memory text is too long." });
-        }
-        if (
-          decision.decision === "approve" &&
-          decision.scope !== undefined &&
-          decision.scope !== candidate.scope
-        ) {
-          return yield* new MemoryApprovalError({
-            message: "The approval scope must match the candidate scope.",
-          });
-        }
-        let scope =
-          decision.decision === "approve"
-            ? (decision.scope ?? (candidate.scope as AkeruMemoryTargetScope))
-            : (candidate.scope as AkeruMemoryTargetScope);
-        let approvedRevision: AkeruMemoryRevision | null = null;
-        if (decision.decision === "approve") {
-          approvedRevision = yield* repository
-            .insertScopedFact({
-              access,
-              scope,
-              fact,
-              sensitive: candidate.sensitive === 1,
-              confidence: candidate.confidence,
-              sourceMessageId: null,
-              memoryId: AkeruMemoryId.make(`approval:${candidate.candidateId}`),
-              createdAt,
-            })
-            .pipe(
-              Effect.catchTag("EntityMemoryConflictError", () =>
-                repository.getCurrent({
-                  access,
-                  rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
-                }).pipe(
-                  Effect.flatMap((existing) =>
-                    existing.fact === fact &&
-                    existing.partition.scope === scope &&
-                    existing.approvalState === "approved" &&
-                    existing.deletionState === "active"
-                      ? Effect.succeed(existing)
-                      : Effect.fail(
-                          new MemoryApprovalError({
-                            message:
-                              "This memory approval already has a different approved fact or scope.",
-                          }),
-                        ),
-                  ),
-                ),
-              ),
-              Effect.mapError((cause) =>
-                cause._tag === "MemoryApprovalError"
-                  ? cause
-                  : failWith("Could not save the memory")(cause),
-              ),
-            );
-          // A conflict may mean the insert committed before the receipt write.
-          // Use the durable revision as the source of truth for the receipt.
-          fact = approvedRevision.fact;
-          scope = approvedRevision.partition.scope as AkeruMemoryTargetScope;
-        } else {
-          const orphan = yield* repository
-            .getCurrent({
-              access,
-              rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
-            })
-            .pipe(Effect.catchTag("EntityMemoryNotFoundError", () => Effect.succeed(null)));
-          if (orphan !== null) {
-            yield* repository
-              .applyMutation({
-                access,
-                mutation: {
-                  operation: "fact.forget",
-                  memoryId: orphan.rootId,
-                  expectedRevision: orphan.revision,
-                },
-                memoryId: AkeruMemoryId.make(`approval:${candidate.candidateId}:rejected`),
-                updatedAt: createdAt,
-                sharedProjectApproval: "approved",
-              })
-              .pipe(Effect.mapError(failWith("Could not retract the rejected memory")));
+          const createdAt = yield* nowIso;
+          let fact =
+            decision.decision === "approve" ? (decision.fact ?? candidate.fact) : candidate.fact;
+          if (fact.length > AKERU_MEMORY_FACT_MAX_CHARS) {
+            return yield* new MemoryApprovalError({ message: "Memory text is too long." });
           }
-        }
-        const memoryRootId = approvedRevision?.rootId ?? null;
-        const receipt: AkeruMemoryDecisionReceipt = {
-          candidateId: AkeruMemoryCandidateId.make(candidate.candidateId),
-          status: decision.decision === "approve" ? "approved" : "rejected",
-          fact,
-          scope,
-          affectedBotIds: candidate.affectedBotIds,
-          memoryRootId,
-          createdAt,
-        };
-        const affectedBotIdsJson = yield* encodeAffectedBotIds(receipt.affectedBotIds).pipe(
-          Effect.mapError(failWith("Could not record the memory decision")),
-        );
-        yield* sql
-          .withTransaction(
-            Effect.gen(function* () {
-              yield* sql`
+          if (
+            decision.decision === "approve" &&
+            decision.scope !== undefined &&
+            decision.scope !== candidate.scope
+          ) {
+            return yield* new MemoryApprovalError({
+              message: "The approval scope must match the candidate scope.",
+            });
+          }
+          let scope =
+            decision.decision === "approve"
+              ? (decision.scope ?? (candidate.scope as AkeruMemoryTargetScope))
+              : (candidate.scope as AkeruMemoryTargetScope);
+          let approvedRevision: AkeruMemoryRevision | null = null;
+          if (decision.decision === "approve") {
+            approvedRevision = yield* repository
+              .insertScopedFact({
+                access,
+                scope,
+                fact,
+                sensitive: candidate.sensitive === 1,
+                confidence: candidate.confidence,
+                sourceMessageId: null,
+                memoryId: AkeruMemoryId.make(`approval:${candidate.candidateId}`),
+                createdAt,
+              })
+              .pipe(
+                Effect.catchTag("EntityMemoryConflictError", () =>
+                  repository
+                    .getCurrent({
+                      access,
+                      rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
+                    })
+                    .pipe(
+                      Effect.flatMap((existing) =>
+                        existing.fact === fact &&
+                        existing.partition.scope === scope &&
+                        existing.approvalState === "approved" &&
+                        existing.deletionState === "active"
+                          ? Effect.succeed(existing)
+                          : Effect.fail(
+                              new MemoryApprovalError({
+                                message:
+                                  "This memory approval already has a different approved fact or scope.",
+                              }),
+                            ),
+                      ),
+                    ),
+                ),
+                Effect.mapError((cause) =>
+                  cause._tag === "MemoryApprovalError"
+                    ? cause
+                    : failWith("Could not save the memory")(cause),
+                ),
+              );
+            // A conflict may mean the insert committed before the receipt write.
+            // Use the durable revision as the source of truth for the receipt.
+            fact = approvedRevision.fact;
+            scope = approvedRevision.partition.scope as AkeruMemoryTargetScope;
+          } else {
+            const orphan = yield* repository
+              .getCurrent({
+                access,
+                rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
+              })
+              .pipe(Effect.catchTag("EntityMemoryNotFoundError", () => Effect.succeed(null)));
+            if (orphan !== null) {
+              yield* repository
+                .applyMutation({
+                  access,
+                  mutation: {
+                    operation: "fact.forget",
+                    memoryId: orphan.rootId,
+                    expectedRevision: orphan.revision,
+                  },
+                  memoryId: AkeruMemoryId.make(`approval:${candidate.candidateId}:rejected`),
+                  updatedAt: createdAt,
+                  sharedProjectApproval: "approved",
+                })
+                .pipe(Effect.mapError(failWith("Could not retract the rejected memory")));
+            }
+          }
+          const memoryRootId = approvedRevision?.rootId ?? null;
+          const receipt: AkeruMemoryDecisionReceipt = {
+            candidateId: AkeruMemoryCandidateId.make(candidate.candidateId),
+            status: decision.decision === "approve" ? "approved" : "rejected",
+            fact,
+            scope,
+            affectedBotIds: candidate.affectedBotIds,
+            memoryRootId,
+            createdAt,
+          };
+          const affectedBotIdsJson = yield* encodeAffectedBotIds(receipt.affectedBotIds).pipe(
+            Effect.mapError(failWith("Could not record the memory decision")),
+          );
+          yield* sql
+            .withTransaction(
+              Effect.gen(function* () {
+                yield* sql`
                 UPDATE akeru_memory_candidates
                 SET status = ${receipt.status}, decided_at = ${createdAt},
                   decided_memory_root_id = ${memoryRootId}
                 WHERE tenant_id = ${access.tenantId} AND candidate_id = ${candidate.candidateId}
               `;
-              yield* sql`
+                yield* sql`
                 INSERT INTO akeru_memory_decision_receipts (
                   receipt_id, candidate_id, tenant_id, status, fact_text, target_scope,
                   affected_bot_ids_json, memory_root_id, created_at
@@ -464,17 +469,20 @@ const make = Effect.gen(function* () {
                   ${memoryRootId}, ${createdAt}
                 )
               `;
-            }),
-          )
-          .pipe(Effect.mapError(failWith("Could not record the memory decision")));
-        yield* reconcileResolved(candidate, receipt);
-        return receipt;
-      }),
-    ).pipe(Effect.mapError((cause) =>
-      cause._tag === "MemoryApprovalError"
-        ? cause
-        : failWith("Could not record the memory decision")(cause),
-    ));
+              }),
+            )
+            .pipe(Effect.mapError(failWith("Could not record the memory decision")));
+          yield* reconcileResolved(candidate, receipt);
+          return receipt;
+        }),
+      )
+      .pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "MemoryApprovalError"
+            ? cause
+            : failWith("Could not record the memory decision")(cause),
+        ),
+      );
 
   return { propose, decide } satisfies MemoryApprovalsShape;
 });

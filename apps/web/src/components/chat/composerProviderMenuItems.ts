@@ -1,4 +1,8 @@
-import { createTranslator, type MessageKey, type TranslationParams } from "@t3tools/client-runtime/i18n";
+import {
+  createTranslator,
+  type MessageKey,
+  type TranslationParams,
+} from "@t3tools/client-runtime/i18n";
 import {
   formatProviderSkillDisplayName,
   getProviderSkillsForSlashMenu,

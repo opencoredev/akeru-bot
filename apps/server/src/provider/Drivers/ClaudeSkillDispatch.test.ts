@@ -54,28 +54,20 @@ describe("planClaudeSkillDispatch", () => {
   });
 
   it("keeps a $skill inside a multiline double-quoted string literal", () => {
-    expect(
-      planClaudeSkillDispatch('echo "first\n$implement\nlast"', SKILLS),
-    ).toBeUndefined();
+    expect(planClaudeSkillDispatch('echo "first\n$implement\nlast"', SKILLS)).toBeUndefined();
   });
 
   it("keeps a $skill inside a multiline single-quoted string literal", () => {
-    expect(
-      planClaudeSkillDispatch("echo 'first\n$implement\nlast'", SKILLS),
-    ).toBeUndefined();
+    expect(planClaudeSkillDispatch("echo 'first\n$implement\nlast'", SKILLS)).toBeUndefined();
   });
 
   it("still dispatches a real mention after a properly closed multiline quote", () => {
-    expect(
-      planClaudeSkillDispatch('echo "first\nline"\n$implement the fix', SKILLS),
-    ).toEqual({
+    expect(planClaudeSkillDispatch('echo "first\nline"\n$implement the fix', SKILLS)).toEqual({
       leadingText: 'echo "first\nline"',
       commandText: "/implement the fix",
       skillName: "implement",
     });
-    expect(
-      planClaudeSkillDispatch("echo 'first\nline'\n$implement the fix", SKILLS),
-    ).toEqual({
+    expect(planClaudeSkillDispatch("echo 'first\nline'\n$implement the fix", SKILLS)).toEqual({
       leadingText: "echo 'first\nline'",
       commandText: "/implement the fix",
       skillName: "implement",
@@ -98,13 +90,11 @@ describe("planClaudeSkillDispatch", () => {
         SKILLS,
       ),
     ).toEqual({
-      leadingText: 'don\'t wait, it\'s fine: `echo $review` and "$review" then',
+      leadingText: "don't wait, it's fine: `echo $review` and \"$review\" then",
       commandText: "/implement it",
       skillName: "implement",
     });
-    expect(
-      planClaudeSkillDispatch("```\n$review\n```\n$implement the fix", SKILLS),
-    ).toEqual({
+    expect(planClaudeSkillDispatch("```\n$review\n```\n$implement the fix", SKILLS)).toEqual({
       leadingText: "```\n$review\n```",
       commandText: "/implement the fix",
       skillName: "implement",

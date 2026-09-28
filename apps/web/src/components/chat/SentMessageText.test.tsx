@@ -53,9 +53,7 @@ describe("SentMessageText", () => {
     const markup = renderToStaticMarkup(
       <SentMessageText
         text="use $review then $missing with @browser"
-        skills={[
-          { name: "review", displayName: "Review", path: "/skills/review", enabled: true },
-        ]}
+        skills={[{ name: "review", displayName: "Review", path: "/skills/review", enabled: true }]}
       />,
     );
 
