@@ -250,6 +250,20 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     return [next, next] as const;
   });
 
+  const clearFallbacks = Effect.fn("MobilePreferencesStore.clearFallbacks")(function* (
+    warning: string,
+  ) {
+    for (const key of [PREFERENCES_FALLBACK_KEY, LEGACY_PREFERENCES_FALLBACK_KEY]) {
+      yield* secureStorage
+        .removeItem(key)
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(warning).pipe(Effect.annotateLogs({ key, error })),
+          ),
+        );
+    }
+  });
+
   const saveJson = Effect.fn("MobilePreferencesStore.saveJson")(function* (
     payload: string,
     updatedAt?: number,
@@ -265,15 +279,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       yield* secureStorage.setItem(PREFERENCES_FALLBACK_KEY, fallback);
       return;
     }
-    yield* secureStorage
-      .removeItem(PREFERENCES_FALLBACK_KEY)
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Could not remove the mobile preferences fallback.").pipe(
-            Effect.annotateLogs({ error }),
-          ),
-        ),
-      );
+    yield* clearFallbacks("Could not remove the mobile preferences fallback.");
   });
 
   const loadUnlocked = Effect.gen(function* () {
@@ -328,15 +334,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       parsed = storedPreferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, storedJson.value.updatedAt));
       if (fallbackJson !== null) {
-        yield* secureStorage
-          .removeItem(PREFERENCES_FALLBACK_KEY)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Could not remove a stale mobile preferences fallback.").pipe(
-                Effect.annotateLogs({ error }),
-              ),
-            ),
-          );
+        yield* clearFallbacks("Could not remove a stale mobile preferences fallback.");
       }
     }
 
