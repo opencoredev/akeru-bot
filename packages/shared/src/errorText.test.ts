@@ -25,6 +25,30 @@ describe("withoutErrorStack", () => {
     expect(withoutErrorStack("Boom at new Worker (node:internal/worker:1:2)")).toBe("Boom");
   });
 
+  it("keeps the details of a multi-line message", () => {
+    const message = "Validation failed:\n- Missing API key\n- Choose a configured model";
+    expect(withoutErrorStack(message)).toBe(message);
+    expect(
+      withoutErrorStack(
+        `Error: ${message}\n    at validate (/srv/app/validate.js:12:3)\n    at async Promise.all (index 0)`,
+      ),
+    ).toBe(message);
+  });
+
+  it("removes stack frames between message lines", () => {
+    expect(
+      withoutErrorStack(
+        [
+          "Error: Request failed",
+          "    at send (file:///srv/app.js:1:2)",
+          "    at <anonymous>",
+          "Caused by: connection refused",
+          "    at connect (node:net:3:4)",
+        ].join("\n"),
+      ),
+    ).toBe("Request failed\nCaused by: connection refused");
+  });
+
   it("leaves readable messages alone", () => {
     for (const message of [
       "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.",
