@@ -12,7 +12,12 @@ import {
 
 const thread = (
   id: string,
-  overrides: Partial<{ projectId: string; title: string; archivedAt: string | null; updatedAt: string }> = {},
+  overrides: Partial<{
+    projectId: string;
+    title: string;
+    archivedAt: string | null;
+    updatedAt: string;
+  }> = {},
 ) => ({
   id,
   projectId: overrides.projectId ?? "project-a",
@@ -55,7 +60,11 @@ describe("rankComposerThreadMentions", () => {
   it("puts the current project first, then recency, and matches titles or search hits", () => {
     const ranked = rankComposerThreadMentions(
       [
-        thread("other-new", { projectId: "project-b", title: "Release notes", updatedAt: "2026-09-09T00:00:00.000Z" }),
+        thread("other-new", {
+          projectId: "project-b",
+          title: "Release notes",
+          updatedAt: "2026-09-09T00:00:00.000Z",
+        }),
         thread("local-old", { title: "Release plan", updatedAt: "2026-09-01T00:00:00.000Z" }),
         thread("local-new", { title: "Release blockers", updatedAt: "2026-09-05T00:00:00.000Z" }),
         thread("content-hit", { title: "Something else" }),
@@ -79,7 +88,11 @@ describe("rankComposerThreadMentions", () => {
   it("caps picker rows", () => {
     const many = Array.from({ length: 20 }, (_, index) => thread(`t${index}`));
     expect(
-      rankComposerThreadMentions(many, { query: "", currentThreadId: null, currentProjectId: null }),
+      rankComposerThreadMentions(many, {
+        query: "",
+        currentThreadId: null,
+        currentProjectId: null,
+      }),
     ).toHaveLength(THREAD_MENTION_PICKER_LIMIT);
   });
 });

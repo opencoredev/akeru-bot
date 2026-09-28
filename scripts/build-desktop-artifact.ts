@@ -1876,7 +1876,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "akeru.icon",
       category: "public.app-category.developer-tools",
       extendInfo: {
-        NSMicrophoneUsageDescription: "Akeru Bot uses the microphone for calls and dictation with your bots.",
+        NSMicrophoneUsageDescription:
+          "Akeru Bot uses the microphone for calls and dictation with your bots.",
       },
       protocols: [
         {
