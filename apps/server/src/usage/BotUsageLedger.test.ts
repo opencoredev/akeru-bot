@@ -243,6 +243,40 @@ it.layer(layer)("BotUsageLedger", (it) => {
     }),
   );
 
+  it.effect("preserves reported usage when a turn is cancelled", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-cancelled-after-report");
+      const turnId = TurnId.make("turn-cancelled-after-report");
+      yield* ledger.reserve(
+        reserveInput("cancelled-after-report", { botId, maximumTokens: 500, capLimit: 500 }),
+      );
+      yield* ledger.settleForTurn({
+        botId,
+        threadId: ThreadId.make("thread-1"),
+        turnId,
+        state: "reported",
+        inputTokens: 120,
+        outputTokens: 30,
+        reasoningTokens: 10,
+        settledAt: "2026-08-30T20:01:00.000Z",
+      });
+      yield* ledger.finalizeForTurn({
+        botId,
+        threadId: ThreadId.make("thread-1"),
+        turnId,
+        settledAt: "2026-08-30T20:02:00.000Z",
+        cancelled: true,
+      });
+      const summary = yield* ledger.summarize(botId);
+      assert.equal(summary.consumedTokens, 150);
+      assert.equal(summary.reservedTokens, 0);
+      assert.equal(summary.entries[0]?.state, "reported");
+      assert.equal(summary.entries[0]?.inputTokens, 120);
+      assert.equal(summary.entries[0]?.outputTokens, 30);
+    }),
+  );
+
   it.effect("records tool and routine writers and includes their priced tokens in the cap", () =>
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
