@@ -30,7 +30,9 @@ const baseSnapshot: OrchestrationShellSnapshot = {
   updatedAt: "2026-04-01T00:00:00.000Z",
 };
 
-const stubDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord)({
+const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+
+const stubDelegation = decodeDelegationRecord({
   delegationId: "delegation-1",
   parentDelegationId: null,
   parentBotId: "bot-parent",
@@ -58,6 +60,23 @@ const stubDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord)({
   createdAt: "2026-04-01T00:00:00.000Z",
   updatedAt: "2026-04-01T00:00:00.000Z",
 });
+
+const completedDelegation = (delegationId: string, createdAt: string, updatedAt: string) =>
+  decodeDelegationRecord({
+    ...stubDelegation,
+    delegationId,
+    createdAt,
+    updatedAt,
+    phase: {
+      _tag: "Completed",
+      childThreadId: "thread-child",
+      childTurnId: null,
+      startedAt: createdAt,
+      completedAt: updatedAt,
+      result: { summary: "Finished", childThreadId: "thread-child", childTurnId: null },
+      acknowledgedAt: null,
+    },
+  });
 
 const stubProject = {
   id: ProjectId.make("project-1"),
@@ -419,13 +438,22 @@ describe("applyShellStreamEvent", () => {
     });
 
     it("keeps only the newest finished delegations per parent thread", () => {
-      const finished = (index: number) => ({
+      const finished = (index: number) =>
+        completedDelegation(
+          `delegation-finished-${index}`,
+          stubDelegation.createdAt,
+          `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
+        );
+      const open = {
         ...stubDelegation,
-        delegationId: DelegationId.make(`delegation-finished-${index}`),
-        state: "completed" as const,
-        updatedAt: `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
-      });
-      const open = { ...stubDelegation, state: "running" as const };
+        phase: {
+          _tag: "Running" as const,
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+          startedAt: stubDelegation.createdAt,
+          progress: null,
+        },
+      };
       const otherThread = {
         ...finished(0),
         delegationId: DelegationId.make("delegation-other-thread"),
@@ -459,13 +487,12 @@ describe("applyShellStreamEvent", () => {
     });
 
     it("breaks finished delegation ties the same way as the shell snapshot", () => {
-      const tied = (index: number) => ({
-        ...stubDelegation,
-        delegationId: DelegationId.make(`delegation-tied-${String(index).padStart(2, "0")}`),
-        state: "completed" as const,
-        createdAt: `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
-        updatedAt: "2026-04-02T00:00:00.000Z",
-      });
+      const tied = (index: number) =>
+        completedDelegation(
+          `delegation-tied-${String(index).padStart(2, "0")}`,
+          `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+          "2026-04-02T00:00:00.000Z",
+        );
       let snapshot = baseSnapshot;
       // Arrive newest-created first, so arrival order disagrees with the ranking.
       for (let index = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD; index >= 0; index--) {
