@@ -190,4 +190,53 @@ describe("BotWorkspacePool", () => {
     await lease.release({ destroy: true });
     expect(create).toHaveBeenCalledTimes(2);
   });
+
+  it("preserves a remote workspace after a failed initial wake and retries it", async () => {
+    const pool = new BotWorkspacePool();
+    const local = localWorkspace();
+    const remote = {
+      id: local.id,
+      provider: "ascii" as const,
+      workspace: local,
+      inspect: async () => "running" as const,
+      wake: () => local.init(),
+      sleep: () => local.stop(),
+      destroy: () => local.destroy(),
+    };
+    vi.spyOn(local, "init").mockRejectedValueOnce(new Error("wake failed"));
+    const destroy = vi.spyOn(local, "destroy");
+    const create = vi.fn(async () => remote);
+
+    await expect(pool.acquire("remote-wake", create)).rejects.toThrow("wake failed");
+    expect(destroy).not.toHaveBeenCalled();
+    const lease = await pool.acquire("remote-wake", create);
+    expect(create).toHaveBeenCalledTimes(2);
+    await lease.release({ destroy: true });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it("preserves and reattaches a remote workspace after idle sleep fails", async () => {
+    const pool = new BotWorkspacePool();
+    const local = localWorkspace();
+    const remote = {
+      id: local.id,
+      provider: "ascii" as const,
+      workspace: local,
+      inspect: async () => "running" as const,
+      wake: () => local.init(),
+      sleep: () => local.stop(),
+      destroy: () => local.destroy(),
+    };
+    vi.spyOn(local, "stop").mockRejectedValueOnce(new Error("sleep failed"));
+    const destroy = vi.spyOn(local, "destroy");
+    const create = vi.fn(async () => remote);
+    const lease = await pool.acquire("remote-sleep", create);
+
+    await expect(lease.release()).rejects.toThrow("sleep failed");
+    expect(destroy).not.toHaveBeenCalled();
+    const retry = await pool.acquire("remote-sleep", create);
+    expect(create).toHaveBeenCalledTimes(2);
+    await retry.release({ destroy: true });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
 });

@@ -79,7 +79,9 @@ export class BotWorkspacePool {
           try {
             await workspace.wake();
           } catch (error) {
-            await workspace.destroy().catch(() => undefined);
+            if (workspace.provider === "local") {
+              await workspace.destroy().catch(() => undefined);
+            }
             throw error;
           }
           return workspace;
@@ -111,7 +113,9 @@ export class BotWorkspacePool {
       }
       if (entry.references === 0) {
         void entry.workspace
-          .then((failedWorkspace) => failedWorkspace.destroy())
+          .then((failedWorkspace) => {
+            if (failedWorkspace.provider === "local") return failedWorkspace.destroy();
+          })
           .catch(() => undefined);
       }
       throw error;
@@ -137,10 +141,14 @@ export class BotWorkspacePool {
           await entry.waking;
           await workspace.sleep();
         })().catch(async (error: unknown) => {
-          entry.destroying ??= workspace.destroy().finally(() => {
+          if (workspace.provider !== "local") {
             if (this.entries.get(key) === entry) this.entries.delete(key);
-          });
-          await entry.destroying.catch(() => undefined);
+          } else {
+            entry.destroying ??= workspace.destroy().finally(() => {
+              if (this.entries.get(key) === entry) this.entries.delete(key);
+            });
+            await entry.destroying.catch(() => undefined);
+          }
           throw error;
         });
         await entry.sleeping;
