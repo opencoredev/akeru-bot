@@ -11,6 +11,11 @@ import { AkeruSessionResources } from "./AkeruSessionResources.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 import { createBotBrowser } from "./botBrowser.ts";
 import {
+  botWorkspaceCredentialFingerprint,
+  botWorkspaceIdentity,
+  botWorkspaceResourceKey,
+} from "./botWorkspacePool.ts";
+import {
   type AkeruBotWorkspace,
   type AkeruRemoteSession,
   createRemoteBotWorkspace,
@@ -541,6 +546,98 @@ describe("AkeruSessionResources", () => {
     await second.release("after-restart", { destroy: true });
     expect(destroy).toHaveBeenCalledOnce();
     expect(NodeFS.existsSync(identityFile)).toBe(false);
+  });
+
+  it("reattaches Railway after credential rotation and rejects browser connectors without touching the VM", async () => {
+    const directory = stateDir();
+    const destroy = vi.fn(async () => undefined);
+    const openSession = vi.fn(
+      async (providerId?: string): Promise<AkeruRemoteSession> => ({
+        providerId: providerId ?? "railway-vm",
+        inspect: async () => "running",
+        run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+        browserEndpoint: async () => {
+          throw new Error("Railway CLI tunnel required");
+        },
+        wake: async () => undefined,
+        sleep: async () => undefined,
+        destroy,
+      }),
+    );
+    const makeRemoteWorkspace = vi.fn((input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
+      createRemoteBotWorkspace({ ...input, openSession }),
+    );
+    const resources = new AkeruSessionResources({
+      stateDir: directory,
+      makeRemoteWorkspace,
+      toMcpServerConfigs: () => ({}),
+    });
+    const input = (token: string) => {
+      const sandboxEnvironment = {
+        RAILWAY_API_TOKEN: token,
+        RAILWAY_ENVIRONMENT_ID: "environment",
+      };
+      const workspaceResourceKey = botWorkspaceResourceKey({
+        sandbox: "railway",
+        resourceScope: "bot-one",
+        credentialFingerprint: botWorkspaceCredentialFingerprint(sandboxEnvironment),
+      });
+      return {
+        ...remoteInput,
+        botSandbox: "railway" as const,
+        sandboxEnvironment,
+        threadId: token,
+        workspaceResourceKey,
+        workspaceId: botWorkspaceIdentity(workspaceResourceKey),
+        mcpServers: [],
+      };
+    };
+    const first = input("old-token");
+    const second = input("new-token");
+    await resources.acquire(first);
+    await resources.release(first.threadId);
+    await resources.acquire(second);
+    expect(openSession).toHaveBeenNthCalledWith(1, undefined);
+    expect(openSession).toHaveBeenNthCalledWith(2, "railway-vm");
+    await resources.release(second.threadId);
+    const identityFile = NodePath.join(
+      directory,
+      "bot-workspaces",
+      first.workspaceId,
+      "provider.json",
+    );
+    const identity = NodeFS.readFileSync(identityFile, "utf8");
+    await expect(
+      resources.acquire({
+        ...second,
+        threadId: "connector",
+        mcpServers: [
+          {
+            ...exaServer,
+            id: McpServerId.make("builtin-tinyfish"),
+            transport: "stdio",
+            command: "connector",
+          },
+        ],
+      }),
+    ).rejects.toThrow("Railway CLI tunnel");
+    expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(destroy).not.toHaveBeenCalled();
+    expect(NodeFS.readFileSync(identityFile, "utf8")).toBe(identity);
+    await resources.shutdown();
+    const restarted = new AkeruSessionResources({
+      stateDir: directory,
+      makeRemoteWorkspace,
+      toMcpServerConfigs: () => ({}),
+    });
+    openSession.mockRejectedValueOnce(new Error("credentials revoked"));
+    await expect(restarted.acquire(input("revoked-token"))).rejects.toThrow(
+      "missing or unavailable",
+    );
+    expect(openSession).toHaveBeenLastCalledWith("railway-vm");
+    expect(NodeFS.readFileSync(identityFile, "utf8")).toBe(identity);
+    expect(destroy).not.toHaveBeenCalled();
+    await restarted.shutdown();
   });
 
   it("keeps the bot workspace separate from the user computer workspace", async () => {

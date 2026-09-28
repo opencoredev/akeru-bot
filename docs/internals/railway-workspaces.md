@@ -4,8 +4,12 @@
 
 The shared identity file persists the Railway sandbox ID. Reattachment uses `Sandbox.connect` and verifies live status; unavailable identities fail closed without creating a replacement. `refresh` maps running, creating, and terminal states to the existing workspace state model. Only `SandboxNotFoundError` is converted to missing; authorization and network failures propagate.
 
+Railway identity hashes exclude the credential fingerprint while pool keys retain it. Rotating credentials creates a fresh SDK client but reconnects to the same saved VM, including after a server restart. Changing environments or revoking access fails closed rather than abandoning the old identity and creating a second billable VM. Settings requires explicit acknowledgement of the Railway-dashboard retirement path before replacing or removing existing credentials; this is not automatic remote cleanup.
+
 Railway has no SDK pause/resume operation. Workspace-pool release is therefore nondestructive: sleep is a no-op, wake verifies the VM is running, and destroy deletes the VM before the shared wrapper removes its identity file. Disk checkpoints are a Railway capability, not a substitute for pause/resume: restoring one creates a different VM and cannot transparently preserve the saved identity. No checkpoint API is added to the common workspace contract.
 
 Commands use the existing shell quoting and map cwd, environment, and millisecond timeouts to SDK options. A null exit code is treated as failure, never successful execution.
 
 Browser endpoint resolution fails explicitly because Railway previews require CLI tunnels. Private network addresses must not be returned as client-accessible preview URLs. There is no automatic tunnel process or local/remote origin assumption in this adapter.
+
+Browser-dependent MCP connectors are rejected before a Railway workspace lease is acquired, so unsupported browser setup cannot invoke destructive acquisition-failure cleanup on a durable VM.
