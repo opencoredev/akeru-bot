@@ -314,6 +314,16 @@ const make = Effect.gen(function* () {
         );
         continue;
       }
+      // Scheduled bot work settles from its delegation. A delegation that
+      // ended while nothing watched it, such as one startup reconciliation
+      // failed after a restart, still settles its run here.
+      if (claim.status === "dispatched" && claim.threadRef != null) {
+        const delegation = yield* adapter.findDelegatedRunDelegation(claim.threadRef);
+        if (delegation !== null) {
+          yield* settleDelegatedRun(delegation);
+          continue;
+        }
+      }
       if (
         claim.status === "dispatched" &&
         claim.terminalState !== null &&

@@ -322,6 +322,22 @@ const make = Effect.gen(function* () {
       yield* cancelDelegation(run, delegation.delegationId);
     }).pipe(Effect.orDie);
 
+  const findDelegatedRunDelegation: RoutineRuntimeAdapterShape["findDelegatedRunDelegation"] = (
+    threadRef,
+  ) =>
+    snapshots.getCommandReadModel().pipe(
+      Effect.map(
+        (readModel) =>
+          (readModel.delegations ?? []).find(
+            (candidate) =>
+              candidate.trigger === "scheduled" &&
+              candidate.phase._tag !== "Queued" &&
+              candidate.phase.childThreadId === threadRef,
+          ) ?? null,
+      ),
+      Effect.orDie,
+    );
+
   const openFailureIncident: RoutineRuntimeAdapterShape["openFailureIncident"] = (
     routine,
     failure,
@@ -492,6 +508,7 @@ const make = Effect.gen(function* () {
     recordFailed,
     recordCanceled,
     cancelDelegatedRun,
+    findDelegatedRunDelegation,
     openFailureIncident,
     resolveFailureIncident,
     dispatchTurn,

@@ -82,6 +82,8 @@ on its next turn, and the card offers Retry like any other failure. Running
 before the reactors means no delegation from the new process can exist yet.
 `Blocked` work waits on the user and is left alone, as are terminal records, so
 a second startup writes nothing. Liveness is never inferred from elapsed time.
+Routine recovery then settles any scheduled run whose work this failed (see
+Scheduled delegation below).
 
 `ProviderCommandReactor` startup recovery skips every thread with a
 `parentDelegationId`. It neither replays a pending turn start, resumes a
@@ -346,6 +348,14 @@ runtime links the run to its delegation.
 Scheduled work has no live parent turn. Ending a turn in the routine's chat
 therefore never cancels it.
 
-A delegation that ends while the server is down, or before `routine.run.start`
-records the run's `threadRef`, does not settle the run. Recovering those runs after a restart is
-follow-up work.
+Routine recovery in `apps/server/src/routines/RuntimeLive.ts` also settles a
+dispatched scheduled run from its persisted delegation. When the scheduled
+delegation whose child chat is the run's `threadRef` has ended, recovery settles
+the run the way the live `delegation.updated` path does. That covers work that
+ended while the server was down and work `reconcileDelegations` failed at
+startup, which no live subscriber sees. Recovery runs at startup and every
+minute, and only settles a run that is still active, so it is idempotent.
+
+A delegation that ends before `routine.run.start` records the run's
+`threadRef` still does not settle the run, because recovery has no child chat
+to match it by.

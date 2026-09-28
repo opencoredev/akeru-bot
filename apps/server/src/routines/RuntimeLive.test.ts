@@ -163,6 +163,7 @@ const harness = (
     recordCanceled: () => Effect.sync(() => events.push("run-canceled")),
     cancelDelegatedRun: (run) =>
       Effect.sync(() => events.push(`delegation-canceled:${run.threadRef}`)),
+    findDelegatedRunDelegation: () => Effect.succeed(null),
     openFailureIncident: () => Effect.sync(() => events.push("incident")),
     resolveFailureIncident: (routineId) =>
       Effect.sync(() => events.push(`incident-resolved:${routineId}`)),
