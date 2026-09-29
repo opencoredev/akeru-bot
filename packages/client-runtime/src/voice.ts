@@ -70,15 +70,14 @@ export async function runVoiceOperation<T>(
 }
 
 /**
- * Pass `sawTurnRunning` once the caller has observed the voice turn as the
- * running latest turn. If a newer turn then replaces it before it is seen
- * completing, its final state is unknown, so the reply is not spoken.
+ * Finds the reply to speak for the voice turn started by `requestMessageId`.
+ * If a newer chat turn has already replaced it as the latest turn, the voice
+ * turn's final reply is still spoken, once none of its messages are streaming.
  */
 export function correlatedVoiceReply(
   requestMessageId: string,
   latestTurn: OrchestrationLatestTurn | null,
   messages: readonly OrchestrationMessage[],
-  sawTurnRunning = false,
 ): string | null {
   if (latestTurn?.requestMessageId === requestMessageId) {
     if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
@@ -90,12 +89,13 @@ export function correlatedVoiceReply(
     const message = messages.find((item) => item.id === latestTurn.assistantMessageId);
     return message?.role === "assistant" && !message.streaming ? message.text : null;
   }
-  if (sawTurnRunning) throw new Error("The bot turn did not complete. Continue in chat.");
   const request = messages.find((item) => item.id === requestMessageId && item.role === "user");
   if (!request?.turnId) return null;
-  const reply = messages.findLast(
-    (item) => item.turnId === request.turnId && item.role === "assistant" && !item.streaming,
+  const replies = messages.filter(
+    (item) => item.turnId === request.turnId && item.role === "assistant",
   );
+  if (replies.some((item) => item.streaming)) return null;
+  const reply = replies.at(-1);
   if (reply) return reply.text;
   if (latestTurn && latestTurn.requestedAt > request.createdAt) {
     throw new Error("The bot turn did not complete. Continue in chat.");

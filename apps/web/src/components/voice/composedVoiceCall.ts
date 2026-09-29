@@ -85,18 +85,11 @@ export function composedVoiceAdapters(deps: ComposedVoiceCallDependencies): Comp
       if (messageId === null) {
         throw new Error("The chat did not accept the message. Continue in chat.");
       }
-      let sawTurnRunning = false;
       return waitForVoiceReply(
         signal,
         () => {
           const turn = deps.readTurn();
-          if (
-            turn.latestTurn?.requestMessageId === messageId &&
-            turn.latestTurn.state === "running"
-          ) {
-            sawTurnRunning = true;
-          }
-          return correlatedVoiceReply(messageId, turn.latestTurn, turn.messages, sawTurnRunning);
+          return correlatedVoiceReply(messageId, turn.latestTurn, turn.messages);
         },
         deps.subscribeTurn,
       );

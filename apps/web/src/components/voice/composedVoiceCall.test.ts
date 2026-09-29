@@ -196,7 +196,7 @@ describe("composed voice call adapters", () => {
     expect(chat.listenerCount()).toBe(0);
   });
 
-  it("does not speak a reply when a newer turn replaces a voice turn that was still running", async () => {
+  it("speaks the finished voice reply after a newer chat turn replaces it", async () => {
     const chat = fakeChat();
     let markSubscribed!: () => void;
     const subscribed = new Promise<void>((resolve) => {
@@ -217,30 +217,32 @@ describe("composed voice call adapters", () => {
       },
     });
     const waiting = adapters.sendAndWait("hello", new AbortController().signal);
-    const voiceTurn = completedTurn("request-1", "Partial answer");
+    const voiceTurn = completedTurn("request-1", "Done.");
+    const reply = voiceTurn.messages[0]!;
     const request: OrchestrationMessage = {
-      ...voiceTurn.messages[0]!,
+      ...reply,
       id: MessageId.make("request-1"),
       role: "user",
       text: "hello",
       createdAt: "2026-09-25T00:00:00.000Z",
     };
+    const newerTurn: OrchestrationLatestTurn = {
+      ...voiceTurn.latestTurn!,
+      turnId: TurnId.make("turn-2"),
+      requestMessageId: MessageId.make("request-2"),
+      requestedAt: "2026-09-25T00:00:02.000Z",
+      state: "running",
+      completedAt: null,
+    };
     await subscribed;
     chat.publish({
       latestTurn: { ...voiceTurn.latestTurn!, state: "running", completedAt: null },
-      messages: [request, voiceTurn.messages[0]!],
+      messages: [request, { ...reply, streaming: true }],
     });
-    chat.publish({
-      latestTurn: {
-        ...voiceTurn.latestTurn!,
-        turnId: TurnId.make("turn-2"),
-        requestMessageId: MessageId.make("request-2"),
-        requestedAt: "2026-09-25T00:00:02.000Z",
-        state: "running",
-        completedAt: null,
-      },
-      messages: [request, voiceTurn.messages[0]!],
-    });
-    await expect(waiting).rejects.toThrow("The bot turn did not complete. Continue in chat.");
+    chat.publish({ latestTurn: newerTurn, messages: [request, { ...reply, streaming: true }] });
+    expect(chat.listenerCount()).toBe(1);
+    chat.publish({ latestTurn: newerTurn, messages: [request, reply] });
+    await expect(waiting).resolves.toBe("Done.");
+    expect(chat.listenerCount()).toBe(0);
   });
 });

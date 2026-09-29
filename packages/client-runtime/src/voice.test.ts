@@ -305,9 +305,15 @@ describe("accepted bot turn correlation", () => {
     expect(() => correlatedVoiceReply("request-1", newerTurn, [request])).toThrow(
       "The bot turn did not complete",
     );
-    // Once the voice turn was seen running, a replacement hides how it ended.
-    expect(() => correlatedVoiceReply("request-1", newerTurn, [request, assistant], true)).toThrow(
-      "The bot turn did not complete",
+    // The voice reply is still spoken once it has finished streaming.
+    const followUp = { ...assistant, id: MessageId.make("assistant-2"), text: "Final reply" };
+    const streaming = { ...followUp, streaming: true };
+    expect(correlatedVoiceReply("request-1", newerTurn, [request, streaming])).toBeNull();
+    expect(
+      correlatedVoiceReply("request-1", newerTurn, [request, assistant, streaming]),
+    ).toBeNull();
+    expect(correlatedVoiceReply("request-1", newerTurn, [request, assistant, followUp])).toBe(
+      "Final reply",
     );
   });
 
