@@ -702,8 +702,10 @@ export function channelBindingsForRuntime(
   isRunning: (botId: BotId, provider: ChannelProvider) => boolean,
   isConnecting: (botId: BotId, provider: ChannelProvider) => boolean = () => false,
 ): ReadonlyArray<ChannelBinding> {
+  // A not-live WhatsApp binding still runs a transport that can send, so it needs one too.
   return bindings.map((binding) =>
-    (binding.status === "connected" && !isRunning(binding.botId, binding.provider)) ||
+    ((binding.status === "connected" || binding.status === "not-live") &&
+      !isRunning(binding.botId, binding.provider)) ||
     (binding.status === "connecting" && !isConnecting(binding.botId, binding.provider))
       ? { ...binding, status: "needs-reconnect" }
       : binding,
@@ -2034,7 +2036,7 @@ const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel)
         Effect.gen(function* () {
           if (ctx.closed || ctx.runtimes.get(key) !== started.runtime) return;
           const current = bindingFor(yield* ctx.deps.readModel, botId, provider);
-          if (current?.status !== "connected") return;
+          if (current?.status !== "connected" && current?.status !== "not-live") return;
           yield* replaceBinding(ctx, {
             ...current,
             status: "needs-reconnect",

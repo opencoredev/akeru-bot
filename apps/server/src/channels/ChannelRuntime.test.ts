@@ -930,6 +930,20 @@ describe("channel runtime", () => {
     }),
   );
 
+  it("asks to reconnect a not-live WhatsApp binding whose transport stopped", () => {
+    const binding: ChannelBinding = {
+      status: "not-live",
+      botId: BOT_ID,
+      provider: "whatsapp",
+      projectId: PROJECT_ID,
+      externalIdentity: null,
+      connectedAt: null,
+      sentMessageIds: [],
+    };
+    expect(channelBindingsWith([binding], () => false)[0]?.status).toBe("needs-reconnect");
+    expect(channelBindingsWith([binding], () => true)[0]?.status).toBe("not-live");
+  });
+
   it("keeps ChannelPostRejectedError typed and message-safe", () => {
     const error = new ChannelPostRejectedError({ message: "rejected" });
     expect(error._tag).toBe("ChannelPostRejectedError");
