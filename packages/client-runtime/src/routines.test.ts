@@ -193,6 +193,21 @@ describe("routineApprovalSummary", () => {
     });
   });
 
+  it("shows the proposed timezone beside a wall-clock schedule", () => {
+    expect(
+      routineApprovalSummary({
+        schedule: { kind: "weekdays", time: "09:00" },
+        timezone: "America/New_York",
+      }).schedule,
+    ).toBe("Weekdays at 09:00 (America/New_York)");
+    expect(
+      routineApprovalSummary({
+        schedule: { kind: "weekdays", time: "09:00" },
+        timezone: { invalid: true },
+      }).schedule,
+    ).toBe("Weekdays at 09:00");
+  });
+
   it("follows the interface language", () => {
     const { t } = createTranslator("zh-CN", zhCNCatalog);
     expect(

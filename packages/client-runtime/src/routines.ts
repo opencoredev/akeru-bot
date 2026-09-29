@@ -389,13 +389,14 @@ export function routineApprovalSummary(
           : t("Weekly")
         : t("Daily");
   const base = time ? t("{schedule} at {time}", { schedule: kind, time }) : null;
+  const timezone =
+    typeof record?.timezone === "string" && record.timezone.trim() ? record.timezone.trim() : null;
   return {
     name: typeof record?.name === "string" && record.name.trim() ? record.name : t("New routine"),
     instructions:
       typeof record?.instructions === "string" && record.instructions.trim()
         ? record.instructions
         : null,
-    // The tool proposes no timezone; the server uses the chat's device timezone.
-    schedule: base,
+    schedule: base && timezone ? `${base} (${timezone})` : base,
   };
 }
