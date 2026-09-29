@@ -171,6 +171,16 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     return context;
   };
 
+  // A request that raced close() must not open a new session: nothing would
+  // close it again. getContext() claims the lease synchronously, so checking
+  // right before the call leaves no gap.
+  const contextFor = (generation: number): Promise<BrowserContext> => {
+    if (generation !== closeGeneration) {
+      return Promise.reject(new Error("The browser was closed while this request was running."));
+    }
+    return getContext();
+  };
+
   const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
     const tabId = request.tabId ?? activeByThread.get(request.threadId);
     const tab = tabId ? tabs.get(tabId) : undefined;
@@ -294,7 +304,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           }),
         );
         tabId = snapshot.tabId;
-        const page = await (await getContext()).newPage();
+        const page = await (await contextFor(generation)).newPage();
         if (generation !== closeGeneration) {
           await page.close().catch(() => undefined);
           throw new Error("The browser was closed while this tab was opening.");
@@ -411,7 +421,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
       case "evaluate": {
         const input = request.input as PreviewAutomationEvaluateInput;
-        const session = await (await getContext()).newCDPSession(tab.page);
+        const session = await (await contextFor(generation)).newCDPSession(tab.page);
         try {
           const result = await session.send("Runtime.evaluate", {
             expression: input.expression,

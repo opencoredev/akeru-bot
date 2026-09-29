@@ -83,12 +83,14 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
     }),
   );
 
-  it.effect("does not keep a tab from an open that raced close", () =>
+  it.effect("does not keep a tab or session from an open that raced close", () =>
     Effect.gen(function* () {
       const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
       const opening = browser.handle(openRequest("thread-race", "open-race"));
       yield* Effect.promise(() => browser.close());
-      yield* Effect.promise(() => expect(opening).rejects.toThrow("closed while this tab"));
+      yield* Effect.promise(() => expect(opening).rejects.toThrow("browser was closed"));
+      // No Browserbase session outlives the close.
+      for (const opened of playwright.browsers) expect(opened.close).toHaveBeenCalledOnce();
     }),
   );
 });
