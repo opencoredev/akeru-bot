@@ -273,7 +273,7 @@ export const akeruDelegationStateOf = (phase: AkeruDelegationPhase): AkeruDelega
   }
 };
 
-export const AkeruDelegationRecord = Schema.Union([TaggedDelegationRecord, LegacyToTagged]);
+export const AkeruDelegationRecord = Schema.Union([LegacyToTagged, TaggedDelegationRecord]);
 export type AkeruDelegationRecord = typeof AkeruDelegationRecord.Type;
 
 export const AKERU_DELEGATION_TRANSITIONS = {

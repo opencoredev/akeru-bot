@@ -10,9 +10,11 @@ import {
 import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+const encodeDelegationRecord = Schema.encodeSync(AkeruDelegationRecord);
 const decodeDelegationPhase = Schema.decodeUnknownSync(AkeruDelegationPhase);
 const decodeOrchestrationCommand = Schema.decodeUnknownSync(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownSync(OrchestrationEvent);
+const encodeOrchestrationEvent = Schema.encodeUnknownSync(OrchestrationEvent);
 
 const record = {
   delegationId: "delegation-1",
@@ -103,6 +105,22 @@ describe("Akeru delegation contracts", () => {
     expect(decoded.phase).toEqual({ ...phase, result: phase.result });
   });
 
+  it("encodes tagged records with the previous client's flat wire fields", () => {
+    const tagged = decodeDelegationRecord(record);
+    const encoded = encodeDelegationRecord(tagged);
+    expect(encoded).toMatchObject({
+      state: "completed",
+      childThreadId: "thread-child",
+      childTurnId: "turn-child",
+      result: record.phase.result,
+      failure: null,
+      startedAt: record.phase.startedAt,
+      completedAt: record.phase.completedAt,
+    });
+    expect(encoded).not.toHaveProperty("phase");
+    expect(decodeDelegationRecord(encoded)).toEqual(tagged);
+  });
+
   it("lifts legacy queued and failed records", () => {
     const { phase: _phase, ...base } = record;
     const legacy = {
@@ -179,5 +197,13 @@ describe("Akeru delegation contracts", () => {
         decodeOrchestrationEvent({ ...eventBase, eventId: "event-2", type: "delegation.updated" }),
       ].map((event) => event.type),
     ).toEqual(["delegation.created", "delegation.updated"]);
+    expect(
+      encodeOrchestrationEvent(
+        decodeOrchestrationEvent({ ...eventBase, eventId: "event-2", type: "delegation.updated" }),
+      ),
+    ).toMatchObject({
+      type: "delegation.updated",
+      payload: { delegation: { state: "completed", childThreadId: "thread-child" } },
+    });
   });
 });
