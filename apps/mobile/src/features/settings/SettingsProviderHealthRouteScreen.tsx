@@ -153,18 +153,19 @@ function BotInboxRow({
                 </Text>
               </Pressable>
             ) : null}
-            {/* Repair rows resolve too: mobile cannot always reach the repair screen. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
-              className="rounded-[12px] bg-subtle px-3 py-2"
-              onPress={() => void resolve()}
-            >
-              <Text className="text-sm font-t3-medium text-foreground">
-                {busy ? t("Resolving…") : t("Resolve")}
-              </Text>
-            </Pressable>
+            {action === "resolve" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                className="rounded-[12px] bg-subtle px-3 py-2"
+                onPress={() => void resolve()}
+              >
+                <Text className="text-sm font-t3-medium text-foreground">
+                  {busy ? t("Resolving…") : t("Resolve")}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </>
       )}
