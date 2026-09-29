@@ -2,7 +2,7 @@ import { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { makeComposerTestProvider } from "../../test/chatComposerProps";
+import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import type { Bot, Group } from "./types";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
