@@ -336,6 +336,12 @@ function ThreadRouteContent(
         (selectedThread?.session?.providerInstanceId ?? selectedThread?.modelSelection.instanceId),
     )?.driver ?? null;
   const headerBotName = threadBot?.name ?? providerBotName(headerProviderDriver) ?? "Bot";
+  const headerTitle =
+    !usesNativeHeaderGlass &&
+    selectedThread !== null &&
+    selectedThread.title !== PLACEHOLDER_THREAD_TITLE
+      ? selectedThread.title
+      : headerBotName;
   const headerAvatarSeed = headerProviderDriver ?? headerBotName;
   const headerSubtitle = [
     selectedThread !== null && selectedThread.title !== PLACEHOLDER_THREAD_TITLE
@@ -694,7 +700,7 @@ function ThreadRouteContent(
       buildThreadWorkspaceActions({
         canOpenFiles: fileInspector.supported && selectedThreadCwd !== null,
         canOpenTerminal: Boolean(selectedThreadProject?.workspaceRoot),
-        canOpenGit: selectedThread !== null,
+        canOpenGit: selectedThread !== null && selectedThreadCwd !== null,
         canToggleInspector:
           !layout.usesSplitView && fileInspector.supported && selectedThreadCwd !== null,
       }),
@@ -779,14 +785,14 @@ function ThreadRouteContent(
       // Android draws its own in-flow header (AndroidScreenHeader below);
       // the native stack header stays iOS-only.
       headerShown: Platform.OS !== "android",
-      headerTitle: headerBotName,
+      headerTitle,
       headerTitleStyle: usesNativeHeaderGlass
         ? {
             fontSize: 17,
             fontWeight: "800",
           }
         : undefined,
-      title: headerBotName,
+      title: headerTitle,
       headerBackVisible: !layout.usesSplitView,
       // Compact uses the NATIVE back button when a previous route exists;
       // deep links / cold starts get an explicit Home button instead.
@@ -799,7 +805,7 @@ function ThreadRouteContent(
               ? undefined
               : () => compactHomeHeaderItems
           : undefined,
-      // The header title and subtitle carry the bot; the workspace tools
+      // The header title identifies the chat on older iOS and the bot on native glass; the workspace tools
       // stay on the RIGHT, where split view keeps the richer center-item
       // ordering (no breadcrumbs occupy that space yet).
       unstable_headerRightItems:
@@ -812,7 +818,7 @@ function ThreadRouteContent(
       canGoBack,
       compactHomeHeaderItems,
       compactRightHeaderItems,
-      headerBotName,
+      headerTitle,
       headerSubtitle,
       layout.usesSplitView,
       splitLeftHeaderItems,
@@ -908,7 +914,12 @@ function ThreadRouteContent(
           botName={headerBotName}
           subtitle={headerSubtitle}
           onBack={
-            layout.usesSplitView ? (props.onReturnToThread ?? undefined) : () => navigation.goBack()
+            layout.usesSplitView
+              ? (props.onReturnToThread ?? undefined)
+              : () =>
+                  canGoBack
+                    ? navigation.goBack()
+                    : navigation.dispatch(StackActions.replace("Home"))
           }
           workspaceActions={workspaceActions}
           onWorkspaceAction={handleWorkspaceAction}

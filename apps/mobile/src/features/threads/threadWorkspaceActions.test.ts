@@ -14,7 +14,7 @@ function actionsFor(input: {
   return buildThreadWorkspaceActions({
     canOpenFiles: input.inspectorSupported && input.threadCwd !== null,
     canOpenTerminal: Boolean(input.workspaceRoot),
-    canOpenGit: true,
+    canOpenGit: input.threadCwd !== null,
     canToggleInspector:
       !input.usesSplitView && input.inspectorSupported && input.threadCwd !== null,
   }).map((action) => action.id);
@@ -44,7 +44,7 @@ describe("thread workspace actions", () => {
     ]);
   });
 
-  it("keeps git reachable for a chat with no working directory", () => {
+  it("hides git for a chat with no working directory", () => {
     expect(
       actionsFor({
         usesSplitView: false,
@@ -52,7 +52,7 @@ describe("thread workspace actions", () => {
         threadCwd: null,
         workspaceRoot: null,
       }),
-    ).toEqual(["git"]);
+    ).toEqual([]);
   });
 
   it("offers the terminal for a project chat before its working directory resolves", () => {
@@ -63,10 +63,10 @@ describe("thread workspace actions", () => {
         threadCwd: null,
         workspaceRoot: "/work/akeru",
       }),
-    ).toEqual(["terminal", "git"]);
+    ).toEqual(["terminal"]);
   });
 
-  it("keeps Git reachable when the inspector is unsupported and there is no project", () => {
+  it("hides Git when the inspector is unsupported and there is no project", () => {
     expect(
       actionsFor({
         usesSplitView: false,
@@ -74,7 +74,7 @@ describe("thread workspace actions", () => {
         threadCwd: null,
         workspaceRoot: null,
       }),
-    ).toEqual(["git"]);
+    ).toEqual([]);
   });
 
   it("gives every action a title and an icon so the overflow menu is legible", () => {
