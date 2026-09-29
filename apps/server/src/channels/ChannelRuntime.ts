@@ -2504,6 +2504,84 @@ const handleWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request
     ),
   );
 
+// Meta's message webhooks are a few kilobytes; media arrives by reference, not inline.
+const MAX_WHATSAPP_WEBHOOK_BYTES = 1024 * 1024;
+const WEBHOOK_TOO_LARGE = Symbol("webhook-too-large");
+
+/** Reads a webhook body without buffering more than the cap. */
+const readBoundedWebhookBody = async (
+  request: Request,
+): Promise<Buffer | typeof WEBHOOK_TOO_LARGE> => {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_WHATSAPP_WEBHOOK_BYTES) return WEBHOOK_TOO_LARGE;
+  const reader = request.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_WHATSAPP_WEBHOOK_BYTES) {
+      void reader.cancel().catch(() => undefined);
+      return WEBHOOK_TOO_LARGE;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+};
+
+const parseWebhookJson = (body: Buffer): unknown => {
+  try {
+    // @effect-diagnostics-next-line preferSchemaOverJson:off - payload shape is checked field by field.
+    return JSON.parse(body.toString("utf8")) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+/** Hands a webhook to the bot's transport only when its messages are for the saved phone number. */
+const handlePhoneScopedWhatsAppWebhook = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  secret: StoredChannelSecret | null,
+  request: Request,
+): Effect.Effect<Response> => {
+  if (!secret || secret.provider !== "whatsapp")
+    return Effect.succeed(new Response("Not Found", { status: 404 }));
+  if (request.method !== "POST") return handleWhatsAppWebhook(ctx, botId, request);
+  return Effect.promise(() => readBoundedWebhookBody(request)).pipe(
+    Effect.flatMap((body) =>
+      body === WEBHOOK_TOO_LARGE
+        ? Effect.succeed(new Response("Payload Too Large", { status: 413 }))
+        : hasMismatchedWhatsAppPhone(parseWebhookJson(body), secret.phoneNumberId)
+          ? Effect.succeed(new Response("Not Found", { status: 404 }))
+          : handleWhatsAppWebhook(
+              ctx,
+              botId,
+              new Request(request.url, { method: request.method, headers: request.headers, body }),
+            ),
+    ),
+  );
+};
+
+/** Serves the older bot-addressed webhook URL with the same phone check as connection URLs. */
+const handleBotWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request: Request) =>
+  ctx.deps.readModel.pipe(
+    Effect.map((model) =>
+      model.bots
+        .find((bot) => bot.id === botId && bot.archivedAt === null)
+        ?.channelBindings?.find((binding) => binding.provider === "whatsapp"),
+    ),
+    Effect.flatMap((binding) =>
+      binding?.connectionId
+        ? loadConnectionSecret(ctx, binding.connectionId)
+        : loadSecret(ctx, botId, "whatsapp"),
+    ),
+    Effect.flatMap((secret) => handlePhoneScopedWhatsAppWebhook(ctx, botId, secret, request)),
+    Effect.catchCause(() => Effect.succeed(new Response("Not Found", { status: 404 }))),
+  );
+
 const record = (value: unknown): Readonly<Record<string, unknown>> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Readonly<Record<string, unknown>>)
@@ -2900,7 +2978,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       stopChannelsForBot: (botId) => stopChannelsForBot(ctx, botId),
       clearChannelThreadStatuses: (threadId) => clearChannelThreadStatuses(ctx, threadId),
       stopArchivedBotChannels: (events) => stopArchivedBotChannels(ctx, events),
-      handleWhatsAppWebhook: (botId, request) => handleWhatsAppWebhook(ctx, botId, request),
+      handleWhatsAppWebhook: (botId, request) => handleBotWhatsAppWebhook(ctx, botId, request),
       handleWhatsAppConnectionWebhook: (connectionId, request) =>
         ctx.deps.readModel.pipe(
           Effect.map(
@@ -2918,22 +2996,9 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
           Effect.flatMap((botId) =>
             botId
               ? loadConnectionSecret(ctx, connectionId).pipe(
-                  Effect.flatMap((secret) => {
-                    if (!secret || secret.provider !== "whatsapp")
-                      return Effect.succeed(new Response("Not Found", { status: 404 }));
-                    if (request.method !== "POST")
-                      return handleWhatsAppWebhook(ctx, botId, request);
-                    return Effect.tryPromise({
-                      try: async (): Promise<unknown> => request.clone().json(),
-                      catch: () => null,
-                    }).pipe(
-                      Effect.flatMap((payload) =>
-                        hasMismatchedWhatsAppPhone(payload, secret.phoneNumberId)
-                          ? Effect.succeed(new Response("Not Found", { status: 404 }))
-                          : handleWhatsAppWebhook(ctx, botId, request),
-                      ),
-                    );
-                  }),
+                  Effect.flatMap((secret) =>
+                    handlePhoneScopedWhatsAppWebhook(ctx, botId, secret, request),
+                  ),
                   Effect.catchCause(() =>
                     Effect.succeed(new Response("Not Found", { status: 404 })),
                   ),

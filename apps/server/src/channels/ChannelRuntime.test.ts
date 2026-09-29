@@ -1664,6 +1664,58 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("keeps the bot-addressed WhatsApp webhook to its own phone number", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({ startTransport: null });
+      yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+      const message = (phoneNumberId: string) =>
+        // @effect-diagnostics-next-line preferSchemaOverJson:off - the webhook signs raw JSON text.
+        JSON.stringify({
+          object: "whatsapp_business_account",
+          entry: [
+            {
+              id: "business-id",
+              changes: [
+                {
+                  field: "messages",
+                  value: {
+                    messaging_product: "whatsapp",
+                    metadata: {
+                      display_phone_number: "+15550002222",
+                      phone_number_id: phoneNumberId,
+                    },
+                    contacts: [{ profile: { name: "Mallory" }, wa_id: "15557654321" }],
+                    messages: [
+                      {
+                        from: "15557654321",
+                        id: "wamid.other-line",
+                        timestamp: "1788220000",
+                        text: { body: "For another line" },
+                        type: "text",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        });
+
+      const otherLine = yield* handleWhatsAppWebhook(
+        BOT_ID,
+        signedWhatsAppRequest(message("other-phone-number-id")),
+      );
+      const oversized = yield* handleWhatsAppWebhook(
+        BOT_ID,
+        signedWhatsAppRequest(" ".repeat(1024 * 1024 + 1)),
+      );
+
+      expect(otherLine.status).toBe(404);
+      expect(oversized.status).toBe(413);
+      expect(harness.commands.some((command) => command.type === "thread.turn.start")).toBe(false);
+    }),
+  );
+
   it.effect("accepts iMessage direct messages and ignores group messages", () =>
     Effect.gen(function* () {
       let directMessage:
