@@ -80,6 +80,13 @@ describe("Akeru WebFetch", () => {
     await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("private");
   });
 
+  it("rejects a hostname whose lookup returns a malformed address", async () => {
+    const webFetch = createAkeruWebFetch({
+      lookup: async () => [{ address: "not-an-address", family: 4 }],
+    });
+    await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("valid address");
+  });
+
   it("times out a hostname whose lookup never answers", async () => {
     const webFetch = createAkeruWebFetch({
       lookup: () => new Promise(() => undefined),

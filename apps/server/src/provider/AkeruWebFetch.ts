@@ -133,6 +133,9 @@ async function resolvePinnedAddress(
   const literal = NodeNet.isIP(host);
   const records = literal !== 0 ? [{ address: host, family: literal }] : await lookup(host);
   if (records.length === 0) throw new Error(`WebFetch could not resolve ${host}.`);
+  if (records.some((record) => NodeNet.isIP(record.address) === 0)) {
+    throw new Error(`WebFetch could not resolve ${host} to a valid address.`);
+  }
   if (records.some((record) => !allowAddress(record.address))) {
     throw new Error("WebFetch rejects private, loopback, and local addresses.");
   }
