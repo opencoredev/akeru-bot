@@ -221,6 +221,9 @@ export class SubscriptionAuthService {
         readonly [string, PendingLogin]
       >;
       for (const [loginId, pending] of entries.slice(-PENDING_LOGIN_CAP)) {
+        // Cursor sign-in was retired; a login saved before the upgrade reports
+        // as expired instead of polling a provider this build cannot finish.
+        if (pending.provider === "cursor") continue;
         this.pendingLogins.set(loginId, pending);
       }
     } catch {

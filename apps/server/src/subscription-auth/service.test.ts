@@ -186,6 +186,17 @@ describe("subscription auth storage", () => {
     expect(JSON.stringify(runtime.statuses())).not.toContain("private-key");
     expect(NodeFS.readFileSync(`${authPath}.health`, "utf-8")).not.toContain("private-key");
   });
+  it("fails a Cursor login saved before Cursor was retired", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      `${authPath}.pending`,
+      JSON.stringify([["login-cursor", { provider: "cursor", authMode: "api-key" }]]),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    expect(await service.pollLogin("login-cursor")).toMatchObject({ status: "failed" });
+    expect(await service.completeLogin("login-cursor", "key")).toMatchObject({ status: "failed" });
+    expect(service.getApiKeyCredential("cursor")).toBeUndefined();
+  });
   it.each(["anthropic", "openai-codex", "xai", "kimi-for-coding", "opencode-go"] as const)(
     "saves %s API keys through complete and never returns the key",
     async (provider) => {
