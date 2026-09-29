@@ -801,7 +801,6 @@ export class SubscriptionAuthService {
 
   async testHealth(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
     await this.reloadAsync();
-    if (provider === "cursor") return;
     const key = credentialKey(provider, instanceId);
     const version = (this.healthProbeVersions.get(key) ?? 0) + 1;
     this.healthProbeVersions.set(key, version);
