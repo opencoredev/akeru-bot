@@ -34,19 +34,56 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Enable pnpm for the Changesets action
+      - name: Enable pnpm for Changesets
         run: corepack enable
+
+      # changesets/action finds its PR through the pulls `head` filter, which
+      # returns nothing for this fork, so it tried to open a duplicate PR on
+      # every push and never refreshed the existing one. Match on head.ref instead.
+      - name: Version packages
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm release:version
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Update Version Packages PR
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          version: pnpm release:version
-          commit: "chore(release): version packages"
-          title: "chore(release): version packages"
-          createGithubReleases: false
+        if: steps.version.outputs.changed == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: changeset-release/main
+          TITLE: "chore(release): version packages"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$RELEASE_BRANCH"
+          git add -A
+          git commit -m "$TITLE"
+          git push --force origin "HEAD:$RELEASE_BRANCH"
+
+          version="$(jq -r .version apps/server/package.json)"
+          {
+            echo "This PR was opened by the Version packages workflow. Merging it releases akeru-bot $version. Every push to main with new changesets updates it."
+            echo
+            echo "# akeru-bot@$version"
+            awk '/^## /{n++; next} n==1' apps/server/CHANGELOG.md
+          } > "$RUNNER_TEMP/version-pr-body.md"
+
+          pr="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&base=main&per_page=100" \
+            --jq ".[] | select(.head.ref == \"$RELEASE_BRANCH\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number" | head -n 1)"
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "$TITLE" --body-file "$RUNNER_TEMP/version-pr-body.md"
+          else
+            url="$(gh pr create --base main --head "$RELEASE_BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/version-pr-body.md")"
+            pr="${url##*/}"
+          fi
+          echo "pullRequestNumber=$pr" >> "$GITHUB_OUTPUT"
 
       - name: Run checks for the updated version branch
         if: steps.changesets.outputs.pullRequestNumber != ''
