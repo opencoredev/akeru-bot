@@ -51,6 +51,7 @@ import {
   ImageGenerationRuntime,
   type ImageSubscriptionAuth,
   layerWith,
+  makeImageGenerationRuntime,
 } from "./ImageGenerationRuntime.ts";
 import { base64, jpegBytes, pngBytes } from "./testImages.ts";
 
@@ -629,6 +630,78 @@ describe("ImageGenerationRuntime", () => {
       assert.equal(result.status === "failed" && result.kind, "provider-failed");
       const [message] = yield* generatedMessages(threadId);
       assert.equal(message?.attachments?.length, 1);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("removes saved images when posting them fails", () => {
+    const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+    return Effect.gen(function* () {
+      const config = yield* ServerConfig;
+      const engine = yield* OrchestrationEngineService;
+      const botId = BotId.make("bot-post-fails");
+      const threadId = ThreadId.make("thread-post-fails");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+      yield* sendUserMessage(threadId, "post-fails");
+      const runtime = yield* makeImageGenerationRuntime({
+        adapters,
+        subscriptionAuth: fakeSubscriptions(),
+      }).pipe(
+        Effect.provideService(OrchestrationEngineService, {
+          ...engine,
+          dispatch: (command) =>
+            command.type === "thread.message.assistant.delta"
+              ? Effect.die("post failed")
+              : engine.dispatch(command),
+        }),
+      );
+
+      const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
+
+      assert.notEqual(result.status, "completed");
+      const saved = NodeFS.existsSync(config.attachmentsDir)
+        ? NodeFS.readdirSync(config.attachmentsDir, { recursive: true }).filter((entry) =>
+            String(entry).includes("."),
+          )
+        : [];
+      assert.deepEqual(saved, []);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("keeps saved images once the message references them", () => {
+    const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+    return Effect.gen(function* () {
+      const config = yield* ServerConfig;
+      const engine = yield* OrchestrationEngineService;
+      const botId = BotId.make("bot-complete-fails");
+      const threadId = ThreadId.make("thread-complete-fails");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+      yield* sendUserMessage(threadId, "complete-fails");
+      const runtime = yield* makeImageGenerationRuntime({
+        adapters,
+        subscriptionAuth: fakeSubscriptions(),
+      }).pipe(
+        Effect.provideService(OrchestrationEngineService, {
+          ...engine,
+          dispatch: (command) =>
+            command.type === "thread.message.assistant.complete"
+              ? Effect.die("complete failed")
+              : engine.dispatch(command),
+        }),
+      );
+
+      const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
+
+      assert.notEqual(result.status, "completed");
+      const saved = NodeFS.existsSync(config.attachmentsDir)
+        ? NodeFS.readdirSync(config.attachmentsDir, { recursive: true }).filter((entry) =>
+            String(entry).includes("."),
+          )
+        : [];
+      assert.equal(saved.length, 1);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 

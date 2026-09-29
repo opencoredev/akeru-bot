@@ -248,16 +248,31 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     Effect.gen(function* () {
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       const messageId = MessageId.make(`image-generation-${input.generationId}`);
-      yield* engine.dispatch({
-        type: "thread.message.assistant.delta",
-        commandId: CommandId.make(`server:image-generation:${input.generationId}`),
-        threadId: input.threadId,
-        messageId,
-        delta: "",
-        attachments: [...input.attachments],
-        ...(input.turnId ? { turnId: input.turnId } : {}),
-        createdAt,
-      });
+      yield* engine
+        .dispatch({
+          type: "thread.message.assistant.delta",
+          commandId: CommandId.make(`server:image-generation:${input.generationId}`),
+          threadId: input.threadId,
+          messageId,
+          delta: "",
+          attachments: [...input.attachments],
+          ...(input.turnId ? { turnId: input.turnId } : {}),
+          createdAt,
+        })
+        .pipe(
+          // No message references the files when this post fails, so nothing else would remove them.
+          Effect.onError(() =>
+            Effect.sync(() => {
+              for (const attachment of input.attachments) {
+                const path = resolveAttachmentPath({
+                  attachmentsDir: config.attachmentsDir,
+                  attachment,
+                });
+                if (path) NodeFS.rmSync(path, { force: true });
+              }
+            }),
+          ),
+        );
       yield* engine.dispatch({
         type: "thread.message.assistant.complete",
         commandId: CommandId.make(`server:image-generation-complete:${input.generationId}`),
