@@ -940,10 +940,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       access: AkeruMemoryThreadAccess | undefined,
     ): Promise<AkeruMemoryThreadAccess | undefined> => {
       if (!access || access.groupId === null) return access;
-      // Without a projection the membership cannot be rechecked, so a bot removed from the
-      // group must not keep reading its shared facts.
+      // Without a projection the membership cannot be rechecked. The access stays a group
+      // access with no members, so it reads neither group facts nor the bot's private ones.
       if (Option.isNone(projectionSnapshotQuery)) {
-        return { ...access, groupId: null, groupMemberBotIds: [] };
+        return { ...access, groupMemberBotIds: [] };
       }
       const snapshot = await runPromise(projectionSnapshotQuery.value.getSnapshot());
       const group = snapshot.groups.find((candidate) => candidate.id === access.groupId);
@@ -961,6 +961,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     ): Promise<string> => {
       const current = await refreshEntityMemoryAccess(access);
       if (!current || !options?.entityMemoryRepository) return "";
+      if (current.groupId !== null && current.groupMemberBotIds.length === 0) return "";
       const revisions = await runPromise(
         options.entityMemoryRepository.listCurrent({ access: current }),
       );

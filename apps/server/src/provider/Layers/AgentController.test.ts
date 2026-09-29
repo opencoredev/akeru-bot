@@ -2023,12 +2023,8 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
           memoryAccess: access,
         });
-        // The last read builds the memory packet; earlier ones are the legacy migration.
-        expect(recordDerivedCopies).toHaveBeenCalledTimes(1);
-        expect(listCurrent.mock.lastCall?.[0].access).toMatchObject({
-          groupId: null,
-          groupMemberBotIds: [],
-        });
+        // Reads here are the legacy migration; no memory packet reaches the group prompt.
+        expect(recordDerivedCopies).not.toHaveBeenCalled();
       }),
       bridge.service,
       mastra.factory,
