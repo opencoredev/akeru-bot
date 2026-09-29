@@ -96,7 +96,14 @@ function sniffWebp(bytes: Uint8Array): SniffedImage | undefined {
   return undefined;
 }
 
+/**
+ * Largest pixel count accepted. Generated images stay far below it; a small file that declares
+ * more would make every client that decodes or copies it allocate an enormous canvas.
+ */
+export const MAX_IMAGE_PIXELS = 64 * 1024 * 1024;
+
 /** Returns the real format and pixel size, or undefined for anything else. */
 export function sniffImage(bytes: Uint8Array): SniffedImage | undefined {
-  return sniffPng(bytes) ?? sniffJpeg(bytes) ?? sniffWebp(bytes);
+  const sniffed = sniffPng(bytes) ?? sniffJpeg(bytes) ?? sniffWebp(bytes);
+  return sniffed && sniffed.width * sniffed.height <= MAX_IMAGE_PIXELS ? sniffed : undefined;
 }

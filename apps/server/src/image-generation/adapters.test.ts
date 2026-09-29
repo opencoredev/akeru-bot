@@ -201,6 +201,11 @@ describe("ChatGPT image adapter", () => {
     );
   });
 
+  it("rejects images that declare an oversized canvas", () => {
+    expect(sniffImage(pngBytes(8192, 8192))).toMatchObject({ width: 8192, height: 8192 });
+    expect(sniffImage(pngBytes(100_000, 100_000))).toBeUndefined();
+  });
+
   it("maps an aborted request to cancelled", async () => {
     const controller = new AbortController();
     const adapter = makeChatGptImageAdapter({
