@@ -4758,7 +4758,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("keeps the same remote workspace when only cwd changes", () => {
+  it.effect("preserves remote workspace identity when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
@@ -4766,7 +4766,9 @@ describe("AgentControllerLive", () => {
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
     const destroy = vi.spyOn(remote, "destroy");
-    const makeRemoteWorkspace = vi.fn(async () => remote);
+    const makeRemoteWorkspace = vi.fn<
+      NonNullable<AgentControllerLiveOptions["makeRemoteWorkspace"]>
+    >(async () => remote);
     const makeBotBrowser = vi.fn(() => ({
       tools: {},
       attachment: vi.fn(async () => undefined),
@@ -4803,7 +4805,13 @@ describe("AgentControllerLive", () => {
       yield* controller.startSession(codexThreadId, { ...input, cwd: process.cwd() });
       yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
 
-      expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
+      expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
+      expect(makeRemoteWorkspace.mock.calls[1]?.[0].workspaceId).toBe(
+        makeRemoteWorkspace.mock.calls[0]?.[0].workspaceId,
+      );
+      expect(makeRemoteWorkspace.mock.calls[1]?.[0].identityFile).toBe(
+        makeRemoteWorkspace.mock.calls[0]?.[0].identityFile,
+      );
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(layer), Effect.orDie);
