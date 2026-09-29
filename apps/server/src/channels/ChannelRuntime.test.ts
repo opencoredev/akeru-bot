@@ -2592,6 +2592,55 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("allows not-live WhatsApp replies but blocks other not-live channels", () =>
+    Effect.gen(function* () {
+      for (const provider of ["telegram", "whatsapp"] as const) {
+        const messageId = MessageId.make(`not-live-reply-${provider}`);
+        const threadId = ThreadId.make(`thread-not-live-${provider}`);
+        let posts = 0;
+        const harness = makeHarness({
+          threads: [
+            makeThread(threadId, BOT_ID, [
+              makeMessage(MessageId.make(`not-live-inbound-${provider}`), "user", "Question", {
+                provider,
+                externalThreadId: `${provider}:conversation`,
+              }),
+              makeMessage(messageId, "assistant", "Answer"),
+            ]),
+          ],
+          post: async () => void (posts += 1),
+        });
+        yield* connectChannel(
+          harness.dependencies,
+          provider === "telegram" ? telegramConnect(BOT_ID) : whatsappConnect(BOT_ID),
+        );
+        const update = harness.commands.findLast((command) => command.type === "bot.update");
+        if (!update) throw new Error("Expected a connected channel binding");
+        yield* harness.dependencies.engine.dispatch({
+          ...update,
+          commandId: CommandId.make(`mark-not-live-${provider}`),
+          channelBindings: update.channelBindings?.map((binding) => ({
+            ...binding,
+            status: "not-live" as const,
+          })),
+        });
+
+        const send = sendChannelMessage(harness.dependencies, {
+          botId: BOT_ID,
+          threadId,
+          messageId,
+        });
+        if (provider === "telegram") {
+          yield* expectFailureMessage(send, "Reconnect this channel before sending a reply.");
+          expect(posts).toBe(0);
+        } else {
+          yield* send;
+          expect(posts).toBe(1);
+        }
+      }
+    }),
+  );
+
   it.effect("automatically sends one completed reply for an inbound channel turn", () =>
     Effect.gen(function* () {
       const turnId = TurnId.make("turn-auto-reply");

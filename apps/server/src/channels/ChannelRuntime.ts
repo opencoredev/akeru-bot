@@ -2603,7 +2603,10 @@ const sendChannelMessage = (
           return yield* failWith("This reply belongs to a previous channel project assignment.");
         }
         // A not-live WhatsApp binding can still hear messages through an unconfigured tunnel.
-        if (binding.status !== "connected" && binding.status !== "not-live") {
+        if (
+          binding.status !== "connected" &&
+          !(binding.status === "not-live" && origin.provider === "whatsapp")
+        ) {
           return yield* failWith("Reconnect this channel before sending a reply.");
         }
         const claim = yield* deps.deliveryStore.claim({
