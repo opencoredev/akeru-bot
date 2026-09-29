@@ -808,7 +808,6 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:image-providers",
       tag: WS_METHODS.imageProviderList,
       staleTimeMs: 5_000,
-
     }),
     composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:composio-status",
