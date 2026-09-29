@@ -116,6 +116,40 @@ describe("pair admin link", () => {
   );
 });
 
+describe("first admin pairing", () => {
+  it.effect("revokes admin links issued before it", () =>
+    Effect.gen(function* () {
+      const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const noOverrides = { ttl: Option.none(), label: Option.none() };
+      const first = yield* issueAdminPairingLink(noOverrides);
+      const second = yield* issueAdminPairingLink(noOverrides);
+      const startup = yield* environmentAuth.issueStartupPairingCredential();
+      const standard = yield* environmentAuth.createPairingLink();
+
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        first.credential,
+        undefined,
+        { deviceType: "mobile" },
+      );
+
+      for (const credential of [second.credential, startup.credential]) {
+        const refused = yield* environmentAuth
+          .exchangeBootstrapCredentialForAccessToken(credential, undefined, {
+            deviceType: "mobile",
+          })
+          .pipe(Effect.flip);
+        expect(refused._tag).toBe("ServerAuthInvalidCredentialError");
+      }
+      // Standard links for adding devices stay valid.
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        standard.credential,
+        undefined,
+        { deviceType: "mobile" },
+      );
+    }).pipe(Effect.provide(InMemoryEnvironmentAuthLayer)),
+  );
+});
+
 describe("pair tailscale local target", () => {
   it("proxies the dev web port for dev servers", () => {
     expect(resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://localhost:5733/" })).toEqual(
