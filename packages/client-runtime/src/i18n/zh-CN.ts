@@ -1254,6 +1254,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "Needs attention": "需要处理",
   "Not set up": "未设置",
   "Unassign this channel before deleting it": "请先取消分配此频道，再删除它",
+  "Unassign the channel already connected to this bot first": "请先取消分配已连接到此机器人的频道",
   "Could not assign or restore channel": "无法分配或恢复频道",
   "Could not assign channel": "无法分配频道",
   "Could not disconnect channel": "无法断开频道",

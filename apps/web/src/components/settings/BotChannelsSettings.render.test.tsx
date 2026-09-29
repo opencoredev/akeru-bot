@@ -268,6 +268,31 @@ describe("channel project selection", () => {
     });
   });
 
+  it("keeps both bindings when the destination already has this channel provider", () => {
+    fixtures.bots = [
+      boundBot("connected"),
+      {
+        ...boundBot("connected"),
+        id: "bot-other",
+        name: "Mira",
+        channelBindings: [
+          {
+            ...boundBot("connected").channelBindings[0]!,
+            botId: "bot-other",
+            connectionId: "profile-2",
+          },
+        ],
+      },
+    ];
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-other");
+    expect(fixtures.command).not.toHaveBeenCalled();
+    expect(fixtures.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Unassign the channel already connected to this bot first",
+    });
+  });
+
   it("renders a blocked binding with repair copy and a project repair action", () => {
     fixtures.bots = [boundBot("blocked", "private-server-detail")];
     const html = renderPage();

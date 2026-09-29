@@ -1308,6 +1308,8 @@ export const englishCatalog = {
   "Needs attention": "Needs attention",
   "Not set up": "Not set up",
   "Unassign this channel before deleting it": "Unassign this channel before deleting it",
+  "Unassign the channel already connected to this bot first":
+    "Unassign the channel already connected to this bot first",
   "Could not assign or restore channel": "Could not assign or restore channel",
   "Could not assign channel": "Could not assign channel",
   "Could not disconnect channel": "Could not disconnect channel",

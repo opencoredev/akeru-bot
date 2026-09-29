@@ -275,6 +275,16 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       bots,
     );
     if (assignedBot?.id === nextBotId) return;
+    const destinationBinding = bots
+      .find((bot) => bot.id === nextBotId)
+      ?.channelBindings.find((binding) => binding.provider === connection.provider);
+    if (destinationBinding && destinationBinding.connectionId !== connection.id) {
+      toastManager.add({
+        type: "error",
+        title: t("Unassign the channel already connected to this bot first"),
+      });
+      return;
+    }
     setBusyConnectionId(connection.id);
 
     if (assignedBot) {
