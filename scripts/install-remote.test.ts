@@ -21,6 +21,10 @@ describe("remote installer", () => {
     expect(script).not.toContain("remote link");
     expect(script).not.toContain("heartbeat");
   });
+  it("checks only the installed Akeru service for a healthy update", () => {
+    expect(script).toContain("systemctl --user is-active akeru-bot.service");
+    expect(script).not.toContain("systemctl --user is-active t3code.service");
+  });
   it("only installs the platforms the release publishes", () => {
     expect(script).toContain("linux-x64|darwin-arm64) ;;");
   });
