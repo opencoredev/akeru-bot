@@ -66,6 +66,15 @@ export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
   return members.find((bot) => bot.id === bossBotId) ?? null;
 }
 
+/** The bot a group draft goes to: the mentioned member, otherwise the boss. */
+export function resolveGroupAddressedBot<T extends { readonly id: string }>(
+  members: ReadonlyArray<T>,
+  boss: T | null,
+  addressedBotId: string | null,
+): T | null {
+  return members.find((bot) => bot.id === addressedBotId) ?? boss;
+}
+
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
@@ -95,8 +104,12 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     ? groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null)
     : [];
   const boss = group ? resolveAvailableGroupBoss(members, group.bossBotId) : null;
-  // The boss answers a group message first, so its provider's `$` skills and `/` commands are offered.
+  // The boss answers a group message first, so its provider's skills label sent messages.
   const bossCatalog = useBotEngineAvailability(boss?.engine ?? null).catalog;
+  // A mention sends the draft to that member, so the `$` and `/` pickers offer its provider's catalog.
+  const [addressedBotId, setAddressedBotId] = useState<string | null>(null);
+  const addressedBot = resolveGroupAddressedBot(members, boss, addressedBotId);
+  const composerCatalog = useBotEngineAvailability(addressedBot?.engine ?? null).catalog;
   const noProviderNoticeId = useId();
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
@@ -306,7 +319,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         ) : null}
         <BotPromptComposer
           mentionScope={mentionScope}
-          commandCatalog={bossCatalog}
+          commandCatalog={composerCatalog}
+          onAddressedBotChange={setAddressedBotId}
           botName={group.name}
           draftKey={`group:${group.id}`}
           busy={working && pendingApproval === null}

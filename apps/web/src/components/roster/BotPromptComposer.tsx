@@ -192,6 +192,7 @@ export function BotPromptComposer({
   replyPreview,
   onCancelReply,
   sendBlockedDescriptionId,
+  onAddressedBotChange,
   onSubmit,
 }: {
   botName: string;
@@ -217,6 +218,8 @@ export function BotPromptComposer({
   onCancelReply?: () => void;
   /** Id of the element explaining why Send is off, announced with the Send button. */
   sendBlockedDescriptionId?: string | undefined;
+  /** Reports the bot the draft's mention addresses, or null when it addresses none. */
+  onAddressedBotChange?: (botId: string | null) => void;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
   const { t, plural } = useI18n();
@@ -234,7 +237,12 @@ export function BotPromptComposer({
   // Bumped whenever the draft is sent, stashed, or swapped, so a late transcript is dropped.
   const [dictationGeneration, setDictationGeneration] = useState(0);
   const mentionHintId = useId();
-  const mentionHint = botMentionHint(resolveBotMention(draft, mentionBots), t);
+  const draftMention = resolveBotMention(draft, mentionBots);
+  const mentionHint = botMentionHint(draftMention, t);
+  const addressedBotId = draftMention.kind === "bot" ? draftMention.botId : null;
+  useEffect(() => {
+    onAddressedBotChange?.(addressedBotId);
+  }, [addressedBotId, onAddressedBotChange]);
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),

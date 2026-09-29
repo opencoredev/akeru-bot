@@ -6,7 +6,7 @@ import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { botEngineCatalog, resolveStickyBotEngine } from "./botEngineSelection";
 import { isCurrentGroupPerson } from "./roster.logic";
-import { resolveAvailableGroupBoss } from "./GroupThreadLanding";
+import { resolveAvailableGroupBoss, resolveGroupAddressedBot } from "./GroupThreadLanding";
 
 describe("group thread person placement", () => {
   it("keeps legacy host messages on the right for the host", () => {
@@ -29,6 +29,16 @@ describe("group boss availability", () => {
 });
 
 describe("group composer menus", () => {
+  it("offers the mentioned member's catalog and otherwise the boss's", () => {
+    const boss = { id: "boss" };
+    const specialist = { id: "specialist" };
+    const members = [boss, specialist];
+
+    expect(resolveGroupAddressedBot(members, boss, "specialist")).toBe(specialist);
+    expect(resolveGroupAddressedBot(members, boss, null)).toBe(boss);
+    expect(resolveGroupAddressedBot(members, boss, "left-group")).toBe(boss);
+  });
+
   it("offers the boss's skills and commands when a specialist uses another provider", () => {
     const codex = {
       ...makeComposerTestProvider(),
