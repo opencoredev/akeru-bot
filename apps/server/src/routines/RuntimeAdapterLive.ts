@@ -272,20 +272,30 @@ const make = Effect.gen(function* () {
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       const bot = yield* bots.getById({ botId: routine.botId });
       if (Option.isSome(bot)) {
-        yield* botUsageLedger.recordMeasurement({
-          reservationId: AkeruUsageReservationId.make(`routine:${run.id}`),
-          sourceKey: `routine:${run.id}`,
-          botId: routine.botId,
-          threadId: threadRef,
-          turnId: null,
-          category: "routine",
-          inputTokens: 0,
-          outputTokens: 0,
-          reasoningTokens: null,
-          provider: null,
-          model: bot.value.engine?.model ?? null,
-          createdAt,
-        });
+        yield* botUsageLedger
+          .recordMeasurement({
+            reservationId: AkeruUsageReservationId.make(`routine:${run.id}`),
+            sourceKey: `routine:${run.id}`,
+            botId: routine.botId,
+            threadId: threadRef,
+            turnId: null,
+            category: "routine",
+            inputTokens: 0,
+            outputTokens: 0,
+            reasoningTokens: null,
+            provider: null,
+            model: bot.value.engine?.model ?? null,
+            createdAt,
+          })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("failed to record routine usage", {
+                routineId: routine.id,
+                runId: run.id,
+                cause,
+              }),
+            ),
+          );
       }
       yield* dispatch({
         type: "routine.run.start",
