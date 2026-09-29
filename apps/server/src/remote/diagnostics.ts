@@ -12,6 +12,8 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
+import { BOOT_SERVICE_LAUNCHD_LABEL, BOOT_SERVICE_UNIT_FILE } from "../cloud/bootService.ts";
+
 const decodeReport = Schema.decodeUnknownSync(RemoteDoctorReport);
 
 const commandOk = (command: string, args: ReadonlyArray<string>) =>
@@ -25,6 +27,15 @@ const check = (
   details?: Record<string, string>,
 ): RemoteDiagnosticCheck => ({ id, status, message, repairable, ...(details ? { details } : {}) });
 
+function httpsOrigin(endpoint: string): string | undefined {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === "https:" ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function redact(value: string): string {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~-]+/giu, "Bearer [REDACTED]")
@@ -34,6 +45,7 @@ function redact(value: string): string {
 export function runRemoteDoctor(input: {
   readonly baseDir: string;
   readonly repair: boolean;
+  readonly platform: NodeJS.Platform;
   readonly now?: Date;
 }): RemoteDoctorReportValue {
   const stateDir = NodePath.join(input.baseDir, "userdata");
@@ -52,7 +64,12 @@ export function runRemoteDoctor(input: {
         "-fsS",
         `http://127.0.0.1:${process.env.T3CODE_PORT?.trim() || "3773"}/.well-known/t3/environment`,
       ])
-    : commandOk("systemctl", ["--user", "is-active", "akeru.service"]);
+    : input.platform === "darwin"
+      ? commandOk("launchctl", [
+          "print",
+          `gui/${process.getuid?.() ?? 0}/${BOOT_SERVICE_LAUNCHD_LABEL}`,
+        ])
+      : commandOk("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]);
   checks.push(
     check(
       "service",
@@ -196,12 +213,17 @@ export function runRemoteDoctor(input: {
   const environmentId = NodeFS.existsSync(NodePath.join(stateDir, "environment-id"))
     ? NodeFS.readFileSync(NodePath.join(stateDir, "environment-id"), "utf8").trim()
     : "";
+  // The binding is local state, so only probe an HTTPS origin and never follow redirects.
+  const endpointOrigin =
+    typeof binding?.endpoint === "string" ? httpsOrigin(binding.endpoint) : undefined;
   if (typeof binding?.endpoint === "string") {
-    const response = NodeChildProcess.spawnSync(
-      "curl",
-      ["-fsSL", `${binding.endpoint}/.well-known/t3/environment`],
-      { encoding: "utf8" },
-    );
+    const response = endpointOrigin
+      ? NodeChildProcess.spawnSync(
+          "curl",
+          ["-fsS", "--proto", "=https", `${endpointOrigin}/.well-known/t3/environment`],
+          { encoding: "utf8" },
+        )
+      : { status: 1, stdout: "" };
     let servedId = "";
     try {
       servedId = String(
@@ -378,4 +400,6 @@ export function writeRemoteSupportBundle(
   NodeFS.writeFileSync(path, redact(`${JSON.stringify({ report, ...host }, null, 2)}\n`), {
     mode: 0o600,
   });
+  // `mode` applies only on creation; an existing bundle keeps its old permissions otherwise.
+  NodeFS.chmodSync(path, 0o600);
 }

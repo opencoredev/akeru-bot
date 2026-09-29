@@ -15,7 +15,7 @@ describe("Akeru Remote diagnostics", () => {
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     process.env.AKERU_REMOTE_CONTAINER = "1";
     try {
-      expect(() => runRemoteDoctor({ baseDir, repair: true })).not.toThrow();
+      expect(() => runRemoteDoctor({ baseDir, repair: true, platform: "linux" })).not.toThrow();
     } finally {
       if (prior === undefined) delete process.env.AKERU_REMOTE_CONTAINER;
       else process.env.AKERU_REMOTE_CONTAINER = prior;
@@ -34,7 +34,7 @@ describe("Akeru Remote diagnostics", () => {
     process.env.AKERU_REMOTE_CONTAINER = "1";
     process.env.PATH = `${binDir}:${priorPath ?? ""}`;
     try {
-      const report = runRemoteDoctor({ baseDir, repair: false });
+      const report = runRemoteDoctor({ baseDir, repair: false, platform: "linux" });
       expect(report.checks.find((check) => check.id === "service")?.status).toBe("pass");
       expect(report.checks.find((check) => check.id === "image-lifecycle")?.status).toBe("pass");
       expect(report.checks.some((check) => check.id === "boot-persistence")).toBe(false);
@@ -76,6 +76,7 @@ describe("Akeru Remote diagnostics", () => {
     const report = runRemoteDoctor({
       baseDir,
       repair: true,
+      platform: "linux",
       now: new Date("2026-09-13T12:00:00.000Z"),
     });
     expect(report.checks.find((check) => check.id === "database")?.status).toBe("pass");
@@ -84,6 +85,8 @@ describe("Akeru Remote diagnostics", () => {
     expect(NodeFS.statSync(bindingPath).mode & 0o077).toBe(0);
 
     const bundlePath = NodePath.join(baseDir, "support.json");
+    NodeFS.writeFileSync(bundlePath, "old", { mode: 0o644 });
+    NodeFS.chmodSync(bundlePath, 0o644);
     writeRemoteSupportBundle(bundlePath, report, { platform: "linux", arch: "x64" });
     expect(NodeFS.statSync(bundlePath).mode & 0o077).toBe(0);
     expect(NodeFS.readFileSync(bundlePath, "utf8")).not.toContain("super-secret");

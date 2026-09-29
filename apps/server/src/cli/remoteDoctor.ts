@@ -34,10 +34,12 @@ export const remoteDoctorCommand = Command.make(
   (flags) =>
     Effect.gen(function* () {
       const baseDir = yield* resolveBaseDir(remoteDoctorHome(flags.baseDir, process.env));
-      const report = yield* Effect.sync(() => runRemoteDoctor({ baseDir, repair: flags.repair }));
+      const platform = yield* HostProcessPlatform;
+      const report = yield* Effect.sync(() =>
+        runRemoteDoctor({ baseDir, repair: flags.repair, platform }),
+      );
       if (Option.isSome(flags.supportBundle)) {
         const bundlePath = Option.getOrThrow(flags.supportBundle);
-        const platform = yield* HostProcessPlatform;
         const arch = yield* HostProcessArchitecture;
         yield* Effect.sync(() => writeRemoteSupportBundle(bundlePath, report, { platform, arch }));
       }
