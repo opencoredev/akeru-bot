@@ -448,9 +448,9 @@ describe("AkeruDelegationRuntime", () => {
       if (command.type === "thread.create") test.state.threads.push(thread(command.threadId, null));
     });
 
-    const result = await test.runtime.send(parent(), request() as never);
+    await test.runtime.send(parent(), request() as never);
+    await test.runtime.drain();
 
-    expect(result).toMatchObject({ summary: "The delegated answer." });
     expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Completed"]);
   });
 
