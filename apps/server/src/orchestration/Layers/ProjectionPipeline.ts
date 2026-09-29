@@ -831,13 +831,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         `;
         // Children created before thread.created carried parent links get
         // them from their delegation record, whichever projector runs first.
-        if (delegation.childThreadId !== null) {
+        const childThreadId =
+          "childThreadId" in delegation.phase ? delegation.phase.childThreadId : null;
+        if (childThreadId !== null) {
           yield* sql`
             UPDATE projection_threads
             SET
               parent_thread_id = ${delegation.parentThreadId},
               parent_delegation_id = ${delegation.delegationId}
-            WHERE thread_id = ${delegation.childThreadId}
+            WHERE thread_id = ${childThreadId}
               AND parent_thread_id IS NULL
           `;
         }
@@ -856,7 +858,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           json_extract(record_json, '$.parentThreadId') AS "parentThreadId",
           delegation_id AS "parentDelegationId"
         FROM projection_delegations
-        WHERE json_extract(record_json, '$.childThreadId') = ${threadId}
+        WHERE COALESCE(
+          json_extract(record_json, '$.phase.childThreadId'),
+          json_extract(record_json, '$.childThreadId')
+        ) = ${threadId}
         LIMIT 1
       `.pipe(
         Effect.map(([row]) => ({
