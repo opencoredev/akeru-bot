@@ -1544,14 +1544,17 @@ describe("channel runtime", () => {
       const gateway = yield* startRenewingGateway(listener.start, "Test gateway").pipe(
         Scope.provide(scope),
       );
-      yield* Queue.take(listener.starts);
+      const first = yield* Queue.take(listener.starts);
 
       yield* TestClock.adjust(
         Duration.subtract(CHANNEL_GATEWAY_RENEWAL_INTERVAL, Duration.millis(1)),
       );
       expect(yield* Queue.size(listener.starts)).toBe(0);
       yield* TestClock.adjust(Duration.millis(1));
-      yield* Queue.take(listener.starts);
+      const second = yield* Queue.take(listener.starts);
+      // The listener that outlived its deadline stops before the next one starts.
+      expect(first.signal.aborted).toBe(true);
+      expect(second.signal.aborted).toBe(false);
       expect(gateway.isHealthy()).toBe(true);
       yield* TestClock.adjust(CHANNEL_GATEWAY_RENEWAL_INTERVAL);
       yield* Queue.take(listener.starts);
@@ -1581,6 +1584,19 @@ describe("channel runtime", () => {
       expect(gateway.isHealthy()).toBe(false);
       cleanup.resolve();
       yield* Fiber.join(shutdown);
+    }),
+  );
+
+  it.effect("fails when the first gateway listener cannot launch", () =>
+    Effect.gen(function* () {
+      let starts = 0;
+      const exit = yield* startRenewingGateway(async () => {
+        starts += 1;
+        return new Response(null, { status: 503 });
+      }, "Test gateway").pipe(Effect.exit);
+      expect(Exit.isFailure(exit)).toBe(true);
+      yield* TestClock.adjust(Duration.times(CHANNEL_GATEWAY_RENEWAL_INTERVAL, 2));
+      expect(starts).toBe(1);
     }),
   );
 

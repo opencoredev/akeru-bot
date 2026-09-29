@@ -1069,8 +1069,9 @@ export interface RenewingGateway {
 /**
  * Keeps a time-limited gateway listener alive. Each cycle launches a listener that ends
  * itself at the renewal deadline and watches it until then; a schedule repeats the cycle.
- * The first launch completes before this returns.
- * A listener that stops early or fails to launch leaves the gateway unhealthy. Renewal
+ * Each cycle aborts and awaits the previous listener before launching the next one.
+ * The first launch completes before this returns, and a failed first launch fails it.
+ * A listener that stops early or fails to renew leaves the gateway unhealthy. Renewal
  * runs in its own child of the caller's scope, so closing that scope stops it.
  */
 export const startRenewingGateway = (
@@ -1080,15 +1081,21 @@ export const startRenewingGateway = (
     signal: AbortSignal,
   ) => Promise<Response>,
   label: string,
-): Effect.Effect<RenewingGateway, never, Scope.Scope> =>
+): Effect.Effect<RenewingGateway, ChannelRuntimeError | ChannelTransportError, Scope.Scope> =>
   Effect.gen(function* () {
     const scope = yield* Scope.fork(yield* Scope.Scope);
-    const abort = new AbortController();
+    let abort = new AbortController();
     const durationMs = Duration.toMillis(CHANNEL_GATEWAY_RENEWAL_INTERVAL);
     let healthy = true;
     let activeTask: Promise<unknown> | undefined;
     const currentTask = () => activeTask;
+    const settle = (task: Promise<unknown>) => Effect.promise(() => task);
     const launch = Effect.gen(function* () {
+      // A listener still running at its deadline must stop before the next one starts.
+      const previous = currentTask();
+      abort.abort();
+      if (previous) yield* settle(previous);
+      abort = new AbortController();
       activeTask = undefined;
       const response = yield* fromPromise(() =>
         start(
@@ -1108,20 +1115,20 @@ export const startRenewingGateway = (
         return yield* failWith(`${label} failed with status ${response.status}.`);
       return task;
     });
-    const settle = (task: Promise<unknown>) => Effect.promise(() => task);
     const watch = (task: Promise<unknown>) =>
       settle(task).pipe(
         Effect.andThen(failWith(`${label} stopped before its renewal deadline.`)),
         Effect.timeoutOption(CHANNEL_GATEWAY_RENEWAL_INTERVAL),
       );
     // The first listener launches before this returns, so callers see it running.
-    const first = yield* Effect.exit(launch);
+    const first = yield* launch.pipe(
+      Effect.onError(() =>
+        Scope.close(scope, Exit.void).pipe(Effect.andThen(Effect.sync(() => abort.abort()))),
+      ),
+    );
     const renew = launch.pipe(Effect.flatMap(watch), Effect.repeat(Schedule.forever));
-    const supervisor = yield* (
-      Exit.isSuccess(first)
-        ? watch(first.value).pipe(Effect.andThen(renew))
-        : Effect.failCause(first.cause)
-    ).pipe(
+    const supervisor = yield* watch(first).pipe(
+      Effect.andThen(renew),
       Effect.onError(() =>
         Effect.sync(() => {
           healthy = false;
@@ -1196,7 +1203,7 @@ const startIMessage = (
       (waitUntil, durationMs, signal) =>
         adapter.startGatewayListener({ waitUntil }, durationMs, signal),
       "Photon gateway",
-    );
+    ).pipe(Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)));
     return {
       externalIdentity:
         input.mode === "self-hosted" && input.phone
@@ -1329,7 +1336,7 @@ const startDiscord = (
       (waitUntil, durationMs, signal) =>
         adapter.startGatewayListener({ waitUntil }, durationMs, signal),
       "Discord gateway",
-    );
+    ).pipe(Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)));
     return {
       externalIdentity: `${identity.userName} (${identity.userId})`,
       runtime: {
