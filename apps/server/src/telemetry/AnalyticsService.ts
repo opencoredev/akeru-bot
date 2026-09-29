@@ -142,16 +142,10 @@ function collapse<T extends string>(
   return values.values().next().value ?? none;
 }
 
-const providerValues = new Set([
-  "codex",
-  "claude",
-  "claudeagent",
-  "cursor",
-  "grok",
-  "kimi",
-  "opencode",
-]);
-function normalizeProvider(value: string): UsageAnalyticsProvider {
+// Retired providers such as Cursor fall through to "other" so historical
+// buckets still match the event schema.
+const providerValues = new Set(["codex", "claude", "claudeagent", "grok", "kimi", "opencode"]);
+export function normalizeProvider(value: string): UsageAnalyticsProvider {
   if (value === "claudeagent") return "claude";
   if (value === "other") return "other";
   return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";

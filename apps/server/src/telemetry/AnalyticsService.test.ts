@@ -459,6 +459,12 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
     }),
   );
 
+  it("reports retired Cursor usage as another provider", () => {
+    assert.equal(AnalyticsService.normalizeProvider("cursor"), "other");
+    assert.equal(AnalyticsService.normalizeProvider("claudeagent"), "claude");
+    assert.equal(AnalyticsService.normalizeProvider("grok"), "grok");
+  });
+
   it.effect("keeps provider account files outside the analytics identity path", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
