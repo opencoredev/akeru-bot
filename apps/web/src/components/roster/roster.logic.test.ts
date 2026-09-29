@@ -695,6 +695,9 @@ describe("flattenMarkdownPreview", () => {
     expect(preview).toMatch(/^Start word word/);
     expect(preview.length).toBeLessThanOrEqual(2_000);
     expect(flattenMarkdownPreview(`Opening paragraph.\n\n${line}`)).toBe("Opening paragraph.");
+    expect(
+      flattenMarkdownPreview(`Example \`![literal](chart.png)\` ${"word ".repeat(10_000)}`),
+    ).toMatch(/^Example !\[literal\]\(chart\.png\) word/);
   });
 
   it("drops nested and escaped image alt text in the rough preview", () => {

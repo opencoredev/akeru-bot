@@ -334,12 +334,30 @@ function markdownPreviewChunkEnd(
  * next to words may survive or go.
  */
 function stripMarkdownRoughly(markdown: string): string {
-  return withoutImagesRoughly(markdown)
-    .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
-    .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
-    .replace(/`+|~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const stripProse = (text: string) =>
+    withoutImagesRoughly(text)
+      .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
+      .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
+      .replace(/~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "");
+  let result = "";
+  let offset = 0;
+  while (offset < markdown.length) {
+    const opening = markdown.indexOf("`", offset);
+    if (opening < 0) {
+      result += stripProse(markdown.slice(offset));
+      break;
+    }
+    const delimiter = /^`+/.exec(markdown.slice(opening))![0];
+    const closing = markdown.indexOf(delimiter, opening + delimiter.length);
+    if (closing < 0) {
+      result += stripProse(markdown.slice(offset).replace(/`+/g, ""));
+      break;
+    }
+    result += stripProse(markdown.slice(offset, opening));
+    result += markdown.slice(opening + delimiter.length, closing);
+    offset = closing + delimiter.length;
+  }
+  return result.replace(/\s+/g, " ").trim();
 }
 
 /**
