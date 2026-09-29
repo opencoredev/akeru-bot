@@ -247,15 +247,27 @@ export function ChannelSetupDialog({
       }
       setBusy(false);
       setConnectError(
-        isChannelIdentityConflict(attached)
-          ? conflictCopy
-          : restored._tag === "Failure"
-            ? t("Could not connect with the new credentials or restore the old connection.")
+        restored._tag === "Failure"
+          ? isChannelIdentityConflict(attached)
+            ? `${conflictCopy} ${t("The old connection could not be restored.")}`
+            : t("Could not connect with the new credentials or restore the old connection.")
+          : isChannelIdentityConflict(attached)
+            ? conflictCopy
             : t("Could not connect with the new credentials. The old connection is unchanged."),
       );
       return;
     }
-    await deleteConnection({ environmentId, input: { connectionId: current.connectionId } });
+    const removedOld = await deleteConnection({
+      environmentId,
+      input: { connectionId: current.connectionId },
+    });
+    if (removedOld._tag === "Failure") {
+      toastManager.add({
+        type: "warning",
+        title: t("New credentials connected"),
+        description: t("The old connection could not be removed. Delete it from the channel list."),
+      });
+    }
     finish(connectionId);
   };
 
