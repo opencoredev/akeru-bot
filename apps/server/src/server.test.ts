@@ -8241,6 +8241,34 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }
       assert.include(deniedImport.detail, "Memory is turned off.");
       assert.deepEqual(yield* listFacts("thread"), [threadFact.rootId]);
+
+      // Archive import is a write too, so it is rejected while memory is off.
+      const deniedDurableImport = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[WS_METHODS.memoryImportApply]({
+              threadId,
+              previewHash: "0".repeat(64),
+              archive: {
+                schemaVersion: 3,
+                anchorThreadId: threadId,
+                botId,
+                groupId: null,
+                createdAt: now,
+                documents: [],
+                conversation: {
+                  snapshot: { current: null, history: [] },
+                  sha256: "0".repeat(64),
+                },
+                manifestSha256: "0".repeat(64),
+              },
+            }),
+          ),
+        ),
+      );
+      if (deniedDurableImport._tag !== "AkeruMemoryOperationError")
+        return assert.fail("expected a memory error");
+      assert.equal(deniedDurableImport.detail, "Memory is turned off.");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

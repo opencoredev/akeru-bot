@@ -9,6 +9,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import * as PairingGrantStore from "./PairingGrantStore.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
+import * as EnvironmentAuthPolicy from "./EnvironmentAuthPolicy.ts";
 
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
@@ -37,6 +38,30 @@ const makeEnvironmentAuthLayer = (overrides?: Partial<ServerConfig.ServerConfig[
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(ServerEnvironment.identityLayer),
     Layer.provide(makeServerConfigLayer(overrides)),
+  );
+
+// Yields inside the first-admin check so concurrent redemptions interleave
+// there unless the redemption lock serializes them.
+const makeInterleavingEnvironmentAuthLayer = () =>
+  Layer.effect(
+    EnvironmentAuth.EnvironmentAuth,
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      return yield* EnvironmentAuth.make.pipe(
+        Effect.provideService(SessionStore.SessionStore, {
+          ...sessions,
+          listActive: () => Effect.yieldNow.pipe(Effect.andThen(sessions.listActive())),
+        }),
+      );
+    }),
+  ).pipe(
+    Layer.provideMerge(PairingGrantStore.layer),
+    Layer.provideMerge(SessionStore.layer),
+    Layer.provideMerge(EnvironmentAuthPolicy.layer),
+    Layer.provide(SqlitePersistenceMemory),
+    Layer.provide(ServerSecretStore.layer),
+    Layer.provide(ServerEnvironment.identityLayer),
+    Layer.provide(makeServerConfigLayer()),
   );
 
 const makeCookieRequest = (
@@ -156,6 +181,35 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(token.scope).toBe("orchestration:read");
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+  );
+
+  it.effect("lets only one of two concurrent admin link redemptions become the first admin", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const browserLink = yield* serverAuth.issuePairingCredential({
+        scopes: AuthAdministrativeScopes,
+      });
+      const tokenLink = yield* serverAuth.issuePairingCredential({
+        scopes: AuthAdministrativeScopes,
+      });
+
+      const [browser, token] = yield* Effect.all(
+        [
+          Effect.result(serverAuth.createBrowserSession(browserLink.credential, requestMetadata)),
+          Effect.result(
+            serverAuth.exchangeBootstrapCredentialForAccessToken(
+              tokenLink.credential,
+              undefined,
+              requestMetadata,
+            ),
+          ),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      expect([browser, token].filter((result) => result._tag === "Success")).toHaveLength(1);
+      expect(yield* serverAuth.listPairingLinks()).toHaveLength(0);
+    }).pipe(Effect.provide(makeInterleavingEnvironmentAuthLayer())),
   );
 
   it.effect("keeps user-issued administrative pairing links manageable", () =>
