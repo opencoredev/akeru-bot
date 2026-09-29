@@ -343,6 +343,15 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
       setReconnecting(false);
       return;
     }
+    // Composed calls run every turn over RPC, so they cannot ride out a disconnect.
+    if (current.peer === null) {
+      endBrowserCall(current, {
+        type: "warning",
+        title: "Call connection lost",
+        description: "Start a new call after the environment reconnects.",
+      });
+      return;
+    }
     setReconnecting(true);
     current.environmentDisconnectTimer ??= setTimeout(() => {
       current.environmentDisconnectTimer = null;
