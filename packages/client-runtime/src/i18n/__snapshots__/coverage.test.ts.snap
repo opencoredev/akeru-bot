@@ -112,6 +112,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     ],
     "apps/web/src/components/settings/SettingsPanels.tsx": [
       "actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",",
+      "BACKGROUND_ACTIVITY_PROFILE_LABELS[activeProfile])}</SelectValue>",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS.balanced)}",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS.performance)}",
       "BACKGROUND_ACTIVITY_PROFILE_LABELS["battery-saver"])}",
