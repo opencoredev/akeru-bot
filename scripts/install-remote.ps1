@@ -5,6 +5,8 @@ param(
   [switch]$NoTailscale,
   [switch]$NoAutoUpdate,
   [switch]$PrepareOnly,
+  # SHA-256 from the signed release manifest, verified by the running server before an update.
+  [string]$ExpectedSha256,
   [switch]$MigrateEnvironmentId
 )
 $ErrorActionPreference = "Stop"
@@ -53,6 +55,7 @@ try {
   Invoke-WebRequest -UseBasicParsing -Uri $Asset.browser_download_url -OutFile $Archive
   $ActualHash = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
   if ($ActualHash -ne $ExpectedHash) { throw "SHA-256 verification failed for $ArchiveName." }
+  if ($ExpectedSha256 -and $ActualHash -ne $ExpectedSha256.ToLowerInvariant()) { throw "The archive does not match the signed release manifest for $ArchiveName." }
   $Expanded = Join-Path $Temporary "expanded"
   Expand-Archive -LiteralPath $Archive -DestinationPath $Expanded
   $Source = Join-Path $Expanded "akeru"

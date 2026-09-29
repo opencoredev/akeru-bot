@@ -1,3 +1,5 @@
+import * as NodeCrypto from "node:crypto";
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { HostProcessExecutablePath, HostProcessPlatform } from "@t3tools/shared/hostProcess";
@@ -6,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Path from "effect/Path";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as ServerConfig from "../config.ts";
@@ -13,6 +16,23 @@ import * as ProcessRunner from "../processRunner.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 import * as ServerSelfUpdate from "./selfUpdate.ts";
+
+const ARCHIVE_SHA256 = "a".repeat(64);
+const releaseKeys = NodeCrypto.generateKeyPairSync("ed25519");
+const releaseManifest = new TextEncoder().encode(
+  `${ARCHIVE_SHA256}  Akeru-Remote-1.1.0-win32-x64.zip\n`,
+);
+const releaseSignature = NodeCrypto.sign(null, releaseManifest, releaseKeys.privateKey);
+
+/** Serves the signed stub release that the Windows update verifies. */
+const releaseClient = HttpClient.make((request) =>
+  Effect.succeed(
+    HttpClientResponse.fromWeb(
+      request,
+      new Response(request.url.endsWith(".sig") ? releaseSignature : releaseManifest),
+    ),
+  ),
+);
 
 interface HarnessOptions {
   readonly mode?: "web" | "desktop";
@@ -37,6 +57,9 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           order.push("archive");
           expect(input.args).toContain("v1.1.0");
           expect(input.args).toContain(input.command === "sh" ? "--prepare-only" : "-PrepareOnly");
+          if (input.command === "powershell.exe") {
+            expect(input.args[input.args.indexOf("-ExpectedSha256") + 1]).toBe(ARCHIVE_SHA256);
+          }
           const installRoot = input.env?.AKERU_INSTALL_ROOT;
           if (installRoot === undefined) return yield* Effect.die("missing archive install root");
           const entry = path.join(
@@ -115,7 +138,10 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const config = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
   );
-  const selfUpdate = yield* ServerSelfUpdate.make().pipe(
+  const selfUpdate = yield* ServerSelfUpdate.make({
+    manifestKey: releaseKeys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+  }).pipe(
+    Effect.provideService(HttpClient.HttpClient, releaseClient),
     Effect.provideService(ProcessRunner.ProcessRunner, runner),
     Effect.provideService(ServiceLauncherClient.ServiceLauncherClient, launcher),
     Effect.provideService(HostProcessExecutablePath, "/usr/bin/node"),

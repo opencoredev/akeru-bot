@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -26,6 +27,7 @@ import {
   PinnedRuntimeInstallError,
   PinnedRuntimePreflightBlockedError,
 } from "./pinnedRuntime.ts";
+import { signedArchiveChecksum } from "./releaseManifest.ts";
 import { decodeServicePreflightResult } from "./servicePreflight.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { isExactServiceVersion, SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
@@ -50,12 +52,16 @@ export class ServerSelfUpdate extends Context.Service<
   }
 >()("akeru-bot/cloud/selfUpdate/ServerSelfUpdate") {}
 
-export const make = Effect.fn("cloud.server_self_update.make")(function* () {
+/** `manifestKey` replaces the pinned release key so tests can sign a stub release. */
+export const make = Effect.fn("cloud.server_self_update.make")(function* (
+  options: { readonly manifestKey?: string } = {},
+) {
   const serverConfig = yield* ServerConfig.ServerConfig;
   const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
   const runner = yield* ProcessRunner.ProcessRunner;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const httpClient = yield* HttpClient.HttpClient;
   const execPath = yield* HostProcessExecutablePath;
   const platform = yield* HostProcessPlatform;
   const environment = yield* HostProcessEnvironment;
@@ -70,6 +76,38 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     cause === undefined
       ? new ServerSelfUpdateError({ reason })
       : new ServerSelfUpdateError({ reason, cause });
+
+  const downloadReleaseAsset = (url: string) =>
+    httpClient.get(url, { headers: { "user-agent": "Akeru-Remote-Updater" } }).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.flatMap((response) => response.arrayBuffer),
+      Effect.map((bytes) => new Uint8Array(bytes)),
+    );
+  const verifiedWindowsArchiveChecksum = (version: string) =>
+    Effect.gen(function* () {
+      const repository = environment.AKERU_REMOTE_REPOSITORY || "opencoredev/akeru-bot";
+      const base = `https://github.com/${repository}/releases/download/v${version}`;
+      const [manifest, signature] = yield* Effect.all(
+        [
+          downloadReleaseAsset(`${base}/AKERU-REMOTE-MANIFEST.txt`),
+          downloadReleaseAsset(`${base}/AKERU-REMOTE-MANIFEST.sig`),
+        ],
+        { concurrency: 2 },
+      );
+      return yield* Effect.try(() =>
+        signedArchiveChecksum({
+          manifest,
+          signature,
+          archiveName: `Akeru-Remote-${version}-win32-x64.zip`,
+          ...(options.manifestKey === undefined ? {} : { key: options.manifestKey }),
+        }),
+      );
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PinnedRuntimeInstallError({ step: "verifying the signed release manifest", cause }),
+      ),
+    );
 
   const update: ServerSelfUpdate["Service"]["update"] = Effect.fn(
     "cloud.server_self_update.update",
@@ -111,6 +149,11 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
                       prefix: ".archive-",
                     });
                     const windows = platform === "win32";
+                    // Windows PowerShell cannot check an Ed25519 signature, so the running server
+                    // verifies the signed manifest and hands the installer the checksum to enforce.
+                    const expectedSha256 = windows
+                      ? yield* verifiedWindowsArchiveChecksum(targetVersion)
+                      : undefined;
                     const installer = path.join(
                       artifactRoot,
                       windows ? "install-remote.ps1" : "install-remote.sh",
@@ -127,6 +170,8 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
                             "-PrepareOnly",
                             "-Tag",
                             `v${targetVersion}`,
+                            "-ExpectedSha256",
+                            expectedSha256 ?? "",
                           ]
                         : [installer, "--prepare-only", "--tag", `v${targetVersion}`],
                       env: {
