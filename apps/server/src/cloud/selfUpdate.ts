@@ -205,20 +205,27 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                 ),
             }
           : {}),
+        // A Windows archive bundles the Node it was built for, which the launcher runs it on too.
         validate: (runtime) =>
-          runner
-            .run({
-              command: execPath,
-              args: [
-                runtime.entryPath,
-                "__service-preflight",
-                "--database-path",
-                serverConfig.dbPath,
-                "--launcher-protocol",
-                String(SERVICE_LAUNCHER_PROTOCOL),
-              ],
-              timeout: PREFLIGHT_TIMEOUT,
-            })
+          fs
+            .exists(path.join(runtime.versionDir, "node", "node.exe"))
+            .pipe(
+              Effect.orElseSucceed(() => false),
+              Effect.flatMap((bundled) =>
+                runner.run({
+                  command: bundled ? path.join(runtime.versionDir, "node", "node.exe") : execPath,
+                  args: [
+                    runtime.entryPath,
+                    "__service-preflight",
+                    "--database-path",
+                    serverConfig.dbPath,
+                    "--launcher-protocol",
+                    String(SERVICE_LAUNCHER_PROTOCOL),
+                  ],
+                  timeout: PREFLIGHT_TIMEOUT,
+                }),
+              ),
+            )
             .pipe(
               Effect.mapError(
                 (cause) =>

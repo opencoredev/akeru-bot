@@ -50,6 +50,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const path = yield* Path.Path;
   const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-self-update-test-" });
   const order: string[] = [];
+  const preflightCommands: string[] = [];
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
@@ -73,6 +74,11 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           );
           yield* fs.makeDirectory(path.dirname(entry), { recursive: true }).pipe(Effect.orDie);
           yield* fs.writeFileString(entry, "verified archive bytes\n").pipe(Effect.orDie);
+          if (options.platform === "win32") {
+            const node = path.join(installRoot, "versions", "1.1.0", "node", "node.exe");
+            yield* fs.makeDirectory(path.dirname(node), { recursive: true }).pipe(Effect.orDie);
+            yield* fs.writeFileString(node, "bundled node\n").pipe(Effect.orDie);
+          }
           return {
             stdout: "",
             stderr: "",
@@ -103,6 +109,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           };
         }
         order.push("preflight");
+        preflightCommands.push(input.command);
         const result =
           options.preflight === "blocked"
             ? { status: "blocked", version: "1.1.0", reason: "local update required" }
@@ -148,7 +155,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
     Effect.provideService(HostProcessPlatform, options.platform ?? "linux"),
     Effect.provide(ServerConfig.layer({ ...config, mode: options.mode ?? "web" })),
   );
-  return { selfUpdate, order, baseDir };
+  return { selfUpdate, order, preflightCommands, baseDir };
 });
 
 it.layer(NodeServices.layer)("server self update", (it) => {
@@ -157,7 +164,7 @@ it.layer(NodeServices.layer)("server self update", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const { selfUpdate, order, baseDir } = yield* makeHarness({ platform });
+        const { selfUpdate, order, preflightCommands, baseDir } = yield* makeHarness({ platform });
         const versionDir = path.join(baseDir, "runtime", "versions", "1.1.0");
         const entry = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
         yield* fs.makeDirectory(path.dirname(entry), { recursive: true });
@@ -167,6 +174,15 @@ it.layer(NodeServices.layer)("server self update", (it) => {
         expect(order).toEqual(["archive", "preflight", "accept"]);
         expect(yield* fs.readFileString(entry)).toBe("verified archive bytes\n");
         expect(yield* fs.exists(path.join(versionDir, ".archive-verified"))).toBe(true);
+        // Windows archives preflight on their own Node, the one the launcher will run them on.
+        expect(preflightCommands).toHaveLength(1);
+        if (platform === "win32") {
+          expect(preflightCommands[0]).toMatch(
+            /[/\\]runtime[/\\]versions[/\\].+[/\\]node[/\\]node\.exe$/,
+          );
+        } else {
+          expect(preflightCommands[0]).toBe("/usr/bin/node");
+        }
       }),
     );
   }
