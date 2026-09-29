@@ -88,11 +88,7 @@ import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgro
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
-import {
-  imageProviderStatuses,
-  normalizeImageGenerationPatch,
-  runImageProviderHealthTest,
-} from "./image-generation/service.ts";
+import { imageProviderStatuses, runImageProviderHealthTest } from "./image-generation/service.ts";
 import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import {
   buildProviderAccessCapabilities,
@@ -2491,20 +2487,9 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverUpdateSettings]: ({ patch }) =>
           observeRpcEffect(
             WS_METHODS.serverUpdateSettings,
-            Effect.gen(function* () {
-              const normalizedPatch = patch.imageGeneration
-                ? {
-                    ...patch,
-                    imageGeneration: normalizeImageGenerationPatch(
-                      (yield* serverSettings.getSettings).imageGeneration,
-                      patch.imageGeneration,
-                    ),
-                  }
-                : patch;
-              return yield* serverSettings
-                .updateSettings(normalizedPatch)
-                .pipe(Effect.map(ServerSettings.redactServerSettingsForClient));
-            }),
+            serverSettings
+              .updateSettings(patch)
+              .pipe(Effect.map(ServerSettings.redactServerSettingsForClient)),
             {
               "rpc.aggregate": "server",
             },

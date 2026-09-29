@@ -57,6 +57,7 @@ import {
   isModelSelectionProviderEnabled,
 } from "@t3tools/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import { normalizeImageGenerationPatch } from "./image-generation/service.ts";
 
 export { resolveSourceControlWriterModelSelection } from "@t3tools/shared/serverSettings";
 
@@ -1212,7 +1213,16 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* bumpMaterializedGeneration;
           const current = yield* getSettingsFromCache;
-          const patched = applyServerSettingsPatch(current, patch);
+          const normalizedPatch = patch.imageGeneration
+            ? {
+                ...patch,
+                imageGeneration: normalizeImageGenerationPatch(
+                  current.imageGeneration,
+                  patch.imageGeneration,
+                ),
+              }
+            : patch;
+          const patched = applyServerSettingsPatch(current, normalizedPatch);
           const sandboxMaterialized = yield* materializeSandboxEnvironmentSecrets(patched);
           yield* validateSandboxSettings(sandboxMaterialized);
           const secretSnapshots = yield* snapshotSettingsSecrets(current, patched);

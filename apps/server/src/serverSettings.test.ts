@@ -1504,4 +1504,22 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(preserved.browserProvider.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
+  it.effect("preserves both image providers when clients enable them concurrently", () =>
+    Effect.gen(function* () {
+      const settings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* Effect.all(
+        [
+          settings.updateSettings({ imageGeneration: { chatgptEnabled: true } }),
+          settings.updateSettings({ imageGeneration: { grokEnabled: true } }),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      const image = (yield* settings.getSettings).imageGeneration;
+      assert.isTrue(image.chatgptEnabled);
+      assert.isTrue(image.grokEnabled);
+      assert.sameMembers([...image.fallbackOrder], ["chatgpt", "grok"]);
+      assert.include(["chatgpt", "grok"], image.defaultProvider);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
 });
