@@ -83,10 +83,16 @@ function setClientSettingsHydrated(nextHydrated: boolean): void {
   emitClientSettingsHydrationChange();
 }
 
+// Counts local writes, so another tab's change applied after a later local edit
+// cannot replace that edit.
+let clientSettingsLocalWrites = 0;
+
 function onClientSettingsStorage(event: StorageEvent): void {
   if (window.desktopBridge || (event.key !== CLIENT_SETTINGS_STORAGE_KEY && event.key !== null))
     return;
+  const localWrites = clientSettingsLocalWrites;
   void hydrateClientSettings().then(() => {
+    if (localWrites !== clientSettingsLocalWrites) return;
     replaceClientSettingsSnapshot({ ...DEFAULT_CLIENT_SETTINGS, ...readBrowserClientSettings() });
   });
 }
@@ -156,6 +162,7 @@ async function hydrateClientSettings(): Promise<void> {
 }
 
 function persistClientSettings(settings: ClientSettings): void {
+  clientSettingsLocalWrites += 1;
   replaceClientSettingsSnapshot(settings);
   void ensureLocalApi()
     .persistence.setClientSettings(settings)
