@@ -81,14 +81,25 @@ export function createBotMemoryToolHandler(
               target: decoded.target,
               operations: decoded.operations,
             });
-      const shared =
-        decoded.share && shareFact
-          ? await shareFact({
-              fact: decoded.share.fact,
-              scope: decoded.share.scope,
-              sensitive: decoded.share.sensitive ?? false,
-            })
-          : undefined;
+      let shared: AkeruMemoryShareOutcome | undefined;
+      let shareError: string | undefined;
+      if (decoded.share && shareFact) {
+        const request = {
+          fact: decoded.share.fact,
+          scope: decoded.share.scope,
+          sensitive: decoded.share.sensitive ?? false,
+        };
+        if (result === null) {
+          shared = await shareFact(request);
+        } else {
+          // The document write already committed. Report the share failure
+          // beside it so the bot does not retry a write that cannot match again.
+          shared = await shareFact(request).catch((cause: unknown) => {
+            shareError = cause instanceof Error ? cause.message : "The shared fact was not saved.";
+            return undefined;
+          });
+        }
+      }
       const shareResult = shared
         ? {
             share: {
@@ -100,7 +111,9 @@ export function createBotMemoryToolHandler(
                   : "The shared fact is pending the user's approval in this chat.",
             },
           }
-        : {};
+        : shareError !== undefined
+          ? { share: { scope: decoded.share!.scope, status: "failed", message: shareError } }
+          : {};
       if (result === null) {
         if (shared) {
           return {

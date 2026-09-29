@@ -107,4 +107,33 @@ describe("memory tool shared facts", () => {
     ).rejects.toThrow("write failed");
     expect(shareFact).not.toHaveBeenCalled();
   });
+
+  it("reports a failed share beside a document write that already committed", async () => {
+    const shareFact = vi.fn<AkeruMemoryShareFact>(async () => {
+      throw new Error("This bot cannot share to the project.");
+    });
+    const document = { charCount: 10, charLimit: 2_000 };
+    const committedStore = {
+      readDocument: vi.fn(() => Promise.reject(new Error("unexpected read"))),
+      mutate: vi.fn(async () => ({ changed: true, applied: 1, document })),
+    } as unknown as BotMemoryStore;
+    const result = await call(
+      shareFact,
+      {
+        target: "memory",
+        operations: [{ action: "remove", oldText: "Deploys happen on Fridays." }],
+        share: { fact: "Deploys happen on Fridays.", scope: "project" },
+      },
+      committedStore,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      changed: true,
+      share: {
+        scope: "project",
+        status: "failed",
+        message: "This bot cannot share to the project.",
+      },
+    });
+  });
 });
