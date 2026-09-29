@@ -5281,6 +5281,83 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps the memory tool for a delegated turn granted memory scopes", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-grant-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const access: AkeruDelegationAccessGrant = {
+      allowedToolIds: ["Read"],
+      memoryScopes: ["bot"],
+      sandbox: "local",
+      runtimeMode: "approval-required",
+      hasUserComputer: false,
+      enabledMcpServerIds: [],
+      disabledMcpServerIds: [],
+      approvalCeiling: "send",
+    };
+    const runtime = {
+      send: vi.fn(async () => {
+        throw new Error("not used");
+      }),
+      sendToUser: vi.fn(async () => {
+        throw new Error("not used");
+      }),
+      parentFinished: vi.fn(async () => undefined),
+      accessForThread: () => access,
+    };
+    const layer = makeLayer(
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore },
+      runtime,
+    );
+    const memoryToolIds = () =>
+      mastra.harnessOptions[0]?.toolRuntime
+        .toolsForThread(String(codexThreadId))
+        .map((tool) => tool.id)
+        .filter((id) => id === "memory");
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        modelSelection: codexSelection,
+        runtimeMode: "approval-required",
+        memoryAccess: {
+          tenantId: AkeruMemoryTenantId.make("local"),
+          userId: AkeruMemoryUserId.make("owner"),
+          threadId: codexThreadId,
+          projectId: ProjectId.make("delegation-memory-grant"),
+          workspaceRoot: process.cwd(),
+          botId: BotId.make("delegated-bot"),
+          respondingBotId: BotId.make("delegated-bot"),
+          groupId: null,
+          groupMemberBotIds: [],
+        },
+      });
+      expect(memoryToolIds()).toEqual(["memory"]);
+      yield* controller.sendTurn({ threadId: codexThreadId, input: "Do the delegated task." });
+      expect(mastra.session.sendMessage).toHaveBeenCalled();
+      // Admission runs the turn without durable memory but keeps the granted tool.
+      expect(memoryToolIds()).toEqual(["memory"]);
+      expect(mastra.session.state.get()).not.toHaveProperty("persistentMemoryContext");
+    }).pipe(
+      Effect.provide(layer),
+      Effect.orDie,
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+      ),
+    );
+  });
+
   it.effect("creates no workspace for a delegated sandbox denial", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();

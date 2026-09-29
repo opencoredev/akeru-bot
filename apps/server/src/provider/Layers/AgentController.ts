@@ -1846,10 +1846,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (settings) active.privateBotMemory = settings.privateBotMemory;
         active.memoryAccess = memoryAccess;
         if (!memoryAccess) {
-          // No durable memory this turn: drop any memory tool handler captured
-          // when the turn was queued so the bot cannot read or change facts.
+          // Memory was turned off after the turn was queued: drop the memory
+          // tool handler so the bot cannot read or change facts. A delegated
+          // turn never has durable access, so it keeps the handler its grant
+          // built; that handler checks the Memory setting on every call.
           const toolSession = { ...pending.toolSession };
-          delete toolSession.memoryHandlers;
+          if (pending.memoryAccess) delete toolSession.memoryHandlers;
           active.toolSession = toolSession;
           toolRuntime.registerSession(String(threadId), active.toolSession);
           const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
