@@ -291,9 +291,13 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   ) => {
     const snapshot = await options.readSnapshot();
     const { bot } = availableBot(snapshot, parent, request.botId);
+    // A group thread holds work from several parent bots; each bot reads and
+    // acknowledges only its own results.
     const delegations = snapshot.delegations.filter(
       (delegation) =>
-        delegation.parentThreadId === parent.threadId && delegation.childBotId === bot.id,
+        delegation.parentThreadId === parent.threadId &&
+        delegation.parentBotId === parent.botId &&
+        delegation.childBotId === bot.id,
     );
     // Reading a finished result here is its delivery, so the next parent turn
     // does not receive it again.
@@ -499,6 +503,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     activeByParent.set(parent.threadId, byParent);
     await deliver(delegation, `Sent bot work to ${bot.name}.`);
 
+    // The waiter must exist before the child turn starts: a child that ends
+    // quickly reports its outcome once, and an outcome with no waiter is lost.
+    const childOutcome = options.awaitChild(childThreadId, request.deadline ?? null);
+    childOutcome.catch(() => undefined);
     await dispatch({
       type: "thread.turn.start",
       commandId: commandId("turn"),
@@ -533,7 +541,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         return latest !== undefined && !TERMINAL_PHASES.has(latest.phase._tag) ? latest : undefined;
       };
       try {
-        const outcome = await options.awaitChild(childThreadId, request.deadline ?? null);
+        const outcome = await childOutcome;
         const current = activeByParent.get(parent.threadId)?.get(delegationId);
         const latest = await latestRecord();
         if (!current || latest === undefined) return;
@@ -679,13 +687,17 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
             (entry) => entry.delegationId === record.delegationId,
           );
           if (latest === undefined || TERMINAL_PHASES.has(latest.phase._tag)) continue;
-          await fail(latest, "parent_failed", "The parent turn failed.");
-          const latestChildThreadId = phaseChildThreadId(latest) ?? childThreadId;
-          if (latestChildThreadId) {
-            await options.interruptChild(
-              latestChildThreadId,
-              child?.turnId ?? phaseChildTurnId(latest),
-            );
+          // The child stops even when its Failed record cannot be written.
+          try {
+            await fail(latest, "parent_failed", "The parent turn failed.");
+          } finally {
+            const latestChildThreadId = phaseChildThreadId(latest) ?? childThreadId;
+            if (latestChildThreadId) {
+              await options.interruptChild(
+                latestChildThreadId,
+                child?.turnId ?? phaseChildTurnId(latest),
+              );
+            }
           }
         } catch (cause) {
           options.onWatchError?.(record.delegationId, cause);

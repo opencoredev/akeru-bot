@@ -814,7 +814,8 @@ describe("AkeruDelegationRuntime", () => {
       _tag: "Failed",
       failure: { failureCode: "parent_failed" },
     });
-    expect(test.interrupts).toHaveLength(1);
+    // Both children stop, including the one whose Failed write was rejected.
+    expect(test.interrupts).toHaveLength(2);
     expect(watchErrors).toHaveLength(1);
     expect(watchErrors[0]).toBeInstanceOf(Error);
     expect((watchErrors[0] as Error).message).toBe("state.set rejected");
@@ -982,6 +983,56 @@ describe("AkeruDelegationRuntime", () => {
       delegations: [{ state: "completed", summary: "The delegated answer." }],
     });
     expect(test.commands).toHaveLength(writes);
+  });
+
+  it("leaves another parent bot's pending result for that bot", async () => {
+    const childThreadId = ThreadId.make("other-parent-child");
+    const otherResult = delegation(DelegationId.make("other-parent-delegation"), {
+      parentBotId: OTHER_BOT_ID,
+      phase: {
+        _tag: "Completed",
+        childThreadId,
+        childTurnId: CHILD_TURN_ID,
+        startedAt: NOW,
+        completedAt: NOW,
+        result: { summary: "Other bot's answer.", childThreadId, childTurnId: CHILD_TURN_ID },
+        acknowledgedAt: null,
+      },
+    });
+    const test = harness(snapshot({ delegations: [otherResult] }));
+
+    await expect(test.runtime.check(parent(), { botId: CHILD_BOT_ID })).resolves.toMatchObject({
+      delegations: [],
+    });
+    expect(test.state.delegations[0]?.phase).toMatchObject({ acknowledgedAt: null });
+  });
+
+  it("waits for the child before its turn starts", async () => {
+    const test = harness();
+    const order: string[] = [];
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: async (command) => {
+        if (command.type === "thread.turn.start") order.push("turn.start");
+        await test.dispatch(command);
+      },
+      awaitChild: async () => {
+        order.push("awaitChild");
+        return { state: "completed", turnId: CHILD_TURN_ID, summary: "Fast answer." };
+      },
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: (() => {
+        let value = 0;
+        return () => String(++value);
+      })(),
+    });
+
+    await runtime.send(parent(), request() as never);
+    await runtime.drain();
+
+    expect(order).toEqual(["awaitChild", "turn.start"]);
+    expect(test.state.delegations[0]?.phase._tag).toBe("Completed");
   });
 
   it("uses group-thread routing and does not treat a bot thread as a group", async () => {
