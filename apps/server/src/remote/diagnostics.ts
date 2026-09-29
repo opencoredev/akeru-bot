@@ -71,6 +71,7 @@ function redact(value: string): string {
 export async function runRemoteDoctor(input: {
   readonly baseDir: string;
   readonly repair: boolean | ReadonlySet<string>;
+  /** Host platform from `HostProcessPlatform`; omitted means a Linux (systemd) host. */
   readonly platform?: NodeJS.Platform;
   readonly now?: Date;
 }): Promise<RemoteDoctorReportValue> {
@@ -94,7 +95,7 @@ export async function runRemoteDoctor(input: {
         "5",
         `http://127.0.0.1:${process.env.T3CODE_PORT?.trim() || "3773"}/.well-known/t3/environment`,
       ])
-    : (input.platform ?? process.platform) === "darwin"
+    : input.platform === "darwin"
       ? await commandOk("launchctl", [
           "print",
           `gui/${process.getuid?.() ?? 0}/${BOOT_SERVICE_LAUNCHD_LABEL}`,

@@ -3,19 +3,23 @@ import {
   type RemoteDoctorRepairInput,
   type RemoteDoctorStatus,
 } from "@t3tools/contracts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
 
 import { runRemoteDoctor } from "./diagnostics.ts";
 
 const runDoctor = (baseDir: string, repair: false | ReadonlySet<string>) =>
-  Effect.tryPromise({
-    try: () => runRemoteDoctor({ baseDir, repair }),
-    catch: (cause) =>
-      new RemoteDoctorError({
-        reason: "doctor-failed",
-        detail: "The remote doctor could not finish.",
-        cause,
-      }),
+  Effect.gen(function* () {
+    const platform = yield* HostProcessPlatform;
+    return yield* Effect.tryPromise({
+      try: () => runRemoteDoctor({ baseDir, repair, platform }),
+      catch: (cause) =>
+        new RemoteDoctorError({
+          reason: "doctor-failed",
+          detail: "The remote doctor could not finish.",
+          cause,
+        }),
+    });
   });
 
 /** Reads the doctor report for Settings > Connections. Local environments report not applicable. */

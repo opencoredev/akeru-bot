@@ -16,7 +16,9 @@ describe("Akeru Remote diagnostics", () => {
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     process.env.AKERU_REMOTE_CONTAINER = "1";
     try {
-      await expect(runRemoteDoctor({ baseDir, repair: true, platform: "linux" })).resolves.toBeDefined();
+      await expect(
+        runRemoteDoctor({ baseDir, repair: true, platform: "linux" }),
+      ).resolves.toBeDefined();
     } finally {
       if (prior === undefined) delete process.env.AKERU_REMOTE_CONTAINER;
       else process.env.AKERU_REMOTE_CONTAINER = prior;
