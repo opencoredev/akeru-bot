@@ -3792,7 +3792,17 @@ const make = (options?: AgentControllerLiveOptions) =>
             detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,
           });
         }
-        yield* runMastra("respondToToolSuspension", () => admitted.resume);
+        yield* runMastra("respondToToolSuspension", () => admitted.resume).pipe(
+          // A rejected resume leaves the question open while its turn is still live.
+          Effect.onError(() =>
+            Effect.sync(() => {
+              if (!activeTurn || active.activeTurn !== activeTurn || resumeFailure !== undefined)
+                return;
+              activeTurn.suspendedToolCalls.add(toolCallId);
+              activeTurn.waiting = turnStillWaiting(key, active);
+            }),
+          ),
+        );
       }).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
       if (resumeFailure !== undefined) {
         return yield* new AgentControllerRuntimeError({
