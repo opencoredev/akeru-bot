@@ -9,7 +9,7 @@ import { resolveStickyBotEngine } from "./botEngineSelection";
 const settings = DEFAULT_UNIFIED_SETTINGS;
 
 describe("resolveStickyBotEngine", () => {
-  it("returns no engine when every provider is disabled", () => {
+  it("preserves the saved engine when every provider is disabled", () => {
     const providers = [
       {
         ...makeComposerTestProvider(),
@@ -30,7 +30,7 @@ describe("resolveStickyBotEngine", () => {
         providers,
         defaultSelection: { instanceId, model: "gpt-5.6-sol" },
       }),
-    ).toBeNull();
+    ).toEqual({ instanceId, model: "gpt-5.6-sol" });
   });
 
   it("does not show a fallback provider for a bot with an unavailable saved engine", () => {
@@ -49,7 +49,7 @@ describe("resolveStickyBotEngine", () => {
         providers,
         defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
       }),
-    ).toBeNull();
+    ).toEqual({ instanceId: savedId, model: "gpt-5-codex" });
   });
 
   it("keeps the bot engine model instead of the app default", () => {

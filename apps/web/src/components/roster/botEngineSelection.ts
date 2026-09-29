@@ -21,8 +21,6 @@ export function resolveStickyBotEngine(input: {
 }): ModelSelection | null {
   if (input.engine) {
     const instanceId = ProviderInstanceId.make(input.engine.provider);
-    const entry = input.instanceEntries.find((candidate) => candidate.instanceId === instanceId);
-    if (!entry?.enabled || !entry.isAvailable) return null;
     const options =
       input.engine.options ??
       (input.defaultSelection.instanceId === instanceId &&
