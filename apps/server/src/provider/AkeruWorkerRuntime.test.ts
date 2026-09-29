@@ -102,6 +102,8 @@ it.effect("returns the worker result and runs the child with a narrowed grant", 
       assert.include(childAccess!.allowedToolIds, "Read");
       assert.strictEqual(runtime.depthForThread(turn.childThreadId), 1);
       assert.strictEqual(runtime.depthForThread(parent.threadId), 0);
+      // A worker chat left over from before a restart still counts as a worker.
+      assert.strictEqual(runtime.depthForThread(ThreadId.make("worker-thread-orphaned")), 1);
 
       yield* runtime.childTurnFinished(turn.childThreadId, {
         state: "completed",

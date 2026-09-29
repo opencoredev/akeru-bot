@@ -118,6 +118,12 @@ export const AKERU_WORKER_EXCLUDED_TOOL_IDS: ReadonlySet<AkeruToolId> = new Set(
  * workspace as an explicit `local` sandbox, because a null sandbox on a
  * delegated grant means no workspace at all.
  */
+/** Worker chats use this id prefix, so they stay recognizable after a server restart. */
+export const WORKER_THREAD_ID_PREFIX = "worker-thread-";
+
+export const isWorkerThreadId = (threadId: ThreadId): boolean =>
+  String(threadId).startsWith(WORKER_THREAD_ID_PREFIX);
+
 export function workerAccess(parent: AkeruDelegationAccessGrant): AkeruDelegationAccessGrant {
   return {
     ...parent,
@@ -473,8 +479,9 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     /** The worker grant when the thread belongs to a worker. */
     accessForThread: (threadId: ThreadId): AkeruDelegationAccessGrant | undefined =>
       byChildThread.get(threadId)?.access,
-    /** 1 for worker threads, 0 for bot turns. */
-    depthForThread: (threadId: ThreadId): number => (byChildThread.has(threadId) ? 1 : 0),
+    /** 1 for worker threads, including ones a restart orphaned, 0 for bot turns. */
+    depthForThread: (threadId: ThreadId): number =>
+      byChildThread.has(threadId) || isWorkerThreadId(threadId) ? 1 : 0,
   };
 });
 

@@ -126,7 +126,12 @@ import {
   type AkeruDelegationRuntime,
   type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
-import { AkeruWorkerError, makeAkeruWorkerRuntime } from "../AkeruWorkerRuntime.ts";
+import {
+  AkeruWorkerError,
+  makeAkeruWorkerRuntime,
+  WORKER_THREAD_ID_PREFIX,
+  workerAccess,
+} from "../AkeruWorkerRuntime.ts";
 import { makeAkeruRuntimeSeam } from "../AkeruRuntimeSeam.ts";
 import {
   AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
@@ -1736,7 +1741,9 @@ const make = (options?: AgentControllerLiveOptions) =>
             parentThread.respondingBotId ??
             parentThread.botId ??
             null;
-          const childThreadId = ThreadId.make(`worker-thread-${NodeCrypto.randomUUID()}`);
+          const childThreadId = ThreadId.make(
+            `${WORKER_THREAD_ID_PREFIX}${NodeCrypto.randomUUID()}`,
+          );
           workerTurnDefaults.set(String(childThreadId), parentThread.runtimeMode);
           // A worker is a direct copy of the responding bot, never a group chat,
           // even when the parent is one.
@@ -2841,7 +2848,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         parentDelegation?.access ??
         workerRuntime.accessForThread(threadId);
       const isWorkerThread = workerRuntime.depthForThread(threadId) > 0;
-      const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
+      const botAccess: AkeruDelegationAccessGrant = delegatedAccess ?? {
         allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
         memoryScopes: ["private", "bot", "project", "group", "workspace"],
         sandbox: input.botSandbox ?? null,
@@ -2853,6 +2860,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
         approvalCeiling: "secrets",
       };
+      // A worker chat a restart orphaned has lost its grant, so it keeps the worker limits
+      // instead of regaining the bot's tools and memory.
+      const access = !delegatedAccess && isWorkerThread ? workerAccess(botAccess) : botAccess;
       // A top-level bot's null sandbox is its local workspace, while a delegated
       // null sandbox has none, so workers receive the local workspace explicitly.
       const workerParentAccess: AkeruDelegationAccessGrant =
