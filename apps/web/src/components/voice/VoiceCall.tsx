@@ -190,7 +190,6 @@ function stopBrowserCall(active: ActiveBrowserCall): void {
   if (active.environmentDisconnectTimer !== null) {
     clearTimeout(active.environmentDisconnectTimer);
   }
-  active.scope.cancel();
   active.stopListeningForDeviceLoss();
   if (active.events) {
     active.events.onmessage = null;
