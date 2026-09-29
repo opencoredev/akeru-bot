@@ -1,4 +1,4 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off preferSchemaOverJson:off
+// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -5791,11 +5791,14 @@ describe("AgentControllerLive", () => {
         }),
       );
 
-      const fetchPatched = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation((input, init) =>
-          fakeKimi(input as string | URL | Request, init as RequestInit | undefined),
-        );
+      const originalFetch = globalThis.fetch;
+      const fetchPatched = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        return url.startsWith("https://api.kimi.com/coding/v1/messages")
+          ? fakeKimi(input as string | URL | Request, init as RequestInit | undefined)
+          : originalFetch(input, init);
+      });
 
       const layer = makeAgentControllerLive({
         makeMastraHarness: createAkeruMastraHarness,
@@ -5818,6 +5821,11 @@ describe("AgentControllerLive", () => {
       );
 
       return Effect.gen(function* () {
+        const unrelated = yield* Effect.promise(() =>
+          fetch("data:text/plain,unrelated").then((response) => response.text()),
+        );
+        assert.equal(unrelated, "unrelated");
+        assert.equal(kimiRequests.length, 0);
         const scope = yield* Scope.make("sequential");
         const context = yield* Layer.buildWithScope(layer, scope);
         const controller = Context.get(context, AgentController);
