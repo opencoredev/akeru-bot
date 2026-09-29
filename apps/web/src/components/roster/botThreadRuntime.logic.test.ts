@@ -18,7 +18,9 @@ import {
   isBotOwnChatShell,
   joinOrStartThreadCreate,
   nextRetainedChat,
+  preferRetainedChatTarget,
   resolveBotThreadTarget,
+  shouldTitlePlaceholderChat,
 } from "./botThreadRuntime.logic";
 
 describe.each([
@@ -406,6 +408,39 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("preferRetainedChatTarget", () => {
+  const created = {
+    ownerId: "bot-1",
+    threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("new") },
+    linked: false,
+  };
+  const older = { environmentId: "env-1", threadId: "old" };
+  const shell = (id: string) => ({ environmentId: "env-1", id, archivedAt: null });
+
+  it("shows a just-created chat once its shell arrives, even when an older chat updated later", () => {
+    expect(preferRetainedChatTarget(created, older, [shell("old"), shell("new")])).toEqual({
+      environmentId: "env-1",
+      threadId: "new",
+    });
+  });
+
+  it("keeps the resolved chat before the new shell arrives or once the new chat is linked", () => {
+    expect(preferRetainedChatTarget(created, older, [shell("old")])).toBe(older);
+    expect(
+      preferRetainedChatTarget({ ...created, linked: true }, older, [shell("old"), shell("new")]),
+    ).toBe(older);
+  });
+});
+
+describe("shouldTitlePlaceholderChat", () => {
+  it("titles a placeholder chat and leaves renamed chats alone", () => {
+    expect(shouldTitlePlaceholderChat("new", "New chat", null)).toBe(true);
+    expect(shouldTitlePlaceholderChat("new", "Trip plans", "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", undefined, "new")).toBe(true);
+    expect(shouldTitlePlaceholderChat("other", undefined, "new")).toBe(false);
   });
 });
 

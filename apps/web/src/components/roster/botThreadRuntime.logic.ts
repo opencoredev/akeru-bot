@@ -1,4 +1,5 @@
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/state/threads";
+import { PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import type {
   BotId,
   GroupId,
@@ -258,6 +259,47 @@ export interface RetainedChat {
   readonly threadRef: ScopedThreadRef | null;
   /** Whether the shell list has shown this chat since it was retained. */
   readonly linked: boolean;
+}
+
+/**
+ * The chat the bot shows. A just-created chat wins once its shell arrives, even
+ * when an older chat finished a reply after it, so the screen and sends agree.
+ */
+export function preferRetainedChatTarget(
+  retained: RetainedChat,
+  target: { environmentId: string; threadId: string } | null,
+  shells: readonly {
+    environmentId: string;
+    id: string;
+    archivedAt: string | null;
+    deletedAt?: string | null | undefined;
+  }[],
+): { environmentId: string; threadId: string } | null {
+  const pending = retained.linked ? null : retained.threadRef;
+  if (
+    pending &&
+    shells.some(
+      (shell) =>
+        shell.environmentId === pending.environmentId &&
+        shell.id === pending.threadId &&
+        shell.archivedAt === null &&
+        shell.deletedAt == null,
+    )
+  ) {
+    return { environmentId: pending.environmentId, threadId: pending.threadId };
+  }
+  return target;
+}
+
+/** Whether a send into this chat should replace its New chat placeholder title. */
+export function shouldTitlePlaceholderChat(
+  threadId: string,
+  shellTitle: string | undefined,
+  createdPlaceholderId: string | null,
+): boolean {
+  return shellTitle === undefined
+    ? createdPlaceholderId === threadId
+    : shellTitle === PLACEHOLDER_THREAD_TITLE;
 }
 
 /**

@@ -42,7 +42,9 @@ import {
   findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
   nextRetainedChat,
+  preferRetainedChatTarget,
   resolveBotThreadTarget,
+  shouldTitlePlaceholderChat,
   type RetainedChat,
 } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
@@ -100,11 +102,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         : [],
     [primaryEnvironmentId, threadShells],
   );
-  const target = primaryEnvironmentId
-    ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
-    : null;
-  const { ref: rememberedThreadRef, shell: rememberedThread } = useBotChatTarget(botId, target);
-  const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
   // Holds a just-created chat until its shell arrives. A chat that was linked
   // and then left the shell list was archived or deleted, so it is dropped
   // rather than sent into.
@@ -116,6 +113,17 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   if (retainedThreadRef.current.ownerId !== botId) {
     retainedThreadRef.current = { ownerId: botId, threadRef: null, linked: false };
   }
+  const target = preferRetainedChatTarget(
+    retainedThreadRef.current,
+    primaryEnvironmentId
+      ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
+      : null,
+    primaryThreadShells,
+  );
+  const { ref: rememberedThreadRef, shell: rememberedThread } = useBotChatTarget(botId, target);
+  const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
+  const threadShellsRef = useRef(primaryThreadShells);
+  threadShellsRef.current = primaryThreadShells;
   retainedThreadRef.current = nextRetainedChat(
     retainedThreadRef.current,
     linkedThreadRef,
@@ -167,8 +175,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     reportFailure: false,
   });
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const startingNewChatRef = useRef(false);
+  // Sends made while New chat is still creating wait for it instead of reaching the old chat.
+  const pendingNewChatRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
+  // The chat New chat created with a placeholder title, until a send titles it.
+  const placeholderChatIdRef = useRef<string | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
@@ -302,15 +317,19 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     if (retained.threadRef !== null && !retained.linked) return false;
     startingNewChatRef.current = true;
     setError(null);
+    const pending = createBotChat(PLACEHOLDER_THREAD_TITLE);
+    pendingNewChatRef.current = pending;
     try {
-      const threadRef = await createBotChat(PLACEHOLDER_THREAD_TITLE);
+      const threadRef = await pending;
       if (!threadRef) {
         setError(localFailure("Could not start a new chat."));
         return false;
       }
+      placeholderChatIdRef.current = threadRef.threadId;
       return true;
     } finally {
       startingNewChatRef.current = false;
+      if (pendingNewChatRef.current === pending) pendingNewChatRef.current = null;
     }
   }, [canStartNewChat, createBotChat]);
 
@@ -356,6 +375,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         return Promise.resolve(false);
       }
 
+      const pendingNewChat = pendingNewChatRef.current;
       queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
@@ -382,8 +402,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               };
             }),
           );
+          const newChatRef = pendingNewChat ? await pendingNewChat : null;
+          if (pendingNewChat && !newChatRef) {
+            setError(localFailure("Could not start a new chat."));
+            return false;
+          }
           const currentThreadRef =
-            retainedThreadRef.current.threadRef ?? (await ensureTranscriptThread(title));
+            newChatRef ??
+            retainedThreadRef.current.threadRef ??
+            (await ensureTranscriptThread(title));
           if (!currentThreadRef) {
             setError(localFailure("Could not send the message."));
             return false;
@@ -428,6 +455,25 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           if (startResult._tag === "Failure") {
             setError(commandFailure(startResult));
             return false;
+          }
+          const shellTitle = threadShellsRef.current.find(
+            (shell) => shell.id === currentThreadRef.threadId,
+          )?.title;
+          if (
+            shouldTitlePlaceholderChat(
+              currentThreadRef.threadId,
+              shellTitle,
+              placeholderChatIdRef.current,
+            )
+          ) {
+            if (placeholderChatIdRef.current === currentThreadRef.threadId) {
+              placeholderChatIdRef.current = null;
+            }
+            // Best effort: the turn already started, so a failed rename only keeps the placeholder.
+            void updateMetadata({
+              environmentId: currentThreadRef.environmentId,
+              input: { threadId: currentThreadRef.threadId, title },
+            });
           }
 
           if (retainedThreadRef.current.threadRef !== currentThreadRef) {
@@ -478,6 +524,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       respondingRequestIds,
       submitPendingUserInput,
       startTurn,
+      updateMetadata,
     ],
   );
 
