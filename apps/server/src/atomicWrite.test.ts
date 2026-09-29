@@ -38,7 +38,9 @@ it.effect("syncs durable contents before publishing and the directory afterward"
           Effect.map((file) => ({
             ...file,
             sync: Effect.sync(() => {
-              operations.push(args[0] === directory ? "directory sync" : "file sync");
+              operations.push(
+                args[0] === directory ? "directory sync" : `file sync (${args[1]?.flag})`,
+              );
             }).pipe(Effect.flatMap(() => file.sync)),
           })),
         ),
@@ -56,7 +58,10 @@ it.effect("syncs durable contents before publishing and the directory afterward"
 
     assert.deepEqual(
       operations,
-      platform === "win32" ? ["file sync", "rename"] : ["file sync", "rename", "directory sync"],
+      // Windows rejects a flush through a read-only handle, so the temporary file opens as r+.
+      platform === "win32"
+        ? ["file sync (r+)", "rename"]
+        : ["file sync (r+)", "rename", "directory sync"],
     );
     assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "saved");
     if (platform !== "win32") {

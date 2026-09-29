@@ -30,7 +30,8 @@ export const writeFileStringAtomically = (input: {
       if (input.durable) {
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const tempFile = yield* fs.open(tempPath, { flag: "r" });
+            // Windows only flushes handles opened with write access.
+            const tempFile = yield* fs.open(tempPath, { flag: "r+" });
             yield* tempFile.sync;
           }),
         );
