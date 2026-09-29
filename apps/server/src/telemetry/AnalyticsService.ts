@@ -60,6 +60,34 @@ const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(AnalyticsStat
   onExcessProperty: "error",
 });
 const encodeState = Schema.encodeSync(Schema.fromJsonString(AnalyticsState));
+
+const RETIRED_PROVIDER_COUNTERS = [
+  ["provider_turns_cursor", "provider_turns_other"],
+  ["browser_searches_cursor", "browser_searches_other"],
+] as const;
+
+// Folds counters for retired providers into `other` so events queued before an
+// upgrade still decode and deliver.
+const migrateLegacyState = (encoded: string): string => {
+  const state: unknown = JSON.parse(encoded);
+  if (typeof state !== "object" || state === null || !("pending" in state)) return encoded;
+  if (!Array.isArray(state.pending)) return encoded;
+  for (const event of state.pending) {
+    const properties: unknown = event?.properties;
+    if (typeof properties !== "object" || properties === null) continue;
+    const record = properties as Record<string, unknown>;
+    for (const [retired, other] of RETIRED_PROVIDER_COUNTERS) {
+      const count = record[retired];
+      if (count === undefined) continue;
+      delete record[retired];
+      if (typeof count === "number" && typeof record[other] === "number") {
+        record[other] = Math.min(record[other] + count, USAGE_3H_COUNTER_MAX);
+      }
+    }
+    if (record.provider === "cursor") record.provider = "other";
+  }
+  return JSON.stringify(state);
+};
 const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const TelemetryEnvConfig = Config.all({
@@ -246,7 +274,7 @@ export const make = Effect.gen(function* () {
         return fresh;
       }
       const encoded = yield* fs.readFileString(serverConfig.analyticsStatePath);
-      return yield* Effect.sync(() => decodeState(encoded));
+      return yield* Effect.sync(() => decodeState(migrateLegacyState(encoded)));
     });
 
   const persistState = writeState;

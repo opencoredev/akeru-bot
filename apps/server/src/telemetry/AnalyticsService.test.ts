@@ -459,6 +459,80 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
     }),
   );
 
+  it.effect("delivers usage queued for Cursor before an upgrade", () =>
+    Effect.gen(function* () {
+      const captured: unknown[] = [];
+      const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
+        prefix: "akeru-analytics-cursor-",
+      });
+      const analyticsLayer = makeLayers(serverConfigLayer).pipe(
+        Layer.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              T3CODE_TELEMETRY_ENABLED: true,
+              T3CODE_POSTHOG_KEY: "phc_test",
+              T3CODE_POSTHOG_HOST: "http://localhost",
+            }),
+          ),
+        ),
+      );
+      const batchServerLayer = HttpServer.serve(
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          captured.push(yield* request.json);
+          return HttpServerResponse.jsonUnsafe({});
+        }),
+      );
+
+      yield* Effect.gen(function* () {
+        yield* Layer.launch(batchServerLayer).pipe(Effect.forkScoped);
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const analytics = yield* AnalyticsService.AnalyticsService;
+        const currentStart = AnalyticsService.bucketStartAt(
+          DateTime.toEpochMillis(yield* DateTime.now),
+        );
+        yield* fs.writeFileString(
+          config.analyticsStatePath,
+          encodeJson({
+            version: 1,
+            installationId: pendingEvent.distinct_id,
+            cursorBucketStart: currentStart,
+            deliveryDay: currentStart.slice(0, 10),
+            deliveredToday: 0,
+            firstActiveInstallReported: true,
+            pending: [
+              {
+                ...pendingEvent,
+                properties: {
+                  ...pendingEvent.properties,
+                  provider: "cursor",
+                  provider_turns_cursor: 2,
+                  provider_turns_other: 1,
+                  browser_searches_cursor: 3,
+                },
+              },
+            ],
+          }),
+        );
+
+        yield* analytics.flush;
+        assert.equal(
+          readState(yield* fs.readFileString(config.analyticsStatePath)).pending.length,
+          0,
+        );
+        const request = captured[0] as {
+          readonly batch: ReadonlyArray<{ readonly properties: Record<string, unknown> }>;
+        };
+        const properties = request.batch[0]?.properties;
+        assert.equal(properties?.provider, "other");
+        assert.equal(properties?.provider_turns_other, 3);
+        assert.equal(properties?.browser_searches_other, 3);
+        assert.isFalse(properties !== undefined && "provider_turns_cursor" in properties);
+      }).pipe(Effect.provide(analyticsLayer));
+    }),
+  );
+
   it("reports retired Cursor usage as another provider", () => {
     assert.equal(AnalyticsService.normalizeProvider("cursor"), "other");
     assert.equal(AnalyticsService.normalizeProvider("claudeagent"), "claude");
