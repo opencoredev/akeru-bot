@@ -62,8 +62,9 @@ const download = async (url) => {
 };
 // Mirrors the Unix `remote update`: resolve the latest release, verify the Windows archive against
 // the signed manifest, stage it beside the running version, then ask the service to update.
-// `update` accepts two flags the packaged launcher never forwards; they exist so tests can stage a
-// signed stub release. `--manifest-key-file` replaces the pinned key for that one invocation.
+// `update` accepts two test-only flags so tests can stage a signed stub release. They require
+// AKERU_REMOTE_TEST_RELEASE=1 because the launcher forwards every `akeru remote` argument, and
+// `--manifest-key-file` replaces the pinned key for that one invocation.
 const update = async (parameters) => {
   const repo = process.env.AKERU_REMOTE_REPOSITORY || "opencoredev/akeru-bot";
   if (
@@ -78,6 +79,9 @@ const update = async (parameters) => {
     const flag = parameters[index];
     if (flag === "--api-origin" || flag === "--manifest-key-file") {
       const value = parameters[index + 1];
+      if (process.env.AKERU_REMOTE_TEST_RELEASE !== "1") {
+        throw new Error(`${flag} is only available to Akeru release tests.`);
+      }
       if (!value) throw new Error(`${flag} requires a value.`);
       if (flag === "--api-origin") apiOrigin = value;
       else manifestKey = NodeFS.readFileSync(value, "utf8");

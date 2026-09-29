@@ -88,7 +88,9 @@ describe("Akeru Remote administration", () => {
   });
 
   describe("Windows remote update", () => {
-    const stubRelease = async (options: { readonly tamperSignature?: boolean } = {}) => {
+    const stubRelease = async (
+      options: { readonly tamperSignature?: boolean; readonly testRelease?: boolean } = {},
+    ) => {
       const root = tempRoot();
       const installRoot = NodePath.join(root, "install");
       const artifact = NodePath.join(installRoot, "versions", "1.0.0");
@@ -187,6 +189,7 @@ describe("Akeru Remote administration", () => {
                   PATH: process.env.PATH ?? "",
                   HOME: root,
                   AKERU_HOME: home,
+                  ...(options.testRelease === false ? {} : { AKERU_REMOTE_TEST_RELEASE: "1" }),
                   // The updater must ignore an ambient key override; the shipped launcher never
                   // forwards --manifest-key-file, so production always verifies the pinned key.
                   AKERU_REMOTE_MANIFEST_PUBLIC_KEY: "forged-env-key",
@@ -225,6 +228,14 @@ describe("Akeru Remote administration", () => {
       const { result, installRoot, updateRequests } = await stubRelease({ tamperSignature: true });
       expect(result.code).not.toBe(0);
       expect(result.stderr).toContain("does not match the pinned Akeru release key");
+      expect(NodeFS.existsSync(NodePath.join(installRoot, "versions", "1.1.0"))).toBe(false);
+      expect(updateRequests).toEqual([]);
+    });
+
+    it("refuses a replacement release key outside release tests", async () => {
+      const { result, installRoot, updateRequests } = await stubRelease({ testRelease: false });
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain("only available to Akeru release tests");
       expect(NodeFS.existsSync(NodePath.join(installRoot, "versions", "1.1.0"))).toBe(false);
       expect(updateRequests).toEqual([]);
     });
