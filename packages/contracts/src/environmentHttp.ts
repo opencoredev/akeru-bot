@@ -33,6 +33,7 @@ import {
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
 } from "./orchestration.ts";
+import { ServerProviderUnavailability } from "./server.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
@@ -80,6 +81,9 @@ export class EnvironmentRequestInvalidError extends Schema.TaggedErrorClass<Envi
     code: Schema.Literal("invalid_request"),
     reason: EnvironmentRequestInvalidReason,
     traceId: TrimmedNonEmptyString,
+    detail: Schema.optional(TrimmedNonEmptyString),
+    unavailability: Schema.optional(ServerProviderUnavailability),
+    repairAction: Schema.optional(TrimmedNonEmptyString),
   },
   { httpApiStatus: 400 },
 ) {
@@ -88,7 +92,7 @@ export class EnvironmentRequestInvalidError extends Schema.TaggedErrorClass<Envi
   }
 
   override get message(): string {
-    return `The environment rejected the request (${this.reason}).`;
+    return this.detail ?? `The environment rejected the request (${this.reason}).`;
   }
 }
 

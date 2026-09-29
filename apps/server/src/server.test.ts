@@ -124,6 +124,7 @@ import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
+import { OrchestrationCommandReceiptRepository } from "./persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
@@ -509,6 +510,7 @@ const buildAppUnderTest = (options?: {
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     previewManager?: Partial<PreviewManager.PreviewManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
+    commandReceipts?: Partial<OrchestrationCommandReceiptRepository["Service"]>;
     threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     routineRepository?: Partial<RoutineRepositoryShape>;
     routineRuntime?: Partial<RoutineRuntimeShape>;
@@ -902,6 +904,14 @@ const buildAppUnderTest = (options?: {
             latestSequence: Effect.succeed(0),
             ...options?.layers?.orchestrationEngine,
           }),
+          Layer.succeed(
+            OrchestrationCommandReceiptRepository,
+            OrchestrationCommandReceiptRepository.of({
+              getByCommandId: () => Effect.succeed(Option.none()),
+              upsert: () => Effect.void,
+              ...options?.layers?.commandReceipts,
+            }),
+          ),
           Layer.mock(ThreadDeletionReactor)({
             start: () => Effect.void,
             drain: Effect.void,
@@ -7747,7 +7757,79 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       assert.equal(response.status, 400);
+      const error = (yield* response.json) as Record<string, unknown>;
+      assert.equal(error.reason, "invalid_command");
+      assert.equal(error.detail, "Provider is unavailable.");
+      assert.equal(error.unavailability, "temporary-failure");
       assert.equal(dispatch.mock.calls.length, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("dispatches an accepted HTTP turn retry after provider availability changes", () =>
+    Effect.gen(function* () {
+      const commandId = CommandId.make("cmd-http-accepted-retry");
+      const threadId = ThreadId.make("thread-http-accepted-retry");
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 7 }),
+      );
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([{ ...readyDefaultProvider, enabled: false }]),
+          },
+          commandReceipts: {
+            getByCommandId: () =>
+              Effect.succeed(
+                Option.some({
+                  commandId,
+                  aggregateKind: "thread",
+                  aggregateId: threadId,
+                  acceptedAt: "2026-01-01T00:00:00.000Z",
+                  resultSequence: 7,
+                  status: "accepted",
+                  error: null,
+                }),
+              ),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:operate",
+      });
+      const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+        headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+        body: yield* HttpBody.json({
+          type: "thread.turn.start",
+          commandId,
+          threadId,
+          message: {
+            messageId: MessageId.make("msg-http-accepted-retry"),
+            role: "user",
+            text: "Start chat",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          bootstrap: {
+            createThread: {
+              projectId: defaultProjectId,
+              title: "New chat",
+              modelSelection: defaultModelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: "main",
+              worktreePath: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(dispatch.mock.calls.length, 1);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -7766,7 +7848,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
-          projectionBots: { getById: () => Effect.succeed(Option.some(bot)) },
+          projectionBots: {
+            getById: ({ botId: requested }) =>
+              Effect.succeed(requested === botId ? Option.some(bot) : Option.none()),
+          },
           botUsageLedger: {
             summarize: () =>
               Effect.succeed({
@@ -7795,6 +7880,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           type: "thread.turn.start",
           commandId: CommandId.make("cmd-http-bootstrap-capped"),
           threadId: ThreadId.make("thread-http-bootstrap-capped"),
+          respondingBotId: BotId.make("bot-http-unrelated-responder"),
           message: {
             messageId: MessageId.make("msg-http-bootstrap-capped"),
             role: "user",
@@ -7821,6 +7907,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       assert.equal(response.status, 400);
+      const error = (yield* response.json) as Record<string, unknown>;
+      assert.equal(error.unavailability, "usage-cap");
+      assert.equal(error.repairAction, "usage");
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
@@ -7840,7 +7929,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
-          projectionBots: { getById: () => Effect.succeed(Option.some(bot)) },
+          projectionBots: {
+            getById: ({ botId: requested }) =>
+              Effect.succeed(requested === botId ? Option.some(bot) : Option.none()),
+          },
           botUsageLedger: {
             summarize: () =>
               Effect.succeed({
@@ -7867,6 +7959,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             type: "thread.turn.start",
             commandId: CommandId.make("cmd-bootstrap-capped-bot"),
             threadId: ThreadId.make("thread-bootstrap-capped-bot"),
+            respondingBotId: BotId.make("bot-unrelated-responder"),
             message: {
               messageId: MessageId.make("msg-bootstrap-capped-bot"),
               role: "user",

@@ -14,6 +14,7 @@ import {
   EnvironmentOperationForbiddenError,
   EnvironmentRequestInvalidError,
   type EnvironmentRequestInvalidReason,
+  type ServerProviderUnavailability,
   EnvironmentResourceNotFoundError,
   type EnvironmentResourceNotFoundReason,
   EnvironmentScopeRequiredError,
@@ -82,10 +83,24 @@ export function failEnvironmentAuthInvalid(reason: EnvironmentAuthInvalidReason)
   );
 }
 
-export function failEnvironmentInvalidRequest(reason: EnvironmentRequestInvalidReason) {
+export function failEnvironmentInvalidRequest(
+  reason: EnvironmentRequestInvalidReason,
+  guidance?: {
+    readonly detail: string;
+    readonly unavailability: ServerProviderUnavailability;
+    readonly repairAction?: string;
+  },
+) {
   return currentEnvironmentTraceId.pipe(
     Effect.flatMap((traceId) =>
-      Effect.fail(new EnvironmentRequestInvalidError({ code: "invalid_request", reason, traceId })),
+      Effect.fail(
+        new EnvironmentRequestInvalidError({
+          code: "invalid_request",
+          reason,
+          traceId,
+          ...guidance,
+        }),
+      ),
     ),
   );
 }

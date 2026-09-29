@@ -20,6 +20,7 @@ import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
+import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
@@ -53,6 +54,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
     const projectionBots = yield* ProjectionBots.ProjectionBotRepository;
     const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
+    const commandReceipts = yield* OrchestrationCommandReceiptRepository;
     const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
     const botUsageLedger = yield* BotUsageLedger;
     const config = yield* ServerConfig.ServerConfig;
@@ -220,7 +222,18 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
           }
-          if (normalizedCommand.type === "thread.turn.start") {
+          const shouldPreflightTurn =
+            normalizedCommand.type === "thread.turn.start" &&
+            Option.isNone(
+              yield* commandReceipts
+                .getByCommandId({ commandId: normalizedCommand.commandId })
+                .pipe(
+                  Effect.catch((cause) =>
+                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                  ),
+                ),
+            );
+          if (shouldPreflightTurn && normalizedCommand.type === "thread.turn.start") {
             if (Option.isNone(providerRegistry)) {
               return yield* failEnvironmentInternal(
                 "orchestration_dispatch_failed",
@@ -245,9 +258,9 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ),
                 )
               : undefined;
-            const botId =
-              normalizedCommand.respondingBotId ??
-              (groupId ? group?.bossBotId : (thread?.botId ?? bootstrapThread?.botId));
+            const botId = groupId
+              ? (normalizedCommand.respondingBotId ?? group?.bossBotId)
+              : (thread?.botId ?? bootstrapThread?.botId ?? normalizedCommand.respondingBotId);
             const bot = botId
               ? yield* projectionBots.getById({ botId }).pipe(
                   Effect.map(Option.getOrUndefined),
@@ -277,7 +290,13 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               });
               if (verdict) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
-                return yield* failEnvironmentInvalidRequest("invalid_command");
+                return yield* failEnvironmentInvalidRequest("invalid_command", {
+                  detail: verdict.detail,
+                  unavailability: verdict.category,
+                  ...(verdict.category === "missing-login" || verdict.category === "expired-login"
+                    ? { repairAction: "providers" }
+                    : {}),
+                });
               }
             }
             if (bot?.usageCap) {
@@ -290,7 +309,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 );
               if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
-                return yield* failEnvironmentInvalidRequest("invalid_command");
+                return yield* failEnvironmentInvalidRequest("invalid_command", {
+                  detail: `Usage cap reached for ${bot.name}.`,
+                  unavailability: "usage-cap",
+                  repairAction: "usage",
+                });
               }
             }
           }

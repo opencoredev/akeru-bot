@@ -1890,9 +1890,9 @@ const makeWsRpcLayer = (
                       .getById({ groupId })
                       .pipe(Effect.map(Option.getOrUndefined))
                   : undefined;
-                const botId =
-                  normalizedCommand.respondingBotId ??
-                  (groupId ? group?.bossBotId : (thread?.botId ?? bootstrapThread?.botId));
+                const botId = groupId
+                  ? (normalizedCommand.respondingBotId ?? group?.bossBotId)
+                  : (thread?.botId ?? bootstrapThread?.botId ?? normalizedCommand.respondingBotId);
                 const bot = botId
                   ? yield* projectionBots.getById({ botId }).pipe(Effect.map(Option.getOrUndefined))
                   : undefined;
