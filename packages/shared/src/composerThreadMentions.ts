@@ -15,6 +15,8 @@ export const THREAD_MENTION_MAX_CHARS = 4_000;
 export const THREAD_MENTION_MAX_MESSAGE_CHARS = 1_200;
 /** Chats expanded per prompt. Further mentions stay as plain references. */
 export const THREAD_MENTION_MAX_THREADS = 3;
+/** Distinct chat mentions the server looks up per prompt, including hidden or missing ones. */
+export const THREAD_MENTION_MAX_LOOKUPS = 12;
 /** Rows the composer picker shows for chats. */
 export const THREAD_MENTION_PICKER_LIMIT = 6;
 

@@ -28,6 +28,7 @@ import { collectComposerMentionReferences } from "@t3tools/shared/composerInline
 import {
   appendComposerMentionContext,
   isHiddenComposerThread,
+  THREAD_MENTION_MAX_LOOKUPS,
   THREAD_MENTION_MAX_THREADS,
   THREAD_MENTION_TURN_LIMIT,
   type ThreadMentionSource,
@@ -1235,8 +1236,12 @@ const make = Effect.gen(function* () {
         ? ("enabled" as const)
         : ("disabled" as const);
     const threads: ThreadMentionSource[] = [];
-    // Hidden or missing chats do not use up a context slot.
-    for (const mentionedId of references.threadIds.filter((id) => id !== threadId)) {
+    // Hidden or missing chats do not use up a context slot, but every lookup
+    // counts toward a separate cap so a prompt cannot force unbounded reads.
+    const mentionedIds = references.threadIds
+      .filter((id) => id !== threadId)
+      .slice(0, THREAD_MENTION_MAX_LOOKUPS);
+    for (const mentionedId of mentionedIds) {
       if (threads.length >= THREAD_MENTION_MAX_THREADS) break;
       const snapshot = yield* projectionSnapshotQuery
         .getThreadDetailSnapshot(ThreadId.make(mentionedId), {
