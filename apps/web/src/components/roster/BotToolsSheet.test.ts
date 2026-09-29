@@ -1,11 +1,16 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { loadCatalog } from "../../../../../plugins";
+import { loadDirectoryCatalog } from "../../../../../plugins";
 import { buildBotToolItems, planBotToolToggle } from "./BotToolsSheet";
 
-const installedPlugin = loadCatalog().find((plugin) => plugin.id === "exa");
-if (!installedPlugin) throw new TypeError("Exa must remain in the plugin catalog.");
+const exa = loadDirectoryCatalog().find((plugin) => plugin.id === "exa");
+if (!exa || exa.kind !== "mcp-url") throw new TypeError("Exa URL fixture is missing.");
+const installedPlugin = {
+  ...exa,
+  catalogStatus: "available" as const,
+  connection: { type: "ready" as const },
+};
 
 const globalServer: McpServer = {
   id: McpServerId.make("builtin-exa"),
