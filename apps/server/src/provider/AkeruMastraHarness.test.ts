@@ -612,6 +612,64 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("retries a backed-off observation when its backoff elapses without another turn", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-backoff-"));
+    const calls: string[] = [];
+    const retried = Promise.withResolvers<void>();
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async (input: { threadId: string }) => {
+        calls.push(input.threadId);
+        if (calls.length === 1) throw new Error("observer exploded");
+        retried.resolve();
+        return { observed: false, reflected: false, record: {} } as never;
+      });
+    const harness = await makeObservationHarness(directory);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      await harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" });
+      expect(calls).toEqual(["thread-a"]);
+      assert.equal(queuedObservations(directory)[0]!.attempts, 1);
+
+      // No turn or explicit drain follows: only the scheduled retry can observe.
+      await vi.advanceTimersByTimeAsync(30_000);
+      await retried.promise;
+      await harness.drainObservationQueue!();
+      expect(calls).toEqual(["thread-a", "thread-a"]);
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      vi.useRealTimers();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("discards a backed-off observation when the chat's memory is cleared", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-clear-"));
+    const calls: string[] = [];
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async (input: { threadId: string }) => {
+        calls.push(input.threadId);
+        throw new Error("observer exploded");
+      });
+    const harness = await makeObservationHarness(directory);
+    try {
+      await harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" });
+      assert.equal(queuedObservations(directory).length, 1);
+
+      await harness.clearObservationalMemory!("thread-a");
+      assert.deepEqual(queuedObservations(directory), []);
+      await harness.drainObservationQueue!();
+      expect(calls).toEqual(["thread-a"]);
+    } finally {
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("drops a queued observation after three attempts and notifies the drop", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-retries-"));
     const observe = vi
