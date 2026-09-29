@@ -1376,10 +1376,12 @@ describe("AkeruMastraHarness", () => {
         .mockRejectedValue(new Error("observer down"));
       const warn = vi.spyOn(console, "log").mockImplementation(() => undefined);
       const notices: string[] = [];
+      const errors: string[] = [];
       let noticeFails = true;
       const harness = await makeObservationHarness(open, directory, {
         onObservationDropped: (input) => {
           notices.push(input.observationId);
+          errors.push(input.error.message);
           if (noticeFails) throw new Error("orchestration unavailable");
         },
       });
@@ -1407,6 +1409,8 @@ describe("AkeruMastraHarness", () => {
         noticeFails = false;
         await harness.drainObservationQueue!();
         assert.deepEqual(notices, [kept[0]!.id, kept[0]!.id]);
+        // The retried notice still carries the observer's failure.
+        assert.deepEqual(errors, ["observer down", "observer down"]);
         assert.deepEqual(queuedObservations(directory), []);
         // Retrying the notice does not run the observer again.
         expect(observe).toHaveBeenCalledTimes(3);

@@ -1239,6 +1239,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   // cannot abort observe, so close keeps these claimed until the lease expires
   // instead of letting another harness observe the same turn concurrently.
   const observingRows = new Set<string>();
+  // The observer failure behind each dropped row whose notice is waiting for a
+  // retry, so the retried notice reports the original error.
+  const droppedCauses = new Map<string, unknown>();
 
   const enqueueObservation = observationQueueDb.prepare(
     `INSERT OR IGNORE INTO akeru_observation_queue
@@ -1482,6 +1485,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         attempts,
         error: cause instanceof Error ? cause : new Error(String(cause)),
       });
+      droppedCauses.delete(item.id);
       removeQueuedObservation.run(item.id, claim);
     } catch (callbackCause) {
       await Effect.runPromise(
@@ -1493,8 +1497,10 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       );
       // Keep the row so a later drain retries the notice.
       if (attempts >= OBSERVATION_NOTICE_ATTEMPTS) {
+        droppedCauses.delete(item.id);
         removeQueuedObservation.run(item.id, claim);
       } else {
+        droppedCauses.set(item.id, cause);
         releaseWithBackoff(item.id, claim, attempts);
       }
     }
@@ -1530,7 +1536,8 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
             item,
             now,
             item.attempts + 1,
-            new Error("Observation failed repeatedly."),
+            // A restarted harness no longer has the original failure.
+            droppedCauses.get(item.id) ?? new Error("Observation failed repeatedly."),
           );
           continue;
         }
