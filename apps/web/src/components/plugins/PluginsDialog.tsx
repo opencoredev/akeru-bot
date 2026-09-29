@@ -717,7 +717,12 @@ function PluginsDialogForEnvironment({
             nothingInstalled={filter === "Installed" && query.trim() === ""}
           />
           {filter === "All" || filter === "Installed" ? (
-            <ComposioSection environmentId={environmentId} query={query} catalog={FULL_CATALOG} />
+            <ComposioSection
+              environmentId={environmentId}
+              query={query}
+              catalog={FULL_CATALOG}
+              installedOnly={filter === "Installed"}
+            />
           ) : null}
           {filter === "Installed" ? (
             <>

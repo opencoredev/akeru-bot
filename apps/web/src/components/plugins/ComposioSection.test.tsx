@@ -32,6 +32,15 @@ describe("composioSearchResults", () => {
     );
     expect(results.map((result) => result.slug)).toEqual(["slack"]);
   });
+
+  it("keeps only connected toolkits for the Installed filter", () => {
+    const results = composioSearchResults(
+      [toolkit("slack", "Slack"), toolkit("notion", "Notion")],
+      catalog,
+      activeComposioToolkitIds(connections),
+    );
+    expect(results.map((result) => result.slug)).toEqual(["slack"]);
+  });
 });
 
 describe("activeComposioToolkitIds", () => {

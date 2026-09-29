@@ -45,11 +45,16 @@ export function composioConnectionLabel(status: ComposioConnectionStatus): strin
 export function composioSearchResults(
   toolkits: readonly ComposioToolkit[],
   catalog: readonly PluginDirectoryDefinition[],
+  connectedOnly?: ReadonlySet<string>,
 ): readonly ComposioToolkit[] {
   const brokered = new Set(
     catalog.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
   );
-  return toolkits.filter((toolkit) => !brokered.has(toolkit.slug));
+  return toolkits.filter(
+    (toolkit) =>
+      !brokered.has(toolkit.slug) &&
+      (connectedOnly === undefined || connectedOnly.has(toolkit.slug)),
+  );
 }
 
 export function activeComposioToolkitIds(
@@ -119,10 +124,13 @@ export function ComposioSection({
   environmentId,
   query,
   catalog,
+  installedOnly = false,
 }: {
   readonly environmentId: EnvironmentId;
   readonly query: string;
   readonly catalog: readonly PluginDirectoryDefinition[];
+  /** The Installed filter only lists apps that already have a connected account. */
+  readonly installedOnly?: boolean;
 }) {
   const status = useEnvironmentQuery(
     serverEnvironment.composioStatus({ environmentId, input: {} }),
@@ -238,7 +246,12 @@ export function ComposioSection({
       .catch(() => toastManager.add({ type: "error", title: "Could not open Composio" }));
   };
 
-  const results = composioSearchResults(toolkits.data ?? [], catalog);
+  const connectedToolkitIds = activeComposioToolkitIds(connections);
+  const results = composioSearchResults(
+    toolkits.data ?? [],
+    catalog,
+    installedOnly ? connectedToolkitIds : undefined,
+  );
 
   return (
     <>
@@ -321,7 +334,7 @@ export function ComposioSection({
       {searching ? (
         <ComposioToolkitResults
           toolkits={results}
-          connectedToolkitIds={activeComposioToolkitIds(connections)}
+          connectedToolkitIds={connectedToolkitIds}
           pendingToolkitId={
             pendingId?.startsWith("toolkit:") ? pendingId.slice("toolkit:".length) : null
           }
