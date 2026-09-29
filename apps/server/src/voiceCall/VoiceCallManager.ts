@@ -379,6 +379,8 @@ const make = (options?: VoiceCallManagerOptions) =>
         const pinned = yield* lock.withPermits(1)(
           Effect.gen(function* () {
             if (operations.size >= 8 || operations.has(id)) return yield* voiceFailure("busy");
+            if (input.callId === undefined && active && active.ownerId !== ownerId)
+              return yield* voiceFailure("call-not-active");
             if (
               input.callId !== undefined &&
               (active?.callId !== input.callId ||

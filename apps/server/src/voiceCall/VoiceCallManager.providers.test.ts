@@ -113,6 +113,11 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
     );
     assert.equal(stolen._tag, "Failure");
     if (stolen._tag === "Failure") assert.equal(stolen.failure.reason, "call-not-active");
+    const standalone = yield* Effect.result(
+      manager.synthesize({ operationId: "standalone", text: "Hello" }, "other"),
+    );
+    assert.equal(standalone._tag, "Failure");
+    if (standalone._tag === "Failure") assert.equal(standalone.failure.reason, "call-not-active");
     yield* manager.synthesize(
       { operationId: "owned", callId: started.call.callId, text: "Hello" },
       "owner",
