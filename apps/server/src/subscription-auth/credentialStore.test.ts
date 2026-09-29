@@ -200,6 +200,22 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("keeps an earlier backup when another damaged file is replaced", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { authPath } = yield* authFile;
+      yield* fs.writeFileString(authPath, "{first damage");
+      const store = yield* subscriptionCredentialStore(authPath);
+      yield* store.update((data) => ({ ...data, xai: currentFormat.xai }));
+
+      yield* fs.writeFileString(authPath, "{second damage");
+      yield* store.update((data) => ({ ...data, anthropic: currentFormat.anthropic }));
+
+      assert.strictEqual(yield* fs.readFileString(`${authPath}.corrupt`), "{first damage");
+      assert.strictEqual(yield* fs.readFileString(`${authPath}.corrupt.1`), "{second damage");
+    }),
+  );
+
   it.effect("restores a damaged credential file when its replacement write fails", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

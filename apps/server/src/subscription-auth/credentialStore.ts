@@ -116,7 +116,8 @@ export interface SubscriptionCredentialStore {
   readonly reload: Effect.Effect<CredentialStoreState>;
   /**
    * Reread, apply `f`, and write atomically. A damaged file is kept beside the
-   * original as `<file>.corrupt` before it is replaced.
+   * original as `<file>.corrupt` (or `<file>.corrupt.N` when that name is taken)
+   * before it is replaced.
    */
   readonly update: (
     f: (data: SubscriptionAuthData) => SubscriptionAuthData,
@@ -295,7 +296,15 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
         Effect.gen(function* () {
           const loaded = settle(state, yield* Effect.result(read), yield* now);
           if (loaded.loadError?.reason === "unreadable") return yield* loaded.loadError;
-          const backupPath = `${filePath}.corrupt`;
+          // Earlier backups stay: a later damaged file gets the next free name.
+          let backupPath = `${filePath}.corrupt`;
+          for (let index = 1; loaded.loadError?.reason === "corrupt"; index += 1) {
+            const taken = yield* fs
+              .exists(backupPath)
+              .pipe(Effect.mapError((cause) => storeError("write", cause)));
+            if (!taken) break;
+            backupPath = `${filePath}.corrupt.${index}`;
+          }
           if (loaded.loadError?.reason === "corrupt") {
             yield* fs
               .rename(filePath, backupPath)
