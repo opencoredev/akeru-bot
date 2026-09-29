@@ -59,7 +59,10 @@ export function DictationControls({
     cancelCallback.current();
   };
   useEffect(() => {
-    if (blocked) cancel();
+    if (!blocked) return;
+    // A blocked slot cannot retry, so settle a failed dictation and give the send slot back.
+    if (status === "failed") cancelCallback.current();
+    else cancel();
   }, [blocked, status]);
   useEffect(() => () => cancel(), []);
   const start = () => {

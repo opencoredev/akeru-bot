@@ -34,6 +34,8 @@ export function DictationControls({
   onBlockedPress,
 }: DictationControlsProps) {
   const holding = useRef(false);
+  const holdStartedAt = useRef(0);
+  const startedThisGesture = useRef(false);
   const iconColor = useThemeColor("--color-icon");
   const active = status === "requesting" || status === "recording";
   const busy = active || status === "transcribing";
@@ -58,7 +60,10 @@ export function DictationControls({
     cancelCallback.current();
   };
   useEffect(() => {
-    if (blocked) cancel();
+    if (!blocked) return;
+    // A blocked slot cannot retry, so settle a failed dictation and give the send slot back.
+    if (status === "failed") cancelCallback.current();
+    else cancel();
   }, [blocked, status]);
   useEffect(() => () => cancel(), []);
   const start = () => {
@@ -122,11 +127,20 @@ export function DictationControls({
         )
           return;
         holding.current = true;
+        holdStartedAt.current = Date.now();
+        startedThisGesture.current = !active;
         if (!active) start();
       }}
       onResponderRelease={() => {
         if (!holding.current) return;
         holding.current = false;
+        // A tap starts recording; only a real hold finishes on release.
+        if (
+          appearance === "send-slot" &&
+          startedThisGesture.current &&
+          Date.now() - holdStartedAt.current < 220
+        )
+          return;
         onRelease();
       }}
       onResponderTerminate={() => {

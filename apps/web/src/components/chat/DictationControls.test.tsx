@@ -180,6 +180,19 @@ describe("DictationControls", () => {
     expect(handlers.onCancel).toHaveBeenCalled();
   });
 
+  it("settles a failed dictation when voice becomes unavailable", () => {
+    const handlers = callbacks();
+    render({ status: "failed", appearance: "send-slot", ...handlers });
+    expect(handlers.onCancel).not.toHaveBeenCalled();
+    render({
+      status: "failed",
+      appearance: "send-slot",
+      unavailableReason: "Voice is offline",
+      ...handlers,
+    });
+    expect(handlers.onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a visible cancel while a send-slot recording runs", () => {
     const handlers = callbacks();
     hooks.beginRender();
