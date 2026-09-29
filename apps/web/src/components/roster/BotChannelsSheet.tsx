@@ -25,7 +25,7 @@ import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentSessionState } from "../../state/session";
-import { openSettings } from "../../settingsDialogStore";
+import { openSettings, setSettingsChannelProvider } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ChannelProjectSelect } from "../settings/ChannelProjectSelect";
 import { channelSettingsTarget } from "../settings/channelProviderMeta";
@@ -192,6 +192,8 @@ export function BotChannelsSheet({
 
   const openChannelSettings = (provider?: ChannelProvider) => {
     onOpenChange(false);
+    // Settings keeps its selected channel tab in the store, so a repair opens on that provider.
+    if (provider) setSettingsChannelProvider(provider);
     openSettings("channels", provider ? channelSettingsTarget(provider) : null, environmentId);
   };
 

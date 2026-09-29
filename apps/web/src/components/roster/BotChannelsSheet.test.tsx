@@ -11,6 +11,7 @@ const fixtures = vi.hoisted(() => ({
   scopes: [] as string[],
   toast: vi.fn(),
   openSettings: vi.fn(),
+  setSettingsChannelProvider: vi.fn(),
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   commands: {
     attach: vi.fn(),
@@ -49,7 +50,10 @@ vi.mock("../../hooks/useSettings", () => ({
     { id: "profile-1", name: "Fixture line", provider: "telegram", externalIdentity: null },
   ],
 }));
-vi.mock("../../settingsDialogStore", () => ({ openSettings: fixtures.openSettings }));
+vi.mock("../../settingsDialogStore", () => ({
+  openSettings: fixtures.openSettings,
+  setSettingsChannelProvider: fixtures.setSettingsChannelProvider,
+}));
 vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({
@@ -99,6 +103,7 @@ describe("BotChannelsSheet project selection", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
+    fixtures.setSettingsChannelProvider.mockReset();
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
@@ -166,6 +171,7 @@ describe("BotChannelsSheet health and repair", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
+    fixtures.setSettingsChannelProvider.mockReset();
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
@@ -196,6 +202,7 @@ describe("BotChannelsSheet health and repair", () => {
     expect(html).not.toContain("Fixed server copy.");
     expect(fixtures.buttons.has("Disconnect")).toBe(true);
     fixtures.buttons.get("Update credentials")?.onClick?.();
+    expect(fixtures.setSettingsChannelProvider).toHaveBeenCalledWith("telegram");
     expect(fixtures.openSettings).toHaveBeenCalledWith(
       "channels",
       "channel-telegram",

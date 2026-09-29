@@ -109,6 +109,11 @@ export function settingsSectionFromPathname(pathname: string): SettingsSection {
     : "general";
 }
 
+/** Select the Bot channels tab from outside React. */
+export function setSettingsChannelProvider(provider: ChannelProvider): void {
+  useSettingsDialogStore.getState().setChannelProvider(provider);
+}
+
 /** The selected Bot channels tab and its setter. */
 export function useSettingsChannelProvider(): readonly [
   ChannelProvider,
