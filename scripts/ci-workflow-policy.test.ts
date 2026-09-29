@@ -151,10 +151,15 @@ describe("CI workflow budget", () => {
       "pull-requests": "write",
     });
     expect(versionJob?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
+    expect(versionJob?.steps.some((step) => step.uses?.includes("changesets/action@"))).toBe(false);
+    const version = versionJob?.steps.find((step) => step.id === "version");
+    expect(version?.run).toContain("pnpm release:version");
     const changesets = versionJob?.steps.find((step) => step.id === "changesets");
-    expect(changesets?.uses).toContain("changesets/action@");
-    expect(changesets?.with?.version).toBe("pnpm release:version");
-    expect(changesets?.with?.createGithubReleases).toBe(false);
+    expect(changesets?.if).toBe("steps.version.outputs.changed == 'true'");
+    // The PR lookup matches head.ref, since the pulls `head` filter misses this fork's PR.
+    expect(changesets?.run).toContain(".head.ref == ");
+    expect(changesets?.run).toContain("gh pr edit");
+    expect(changesets?.run).not.toContain("gh release");
     const dispatch = versionJob?.steps.find(
       (step) => step.name === "Run checks for the updated version branch",
     );
