@@ -70,6 +70,39 @@ describe("theme failure handling", () => {
     }
   });
 
+  it("keeps a mix saved only under the legacy key when a theme change fails", async () => {
+    const storage = createStorage();
+    storage.setItem("t3code:theme-halves:v1", JSON.stringify({ dark: "grove" }));
+    const setItem = storage.setItem.bind(storage);
+    storage.setItem = (key, value) => {
+      if (key === "akeru:theme") throw new Error("storage quota exceeded");
+      setItem(key, value);
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.doMock("react", () => ({
+      useCallback: <A>(callback: A) => callback,
+      useEffect: () => undefined,
+      useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
+    }));
+    vi.stubGlobal("window", {
+      addEventListener: () => undefined,
+      localStorage: storage,
+      matchMedia: () => ({
+        matches: false,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+      removeEventListener: () => undefined,
+    });
+
+    const { readThemeHalves, useTheme } = await import("./useTheme");
+    const before = readThemeHalves();
+
+    expect(before).not.toBeNull();
+    expect(useTheme().setTheme("akeru-paper")).toBe(false);
+    expect(readThemeHalves()).toEqual(before);
+  });
+
   it("uses Akeru Paper for a fresh profile", async () => {
     vi.stubGlobal("window", { localStorage: createStorage() });
 

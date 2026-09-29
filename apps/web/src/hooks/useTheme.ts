@@ -503,7 +503,9 @@ export function useTheme() {
       // Choosing a whole theme replaces any automatic-mode mix. The mix is
       // captured first so a failed preference write can put it back instead
       // of erasing it or leaving it attached to the new theme.
-      const previousHalvesRaw = window.localStorage.getItem(THEME_HALVES_STORAGE_KEY);
+      const previousHalvesRaw =
+        window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY);
       window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_THEME_HALVES_STORAGE_KEY);
       try {
