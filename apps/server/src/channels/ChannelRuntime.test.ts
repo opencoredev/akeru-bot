@@ -1291,23 +1291,24 @@ describe("channel runtime", () => {
       }),
     );
 
-    it.effect("restores the previous project when the old transport fails to shut down", () =>
+    it.effect("keeps the old listener reachable when shutdown prevents a project move", () =>
       Effect.gen(function* () {
         const events: Array<string> = [];
+        const callbacks: Array<
+          Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
+        > = [];
+        let shutdownFails = true;
         const harness = makeHarness({
-          startTransport: async (input) => {
-            if (input.targetProjectId === SECOND_PROJECT_ID) {
-              events.push(`fail:${input.targetProjectId}`);
-              throw new Error("transport refused");
-            }
+          startTransport: async (input, onDirectMessage) => {
             events.push(`start:${input.targetProjectId}`);
+            callbacks.push(onDirectMessage);
             return {
               externalIdentity: "@akeru",
               runtime: {
                 post: async () => undefined,
                 shutdown: async () => {
                   events.push(`stop:${input.targetProjectId}`);
-                  throw new Error("shutdown failed");
+                  if (shutdownFails) throw new Error("shutdown failed");
                 },
               },
             };
@@ -1321,22 +1322,45 @@ describe("channel runtime", () => {
           PROJECT_ID,
           "telegram",
         );
+        const before = harness.readModel().bots[0]?.channelBindings[0];
+        const sequenceBefore = harness.readModel().snapshotSequence;
 
         yield* expectFailureMessage(
           changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID),
-          "transport refused",
+          "shutdown failed",
         );
 
+        expect(events).toEqual([`start:${PROJECT_ID}`, `stop:${PROJECT_ID}`]);
+        expect(harness.readModel().bots[0]?.channelBindings[0]).toEqual(before);
+        expect(harness.readModel().snapshotSequence).toBe(sequenceBefore);
+        const message = {
+          externalThreadId: "telegram:failed-project-move",
+          externalMessageId: "still-reachable",
+          text: "Use the original project",
+        };
+        yield* Effect.promise(async () => callbacks[0]?.(message));
+        expect(
+          harness.commands.filter((command) => command.type === "thread.turn.start"),
+        ).toHaveLength(1);
+        expect(harness.readModel().threads[0]?.projectId).toBe(PROJECT_ID);
+
+        yield* shutdownAllChannels();
+        shutdownFails = false;
+        yield* shutdownAllChannels();
         expect(events).toEqual([
           `start:${PROJECT_ID}`,
           `stop:${PROJECT_ID}`,
-          `fail:${SECOND_PROJECT_ID}`,
-          `start:${PROJECT_ID}`,
+          `stop:${PROJECT_ID}`,
+          `stop:${PROJECT_ID}`,
         ]);
-        expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
-          projectId: PROJECT_ID,
-          status: "connected",
-        });
+        yield* Effect.promise(async () =>
+          callbacks[0]?.({ ...message, externalMessageId: "after-shutdown" }),
+        );
+        expect(
+          harness.commands.filter((command) => command.type === "thread.turn.start"),
+        ).toHaveLength(1);
+        yield* shutdownAllChannels();
+        expect(events).toHaveLength(4);
       }),
     );
 

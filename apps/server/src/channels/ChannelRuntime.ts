@@ -948,8 +948,7 @@ const stopRuntime = (ctx: ChannelRuntimeContext, botId: BotId, provider: Channel
     const key = runtimeKey(botId, provider);
     const runtime = ctx.runtimes.get(key);
     if (!runtime) return Effect.void;
-    ctx.runtimes.delete(key);
-    return runtime.shutdown;
+    return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
   });
 
 /** Runs `operation` for each running transport under its channel lock, ignoring failures. */
@@ -998,8 +997,7 @@ const shutdownAllChannels = (ctx: ChannelRuntimeContext) =>
   forEachRuntime(ctx, (key, runtime) =>
     Effect.suspend(() => {
       if (ctx.runtimes.get(key) !== runtime) return Effect.void;
-      ctx.runtimes.delete(key);
-      return runtime.shutdown;
+      return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
     }),
   );
 
@@ -1911,9 +1909,7 @@ const changeChannelProject = (
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
-      // The old transport is already unregistered, so a failed shutdown must
-      // still reach the start and restore paths below.
-      yield* stopRuntime(ctx, botId, provider).pipe(Effect.ignoreCause({ log: true }));
+      yield* stopRuntime(ctx, botId, provider);
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
           const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
