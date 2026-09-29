@@ -345,6 +345,75 @@ describe("group runtime errors", () => {
     expect(secondInput.threadId).toBe(firstInput.threadId);
   });
 
+  it("keeps a queued message in its chat when a newer chat appears after switching groups", async () => {
+    let acceptFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstAccepted = new Promise<void>((resolve) => (acceptFirst = resolve));
+    const firstStartedPromise = new Promise<void>((resolve) => (firstStarted = resolve));
+    mocks.startTurn = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        firstStarted();
+        await firstAccepted;
+        return { _tag: "Success" };
+      })
+      .mockResolvedValue({ _tag: "Success" });
+    mocks.serverGroups = [{ id: "group-1" }, { id: "group-2" }];
+    mocks.projects = [
+      {
+        id: "project-1",
+        environmentId: mocks.primaryEnvironmentId,
+        defaultModelSelection: null,
+      },
+    ];
+    mocks.groups = ["group-1", "group-2"].map((id) => ({
+      id,
+      name: id,
+      bossBotId: "bot-1",
+      members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+      createdAt: "2026-09-13T00:00:00.000Z",
+      updatedAt: "2026-09-13T00:00:00.000Z",
+    })) as Group[];
+    mocks.bots = [
+      {
+        id: "bot-1",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
+        runtimeMode: "full-access",
+      } as Bot,
+    ];
+    const chat = (id: string, updatedAt: string) => ({
+      environmentId: mocks.primaryEnvironmentId,
+      id: ThreadId.make(id),
+      groupId: "group-1",
+      updatedAt,
+      archivedAt: null,
+      runtimeMode: "full-access",
+    });
+    mocks.threadShells = [chat("thread-x", "2026-09-13T00:00:00.000Z")];
+    mocks.threadShell = mocks.threadShells[0]!;
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+    const first = runtime.send("Compare A and B", []);
+    const queued = runtime.send("Also include C", []);
+    await firstStartedPromise;
+    hooks.beginRender();
+    useGroupThreadRuntime("group-2");
+    // Another device starts a newer chat in the group before the queue drains.
+    mocks.threadShells = [
+      chat("thread-x", "2026-09-13T00:00:00.000Z"),
+      chat("thread-y", "2026-09-13T00:01:00.000Z"),
+    ];
+    mocks.threadShell = mocks.threadShells[1]!;
+    hooks.beginRender();
+    useGroupThreadRuntime("group-1");
+
+    acceptFirst();
+    expect(await Promise.all([first, queued])).toEqual([true, true]);
+    expect(mocks.startTurn.mock.calls[1]?.[0].input.threadId).toBe("thread-x");
+  });
+
   it("surfaces the persisted provider error for a failed turn", () => {
     mocks.threadShells = [
       {

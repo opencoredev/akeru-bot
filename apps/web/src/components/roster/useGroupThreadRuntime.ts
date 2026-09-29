@@ -314,15 +314,18 @@ export function useGroupThreadRuntime(groupId: string) {
       queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
-      // Bind the queued send to this group's chat; the ref moves on if the user switches groups.
+      // Bind the queued send to the chat selected at submission; the ref moves on if the user
+      // switches groups.
       const queuedRetained = retainedThreadRef.current;
+      const queuedThreadRef = queuedRetained.threadRef;
       return sendQueueRef.current.enqueue(async () => {
         setError(null);
         const createdAt = new Date().toISOString();
-        // Leaving and returning to this group replaces the ref, so prefer the live one.
+        // Leaving and returning to this group replaces the ref. A send queued before the
+        // group had a chat joins the one an earlier send created there.
         const live = retainedThreadRef.current;
         const retained = live.groupId === groupId ? live : queuedRetained;
-        const currentThreadRef = retained.threadRef;
+        const currentThreadRef = queuedThreadRef ?? queuedRetained.threadRef ?? retained.threadRef;
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
 
