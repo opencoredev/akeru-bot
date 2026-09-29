@@ -230,7 +230,7 @@ describe("subscription runtime credentials", () => {
       ANTHROPIC_API_KEY: "new-key",
       ANTHROPIC_BASE_URL: "https://proxy.example",
     });
-    auth.logout("anthropic");
+    await auth.logout("anthropic");
     expect(await runtimeEnvironment(secretsDir, "anthropic", environment)).toBe(environment);
     expect(environment.CLAUDE_CODE_OAUTH_TOKEN).toBe("native-oauth");
   });
