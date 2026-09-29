@@ -242,34 +242,26 @@ export function HomeHeader(props: {
       >
         <View className="w-full max-w-[720px] self-center">
           <View className="flex-row items-center gap-3">
-            {/* The profile slot doubles as the connection status surface:
-                while an environment reconnects, a status label fades in
-                beside the circle (no layout shift in the list below). */}
-            <WorkspaceConnectionTitle
-              grow
-              onPress={props.onOpenEnvironments}
-              brand={
-                <ControlPillMenu
-                  actions={menuActions}
-                  onPressAction={handleMenuAction}
-                  title={selectedEnvironmentLabel ?? "All environments"}
-                >
-                  <Pressable
-                    accessibilityHint="Opens filters, archived chats, and settings"
-                    accessibilityLabel={`Menu, ${hasCustomListOptions ? "filters active" : "no filters"}`}
-                    accessibilityRole="button"
-                    className="size-11 items-center justify-center rounded-full border border-border-subtle bg-subtle"
-                  >
-                    <RNText className="text-[15px] font-t3-bold tracking-[0.5px] text-foreground-secondary">
-                      {initials}
-                    </RNText>
-                    {hasCustomListOptions ? (
-                      <View className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-screen bg-blue-500" />
-                    ) : null}
-                  </Pressable>
-                </ControlPillMenu>
-              }
-            />
+            <ControlPillMenu
+              actions={menuActions}
+              onPressAction={handleMenuAction}
+              title={selectedEnvironmentLabel ?? "All environments"}
+            >
+              <Pressable
+                accessibilityHint="Opens filters, archived chats, and settings"
+                accessibilityLabel={`Menu, ${hasCustomListOptions ? "filters active" : "no filters"}`}
+                accessibilityRole="button"
+                className="size-11 items-center justify-center rounded-full border border-border-subtle bg-subtle"
+              >
+                <RNText className="text-[15px] font-t3-bold tracking-[0.5px] text-foreground-secondary">
+                  {initials}
+                </RNText>
+                {hasCustomListOptions ? (
+                  <View className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-screen bg-blue-500" />
+                ) : null}
+              </Pressable>
+            </ControlPillMenu>
+            <WorkspaceConnectionTitle grow onPress={props.onOpenEnvironments} brand={null} />
 
             <Pressable
               accessibilityLabel={searchOpen ? "Close search" : "Search chats"}
