@@ -612,7 +612,7 @@ describe("image generation", () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const cancel = vi.fn();
     const fetchFn = vi.fn(async (url: string | URL) =>
       String(url).includes("openai")
