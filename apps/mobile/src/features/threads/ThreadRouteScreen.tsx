@@ -307,7 +307,6 @@ function ThreadRouteContent(
     }).finally(() => setResumingThread(false));
   }, [resumeThreadTurn, resumingThread, selectedThread]);
 
-
   const splitLeftHeaderItems = useMemo<NativeHeaderItems>(
     () => [
       {
@@ -490,7 +489,6 @@ function ThreadRouteContent(
       </View>
     </>
   );
-
 }
 
 /**
