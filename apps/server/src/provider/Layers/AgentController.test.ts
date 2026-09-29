@@ -370,17 +370,21 @@ function makeMemoryOnlyCredentialOptions() {
 function makeUsageLedger() {
   const reserve = vi.fn<BotUsageLedgerShape["reserve"]>(() => Effect.succeed({} as never));
   const settle = vi.fn<BotUsageLedgerShape["settle"]>(() => Effect.succeed({} as never));
+  const recordMeasurement = vi.fn<BotUsageLedgerShape["recordMeasurement"]>(() =>
+    Effect.succeed({} as never),
+  );
   const unused = () => Effect.die("unused");
   return {
     reserve,
     settle,
+    recordMeasurement,
     service: BotUsageLedger.of({
       reserve,
       settle,
       bindTurn: unused,
       settleForTurn: unused,
       finalizeForTurn: unused,
-      recordMeasurement: unused,
+      recordMeasurement,
       summarize: unused,
       pricingTotals: unused,
     }),
@@ -1094,6 +1098,64 @@ describe("AgentControllerLive", () => {
       }),
       bridge.service,
       mastra.factory,
+    );
+  });
+
+  it.effect("records tool calls without holding bot token capacity", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const usage = makeUsageLedger();
+    const botId = BotId.make("bot-tool-usage");
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          botId,
+          memoryAccess: {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId: codexThreadId,
+            projectId: ProjectId.make("project-tool-usage"),
+            workspaceRoot: "/workspace/tool-usage",
+            botId,
+            groupId: null,
+            respondingBotId: botId,
+            groupMemberBotIds: [],
+          },
+        });
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "memory",
+            toolCallId: "usage-tool-call",
+            input: { target: "user", operations: [] },
+            approvalMode: "require-grant",
+          }),
+        );
+
+        expect(usage.reserve).not.toHaveBeenCalled();
+        expect(usage.recordMeasurement).toHaveBeenCalledTimes(1);
+        expect(usage.recordMeasurement.mock.calls[0]?.[0]).toMatchObject({
+          sourceKey: `tool:${codexThreadId}:usage-tool-call`,
+          botId,
+          category: "tool",
+          inputTokens: 0,
+          outputTokens: 0,
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      usage.service,
     );
   });
 

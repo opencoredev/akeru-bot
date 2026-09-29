@@ -622,7 +622,15 @@ const make = (options?: AgentControllerLiveOptions) =>
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
     >();
     const sessions = new Map<string, ActiveSession>();
-    const toolUsageReservations = new Set<string>();
+    // Tool calls consume no model tokens, so they are recorded on finish without holding cap.
+    const toolUsageStarts = new Map<
+      string,
+      {
+        readonly turnId: TurnId | null;
+        readonly provider: ProviderDriverKind | null;
+        readonly model: string | null;
+      }
+    >();
     // Providers only promise tool-call ids unique within a chat.
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
@@ -783,49 +791,37 @@ const make = (options?: AgentControllerLiveOptions) =>
       },
       onToolStart: async (input, session) => {
         if (!session.botId) return;
+        const active = sessions.get(input.threadId);
+        toolUsageStarts.set(toolUsageKey(input), {
+          turnId: active?.activeTurn?.turnId ?? null,
+          provider: active?.provider ?? null,
+          model: active?.model ?? null,
+        });
+      },
+      onToolFinish: async (input, session) => {
         const key = toolUsageKey(input);
+        const started = toolUsageStarts.get(key);
+        toolUsageStarts.delete(key);
+        if (!session.botId || !started) return;
         await runPromise(
           botUsageLedger
-            .reserve({
+            .recordMeasurement({
               reservationId: AkeruUsageReservationId.make(key),
               sourceKey: key,
               botId: session.botId,
               threadId: ThreadId.make(input.threadId),
-              turnId: sessions.get(input.threadId)?.activeTurn?.turnId ?? null,
+              turnId: started.turnId,
               category: "tool",
-              maximumTokens: 1,
-              capLimit: Number.MAX_SAFE_INTEGER,
-              provider: sessions.get(input.threadId)?.provider ?? null,
-              model: sessions.get(input.threadId)?.model ?? null,
-              createdAt: nowIso(),
-            })
-            .pipe(
-              Effect.tap(() => Effect.sync(() => toolUsageReservations.add(key))),
-              Effect.catchCause((cause) =>
-                Effect.logWarning("failed to reserve tool usage", {
-                  toolCallId: input.toolCallId,
-                  cause,
-                }),
-              ),
-            ),
-        );
-      },
-      onToolFinish: async (input, session) => {
-        const key = toolUsageKey(input);
-        if (!session.botId || !toolUsageReservations.delete(key)) return;
-        await runPromise(
-          botUsageLedger
-            .settle({
-              reservationId: AkeruUsageReservationId.make(key),
-              state: "reported",
               inputTokens: 0,
               outputTokens: 0,
               reasoningTokens: null,
-              settledAt: nowIso(),
+              provider: started.provider,
+              model: started.model,
+              createdAt: nowIso(),
             })
             .pipe(
               Effect.catchCause((cause) =>
-                Effect.logWarning("failed to settle tool usage", {
+                Effect.logWarning("failed to record tool usage", {
                   toolCallId: input.toolCallId,
                   cause,
                 }),
