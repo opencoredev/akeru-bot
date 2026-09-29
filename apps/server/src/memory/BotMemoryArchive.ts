@@ -86,6 +86,8 @@ async function prepareImport(input: {
   readonly threadId: ThreadId;
   readonly archive: AkeruMarkdownMemoryArchiveV3Value;
   readonly currentConversation: AkeruConversationMemorySnapshot;
+  /** When false, the archive may restore every file except a changed MEMORY.md. */
+  readonly privateBotMemory?: boolean;
 }) {
   const { archive, access } = input;
   if (archive.anchorThreadId !== input.threadId) {
@@ -161,6 +163,17 @@ async function prepareImport(input: {
             : ("changed" as const),
     };
   });
+  if (
+    input.privateBotMemory === false &&
+    prepared.some(
+      (document) => document.target === "memory" && document.classification !== "unchanged",
+    )
+  ) {
+    throw new BotMemoryError(
+      "invalid-operation",
+      "Private bot memory is turned off. Turn it on to restore MEMORY.md from this archive.",
+    );
+  }
   const currentStateChecksum = checksum(
     encodeMemoryArchiveJson({
       documents: [...currentByTarget.values()].map(({ target, content }) => ({ target, content })),
@@ -183,6 +196,7 @@ export async function previewBotMemoryImport(input: {
   readonly threadId: ThreadId;
   readonly archive: AkeruMarkdownMemoryArchiveV3Value;
   readonly currentConversation: AkeruConversationMemorySnapshot;
+  readonly privateBotMemory?: boolean;
 }): Promise<AkeruMarkdownMemoryImportPreview> {
   const prepared = await prepareImport(input);
   return {
@@ -199,6 +213,7 @@ export async function applyBotMemoryImport(input: {
   readonly archive: AkeruMarkdownMemoryArchiveV3Value;
   readonly currentConversation: AkeruConversationMemorySnapshot;
   readonly previewHash: string;
+  readonly privateBotMemory?: boolean;
   /** Restores or rolls back atomically, rejecting a stale expected snapshot before mutation. */
   readonly restoreConversation: (
     snapshot: AkeruConversationMemorySnapshot,

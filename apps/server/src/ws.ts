@@ -3156,6 +3156,9 @@ const makeWsRpcLayer = (
             WS_METHODS.memoryImportPreview,
             Effect.all({
               access: resolveBotMemoryAccess("documents.importPreview", input.threadId),
+              settings: serverSettings.getSettings.pipe(
+                Effect.mapError((cause) => memoryOperationError("documents.importPreview", cause)),
+              ),
               conversation: agentController.readConversationMemory
                 ? agentController
                     .readConversationMemory(input.threadId)
@@ -3171,7 +3174,7 @@ const makeWsRpcLayer = (
                     ),
                   ),
             }).pipe(
-              Effect.flatMap(({ access, conversation }) =>
+              Effect.flatMap(({ access, settings, conversation }) =>
                 Effect.tryPromise({
                   try: () =>
                     previewBotMemoryImport({
@@ -3180,6 +3183,7 @@ const makeWsRpcLayer = (
                       threadId: input.threadId,
                       archive: input.archive,
                       currentConversation: conversation,
+                      privateBotMemory: settings.memory.privateBotMemory,
                     }),
                   catch: (cause) => memoryOperationError("documents.importPreview", cause),
                 }),
@@ -3195,16 +3199,11 @@ const makeWsRpcLayer = (
               settings: serverSettings.getSettings.pipe(
                 Effect.mapError((cause) => memoryOperationError("documents.importApply", cause)),
                 Effect.flatMap((settings) =>
-                  settings.memory.enabled === false || settings.memory.privateBotMemory === false
+                  settings.memory.enabled === false
                     ? Effect.fail(
-                        memoryOperationError(
-                          "documents.importApply",
-                          settings.memory.enabled === false
-                            ? "Memory is turned off."
-                            : "Private bot memory is turned off.",
-                        ),
+                        memoryOperationError("documents.importApply", "Memory is turned off."),
                       )
-                    : Effect.void,
+                    : Effect.succeed(settings),
                 ),
               ),
               conversation: agentController.readConversationMemory
@@ -3222,7 +3221,7 @@ const makeWsRpcLayer = (
                     ),
                   ),
             }).pipe(
-              Effect.flatMap(({ access, conversation }) =>
+              Effect.flatMap(({ access, settings, conversation }) =>
                 Effect.tryPromise({
                   try: () =>
                     applyBotMemoryImport({
@@ -3232,6 +3231,7 @@ const makeWsRpcLayer = (
                       archive: input.archive,
                       currentConversation: conversation,
                       previewHash: input.previewHash,
+                      privateBotMemory: settings.memory.privateBotMemory,
                       restoreConversation: (snapshot, expectedSnapshot) =>
                         agentController.restoreConversationMemory
                           ? Effect.runPromise(
