@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import {
   isHostedPairingLink,
   listenForPairingHash,
+  takePairingHash,
   readHostedPairingLink,
   runHostedPairing,
 } from "./hostedPairing";
@@ -80,6 +81,26 @@ describe("listenForPairingHash", () => {
     stop();
     target.dispatchEvent(new Event("hashchange"));
     expect(calls).toEqual(["strip", "submit:abc"]);
+  });
+});
+
+describe("takePairingHash", () => {
+  it("leaves a link opened mid-submission for the next take", () => {
+    let busy = true;
+    const calls: string[] = [];
+    const options = {
+      read: () => "def",
+      isBusy: () => busy,
+      strip: () => calls.push("strip"),
+      submit: (value: string) => calls.push(`submit:${value}`),
+    };
+
+    takePairingHash(options);
+    expect(calls).toEqual([]);
+
+    busy = false;
+    takePairingHash(options);
+    expect(calls).toEqual(["strip", "submit:def"]);
   });
 });
 

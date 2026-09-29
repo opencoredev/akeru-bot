@@ -52,27 +52,36 @@ export function readHostedPairingLink(href: string): HostedPairingRequest | null
   return request && readHashParams(url).get("token")?.trim() === request.token ? request : null;
 }
 
+export interface PairingHashOptions<T> {
+  readonly read: () => T | null;
+  readonly isBusy: () => boolean;
+  readonly strip: () => void;
+  readonly submit: (value: T) => void;
+}
+
+/**
+ * Submits the pairing link in the address bar. Reads it with `read`, leaves it
+ * in place while a submission is in flight, strips the token from the address
+ * bar, then hands it to `submit`. Call it again when a submission fails so a
+ * link opened meanwhile is not lost.
+ */
+export function takePairingHash<T>(options: PairingHashOptions<T>): void {
+  const value = options.read();
+  if (value === null || options.isBusy()) return;
+  options.strip();
+  options.submit(value);
+}
+
 /**
  * Resubmits a pairing link opened again in this tab with its `#token`, a
- * same-document navigation that only fires `hashchange`. Reads the link with
- * `read`, skips it while a submission is in flight, strips the token from the
- * address bar, then hands it to `submit`. Returns the unsubscribe function.
+ * same-document navigation that only fires `hashchange`. See
+ * `takePairingHash`. Returns the unsubscribe function.
  */
 export function listenForPairingHash<T>(
   target: Pick<EventTarget, "addEventListener" | "removeEventListener">,
-  options: {
-    readonly read: () => T | null;
-    readonly isBusy: () => boolean;
-    readonly strip: () => void;
-    readonly submit: (value: T) => void;
-  },
+  options: PairingHashOptions<T>,
 ): () => void {
-  const onHashChange = () => {
-    const value = options.read();
-    if (value === null || options.isBusy()) return;
-    options.strip();
-    options.submit(value);
-  };
+  const onHashChange = () => takePairingHash(options);
   target.addEventListener("hashchange", onHashChange);
   return () => target.removeEventListener("hashchange", onHashChange);
 }
