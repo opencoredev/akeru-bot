@@ -1235,9 +1235,9 @@ const make = Effect.gen(function* () {
         ? ("enabled" as const)
         : ("disabled" as const);
     const threads: ThreadMentionSource[] = [];
-    for (const mentionedId of references.threadIds
-      .filter((id) => id !== threadId)
-      .slice(0, THREAD_MENTION_MAX_THREADS)) {
+    // Hidden or missing chats do not use up a context slot.
+    for (const mentionedId of references.threadIds.filter((id) => id !== threadId)) {
+      if (threads.length >= THREAD_MENTION_MAX_THREADS) break;
       const snapshot = yield* projectionSnapshotQuery
         .getThreadDetailSnapshot(ThreadId.make(mentionedId), {
           turnLimit: THREAD_MENTION_TURN_LIMIT,

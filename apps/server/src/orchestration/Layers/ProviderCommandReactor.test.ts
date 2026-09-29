@@ -2730,8 +2730,10 @@ describe("ProviderCommandReactor", () => {
       threadId: ThreadId.make("thread-deleted"),
     });
 
+    // Four excluded mentions come first, so a valid fifth one needs a free context slot.
+    await createWithMessage("thread-visible", "Visible plan", 4);
     const prompt =
-      "see @chat:thread-archived @chat:thread-deleted @chat:delegation-thread-worker @chat:thread-missing";
+      "see @chat:thread-archived @chat:thread-deleted @chat:delegation-thread-worker @chat:thread-missing @chat:thread-visible";
     await dispatch({
       type: "thread.turn.start",
       commandId: CommandId.make("cmd-turn-mentioning"),
@@ -2746,11 +2748,13 @@ describe("ProviderCommandReactor", () => {
       runtimeMode: "approval-required",
       createdAt: now,
     });
-    await waitFor(() => harness.sendTurn.mock.calls.length === 4);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 5);
 
-    const sent = harness.sendTurn.mock.calls[3]?.[0] as { readonly input?: string };
-    expect(sent.input).not.toContain("<chat_context");
-    expect(sent.input).not.toContain("secret from");
+    const sent = harness.sendTurn.mock.calls[4]?.[0] as { readonly input?: string };
+    expect(sent.input).toContain("secret from Visible plan");
+    expect(sent.input).not.toContain("secret from Archived plan");
+    expect(sent.input).not.toContain("secret from Deleted plan");
+    expect(sent.input).not.toContain("secret from Background work");
   });
 
   it("forwards plan interaction mode to the provider turn request", async () => {
