@@ -176,7 +176,8 @@ export class BotInboxService {
       existing.botName === incident.botName &&
       existing.taskOrRoutine === incident.taskOrRoutine &&
       existing.lastFailure === incident.lastFailure &&
-      existing.nextAction === incident.nextAction
+      existing.nextAction === incident.nextAction &&
+      existing.lastFailedRequestAt === incident.lastFailedRequestAt
     ) {
       return existing;
     }

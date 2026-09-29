@@ -133,6 +133,24 @@ describe("bot inbox incidents", () => {
     expect(reopened.resolvedAt).toBeUndefined();
   });
 
+  it("stays resolved after a repeated failure message with a newer timestamp", () => {
+    const { service } = makeService([
+      "2026-08-30T20:00:00.000Z",
+      "2026-08-30T20:01:00.000Z",
+      "2026-08-30T20:02:00.000Z",
+      "2026-08-30T20:03:00.000Z",
+    ]);
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
+    // Same message, newer provider failure while the item is still open.
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:01:00.000Z" });
+    const item = service.list()[0]!;
+    service.resolveById(item.id);
+
+    service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:01:00.000Z" });
+
+    expect(service.list()).toEqual([expect.objectContaining({ id: item.id, status: "resolved" })]);
+  });
+
   it("stays resolved when the sync carries no failure timestamp", () => {
     const { service } = makeService([
       "2026-08-30T20:00:00.000Z",
