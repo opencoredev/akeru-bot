@@ -547,6 +547,7 @@ describe("channel health and repair", () => {
       name: "Fixture line",
       botId: "bot-uuid",
       projectId: "project-uuid",
+      disconnected: false,
     });
     expect(fixtures.command).not.toHaveBeenCalled();
   });
