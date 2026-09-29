@@ -753,9 +753,9 @@ describe("ProviderRuntimeIngestion", () => {
         payload: {},
       });
       await harness.drain();
+      // The approval carries no turn id; it belongs to the active turn.
       harness.emit({
         ...base,
-        turnId,
         eventId: asEventId("waiting-approval"),
         type: "request.opened",
         requestId: ApprovalRequestId.make("waiting-approval"),
@@ -780,11 +780,11 @@ describe("ProviderRuntimeIngestion", () => {
       });
       await harness.drain();
       expect([...signals]).toEqual(["hourglass"]);
+      // A resolution without a request id answers one request, not the pending question too.
       harness.emit({
         ...base,
         eventId: asEventId("waiting-approval-resolved"),
         type: "request.resolved",
-        requestId: ApprovalRequestId.make("waiting-approval"),
         payload: { requestType: "command_execution_approval", decision: "accept" },
       });
       await harness.drain();

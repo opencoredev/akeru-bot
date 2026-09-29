@@ -1943,15 +1943,17 @@ const make = Effect.gen(function* () {
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
+      // Requests do not always carry a turn id; they then belong to the active turn.
+      const waitingTurnId = eventTurnId ?? activeTurnId ?? undefined;
       if (
         channelRuntime &&
-        eventTurnId &&
+        waitingTurnId &&
         !conflictsWithActiveTurn &&
         (event.type === "request.opened" || event.type === "user-input.requested")
       ) {
-        const waitingKey = providerTurnKey(thread.id, eventTurnId);
+        const waitingKey = providerTurnKey(thread.id, waitingTurnId);
         const open = channelWaitingRequests.get(waitingKey) ?? {
-          turnId: eventTurnId,
+          turnId: waitingTurnId,
           requestIds: new Set<string>(),
         };
         open.requestIds.add(event.requestId ?? event.eventId);
@@ -1959,7 +1961,7 @@ const make = Effect.gen(function* () {
         if (open.requestIds.size === 1) {
           yield* channelStatusWorker.enqueue({
             threadId: thread.id,
-            turnId: eventTurnId,
+            turnId: waitingTurnId,
             state: "waiting",
           });
         }
@@ -1973,8 +1975,9 @@ const make = Effect.gen(function* () {
           if (!waitingKey.startsWith(`${thread.id}:`)) continue;
           if (eventTurnId && !sameId(open.turnId, eventTurnId)) continue;
           if (requestId && !open.requestIds.has(requestId)) continue;
-          if (requestId) open.requestIds.delete(requestId);
-          else open.requestIds.clear();
+          // Without a request id, one resolution answers one request, never all of them.
+          const resolved = requestId ?? open.requestIds.values().next().value;
+          if (resolved !== undefined) open.requestIds.delete(resolved);
           if (open.requestIds.size > 0) continue;
           channelWaitingRequests.delete(waitingKey);
           yield* channelStatusWorker.enqueue({
