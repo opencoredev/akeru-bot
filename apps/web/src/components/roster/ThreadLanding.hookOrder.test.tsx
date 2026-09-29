@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   refreshHistory: vi.fn(),
   queryData: { inbox: [], runs: [], nextCursor: null },
   snapshot: null as OrchestrationShellSnapshot | null,
+  rosterLoadState: { kind: "loading" } as { kind: "loading" } | { kind: "failed"; message: string },
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -46,6 +47,10 @@ vi.mock("./useBotEngineAvailability", () => ({
     unavailability: null,
     blocked: false,
   }),
+}));
+vi.mock("./useServerRoster", () => ({
+  useRosterLoadState: () => mocks.rosterLoadState,
+  useEnableBotAutoReview: () => vi.fn(),
 }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
@@ -259,6 +264,7 @@ beforeEach(() => {
   mocks.messages = [];
   mocks.mediaBlocked = false;
   mocks.snapshot = null;
+  mocks.rosterLoadState = { kind: "loading" };
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
   vi.stubGlobal("window", {

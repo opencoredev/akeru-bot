@@ -77,6 +77,13 @@ describe("roster route selection", () => {
     expect(source).toContain("useRosterStore.getState().selectBot(botId)");
     expect(source).toContain("[botId, navigate, routedBot.status]");
   });
+
+  it("offers the shared roster retry in a failed deep-linked bot pane", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain('if (rosterLoadState.kind === "failed")');
+    expect(source).toContain('<RosterLoadStatus state={rosterLoadState} variant="page" />');
+  });
 });
 
 describe("resolveRosterListState", () => {
