@@ -1202,6 +1202,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 reason: `The ${input.mutation.scope} memory scope has no owner in this thread.`,
               });
             }
+            const isBotPrivate = partition.scope === "bot" || partition.scope === "bot-user";
+            const authorBotId = input.access.respondingBotId ?? input.access.botId;
             next = nextFor({
               ...current,
               partition: {
@@ -1212,6 +1214,13 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               entityKind: entity.kind,
               entityId: entity.id,
               visibility: partition.visibility,
+              authorBotId: isBotPrivate ? authorBotId : current.authorBotId,
+              initiatingUserId: isBotPrivate ? input.access.userId : current.initiatingUserId,
+              affectedBotIds: isBotPrivate
+                ? authorBotId === null
+                  ? []
+                  : [authorBotId]
+                : current.affectedBotIds,
               // A move changes who can read the fact, not where it came from.
               sourceThreadId:
                 current.sourceThreadId ??

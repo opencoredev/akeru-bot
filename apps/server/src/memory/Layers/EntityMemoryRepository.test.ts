@@ -1043,6 +1043,118 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("roundtrips an imported project fact moved into the receiving bot's scope", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const alice = {
+        ...privateAccess("alice-private-import"),
+        userId: AkeruMemoryUserId.make("alice-user"),
+        projectId: ProjectId.make("project-privatize-import"),
+        legacyWorkspaceOwnerProjectId: ProjectId.make("project-privatize-import"),
+      };
+      const bob = {
+        ...privateAccess("bob-private-import"),
+        projectId: alice.projectId,
+        legacyWorkspaceOwnerProjectId: alice.projectId,
+      };
+      const rootId = AkeruMemoryRootId.make("import-privatize-root");
+      const original = makeRevision("import-privatize-1", "project", {
+        rootId,
+        partition: {
+          tenantId: alice.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(alice.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(alice.projectId),
+        sourceThreadId: alice.threadId,
+        authorBotId: alice.botId,
+        initiatingUserId: alice.userId,
+        affectedBotIds: [alice.botId],
+        visibility: "shared",
+      });
+      yield* repository.insert({ access: alice, revision: original });
+      const projectArchive = yield* exportAkeruMemory({
+        repository,
+        access: alice,
+        target: "project",
+        complete: true,
+        createdAt: "2026-08-30T22:00:00.000Z",
+        conversations: [],
+      });
+      yield* repository.deleteRoot({ access: alice, rootId });
+      const projectPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: projectArchive,
+      });
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: projectArchive,
+        previewHash: projectPreview.previewHash,
+      });
+      const imported = yield* repository.getCurrent({ access: bob, rootId });
+      assert.equal(imported.authorBotId, alice.botId);
+      assert.equal(imported.initiatingUserId, alice.userId);
+      assert.deepEqual(imported.affectedBotIds, [alice.botId]);
+      const moved = yield* repository.applyMutation({
+        access: bob,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: imported.revision,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("import-privatize-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const botArchive = yield* exportAkeruMemory({
+        repository,
+        access: bob,
+        target: "bot",
+        complete: true,
+        createdAt: "2026-08-30T23:00:00.000Z",
+        conversations: [],
+      });
+      yield* repository.deleteRoot({ access: bob, rootId });
+      const botPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "bot",
+        archive: botArchive,
+      });
+      assert.deepEqual(
+        botPreview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "bot",
+        archive: botArchive,
+        previewHash: botPreview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const restored = yield* repository.getCurrent({ access: bob, rootId });
+      assert.equal(restored.id, moved!.id);
+      assert.equal(restored.partition.scope, "bot");
+      assert.equal(restored.authorBotId, bob.botId);
+      assert.equal(restored.initiatingUserId, bob.userId);
+      assert.deepEqual(restored.affectedBotIds, [bob.botId]);
+      assert.equal(restored.sourceThreadId, alice.threadId);
+      const history = yield* repository.listHistory({ access: bob, rootId });
+      assert.equal(history.length, 2);
+      assert.equal(history[1]!.partition.scope, "project");
+      assert.equal(history[1]!.authorBotId, alice.botId);
+      assert.equal(history[1]!.initiatingUserId, alice.userId);
+      assert.deepEqual(history[1]!.affectedBotIds, [alice.botId]);
+    }),
+  );
+
   it.effect("roundtrips a pending fact that moved scopes with its full history", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
