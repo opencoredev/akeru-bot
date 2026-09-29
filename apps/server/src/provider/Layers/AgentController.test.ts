@@ -4805,13 +4805,10 @@ describe("AgentControllerLive", () => {
       yield* controller.startSession(codexThreadId, { ...input, cwd: process.cwd() });
       yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
 
-      expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
-      expect(makeRemoteWorkspace.mock.calls[1]?.[0].workspaceId).toBe(
-        makeRemoteWorkspace.mock.calls[0]?.[0].workspaceId,
-      );
-      expect(makeRemoteWorkspace.mock.calls[1]?.[0].identityFile).toBe(
-        makeRemoteWorkspace.mock.calls[0]?.[0].identityFile,
-      );
+      expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
+      expect(mastra.createSession).toHaveBeenCalledTimes(2);
+      expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
+      expect(mastra.createSession.mock.calls[1]?.[0]).toMatchObject({ workspace: remote });
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(layer), Effect.orDie);
