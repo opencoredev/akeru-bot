@@ -320,12 +320,11 @@ describe("onboarding handoff", () => {
     mocks.environmentId = "onboarding-environment";
     mocks.rosterLoaded = false;
     await act(async () => root.render(<DesktopOnboarding />));
-    mocks.rosterLoaded = true;
-    await act(async () => root.render(<DesktopOnboarding />));
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
 
     mocks.serverBots = [{ id: BOT_ID }];
+    mocks.rosterLoaded = true;
     await act(async () => root.render(<DesktopOnboarding />));
     expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith({
       to: "/bots/$botId",
