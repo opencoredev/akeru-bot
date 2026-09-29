@@ -538,15 +538,21 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         updatedAt: completedAt,
       };
       await setState(completed);
-      await options.recordUsage?.({
-        botId: bot.id,
-        threadId: childThreadId,
-        turnId: outcome.turnId,
-        category: "delegated",
-        inputTokens: outcome.usage?.inputTokens ?? 0,
-        outputTokens: outcome.usage?.outputTokens ?? 0,
-      });
-      await deliver(completed, result.summary);
+      // The child's work is durably complete, so bookkeeping failures cannot turn it into a
+      // failed delegation. The caller still receives the result directly.
+      await Promise.resolve()
+        .then(() =>
+          options.recordUsage?.({
+            botId: bot.id,
+            threadId: childThreadId,
+            turnId: outcome.turnId,
+            category: "delegated",
+            inputTokens: outcome.usage?.inputTokens ?? 0,
+            outputTokens: outcome.usage?.outputTokens ?? 0,
+          }),
+        )
+        .catch(() => undefined);
+      await deliver(completed, result.summary).catch(() => undefined);
       return result;
     } catch (cause) {
       const timeout =

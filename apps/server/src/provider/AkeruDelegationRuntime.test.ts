@@ -230,7 +230,7 @@ function harness(
     now: () => NOW,
     id: () => String(++nextId),
   });
-  return { runtime, state, commands, interrupts, usage, dispatch };
+  return { runtime, state, commands, interrupts, usage, dispatch, recordUsage };
 }
 
 describe("delegation access", () => {
@@ -411,6 +411,32 @@ describe("AkeruDelegationRuntime", () => {
       threadId: PARENT_THREAD_ID,
       activity: { payload: { childBotId: CHILD_BOT_ID } },
     });
+  });
+
+  it("keeps completed work completed when usage and delivery fail", async () => {
+    const test = harness();
+    test.recordUsage.mockRejectedValueOnce(new Error("usage store offline"));
+    test.dispatch.mockImplementation(async (command: OrchestrationCommand) => {
+      test.commands.push(command);
+      if (
+        command.type === "thread.activity.append" &&
+        command.activity.kind === "delegation.completed"
+      )
+        throw new Error("delivery offline");
+      if (command.type === "delegation.create") test.state.delegations.push(command.delegation);
+      if (command.type === "delegation.state.set") {
+        const index = test.state.delegations.findIndex(
+          (entry) => entry.delegationId === command.delegation.delegationId,
+        );
+        if (index >= 0) test.state.delegations[index] = command.delegation;
+      }
+      if (command.type === "thread.create") test.state.threads.push(thread(command.threadId, null));
+    });
+
+    const result = await test.runtime.send(parent(), request() as never);
+
+    expect(result).toMatchObject({ summary: "The delegated answer." });
+    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Completed"]);
   });
 
   it("persists a completed record that decodes with the child turn", async () => {
