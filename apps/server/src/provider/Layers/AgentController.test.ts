@@ -37,6 +37,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -68,6 +69,7 @@ import {
 } from "./AgentController.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   BotUsageCapExceeded,
   BotUsageLedger,
@@ -2829,6 +2831,58 @@ describe("AgentControllerLive", () => {
           subscribeDomainEvents: Effect.succeed(Stream.empty),
           latestSequence: Effect.succeed(0),
         }),
+      ),
+    );
+  });
+
+  it.effect("records memory usage for an observation drained before its chat reopens", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const usage = makeUsageLedger();
+    const botId = BotId.make("bot-recovered-memory");
+    return provideController(
+      Effect.gen(function* () {
+        // No startSession or turn: the durable queue drained after a restart.
+        const options = mastra.harnessOptions[0]!;
+        const callId = yield* Effect.promise(() =>
+          options.startMemoryCall!({ threadId: "thread-recovered", category: "observer" }),
+        );
+        assert.isDefined(callId);
+        yield* Effect.promise(() =>
+          Promise.resolve(
+            options.finishMemoryCall!({
+              callId,
+              category: "observer",
+              usage: { inputTokens: 120, outputTokens: 30 },
+            }),
+          ),
+        );
+        expect(usage.reserve).not.toHaveBeenCalled();
+        expect(usage.recordMeasurement).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reservationId: callId,
+            botId,
+            threadId: ThreadId.make("thread-recovered"),
+            category: "observer",
+            inputTokens: 120,
+            outputTokens: 30,
+          }),
+        );
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      usage.service,
+    ).pipe(
+      Effect.provideService(
+        ProjectionSnapshotQuery,
+        ProjectionSnapshotQuery.of({
+          getThreadRuntimeContext: () => Effect.succeed(Option.some({ botId })),
+          getBotById: () => Effect.succeed(Option.none()),
+          getGroupById: () => Effect.succeed(Option.none()),
+          listThreadDelegations: () => Effect.succeed([]),
+        } as unknown as ProjectionSnapshotQuery["Service"]),
       ),
     );
   });

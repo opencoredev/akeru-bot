@@ -644,6 +644,17 @@ const make = (options?: AgentControllerLiveOptions) =>
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
     const legacyHiddenWakeByTurn = new Map<string, boolean>();
+    // Memory calls with no live turn reservation, recorded when they finish.
+    const unreservedMemoryCalls = new Map<
+      string,
+      {
+        readonly botId: BotId;
+        readonly threadId: ThreadId;
+        readonly category: "observer" | "reflector";
+        readonly provider: ProviderDriverKind | null;
+        readonly model: string | null;
+      }
+    >();
     const memoryUsageByThread = new Map<
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
@@ -1247,8 +1258,26 @@ const make = (options?: AgentControllerLiveOptions) =>
         startMemoryCall: async ({ threadId, category }) => {
           const context = memoryUsageByThread.get(threadId);
           const active = sessions.get(threadId);
-          if (!context || !active) return undefined;
           const callId = `${category}:${NodeCrypto.randomUUID()}`;
+          if (!context || !active) {
+            // A queued observation can drain after a restart before its chat
+            // reopens. Attribute it to the chat's bot and record what it used.
+            const botId = await runPromise(
+              readSessionStartContext(ThreadIdBrand(threadId), null).pipe(
+                Effect.map((started) => started.botId),
+                Effect.catchCause(() => Effect.succeed(null)),
+              ),
+            );
+            if (!botId) return undefined;
+            unreservedMemoryCalls.set(callId, {
+              botId,
+              threadId: ThreadIdBrand(threadId),
+              category,
+              provider: active?.provider ?? null,
+              model: active?.model ?? null,
+            });
+            return callId;
+          }
           await runPromise(
             botUsageLedger.reserve({
               reservationId: AkeruUsageReservationId.make(callId),
@@ -1270,6 +1299,28 @@ const make = (options?: AgentControllerLiveOptions) =>
           const outputTokens = usage?.outputTokens ?? 0;
           const inputTokens =
             usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+          const unreserved = unreservedMemoryCalls.get(callId);
+          if (unreserved) {
+            unreservedMemoryCalls.delete(callId);
+            if (!usage) return;
+            await runPromise(
+              botUsageLedger.recordMeasurement({
+                reservationId: AkeruUsageReservationId.make(callId),
+                sourceKey: callId,
+                botId: unreserved.botId,
+                threadId: unreserved.threadId,
+                turnId: null,
+                category: unreserved.category,
+                inputTokens,
+                outputTokens,
+                reasoningTokens: null,
+                provider: unreserved.provider,
+                model: unreserved.model,
+                createdAt: nowIso(),
+              }),
+            );
+            return;
+          }
           await runPromise(
             botUsageLedger.settle(
               usage
