@@ -74,7 +74,7 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
-import { useChatUnread } from "../chat/useChatUnread";
+import { useBotRosterUnread, useChatUnread } from "../chat/useChatUnread";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
@@ -469,7 +469,7 @@ const BotRosterRow = memo(function BotRosterRow({
     taskTitle,
     threadRef: chatRef,
   } = useLatestBotMessage(bot.id, lastMessage);
-  const unread = useChatUnread(chatRef) && !chatOpen;
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <li
       role="listitem"
@@ -617,7 +617,7 @@ function RailBotButton({
   const presence = useBotPresence(bot.id);
   // The collapsed rail marks unread replies like the expanded row does.
   const { ref: chatRef } = useBotChatTarget(bot.id, useBotThreadCandidate(bot.id));
-  const unread = useChatUnread(chatRef) && !chatOpen;
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <Tooltip>
       <TooltipTrigger
