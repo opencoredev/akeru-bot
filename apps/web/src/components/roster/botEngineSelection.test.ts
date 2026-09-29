@@ -33,6 +33,25 @@ describe("resolveStickyBotEngine", () => {
     ).toBeNull();
   });
 
+  it("does not show a fallback provider for a bot with an unavailable saved engine", () => {
+    const savedId = ProviderInstanceId.make("codex");
+    const fallbackId = ProviderInstanceId.make("codex-backup");
+    const providers = [
+      { ...makeComposerTestProvider(), enabled: false, status: "disabled" as const },
+      { ...makeComposerTestProvider(), instanceId: fallbackId },
+    ];
+
+    expect(
+      resolveStickyBotEngine({
+        engine: { provider: savedId, model: "gpt-5-codex" },
+        instanceEntries: deriveProviderInstanceEntries(providers),
+        settings,
+        providers,
+        defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
+      }),
+    ).toBeNull();
+  });
+
   it("keeps the bot engine model instead of the app default", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);

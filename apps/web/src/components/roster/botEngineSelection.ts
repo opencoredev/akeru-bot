@@ -19,24 +19,27 @@ export function resolveStickyBotEngine(input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly defaultSelection: ModelSelection;
 }): ModelSelection | null {
-  const preferredId = ProviderInstanceId.make(
-    input.engine?.provider ?? input.defaultSelection.instanceId,
-  );
-  const entry = resolveSelectableProviderInstanceEntry(input.instanceEntries, preferredId) ?? null;
-  if (!entry) return null;
-  if (input.engine && input.engine.provider === entry.instanceId) {
+  if (input.engine) {
+    const instanceId = ProviderInstanceId.make(input.engine.provider);
+    const entry = input.instanceEntries.find((candidate) => candidate.instanceId === instanceId);
+    if (!entry?.enabled || !entry.isAvailable) return null;
     const options =
       input.engine.options ??
-      (input.defaultSelection.instanceId === entry.instanceId &&
+      (input.defaultSelection.instanceId === instanceId &&
       input.defaultSelection.model === input.engine.model
         ? input.defaultSelection.options
         : undefined);
     return {
-      instanceId: entry.instanceId,
+      instanceId,
       model: input.engine.model,
       ...(options ? { options } : {}),
     };
   }
+  const entry = resolveSelectableProviderInstanceEntry(
+    input.instanceEntries,
+    ProviderInstanceId.make(input.defaultSelection.instanceId),
+  );
+  if (!entry) return null;
   const model =
     resolveAppModelSelectionForInstance(entry.instanceId, input.settings, input.providers, null) ??
     input.defaultSelection.model;
