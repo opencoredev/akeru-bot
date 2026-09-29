@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   browserRpcErrorMessage,
+  browserMonitorRetryDelayMs,
   createBotBrowser,
   createBotBrowserTools,
   lightpandaMcpCommand,
@@ -41,6 +42,12 @@ async function executeTool(
 }
 
 describe("sandbox bot browser", () => {
+  it("backs off repeated remote monitor failures to at most one request per minute", () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(browserMonitorRetryDelayMs)).toEqual([
+      1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000, 60_000,
+    ]);
+  });
+
   it("redacts sensitive browser RPC errors", () => {
     expect(
       browserRpcErrorMessage({

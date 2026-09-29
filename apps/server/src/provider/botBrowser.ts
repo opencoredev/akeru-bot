@@ -240,6 +240,10 @@ function browserRequestTransport(
 
 type BrowserProcess = Pick<ProcessHandle, "kill"> & { readonly wait?: () => Promise<unknown> };
 
+export function browserMonitorRetryDelayMs(failures: number): number {
+  return Math.min(60_000, 1_000 * 2 ** Math.min(failures - 1, 6));
+}
+
 async function spawnRemoteBrowser(
   sandbox: WorkspaceSandbox,
   binaryPath: string,
@@ -278,7 +282,7 @@ async function spawnRemoteBrowser(
           // A command timeout or transport error does not mean the browser exited.
           // Keep watching; only an observed dead process settles this waiter.
           failures += 1;
-          if (failures > 1 && !stopped) await NodeTimersPromises.setTimeout(1_000);
+          if (!stopped) await NodeTimersPromises.setTimeout(browserMonitorRetryDelayMs(failures));
         }
       }
     },
