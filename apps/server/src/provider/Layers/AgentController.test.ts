@@ -1779,6 +1779,67 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("reads entity memory for the access of a reused Mastra session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-entity-reuse-"));
+    const botMemoryStore = new BotMemoryStore(memoryDir);
+    const botId = BotId.make("bot-entity-reuse");
+    const accessFor = (project: string) =>
+      ({
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: codexThreadId,
+        projectId: ProjectId.make(project),
+        workspaceRoot: "/workspace/entity-reuse",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      }) as const;
+    const listedProjects: Array<string | null> = [];
+    const listCurrent = vi.fn((input: { readonly access: { readonly projectId: unknown } }) => {
+      listedProjects.push(String(input.access.projectId));
+      return Effect.succeed([]);
+    });
+    const recordDerivedCopies = vi.fn(() => Effect.void);
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        const start = (project: string) =>
+          controller.startSession(codexThreadId, {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+            memoryAccess: accessFor(project),
+          });
+        yield* start("project-before");
+        yield* start("project-after");
+        listedProjects.length = 0;
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Use current memory." });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        expect(listedProjects).toContain("project-after");
+        expect(listedProjects).not.toContain("project-before");
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      { botMemoryStore, entityMemoryRepository: { listCurrent, recordDerivedCopies } as never },
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
+      ),
+    );
+  });
+
   it.effect("honors the Memory setting per turn on the legacy provider path", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
