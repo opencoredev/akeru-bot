@@ -1294,6 +1294,7 @@ function itemForCommand(
       case "bot.update":
       case "bot.archive":
       case "bot.restore":
+      case "bot.delete":
         return `bot:${command.botId}`;
       case "group.create":
       case "group.rename":

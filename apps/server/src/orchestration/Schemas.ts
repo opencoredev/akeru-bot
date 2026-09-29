@@ -6,6 +6,7 @@ import {
   BotUpdatedPayload as ContractsBotUpdatedPayloadSchema,
   BotArchivedPayload as ContractsBotArchivedPayloadSchema,
   BotRestoredPayload as ContractsBotRestoredPayloadSchema,
+  BotDeletedPayload as ContractsBotDeletedPayloadSchema,
   GroupCreatedPayload as ContractsGroupCreatedPayloadSchema,
   GroupRenamedPayload as ContractsGroupRenamedPayloadSchema,
   GroupDeletedPayload as ContractsGroupDeletedPayloadSchema,
@@ -57,6 +58,7 @@ export const BotCreatedPayload = ContractsBotCreatedPayloadSchema;
 export const BotUpdatedPayload = ContractsBotUpdatedPayloadSchema;
 export const BotArchivedPayload = ContractsBotArchivedPayloadSchema;
 export const BotRestoredPayload = ContractsBotRestoredPayloadSchema;
+export const BotDeletedPayload = ContractsBotDeletedPayloadSchema;
 export const GroupCreatedPayload = ContractsGroupCreatedPayloadSchema;
 export const GroupRenamedPayload = ContractsGroupRenamedPayloadSchema;
 export const GroupDeletedPayload = ContractsGroupDeletedPayloadSchema;

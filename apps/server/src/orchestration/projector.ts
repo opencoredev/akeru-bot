@@ -35,6 +35,7 @@ import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "
 import {
   BotArchivedPayload,
   BotCreatedPayload,
+  BotDeletedPayload,
   BotRestoredPayload,
   BotUpdatedPayload,
   GroupBossSetPayload,
@@ -473,6 +474,14 @@ export function projectEvent(
             archivedAt: null,
             updatedAt: payload.updatedAt,
           }),
+        })),
+      );
+
+    case "bot.deleted":
+      return decodeForEvent(BotDeletedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          bots: nextBase.bots.filter((entry) => entry.id !== payload.botId),
         })),
       );
 

@@ -803,6 +803,137 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "bot.delete": {
+      const bot = yield* requireBot({ readModel, command, botId: command.botId });
+      const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
+      if (bossGroup) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before deleting it.`,
+          }),
+        );
+      }
+      const undersizedGroup = readModel.groups.find((group) => {
+        if (
+          !group.members.some(
+            (member) => isGroupBotMember(member) && member.botId === command.botId,
+          )
+        ) {
+          return false;
+        }
+        const remainingBotIds = activeGroupBotIds(readModel, group);
+        remainingBotIds.delete(command.botId);
+        return remainingBotIds.size < 2;
+      });
+      if (undersizedGroup) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
+          }),
+        );
+      }
+      const occurredAt = yield* nowIso;
+      const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      for (const group of readModel.groups) {
+        if (!group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)) {
+          continue;
+        }
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "group",
+            aggregateId: group.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "group.member-unassigned",
+          payload: {
+            groupId: group.id,
+            botId: bot.id,
+            updatedAt: occurredAt,
+          },
+        });
+      }
+      for (const thread of readModel.threads) {
+        if (thread.botId !== bot.id || thread.deletedAt !== null) {
+          continue;
+        }
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: thread.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.ownership-updated",
+          payload: {
+            threadId: thread.id,
+            botId: null,
+            groupId: null,
+            updatedAt: occurredAt,
+          },
+        });
+      }
+      for (const routine of readModel.routines ?? []) {
+        if (routine.botId !== bot.id || routine.lifecycle === "deleted") {
+          continue;
+        }
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "routine",
+            aggregateId: routine.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "routine.deleted",
+          payload: {
+            routine: {
+              ...routine,
+              enabled: false,
+              lifecycle: "deleted",
+              nextRunAt: null,
+              updatedAt: occurredAt,
+              deletedAt: occurredAt,
+            },
+          },
+        });
+      }
+      for (const assignment of readModel.skillAssignments ?? []) {
+        if (assignment.botId !== bot.id) {
+          continue;
+        }
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "skill-assignment",
+            aggregateId: assignment.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "skill-assignment.unassigned",
+          payload: {
+            assignmentId: assignment.id,
+            botId: bot.id,
+            removedAt: occurredAt,
+          },
+        });
+      }
+      events.push({
+        ...(yield* withEventBase({
+          aggregateKind: "bot",
+          aggregateId: command.botId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "bot.deleted",
+        payload: {
+          botId: command.botId,
+          deletedAt: occurredAt,
+        },
+      });
+      return events;
+    }
+
     case "group.create": {
       yield* requireGroupAbsent({ readModel, command, groupId: command.groupId });
       if (command.bossBotId === undefined) {

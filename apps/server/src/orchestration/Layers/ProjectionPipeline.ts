@@ -660,6 +660,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             });
             return;
           }
+          case "bot.deleted":
+            yield* projectionBotRepository.deleteById({ botId: event.payload.botId });
+            return;
           default:
             return;
         }
@@ -2167,6 +2170,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           "bot.updated",
           "bot.archived",
           "bot.restored",
+          "bot.deleted",
         ]),
         apply: applyBotsProjection,
       },

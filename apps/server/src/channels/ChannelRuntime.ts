@@ -895,7 +895,7 @@ export async function clearChannelThreadStatuses(threadId: ThreadId): Promise<vo
 
 export const stopArchivedBotChannels = (events: Stream.Stream<OrchestrationEvent>) =>
   Stream.runForEach(events, (event) =>
-    event.type === "bot.archived"
+    event.type === "bot.archived" || event.type === "bot.deleted"
       ? Effect.promise(() => stopChannelsForBot(event.payload.botId))
       : event.type === "thread.deleted" || event.type === "thread.archived"
         ? Effect.promise(() => clearChannelThreadStatuses(event.payload.threadId))

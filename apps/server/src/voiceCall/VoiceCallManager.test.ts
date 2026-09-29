@@ -101,6 +101,7 @@ const repository = {
   getById: ({ botId: requested }) =>
     Effect.succeed(requested === botId ? Option.some(bot) : Option.none()),
   listAll: () => Effect.succeed([bot]),
+  deleteById: () => Effect.void,
 } satisfies ProjectionBotRepositoryShape;
 
 const TestLayer = layer({

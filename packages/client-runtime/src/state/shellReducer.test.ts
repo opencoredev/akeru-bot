@@ -352,6 +352,23 @@ describe("applyShellStreamEvent", () => {
     });
   });
 
+  describe("bot-removed", () => {
+    it("removes a bot by id", () => {
+      const snapshotWithBot: OrchestrationShellSnapshot = {
+        ...baseSnapshot,
+        bots: [stubBot],
+      };
+      const next = applyShellStreamEvent(snapshotWithBot, {
+        kind: "bot-removed",
+        sequence: 6,
+        botId: stubBot.id,
+      });
+
+      expect(next.bots).toHaveLength(0);
+      expect(next.snapshotSequence).toBe(6);
+    });
+  });
+
   describe("group-upserted", () => {
     it("adds and updates a group", () => {
       const added = applyShellStreamEvent(baseSnapshot, {

@@ -1051,7 +1051,15 @@ const makeWsRpcLayer = (
           case "bot.updated":
           case "bot.archived":
           case "bot.restored":
-            return botUpsert(event.payload.botId, event.sequence);
+            return botUpsertOrRemove(event.payload.botId, event.sequence);
+          case "bot.deleted":
+            return Effect.succeed(
+              Option.some({
+                kind: "bot-removed" as const,
+                sequence: event.sequence,
+                botId: event.payload.botId,
+              }),
+            );
           case "group.created":
           case "group.renamed":
           case "group.member-assigned":
@@ -1206,42 +1214,48 @@ const makeWsRpcLayer = (
           ),
         );
 
-      const botUpsert = (
+      const botUpsertOrRemove = (
         botId: BotId,
         sequence: number,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> =>
         retryShellProjectionRead("bot", botId, projectionBots.getById({ botId })).pipe(
           Effect.map(
             Option.flatMap((bot) =>
-              Option.map(
-                bot,
-                (nextBot): OrchestrationShellStreamEvent => ({
-                  kind: "bot-upserted",
-                  sequence,
-                  bot: {
-                    id: nextBot.botId,
-                    name: nextBot.name,
-                    title: nextBot.title,
-                    label: nextBot.label,
-                    description: nextBot.description,
-                    disabledMcpServerIds: nextBot.disabledMcpServerIds,
-                    avatar: nextBot.avatar,
-                    engine: nextBot.engine,
-                    sandbox: nextBot.sandbox,
-                    runtimeMode: nextBot.runtimeMode,
-                    usageCap: nextBot.usageCap,
-                    personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
-                    voiceEnabled: nextBot.voiceEnabled,
-                    channelBindings: ChannelRuntime.channelBindingsForRuntime(
-                      nextBot.channelBindings ?? [],
-                    ),
-                    groupId: nextBot.groupId,
-                    archivedAt: nextBot.archivedAt,
-                    createdAt: nextBot.createdAt,
-                    updatedAt: nextBot.updatedAt,
-                  },
-                }),
-              ),
+              Option.match(bot, {
+                onNone: () =>
+                  Option.some<OrchestrationShellStreamEvent>({
+                    kind: "bot-removed",
+                    sequence,
+                    botId,
+                  }),
+                onSome: (nextBot) =>
+                  Option.some<OrchestrationShellStreamEvent>({
+                    kind: "bot-upserted",
+                    sequence,
+                    bot: {
+                      id: nextBot.botId,
+                      name: nextBot.name,
+                      title: nextBot.title,
+                      label: nextBot.label,
+                      description: nextBot.description,
+                      disabledMcpServerIds: nextBot.disabledMcpServerIds,
+                      avatar: nextBot.avatar,
+                      engine: nextBot.engine,
+                      sandbox: nextBot.sandbox,
+                      runtimeMode: nextBot.runtimeMode,
+                      usageCap: nextBot.usageCap,
+                      personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
+                      voiceEnabled: nextBot.voiceEnabled,
+                      channelBindings: ChannelRuntime.channelBindingsForRuntime(
+                        nextBot.channelBindings ?? [],
+                      ),
+                      groupId: nextBot.groupId,
+                      archivedAt: nextBot.archivedAt,
+                      createdAt: nextBot.createdAt,
+                      updatedAt: nextBot.updatedAt,
+                    },
+                  }),
+              }),
             ),
           ),
         );

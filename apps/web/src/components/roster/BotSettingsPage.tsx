@@ -9,6 +9,7 @@ import { requestConfirmDialog } from "../../confirmDialog";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { botEnvironment } from "../../state/bots";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { SidebarInset } from "../ui/sidebar";
@@ -111,7 +112,12 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
           </WorkspaceBreadcrumb>
         </WorkspacePageHeader>
         {bot ? (
-          <BotSettingsForm key={bot.id} bot={bot} onSave={onSaveBot} />
+          <BotSettingsForm
+            key={bot.id}
+            bot={bot}
+            onSave={onSaveBot}
+            onDeleted={navigateBackWithinApp}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
             This bot is no longer available.
@@ -125,18 +131,22 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
 function BotSettingsForm({
   bot,
   onSave,
+  onDeleted,
 }: {
   readonly bot: Bot;
   readonly onSave: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly onDeleted: () => void;
 }) {
   const environmentId = usePrimaryEnvironmentId();
   const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
+  const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const threadRef = useBotThreadRef(bot.id);
   const draft = useBotProfileDraft(bot, onSave);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const shouldBlockNavigation = useCallback(async () => {
     if (!draft.dirty) return false;
@@ -163,6 +173,37 @@ function BotSettingsForm({
   const connectedChannelCount = assignedChannels.filter(
     (binding) => binding.status === "connected",
   ).length;
+
+  const onDeleteBot = useCallback(() => {
+    if (!environmentId) return;
+    const confirmation = requestConfirmDialog(
+      `Delete ${bot.name}? Its chats stay in your history. This cannot be undone.`,
+      { variant: "destructive" },
+    );
+    if (!confirmation) return;
+    setDeleting(true);
+    void confirmation.then(async (confirmed) => {
+      if (!confirmed) {
+        setDeleting(false);
+        return;
+      }
+      const result = await deleteBot({
+        environmentId,
+        input: { botId: BotId.make(bot.id) },
+      });
+      setDeleting(false);
+      if (result._tag === "Failure") {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: `Could not delete ${bot.name}`,
+          description: error instanceof Error ? error.message : "The command failed.",
+        });
+        return;
+      }
+      onDeleted();
+    });
+  }, [bot, environmentId, deleteBot, onDeleted]);
 
   return (
     <>
@@ -435,6 +476,23 @@ function BotSettingsForm({
                 {assignedChannels.length === 0
                   ? "No channels"
                   : `${connectedChannelCount} of ${assignedChannels.length} connected`}
+              </Button>
+            }
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Danger">
+          <SettingsRow
+            title="Delete bot"
+            description={`Remove ${bot.name} from the roster. Its chats stay in your history.`}
+            control={
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleting || !environmentId}
+                onClick={onDeleteBot}
+              >
+                {deleting ? "Deleting" : "Delete"}
               </Button>
             }
           />

@@ -263,13 +263,13 @@ export const make = Effect.gen(function* () {
         sql<BucketAggregateRow>`
         SELECT
           COALESCE(SUM(CASE WHEN e.event_type = 'bot.created' THEN 1 ELSE 0 END), 0) AS "botsCreated",
-          COALESCE(SUM(CASE WHEN e.event_type = 'bot.archived' THEN 1 ELSE 0 END), 0) AS "botsDeleted",
+          COALESCE(SUM(CASE WHEN e.event_type IN ('bot.archived', 'bot.deleted') THEN 1 ELSE 0 END), 0) AS "botsDeleted",
           COALESCE(SUM(CASE WHEN e.event_type = 'bot.restored' THEN 1 ELSE 0 END), 0) AS "botsRestored",
           (SELECT COUNT(*) FROM orchestration_events
             WHERE event_type = 'bot.created' AND occurred_at < ${end}
               AND COALESCE(json_extract(metadata_json, '$.importedHistory'), 0) <> 1) AS "botsTotalCreated",
           (SELECT COUNT(*) FROM orchestration_events
-            WHERE event_type = 'bot.archived' AND occurred_at < ${end}
+            WHERE event_type IN ('bot.archived', 'bot.deleted') AND occurred_at < ${end}
               AND COALESCE(json_extract(metadata_json, '$.importedHistory'), 0) <> 1) AS "botsTotalDeleted",
           (SELECT COUNT(*) FROM orchestration_events
             WHERE event_type = 'bot.restored' AND occurred_at < ${end}

@@ -97,3 +97,11 @@ read the full result.
 Akeru uses the microphone and speaker on the current computer. Only one call can run at a time. The
 call bar stays visible when you open another bot. Select it to return to the call, or select hang up
 to end the call.
+
+## Delete a bot
+
+Open the bot's settings page and select **Delete** under **Danger**, then confirm. Deleting removes
+the bot from the roster. Its chats stay in your history.
+
+A bot that leads a group as boss cannot be deleted. Set a new boss for the group first. A bot also
+cannot be deleted when its removal would leave a group with fewer than two active bots.
