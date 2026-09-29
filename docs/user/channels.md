@@ -18,7 +18,7 @@ If the connection saves but cannot connect, the form names the connection and sa
 
 Choose the project that should receive this channel's turns when you connect the bot. Akeru suggests the project the bot used most recently, but you can pick any project. It keeps replies in that project, so messages cannot silently move between workspaces. **Connect** stays unavailable until a project is selected. If the environment has no projects yet, the form asks you to add one first.
 
-To move a working channel, pick another project on its card in **Settings > Bot channels** or in the bot's Channels panel, then click **Move to this project**. Akeru restarts the channel in the new project. If the move fails, the channel keeps running in its earlier project.
+To move a working channel, pick another project on its card in **Settings > Bot channels** or in the bot's Channels panel, then click **Move to this project**. Akeru restarts the channel in the new project. If the move fails, the channel keeps running in its earlier project. If that project no longer exists, the channel stays assigned to the project you picked, so you can fix the problem and reconnect it there.
 
 You can reconnect, disconnect, unassign, or delete a connection. Akeru asks you to confirm before it deletes a connection and its saved credentials. Disconnect stops messages but keeps the bot and project assignment. Unassign removes that assignment so you can use the connection with another bot or delete it. A connection that fails while the server restores it after a restart shows a repair state instead of appearing connected; the server still starts, and the card offers the right repair for the failure.
 
