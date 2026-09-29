@@ -243,5 +243,5 @@ export function harness(
     id: () => String(++nextId),
     ...options,
   });
-  return { runtime, state, commands, interrupts, usage, dispatch };
+  return { runtime, state, commands, interrupts, usage, recordUsage, dispatch };
 }

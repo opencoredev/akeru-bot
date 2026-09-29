@@ -227,6 +227,21 @@ describe("AkeruDelegationRuntime", () => {
     });
   });
 
+  it("delivers completed work when the usage write fails", async () => {
+    const test = harness();
+    test.recordUsage.mockRejectedValueOnce(new Error("usage store offline"));
+    await test.runtime.send(parent(), request() as never);
+    await test.runtime.drain();
+    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Completed"]);
+    expect(
+      test.commands.some(
+        (command) =>
+          command.type === "thread.activity.append" &&
+          command.activity.kind === "delegation.completed",
+      ),
+    ).toBe(true);
+  });
+
   it("persists a completed record that decodes with the child turn", async () => {
     const test = harness();
     await test.runtime.send(parent(), request() as never);
