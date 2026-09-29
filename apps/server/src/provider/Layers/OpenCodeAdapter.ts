@@ -2030,16 +2030,34 @@ export function makeOpenCodeAdapter(
           answers: toOpenCodeQuestionAnswers(request, answers),
         }),
       ).pipe(
-        // The question stays pending until OpenCode reports it replied, so the answer can be sent again.
-        Effect.mapError(
+        // OpenCode no longer has the question, so drop it and let the reactor close it.
+        Effect.catchIf(
+          (cause) => isOpenCodeNotFound(cause),
           (cause) =>
-            new ProviderAdapterRequestError({
-              provider: PROVIDER,
-              method: cause.operation,
-              detail: cause.detail,
-              cause: cause.cause,
-              retryable: true,
-            }),
+            Effect.sync(() => context.pendingQuestions.delete(requestId)).pipe(
+              Effect.andThen(
+                Effect.fail(
+                  new ProviderAdapterRequestError({
+                    provider: PROVIDER,
+                    method: cause.operation,
+                    detail: `Unknown pending user-input request: ${requestId}`,
+                    cause: cause.cause,
+                  }),
+                ),
+              ),
+            ),
+        ),
+        // The question stays pending until OpenCode reports it replied, so the answer can be sent again.
+        Effect.mapError((cause) =>
+          cause._tag === "ProviderAdapterRequestError"
+            ? cause
+            : new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: cause.operation,
+                detail: cause.detail,
+                cause: cause.cause,
+                retryable: true,
+              }),
         ),
       );
     });

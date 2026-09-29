@@ -17,6 +17,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { beforeEach } from "vite-plus/test";
 
 import {
+  ApprovalRequestId,
   McpServerId,
   OpenCodeSettings,
   ProviderDriverKind,
@@ -90,6 +91,8 @@ const runtimeMock = {
     mcpAddCalls: [] as Array<{ name: string; config: unknown }>,
     permissionReplyCalls: [] as Array<{ requestID: string; reply: string }>,
     permissionReplyError: null as Error | null,
+    questionReplyCalls: [] as string[],
+    questionReplyError: null as Error | null,
     permissionReplyImplementation: null as
       | ((requestID: string, reply: string, signal?: AbortSignal) => Promise<void>)
       | null,
@@ -122,6 +125,8 @@ const runtimeMock = {
     this.state.mcpAddCalls.length = 0;
     this.state.permissionReplyCalls.length = 0;
     this.state.permissionReplyError = null;
+    this.state.questionReplyCalls.length = 0;
+    this.state.questionReplyError = null;
     this.state.permissionReplyImplementation = null;
   },
 };
@@ -270,6 +275,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             reply,
             options?.signal,
           );
+        },
+      },
+      question: {
+        reply: async ({ requestID }: { requestID: string }) => {
+          runtimeMock.state.questionReplyCalls.push(requestID);
+          if (runtimeMock.state.questionReplyError) {
+            throw runtimeMock.state.questionReplyError;
+          }
         },
       },
       mcp: {
@@ -2010,6 +2023,62 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         ["session.started", "thread.started", "session.exited"],
       );
     }),
+  );
+
+  it.effect("drops a question OpenCode no longer has", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-expired-question");
+      runtimeMock.state.questionReplyError = new Error("Question not found", {
+        cause: { status: 404, body: { name: "NotFoundError" } },
+      });
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "question.asked",
+          properties: {
+            id: "que_expired",
+            sessionID: "http://127.0.0.1:9999/session",
+            questions: [
+              {
+                question: "Which file?",
+                header: "File",
+                options: [{ label: "a.ts", description: "The first file" }],
+              },
+            ],
+          },
+        },
+      ];
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) => event.threadId === threadId && event.type === "user-input.requested",
+        ),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* Fiber.join(openedFiber).pipe(Effect.timeout("1 second"));
+
+      const first = yield* adapter
+        .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
+        .pipe(Effect.flip);
+      NodeAssert.ok(first._tag === "ProviderAdapterRequestError");
+      NodeAssert.equal(first.detail, "Unknown pending user-input request: que_expired");
+      NodeAssert.notEqual(first.retryable, true);
+
+      const second = yield* adapter
+        .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
+        .pipe(Effect.flip);
+      NodeAssert.ok(second._tag === "ProviderAdapterRequestError");
+      NodeAssert.equal(second.detail, "Unknown pending user-input request: que_expired");
+      NodeAssert.deepEqual(runtimeMock.state.questionReplyCalls, ["que_expired"]);
+
+      yield* adapter.stopSession(threadId);
+    }).pipe(TestClock.withLive),
   );
 
   it.effect("falls back to a permission dialog when full-access auto-reply fails", () =>
