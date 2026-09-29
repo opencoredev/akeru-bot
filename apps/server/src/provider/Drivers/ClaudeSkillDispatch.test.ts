@@ -74,6 +74,18 @@ describe("planClaudeSkillDispatch", () => {
     });
   });
 
+  it("keeps a $skill literal in a double quote closed against a word", () => {
+    expect(planClaudeSkillDispatch('printf "run $implement now"suffix', SKILLS)).toBeUndefined();
+  });
+
+  it("keeps a $skill literal after an unclosed double quote", () => {
+    expect(planClaudeSkillDispatch('he wrote "run $implement now', SKILLS)).toBeUndefined();
+  });
+
+  it("keeps a $skill literal in an inline code span that crosses a line", () => {
+    expect(planClaudeSkillDispatch("run `echo\n$implement` first", SKILLS)).toBeUndefined();
+  });
+
   it("keeps known skill names inside inline and fenced code literal", () => {
     expect(planClaudeSkillDispatch("run `echo $implement` first", SKILLS)).toBeUndefined();
     expect(planClaudeSkillDispatch("run ``a ` $implement`` first", SKILLS)).toBeUndefined();

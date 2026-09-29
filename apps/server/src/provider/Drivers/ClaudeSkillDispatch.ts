@@ -79,7 +79,9 @@ const WORD_CHARACTER = /[\p{L}\p{N}_]/u;
  * non-word character and only closes before one, so apostrophes in prose like
  * "don't" and "it's" never start a quoted run. Quoted runs may span lines, and
  * inside double quotes a backslash escapes the next character, matching shell
- * rules; single quotes have no escapes.
+ * rules; single quotes have no escapes. A double quote closes at the next
+ * unescaped double quote, and an unclosed one keeps the rest of the prompt
+ * literal. Inline code spans may cross single line breaks but not blank lines.
  */
 function findLiteralRanges(prompt: string): TextRange[] {
   const ranges: TextRange[] = [];
@@ -108,7 +110,13 @@ function findLiteralRanges(prompt: string): TextRange[] {
     const character = prompt[index];
     if (character === "`") {
       const run = /^`+/.exec(prompt.slice(index, end))?.[0] ?? "`";
-      const close = findBacktickRun(prompt, index + run.length, run.length, end);
+      const paragraphEnd = prompt.indexOf("\n\n", index);
+      const close = findBacktickRun(
+        prompt,
+        index + run.length,
+        run.length,
+        paragraphEnd < 0 ? prompt.length : paragraphEnd,
+      );
       if (close >= 0) {
         ranges.push({ start: index, end: close + run.length });
         index = close + run.length;
@@ -123,6 +131,10 @@ function findLiteralRanges(prompt: string): TextRange[] {
         ranges.push({ start: index, end: close + 1 });
         index = close + 1;
         continue;
+      }
+      if (character === '"') {
+        ranges.push({ start: index, end: prompt.length });
+        break;
       }
     }
     index += 1;
@@ -147,7 +159,8 @@ function findClosingQuote(text: string, from: number, quote: string): number {
       index += 1;
       continue;
     }
-    if (text[index] === quote && !isWordCharacter(text[index + 1])) return index;
+    if (text[index] !== quote) continue;
+    if (quote === '"' || !isWordCharacter(text[index + 1])) return index;
   }
   return -1;
 }
