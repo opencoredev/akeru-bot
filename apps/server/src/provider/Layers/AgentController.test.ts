@@ -1168,6 +1168,67 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("records the whole tool entry at finish when the start write fails", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const usage = makeUsageLedger();
+    usage.recordStart.mockImplementation(() => Effect.die(new Error("ledger unavailable")));
+    const botId = BotId.make("bot-tool-usage");
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+          botId,
+          memoryAccess: {
+            tenantId: AkeruMemoryTenantId.make("local"),
+            userId: AkeruMemoryUserId.make("owner"),
+            threadId: codexThreadId,
+            projectId: ProjectId.make("project-tool-usage"),
+            workspaceRoot: "/workspace/tool-usage",
+            botId,
+            groupId: null,
+            respondingBotId: botId,
+            groupMemberBotIds: [],
+          },
+        });
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "memory",
+            toolCallId: "usage-tool-call",
+            input: { target: "user", operations: [] },
+            approvalMode: "require-grant",
+          }),
+        );
+
+        expect(usage.recordStart).toHaveBeenCalledTimes(1);
+        expect(usage.settle).not.toHaveBeenCalled();
+        expect(usage.recordMeasurement).toHaveBeenCalledTimes(1);
+        expect(usage.recordMeasurement.mock.calls[0]?.[0]).toMatchObject({
+          reservationId: `tool:${codexThreadId}:usage-tool-call`,
+          sourceKey: `tool:${codexThreadId}:usage-tool-call`,
+          botId,
+          category: "tool",
+          inputTokens: 0,
+          outputTokens: 0,
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      usage.service,
+    );
+  });
+
   it.effect("keeps group memory tools bound to the admitted responding bot", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();

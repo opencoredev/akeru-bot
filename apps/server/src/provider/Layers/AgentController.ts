@@ -623,7 +623,16 @@ const make = (options?: AgentControllerLiveOptions) =>
     >();
     const sessions = new Map<string, ActiveSession>();
     // Tool calls consume no model tokens, so their entries hold no cap while they run.
-    const toolUsageStarts = new Set<string>();
+    // `persisted` is false when the start write failed; finish then writes the whole entry.
+    const toolUsageStarts = new Map<
+      string,
+      {
+        persisted: boolean;
+        readonly turnId: TurnId | null;
+        readonly provider: ProviderDriverKind | null;
+        readonly model: string | null;
+      }
+    >();
     // Providers only promise tool-call ids unique within a chat.
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
@@ -786,6 +795,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (!session.botId) return;
         const key = toolUsageKey(input);
         const active = sessions.get(input.threadId);
+        const started = {
+          persisted: false,
+          turnId: active?.activeTurn?.turnId ?? null,
+          provider: active?.provider ?? null,
+          model: active?.model ?? null,
+        };
+        toolUsageStarts.set(key, started);
         await runPromise(
           botUsageLedger
             .recordStart({
@@ -793,14 +809,18 @@ const make = (options?: AgentControllerLiveOptions) =>
               sourceKey: key,
               botId: session.botId,
               threadId: ThreadId.make(input.threadId),
-              turnId: active?.activeTurn?.turnId ?? null,
+              turnId: started.turnId,
               category: "tool",
-              provider: active?.provider ?? null,
-              model: active?.model ?? null,
+              provider: started.provider,
+              model: started.model,
               createdAt: nowIso(),
             })
             .pipe(
-              Effect.tap(() => Effect.sync(() => toolUsageStarts.add(key))),
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  started.persisted = true;
+                }),
+              ),
               Effect.catchCause((cause) =>
                 Effect.logWarning("failed to record tool start", {
                   toolCallId: input.toolCallId,
@@ -812,25 +832,41 @@ const make = (options?: AgentControllerLiveOptions) =>
       },
       onToolFinish: async (input, session) => {
         const key = toolUsageKey(input);
-        if (!session.botId || !toolUsageStarts.delete(key)) return;
+        const started = toolUsageStarts.get(key);
+        toolUsageStarts.delete(key);
+        if (!session.botId || !started) return;
         await runPromise(
-          botUsageLedger
-            .settle({
-              reservationId: AkeruUsageReservationId.make(key),
-              state: "reported",
-              inputTokens: 0,
-              outputTokens: 0,
-              reasoningTokens: null,
-              settledAt: nowIso(),
-            })
-            .pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning("failed to record tool usage", {
-                  toolCallId: input.toolCallId,
-                  cause,
-                }),
-              ),
+          (started.persisted
+            ? botUsageLedger.settle({
+                reservationId: AkeruUsageReservationId.make(key),
+                state: "reported",
+                inputTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: null,
+                settledAt: nowIso(),
+              })
+            : botUsageLedger.recordMeasurement({
+                reservationId: AkeruUsageReservationId.make(key),
+                sourceKey: key,
+                botId: session.botId,
+                threadId: ThreadId.make(input.threadId),
+                turnId: started.turnId,
+                category: "tool",
+                inputTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: null,
+                provider: started.provider,
+                model: started.model,
+                createdAt: nowIso(),
+              })
+          ).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("failed to record tool usage", {
+                toolCallId: input.toolCallId,
+                cause,
+              }),
             ),
+          ),
         );
       },
       onProgress: ({ threadId, toolId, toolCallId, summary, authorizationUrl }) => {
