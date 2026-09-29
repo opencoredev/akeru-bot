@@ -42,7 +42,8 @@ import {
   VOICE_MODE_LABELS,
   VOICE_SYNTHESIS_PROVIDERS,
   VOICE_TRANSCRIPTION_PROVIDERS,
-  nextVoiceKeyRejected,
+  recordVoiceKeyOutcome,
+  rememberedVoiceKeyRejected,
   voiceKeyWasRejected,
   selectedSynthesisVoice,
   voiceCapabilityLabel,
@@ -128,6 +129,7 @@ export function VoiceSettingsPanel() {
       </SettingsSection>
       {environmentId ? (
         <VoiceApiConnectionsSection
+          key={environmentId}
           environmentId={environmentId}
           connected={connected}
           loadError={providersQuery.error}
@@ -470,7 +472,14 @@ function VoiceApiConnectionsSection({
   const [busy, setBusy] = useState<{ provider: VoiceApiProvider; action: string } | null>(null);
   const [messages, setMessages] = useState<Partial<Record<VoiceApiProvider, ProviderMessage>>>({});
   // The last Test verdict per saved key. Saving or removing a key clears it.
-  const [rejected, setRejected] = useState<Partial<Record<VoiceApiProvider, boolean>>>({});
+  const [rejected, setRejected] = useState<Partial<Record<VoiceApiProvider, boolean>>>(() =>
+    Object.fromEntries(
+      VOICE_API_PROVIDERS.map((provider) => [
+        provider,
+        rememberedVoiceKeyRejected(environmentId, provider),
+      ]),
+    ),
+  );
 
   const run = async (
     provider: VoiceApiProvider,
@@ -485,10 +494,8 @@ function VoiceApiConnectionsSection({
     const ok = result._tag === "Success";
     const failure = result._tag === "Failure" ? squashAtomCommandFailure(result) : null;
     const keyRejected = failure !== null && voiceKeyWasRejected(failure);
-    setRejected((current) => ({
-      ...current,
-      [provider]: nextVoiceKeyRejected(current[provider] ?? false, failure),
-    }));
+    const nextRejected = recordVoiceKeyOutcome(environmentId, provider, failure);
+    setRejected((current) => ({ ...current, [provider]: nextRejected }));
     setMessages((current) => ({
       ...current,
       [provider]: ok
