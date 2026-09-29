@@ -1150,6 +1150,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         // depend on an active provider session; the row's recorded turnId is
         // the authority and the active turn is only a fallback.
         onObservationDropped: async ({
+          observationId,
           threadId,
           turnId,
           resourceId,
@@ -1163,10 +1164,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           await runPromise(
             orchestrationEngine.value.dispatch({
               type: "thread.activity.append",
-              commandId: CommandId.make(`server:observation-dropped:${NodeCrypto.randomUUID()}`),
+              // Stable ids make a retried notice idempotent.
+              commandId: CommandId.make(`server:observation-dropped:${observationId}`),
               threadId: ThreadIdBrand(threadId),
               activity: {
-                id: EventId.make(`observation-dropped:${NodeCrypto.randomUUID()}`),
+                id: EventId.make(`observation-dropped:${observationId}`),
                 tone: "error",
                 kind: "memory.observation.dropped",
                 summary: "Background memory observation dropped after repeated failures",

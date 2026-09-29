@@ -2766,7 +2766,11 @@ describe("AgentControllerLive", () => {
   it.effect("dispatches a thread activity when an observation is dropped", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
-    const dispatched: Array<{ readonly type: string; readonly activity?: unknown }> = [];
+    const dispatched: Array<{
+      readonly type: string;
+      readonly commandId?: string;
+      readonly activity?: unknown;
+    }> = [];
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -2782,6 +2786,7 @@ describe("AgentControllerLive", () => {
         yield* Effect.promise(() =>
           Promise.resolve(
             options.onObservationDropped!({
+              observationId: "observation-dropped-row",
               threadId: String(codexThreadId),
               turnId: "turn-dropped",
               resourceId: String(codexThreadId),
@@ -2804,6 +2809,7 @@ describe("AgentControllerLive", () => {
         assert.equal(activity.tone, "error");
         assert.equal(activity.turnId, "turn-dropped");
         assert.equal(activity.payload.attempts, 3);
+        assert.equal(command.commandId, "server:observation-dropped:observation-dropped-row");
       }),
       bridge.service,
       mastra.factory,
@@ -2839,6 +2845,7 @@ describe("AgentControllerLive", () => {
         yield* Effect.promise(() =>
           Promise.resolve(
             options.onObservationDropped!({
+              observationId: "observation-never-opened",
               threadId: "thread-never-opened",
               turnId: "turn-durable",
               resourceId: "thread-never-opened",

@@ -244,6 +244,8 @@ export interface AkeruMastraHarnessOptions {
     routineIds: ReadonlyArray<string>,
   ) => Promise<AkeruRoutineDeleteResult>;
   readonly onObservationDropped?: (input: {
+    /** Stable queue-row id; retried notices reuse it. */
+    readonly observationId: string;
     readonly threadId: string;
     readonly turnId?: string;
     readonly resourceId: string;
@@ -1076,6 +1078,10 @@ export async function createAkeruMastraHarness(
   const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
   const OBSERVATION_CLAIM_LEASE_MS = 5 * 60_000;
   const OBSERVATION_RETRY_BACKOFF_MS = 30_000;
+  const OBSERVATION_DROP_ATTEMPTS = 3;
+  // A dropped row stays queued until its drop notice lands; past this many
+  // attempts it is removed even if the notice keeps failing.
+  const OBSERVATION_NOTICE_ATTEMPTS = 6;
   const observationQueueDb = new NodeSqlite.DatabaseSync(`${options.memoryDbPath}.queue.sqlite`);
   observationQueueDb.exec("PRAGMA busy_timeout = 5000");
   const observationQueueVersion = (
@@ -1345,8 +1351,21 @@ export async function createAkeruMastraHarness(
         } catch (cause) {
           await stopLeaseRenewal(leaseRenewal);
           const attempts = item.attempts + 1;
-          if (attempts >= 3) {
-            if (removeQueuedObservation.run(item.id, claim).changes === 0) continue;
+          const releaseWithBackoff = () =>
+            releaseQueuedObservation.run(
+              attempts,
+              DateTime.formatIso(
+                DateTime.addDuration(
+                  DateTime.nowUnsafe(),
+                  `${OBSERVATION_RETRY_BACKOFF_MS} millis`,
+                ),
+              ),
+              item.id,
+              claim,
+            );
+          if (attempts >= OBSERVATION_DROP_ATTEMPTS) {
+            // A clear or restore discarded the row, so there is nothing to report.
+            if (!isQueuedObservationClaimed.get(item.id, claim)) continue;
             await Effect.runPromise(
               Effect.logWarning("Akeru observational memory dropped a failed observation.", {
                 threadId: item.threadId,
@@ -1357,6 +1376,7 @@ export async function createAkeruMastraHarness(
             );
             try {
               await options.onObservationDropped?.({
+                observationId: item.id,
                 threadId: item.threadId,
                 ...(item.turnId !== null ? { turnId: item.turnId } : {}),
                 resourceId: item.resourceId,
@@ -1364,26 +1384,25 @@ export async function createAkeruMastraHarness(
                 attempts,
                 error: cause instanceof Error ? cause : new Error(String(cause)),
               });
+              removeQueuedObservation.run(item.id, claim);
             } catch (callbackCause) {
               await Effect.runPromise(
                 Effect.logWarning("Akeru observation-drop notification failed.", {
                   threadId: item.threadId,
+                  attempts,
                   cause: callbackCause,
                 }),
               );
+              // Keep the row so a later drain retries the notice.
+              if (attempts >= OBSERVATION_NOTICE_ATTEMPTS)
+                removeQueuedObservation.run(item.id, claim);
+              else releaseWithBackoff();
             }
             continue;
           }
           // Release the row with backoff so later rows are not stuck behind a
           // failing observation; a subsequent drain retries or drops it.
-          releaseQueuedObservation.run(
-            attempts,
-            DateTime.formatIso(
-              DateTime.addDuration(DateTime.nowUnsafe(), `${OBSERVATION_RETRY_BACKOFF_MS} millis`),
-            ),
-            item.id,
-            claim,
-          );
+          releaseWithBackoff();
         }
       }
     })();

@@ -833,6 +833,51 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("keeps a dropped observation queued until its drop notice lands", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-notice-"));
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockRejectedValue(new Error("observer down"));
+    const warn = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const notices: string[] = [];
+    let noticeFails = true;
+    const harness = await makeObservationHarness(directory, {
+      onObservationDropped: (input) => {
+        notices.push(input.observationId);
+        if (noticeFails) throw new Error("orchestration unavailable");
+      },
+    });
+    const queuePath = NodePath.join(directory, "observational-memory.sqlite.queue.sqlite");
+    const makeEligible = () => {
+      const db = new NodeSqlite.DatabaseSync(queuePath);
+      db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+        "2000-01-01T00:00:00.000Z",
+      );
+      db.close();
+    };
+    try {
+      const input = { threadId: "thread-notice", modelId: "openai/gpt-5.6-sol" };
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await (attempt === 0 ? harness.observeAfterTurn!(input) : harness.drainObservationQueue!());
+        makeEligible();
+      }
+      assert.equal(notices.length, 1);
+      const kept = queuedObservations(directory);
+      assert.equal(kept.length, 1);
+      assert.equal(kept[0]!.attempts, 3);
+
+      noticeFails = false;
+      await harness.drainObservationQueue!();
+      assert.deepEqual(notices, [kept[0]!.id, kept[0]!.id]);
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      warn.mockRestore();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("lets a later row drain ahead of a backed-off failure", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-hol-"));
     const calls: string[] = [];
