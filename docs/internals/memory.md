@@ -19,9 +19,10 @@ Mastra providers use this logical order on every turn:
 2. `USER.md`;
 3. `MEMORY.md`;
 4. the responding bot's active `GROUP.md`;
-5. thread observations;
-6. up to 30 complete recent turns within an approximate 64,000-token budget;
-7. the current user message.
+5. the `<entity-memory>` packet of current entity facts;
+6. thread observations;
+7. up to 30 complete recent turns within an approximate 64,000-token budget;
+8. the current user message.
 
 The file snapshot is read immediately before Mastra admission. Codex, Claude, Grok, Kimi,
 and OpenCode Go use this unified path, including instance-specific model transports. Standard
@@ -30,7 +31,9 @@ field. Memory refresh does not require restarting a chat.
 
 Entity memory packets are built by `ProviderMemoryPacket` from authorized current revisions. The
 builder applies the same ordering and fact, character, and token bounds for every provider, so
-Mastra providers and the OpenCode compatibility bridge receive equivalent memory input. A
+Mastra providers and the OpenCode compatibility bridge receive equivalent memory input. Both append
+the packet to the persistent memory context after the Markdown snapshot and before thread
+observations. A
 tombstone is excluded on the next packet or recall read. Tombstoning also removes derived-copy
 rows; the Mastra invalidation call clears that thread's observational memory before a later turn
 can rebuild it.
