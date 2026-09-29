@@ -1244,6 +1244,10 @@ export const englishCatalog = {
     "Could not connect with the new credentials or restore the old connection.",
   "Could not connect with the new credentials. The old connection is unchanged.":
     "Could not connect with the new credentials. The old connection is unchanged.",
+  "The old connection could not be restored.": "The old connection could not be restored.",
+  "New credentials connected": "New credentials connected",
+  "The old connection could not be removed. Delete it from the channel list.":
+    "The old connection could not be removed. Delete it from the channel list.",
   "Connection saved. Could not connect {name}. Try again or check the connection settings.":
     "Connection saved. Could not connect {name}. Try again or check the connection settings.",
   "Update {name} credentials": "Update {name} credentials",

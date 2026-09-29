@@ -1192,6 +1192,10 @@ export const zhCNCatalog: TranslationCatalog = {
     "无法使用新凭据连接，也无法恢复原连接。",
   "Could not connect with the new credentials. The old connection is unchanged.":
     "无法使用新凭据连接。原连接保持不变。",
+  "The old connection could not be restored.": "无法恢复旧连接。",
+  "New credentials connected": "新凭据已连接",
+  "The old connection could not be removed. Delete it from the channel list.":
+    "无法移除旧连接。请从频道列表中删除它。",
   "Connection saved. Could not connect {name}. Try again or check the connection settings.":
     "连接已保存。无法连接 {name}。请重试或检查连接设置。",
   "Update {name} credentials": "更新 {name} 凭据",
