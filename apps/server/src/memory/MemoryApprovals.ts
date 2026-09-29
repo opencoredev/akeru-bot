@@ -157,6 +157,7 @@ const make = Effect.gen(function* () {
         commandId: CommandId.make(`memory-approval:${input.candidateId}:${input.phase}`),
         threadId: input.threadId,
         activity: {
+          // ProjectionSnapshotQuery pins pending requests by this exact ID.
           id: EventId.make(`memory-approval:${input.candidateId}:${input.phase}`),
           tone: input.phase === "requested" ? "approval" : "info",
           kind:

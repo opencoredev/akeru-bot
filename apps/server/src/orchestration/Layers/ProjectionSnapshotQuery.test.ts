@@ -2695,6 +2695,31 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
             'user-input-tied-a-resolution', 'thread-w', NULL, 'info', 'user-input.resolved',
             'Tied open question', '{"requestId":"input-tied-open"}', NULL,
             '2026-03-01T00:00:05.000Z'
+          ),
+          (
+            'memory-approval:memory-open:requested', 'thread-w', NULL, 'approval',
+            'memory.approval.requested', 'Save to project memory?',
+            '{"candidateId":"memory-open"}', NULL, '2026-03-01T00:00:06.000Z'
+          ),
+          (
+            'memory-approval:memory-decided:requested', 'thread-w', NULL, 'approval',
+            'memory.approval.requested', 'Save to project memory?',
+            '{"candidateId":"memory-decided"}', NULL, '2026-03-01T00:00:07.000Z'
+          )
+      `;
+      yield* sql`
+        INSERT INTO akeru_memory_candidates (
+          candidate_id, tenant_id, initiating_user_id, source_thread_id, fact_text,
+          target_scope, sensitive, confidence, affected_bot_ids_json, status, created_at
+        )
+        VALUES
+          (
+            'memory-open', 'tenant', 'user', 'thread-w', 'Open fact', 'project', 0, 1, '[]',
+            'pending', '2026-03-01T00:00:06.000Z'
+          ),
+          (
+            'memory-decided', 'tenant', 'user', 'thread-w', 'Decided fact', 'project', 0, 1,
+            '[]', 'approved', '2026-03-01T00:00:07.000Z'
           )
       `;
       yield* sql`
@@ -2718,11 +2743,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         const ids = new Set(
           detailWithPinnedRequests.value.activities.map((activity) => activity.id),
         );
-        assert.equal(detailWithPinnedRequests.value.activities.length, 503);
+        assert.equal(detailWithPinnedRequests.value.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
         assert.equal(ids.has(asEventId("user-input-closed")), false);
         assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-open:requested")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-decided:requested")), false);
       }
 
       const windowWithPinnedRequests = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
@@ -2733,11 +2760,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         const ids = new Set(
           windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id),
         );
-        assert.equal(windowWithPinnedRequests.value.thread.activities.length, 503);
+        assert.equal(windowWithPinnedRequests.value.thread.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
         assert.equal(ids.has(asEventId("user-input-closed")), false);
         assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-open:requested")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-decided:requested")), false);
       }
     }),
   );

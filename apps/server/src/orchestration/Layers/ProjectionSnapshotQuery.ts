@@ -1886,10 +1886,22 @@ pending_approval_requests AS (
             )
             AND json_extract(activity.payload_json, '$.requestId') IS NOT NULL
         ),
+        pending_memory_approval_activities AS (
+          SELECT activity.activity_id
+          FROM akeru_memory_candidates AS candidate
+          INNER JOIN projection_thread_activities AS activity
+            ON activity.activity_id = 'memory-approval:' || candidate.candidate_id || ':requested'
+          WHERE candidate.source_thread_id = ${threadId}
+            AND candidate.status = 'pending'
+            AND activity.thread_id = candidate.source_thread_id
+        ),
         pinned_activity_ids AS (
           SELECT activity_id
           FROM pending_approval_activities
           WHERE request_order = 1
+          UNION ALL
+          SELECT activity_id
+          FROM pending_memory_approval_activities
           UNION ALL
           SELECT activity_id
           FROM user_input_lifecycle
