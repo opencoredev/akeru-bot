@@ -45,6 +45,15 @@ describe("mobile language preferences", () => {
     },
   );
 
+  it("picks a supported second language from the ordered device list", () => {
+    const locales = readDeviceLocales(() => ["ja-JP", "zh-Hans-CN"]);
+    expect(locales).toEqual(["ja-JP", "zh-Hans-CN"]);
+    expect(resolveMobileLanguage(undefined, locales).locale).toBe("zh-Hans-CN");
+    expect(readDeviceLocales(() => undefined)).toEqual([
+      Intl.DateTimeFormat().resolvedOptions().locale,
+    ]);
+  });
+
   it("falls back to English if device locale is unavailable", () => {
     expect(resolveMobileLanguage(undefined, [])).toEqual({ preference: "system", locale: "en" });
     const formatter = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {

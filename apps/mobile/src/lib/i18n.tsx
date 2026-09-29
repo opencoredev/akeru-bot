@@ -15,7 +15,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform, Settings } from "react-native";
 import { mobilePreferencesAtom } from "../state/preferences";
 import { readDeviceLocales, resolveMobileLanguage } from "./languagePreferences";
 
@@ -36,9 +36,13 @@ const LanguageContext = createContext({
   translator: fallbackTranslator,
 });
 
+// iOS keeps the ordered language list in user defaults; Android exposes only the resolved locale.
+const readDevicePreferredLocales = () =>
+  readDeviceLocales(() => (Platform.OS === "ios" ? Settings.get("AppleLanguages") : undefined));
+
 export function MobileLanguageProvider({ children }: { readonly children: ReactNode }) {
   const stored = useAtomValue(mobilePreferencesAtom);
-  const [deviceLocales, setDeviceLocales] = useState(readDeviceLocales);
+  const [deviceLocales, setDeviceLocales] = useState(readDevicePreferredLocales);
   const language = AsyncResult.isSuccess(stored) ? stored.value.language : undefined;
   const resolved = useMemo(
     () => resolveMobileLanguage(language, deviceLocales),
@@ -54,7 +58,7 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
-      const next = readDeviceLocales();
+      const next = readDevicePreferredLocales();
       setDeviceLocales((current) =>
         current.length === next.length && current.every((locale, index) => locale === next[index])
           ? current
