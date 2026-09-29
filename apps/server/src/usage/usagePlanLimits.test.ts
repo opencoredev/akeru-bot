@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import {
   parseClaudeUsage,
   parseCodexUsage,
+  readProviderPlanLimits,
   readPlanLimits,
   resetPlanLimitCache,
 } from "./usagePlanLimits.ts";
@@ -106,6 +107,18 @@ describe("readPlanLimits cache", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("reads only the requested provider for a bot usage view", async () => {
+    const getAccessToken = vi.fn(async () => "go-key");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const limit = await readProviderPlanLimits("opencode-go", getAccessToken);
+    expect(limit?.provider).toBe("opencode-go");
+    expect(getAccessToken).toHaveBeenCalledOnce();
+    expect(getAccessToken).toHaveBeenCalledWith("opencode-go");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("keeps the last Claude windows when Anthropic rate-limits", async () => {

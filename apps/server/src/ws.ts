@@ -66,6 +66,7 @@ import {
   type ServerSelfUpdateError,
   type ServerSelfUpdateProgressEvent,
   type ServerProvider,
+  type SubscriptionProviderId,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
   isProviderAvailable,
@@ -176,7 +177,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { BotUsageLedger } from "./usage/BotUsageLedger.ts";
 import * as UsageService from "./usage/UsageService.ts";
-import { readPlanLimits } from "./usage/usagePlanLimits.ts";
+import { readProviderPlanLimits } from "./usage/usagePlanLimits.ts";
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -3198,7 +3199,7 @@ const makeWsRpcLayer = (
                       usd: priced.reduce((total, entry) => total + entry.costUsd, 0),
                     }
                   : { status: "unavailable" as const, usd: null };
-              const driverConnection: Record<string, string> = {
+              const driverConnection: Record<string, SubscriptionProviderId> = {
                 claude: "anthropic",
                 claudeAgent: "anthropic",
                 codex: "openai-codex",
@@ -3214,13 +3215,14 @@ const makeWsRpcLayer = (
                     ?.driver ?? bot.value.engine.provider)
                 : undefined;
               const connection = driver === undefined ? undefined : driverConnection[driver];
-              const planLimits = yield* Effect.promise(() =>
-                readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
-              ).pipe(Effect.catchCause(() => Effect.succeed([])));
               const plan =
                 connection === undefined
                   ? undefined
-                  : planLimits.find((limits) => limits.provider === connection);
+                  : yield* Effect.promise(() =>
+                      readProviderPlanLimits(connection, (provider) =>
+                        subscriptionAuth.getPlanAccessToken(provider),
+                      ),
+                    ).pipe(Effect.catchCause(() => Effect.succeed(null)));
               const window =
                 plan?.status === "ok"
                   ? (plan.windows.find((candidate) => candidate.kind === "session") ??

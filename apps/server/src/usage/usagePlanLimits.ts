@@ -568,7 +568,7 @@ function emptyConnectedLimits(provider: SubscriptionProviderId): UsageProviderPl
   };
 }
 
-async function readProviderPlanLimits(
+export async function readProviderPlanLimits(
   provider: SubscriptionProviderId,
   getAccessToken: GetAccessToken,
 ): Promise<UsageProviderPlanLimits | null> {
