@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
@@ -10,6 +10,10 @@ import type {
 
 import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
 import { serverEnvironment } from "../../state/server";
+
+const unavailableSynthesis = storedReplySynthesisCapability();
+const subscribeUnavailable = () => () => {};
+const getUnavailableSynthesis = () => unavailableSynthesis;
 
 export function replyPlaybackControlProps(
   session: ReplyPlaybackSession | null,
@@ -38,6 +42,10 @@ export function useReplyPlaybackThread(options: {
   const synthesis = useMemo(
     () => storedReplySynthesisCapability((settings ?? DEFAULT_SERVER_SETTINGS).voice),
     [settings],
+  );
+  const appliedSynthesis = useSyncExternalStore(
+    session?.subscribeSynthesis ?? subscribeUnavailable,
+    session?.getSynthesisSnapshot ?? getUnavailableSynthesis,
   );
   const signature = options.messages
     .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
@@ -68,5 +76,5 @@ export function useReplyPlaybackThread(options: {
   useEffect(() => {
     session?.observe(options.messages);
   }, [session, options.messages, signature]);
-  return synthesis;
+  return appliedSynthesis;
 }

@@ -43,6 +43,7 @@ export function createReplyPlaybackSession(options: {
   readonly synthesis?: StoredReplySynthesisCapability;
 }) {
   let synthesis = options.synthesis ?? storedReplySynthesisCapability();
+  const synthesisListeners = new Set<() => void>();
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
   const preference = createReplyReadoutPreference(options.storage, () => {
@@ -119,8 +120,14 @@ export function createReplyPlaybackSession(options: {
     get synthesis() {
       return synthesis;
     },
+    getSynthesisSnapshot: () => synthesis,
+    subscribeSynthesis: (listener: () => void) => {
+      synthesisListeners.add(listener);
+      return () => synthesisListeners.delete(listener);
+    },
     setSynthesis: (next: StoredReplySynthesisCapability) => {
       synthesis = next;
+      for (const listener of synthesisListeners) listener();
     },
     actionFor,
     setContext: (next: ReplyPlaybackContext | null) => {
@@ -192,6 +199,7 @@ export function createReplyPlaybackSession(options: {
     },
     dispose: () => {
       controller.dispose();
+      synthesisListeners.clear();
     },
   };
 }
