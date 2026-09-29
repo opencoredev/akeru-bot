@@ -36,4 +36,17 @@ describe("web reply playback synthesis", () => {
     });
     session.dispose();
   });
+
+  it("leaves replies from another environment unavailable", async () => {
+    const synthesize = vi.fn();
+    const session = createWebReplyPlaybackSession({
+      environmentId: "primary" as never,
+      voice: { enabled: true, provider: "composed" },
+      synthesize,
+      cancel: vi.fn(),
+    });
+    expect(session.synthesisFor("remote")).toMatchObject({ available: false });
+    expect(session.synthesisFor("primary")).toMatchObject({ available: true });
+    session.dispose();
+  });
 });

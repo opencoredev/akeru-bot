@@ -8,6 +8,9 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { createBrowserReplyAudio } from "./replyPlaybackAudio";
 import { synthesizeVoiceChunks } from "@t3tools/client-runtime/voice";
 
+const OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE =
+  "Reading replies aloud is only available for this device's primary environment.";
+
 let operationSequence = 0;
 const operationId = () => `voice-${Date.now()}-${operationSequence++}`;
 
@@ -58,10 +61,22 @@ export function createWebReplyPlaybackSession(
         localStorage.setItem(key, value);
       },
     },
-    synthesis: storedReplySynthesisCapability(options.voice),
+    // Speech runs on the primary environment with its voice settings, so replies from another
+    // environment stay unavailable instead of being read by the wrong server.
+    synthesis: (replyEnvironmentId) =>
+      replyEnvironmentId === environmentId
+        ? storedReplySynthesisCapability(options.voice)
+        : {
+            available: false,
+            provider: "unavailable",
+            voice: "unavailable",
+            reason: OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE,
+          },
     prepare: async (request, signal, events) => {
       if (!environmentId || !options.synthesize || !options.cancel)
         throw new Error("Voice synthesis is unavailable.");
+      if (request.identity.environmentId !== environmentId)
+        throw new Error(OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE);
       const id = operationId();
       const abort = () => {
         void options.cancel?.({ environmentId, input: { operationId: id } });
