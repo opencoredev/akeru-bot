@@ -201,6 +201,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
       assert.equal(openItem?.taskOrRoutine, "Release notes");
       assert.equal(openItem?.memoryApproval?.candidateId, proposed.candidateId);
       assert.equal((yield* repository.listCurrent({ access })).length, 0);
+      // Generic inbox dismissal cannot close an undecided memory approval.
+      assert.equal(botInbox.resolveById(openItem!.id), false);
+      assert.equal(botInbox.list().find((item) => item.id === openItem!.id)?.status, "open");
 
       const receipt = yield* approvals.decide({
         access,

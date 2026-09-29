@@ -222,12 +222,16 @@ export class BotInboxService {
     return changed;
   }
 
+  // Generic dismissal. Memory approvals close only when their candidate is
+  // decided, so this leaves them open.
   resolveById(id: string): boolean {
     this.reload();
     const resolvedAt = this.now();
     let changed = false;
     this.items = this.items.map((item) => {
-      if (item.id !== id || item.status === "resolved") return item;
+      if (item.id !== id || item.status === "resolved" || item.memoryApproval !== undefined) {
+        return item;
+      }
       changed = true;
       return {
         ...item,
