@@ -702,12 +702,13 @@ const make = Effect.gen(function* () {
           ) AS "observerTokens",
           COALESCE(SUM(CASE WHEN state = 'reported' AND category = 'reflector'
             THEN input_tokens + output_tokens ELSE 0 END), 0) AS "reflectorTokens",
-          COALESCE(SUM(CASE WHEN state = 'unavailable' AND category NOT IN ('observer', 'reflector')
-            THEN 1 ELSE 0 END), 0) AS "unavailableCoreEntries",
-          COALESCE(SUM(CASE WHEN state = 'unavailable' AND category = 'observer' THEN 1 ELSE 0 END), 0)
-            AS "unavailableObserverEntries",
-          COALESCE(SUM(CASE WHEN state = 'unavailable' AND category = 'reflector' THEN 1 ELSE 0 END), 0)
-            AS "unavailableReflectorEntries"
+          COALESCE(SUM(CASE WHEN state = 'unavailable' AND reserved_tokens > 0
+            AND category NOT IN ('observer', 'reflector') THEN 1 ELSE 0 END), 0)
+            AS "unavailableCoreEntries",
+          COALESCE(SUM(CASE WHEN state = 'unavailable' AND reserved_tokens > 0
+            AND category = 'observer' THEN 1 ELSE 0 END), 0) AS "unavailableObserverEntries",
+          COALESCE(SUM(CASE WHEN state = 'unavailable' AND reserved_tokens > 0
+            AND category = 'reflector' THEN 1 ELSE 0 END), 0) AS "unavailableReflectorEntries"
         FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
       `;
       const entries = yield* Effect.forEach(rows, decodeEntry);
@@ -758,7 +759,7 @@ const make = Effect.gen(function* () {
           COALESCE(SUM(CASE WHEN state = 'reported' THEN cache_creation_tokens ELSE 0 END), 0) AS "cacheCreationTokens",
           COALESCE(SUM(CASE WHEN state = 'reported' THEN output_tokens ELSE 0 END), 0) AS "outputTokens",
           COALESCE(SUM(CASE WHEN state = 'reported' THEN reasoning_tokens ELSE 0 END), 0) AS "reasoningTokens",
-          COALESCE(SUM(CASE WHEN state = 'unavailable' OR
+          COALESCE(SUM(CASE WHEN (state = 'unavailable' AND reserved_tokens > 0) OR
             (state = 'reported' AND (input_tokens IS NULL OR output_tokens IS NULL))
             THEN 1 ELSE 0 END), 0) AS "incompleteEntries"
         FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
