@@ -4084,12 +4084,17 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const opened = yield* Deferred.make<string>();
+        const nextOpened = yield* Deferred.make<string>();
+        let openedCount = 0;
         yield* controller.streamEvents.pipe(
           Stream.runForEach((event) =>
             Effect.sync(() => {
               events.push(event);
               if (event.type === "request.opened" && event.requestId) {
-                Deferred.doneUnsafe(opened, Exit.succeed(String(event.requestId)));
+                Deferred.doneUnsafe(
+                  openedCount++ === 0 ? opened : nextOpened,
+                  Exit.succeed(String(event.requestId)),
+                );
               }
             }),
           ),
@@ -4110,7 +4115,7 @@ describe("AgentControllerLive", () => {
           ),
         ).pipe(Effect.forkChild({ startImmediately: true }));
         const requestId = yield* Deferred.await(opened);
-        return { controller, toolCall, requestId };
+        return { controller, toolCall, requestId, nextOpened };
       });
 
     const provideRoutineController = <A, E>(
@@ -4216,6 +4221,45 @@ describe("AgentControllerLive", () => {
               }),
             ),
         },
+      );
+    });
+
+    it.effect("keeps the turn waiting when another routine review remains open", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const {
+            controller,
+            toolCall: firstCall,
+            nextOpened,
+          } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(30 * 60_000);
+          const createRoutine = mastra.harnessOptions[0]?.createRoutine;
+          assert.isDefined(createRoutine);
+          const secondCall = yield* Effect.promise(() =>
+            createRoutine(String(codexThreadId), routineInput).then(
+              (value) => Exit.succeed(value),
+              (cause: unknown) => Exit.fail(cause),
+            ),
+          ).pipe(Effect.forkChild({ startImmediately: true }));
+          const secondRequestId = yield* Deferred.await(nextOpened);
+
+          yield* TestClock.adjust(30 * 60_000);
+          assert.isTrue(Exit.isFailure(yield* Fiber.join(firstCall)));
+          mastra.finishSend();
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(secondRequestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(secondCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+        }),
+        mastra,
+        {},
       );
     });
   });

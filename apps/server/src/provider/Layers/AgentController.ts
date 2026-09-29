@@ -1452,7 +1452,11 @@ const make = (options?: AgentControllerLiveOptions) =>
                         // Close the review card so the chat no longer waits on the user.
                         const current = sessions.get(threadId);
                         if (!current?.activeTurn) return;
-                        current.activeTurn.waiting = false;
+                        current.activeTurn.waiting =
+                          current.pendingApprovals.size > 0 ||
+                          pendingRoutineRequests
+                            .entries()
+                            .some(([, request]) => request.threadId === threadId);
                         publish({
                           ...baseEvent(ThreadIdBrand(threadId), current, current.activeTurn.turnId),
                           requestId: RuntimeRequestId.make(requestId),
@@ -1465,7 +1469,11 @@ const make = (options?: AgentControllerLiveOptions) =>
                             outcome: "cancelled",
                           },
                         });
-                        publishSessionState(ThreadIdBrand(threadId), current, "running");
+                        publishSessionState(
+                          ThreadIdBrand(threadId),
+                          current,
+                          current.activeTurn.waiting ? "waiting" : "running",
+                        );
                       }),
                     ),
                   ),
@@ -3547,14 +3555,22 @@ const make = (options?: AgentControllerLiveOptions) =>
       // in time always decides the outcome even if creation outlasts the limit.
       const routineRequest = pendingRoutineRequests.claim(toolCallId);
       if (routineRequest) {
-        if (active.activeTurn) active.activeTurn.waiting = false;
+        if (active.activeTurn) {
+          active.activeTurn.waiting =
+            active.pendingApprovals.size > 0 ||
+            pendingRoutineRequests.entries().some(([, request]) => request.threadId === key);
+        }
         publish({
           ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
           requestId: RuntimeRequestId.make(toolCallId),
           type: "request.resolved",
           payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
         });
-        publishSessionState(input.threadId, active, "running");
+        publishSessionState(
+          input.threadId,
+          active,
+          active.activeTurn.waiting ? "waiting" : "running",
+        );
         if (input.decision === "decline" || input.decision === "cancel") {
           pendingRoutineRequests.resolve(toolCallId, { status: "cancelled" });
           return;
