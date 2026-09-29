@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   CHATGPT_IMAGE_CAPABILITIES,
@@ -308,6 +308,25 @@ describe("oversized provider responses", () => {
       expect(failure.kind).toBe("provider-failed");
       expect(failure.message).toContain("larger than the image size limit");
     }
+  });
+});
+
+describe("rejected provider responses", () => {
+  it("close the response body", async () => {
+    const cancel = vi.fn();
+    const rejected = async () => new Response(new ReadableStream({ cancel }), { status: 503 });
+    const adapters = [
+      makeChatGptImageAdapter({
+        subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
+        fetchFn: rejected,
+      }),
+      makeGrokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: rejected }),
+    ];
+    for (const adapter of adapters) {
+      const failure = await failureOf(adapter.run(request(), new AbortController().signal));
+      expect(failure.kind).toBe("provider-failed");
+    }
+    expect(cancel).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -349,7 +349,10 @@ export function makeChatGptImageAdapter(deps: {
               tool_choice: { type: "image_generation" },
             }),
           });
-          if (!response.ok) throw failureForStatus(label, response.status);
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => undefined);
+            throw failureForStatus(label, response.status);
+          }
           body = await readBoundedText(response, label);
         } catch (cause) {
           rethrowFetchFailure(label, cause);
@@ -418,7 +421,10 @@ export function makeGrokImageAdapter(deps: {
           },
           body: JSON.stringify(body),
         });
-        if (!response.ok) throw failureForStatus(label, response.status);
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => undefined);
+          throw failureForStatus(label, response.status);
+        }
         payload = JSON.parse(await readBoundedText(response, label));
       } catch (cause) {
         rethrowFetchFailure(label, cause);
