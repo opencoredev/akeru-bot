@@ -9096,7 +9096,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         () => Effect.succeed({ sequence: 1 }),
       );
       yield* buildAppUnderTest({
-        layers: { orchestrationEngine: { dispatch, readEvents: () => Stream.empty } },
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([{ ...readyDefaultProvider, enabled: false }]),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
@@ -9528,7 +9533,17 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
       yield* buildAppUnderTest({
         layers: {
-          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+          providerRegistry: {
+            getProviders: Effect.succeed([
+              readyDefaultProvider,
+              {
+                ...readyDefaultProvider,
+                instanceId: ProviderInstanceId.make("claudeAgent"),
+                driver: ProviderDriverKind.make("claudeAgent"),
+                enabled: false,
+              },
+            ]),
+          },
           projectionSnapshotQuery: {
             getThreadShellById: () =>
               Effect.succeed(
