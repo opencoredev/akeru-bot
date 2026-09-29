@@ -424,6 +424,71 @@ describe("subscription auth storage", () => {
     }
   });
 
+  it("does not restore an OAuth login removed while a health check saves its refresh", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 0 } }),
+    );
+    const checking = await makeTestSubscriptionAuthService(authPath);
+    const other = await makeTestSubscriptionAuthService(authPath);
+    const writes = checking as unknown as {
+      updateCredentials: (f: (data: object) => object) => Promise<object>;
+    };
+    const write = writes.updateCredentials.bind(checking);
+    let calls = 0;
+    // Another client logs out after the ownership check passes, before the write lands.
+    vi.spyOn(writes, "updateCredentials").mockImplementation(async (f) => {
+      if (++calls === 1) await other.logout("xai");
+      return write(f);
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ access_token: "refreshed", expires_in: 3600 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    try {
+      await checking.testHealth("xai");
+      expect(calls).toBe(1);
+      expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not rewrite an unexpired OAuth credential during a health check", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        xai: { type: "oauth", access: "a", refresh: "r", expires: Date.now() + 60_000 },
+      }),
+    );
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const writes = service as unknown as {
+      updateCredentials: (f: (data: object) => object) => Promise<object>;
+    };
+    const update = vi.spyOn(writes, "updateCredentials");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 200 })),
+    );
+    try {
+      await service.testHealth("xai");
+      expect(update).not.toHaveBeenCalled();
+      expect(service.statuses().find((status) => status.provider === "xai")?.health).toBe(
+        "healthy",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each(["api-key", "oauth"] as const)(
     "ignores a rejected health check for replaced %s credentials",
     async (authMode) => {

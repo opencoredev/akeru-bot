@@ -764,7 +764,20 @@ export class SubscriptionAuthService {
       const refreshed =
         credential.expires > Date.now() ? credential : await this.runRefresh(provider, credential);
       if (!(await this.isCurrentHealthCredential(provider, credential, version))) return;
-      await this.setCredential(provider, refreshed);
+      if (refreshed !== credential) {
+        // Save under the store lock only while the tested credential is still stored,
+        // so a logout or replacement that lands meanwhile is never undone.
+        const saved = await this.updateCredentials((data) => {
+          const latest = data[provider];
+          return latest?.type === "oauth" &&
+            latest.access === credential.access &&
+            latest.refresh === credential.refresh
+            ? { ...data, [provider]: { ...refreshed, type: "oauth" } }
+            : data;
+        });
+        const stored = saved[provider];
+        if (stored?.type !== "oauth" || stored.access !== refreshed.access) return;
+      }
       testedCredential = { type: "oauth", ...refreshed };
       const request = oauthHealthRequest(provider, refreshed);
       if (!request) throw new Error("This subscription does not expose a health endpoint.");
