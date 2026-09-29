@@ -114,6 +114,13 @@ describe("bot selection", () => {
     expect(useRosterStore.getState().openChatByBotId).toEqual({});
   });
 
+  it("remembers the opened chat so an older remembered chat cannot replace the newest", () => {
+    useRosterStore.getState().recordChatPath("akeru", "/env-one/thread-old");
+    useRosterStore.getState().openBotChat("akeru", null, "/env-one/thread-new");
+    expect(useRosterStore.getState().openChatByBotId).toEqual({});
+    expect(useRosterStore.getState().chatPathByBotId.akeru).toBe("/env-one/thread-new");
+  });
+
   it("drops opened chats when the roster switches environment", () => {
     useRosterStore.getState().replaceRoster({ environmentId: "env-one", bots: [], groups: [] });
     useRosterStore.getState().openBotChat("akeru", "thread-old");

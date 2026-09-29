@@ -64,7 +64,13 @@ export function BotChatsSection({
               )}
               onClick={() => {
                 if (!row.current) {
-                  useRosterStore.getState().openBotChat(botId, row.newest ? null : row.threadId);
+                  useRosterStore
+                    .getState()
+                    .openBotChat(
+                      botId,
+                      row.newest ? null : row.threadId,
+                      `/${environmentId}/${row.threadId}`,
+                    );
                 }
                 onOpenChat?.();
               }}

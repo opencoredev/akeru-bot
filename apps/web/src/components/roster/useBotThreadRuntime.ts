@@ -112,9 +112,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     : null;
   useEffect(() => {
     if (openThreadId !== null && openThreadId === latestThreadId) {
-      useRosterStore.getState().openBotChat(botId, null);
+      useRosterStore
+        .getState()
+        .openBotChat(botId, null, `/${primaryEnvironmentId}/${latestThreadId}`);
     }
-  }, [botId, latestThreadId, openThreadId]);
+  }, [botId, latestThreadId, openThreadId, primaryEnvironmentId]);
   // Holds a just-created chat until its shell arrives. A chat that was linked
   // and then left the shell list was archived or deleted, so it is dropped
   // rather than sent into.

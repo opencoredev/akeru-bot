@@ -190,8 +190,11 @@ interface RosterStore {
   recordLastMessage: (botId: string, message: RosterLastMessage) => void;
   recordChatPath: (botId: string, path: string) => void;
   forgetChatPath: (botId: string) => void;
-  /** Opens one of the bot's chats; null returns the bot to its newest chat. */
-  openBotChat: (botId: string, threadId: string | null) => void;
+  /**
+   * Opens one of the bot's chats; null returns the bot to its newest chat. `chatPath` also
+   * remembers the opened chat, so an older remembered chat cannot take its place.
+   */
+  openBotChat: (botId: string, threadId: string | null, chatPath?: string) => void;
   replaceRoster: (input: {
     environmentId: string;
     bots: Bot[];
@@ -408,7 +411,8 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     saveState(get());
   },
 
-  openBotChat: (botId, threadId) => {
+  openBotChat: (botId, threadId, chatPath) => {
+    if (chatPath !== undefined) get().recordChatPath(botId, chatPath);
     const current = get().openChatByBotId[botId];
     if ((current ?? null) === threadId) return;
     const openChatByBotId = { ...get().openChatByBotId };

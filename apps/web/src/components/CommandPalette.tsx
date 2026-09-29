@@ -398,7 +398,11 @@ function useChatSearchItems(query: string): {
         const newest = findLatestBotThreadTarget(botId, chat.environmentId, shells);
         const roster = useRosterStore.getState();
         roster.selectBot(botId);
-        roster.openBotChat(botId, newest?.threadId === chat.threadId ? null : chat.threadId);
+        roster.openBotChat(
+          botId,
+          newest?.threadId === chat.threadId ? null : chat.threadId,
+          `/${chat.environmentId}/${chat.threadId}`,
+        );
         await navigate({ to: "/bots/$botId", params: { botId } });
       } else if (shell?.groupId) {
         await navigate({ to: "/groups/$groupId", params: { groupId: shell.groupId } });
