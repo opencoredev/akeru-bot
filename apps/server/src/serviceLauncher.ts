@@ -84,10 +84,19 @@ async function syncFile(filePath: string): Promise<void> {
 
 const UNSUPPORTED_DIRECTORY_SYNC = new Set(["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]);
 
-/** Flushes a directory entry where the platform allows it. Windows cannot sync a directory. */
-async function syncDirectory(directory: string): Promise<void> {
+/**
+ * Flushes a directory entry where the platform allows it. Windows cannot sync a directory.
+ * `open` is replaceable so tests can simulate filesystems that reject a directory sync.
+ */
+export async function syncDirectory(
+  directory: string,
+  open: (
+    path: string,
+    flags: string,
+  ) => Promise<Pick<NodeFSP.FileHandle, "sync" | "close">> = NodeFSP.open,
+): Promise<void> {
   try {
-    const handle = await NodeFSP.open(directory, "r");
+    const handle = await open(directory, "r");
     try {
       await handle.sync();
     } finally {
