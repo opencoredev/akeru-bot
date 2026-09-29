@@ -127,6 +127,7 @@ export function packageRemoteArchive(input: {
       copy(input.nodeBinary, NodePath.join("node", "node.exe"), 0o755);
       NodeFS.writeFileSync(NodePath.join(root, "akeru.cmd"), WINDOWS_LAUNCHER);
       copy(NodePath.join(scriptsDirectory, "akeru-remote-admin.mjs"), "remote-admin.mjs");
+      copy(NodePath.join(scriptsDirectory, "install-remote.ps1"), "install-remote.ps1");
       copy(
         NodePath.join(scriptsDirectory, "initialize-remote-identity.cjs"),
         "initialize-remote-identity.cjs",

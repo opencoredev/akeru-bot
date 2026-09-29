@@ -85,7 +85,7 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
                 { status: 409, headers: { "retry-after": "3600" } },
               );
             }
-            return yield* updater.update({ targetVersion }).pipe(
+            return yield* updater.update({ targetVersion, source: "remote-archive" }).pipe(
               Effect.map((result) => HttpServerResponse.jsonUnsafe(result, { status: 202 })),
               Effect.catchTag("ServerSelfUpdateError", (error) =>
                 Effect.succeed(

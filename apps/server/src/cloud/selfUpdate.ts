@@ -5,7 +5,11 @@ import {
   type ServerSelfUpdateProgressStage,
   type ServerSelfUpdateResult,
 } from "@t3tools/contracts";
-import { HostProcessExecutablePath } from "@t3tools/shared/hostProcess";
+import {
+  HostProcessEnvironment,
+  HostProcessExecutablePath,
+  HostProcessPlatform,
+} from "@t3tools/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -13,6 +17,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -39,7 +44,7 @@ export class ServerSelfUpdate extends Context.Service<
   ServerSelfUpdate,
   {
     readonly update: (
-      input: ServerSelfUpdateInput,
+      input: ServerSelfUpdateInput & { readonly source?: "remote-archive" },
       reportProgress?: (stage: ServerSelfUpdateProgressStage) => Effect.Effect<void>,
     ) => Effect.Effect<ServerSelfUpdateResult, ServerSelfUpdateError>;
   }
@@ -52,6 +57,11 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const execPath = yield* HostProcessExecutablePath;
+  const platform = yield* HostProcessPlatform;
+  const environment = yield* HostProcessEnvironment;
+  const artifactRoot =
+    environment.AKERU_SERVICE_RUNTIME_ROOT ??
+    path.resolve(path.dirname(execPath), platform === "win32" ? ".." : "../..");
   const inFlight = yield* Ref.make(false);
 
   const capability: ServerSelfUpdateCapability | null =
@@ -91,6 +101,65 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
         fs,
         path,
         runner,
+        ...(input.source === "remote-archive"
+          ? {
+              prepareArchive: (runtime) =>
+                Effect.scoped(
+                  Effect.gen(function* () {
+                    const installRoot = yield* fs.makeTempDirectoryScoped({
+                      directory: path.dirname(runtime.versionDir),
+                      prefix: ".archive-",
+                    });
+                    const windows = platform === "win32";
+                    const installer = path.join(
+                      artifactRoot,
+                      windows ? "install-remote.ps1" : "install-remote.sh",
+                    );
+                    const result = yield* runner.run({
+                      command: windows ? "powershell.exe" : "sh",
+                      args: windows
+                        ? [
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            installer,
+                            "-PrepareOnly",
+                            "-Tag",
+                            `v${targetVersion}`,
+                          ]
+                        : [installer, "--prepare-only", "--tag", `v${targetVersion}`],
+                      env: {
+                        ...environment,
+                        AKERU_HOME: serverConfig.baseDir,
+                        T3CODE_HOME: serverConfig.baseDir,
+                        AKERU_INSTALL_ROOT: installRoot,
+                        AKERU_BIN_DIR: path.join(installRoot, "bin"),
+                      },
+                      timeout: Duration.minutes(10),
+                    });
+                    if (result.code !== 0)
+                      return yield* new PinnedRuntimeInstallError({
+                        step: "verifying the remote release archive",
+                        exitCode: Number(result.code),
+                        stdoutLength: result.stdout.length,
+                        stderrLength: result.stderr.length,
+                      });
+                    const archiveRoot = path.join(installRoot, "versions", targetVersion);
+                    yield* fs.copy(archiveRoot, runtime.versionDir, { overwrite: true });
+                  }),
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    Schema.is(PinnedRuntimeInstallError)(cause)
+                      ? cause
+                      : new PinnedRuntimeInstallError({
+                          step: "preparing the verified remote archive",
+                          cause,
+                        }),
+                  ),
+                ),
+            }
+          : {}),
         validate: (runtime) =>
           runner
             .run({

@@ -83,6 +83,9 @@ interface PinnedRuntimeInstallInput {
   readonly fs: FileSystem.FileSystem;
   readonly path: Path.Path;
   readonly runner: ProcessRunner.ProcessRunner["Service"];
+  readonly prepareArchive?: (
+    paths: PinnedRuntimePaths,
+  ) => Effect.Effect<void, PinnedRuntimeInstallError>;
   readonly validate: (
     paths: PinnedRuntimePaths,
   ) => Effect.Effect<void, PinnedRuntimeInstallError | PinnedRuntimePreflightBlockedError>;
@@ -103,7 +106,18 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
     ),
   );
   const alreadyPinned =
-    entryExists && Option.isSome(sentinel) && sentinel.value.trim() === input.version;
+    entryExists &&
+    Option.isSome(sentinel) &&
+    sentinel.value.trim() === input.version &&
+    (input.prepareArchive === undefined ||
+      (yield* fs
+        .exists(input.path.join(paths.versionDir, ".archive-verified"))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new PinnedRuntimeInstallError({ step: "checking archive provenance", cause }),
+          ),
+        )));
   if (alreadyPinned) {
     yield* input.validate(paths);
     return paths;
@@ -152,35 +166,49 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
 
   return yield* Effect.gen(function* () {
     const installStep = "installing the pinned akeru-bot runtime (this can take a few minutes)";
-    yield* runner
-      .run({
-        command: "npm",
-        args: [
-          "install",
-          "--prefix",
-          stagingDir,
-          "--no-fund",
-          "--no-audit",
-          `akeru-bot@${input.version}`,
-        ],
-        // Native dependencies may compile from source on slower machines.
-        timeout: PINNED_RUNTIME_INSTALL_TIMEOUT,
-      })
-      .pipe(
-        Effect.mapError((cause) => new PinnedRuntimeInstallError({ step: installStep, cause })),
-        Effect.filterOrFail(
-          (result) => result.code === 0,
-          (result) =>
-            new PinnedRuntimeInstallError({
-              step: installStep,
-              exitCode: Number(result.code),
-              stdoutLength: result.stdout.length,
-              stderrLength: result.stderr.length,
-            }),
-        ),
-      );
+    if (input.prepareArchive !== undefined) {
+      yield* input.prepareArchive(stagingPaths);
+    } else {
+      yield* runner
+        .run({
+          command: "npm",
+          args: [
+            "install",
+            "--prefix",
+            stagingDir,
+            "--no-fund",
+            "--no-audit",
+            `akeru-bot@${input.version}`,
+          ],
+          // Native dependencies may compile from source on slower machines.
+          timeout: PINNED_RUNTIME_INSTALL_TIMEOUT,
+        })
+        .pipe(
+          Effect.mapError((cause) => new PinnedRuntimeInstallError({ step: installStep, cause })),
+          Effect.filterOrFail(
+            (result) => result.code === 0,
+            (result) =>
+              new PinnedRuntimeInstallError({
+                step: installStep,
+                exitCode: Number(result.code),
+                stdoutLength: result.stdout.length,
+                stderrLength: result.stderr.length,
+              }),
+          ),
+        );
+    }
 
     yield* input.validate(stagingPaths);
+    if (input.prepareArchive !== undefined) {
+      yield* fs
+        .writeFileString(input.path.join(stagingDir, ".archive-verified"), `${input.version}\n`)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new PinnedRuntimeInstallError({ step: "recording archive provenance", cause }),
+          ),
+        );
+    }
     yield* fs
       .writeFileString(stagingPaths.sentinelPath, `${input.version}\n`)
       .pipe(
@@ -195,6 +223,9 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
         Effect.all([
           fs.exists(paths.entryPath),
           fs.readFileString(paths.sentinelPath).pipe(Effect.option),
+          input.prepareArchive === undefined
+            ? Effect.succeed(true)
+            : fs.exists(input.path.join(paths.versionDir, ".archive-verified")),
         ]).pipe(
           Effect.mapError(
             (checkCause) =>
@@ -203,8 +234,9 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
                 cause: checkCause,
               }),
           ),
-          Effect.flatMap(([publishedEntryExists, publishedSentinel]) =>
+          Effect.flatMap(([publishedEntryExists, publishedSentinel, archiveVerified]) =>
             publishedEntryExists &&
+            archiveVerified &&
             Option.isSome(publishedSentinel) &&
             publishedSentinel.value.trim() === input.version
               ? Effect.succeed(false)

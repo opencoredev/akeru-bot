@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { HostProcessExecutablePath } from "@t3tools/shared/hostProcess";
+import { HostProcessExecutablePath, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -18,6 +18,8 @@ interface HarnessOptions {
   readonly mode?: "web" | "desktop";
   readonly managed?: boolean;
   readonly preflight?: "ready" | "blocked";
+  readonly platform?: NodeJS.Platform;
+  readonly archiveFailure?: boolean;
   readonly requestUpdate?: ServiceLauncherClient.ServiceLauncherClient["Service"]["requestUpdate"];
 }
 
@@ -31,6 +33,34 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
+        if (input.command === "sh" || input.command === "powershell.exe") {
+          order.push("archive");
+          expect(input.args).toContain("v1.1.0");
+          expect(input.args).toContain(input.command === "sh" ? "--prepare-only" : "-PrepareOnly");
+          const installRoot = input.env?.AKERU_INSTALL_ROOT;
+          if (installRoot === undefined) return yield* Effect.die("missing archive install root");
+          const entry = path.join(
+            installRoot,
+            "versions",
+            "1.1.0",
+            "node_modules",
+            "akeru-bot",
+            "dist",
+            "bin.mjs",
+          );
+          yield* fs.makeDirectory(path.dirname(entry), { recursive: true }).pipe(Effect.orDie);
+          yield* fs.writeFileString(entry, "verified archive bytes\n").pipe(Effect.orDie);
+          return {
+            stdout: "",
+            stderr: "",
+            code: ChildProcessSpawner.ExitCode(options.archiveFailure ? 1 : 0),
+            timedOut: false,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            stdoutInvalidUtf8: false,
+            stderrInvalidUtf8: false,
+          };
+        }
         if (input.command === "npm") {
           order.push("install");
           const prefix = input.args[input.args.indexOf("--prefix") + 1];
@@ -89,12 +119,42 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
     Effect.provideService(ProcessRunner.ProcessRunner, runner),
     Effect.provideService(ServiceLauncherClient.ServiceLauncherClient, launcher),
     Effect.provideService(HostProcessExecutablePath, "/usr/bin/node"),
+    Effect.provideService(HostProcessPlatform, options.platform ?? "linux"),
     Effect.provide(ServerConfig.layer({ ...config, mode: options.mode ?? "web" })),
   );
-  return { selfUpdate, order };
+  return { selfUpdate, order, baseDir };
 });
 
 it.layer(NodeServices.layer)("server self update", (it) => {
+  for (const platform of ["linux", "win32"] as const) {
+    it.effect(`publishes verified archive bytes without npm on ${platform}`, () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const { selfUpdate, order, baseDir } = yield* makeHarness({ platform });
+        const versionDir = path.join(baseDir, "runtime", "versions", "1.1.0");
+        const entry = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
+        yield* fs.makeDirectory(path.dirname(entry), { recursive: true });
+        yield* fs.writeFileString(entry, "unverified npm bytes\n");
+        yield* fs.writeFileString(path.join(versionDir, ".install-complete"), "1.1.0\n");
+        yield* selfUpdate.update({ targetVersion: "1.1.0", source: "remote-archive" });
+        expect(order).toEqual(["archive", "preflight", "accept"]);
+        expect(yield* fs.readFileString(entry)).toBe("verified archive bytes\n");
+        expect(yield* fs.exists(path.join(versionDir, ".archive-verified"))).toBe(true);
+      }),
+    );
+  }
+
+  it.effect("does not activate an archive rejected by the installer", () =>
+    Effect.gen(function* () {
+      const { selfUpdate, order } = yield* makeHarness({ archiveFailure: true });
+      const error = yield* selfUpdate
+        .update({ targetVersion: "1.1.0", source: "remote-archive" })
+        .pipe(Effect.flip);
+      expect(error.reason).toContain("Could not prepare");
+      expect(order).toEqual(["archive"]);
+    }),
+  );
   it.effect("stages and preflights before asking the launcher for an update ID", () =>
     Effect.gen(function* () {
       const { selfUpdate, order } = yield* makeHarness();
