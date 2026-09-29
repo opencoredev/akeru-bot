@@ -328,13 +328,14 @@ describe("channel health and repair", () => {
       'href="https://provider.example.com/console"',
     );
     expect(button(withConsole, "Reconnect")).toBeDefined();
-    expect(withConsole).toContain("Delivery is unconfirmed.");
+    expect(withConsole).toContain(channelFailureReason("delivery-unknown", "imessage"));
+    expect(withConsole).not.toContain("Delivery is unconfirmed.");
 
     fixtures.connections = [fixtureConnection];
     const withoutConsole = renderToStaticMarkup(<BotChannelsSettingsPanel />);
     expect(button(withoutConsole, "Check the channel")).toBeUndefined();
     expect(button(withoutConsole, "Reconnect")).toBeDefined();
-    expect(withoutConsole).toContain("Delivery is unconfirmed.");
+    expect(withoutConsole).toContain(channelFailureReason("delivery-unknown", "imessage"));
   });
 
   it("shows no repair for a healthy connected channel", () => {
