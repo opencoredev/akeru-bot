@@ -399,7 +399,7 @@ describe("image provider health test", () => {
   it("keeps image request health separate from an account probe failure", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     await runImageProviderHealthTest({
       provider: "grok",
       subscriptionAuth: service,
@@ -417,7 +417,7 @@ describe("image provider health test", () => {
   it("shows the latest successful account probe after a failed probe", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     await runImageProviderHealthTest({
       provider: "grok",
       subscriptionAuth: service,
@@ -429,7 +429,7 @@ describe("image provider health test", () => {
       fetchFn: async () => new Response("{}", { status: 200 }),
     });
 
-    const reloaded = new SubscriptionAuthService(authPath);
+    const reloaded = await makeTestSubscriptionAuthService(authPath);
     const grok = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
@@ -441,7 +441,7 @@ describe("image provider health test", () => {
   it("does not let an older image request failure override a successful account probe", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     service.recordImageRequestFailure("grok", "image request failed", "2020-01-01T00:00:00.000Z");
     await runImageProviderHealthTest({
       provider: "grok",
