@@ -195,6 +195,46 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
           }
+          // Bot engines bypass the turn preflight, so a changed engine is
+          // checked here as in WebSocket dispatch. Only an unknown model
+          // blocks the save; a missing provider is not evidence of that.
+          if (
+            (normalizedCommand.type === "bot.create" || normalizedCommand.type === "bot.update") &&
+            normalizedCommand.engine &&
+            Option.isSome(providerRegistry)
+          ) {
+            const engine = normalizedCommand.engine;
+            const existingBot =
+              normalizedCommand.type === "bot.update"
+                ? yield* projectionBots.getById({ botId: normalizedCommand.botId }).pipe(
+                    Effect.map(Option.getOrUndefined),
+                    Effect.catch((cause) =>
+                      failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                    ),
+                  )
+                : undefined;
+            const engineChanged =
+              existingBot === undefined ||
+              existingBot.engine?.provider !== engine.provider ||
+              existingBot.engine?.model !== engine.model;
+            if (engineChanged) {
+              const verdict = preflightProvider({
+                providers: yield* providerRegistry.value.getProviders,
+                providerId: engine.provider,
+                model: engine.model,
+                subscriptionStatuses: subscriptionAuth.statuses(),
+                subscriptionHealth: (instanceId) =>
+                  subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                requireSettledCatalog: true,
+              });
+              if (verdict?.category === "unsupported-model") {
+                return yield* failEnvironmentInvalidRequest("invalid_command", {
+                  detail: verdict.detail,
+                  unavailability: verdict.category,
+                });
+              }
+            }
+          }
           const shouldPreflightTurn =
             normalizedCommand.type === "thread.turn.start" &&
             Option.isNone(

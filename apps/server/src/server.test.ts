@@ -11325,6 +11325,50 @@ it.describe("ws bot engine model routing preflight", () => {
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
 
+  it.effect("rejects an HTTP bot.create when the model is not in the provider snapshot", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-http-preflight-"));
+      seedSubscriptionAuth(NodePath.join(baseDir, "userdata", "secrets"));
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 1 }),
+      );
+      yield* buildAppUnderTest({
+        config: { baseDir },
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([readyProvider(["gpt-5.6-sol"])]),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:operate",
+      });
+      const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+        headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+        body: yield* HttpBody.json({
+          type: "bot.create",
+          commandId: CommandId.make("cmd-http-bot-create-bad-model"),
+          botId: BotId.make("bot-http-bad-model"),
+          name: "Bad model bot",
+          title: "Bad model bot",
+          avatar: { kind: "dither", seed: "bad-model" },
+          engine: { provider: "codex", model: "not-a-model" },
+          sandbox: "local",
+          usageCap: null,
+          groupId: null,
+          createdAt: now,
+        }),
+      });
+
+      assert.equal(response.status, 400);
+      const error = (yield* response.json) as Record<string, unknown>;
+      assert.equal(error.unavailability, "unsupported-model");
+      assert.equal(dispatch.mock.calls.length, 0);
+    }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
+  );
+
   it.effect("lets bot.update pass when the saved engine is unchanged", () =>
     Effect.gen(function* () {
       const botId = BotId.make("bot-stale-model");
