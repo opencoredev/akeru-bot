@@ -197,7 +197,6 @@ export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     themeStorageReadFailure = null;
   } catch (cause) {
     throw new ThemeStorageError({
@@ -206,6 +205,11 @@ export function writeThemePreference(theme: Theme): void {
       theme,
       cause,
     });
+  }
+  try {
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // The saved key wins on read, so a leftover legacy theme is harmless.
   }
 }
 

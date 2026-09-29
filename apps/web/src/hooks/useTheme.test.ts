@@ -27,6 +27,19 @@ afterEach(() => {
 });
 
 describe("theme failure handling", () => {
+  it("keeps a saved theme successful when legacy cleanup fails", async () => {
+    const storage = createStorage({
+      removeItem: () => {
+        throw new Error("storage remove blocked");
+      },
+    });
+    vi.stubGlobal("window", { localStorage: storage });
+    const { readThemePreference, writeThemePreference } = await import("./useTheme");
+
+    expect(() => writeThemePreference("dark")).not.toThrow();
+    expect(readThemePreference()).toBe("dark");
+  });
+
   it("preserves exact storage causes and operation context", async () => {
     const readCause = new Error("storage read blocked");
     const writeCause = new Error("storage quota exceeded");

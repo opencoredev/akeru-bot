@@ -46,7 +46,7 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
 
   const effectiveEditor = useMemo(() => {
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
-    if (legacyEditor && availableEditors.includes(legacyEditor)) return legacyEditor;
+    if (!lastEditor && legacyEditor && availableEditors.includes(legacyEditor)) return legacyEditor;
     return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
   }, [lastEditor, legacyEditor, availableEditors]);
 
