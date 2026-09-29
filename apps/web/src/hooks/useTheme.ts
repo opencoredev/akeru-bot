@@ -617,8 +617,14 @@ export function useTheme() {
 
   const clearThemeHalves = useCallback((): boolean => {
     if (typeof window === "undefined") return false;
+    removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
     try {
-      window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      // An empty mix under the current key shadows a legacy mix that could not be removed.
+      if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
+        window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, "{}");
+      }
     } catch (cause) {
       const error = new ThemeStorageError({
         operation: "write",
@@ -632,7 +638,6 @@ export function useTheme() {
       });
       return false;
     }
-    removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
     applyTheme(getStored(), true);
     emitChange();
     return true;

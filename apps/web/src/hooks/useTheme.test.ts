@@ -367,6 +367,23 @@ describe("legacy key cleanup", () => {
       removeEventListener: () => undefined,
     });
 
+    const { readThemeHalves, useTheme } = await import("./useTheme");
+
+    expect(useTheme().clearThemeHalves()).toBe(true);
+    expect(readThemeHalves()).toBeNull();
+  });
+
+  it("removes the current mix key when no legacy mix remains", async () => {
+    const storage = legacyThrowingStorage({
+      "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
+    });
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
     const { useTheme } = await import("./useTheme");
 
     expect(useTheme().clearThemeHalves()).toBe(true);
