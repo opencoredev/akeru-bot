@@ -5787,7 +5787,24 @@ describe("AgentControllerLive", () => {
           UPSTASH_REDIS_REST_URL: "https://sandbox.example",
           UPSTASH_REDIS_REST_TOKEN: "sandbox-token",
         },
+        cwd: "/workspace/remote-project",
       });
+      // Reusing the remote session without a cwd clears the old project path.
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        modelSelection: codexSelection,
+        runtimeMode: "full-access",
+        botSandbox: "upstash",
+        botSandboxEnvironment: {
+          UPSTASH_REDIS_REST_URL: "https://sandbox.example",
+          UPSTASH_REDIS_REST_TOKEN: "sandbox-token",
+        },
+      });
+      const reusedState = vi.mocked(mastra.session.state.set).mock.calls.at(-1)?.[0];
+      expect(reusedState && Object.hasOwn(reusedState, "projectPath")).toBe(true);
+      expect(reusedState?.projectPath).toBeUndefined();
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(makeRemoteWorkspace).toHaveBeenCalledWith(

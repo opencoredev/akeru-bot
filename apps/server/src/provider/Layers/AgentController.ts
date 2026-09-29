@@ -2732,7 +2732,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.cwd = input.cwd;
         yield* runMastra("state.set", () =>
           existing.session.state.set({
-            ...(input.cwd ? { projectPath: input.cwd } : {}),
+            projectPath: input.cwd || undefined,
             yolo: false,
             botConversation: resolved.botConversation,
             botName: input.botName || "",

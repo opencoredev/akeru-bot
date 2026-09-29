@@ -163,7 +163,8 @@ export type AkeruRoutineDeleteResult = z.infer<typeof routineDeleteResultSchema>
 
 export interface AkeruMastraState {
   readonly providerInstanceId?: string;
-  readonly projectPath?: string;
+  // Undefined clears a previous directory when a reused session loses its cwd.
+  readonly projectPath?: string | undefined;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
   readonly botName?: string;
