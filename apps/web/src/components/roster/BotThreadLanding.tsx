@@ -438,8 +438,21 @@ export function BotThreadLanding({
   const channelApprovalFor = (messageIndex: number): ChannelApprovalTarget | null => {
     if (!environmentId || !linkedThreadId) return null;
     const message = messages[messageIndex];
+    if (!message) return null;
     const origin = channelOriginForAssistantMessage(messages, messageIndex);
-    if (!message || !origin) return null;
+    if (!origin) {
+      // The inbound message is on an older, unloaded page: keep the delivery label only.
+      return message.channelDelivery === undefined
+        ? null
+        : {
+            environmentId,
+            botId: BotId.make(bot.id),
+            threadId: linkedThreadId,
+            origin: null,
+            sent: false,
+            canSend: false,
+          };
+    }
     const binding = connectedChannelBinding(bot.channelBindings, origin.provider);
     // Only channel admins with a live binding may trigger a send.
     const canSend = canManageChannelBindings && binding !== undefined;

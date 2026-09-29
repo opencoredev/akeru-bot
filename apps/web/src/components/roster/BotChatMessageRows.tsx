@@ -66,7 +66,8 @@ export interface ChannelApprovalTarget {
   readonly environmentId: EnvironmentId;
   readonly botId: BotId;
   readonly threadId: ThreadId;
-  readonly origin: ChannelMessageOrigin;
+  /** Null when the inbound channel message is not loaded yet. */
+  readonly origin: ChannelMessageOrigin | null;
   readonly sent: boolean;
   /** Only channel admins with a live binding may trigger a send. */
   readonly canSend: boolean;
@@ -184,7 +185,7 @@ export function ChannelSendApproval({
 }: {
   readonly environmentId: EnvironmentId;
   readonly botId: BotId;
-  readonly origin: ChannelMessageOrigin;
+  readonly origin: ChannelMessageOrigin | null;
   readonly threadId: ThreadId;
   readonly messageId: MessageId;
   readonly delivery: OrchestrationMessage["channelDelivery"];
@@ -196,9 +197,11 @@ export function ChannelSendApproval({
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const delivered = sent || submitted || delivery === "sent";
-  const label = channelProviderLabel(origin.provider);
+  const label = origin ? channelProviderLabel(origin.provider) : null;
   const deliveryLabel =
-    !delivered && delivery ? channelDeliveryLabel(delivery, origin.provider) : null;
+    delivery && (!delivered || label === null)
+      ? channelDeliveryLabel(delivery, origin?.provider)
+      : null;
   return (
     <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
       <span
@@ -211,12 +214,18 @@ export function ChannelSendApproval({
               : "text-muted-foreground",
         )}
       >
-        {delivered
+        {delivered && label !== null
           ? t("Sent to {channel}", { channel: label })
           : (deliveryLabel?.message ??
-            (canSend ? t("Send this reply to {channel}?", { channel: label }) : null))}
+            (canSend && label !== null
+              ? t("Send this reply to {channel}?", { channel: label })
+              : null))}
       </span>
-      {canSend && !delivered && delivery !== "pending" && delivery !== "unknown" ? (
+      {canSend &&
+      label !== null &&
+      !delivered &&
+      delivery !== "pending" &&
+      delivery !== "unknown" ? (
         <Button
           size="xs"
           disabled={busy}
