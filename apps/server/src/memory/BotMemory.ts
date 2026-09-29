@@ -501,8 +501,13 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
         await handle.sync();
         return handle;
       } catch (cause) {
+        // Another writer may have reclaimed the lock path meanwhile; only remove our own inode.
+        const owned = await handle.stat().catch(() => null);
         await handle.close().catch(() => undefined);
-        await NodeFS.unlink(lockPath).catch(() => undefined);
+        const current = await NodeFS.lstat(lockPath).catch(() => null);
+        if (owned && current && current.ino === owned.ino && current.dev === owned.dev) {
+          await NodeFS.unlink(lockPath).catch(() => undefined);
+        }
         throw cause;
       }
     },

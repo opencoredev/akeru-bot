@@ -801,6 +801,25 @@ describe("BotMemoryStore", () => {
     assert.isUndefined(files.find((file) => file.startsWith(".memory-review.corrupt-")));
   });
 
+  it("keeps another owner's lock when lock initialization fails", async () => {
+    const store = await fixture();
+    const botId = BotId.make("bot-init-lost-lock");
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    let lockPath = "";
+    vi.mocked(NodeFS.open).mockImplementationOnce(async (...args) => {
+      const handle = await actual.open(...args);
+      lockPath = String(args[0]);
+      await takeLockFromOwner(lockPath);
+      handle.writeFile = async () => {
+        throw new Error("disk full");
+      };
+      return handle;
+    });
+
+    await expect(store.readReviewCadence(botId)).rejects.toBeDefined();
+    assert.include(await NodeFS.readFile(lockPath, "utf8"), "other-owner");
+  });
+
   it("does not archive a group file after its lock is lost", async () => {
     const store = await fixture();
     const access = groupAccess();
