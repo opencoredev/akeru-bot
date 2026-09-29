@@ -39,10 +39,17 @@ export function createMigratingStorage(
  * the legacy value copied forward when only the old key exists. */
 export function readMigratedLocalStorage(key: string, legacyKey: string): string | null {
   if (typeof window === "undefined") return null;
-  const storage = window.localStorage;
-  const value = storage.getItem(key);
-  if (value !== null) return value;
-  const legacy = storage.getItem(legacyKey);
+  let storage: Storage;
+  let legacy: string | null;
+  try {
+    storage = window.localStorage;
+    const value = storage.getItem(key);
+    if (value !== null) return value;
+    legacy = storage.getItem(legacyKey);
+  } catch {
+    // Restricted storage reads as empty so module-load callers keep working.
+    return null;
+  }
   if (legacy === null) return null;
   try {
     storage.setItem(key, legacy);

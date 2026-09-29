@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createMigratingStorage } from "./storageKeyMigration";
+import { createMigratingStorage, readMigratedLocalStorage } from "./storageKeyMigration";
 import type { StateStorage } from "./storage";
 
 const NEW_KEY = "akeru:test";
@@ -67,5 +67,35 @@ describe("createMigratingStorage", () => {
     await expect(storage.setItem(NEW_KEY, "new")).resolves.toBeUndefined();
     expect(store.get(NEW_KEY)).toBe("new");
     expect(store.get(LEGACY_KEY)).toBe("old");
+  });
+});
+
+describe("readMigratedLocalStorage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads restricted storage as empty instead of throwing", () => {
+    const denied = () => {
+      throw new DOMException("denied", "SecurityError");
+    };
+    vi.stubGlobal("window", {
+      localStorage: { getItem: denied, setItem: denied, removeItem: denied },
+    });
+    expect(readMigratedLocalStorage(NEW_KEY, LEGACY_KEY)).toBeNull();
+  });
+
+  it("copies the legacy value forward", () => {
+    const store = new Map([[LEGACY_KEY, "old"]]);
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (name: string) => store.get(name) ?? null,
+        setItem: (name: string, value: string) => store.set(name, value),
+        removeItem: (name: string) => store.delete(name),
+      },
+    });
+    expect(readMigratedLocalStorage(NEW_KEY, LEGACY_KEY)).toBe("old");
+    expect(store.get(NEW_KEY)).toBe("old");
+    expect(store.has(LEGACY_KEY)).toBe(false);
   });
 });
