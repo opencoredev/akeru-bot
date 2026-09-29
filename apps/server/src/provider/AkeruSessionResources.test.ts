@@ -180,6 +180,47 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("reports an active shared-browser failure to a bot that joins later", async () => {
+    const browserFailure = vi.fn();
+    const browserReady = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    let onReady!: () => void;
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        onReady = input.onReady!;
+        return browser();
+      },
+      onBrowserFailure: browserFailure,
+      onBrowserReady: browserReady,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "late-share-first",
+      botId: BotId.make("late-share-first"),
+    };
+    const second = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "late-share-second",
+      botId: BotId.make("late-share-second"),
+    };
+    await resources.acquire(first);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.acquire(second);
+    expect(browserFailure.mock.calls.map(([input]) => input.botId)).toEqual([
+      first.botId,
+      second.botId,
+    ]);
+    onReady();
+    expect(browserReady.mock.calls.map(([botId]) => botId)).toEqual([first.botId, second.botId]);
+    await resources.shutdown();
+  });
+
   it("retains attribution while another chat for the same bot is active", async () => {
     const browserFailure = vi.fn();
     let onFailure!: (error: unknown) => void;

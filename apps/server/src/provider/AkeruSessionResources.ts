@@ -67,8 +67,9 @@ export interface AkeruSessionResourcesOptions {
     readonly botName: string;
     readonly taskOrRoutine: string;
     readonly detail: string;
+    readonly resourceKey: string;
   }) => void;
-  readonly onBrowserReady?: (botId: BotId) => void;
+  readonly onBrowserReady?: (botId: BotId, resourceKey: string) => void;
   readonly getPreviewMcpServerConfig?: (threadId: string) => McpServerConfig | undefined;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
@@ -100,6 +101,7 @@ export class AkeruSessionResources {
   private readonly browserDestroyRequests = new Set<string>();
   private readonly browserReconnects = new Map<string, Promise<void>>();
   private readonly browserAttributions = new Map<string, Map<string, BrowserAttribution>>();
+  private readonly browserFailures = new Map<string, string>();
   private readonly browserThreadBots = new Map<string, string>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
   private controllingThreadId: string | undefined;
@@ -217,6 +219,14 @@ export class AkeruSessionResources {
         );
         this.browserAttributions.set(input.workspaceResourceKey, attributions);
         this.browserThreadBots.set(key, String(input.botId));
+        const activeFailure = this.browserFailures.get(input.workspaceResourceKey);
+        if (!existingAttribution && activeFailure) {
+          this.options.onBrowserFailure?.({
+            ...attributions.get(botKey)!,
+            resourceKey: input.workspaceResourceKey,
+            detail: activeFailure,
+          });
+        }
       }
       const browser =
         existingBrowser ??
@@ -471,14 +481,16 @@ export class AkeruSessionResources {
 
   private reportBrowserFailure(resourceKey: string, error: unknown): void {
     const detail = error instanceof Error ? error.message : String(error);
+    this.browserFailures.set(resourceKey, detail);
     for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
-      this.options.onBrowserFailure?.({ ...attribution, detail });
+      this.options.onBrowserFailure?.({ ...attribution, resourceKey, detail });
     }
   }
 
   private resolveBrowserFailures(resourceKey: string): void {
+    this.browserFailures.delete(resourceKey);
     for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
-      this.options.onBrowserReady?.(attribution.botId);
+      this.options.onBrowserReady?.(attribution.botId, resourceKey);
     }
   }
 
@@ -499,6 +511,7 @@ export class AkeruSessionResources {
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
     this.browserAttributions.clear();
+    this.browserFailures.clear();
     this.browserThreadBots.clear();
   }
 }

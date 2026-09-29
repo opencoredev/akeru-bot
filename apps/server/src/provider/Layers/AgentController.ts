@@ -750,7 +750,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
       onBrowserFailure: (input) => recordBrowserFailure(botInbox, input),
-      onBrowserReady: (botId) => resolveBrowserFailure(botInbox, botId),
+      onBrowserReady: (botId, resourceKey) => resolveBrowserFailure(botInbox, botId, resourceKey),
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
