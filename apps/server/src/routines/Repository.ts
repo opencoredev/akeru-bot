@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type { PersistenceSqlError } from "../persistence/Errors.ts";
-import type { RoutineSkillAssignment } from "@t3tools/contracts";
+import type { RoutineSkillAssignment, ThreadId } from "@t3tools/contracts";
 import type { Routine, RoutineId, RoutineRun, RoutineRunId, RoutineRunTrigger } from "./types.ts";
 
 interface RoutineClaimBase {
@@ -43,6 +43,13 @@ export interface RoutineRepositoryShape {
   readonly listRuns: (
     routineId: RoutineId,
   ) => Effect.Effect<ReadonlyArray<RoutineRun>, PersistenceSqlError>;
+  readonly listThreadRuns: (
+    threadId: ThreadId,
+    beforeRunId?: RoutineRunId,
+  ) => Effect.Effect<
+    { readonly runs: ReadonlyArray<RoutineRun>; readonly nextCursor: RoutineRunId | null },
+    PersistenceSqlError
+  >;
   readonly listAllRuns: Effect.Effect<ReadonlyArray<RoutineRun>, PersistenceSqlError>;
   readonly getActiveRunByThreadRef: (
     threadRef: string,

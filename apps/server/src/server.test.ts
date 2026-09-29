@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -33,7 +34,6 @@ import {
   ProviderInstanceId,
   RoutineId,
   RoutineRunId,
-  type Routine,
   type RoutineRun,
   ResolvedKeybindingRule,
   ThreadId,
@@ -889,6 +889,7 @@ const buildAppUnderTest = (options?: {
               listEnabled: Effect.succeed([]),
               getById: () => Effect.succeed(null),
               listRuns: () => Effect.succeed([]),
+              listThreadRuns: () => Effect.succeed({ runs: [], nextCursor: null }),
               listAllRuns: Effect.succeed([]),
               getActiveRunByThreadRef: () => Effect.succeed(null),
               listSkillAssignments: Effect.succeed([]),
@@ -3314,15 +3315,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("reads every run for one chat, including runs beyond the shell snapshot cap", () =>
+  it.effect("pages routine runs for one chat beyond the shell snapshot cap", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("routine-history-thread");
-      const otherThreadId = ThreadId.make("other-routine-history-thread");
       const routineId = RoutineId.make("routine-history");
-      const otherRoutineId = RoutineId.make("other-routine-history");
-      const routine = { id: routineId, targetThreadId: threadId } as Routine;
-      const otherRoutine = { id: otherRoutineId, targetThreadId: otherThreadId } as Routine;
-      const runs: RoutineRun[] = Array.from({ length: 6 }, (_, index) => ({
+      const runs: RoutineRun[] = Array.from({ length: 151 }, (_, index) => ({
         id: RoutineRunId.make(`history-run-${index}`),
         routineId,
         procedureVersion: 1,
@@ -3335,26 +3332,41 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         threadRef: threadId,
         startedAt: "2026-09-29T00:00:00.000Z",
         completedAt: "2026-09-29T00:01:00.000Z",
-        createdAt: "2026-09-29T00:00:00.000Z",
+        createdAt: new Date(Date.UTC(2026, 8, 29, 0, index)).toISOString(),
         updatedAt: "2026-09-29T00:01:00.000Z",
       }));
       yield* buildAppUnderTest({
         layers: {
           routineRepository: {
-            listAll: Effect.succeed([routine, otherRoutine]),
-            listRuns: (id) => Effect.succeed(id === routineId ? runs : []),
+            listThreadRuns: (id, beforeRunId) => {
+              if (id !== threadId) return Effect.succeed({ runs: [], nextCursor: null });
+              const start = beforeRunId ? runs.findIndex((run) => run.id === beforeRunId) + 1 : 0;
+              const page = runs.slice(start, start + 100);
+              return Effect.succeed({
+                runs: page,
+                nextCursor: start + page.length < runs.length ? (page.at(-1)?.id ?? null) : null,
+              });
+            },
           },
         },
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
-      const result = yield* Effect.scoped(
+      const first = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.routinesListThreadRuns]({ threadId })),
       );
+      assert.equal(first.runs.length, 100);
+      assert.equal(first.nextCursor, runs[99]?.id);
+      const second = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.routinesListThreadRuns]({ threadId, beforeRunId: first.nextCursor! }),
+        ),
+      );
       assert.deepEqual(
-        result.runs.map((run) => run.id),
+        [...first.runs, ...second.runs].map((run) => run.id),
         runs.map((run) => run.id),
       );
+      assert.equal(second.nextCursor, null);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

@@ -177,6 +177,33 @@ const make = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("RoutineRepository.listRuns")),
     );
 
+  const listThreadRuns: RoutineRepositoryShape["listThreadRuns"] = (threadId, beforeRunId) =>
+    sql<Record<string, unknown>>`
+      SELECT run.run_id AS id, run.routine_id AS "routineId",
+        run.procedure_version AS "procedureVersion", run.trigger,
+        run.scheduled_for AS "scheduledFor", run.status, run.thread_ref AS "threadRef",
+        run.result_json AS result, run.failure_json AS failure, run.usage_ref AS "usageRef",
+        run.started_at AS "startedAt", run.completed_at AS "completedAt",
+        run.created_at AS "createdAt", run.updated_at AS "updatedAt"
+      FROM projection_routine_runs AS run
+      JOIN projection_routines AS routine ON routine.routine_id = run.routine_id
+      WHERE routine.target_thread_id = ${threadId}
+        AND (${beforeRunId ?? null} IS NULL OR
+          (run.created_at, run.run_id) < (
+            SELECT previous.created_at, previous.run_id
+            FROM projection_routine_runs AS previous
+            WHERE previous.run_id = ${beforeRunId ?? null}
+          ))
+      ORDER BY run.created_at DESC, run.run_id DESC
+      LIMIT 101
+    `.pipe(
+      Effect.map((rows) => {
+        const runs = rows.slice(0, 100).map((row) => decodeRun(row) as RoutineRun);
+        return { runs, nextCursor: rows.length > 100 ? (runs[99]?.id ?? null) : null };
+      }),
+      Effect.mapError(toPersistenceSqlError("RoutineRepository.listThreadRuns")),
+    );
+
   const listAllRuns: RoutineRepositoryShape["listAllRuns"] = sql<Record<string, unknown>>`
     SELECT run_id AS id, routine_id AS "routineId", procedure_version AS "procedureVersion",
       trigger, scheduled_for AS "scheduledFor", status, thread_ref AS "threadRef",
@@ -322,6 +349,7 @@ const make = Effect.gen(function* () {
     listEnabled,
     getById,
     listRuns,
+    listThreadRuns,
     listAllRuns,
     getActiveRunByThreadRef,
     listSkillAssignments,

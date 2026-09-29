@@ -2665,15 +2665,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.routinesListThreadRuns]: (input) =>
           observeRpcEffect(
             WS_METHODS.routinesListThreadRuns,
-            Effect.gen(function* () {
-              const routines = yield* routineRepository.listAll;
-              const runs = yield* Effect.forEach(
-                routines.filter((routine) => routine.targetThreadId === input.threadId),
-                (routine) => routineRepository.listRuns(routine.id),
-                { concurrency: 4 },
-              );
-              return { runs: runs.flat() };
-            }).pipe(
+            routineRepository.listThreadRuns(input.threadId, input.beforeRunId).pipe(
               Effect.mapError(
                 (cause) =>
                   new RoutineThreadReadError({

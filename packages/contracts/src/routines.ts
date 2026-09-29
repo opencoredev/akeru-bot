@@ -224,7 +224,16 @@ export type RoutineListRunsInput = typeof RoutineListRunsInput.Type;
 export const RoutineListRunsResult = Schema.Struct({ runs: Schema.Array(RoutineRun) });
 export type RoutineListRunsResult = typeof RoutineListRunsResult.Type;
 
-export const RoutineListThreadRunsInput = Schema.Struct({ threadId: ThreadId });
+export const RoutineListThreadRunsInput = Schema.Struct({
+  threadId: ThreadId,
+  beforeRunId: Schema.optional(RoutineRunId),
+});
+
+export const RoutineListThreadRunsResult = Schema.Struct({
+  runs: Schema.Array(RoutineRun),
+  nextCursor: Schema.NullOr(RoutineRunId),
+});
+export type RoutineListThreadRunsResult = typeof RoutineListThreadRunsResult.Type;
 
 export class RoutineThreadReadError extends Schema.TaggedErrorClass<RoutineThreadReadError>()(
   "RoutineThreadReadError",

@@ -1,5 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, type EnvironmentId, type TurnId } from "@t3tools/contracts";
+import {
+  BotId,
+  type EnvironmentId,
+  type RoutineRun,
+  type RoutineRunId,
+  type TurnId,
+} from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
@@ -225,6 +231,75 @@ export function BotThreadLanding({
         })
       : null,
   );
+  const threadId = runtime.linkedThreadRef?.threadId ?? null;
+  const [routineHistory, setRoutineHistory] = useState<{
+    threadId: string | null;
+    runs: RoutineRun[];
+    requestedCursor: RoutineRunId | null;
+    loadedCursor: RoutineRunId | null;
+    nextCursor: RoutineRunId | null;
+  }>({ threadId: null, runs: [], requestedCursor: null, loadedCursor: null, nextCursor: null });
+  const currentHistory =
+    routineHistory.threadId === threadId
+      ? routineHistory
+      : { threadId, runs: [], requestedCursor: null, loadedCursor: null, nextCursor: null };
+  const olderRoutineRuns = useEnvironmentQuery(
+    runtime.linkedThreadRef && currentHistory.requestedCursor
+      ? serverEnvironment.routineThreadRuns({
+          environmentId: runtime.linkedThreadRef.environmentId,
+          input: {
+            threadId: runtime.linkedThreadRef.threadId,
+            beforeRunId: currentHistory.requestedCursor,
+          },
+        })
+      : null,
+  );
+  useEffect(() => {
+    setRoutineHistory({
+      threadId,
+      runs: [],
+      requestedCursor: null,
+      loadedCursor: null,
+      nextCursor: null,
+    });
+  }, [threadId]);
+  useEffect(() => {
+    const page = routineRunHistory.data;
+    if (!page || !threadId) return;
+    setRoutineHistory((previous) =>
+      previous.threadId === threadId
+        ? {
+            ...previous,
+            runs: mergeRoutineRunHistory(previous.runs, page.runs),
+            nextCursor: previous.loadedCursor === null ? page.nextCursor : previous.nextCursor,
+          }
+        : previous,
+    );
+  }, [routineRunHistory.data, threadId]);
+  useEffect(() => {
+    const page = olderRoutineRuns.data;
+    const cursor = currentHistory.requestedCursor;
+    if (!page || !cursor || currentHistory.loadedCursor === cursor) return;
+    setRoutineHistory((previous) =>
+      previous.threadId === threadId && previous.requestedCursor === cursor
+        ? {
+            ...previous,
+            runs: mergeRoutineRunHistory(previous.runs, page.runs),
+            loadedCursor: cursor,
+            nextCursor: page.nextCursor,
+          }
+        : previous,
+    );
+  }, [
+    currentHistory.loadedCursor,
+    currentHistory.requestedCursor,
+    olderRoutineRuns.data,
+    threadId,
+  ]);
+  const nextRoutineCursor =
+    currentHistory.loadedCursor === null
+      ? (routineRunHistory.data?.nextCursor ?? null)
+      : currentHistory.nextCursor;
   const routineRunRevision = useMemo(() => {
     const threadId = runtime.linkedThreadRef?.threadId;
     if (!threadId) return null;
@@ -262,7 +337,7 @@ export function BotThreadLanding({
         ? deriveRoutineReceipts(
             runtime.linkedThreadRef.threadId,
             [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])],
-            mergeRoutineRunHistory(routineRunHistory.data?.runs ?? [], snapshot?.routineRuns ?? []),
+            mergeRoutineRunHistory(currentHistory.runs, snapshot?.routineRuns ?? []),
           )
         : [],
     [
@@ -270,7 +345,7 @@ export function BotThreadLanding({
       snapshot?.routines,
       snapshot?.routineReceiptSources,
       snapshot?.routineRuns,
-      routineRunHistory.data,
+      currentHistory.runs,
     ],
   );
   // Each message carries the index it had in `messages`, because the merge below
@@ -360,6 +435,29 @@ export function BotThreadLanding({
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea>
+            {nextRoutineCursor ? (
+              <button
+                type="button"
+                className="mx-auto my-3 block rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                disabled={olderRoutineRuns.isPending}
+                onClick={() => {
+                  if (currentHistory.requestedCursor === nextRoutineCursor) {
+                    olderRoutineRuns.refresh();
+                  } else {
+                    setRoutineHistory((previous) => ({
+                      ...previous,
+                      requestedCursor: nextRoutineCursor,
+                    }));
+                  }
+                }}
+              >
+                {olderRoutineRuns.isPending
+                  ? "Loading older routine notes…"
+                  : olderRoutineRuns.error
+                    ? "Retry older routine notes"
+                    : "Load older routine notes"}
+              </button>
+            ) : null}
             {timelineItems.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
                 <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-14" />

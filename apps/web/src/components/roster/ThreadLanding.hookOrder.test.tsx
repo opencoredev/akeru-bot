@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   observe: vi.fn(),
   landing: vi.fn(),
   refreshHistory: vi.fn(),
+  queryData: { inbox: [], runs: [], nextCursor: null },
   snapshot: null as OrchestrationShellSnapshot | null,
 }));
 
@@ -50,7 +51,7 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../state/entities", () => ({ useThreadActivities: () => [] }));
 vi.mock("../../state/query", () => ({
-  useEnvironmentQuery: () => ({ data: { inbox: [] }, refresh: mocks.refreshHistory }),
+  useEnvironmentQuery: () => ({ data: mocks.queryData, refresh: mocks.refreshHistory }),
 }));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,

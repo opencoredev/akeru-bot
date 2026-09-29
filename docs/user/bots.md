@@ -80,6 +80,8 @@ again. A draft routine shows **Draft** until you approve its procedure.
 
 The bot's chat notes when a routine is created, starts a run, and finishes, fails, or is canceled.
 Deleting a routine removes it from the Routines panel while keeping those earlier notes in the chat.
+The chat loads recent routine notes first. Select **Load older routine notes** above the conversation
+to bring earlier runs into view.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
 adds one item to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived

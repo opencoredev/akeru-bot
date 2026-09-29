@@ -225,6 +225,7 @@ import {
 import {
   RoutineListRunsInput,
   RoutineListRunsResult,
+  RoutineListThreadRunsResult,
   RoutineListThreadRunsInput,
   RoutineReadError,
   RoutineThreadReadError,
@@ -699,7 +700,7 @@ export const WsRoutinesListRunsRpc = Rpc.make(WS_METHODS.routinesListRuns, {
 
 export const WsRoutinesListThreadRunsRpc = Rpc.make(WS_METHODS.routinesListThreadRuns, {
   payload: RoutineListThreadRunsInput,
-  success: RoutineListRunsResult,
+  success: RoutineListThreadRunsResult,
   error: Schema.Union([RoutineThreadReadError, EnvironmentAuthorizationError]),
 });
 

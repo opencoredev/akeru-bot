@@ -88,6 +88,7 @@ const harness = (
           updatedAt: claim.claimedAt,
         })) as never,
       ),
+    listThreadRuns: () => Effect.succeed({ runs: [], nextCursor: null }),
     listAllRuns: Effect.succeed([]),
     getActiveRunByThreadRef: () => Effect.succeed(null),
     listSkillAssignments: Effect.succeed([]),
