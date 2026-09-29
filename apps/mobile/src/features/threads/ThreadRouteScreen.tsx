@@ -670,7 +670,7 @@ function ThreadRouteContent(
         : undefined,
     onOpenFilesInspector:
       fileInspector.supported && selectedThreadCwd !== null ? handleOpenFilesInspector : undefined,
-    onOpenGitInspector: fileInspector.supported ? handleOpenGitInspector : undefined,
+    onOpenGitInspector: selectedThread !== null ? handleOpenGitInspector : undefined,
     currentBranch: selectedThread?.branch ?? null,
     gitStatus: gitStatus.data,
     gitOperationLabel: gitState.gitOperationLabel,
@@ -694,7 +694,7 @@ function ThreadRouteContent(
       buildThreadWorkspaceActions({
         canOpenFiles: fileInspector.supported && selectedThreadCwd !== null,
         canOpenTerminal: Boolean(selectedThreadProject?.workspaceRoot),
-        canOpenGit: fileInspector.supported,
+        canOpenGit: selectedThread !== null,
         canToggleInspector:
           !layout.usesSplitView && fileInspector.supported && selectedThreadCwd !== null,
       }),
@@ -702,6 +702,7 @@ function ThreadRouteContent(
       fileInspector.supported,
       layout.usesSplitView,
       selectedThreadCwd,
+      selectedThread,
       selectedThreadProject?.workspaceRoot,
     ],
   );

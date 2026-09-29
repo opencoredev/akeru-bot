@@ -14,7 +14,7 @@ function actionsFor(input: {
   return buildThreadWorkspaceActions({
     canOpenFiles: input.inspectorSupported && input.threadCwd !== null,
     canOpenTerminal: Boolean(input.workspaceRoot),
-    canOpenGit: input.inspectorSupported,
+    canOpenGit: true,
     canToggleInspector:
       !input.usesSplitView && input.inspectorSupported && input.threadCwd !== null,
   }).map((action) => action.id);
@@ -66,7 +66,7 @@ describe("thread workspace actions", () => {
     ).toEqual(["terminal", "git"]);
   });
 
-  it("renders no control when the inspector is unsupported and there is no project", () => {
+  it("keeps Git reachable when the inspector is unsupported and there is no project", () => {
     expect(
       actionsFor({
         usesSplitView: false,
@@ -74,7 +74,7 @@ describe("thread workspace actions", () => {
         threadCwd: null,
         workspaceRoot: null,
       }),
-    ).toEqual([]);
+    ).toEqual(["git"]);
   });
 
   it("gives every action a title and an icon so the overflow menu is legible", () => {
