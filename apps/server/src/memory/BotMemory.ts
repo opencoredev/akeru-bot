@@ -620,7 +620,7 @@ async function writeMemoryFile(
   await assertNotSymlink(filePath);
   await verifyOwnership?.();
   await Effect.runPromise(
-    writeFileStringAtomically({ filePath, contents, mode: 0o600 }).pipe(
+    writeFileStringAtomically({ filePath, contents, mode: 0o600, durable: true }).pipe(
       Effect.provide(NodeServices.layer),
     ),
   );

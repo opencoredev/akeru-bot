@@ -1,11 +1,13 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 export const writeFileStringAtomically = (input: {
   readonly filePath: string;
   readonly contents: string;
   readonly mode?: number;
+  readonly durable?: boolean;
 }) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -25,6 +27,33 @@ export const writeFileStringAtomically = (input: {
         input.contents,
         input.mode === undefined ? undefined : { mode: input.mode },
       );
+      if (input.durable) {
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const tempFile = yield* fs.open(tempPath, { flag: "r" });
+            yield* tempFile.sync;
+          }),
+        );
+      }
       yield* fs.rename(tempPath, input.filePath);
+      if (input.durable && (yield* HostProcessPlatform) !== "win32") {
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const directory = yield* fs.open(targetDirectory, { flag: "r" });
+            yield* directory.sync;
+          }),
+        ).pipe(
+          Effect.catch((error) => {
+            const cause = "cause" in error.reason ? error.reason.cause : undefined;
+            const code =
+              typeof cause === "object" && cause !== null && "code" in cause
+                ? cause.code
+                : undefined;
+            return code === "EINVAL" || code === "ENOTSUP" || code === "EOPNOTSUPP"
+              ? Effect.void
+              : Effect.fail(error);
+          }),
+        );
+      }
     }),
   );
