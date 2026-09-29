@@ -2408,7 +2408,6 @@ export const englishCatalog = {
   "Every day at {time}": "Every day at {time}",
   "Weekdays at {time}": "Weekdays at {time}",
   "Every {days} at {time}": "Every {days} at {time}",
-  "What it does": "What it does",
   "Uses {list}": "Uses {list}",
   "The routine details did not come through. Read the bot's last message before creating it.":
     "The routine details did not come through. Read the bot's last message before creating it.",

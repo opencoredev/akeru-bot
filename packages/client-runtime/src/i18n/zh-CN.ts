@@ -2314,7 +2314,6 @@ export const zhCNCatalog: TranslationCatalog = {
   "Every day at {time}": "每天 {time}",
   "Weekdays at {time}": "工作日 {time}",
   "Every {days} at {time}": "每{days} {time}",
-  "What it does": "它会做什么",
   "Uses {list}": "使用 {list}",
   "The routine details did not come through. Read the bot's last message before creating it.":
     "例行任务的详情没有传过来。创建之前，请先阅读机器人的最后一条消息。",
