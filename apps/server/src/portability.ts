@@ -386,6 +386,7 @@ export function portableRecords(
           ? { catalogId: server.id.slice(BUILTIN_MCP_PREFIX.length) }
           : {}),
         configuration: safeMcpConfiguration(server),
+        ...(server.instructions ? { instructions: safeText(server.instructions) } : {}),
       },
     })),
     ...snapshot.bots.map((bot) => ({
@@ -636,6 +637,9 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
   }
   if (record.type === "mcp-server") {
     assertSafeImportedText(`MCP server '${record.id}' name`, record.data.configuration.name);
+    if (record.data.instructions !== undefined) {
+      assertSafeImportedText(`MCP server '${record.id}' instructions`, record.data.instructions);
+    }
     assertSafeImportedMcp(record);
     return;
   }
@@ -1474,7 +1478,16 @@ export function commandsForPortabilityImport(
     else if (configurationChanged) {
       commands.push(mcpCommand("mcp-server.update", record));
     }
-    if (!existing || configurationChanged || existing.enabled) {
+    const instructionsChanged = (existing?.instructions ?? "") !== (record.data.instructions ?? "");
+    if (instructionsChanged) {
+      commands.push({
+        type: "mcp-server.instructions.set",
+        commandId: nextCommandId(),
+        mcpServerId: McpServerId.make(record.id),
+        instructions: record.data.instructions ?? "",
+      });
+    }
+    if (!existing || configurationChanged || instructionsChanged || existing.enabled) {
       applied += 1;
     }
   }
