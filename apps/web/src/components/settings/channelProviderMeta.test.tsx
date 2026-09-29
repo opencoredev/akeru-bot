@@ -4,12 +4,20 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildChannelConnectionSaveInput } from "./ChannelSetupDialog";
 import {
   CHANNEL_PROVIDER_META,
+  channelProviderFromSettingsTarget,
   channelProviderMeta,
+  channelSettingsTarget,
   discordInviteUrl,
   slackPasteTarget,
 } from "./channelProviderMeta";
 
 describe("channel provider metadata", () => {
+  it("reads the provider back from a channel settings target", () => {
+    expect(channelProviderFromSettingsTarget(channelSettingsTarget("telegram"))).toBe("telegram");
+    expect(channelProviderFromSettingsTarget("local-execution")).toBeNull();
+    expect(channelProviderFromSettingsTarget(null)).toBeNull();
+  });
+
   it("describes all five providers with icons, steps, and console links", () => {
     expect(CHANNEL_PROVIDER_META.map((meta) => meta.provider)).toEqual([
       "imessage",
