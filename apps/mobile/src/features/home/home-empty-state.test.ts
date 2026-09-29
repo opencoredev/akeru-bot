@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { WorkspaceState } from "../../state/workspaceModel";
-import { deriveHomeEmptyState } from "./home-empty-state";
+import type { EnvironmentShellState } from "@t3tools/client-runtime/state/shell";
+import { EnvironmentId } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+
+import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
+import { deriveHomeEmptyState, environmentsToRetry } from "./home-empty-state";
 
 function workspaceState(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
   return {
@@ -67,5 +71,61 @@ describe("deriveHomeEmptyState", () => {
         projectCount: 0,
       }),
     ).toMatchObject({ title: "Environment unavailable", loading: false, retry: true });
+  });
+});
+
+describe("environmentsToRetry", () => {
+  const environment = (
+    id: string,
+    connectionState: WorkspaceEnvironment["connectionState"],
+  ): WorkspaceEnvironment => ({
+    environmentId: EnvironmentId.make(id),
+    environmentLabel: id,
+    displayUrl: "",
+    connectionState,
+    connectionError: null,
+    connectionErrorCode: null,
+    connectionErrorTraceId: null,
+  });
+  const loaded: EnvironmentShellState = {
+    snapshot: Option.some({} as never),
+    status: "live",
+    error: Option.none(),
+  };
+  const failed: EnvironmentShellState = {
+    snapshot: Option.none(),
+    status: "synchronizing",
+    error: Option.some("Snapshot failed"),
+  };
+
+  it("retries only the environment whose first snapshot failed", () => {
+    const shells = new Map([
+      ["alpha", failed],
+      ["beta", loaded],
+    ]);
+    expect(
+      environmentsToRetry(
+        [environment("alpha", "connected"), environment("beta", "connected")],
+        (id) => shells.get(id)!,
+      ),
+    ).toEqual(["alpha"]);
+  });
+
+  it("leaves disconnected environments alone while another needs recovery", () => {
+    expect(
+      environmentsToRetry(
+        [environment("alpha", "error"), environment("beta", "available")],
+        () => loaded,
+      ),
+    ).toEqual(["alpha"]);
+  });
+
+  it("reconnects disconnected environments when nothing else is failing", () => {
+    expect(
+      environmentsToRetry(
+        [environment("alpha", "available"), environment("beta", "connected")],
+        () => loaded,
+      ),
+    ).toEqual(["alpha"]);
   });
 });

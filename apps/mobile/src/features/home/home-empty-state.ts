@@ -1,4 +1,8 @@
-import type { WorkspaceState } from "../../state/workspaceModel";
+import type { EnvironmentShellState } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentId } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+
+import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 
 export interface HomeEmptyState {
   readonly title: string;
@@ -85,4 +89,31 @@ export function deriveHomeEmptyState(props: {
     loading: false,
     retry: false,
   };
+}
+
+/**
+ * The environments Try again reconnects. Retry replaces a connected lease, so
+ * healthy environments stay out of it. Deliberately disconnected environments
+ * reconnect only when nothing else needs recovery, which is the page's
+ * "Environment unavailable" case.
+ */
+export function environmentsToRetry(
+  environments: ReadonlyArray<WorkspaceEnvironment>,
+  shellStateOf: (environmentId: EnvironmentId) => EnvironmentShellState,
+): ReadonlyArray<EnvironmentId> {
+  const failing = environments.filter((environment) => {
+    if (environment.connectionState === "offline" || environment.connectionState === "error") {
+      return true;
+    }
+    if (environment.connectionState !== "connected") {
+      return false;
+    }
+    const shell = shellStateOf(environment.environmentId);
+    return Option.isNone(shell.snapshot) && Option.isSome(shell.error);
+  });
+  const targets =
+    failing.length > 0
+      ? failing
+      : environments.filter((environment) => environment.connectionState === "available");
+  return targets.map((environment) => environment.environmentId);
 }

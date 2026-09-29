@@ -8,6 +8,8 @@ import { Platform } from "react-native";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { environmentShell } from "../../state/shell";
 import { useWorkspaceState } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
@@ -17,6 +19,7 @@ import { useConnectionController } from "../connection/useConnectionController";
 import { checkForAppUpdateOnLaunch, startAppUpdateForegroundRecheck } from "../updates/app-updates";
 import { HomeScreen } from "./HomeScreen";
 import { HomeHeader } from "./HomeHeader";
+import { environmentsToRetry } from "./home-empty-state";
 import { useHomeListOptions } from "./home-list-options";
 import { buildHomeProjectScopes } from "./homeThreadList";
 import { usePendingTaskListActions } from "./usePendingTaskListActions";
@@ -175,8 +178,11 @@ export function HomeRouteScreen() {
             })
           }
           onRetryEnvironments={() => {
-            for (const environment of workspaceEnvironments) {
-              void retryEnvironment(environment.environmentId);
+            const targets = environmentsToRetry(workspaceEnvironments, (environmentId) =>
+              appAtomRegistry.get(environmentShell.stateValueAtom(environmentId)),
+            );
+            for (const environmentId of targets) {
+              void retryEnvironment(environmentId);
             }
           }}
           onArchiveThread={archiveThread}
