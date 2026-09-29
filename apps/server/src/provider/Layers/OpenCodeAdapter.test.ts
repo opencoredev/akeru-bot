@@ -92,7 +92,7 @@ const runtimeMock = {
     permissionReplyCalls: [] as Array<{ requestID: string; reply: string }>,
     permissionReplyError: null as Error | null,
     questionReplyCalls: [] as string[],
-    questionReplyError: null as Error | null,
+    questionReplyError: null as unknown,
     permissionReplyImplementation: null as
       | ((requestID: string, reply: string, signal?: AbortSignal) => Promise<void>)
       | null,
@@ -1244,6 +1244,17 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.equal(isOpenCodeNotFound({ statusCode: 404 }), true);
       // OpenCode NotFoundError body name with no status.
       NodeAssert.equal(isOpenCodeNotFound({ body: { name: "NotFoundError" } }), true);
+      for (const tag of ["QuestionNotFoundError", "PermissionNotFoundError"]) {
+        const body = { _tag: tag, requestID: "req_missing", message: "Request not found" };
+        NodeAssert.equal(isOpenCodeNotFound(body), true);
+        NodeAssert.equal(isOpenCodeNotFound({ cause: body }), true);
+        NodeAssert.equal(isOpenCodeNotFound({ error: { data: body } }), true);
+        NodeAssert.equal(isOpenCodeNotFound({ status: 503, body }), false);
+        NodeAssert.equal(isOpenCodeNotFound({ ...body, statusCode: 500 }), false);
+        NodeAssert.equal(isOpenCodeNotFound({ response: { status: 401 }, cause: body }), false);
+      }
+      NodeAssert.equal(isOpenCodeNotFound({ _tag: "ProviderNotFoundError" }), false);
+      NodeAssert.equal(isOpenCodeNotFound({ _tag: "questionnotfounderror" }), false);
 
       // NOT a miss: only structured signals count, never free text. A non-404
       // error whose message/detail merely contains "not found" must propagate,
@@ -2025,13 +2036,38 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
-  it.effect("drops a question OpenCode no longer has", () =>
+  it.effect.each([
+    {
+      label: "wrapped 404",
+      cause: new Error("Question not found", {
+        cause: { status: 404, body: { name: "NotFoundError" } },
+      }),
+      retryable: false,
+    },
+    {
+      label: "SDK QuestionNotFoundError body",
+      cause: {
+        _tag: "QuestionNotFoundError",
+        requestID: "que_expired",
+        message: "Question not found",
+      },
+      retryable: false,
+    },
+    {
+      label: "temporary network failure",
+      cause: new Error("Network unavailable"),
+      retryable: true,
+    },
+    {
+      label: "non-404 response containing a not-found body",
+      cause: { status: 503, body: { _tag: "QuestionNotFoundError" } },
+      retryable: true,
+    },
+  ])("handles question reply failure: $label", ({ cause, retryable }) =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-expired-question");
-      runtimeMock.state.questionReplyError = new Error("Question not found", {
-        cause: { status: 404, body: { name: "NotFoundError" } },
-      });
+      runtimeMock.state.questionReplyError = cause;
       runtimeMock.state.subscribedEvents = [
         {
           type: "question.asked",
@@ -2067,15 +2103,23 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
       NodeAssert.ok(first._tag === "ProviderAdapterRequestError");
-      NodeAssert.equal(first.detail, "Unknown pending user-input request: que_expired");
-      NodeAssert.notEqual(first.retryable, true);
+      NodeAssert.equal(first.retryable === true, retryable);
+      if (!retryable) {
+        NodeAssert.equal(first.detail, "Unknown pending user-input request: que_expired");
+      }
 
       const second = yield* adapter
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
       NodeAssert.ok(second._tag === "ProviderAdapterRequestError");
-      NodeAssert.equal(second.detail, "Unknown pending user-input request: que_expired");
-      NodeAssert.deepEqual(runtimeMock.state.questionReplyCalls, ["que_expired"]);
+      NodeAssert.equal(second.retryable === true, retryable);
+      if (!retryable) {
+        NodeAssert.equal(second.detail, "Unknown pending user-input request: que_expired");
+      }
+      NodeAssert.deepEqual(
+        runtimeMock.state.questionReplyCalls,
+        retryable ? ["que_expired", "que_expired"] : ["que_expired"],
+      );
 
       yield* adapter.stopSession(threadId);
     }).pipe(TestClock.withLive),
