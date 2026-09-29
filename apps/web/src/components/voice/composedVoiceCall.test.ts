@@ -195,4 +195,52 @@ describe("composed voice call adapters", () => {
     await expect(waiting).rejects.toThrow("The bot turn did not complete. Continue in chat.");
     expect(chat.listenerCount()).toBe(0);
   });
+
+  it("does not speak a reply when a newer turn replaces a voice turn that was still running", async () => {
+    const chat = fakeChat();
+    let markSubscribed!: () => void;
+    const subscribed = new Promise<void>((resolve) => {
+      markSubscribed = resolve;
+    });
+    const adapters = composedVoiceAdapters({
+      callId: "call-1",
+      capture: async () => fakeAudio,
+      play: async () => {},
+      transcribe: async () => AsyncResult.success({ text: "x" }),
+      synthesize: async () => AsyncResult.success(fakeSpeech),
+      cancel: async () => undefined,
+      sendMessage: async () => "request-1",
+      readTurn: chat.readTurn,
+      subscribeTurn: (changed) => {
+        markSubscribed();
+        return chat.subscribeTurn(changed);
+      },
+    });
+    const waiting = adapters.sendAndWait("hello", new AbortController().signal);
+    const voiceTurn = completedTurn("request-1", "Partial answer");
+    const request: OrchestrationMessage = {
+      ...voiceTurn.messages[0]!,
+      id: MessageId.make("request-1"),
+      role: "user",
+      text: "hello",
+      createdAt: "2026-09-25T00:00:00.000Z",
+    };
+    await subscribed;
+    chat.publish({
+      latestTurn: { ...voiceTurn.latestTurn!, state: "running", completedAt: null },
+      messages: [request, voiceTurn.messages[0]!],
+    });
+    chat.publish({
+      latestTurn: {
+        ...voiceTurn.latestTurn!,
+        turnId: TurnId.make("turn-2"),
+        requestMessageId: MessageId.make("request-2"),
+        requestedAt: "2026-09-25T00:00:02.000Z",
+        state: "running",
+        completedAt: null,
+      },
+      messages: [request, voiceTurn.messages[0]!],
+    });
+    await expect(waiting).rejects.toThrow("The bot turn did not complete. Continue in chat.");
+  });
 });

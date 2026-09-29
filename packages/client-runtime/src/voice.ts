@@ -69,10 +69,16 @@ export async function runVoiceOperation<T>(
   }
 }
 
+/**
+ * Pass `sawTurnRunning` once the caller has observed the voice turn as the
+ * running latest turn. If a newer turn then replaces it before it is seen
+ * completing, its final state is unknown, so the reply is not spoken.
+ */
 export function correlatedVoiceReply(
   requestMessageId: string,
   latestTurn: OrchestrationLatestTurn | null,
   messages: readonly OrchestrationMessage[],
+  sawTurnRunning = false,
 ): string | null {
   if (latestTurn?.requestMessageId === requestMessageId) {
     if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
@@ -84,6 +90,7 @@ export function correlatedVoiceReply(
     const message = messages.find((item) => item.id === latestTurn.assistantMessageId);
     return message?.role === "assistant" && !message.streaming ? message.text : null;
   }
+  if (sawTurnRunning) throw new Error("The bot turn did not complete. Continue in chat.");
   const request = messages.find((item) => item.id === requestMessageId && item.role === "user");
   if (!request?.turnId) return null;
   const reply = messages.findLast(
@@ -150,9 +157,16 @@ export async function runComposedVoiceCall(scope: VoiceCallScope, adapters: Comp
     const response = await pinned.sendAndWait(text, signal);
     signal.throwIfAborted();
     // Provider requests are bounded; play long responses sequentially, never concurrently.
-    for (const speech of await synthesizeVoiceChunks(response, signal, (chunk) =>
-      pinned.synthesize(chunk, signal),
-    )) {
+    // The next chunk is synthesized while the current one plays so speech starts early.
+    const chunks = splitVoiceSynthesisText(response);
+    let next = chunks[0] === undefined ? undefined : pinned.synthesize(chunks[0], signal);
+    for (let index = 0; next; index += 1) {
+      const speech = await next;
+      signal.throwIfAborted();
+      const following = chunks[index + 1];
+      next = following === undefined ? undefined : pinned.synthesize(following, signal);
+      // Playback failure must not leave the prefetched request unhandled.
+      next?.catch(() => undefined);
       await pinned.play(speech, signal);
       signal.throwIfAborted();
     }

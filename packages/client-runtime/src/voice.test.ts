@@ -203,6 +203,31 @@ describe("composed voice lifecycle", () => {
     expect(capture).toHaveBeenCalledOnce();
   });
 
+  it("plays the first chunk of a long reply before the rest is synthesized", async () => {
+    const scope = createVoiceCallScope(identity);
+    const second = deferred<VoiceAudio>();
+    const firstPlayed = deferred<void>();
+    const synthesize = vi
+      .fn<(text: string) => Promise<VoiceAudio>>()
+      .mockResolvedValueOnce(audio)
+      .mockReturnValueOnce(second.promise);
+    const running = runComposedVoiceCall(scope, {
+      capture: async () => audio,
+      transcribe: async () => "Hello",
+      sendAndWait: async () => "x".repeat(4_001),
+      synthesize,
+      play: async () => {
+        firstPlayed.resolve();
+        scope.cancel();
+      },
+    });
+    const stopped = expect(running).rejects.toMatchObject({ name: "AbortError" });
+    await firstPlayed.promise;
+    expect(synthesize).toHaveBeenCalledTimes(2);
+    second.resolve(audio);
+    await stopped;
+  });
+
   it("never submits a transcript that arrives after cancellation", async () => {
     const scope = createVoiceCallScope(identity);
     const transcription = deferred<string>();
@@ -278,6 +303,10 @@ describe("accepted bot turn correlation", () => {
     };
     expect(correlatedVoiceReply("request-1", newerTurn, [request, assistant])).toBe("Exact reply");
     expect(() => correlatedVoiceReply("request-1", newerTurn, [request])).toThrow(
+      "The bot turn did not complete",
+    );
+    // Once the voice turn was seen running, a replacement hides how it ended.
+    expect(() => correlatedVoiceReply("request-1", newerTurn, [request, assistant], true)).toThrow(
       "The bot turn did not complete",
     );
   });
