@@ -150,6 +150,11 @@ const LegacyDelegationRecord = Schema.Struct({
   failure: Schema.NullOr(AkeruDelegationFailure),
   startedAt: Schema.NullOr(IsoDateTime),
   completedAt: Schema.NullOr(IsoDateTime),
+  // Phase details the flat wire form carries so replay keeps them. Older clients ignore them.
+  progress: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+  blockedReason: Schema.optionalKey(TrimmedNonEmptyString),
+  acknowledgedAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
+  canceledBy: Schema.optionalKey(Schema.Literals(["user", "parent-bot", "parent-turn-failed"])),
 });
 
 type LegacyDelegationRecord = typeof LegacyDelegationRecord.Type;
@@ -171,14 +176,14 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
-            progress: null,
+            progress: legacy.progress ?? null,
           }
         : {
             _tag: "Blocked",
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
-            reason: legacy.failure?.message ?? "The bot is blocked.",
+            reason: legacy.blockedReason ?? legacy.failure?.message ?? "The bot is blocked.",
           };
     case "completed":
       if (childThreadId !== null && legacy.result !== null) {
@@ -189,7 +194,7 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
           startedAt,
           completedAt,
           result: legacy.result,
-          acknowledgedAt: null,
+          acknowledgedAt: legacy.acknowledgedAt ?? null,
         };
       }
       return {
@@ -219,7 +224,7 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
         completedAt,
-        canceledBy: "user",
+        canceledBy: legacy.canceledBy ?? "user",
       };
   }
 };
@@ -237,6 +242,10 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
           failure: _failure,
           startedAt: _startedAt,
           completedAt: _completedAt,
+          progress: _progress,
+          blockedReason: _blockedReason,
+          acknowledgedAt: _acknowledgedAt,
+          canceledBy: _canceledBy,
           ...base
         } = legacy;
         return { ...base, phase: legacyPhase(legacy) };
@@ -250,6 +259,10 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
         failure: phase._tag === "Failed" ? phase.failure : null,
         startedAt: phase._tag === "Queued" ? null : phase.startedAt,
         completedAt: "completedAt" in phase ? phase.completedAt : null,
+        ...(phase._tag === "Running" ? { progress: phase.progress } : {}),
+        ...(phase._tag === "Blocked" ? { blockedReason: phase.reason } : {}),
+        ...(phase._tag === "Completed" ? { acknowledgedAt: phase.acknowledgedAt } : {}),
+        ...(phase._tag === "Canceled" ? { canceledBy: phase.canceledBy } : {}),
       }),
     }),
   ),

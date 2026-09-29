@@ -121,6 +121,40 @@ describe("Akeru delegation contracts", () => {
     expect(decodeDelegationRecord(encoded)).toEqual(tagged);
   });
 
+  it("keeps phase details through the flat wire form", () => {
+    const { phase: _phase, ...base } = decodeDelegationRecord(record);
+    const phases = [
+      {
+        _tag: "Running",
+        childThreadId: "thread-child",
+        childTurnId: null,
+        startedAt: "2026-08-31T00:00:00.000Z",
+        progress: "Reading the logs.",
+      },
+      {
+        _tag: "Blocked",
+        childThreadId: "thread-child",
+        childTurnId: null,
+        startedAt: "2026-08-31T00:00:00.000Z",
+        reason: "Needs repository access.",
+      },
+      {
+        _tag: "Canceled",
+        childThreadId: "thread-child",
+        childTurnId: null,
+        startedAt: "2026-08-31T00:00:00.000Z",
+        completedAt: "2026-08-31T00:01:00.000Z",
+        canceledBy: "parent-bot",
+      },
+    ];
+    for (const phase of phases) {
+      const tagged = decodeDelegationRecord({
+        ...encodeDelegationRecord({ ...base, phase } as never),
+      });
+      expect(tagged.phase).toEqual(phase);
+    }
+  });
+
   it("lifts legacy queued and failed records", () => {
     const { phase: _phase, ...base } = record;
     const legacy = {
