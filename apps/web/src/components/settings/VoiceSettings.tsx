@@ -78,6 +78,8 @@ export function VoiceSettingsPanel() {
   const providersQuery = useEnvironmentQuery(
     environmentId ? serverEnvironment.voiceProviders({ environmentId, input: {} }) : null,
   );
+  // Bumped when a key is saved so the voice list reloads for the new account.
+  const [keyRevision, setKeyRevision] = useState(0);
   const connected = useMemo(
     () =>
       providersQuery.data
@@ -116,6 +118,7 @@ export function VoiceSettingsPanel() {
           voice={voice}
           environmentId={environmentId}
           connected={connected}
+          keyRevision={keyRevision}
           onChange={updateSettings}
         />
         {replyPlayback ? <AutomaticReadoutRow preference={replyPlayback.preference} /> : null}
@@ -126,6 +129,7 @@ export function VoiceSettingsPanel() {
           connected={connected}
           loadError={providersQuery.error}
           onChanged={providersQuery.refresh}
+          onKeySaved={() => setKeyRevision((revision) => revision + 1)}
         />
       ) : null}
     </SettingsPageContainer>
@@ -137,11 +141,14 @@ export function VoiceModeRows({
   voice,
   environmentId,
   connected,
+  keyRevision = 0,
   onChange,
 }: {
   readonly voice: VoiceSettings;
   readonly environmentId: EnvironmentId | null;
   readonly connected: ReadonlyArray<VoiceApiProvider> | null;
+  /** Changes when a voice key is saved, which reloads the voice list. */
+  readonly keyRevision?: number;
   readonly onChange: (patch: VoicePatch) => void;
 }) {
   const { t } = useI18n();
@@ -247,7 +254,7 @@ export function VoiceModeRows({
             control={
               environmentId ? (
                 <SynthesisVoicePicker
-                  key={`${synthesisProvider}:${connected?.includes(synthesisProvider) ?? false}`}
+                  key={`${synthesisProvider}:${connected?.includes(synthesisProvider) ?? false}:${keyRevision}`}
                   environmentId={environmentId}
                   provider={synthesisProvider}
                   connected={connected?.includes(synthesisProvider) ?? false}
@@ -443,11 +450,13 @@ function VoiceApiConnectionsSection({
   connected,
   loadError,
   onChanged,
+  onKeySaved,
 }: {
   readonly environmentId: EnvironmentId;
   readonly connected: ReadonlyArray<VoiceApiProvider> | null;
   readonly loadError: string | null;
   readonly onChanged: () => void;
+  readonly onKeySaved: () => void;
 }) {
   const { t } = useI18n();
   const connect = useAtomCommand(serverEnvironment.connectVoiceProvider, { reportFailure: false });
@@ -498,14 +507,16 @@ function VoiceApiConnectionsSection({
           busyAction={busy?.provider === provider ? busy.action : null}
           disabled={busy !== null}
           message={messages[provider] ?? null}
-          onConnect={(apiKey) =>
-            run(
+          onConnect={async (apiKey) => {
+            const saved = await run(
               provider,
               "connect",
               () => connect({ environmentId, input: { provider, apiKey } }),
               "Key saved. Run Test to check it with the provider.",
-            )
-          }
+            );
+            if (saved) onKeySaved();
+            return saved;
+          }}
           onTest={() =>
             void run(
               provider,
