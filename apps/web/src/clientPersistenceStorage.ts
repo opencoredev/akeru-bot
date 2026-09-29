@@ -1,6 +1,6 @@
 import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
 
-import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
+import { getFirstLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
 export const CLIENT_SETTINGS_STORAGE_KEY = "akeru:client-settings:v1";
 // Pre-rebrand key, kept so existing installs keep their client settings.
@@ -15,15 +15,11 @@ export function readBrowserClientSettings(): ClientSettings | null {
     return null;
   }
 
-  try {
-    return (
-      getLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, ClientSettingsSchema) ??
-      getLocalStorageItem(LEGACY_CLIENT_SETTINGS_STORAGE_KEY, ClientSettingsSchema)
-    );
-  } catch (error) {
-    console.error("Could not read persisted client settings.", error);
-    return null;
-  }
+  return getFirstLocalStorageItem(
+    [CLIENT_SETTINGS_STORAGE_KEY, LEGACY_CLIENT_SETTINGS_STORAGE_KEY],
+    ClientSettingsSchema,
+    (error) => console.error("Could not read persisted client settings.", error),
+  );
 }
 
 export function writeBrowserClientSettings(settings: ClientSettings): void {

@@ -61,6 +61,26 @@ export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E
   return item ? decode(key, schema, item) : null;
 };
 
+/**
+ * Reads the first key that holds a decodable value, so a corrupt current key
+ * still falls back to a legacy key. Each failed read goes to `onError`.
+ */
+export const getFirstLocalStorageItem = <T, E>(
+  keys: ReadonlyArray<string>,
+  schema: Schema.Codec<T, E>,
+  onError: (error: unknown) => void,
+): T | null => {
+  for (const key of keys) {
+    try {
+      const value = getLocalStorageItem(key, schema);
+      if (value !== null) return value;
+    } catch (error) {
+      onError(error);
+    }
+  }
+  return null;
+};
+
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(key, schema, value);
   try {

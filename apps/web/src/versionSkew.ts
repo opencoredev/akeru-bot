@@ -3,7 +3,7 @@ import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";
-import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
+import { getFirstLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
 export interface VersionMismatch {
   readonly clientVersion: string;
@@ -109,21 +109,13 @@ export function buildVersionMismatchDismissalKey(
 }
 
 function readVersionMismatchDismissals(): VersionMismatchDismissals {
-  try {
-    return (
-      getLocalStorageItem(
-        VERSION_MISMATCH_DISMISSALS_STORAGE_KEY,
-        VersionMismatchDismissalsSchema,
-      ) ??
-      getLocalStorageItem(
-        LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY,
-        VersionMismatchDismissalsSchema,
-      ) ?? { keys: [] }
-    );
-  } catch (error) {
-    console.error("Could not read version-mismatch dismissals.", error);
-    return { keys: [] };
-  }
+  return (
+    getFirstLocalStorageItem(
+      [VERSION_MISMATCH_DISMISSALS_STORAGE_KEY, LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY],
+      VersionMismatchDismissalsSchema,
+      (error) => console.error("Could not read version-mismatch dismissals.", error),
+    ) ?? { keys: [] }
+  );
 }
 
 function writeVersionMismatchDismissals(document: VersionMismatchDismissals): void {
