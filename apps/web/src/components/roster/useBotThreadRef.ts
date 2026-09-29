@@ -6,13 +6,14 @@ import { useMemo } from "react";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useLatestBotThreadId, useThreadShell } from "../../state/entities";
 import { parseChatPath } from "./roster.logic";
-import { isBotOwnChatShell } from "./botThreadRuntime.logic";
+import { isBotOwnChatShell, pickBotChatTarget } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
 
 /**
- * The bot's latest durable thread in the primary environment, falling back to
- * the chat path the roster remembered for it. Subscribes to that one bot's
- * latest thread id, not the whole thread list.
+ * The bot's chat per `pickBotChatTarget`: the remembered chat while it is a
+ * live chat of this bot, else its latest durable thread in the primary
+ * environment, else the remembered path. Subscribes to that one bot's latest
+ * thread id and remembered shell, not the whole thread list.
  */
 export function useBotThreadCandidate(
   botId: string,
@@ -21,15 +22,32 @@ export function useBotThreadCandidate(
   const environmentId = usePrimaryEnvironmentId();
   const latestThreadId = useLatestBotThreadId(environmentId, botId);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
+  const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
   const remembered =
-    latestThreadId === null && rememberedPath ? parseChatPath(rememberedPath) : null;
-  const rememberedUsable =
-    remembered !== null &&
-    (options?.rememberedInPrimaryOnly !== true || remembered.environmentId === environmentId);
-  const targetEnvironmentId =
-    latestThreadId !== null ? environmentId : rememberedUsable ? remembered.environmentId : null;
-  const targetThreadId =
-    latestThreadId !== null ? latestThreadId : rememberedUsable ? remembered.threadId : null;
+    parsed !== null &&
+    (options?.rememberedInPrimaryOnly !== true || parsed.environmentId === environmentId)
+      ? parsed
+      : null;
+  const rememberedRef = useMemo(
+    () =>
+      remembered
+        ? scopeThreadRef(
+            EnvironmentId.make(remembered.environmentId),
+            ThreadId.make(remembered.threadId),
+          )
+        : null,
+    [remembered?.environmentId, remembered?.threadId],
+  );
+  const rememberedShell = useThreadShell(rememberedRef);
+  const target = pickBotChatTarget(
+    botId,
+    environmentId,
+    environmentId && latestThreadId ? { environmentId, threadId: latestThreadId } : null,
+    rememberedRef,
+    rememberedShell,
+  );
+  const targetEnvironmentId = target?.environmentId ?? null;
+  const targetThreadId = target?.threadId ?? null;
   return useMemo(
     () =>
       targetEnvironmentId && targetThreadId

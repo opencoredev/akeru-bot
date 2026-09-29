@@ -159,10 +159,46 @@ export function findLatestBotThreadTarget(
 }
 
 /**
- * The bot's own chat: its newest direct thread, else the remembered chat path
- * while a just-created thread has not reached the shell list yet. The shell
- * list leaves out child work, so pair this with `isBotOwnChatShell` on the
- * target's shell before treating it as the bot's chat.
+ * The chat a bot shows. A remembered chat path is the user's pick: while it
+ * names a live chat of this bot it stays selected, even when another chat
+ * replied later. Otherwise the bot shows its newest direct thread, else the
+ * remembered path while a just-created thread has not reached the shell list.
+ * Every surface on the bot route resolves through this, so the conversation
+ * and the side panel target the same chat.
+ */
+export function pickBotChatTarget(
+  botId: string,
+  environmentId: string | null,
+  latest: { environmentId: string; threadId: string } | null,
+  remembered: { environmentId: string; threadId: string } | null,
+  rememberedShell:
+    | {
+        botId?: string | null | undefined;
+        parentThreadId?: string | null | undefined;
+        archivedAt: string | null;
+        deletedAt?: string | null | undefined;
+      }
+    | null
+    | undefined,
+): { environmentId: string; threadId: string } | null {
+  if (
+    remembered &&
+    remembered.environmentId === environmentId &&
+    rememberedShell &&
+    rememberedShell.botId === botId &&
+    rememberedShell.parentThreadId == null &&
+    rememberedShell.archivedAt === null &&
+    rememberedShell.deletedAt == null
+  ) {
+    return { environmentId: remembered.environmentId, threadId: remembered.threadId };
+  }
+  return latest ?? remembered;
+}
+
+/**
+ * The bot's chat from the primary environment's shell list, per
+ * `pickBotChatTarget`. The shell list leaves out child work, so pair this with
+ * `isBotOwnChatShell` on the target's shell before treating it as the bot's chat.
  */
 export function resolveBotThreadTarget(
   botId: string,
@@ -170,12 +206,21 @@ export function resolveBotThreadTarget(
   threads: Parameters<typeof findLatestBotThreadTarget>[2],
   rememberedPath: string | null | undefined,
 ) {
-  const latest = findLatestBotThreadTarget(botId, environmentId, threads);
-  if (latest) return latest;
-  const remembered = rememberedPath ? parseChatPath(rememberedPath) : null;
-  return remembered?.kind === "thread" && remembered.environmentId === environmentId
-    ? remembered
-    : null;
+  const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
+  const remembered =
+    parsed?.kind === "thread" && parsed.environmentId === environmentId ? parsed : null;
+  return pickBotChatTarget(
+    botId,
+    environmentId,
+    findLatestBotThreadTarget(botId, environmentId, threads),
+    remembered,
+    remembered
+      ? threads.find(
+          (thread) =>
+            thread.environmentId === remembered.environmentId && thread.id === remembered.threadId,
+        )
+      : null,
+  );
 }
 
 /**
@@ -259,14 +304,11 @@ export interface RetainedChat {
   readonly threadRef: ScopedThreadRef | null;
   /** Whether the shell list has shown this chat since it was retained. */
   readonly linked: boolean;
-  /** Whether the user started this chat, so it stays shown until they change chats. */
-  readonly picked: boolean;
 }
 
 /**
- * The chat the bot shows. A just-created chat wins once its shell arrives, and
- * a chat the user picked keeps winning while its shell is live, even when an
- * older chat finished a reply after it, so the screen and sends agree.
+ * The chat the bot shows. A just-created chat wins once its shell arrives, even
+ * when an older chat finished a reply after it, so the screen and sends agree.
  */
 export function preferRetainedChatTarget(
   retained: RetainedChat,
@@ -278,7 +320,7 @@ export function preferRetainedChatTarget(
     deletedAt?: string | null | undefined;
   }[],
 ): { environmentId: string; threadId: string } | null {
-  const pending = retained.linked && !retained.picked ? null : retained.threadRef;
+  const pending = retained.linked ? null : retained.threadRef;
   if (
     pending &&
     shells.some(
@@ -327,19 +369,10 @@ export function nextRetainedChat(
     ) {
       return current;
     }
-    const same =
-      current.threadRef !== null &&
-      current.threadRef.environmentId === linkedThreadRef.environmentId &&
-      current.threadRef.threadId === linkedThreadRef.threadId;
-    return {
-      ownerId: current.ownerId,
-      threadRef: linkedThreadRef,
-      linked: true,
-      picked: same && current.picked,
-    };
+    return { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
   }
   if (current.linked && bootstrapped) {
-    return { ownerId: current.ownerId, threadRef: null, linked: false, picked: false };
+    return { ownerId: current.ownerId, threadRef: null, linked: false };
   }
   return current;
 }

@@ -144,10 +144,9 @@ export function useGroupThreadRuntime(groupId: string) {
     ownerId: groupId,
     threadRef: null,
     linked: false,
-    picked: false,
   });
   if (retainedThreadRef.current.ownerId !== groupId) {
-    retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false, picked: false };
+    retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
   retainedThreadRef.current = nextRetainedChat(
     retainedThreadRef.current,
@@ -393,7 +392,6 @@ export function useGroupThreadRuntime(groupId: string) {
               ownerId: groupId,
               threadRef: scopeThreadRef(environmentId, threadId),
               linked: false,
-              picked: false,
             };
           }
           return true;

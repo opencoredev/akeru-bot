@@ -109,10 +109,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     ownerId: botId,
     threadRef: null,
     linked: false,
-    picked: false,
   });
   if (retainedThreadRef.current.ownerId !== botId) {
-    retainedThreadRef.current = { ownerId: botId, threadRef: null, linked: false, picked: false };
+    retainedThreadRef.current = { ownerId: botId, threadRef: null, linked: false };
   }
   const target = preferRetainedChatTarget(
     retainedThreadRef.current,
@@ -274,7 +273,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       });
       if (result._tag === "Failure") return null;
       const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
-      retainedThreadRef.current = { ownerId: botId, threadRef, linked: false, picked: true };
+      retainedThreadRef.current = { ownerId: botId, threadRef, linked: false };
       useRosterStore
         .getState()
         .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
@@ -482,7 +481,6 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               ownerId: botId,
               threadRef: currentThreadRef,
               linked: false,
-              picked: true,
             };
           }
           useRosterStore
