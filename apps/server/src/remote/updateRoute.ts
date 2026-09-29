@@ -9,6 +9,7 @@ import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 
+import { deriveAuthClientMetadata } from "../auth/utils.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSelfUpdate from "../cloud/selfUpdate.ts";
 import { tryBeginMaintenance, withMaintenance } from "./updateGate.ts";
@@ -19,12 +20,19 @@ function sameSecret(presented: string, expected: string): boolean {
   return left.length === right.length && NodeCrypto.timingSafeEqual(left, right);
 }
 
+/** The machine token is a local credential: proxied or non-loopback callers never reach it. */
+export function isLocalMachineCaller(request: HttpServerRequest.HttpServerRequest): boolean {
+  if (request.headers["x-forwarded-for"] || request.headers["forwarded"]) return false;
+  const address = deriveAuthClientMetadata({ request }).ipAddress;
+  return address === "::1" || (address?.startsWith("127.") ?? false);
+}
+
 export function hasActiveTurns(dbPath: string): boolean {
   const db = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
   try {
     const row = db
       .prepare(
-        "SELECT COUNT(*) AS count FROM projection_thread_sessions WHERE status = 'running' OR active_turn_id IS NOT NULL",
+        "SELECT COUNT(*) AS count FROM projection_thread_sessions WHERE status IN ('starting', 'running') OR active_turn_id IS NOT NULL",
       )
       .get() as { count: number };
     return row.count > 0;
@@ -40,6 +48,9 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
       "/api/remote/update",
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
+        if (!isLocalMachineCaller(request)) {
+          return HttpServerResponse.jsonUnsafe({ error: "forbidden" }, { status: 403 });
+        }
         const config = yield* ServerConfig.ServerConfig;
         const tokenPath = `${config.stateDir}/remote-control-token`;
         const expected = yield* Effect.try(() =>

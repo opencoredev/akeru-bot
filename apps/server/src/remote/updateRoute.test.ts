@@ -6,7 +6,26 @@ import * as NodeSqlite from "node:sqlite";
 
 import { expect, it } from "vite-plus/test";
 
-import { hasActiveTurns } from "./updateRoute.ts";
+import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
+
+import { hasActiveTurns, isLocalMachineCaller } from "./updateRoute.ts";
+
+const machineRequest = (remoteAddress: string, headers: Record<string, string> = {}) =>
+  HttpServerRequest.fromWeb(
+    Object.assign(new Request("http://127.0.0.1/api/remote/update", { method: "POST", headers }), {
+      remoteAddress,
+    }),
+  );
+
+it("accepts the machine token only from direct loopback callers", () => {
+  expect(isLocalMachineCaller(machineRequest("127.0.0.1"))).toBe(true);
+  expect(isLocalMachineCaller(machineRequest("::ffff:127.0.0.1"))).toBe(true);
+  expect(isLocalMachineCaller(machineRequest("::1"))).toBe(true);
+  expect(isLocalMachineCaller(machineRequest("100.64.0.7"))).toBe(false);
+  expect(
+    isLocalMachineCaller(machineRequest("127.0.0.1", { "x-forwarded-for": "100.64.0.7" })),
+  ).toBe(false);
+});
 
 it("defers unattended updates while any bot turn is active", () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-update-route-"));
@@ -23,6 +42,8 @@ it("defers unattended updates while any bot turn is active", () => {
     null,
   );
   expect(hasActiveTurns(dbPath)).toBe(false);
+  db.prepare("UPDATE projection_thread_sessions SET status = ?").run("starting");
+  expect(hasActiveTurns(dbPath)).toBe(true);
   db.prepare("UPDATE projection_thread_sessions SET status = ?, active_turn_id = ?").run(
     "running",
     "turn-1",
