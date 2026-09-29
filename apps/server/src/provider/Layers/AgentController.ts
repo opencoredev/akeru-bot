@@ -3551,6 +3551,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const toolCallId = String(input.requestId);
+      const openRoutineRequest = pendingRoutineRequests.get(toolCallId);
+      if (openRoutineRequest && openRoutineRequest.threadId !== key) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `The routine review belongs to another chat: ${input.requestId}.`,
+        });
+      }
       // Claiming the review first stops its timeout, so an answer that arrives
       // in time always decides the outcome even if creation outlasts the limit.
       const routineRequest = pendingRoutineRequests.claim(toolCallId);

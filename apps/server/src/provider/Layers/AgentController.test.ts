@@ -4262,6 +4262,54 @@ describe("AgentControllerLive", () => {
         {},
       );
     });
+
+    it.effect("rejects a routine answer from another active chat without claiming it", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "codex", model: "gpt-5.6-sol" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+          });
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Another chat." });
+
+          const wrongChat = yield* controller
+            .respondToRequest({
+              threadId: claudeThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip);
+          assert.instanceOf(wrongChat, AgentControllerRuntimeError);
+          assert.strictEqual(events.filter((event) => event.type === "request.resolved").length, 0);
+
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(requestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(toolCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {},
+      );
+    });
   });
 
   it.effect("keeps product feedback approval-gated in full-access mode", () => {
