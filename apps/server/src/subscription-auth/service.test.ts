@@ -338,6 +338,49 @@ describe("subscription auth storage", () => {
     },
   );
 
+  it("keeps the first of two concurrent refreshes when the refresh token does not rotate", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        xai: { type: "oauth", access: "old", refresh: "same-refresh", expires: 0 },
+      }),
+    );
+    const first = await makeTestSubscriptionAuthService(authPath);
+    const second = await makeTestSubscriptionAuthService(authPath);
+    const responses: Array<(response: Response) => void> = [];
+    const firstRequested = requestSignal();
+    const secondRequested = requestSignal();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            responses.push(resolve);
+            (responses.length === 1 ? firstRequested : secondRequested).markRequested();
+          }),
+      ),
+    );
+    const tokenResponse = (access: string) =>
+      new Response(JSON.stringify({ access_token: access, expires_in: 3600 }), {
+        headers: { "content-type": "application/json" },
+      });
+    try {
+      const firstRefresh = first.getAccessToken("xai");
+      await firstRequested.requested;
+      const secondRefresh = second.getAccessToken("xai");
+      await secondRequested.requested;
+      responses[0]!(tokenResponse("first-access"));
+      expect(await firstRefresh).toBe("first-access");
+      responses[1]!(tokenResponse("second-access"));
+      // The slower refresh started from a credential that is no longer stored.
+      expect(await secondRefresh).toBe("first-access");
+      expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8")).xai.access).toBe("first-access");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does not save a refreshed token after a concurrent logout reaches the store", async () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(

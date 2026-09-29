@@ -1260,13 +1260,22 @@ export class SubscriptionAuthService {
     try {
       const refreshed = await this.runRefresh(provider, credential);
       await this.reloadAsync();
+      // Another service may have refreshed the same login meanwhile. Providers
+      // that do not rotate refresh tokens leave `refresh` unchanged, so only the
+      // access token shows whether the stored credential is still the one refreshed.
       const current = this.data[provider];
-      if (current?.type !== "oauth" || current.refresh !== credential.refresh) {
+      if (
+        current?.type !== "oauth" ||
+        current.access !== credential.access ||
+        current.refresh !== credential.refresh
+      ) {
         return current?.access;
       }
       const saved = await this.updateCredentials((data) => {
         const latest = data[provider];
-        return latest?.type === "oauth" && latest.refresh === credential.refresh
+        return latest?.type === "oauth" &&
+          latest.access === credential.access &&
+          latest.refresh === credential.refresh
           ? { ...data, [provider]: { ...refreshed, type: "oauth" } }
           : data;
       });
