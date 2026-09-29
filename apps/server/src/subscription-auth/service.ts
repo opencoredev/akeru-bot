@@ -265,6 +265,23 @@ type PendingLogin =
   | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending }
   | { provider: "opencode-go" };
 
+/** Refreshed tokens keep the stored connection identity and account ID. */
+function refreshedCredential(
+  previous: OAuthCredential,
+  refreshed: OAuthCredentials,
+): OAuthCredential {
+  return {
+    ...refreshed,
+    type: "oauth",
+    ...(refreshed.connectionId === undefined && previous.connectionId !== undefined
+      ? { connectionId: previous.connectionId }
+      : {}),
+    ...(refreshed.accountId === undefined && previous.accountId !== undefined
+      ? { accountId: previous.accountId }
+      : {}),
+  };
+}
+
 /** A completed login that the client has not observed yet must not be re-runnable. */
 const PENDING_LOGIN_CAP = 16;
 
@@ -772,7 +789,7 @@ export class SubscriptionAuthService {
           return latest?.type === "oauth" &&
             latest.access === credential.access &&
             latest.refresh === credential.refresh
-            ? { ...data, [provider]: { ...refreshed, type: "oauth" } }
+            ? { ...data, [provider]: refreshedCredential(latest, refreshed) }
             : data;
         });
         const stored = saved[provider];
@@ -1276,7 +1293,7 @@ export class SubscriptionAuthService {
         return latest?.type === "oauth" &&
           latest.access === credential.access &&
           latest.refresh === credential.refresh
-          ? { ...data, [provider]: { ...refreshed, type: "oauth" } }
+          ? { ...data, [provider]: refreshedCredential(latest, refreshed) }
           : data;
       });
       return saved[provider]?.access;

@@ -45,7 +45,7 @@ describe("subscription auth storage", () => {
         },
       }),
     );
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const first = await service.getPlanAccess("anthropic");
     expect(first?.accountId).toBeTruthy();
     const data = JSON.parse(NodeFS.readFileSync(authPath, "utf8"));
@@ -70,11 +70,13 @@ describe("subscription auth storage", () => {
         accessToken: "refreshed-token",
         accountId: first?.accountId,
       });
-      expect(await new SubscriptionAuthService(authPath).getPlanAccess("anthropic")).toEqual({
+      expect(
+        await (await makeTestSubscriptionAuthService(authPath)).getPlanAccess("anthropic"),
+      ).toEqual({
         accessToken: "refreshed-token",
         accountId: first?.accountId,
       });
-      service.logout("anthropic");
+      await service.logout("anthropic");
       expect(await service.getPlanAccess("anthropic")).toBeUndefined();
       NodeFS.writeFileSync(
         authPath,
@@ -108,7 +110,7 @@ describe("subscription auth storage", () => {
         },
       }),
     );
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     expect(await service.getPlanAccess("openai-codex")).toEqual({
       accessToken: "token",
       accountId: "account-123",
