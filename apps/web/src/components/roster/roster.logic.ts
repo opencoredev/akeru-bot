@@ -264,12 +264,16 @@ export function flattenMarkdownPreview(markdown: string): string {
   // characters stands in, so one enormous line cannot stall a roster render.
   const complete = markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT;
   const source = complete ? markdown : markdown.slice(0, MARKDOWN_PREVIEW_PARSE_LIMIT);
+  // Chunks parse apart, so a reference image or link in one chunk still needs
+  // the definitions another chunk holds; they flatten to nothing themselves.
+  const definitions = (source.match(MARKDOWN_REFERENCE_DEFINITION) ?? []).join("\n");
+  const withDefinitions = definitions ? `\n\n${definitions}` : "";
   let flattened = "";
   let offset = 0;
   while (offset < source.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
     const end = markdownPreviewChunkEnd(source, offset, complete);
     if (end === null) break;
-    const chunk = flattenMarkdownText(source.slice(offset, end));
+    const chunk = flattenMarkdownText(source.slice(offset, end) + withDefinitions);
     if (chunk.length > 0) flattened = flattened.length > 0 ? `${flattened} ${chunk}` : chunk;
     offset = end;
   }
@@ -288,6 +292,7 @@ const MARKDOWN_PREVIEW_CHUNK_TARGET = 600;
 const MARKDOWN_PREVIEW_PARSE_LIMIT = 20_000;
 const MARKDOWN_PREVIEW_ROUGH_LIMIT = 2_000;
 const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const MARKDOWN_REFERENCE_DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*\S.*$/gm;
 
 /**
  * End of the next chunk starting at `offset`: a blank line outside a fenced
@@ -342,7 +347,17 @@ function stripMarkdownRoughly(markdown: string): string {
   let result = "";
   let offset = 0;
   while (offset < markdown.length) {
-    const opening = markdown.indexOf("`", offset);
+    const opening = unescapedIndexOf(markdown, "`", offset);
+    // An image that starts before the next code span is dropped whole, so a
+    // backtick inside its label cannot split it and leak the description.
+    const image = unescapedIndexOf(markdown, "![", offset);
+    if (image >= 0 && (opening < 0 || image < opening)) {
+      result += `${stripProse(markdown.slice(offset, image))} `;
+      const end = roughImageEnd(markdown, image);
+      if (end === null) break;
+      offset = end;
+      continue;
+    }
     if (opening < 0) {
       result += stripProse(markdown.slice(offset));
       break;
@@ -373,17 +388,37 @@ function withoutImagesRoughly(markdown: string): string {
     const start = markdown.indexOf("![", offset);
     if (start === -1) return result + markdown.slice(offset);
     result += `${markdown.slice(offset, start)} `;
-    const labelEnd = balancedGroupEnd(markdown, start + 1, "[", "]");
-    if (labelEnd === null) return result;
-    const next = markdown[labelEnd];
-    if (next === "(" || next === "[") {
-      const targetEnd = balancedGroupEnd(markdown, labelEnd, next, next === "(" ? ")" : "]");
-      if (targetEnd === null) return result;
-      offset = targetEnd;
-    } else {
-      offset = labelEnd;
-    }
+    const end = roughImageEnd(markdown, start);
+    if (end === null) return result;
+    offset = end;
   }
+}
+
+/**
+ * Index just past the `![` image at `start`: its balanced label and any
+ * balanced parenthesis or reference group after it. Null when the label or
+ * target never closes.
+ */
+function roughImageEnd(markdown: string, start: number): number | null {
+  const labelEnd = balancedGroupEnd(markdown, start + 1, "[", "]");
+  if (labelEnd === null) return null;
+  const next = markdown[labelEnd];
+  if (next !== "(" && next !== "[") return labelEnd;
+  return balancedGroupEnd(markdown, labelEnd, next, next === "(" ? ")" : "]");
+}
+
+/** Index of `needle` at or after `from` that no backslash escapes, or -1. */
+function unescapedIndexOf(text: string, needle: string, from: number): number {
+  for (
+    let index = text.indexOf(needle, from);
+    index >= 0;
+    index = text.indexOf(needle, index + 1)
+  ) {
+    let backslashes = 0;
+    while (text[index - 1 - backslashes] === "\\") backslashes += 1;
+    if (backslashes % 2 === 0) return index;
+  }
+  return -1;
 }
 
 /** Index just past the close matching the `open` at `start`, or null. */

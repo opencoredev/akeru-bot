@@ -717,6 +717,26 @@ describe("flattenMarkdownPreview", () => {
     expect(flattenMarkdownPreview(`Intro ![alt](chart.png (SECRET ${tail}`)).toBe("Intro");
   });
 
+  it("drops an image whose label holds backticks, and treats escaped backticks as prose", () => {
+    const tail = "z".repeat(20_000);
+    const ticked = flattenMarkdownPreview(
+      `Intro ![alt \`code\` SECRET](chart.png) then answer${tail}`,
+    );
+    expect(ticked).toMatch(/^Intro then answerz/);
+    expect(ticked).not.toContain("SECRET");
+    const escaped = flattenMarkdownPreview(
+      `Intro \\\` ![SECRET](chart.png) \\\` then answer${tail}`,
+    );
+    expect(escaped).not.toContain("SECRET");
+  });
+
+  it("resolves a reference image whose definition sits in a later chunk", () => {
+    const paragraph = `Opening ${"word ".repeat(120)}![private diagram][chart] end`;
+    const preview = flattenMarkdownPreview(`${paragraph}\n\n[chart]: chart.png\n\nMore text`);
+    expect(preview).not.toContain("private diagram");
+    expect(preview).not.toContain("[chart]");
+  });
+
   it("bounds the rough preview to a prefix of the message", () => {
     // Leading whitespace counts against the window instead of being scanned.
     expect(flattenMarkdownPreview(`${" ".repeat(30_000)}word`)).toBe("");
