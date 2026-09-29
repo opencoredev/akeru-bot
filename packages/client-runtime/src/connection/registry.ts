@@ -606,11 +606,7 @@ export const make = Effect.gen(function* () {
   const retryNow = (environmentId: EnvironmentId, options?: { readonly onlyIfDesired?: boolean }) =>
     acquireSupervisor(environmentId).pipe(
       Effect.flatMap((supervisor) =>
-        options?.onlyIfDesired === true
-          ? SubscriptionRef.get(supervisor.state).pipe(
-              Effect.flatMap((current) => (current.desired ? supervisor.retryNow : Effect.void)),
-            )
-          : supervisor.retryNow,
+        options?.onlyIfDesired === true ? supervisor.retryIfDesired : supervisor.retryNow,
       ),
       Effect.catchTag("EnvironmentNotRegisteredError", () => Effect.void),
       Effect.withSpan("EnvironmentRegistry.retryNow"),

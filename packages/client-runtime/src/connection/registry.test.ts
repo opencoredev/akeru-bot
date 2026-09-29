@@ -645,6 +645,34 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 
+  it.effect("keeps a disconnect that lands before a conditional retry reads the state", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness([TARGET]);
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* awaitConnectionState(
+          registry,
+          TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        // The published state still says desired while the disconnect's intent is already false.
+        yield* registry.run(
+          TARGET.environmentId,
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.flatMap((supervisor) => supervisor.disconnect),
+          ),
+        );
+        yield* registry.retryNow(TARGET.environmentId, { onlyIfDesired: true });
+        yield* awaitConnectionState(
+          registry,
+          TARGET.environmentId,
+          (state) => state.phase === "available" && !state.desired,
+        );
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
   it.effect("ignores retry signals for environments that are no longer registered", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([]);

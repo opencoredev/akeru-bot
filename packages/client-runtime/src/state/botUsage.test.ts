@@ -79,6 +79,7 @@ const connectedEnvironment = Effect.fn(function* () {
     connect: Effect.void,
     disconnect: Effect.void,
     retryNow: Effect.void,
+    retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
   const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
     run: ((_id, effect) =>
@@ -161,6 +162,7 @@ describe("bot usage environment atoms", () => {
           connect: Effect.void,
           disconnect: Effect.void,
           retryNow: Effect.void,
+          retryIfDesired: Effect.void,
         } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
         const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
           Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
