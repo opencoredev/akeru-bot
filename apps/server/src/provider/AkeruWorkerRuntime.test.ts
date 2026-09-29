@@ -56,6 +56,7 @@ const makeHarnessWith = (options?: {
     }>();
     const interrupted: ThreadId[] = [];
     const discarded: ThreadId[] = [];
+    const discards = yield* Queue.unbounded<ThreadId>();
     let created = 0;
     let ids = 0;
     const port: AkeruWorkerPort = {
@@ -68,10 +69,14 @@ const makeHarnessWith = (options?: {
           ? Effect.fail(new AkeruWorkerError({ reason: "start_failed", detail: "rejected" }))
           : Effect.asVoid(Queue.offer(turns, { childThreadId, text })),
       interruptChild: (childThreadId) => Effect.sync(() => void interrupted.push(childThreadId)),
-      discardChild: (childThreadId) => Effect.sync(() => void discarded.push(childThreadId)),
+      discardChild: (childThreadId) =>
+        Effect.sync(() => void discarded.push(childThreadId)).pipe(
+          Effect.andThen(Queue.offer(discards, childThreadId)),
+          Effect.asVoid,
+        ),
     };
     const runtime = yield* makeAkeruWorkerRuntime(port, { makeId: () => String(++ids) });
-    return { runtime, turns, interrupted, discarded };
+    return { runtime, turns, interrupted, discarded, discards };
   });
 const makeHarness = makeHarnessWith();
 
@@ -305,15 +310,13 @@ it.effect("discards the child of a worker stopped while the child was created", 
   Effect.scoped(
     Effect.gen(function* () {
       const createGate = yield* Deferred.make<void>();
-      const { runtime, turns, discarded } = yield* makeHarnessWith({ createGate });
+      const { runtime, turns, discarded, discards } = yield* makeHarnessWith({ createGate });
       const running = yield* runtime.spawn(parent, { task: "Early stop", background: true });
-      const stopping = yield* Effect.forkChild(
-        runtime.stop(parent, { workerId: running.workerId }),
-      );
-      yield* Effect.yieldNow;
-      yield* Deferred.succeed(createGate, undefined);
-      const stopped = yield* Fiber.join(stopping);
+      // Stop answers while child creation is still stalled.
+      const stopped = yield* runtime.stop(parent, { workerId: running.workerId });
       assert.strictEqual(phaseOf(stopped), "Canceled");
+      yield* Deferred.succeed(createGate, undefined);
+      assert.strictEqual(yield* Queue.take(discards), ThreadId.make("child-1"));
       assert.deepStrictEqual(discarded, [ThreadId.make("child-1")]);
       assert.strictEqual(yield* Queue.size(turns), 0);
     }),

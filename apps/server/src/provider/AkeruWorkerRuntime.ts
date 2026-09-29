@@ -217,8 +217,17 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           canceledBy,
         })),
       );
-      // Interrupting outside the lock lets the fiber finish its own cleanup.
-      if (canceled && entry.fiber) yield* Fiber.interrupt(entry.fiber);
+      // Interrupting outside the lock lets the fiber finish its own cleanup. A
+      // child still being created cannot be interrupted yet, so stop does not
+      // wait there; the fiber discards that child once creation returns.
+      if (canceled && entry.fiber) {
+        const interrupt = Fiber.interrupt(entry.fiber);
+        if (childThreadOf(yield* Ref.get(entry.phase)) === null) {
+          yield* Effect.forkIn(interrupt, scope);
+        } else {
+          yield* interrupt;
+        }
+      }
       return yield* statusOf(entry);
     });
 
