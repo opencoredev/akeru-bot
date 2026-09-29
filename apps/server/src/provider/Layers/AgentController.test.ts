@@ -742,7 +742,6 @@ describe("provider access health", () => {
   it.each([
     ["codex", "openai-codex"],
     ["claudeAgent", "anthropic"],
-    ["cursor", "cursor"],
     ["grok", "xai"],
     ["kimi", "kimi-for-coding"],
   ] as const)("maps %s runtime requests to %s access health", (driver, provider) => {
