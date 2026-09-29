@@ -53,7 +53,7 @@ export function storedReplySynthesisCapability(
   const provider = voice.synthesisProvider ?? "openai";
   const selectedVoice =
     provider === "openai"
-      ? (voice.synthesisVoices?.openai ?? voice.openaiVoice ?? "alloy")
+      ? (voice.synthesisVoices?.openai ?? "alloy")
       : provider
         ? voice.synthesisVoices?.[provider]
         : undefined;

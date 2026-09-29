@@ -101,6 +101,11 @@ describe("reply playback session", () => {
         synthesisVoices: { elevenlabs: "voice-1" },
       }),
     ).toEqual({ available: true, provider: "elevenlabs", voice: "voice-1" });
+    expect(storedReplySynthesisCapability({ provider: "composed", openaiVoice: "nova" })).toEqual({
+      available: true,
+      provider: "openai",
+      voice: "alloy",
+    });
     expect(storedReplySynthesisCapability({ provider: "chatgpt" }).available).toBe(false);
   });
   it("exposes settled assistant readout without starting a turn", () => {
