@@ -1291,6 +1291,55 @@ describe("channel runtime", () => {
       }),
     );
 
+    it.effect("restores the previous project when the old transport fails to shut down", () =>
+      Effect.gen(function* () {
+        const events: Array<string> = [];
+        const harness = makeHarness({
+          startTransport: async (input) => {
+            if (input.targetProjectId === SECOND_PROJECT_ID) {
+              events.push(`fail:${input.targetProjectId}`);
+              throw new Error("transport refused");
+            }
+            events.push(`start:${input.targetProjectId}`);
+            return {
+              externalIdentity: "@akeru",
+              runtime: {
+                post: async () => undefined,
+                shutdown: async () => {
+                  events.push(`stop:${input.targetProjectId}`);
+                  throw new Error("shutdown failed");
+                },
+              },
+            };
+          },
+        });
+        yield* saveConnection(harness);
+        yield* attachChannelConnection(
+          harness.dependencies,
+          BOT_ID,
+          changeProjectConnectionId,
+          PROJECT_ID,
+          "telegram",
+        );
+
+        yield* expectFailureMessage(
+          changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID),
+          "transport refused",
+        );
+
+        expect(events).toEqual([
+          `start:${PROJECT_ID}`,
+          `stop:${PROJECT_ID}`,
+          `fail:${SECOND_PROJECT_ID}`,
+          `start:${PROJECT_ID}`,
+        ]);
+        expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+          projectId: PROJECT_ID,
+          status: "connected",
+        });
+      }),
+    );
+
     it.effect("records a failure on the previous project when neither runtime starts", () =>
       Effect.gen(function* () {
         const harness = makeHarness({
@@ -2019,6 +2068,29 @@ describe("channel runtime", () => {
       expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
         status: "failed",
         lastError: "Connection restore failed. Reconnect with updated credentials.",
+      });
+    }),
+  );
+
+  it.effect("keeps a deleted project blocked when restore cannot start the transport", () =>
+    Effect.gen(function* () {
+      const binding: ChannelBinding = {
+        botId: BOT_ID,
+        projectId: MISSING_PROJECT_ID,
+        provider: "telegram",
+        status: "connected",
+        externalIdentity: "@akeru",
+        connectedAt: NOW,
+        sentMessageIds: [],
+      };
+      const harness = makeHarness({
+        bots: [makeBot(BOT_ID, { channelBindings: [binding] })],
+      });
+
+      expect(yield* restoreConnectedChannels(harness.dependencies)).toHaveLength(1);
+      expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+        status: "blocked",
+        lastError: "The selected project is unavailable. Choose another project.",
       });
     }),
   );

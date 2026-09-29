@@ -1911,7 +1911,9 @@ const changeChannelProject = (
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
-      yield* stopRuntime(ctx, botId, provider);
+      // The old transport is already unregistered, so a failed shutdown must
+      // still reach the start and restore paths below.
+      yield* stopRuntime(ctx, botId, provider).pipe(Effect.ignoreCause({ log: true }));
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
           const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
@@ -1997,12 +1999,18 @@ const restoreConnectedChannels = (
                 .find((bot) => bot.id === candidate.botId)
                 ?.channelBindings?.find((entry) => entry.provider === candidate.provider);
               if (binding) {
+                // A deleted project needs a new project, not new credentials.
+                const projectMissing = !latest.projects.some(
+                  (project) => project.id === binding.projectId && project.deletedAt === null,
+                );
                 yield* Effect.gen(function* () {
                   yield* replaceBinding(ctx, {
                     ...binding,
-                    status: "failed",
+                    status: projectMissing ? "blocked" : "failed",
                     lastAttemptAt: yield* deps.nowIso,
-                    lastError: "Connection restore failed. Reconnect with updated credentials.",
+                    lastError: projectMissing
+                      ? "The selected project is unavailable. Choose another project."
+                      : "Connection restore failed. Reconnect with updated credentials.",
                   });
                 }).pipe(Effect.ignoreCause);
               }
