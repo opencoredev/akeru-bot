@@ -49,4 +49,29 @@ describe("web reply playback synthesis", () => {
     expect(session.synthesisFor("primary")).toMatchObject({ available: true });
     session.dispose();
   });
+
+  it("keeps other environments unavailable after a voice change", () => {
+    let voice: { enabled: boolean; provider: "composed"; synthesisVoices?: { openai: string } } = {
+      enabled: true,
+      provider: "composed",
+    };
+    const session = createWebReplyPlaybackSession({
+      environmentId: "primary" as never,
+      voice: () => voice as never,
+      synthesize: vi.fn(),
+      cancel: vi.fn(),
+    });
+    const listener = vi.fn();
+    session.subscribeSynthesis(listener);
+    voice = { ...voice, synthesisVoices: { openai: "nova" } };
+    session.setContext({ environmentId: "primary", threadId: "thread" } as never);
+    const before = session.getSynthesisSnapshot();
+    expect(session.getSynthesisSnapshot()).toBe(before);
+    session.refreshSynthesis();
+    expect(listener).toHaveBeenCalledOnce();
+    expect(session.getSynthesisSnapshot()).toMatchObject({ voice: "nova" });
+    expect(session.synthesisFor("primary")).toMatchObject({ available: true, voice: "nova" });
+    expect(session.synthesisFor("remote")).toMatchObject({ available: false });
+    session.dispose();
+  });
 });

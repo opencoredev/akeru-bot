@@ -1,7 +1,7 @@
 import { createReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
 import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { usePrimaryEnvironmentId } from "~/state/environments";
@@ -20,28 +20,31 @@ export function useWebReplyPlaybackSession() {
   const synthesize = useAtomCommand(serverEnvironment.synthesizeVoice, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
   const voice = settings.voice;
-  const [initialVoice] = useState(voice);
+  const voiceRef = useRef(voice);
   const session = useMemo(
     () =>
       createWebReplyPlaybackSession({
         ...(environmentId ? { environmentId } : {}),
-        voice: initialVoice,
+        voice: () => voiceRef.current,
         ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
       }),
-    [cancel, environmentId, initialVoice, synthesize],
+    [cancel, environmentId, synthesize],
   );
   // Voice setting changes update the live session, so playback and automatic readout survive them.
-  // They belong to the primary environment, so replies from other environments stay unavailable.
+  // The per-environment check still applies, so other environments' replies stay unavailable.
   useEffect(() => {
-    if (environmentId) session.setSynthesis(storedReplySynthesisCapability(voice), environmentId);
-  }, [environmentId, session, voice]);
+    voiceRef.current = voice;
+    session.refreshSynthesis();
+  }, [session, voice]);
   return session;
 }
 
 export function createWebReplyPlaybackSession(
   options: {
     readonly environmentId?: string | null;
-    readonly voice?: Parameters<typeof storedReplySynthesisCapability>[0];
+    readonly voice?:
+      | Parameters<typeof storedReplySynthesisCapability>[0]
+      | (() => Parameters<typeof storedReplySynthesisCapability>[0]);
     readonly synthesize?: (target: {
       environmentId: string;
       input: { operationId: string; text: string };
@@ -53,6 +56,7 @@ export function createWebReplyPlaybackSession(
   } = {},
 ) {
   const environmentId = options.environmentId ?? null;
+  const readVoice = () => (typeof options.voice === "function" ? options.voice() : options.voice);
   return createReplyPlaybackSession({
     storage: {
       getItem: async (key) =>
@@ -66,7 +70,7 @@ export function createWebReplyPlaybackSession(
     // environment stay unavailable instead of being read by the wrong server.
     synthesis: (replyEnvironmentId) =>
       replyEnvironmentId === environmentId
-        ? storedReplySynthesisCapability(options.voice)
+        ? storedReplySynthesisCapability(readVoice())
         : {
             available: false,
             provider: "unavailable",
