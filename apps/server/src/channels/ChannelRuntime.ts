@@ -65,11 +65,7 @@ import {
   type OrchestrationEngineShape,
 } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
-import {
-  ChannelDeliveryStore,
-  type ChannelDeliveryClaim,
-  type ChannelDeliveryStoreShape,
-} from "./ChannelDeliveryStore.ts";
+import { ChannelDeliveryStore, type ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
 
 /**
  * Transport adapters must confirm that no part of the reply was accepted before using this error.
@@ -2707,18 +2703,28 @@ const restoreConnectedChannels = (
     // that created them was interrupted, so the post may or may not have
     // landed. Reconcile the projected "pending" state to "unknown" so clients
     // stop showing "Sending…" forever and admins can retry the reply.
-    const staleClaims = yield* deps.deliveryStore
-      .listRequestedClaims()
-      .pipe(Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<ChannelDeliveryClaim>)));
-    for (const claim of staleClaims) {
-      const thread = yield* deps.readThread(claim.threadId);
-      const delivery = thread?.messages.find(
-        (message) => message.id === claim.messageId,
-      )?.channelDelivery;
-      if (delivery === "pending" || delivery === undefined) {
-        yield* setChannelDelivery(ctx, claim.threadId, claim.messageId, "unknown");
+    // A reply whose post landed but whose durable mark failed is recorded in the
+    // binding, so it is sent rather than ambiguous. Reconciliation is best effort
+    // and never keeps a channel from reconnecting.
+    yield* Effect.gen(function* () {
+      const staleClaims = yield* deps.deliveryStore.listRequestedClaims();
+      for (const claim of staleClaims) {
+        const thread = yield* deps.readThread(claim.threadId);
+        const delivery = thread?.messages.find(
+          (message) => message.id === claim.messageId,
+        )?.channelDelivery;
+        if (delivery !== "pending" && delivery !== undefined) continue;
+        const sent = model.bots
+          .find((bot) => bot.id === claim.botId)
+          ?.channelBindings?.find((binding) => binding.provider === claim.provider)
+          ?.sentMessageIds.includes(claim.messageId);
+        yield* setChannelDelivery(ctx, claim.threadId, claim.messageId, sent ? "sent" : "unknown");
       }
-    }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Could not reconcile interrupted channel deliveries.", cause),
+      ),
+    );
     const results = yield* Effect.forEach(
       candidates,
       (candidate) =>
@@ -2773,17 +2779,16 @@ const setChannelDelivery = (
     ) {
       return;
     }
-    yield* ctx.deps.engine
-      .dispatch({
-        type: "thread.channel-delivery.set",
-        commandId: CommandId.make(yield* randomId(ctx, "channel-delivery")),
-        threadId,
-        messageId,
-        delivery,
-        createdAt: yield* ctx.deps.nowIso,
-      })
-      .pipe(Effect.catchCause(() => Effect.void));
-  });
+    yield* ctx.deps.engine.dispatch({
+      type: "thread.channel-delivery.set",
+      commandId: CommandId.make(yield* randomId(ctx, "channel-delivery")),
+      threadId,
+      messageId,
+      delivery,
+      createdAt: yield* ctx.deps.nowIso,
+    });
+    // The label is best effort: a failed read or write never blocks the delivery itself.
+  }).pipe(Effect.catchCause(() => Effect.void));
 
 const sendChannelMessage = (
   ctx: ChannelRuntimeContext,
@@ -2837,8 +2842,11 @@ const sendChannelMessage = (
           externalThreadId: origin.externalThreadId,
           requestedAt: yield* deps.nowIso,
         });
-        yield* setChannelDelivery(ctx, input.threadId, input.messageId, "pending");
         const alreadySent = binding.sentMessageIds.includes(input.messageId);
+        // A retry of a reply that already landed keeps its sent label.
+        if (!alreadySent) {
+          yield* setChannelDelivery(ctx, input.threadId, input.messageId, "pending");
+        }
         if (claim === "requested" && !alreadySent) {
           yield* replaceBinding(ctx, {
             ...binding,

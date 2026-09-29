@@ -3770,6 +3770,70 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("reconciles interrupted sends with sent binding evidence to sent during restore", () =>
+    Effect.gen(function* () {
+      const messageId = MessageId.make("message-restore-sent");
+      const threadId = ThreadId.make("thread-restore-sent");
+      const deliveryStore = makeMemoryChannelDeliveryStore();
+      yield* deliveryStore.claim({
+        messageId,
+        botId: BOT_ID,
+        threadId,
+        provider: "telegram",
+        externalThreadId: "chat-restore-sent",
+        requestedAt: NOW,
+      });
+      const harness = makeHarness({
+        deliveryStore,
+        bots: [
+          makeBot(BOT_ID, {
+            channelBindings: [
+              {
+                botId: BOT_ID,
+                projectId: PROJECT_ID,
+                provider: "telegram",
+                status: "disconnected",
+                externalIdentity: "@akeru",
+                connectedAt: NOW,
+                sentMessageIds: [messageId],
+              },
+            ],
+          }),
+        ],
+        threads: [
+          makeThread(threadId, BOT_ID, [
+            makeMessage(MessageId.make("inbound-restore-sent"), "user", "Question", {
+              provider: "telegram",
+              externalThreadId: "chat-restore-sent",
+            }),
+            { ...makeMessage(messageId, "assistant", "Landed reply"), channelDelivery: "pending" },
+          ]),
+        ],
+      });
+
+      yield* restoreConnectedChannels(harness.dependencies);
+
+      const deliveries = harness.commands
+        .filter((command) => command.type === "thread.channel-delivery.set")
+        .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+      expect(deliveries).toEqual(["sent"]);
+    }),
+  );
+
+  it.effect("restores channels when delivery reconciliation cannot read its claims", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        deliveryStore: {
+          ...makeMemoryChannelDeliveryStore(),
+          listRequestedClaims: () => Effect.die(new Error("database unavailable")),
+        },
+      });
+      yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+
+      expect(yield* restoreConnectedChannels(harness.dependencies)).toEqual([]);
+    }),
+  );
+
   it.effect("repairs a missing delivery record from sent binding evidence without reposting", () =>
     Effect.gen(function* () {
       const messageId = MessageId.make("message-sent-evidence");
