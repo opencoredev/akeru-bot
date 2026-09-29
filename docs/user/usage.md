@@ -46,8 +46,8 @@ that is only partly reported shows a trailing `+` so the number reads as a floor
 snapshot as incomplete when any provider measurement is missing.
 
 Estimated cost comes from the model rate table. It is not subscription spend and not an amount
-billed. Subscription pool use is provider-reported; when a provider reports no meter, the row reads
-Unavailable.
+billed. Subscription pool use is provider-reported as either a percentage or a token count; when a
+provider reports no meter, the row reads Unavailable.
 
 The cap is read-only here. Change a bot's cap in a chat with that bot, under chat settings.
 

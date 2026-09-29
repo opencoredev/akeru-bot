@@ -81,7 +81,9 @@ export function BotUsageSection({
             <span className="text-muted-foreground">Subscription pool</span>
             <span className="text-right">
               {snapshot.subscriptionPool.status === "available"
-                ? `${snapshot.subscriptionPool.used.toLocaleString()}% of pool`
+                ? snapshot.subscriptionPool.unit === "percent"
+                  ? `${snapshot.subscriptionPool.used.toLocaleString()}% of pool`
+                  : `${snapshot.subscriptionPool.used.toLocaleString()} / ${snapshot.subscriptionPool.limit.toLocaleString()} ${snapshot.subscriptionPool.unit}`
                 : "Unavailable"}
             </span>
             {snapshot.reservedTokens > 0 ? (

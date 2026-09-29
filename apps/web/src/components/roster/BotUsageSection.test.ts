@@ -103,6 +103,20 @@ describe("formatUsageMeasurement", () => {
     expect(markup).not.toContain("Some provider usage is unavailable.");
   });
 
+  it("renders token-unit subscription pools as counts", () => {
+    state.query.mockReturnValue({
+      data: {
+        ...snapshot,
+        subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
+      },
+      error: null,
+      isPending: false,
+      refresh: vi.fn(),
+    });
+
+    expect(render()).toContain("4,000 / 10,000 tokens");
+  });
+
   it("marks partial and unavailable provider measurements without inventing values", () => {
     state.query.mockReturnValue({
       data: {
