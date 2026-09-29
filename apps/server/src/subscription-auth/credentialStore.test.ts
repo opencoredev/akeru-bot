@@ -59,6 +59,29 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("shares concurrent creation and serializes credential updates", () =>
+    Effect.gen(function* () {
+      const { authPath } = yield* authFile;
+      const [first, second] = yield* Effect.all(
+        [subscriptionCredentialStore(authPath), subscriptionCredentialStore(authPath)],
+        { concurrency: "unbounded" },
+      );
+      assert.strictEqual(first, second);
+
+      yield* Effect.all(
+        [
+          first.update((data) => ({ ...data, anthropic: currentFormat.anthropic })),
+          second.update((data) => ({ ...data, xai: currentFormat.xai })),
+        ],
+        { concurrency: "unbounded" },
+      );
+      assert.deepStrictEqual(yield* readJson(authPath), {
+        anthropic: currentFormat.anthropic,
+        xai: currentFormat.xai,
+      });
+    }),
+  );
+
   it.effect("loads the current on-disk format unchanged and keeps it through a rewrite", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
