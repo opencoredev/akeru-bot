@@ -73,7 +73,7 @@ import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
 import type { AkeruRuntimeToolId } from "../AkeruToolRuntime.ts";
-import { ProviderValidationError } from "../Errors.ts";
+import { AgentControllerRuntimeError, ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
