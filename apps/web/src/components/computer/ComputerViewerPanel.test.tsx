@@ -11,7 +11,7 @@ import { ThreadId, type ComputerFrame, type ComputerState } from "@t3tools/contr
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { ComputerViewerPanel } from "./ComputerViewerPanel";
+import { ComputerViewerPanel, computerViewerKeyAction } from "./ComputerViewerPanel";
 
 const threadId = ThreadId.make("thread-computer");
 const frame: ComputerFrame = { mimeType: "image/png", data: "AAAA", width: 1280, height: 800 };
@@ -81,6 +81,15 @@ async function shownController(port = fakePort()) {
 }
 
 describe("ComputerViewerPanel", () => {
+  it("uses local clipboard text for paste shortcuts", () => {
+    const key = { key: "v", altKey: false, shiftKey: false };
+    expect(computerViewerKeyAction({ ...key, ctrlKey: true, metaKey: false })).toBeNull();
+    expect(computerViewerKeyAction({ ...key, ctrlKey: false, metaKey: true })).toBeNull();
+    expect(
+      computerViewerKeyAction({ ...key, key: "c", ctrlKey: true, metaKey: false }),
+    ).toMatchObject({ _tag: "key" });
+  });
+
   it("offers take control and stop while the bot drives", async () => {
     const html = render(await shownController());
     expect(owners(html)).toEqual(["bot"]);

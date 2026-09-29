@@ -15,6 +15,15 @@ import type { ComputerAction, ComputerFrame } from "@t3tools/contracts";
 import { useRef, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 
 import { useI18n } from "../../i18n";
+
+export function computerViewerKeyAction(
+  event: Parameters<typeof computerKeyAction>[0],
+): ComputerAction | null {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "v") {
+    return null;
+  }
+  return computerKeyAction(event);
+}
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 
@@ -173,7 +182,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!view.canSendInput || event.nativeEvent.isComposing) return;
-    const action = computerKeyAction(event);
+    const action = computerViewerKeyAction(event);
     if (action === null) return;
     event.preventDefault();
     event.stopPropagation();
