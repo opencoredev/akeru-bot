@@ -127,10 +127,11 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
       positions.every((position, index) => index === 0 || position > positions[index - 1]!)
     ) {
       for (const key of candidates) key.byteAt = time;
-    } else {
-      if (this.pendingPaints.length >= MAX_PENDING_PAINTS) this.pendingPaints.shift();
-      this.pendingPaints.push({ byteAt: time });
+      // Output beyond the matched echoes still needs its own byte-arrival sample.
+      if (printable.length === candidates.length) return;
     }
+    if (this.pendingPaints.length >= MAX_PENDING_PAINTS) this.pendingPaints.shift();
+    this.pendingPaints.push({ byteAt: time });
   }
   onGlyphPaint(time: number, snapshot: TerminalPaintSnapshot, forceFull = false): void {
     const rows = snapshot.rowData.map((row) => row.cells.map((cell) => cell.text));
@@ -173,9 +174,11 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
       if (this.pendingKeys[index]?.byteAt !== undefined) this.pendingKeys.splice(index, 1);
     }
     const unmatchedGlyphs = [...changedGlyphs.values()].reduce((sum, count) => sum + count, 0);
+    // A paint that shows no new output leaves pending arrivals for the paint that does.
+    if (unmatchedGlyphs === 0) return;
     const latestPaint = this.pendingPaints.pop();
     this.pendingPaints.length = 0;
-    if (unmatchedGlyphs > 0 && latestPaint) addSample(latestPaint);
+    if (latestPaint) addSample(latestPaint);
   }
   reset(): void {
     this.pendingKeys.length = 0;

@@ -70,6 +70,25 @@ describe("terminal latency harness", () => {
     r.onGlyphPaint(30, paint("n", "e"));
     expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 10 }]);
   });
+  it("samples unrelated output that arrives with a matched echo", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint("", ""));
+    r.onKeypress(1, "a");
+    r.onByteArrival(2, "ax");
+    r.onGlyphPaint(5, paint("a", "x"));
+    expect(r.samples).toEqual([
+      { keypressToGlyphMs: 4, byteArrivalToGlyphMs: 3 },
+      { byteArrivalToGlyphMs: 3 },
+    ]);
+  });
+  it("keeps a pending arrival across a paint that shows nothing new", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint(""));
+    r.onByteArrival(10, "x");
+    r.onGlyphPaint(12, paint(""));
+    r.onGlyphPaint(15, paint("x"));
+    expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 5 }]);
+  });
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     r.onGlyphPaint(0, paint(""));
