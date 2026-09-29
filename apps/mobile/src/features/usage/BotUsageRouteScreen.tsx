@@ -35,13 +35,13 @@ export type BotUsageParams = {
  * whose own read is already in flight; refreshing on top of it would pay for the
  * same answer twice.
  */
-function useRefreshOnRefocus(refresh: () => void) {
-  const focusedBefore = useRef(false);
+function useRefreshOnRefocus(identity: string, refresh: () => void) {
+  const focusedIdentity = useRef<string | null>(null);
   useFocusEffect(
     useCallback(() => {
-      if (focusedBefore.current) refresh();
-      focusedBefore.current = true;
-    }, [refresh]),
+      if (focusedIdentity.current === identity) refresh();
+      focusedIdentity.current = identity;
+    }, [identity, refresh]),
   );
 }
 
@@ -54,7 +54,7 @@ export function BotUsageRouteScreen({ route }: StaticScreenProps<BotUsageParams>
     [botId, environmentId],
   );
   const query = useEnvironmentQuery(usageAtom);
-  useRefreshOnRefocus(query.refresh);
+  useRefreshOnRefocus(`${environmentId}:${botId}`, query.refresh);
   const view = botUsageView(query);
 
   return (
