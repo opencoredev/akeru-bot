@@ -399,7 +399,7 @@ describe("image provider health test", () => {
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
-    expect(chatgpt?.health).toBe("detected");
+    expect(chatgpt?.health).toBe("missing");
     expect(chatgpt?.healthTest?.status).toBe("failed");
     expect(chatgpt?.lastFailure?.message).toContain("API key is not used");
   });
@@ -413,6 +413,7 @@ describe("image provider health test", () => {
     const grok = imageProviderStatuses({
       settings: { ...baseSettings, grokEnabled: true },
       subscriptionStatuses: reloaded.statuses(),
+      chatgptAccountConnected: reloaded.hasOpenAICodexAccount(),
       requestHealth: (provider) => reloaded.imageRequestHealth(provider),
       lastGenerationAt: (provider) => reloaded.imageLastGenerationAt(provider),
     }).find((row) => row.provider === "grok");
