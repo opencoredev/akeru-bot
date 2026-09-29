@@ -656,7 +656,7 @@ export function createServerEnvironmentAtoms<R, E>(
         // letting the supervisor climb its backoff ladder.
         yield* nudgeReconnectDuringUpdateRestart({
           stateChanges: environmentRegistry.stateChanges(target.environmentId),
-          retryNow: environmentRegistry.retryNow(target.environmentId),
+          retryNow: environmentRegistry.retryNow(target.environmentId, { onlyIfDesired: true }),
         }).pipe(Effect.forkChild);
 
         const resumed = yield* environmentRegistry

@@ -609,6 +609,42 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 
+  it.effect("leaves a disconnected environment alone when a retry asks only if desired", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness([TARGET]);
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* awaitConnectionState(
+          registry,
+          TARGET.environmentId,
+          (state) => state.phase === "connected",
+        );
+        yield* registry.run(
+          TARGET.environmentId,
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.flatMap((supervisor) => supervisor.disconnect),
+          ),
+        );
+        yield* awaitConnectionState(
+          registry,
+          TARGET.environmentId,
+          (state) => state.phase === "available" && !state.desired,
+        );
+
+        yield* registry.retryNow(TARGET.environmentId, { onlyIfDesired: true });
+        expect((yield* registry.state(TARGET.environmentId)).desired).toBe(false);
+
+        yield* registry.retryNow(TARGET.environmentId);
+        yield* awaitConnectionState(
+          registry,
+          TARGET.environmentId,
+          (state) => state.phase === "connected" && state.desired,
+        );
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
   it.effect("ignores retry signals for environments that are no longer registered", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([]);
