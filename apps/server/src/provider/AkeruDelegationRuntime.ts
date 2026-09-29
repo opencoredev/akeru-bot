@@ -600,14 +600,20 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           updatedAt: completedAt,
         };
         await setState(completed);
-        await options.recordUsage?.({
-          botId: bot.id,
-          threadId: childThreadId,
-          turnId: outcome.turnId,
-          category: "delegated",
-          inputTokens: outcome.usage?.inputTokens ?? 0,
-          outputTokens: outcome.usage?.outputTokens ?? 0,
-        });
+        // The result is recorded, so a failed usage write must not keep it
+        // from reaching the chat.
+        await Promise.resolve()
+          .then(() =>
+            options.recordUsage?.({
+              botId: bot.id,
+              threadId: childThreadId,
+              turnId: outcome.turnId,
+              category: "delegated",
+              inputTokens: outcome.usage?.inputTokens ?? 0,
+              outputTokens: outcome.usage?.outputTokens ?? 0,
+            }),
+          )
+          .catch((cause) => options.onWatchError?.(delegationId, cause));
         await deliver(completed, result.summary);
       } catch (cause) {
         const latest = await latestRecord();
