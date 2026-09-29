@@ -42,20 +42,32 @@ same enabled tools.
 
 ## Composio integrations
 
-Gmail appears as a normal plugin with a **Composio** provider badge. Its connection lifecycle is
-still verification-pending: the entry names the required Composio API key and connected Gmail
-account, and **Connect** stays unavailable until that lifecycle is verified.
+Composio connects apps such as Slack, Notion, or GitHub through your own Composio account. Akeru
+holds no vendor OAuth credentials: you bring a Composio API key, and Composio runs each app's
+sign-in.
 
-Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys). You can also save or
-replace the key under **Settings > Plugins**. Akeru stores the key on the environment server, not in
-the plugin catalog or MCP registry.
+1. Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys).
+2. In **Plugins**, under **All** or **Installed**, paste it into the **Composio** section and select
+   **Save key**. Akeru stores the key on the environment server, not in the plugin catalog or MCP
+   registry.
+3. Type at least two letters in the search field. Matching apps appear under **From Composio**.
+4. Select **Connect**. Composio's sign-in opens in your browser. When you come back, the account
+   appears in the **Composio** section.
 
-Connect more than one Gmail account when you need separate work and personal accounts. Manage each
-account under **Settings > Plugins**. The bot asks you to select an account when a tool call could
-use more than one.
+Each account shows its state, such as **Connected**, **Waiting for sign-in**, or **Expired**, and has
+its own **Disconnect**. Use **Replace key** to swap keys, or **Remove key** to stop bots from using
+Composio apps. Without a key, the section says so and search shows no Composio apps.
+
+Gmail appears as a normal plugin with a **Composio** provider badge, but its connection lifecycle is
+still verification-pending. **Connect** stays unavailable, and Composio search does not offer Gmail
+either, until that lifecycle is verified.
+
+Connect more than one account for an app when you need separate work and personal accounts. The bot
+asks you to select an account when a tool call could use more than one.
 
 Composio tools work in chats opened from web, desktop, or mobile after an environment has a key and
-at least one connected account. Configure accounts from the web or desktop client.
+at least one connected account. Manage the key and accounts from the web or desktop client; the
+mobile app does not manage plugins.
 
 ## Custom MCP servers
 

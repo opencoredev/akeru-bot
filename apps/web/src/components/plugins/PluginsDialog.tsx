@@ -49,6 +49,7 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
+import { ComposioSection } from "./ComposioSection";
 import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
 import { runPluginEnablePlan } from "./pluginConnection";
@@ -715,6 +716,9 @@ function PluginsDialogForEnvironment({
             onOpen={openPlugin}
             nothingInstalled={filter === "Installed" && query.trim() === ""}
           />
+          {filter === "All" || filter === "Installed" ? (
+            <ComposioSection environmentId={environmentId} query={query} catalog={FULL_CATALOG} />
+          ) : null}
           {filter === "Installed" ? (
             <>
               <RemovedBuiltinServers
