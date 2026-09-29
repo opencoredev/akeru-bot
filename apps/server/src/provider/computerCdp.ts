@@ -110,6 +110,10 @@ export class ComputerCdp {
     this.pending.clear();
   }
 
+  get connected() {
+    return this.socket.readyState === WebSocket.OPEN;
+  }
+
   close() {
     this.rejectPending();
     this.socket.close();

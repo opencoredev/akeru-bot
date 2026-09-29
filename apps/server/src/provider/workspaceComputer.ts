@@ -46,7 +46,9 @@ export class WorkspaceComputer implements BotBrowserRpc {
 
   private async connect() {
     await this.checkRunning();
-    if (this.browser) return this.browser;
+    if (this.browser?.connected) return this.browser;
+    this.browser?.close();
+    this.browser = undefined;
     await this.initialize();
     this.browser = await ComputerCdp.connect(await this.endpoint());
     return this.browser;
@@ -83,8 +85,13 @@ export class WorkspaceComputer implements BotBrowserRpc {
   }
 
   async input(action: ComputerAction) {
+    const generation = this.gate.generation;
     await this.checkRunning();
     await this.initialize();
+    // Release or stop during inspection must not let a stale action reach the desktop.
+    if (generation !== this.gate.generation) {
+      throw new ComputerError({ code: "revoked", message: "Computer input was revoked." });
+    }
     await this.desktop.input(action);
   }
 
