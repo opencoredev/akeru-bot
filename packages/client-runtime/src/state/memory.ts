@@ -77,9 +77,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
   ) =>
     Effect.sync(() => {
       const nodes = registry.getNodes();
-      const otherThreadIds = [...(listedThreadIds.get(target.environmentId) ?? [])].filter(
-        (threadId) => threadId !== target.input.threadId,
-      );
+      const threadIds = listedThreadIds.get(target.environmentId);
       for (const listTarget of LISTED_FACT_TARGETS) {
         // A scope move changes which list a fact belongs to, so every list for the chat goes stale.
         registry.refresh(
@@ -88,13 +86,18 @@ export function createMemoryEnvironmentAtoms<R, E>(
             input: { threadId: target.input.threadId, target: listTarget },
           }),
         );
-        for (const threadId of otherThreadIds) {
-          const atom = listFactsFamily({
+      }
+      for (const threadId of threadIds ?? []) {
+        if (threadId === target.input.threadId) continue;
+        const mounted = LISTED_FACT_TARGETS.map((listTarget) =>
+          listFactsFamily({
             environmentId: target.environmentId,
             input: { threadId, target: listTarget },
-          });
-          if (nodes.has(atom)) registry.refresh(atom);
-        }
+          }),
+        ).filter((atom) => nodes.has(atom));
+        // Chats whose lists are gone no longer need refreshes, so forget them.
+        if (mounted.length === 0) threadIds?.delete(threadId);
+        for (const atom of mounted) registry.refresh(atom);
       }
     });
 
