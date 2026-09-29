@@ -1955,6 +1955,12 @@ const startAndCommitChannel = (
           ...base,
           status: "connecting",
           lastAttemptAt: yield* ctx.deps.nowIso,
+          ...(previous?.failureCategory === "delivery-unknown"
+            ? {
+                lastError: channelDeliveryUnknownError,
+                failureCategory: "delivery-unknown" as const,
+              }
+            : {}),
         });
       }
       const started = yield* startChannel(ctx, input, options.connectionId);

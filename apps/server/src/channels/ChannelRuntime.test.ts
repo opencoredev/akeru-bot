@@ -3478,6 +3478,37 @@ describe("channel runtime", () => {
       }),
     );
 
+    it.effect("keeps an unconfirmed delivery warning after reconnecting", () =>
+      Effect.gen(function* () {
+        const harness = makeHarness({
+          bots: [
+            makeBot(BOT_ID, {
+              channelBindings: [
+                {
+                  botId: BOT_ID,
+                  provider: "telegram",
+                  projectId: PROJECT_ID,
+                  status: "failed",
+                  externalIdentity: null,
+                  connectedAt: null,
+                  sentMessageIds: [],
+                  lastError: channelFailureMessage("delivery-unknown"),
+                  failureCategory: "delivery-unknown",
+                },
+              ],
+            }),
+          ],
+        });
+
+        yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+        expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+          status: "connected",
+          lastError: channelFailureMessage("delivery-unknown"),
+          failureCategory: "delivery-unknown",
+        });
+      }),
+    );
+
     it.effect("keeps a running channel connected when a new token is rejected", () =>
       Effect.gen(function* () {
         const threadId = ThreadId.make("thread-bad-token");

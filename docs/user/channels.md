@@ -35,7 +35,7 @@ Each channel card shows whether the channel is working. When something is wrong,
 - **Choose another project** means the channel's project is unavailable.
 - **Disconnected** means someone stopped the channel. Click **Connect** to start it again.
 
-A connected channel can show **Needs attention** while it keeps working. If you reconnect with a token the provider rejects, the channel keeps running on its earlier connection and the card offers **Update credentials**. After a network or restart problem, the card offers **Reconnect**. If a reply's delivery is unknown, the card offers **Check the channel**, which opens the provider's console so you can see whether the reply arrived. The warning clears after the next successful connect or reply.
+A connected channel can show **Needs attention** while it keeps working. If you reconnect with a token the provider rejects, the channel keeps running on its earlier connection and the card offers **Update credentials**. After a network or restart problem, the card offers **Reconnect**. If a reply's delivery is unknown, the card offers **Check the channel**, which opens the provider's console so you can see whether the reply arrived. If the connection has also failed, **Reconnect** remains available even when there is no provider console link. Reconnecting does not confirm whether the earlier reply arrived, so the warning remains.
 
 **Update credentials** in Settings opens the setup form for that connection. Enter the new credentials and click **Save and reconnect**. Akeru connects with the new credentials and removes the old ones only after that works. If the new credentials fail, Akeru puts the earlier connection back. The bot's Channels panel sends you to Settings for this step.
 

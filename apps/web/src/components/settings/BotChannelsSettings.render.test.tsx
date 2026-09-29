@@ -292,6 +292,25 @@ describe("channel health and repair", () => {
     expect(button(html, "Disconnect")).toBeDefined();
   });
 
+  it("keeps reconnect available when delivery is unknown and the connection failed", () => {
+    fixtures.bots = [boundBot("failed", "Delivery is unconfirmed.", "delivery-unknown")];
+    fixtures.connections = [
+      { ...fixtureConnection, managementUrl: "https://provider.example.com/console" },
+    ];
+    const withConsole = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(button(withConsole, "Check the channel")).toContain(
+      'href="https://provider.example.com/console"',
+    );
+    expect(button(withConsole, "Reconnect")).toBeDefined();
+    expect(withConsole).toContain("Delivery is unconfirmed.");
+
+    fixtures.connections = [fixtureConnection];
+    const withoutConsole = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(button(withoutConsole, "Check the channel")).toBeUndefined();
+    expect(button(withoutConsole, "Reconnect")).toBeDefined();
+    expect(withoutConsole).toContain("Delivery is unconfirmed.");
+  });
+
   it("shows no repair for a healthy connected channel", () => {
     fixtures.bots = [boundBot("connected")];
     const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);

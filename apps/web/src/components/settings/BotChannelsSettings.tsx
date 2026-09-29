@@ -455,6 +455,7 @@ export function BotChannelsSettingsPanel() {
                   {assignedBot && binding ? (
                     <ChannelRepairButton
                       action={repairAction}
+                      status={binding.status}
                       disabled={
                         busy || connectionBusy || (repairAction === "choose-project" && !canMove)
                       }

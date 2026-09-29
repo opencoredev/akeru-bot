@@ -118,17 +118,19 @@ export function ChannelStatusNotice({
 }
 
 /**
- * The single repair button for a binding, driven by `channelRepairAction`. Returns nothing for
+ * The repair controls for a binding, driven by `channelRepairAction`. Returns nothing for
  * actions a client cannot take, such as setting a public URL, which the notice explains instead.
  * Checking delivery links to the provider console, so callers hide their own provider link then.
  */
 export function ChannelRepairButton({
   action,
+  status,
   disabled,
   managementUrl,
   onRepair,
 }: {
   readonly action: ChannelRepairAction;
+  readonly status: ChannelBinding["status"];
   readonly disabled: boolean;
   readonly managementUrl: string | undefined;
   readonly onRepair: (
@@ -147,14 +149,23 @@ export function ChannelRepairButton({
         </Button>
       );
     case "check-delivery":
-      return managementUrl ? (
-        <Button
-          variant="outline"
-          render={<a href={managementUrl} target="_blank" rel="noreferrer" />}
-        >
-          {t("Check the channel")}
-        </Button>
-      ) : null;
+      return (
+        <>
+          {managementUrl ? (
+            <Button
+              variant="outline"
+              render={<a href={managementUrl} target="_blank" rel="noreferrer" />}
+            >
+              {t("Check the channel")}
+            </Button>
+          ) : null}
+          {status === "failed" ? (
+            <Button disabled={disabled} onClick={() => onRepair("reconnect")}>
+              {t("Reconnect")}
+            </Button>
+          ) : null}
+        </>
+      );
     case "connect":
       return (
         <Button disabled={disabled} onClick={() => onRepair(action)}>
