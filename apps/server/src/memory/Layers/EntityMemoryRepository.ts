@@ -1130,6 +1130,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           reason: "Every historical revision must be authorized before permanent deletion.",
         });
       }
+      // Clear observations before the derived-copy rows that locate them are removed.
+      yield* invalidateObservations(input.access.tenantId, input.rootId);
       yield* sql`
         DELETE FROM akeru_memory_revisions
         WHERE tenant_id = ${input.access.tenantId} AND root_id = ${input.rootId}

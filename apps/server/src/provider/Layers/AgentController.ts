@@ -2589,10 +2589,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.configuredMemoryAccess = delegatedAccess
           ? undefined
           : memoryAccessFor(input.memoryAccess);
+        existing.configuredEntityMemoryAccess = input.memoryAccess;
         existing.privateBotMemory = settings.privateBotMemory;
         if (!existing.activeTurn && !existing.admittingTurn && existing.pendingTurns.length === 0) {
           existing.toolSession = configuredToolSession;
           existing.memoryAccess = existing.configuredMemoryAccess;
+          existing.entityMemoryAccess = existing.configuredEntityMemoryAccess;
           toolRuntime.registerSession(key, existing.toolSession);
         }
         return toProviderSession(threadId, existing);
@@ -2693,9 +2695,10 @@ const make = (options?: AgentControllerLiveOptions) =>
                 ),
               )
             : "";
-        const entityPacket = nextMemoryAccess
-          ? yield* runMastra("memory.packet", () => entityMemoryContext(input.memoryAccess))
-          : "";
+        const entityPacket =
+          nextMemoryAccess && settings.enabled
+            ? yield* runMastra("memory.packet", () => entityMemoryContext(input.memoryAccess))
+            : "";
         const combinedMemoryContext = [frozenMemoryContext, entityPacket]
           .filter(Boolean)
           .join("\n\n");

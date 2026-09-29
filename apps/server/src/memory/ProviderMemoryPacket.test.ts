@@ -85,3 +85,18 @@ it("omits unsafe approved facts from both provider fields", () => {
   );
   assert.equal(packet.rendered, "- [group/fact] Use short replies.");
 });
+
+it("skips an oversized fact and keeps smaller lower-ranked facts", () => {
+  const packet = buildProviderMemoryPacket(ThreadId.make("thread-1"), [
+    revision("huge", {
+      pinned: true,
+      fact: `Remember ${"a very long detail ".repeat(2_000)}`,
+    }),
+    revision("small", { fact: "Use short replies." }),
+  ]);
+
+  assert.deepEqual(
+    packet.facts.map((fact) => fact.memoryId),
+    ["small"],
+  );
+});

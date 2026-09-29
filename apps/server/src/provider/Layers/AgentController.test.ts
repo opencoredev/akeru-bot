@@ -1869,6 +1869,60 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps entity memory out of a new legacy session while Memory is off", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const botId = BotId.make("bot-entity-memory-off");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: claudeThreadId,
+      projectId: ProjectId.make("project-entity-memory-off"),
+      workspaceRoot: "/workspace/entity-memory-off",
+      botId,
+      groupId: null,
+      respondingBotId: botId,
+      groupMemberBotIds: [],
+    } as const;
+    const listCurrent = vi.fn(() => Effect.succeed([]));
+    // Only the entity packet records derived copies; the legacy migration read also lists facts.
+    const recordDerivedCopies = vi.fn(() => Effect.void);
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* settings.updateSettings({ memory: { enabled: false } });
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: access,
+        });
+        expect(recordDerivedCopies).not.toHaveBeenCalled();
+        expect(bridge.startSession.mock.calls[0]?.[1].persistentMemoryContext).toBeUndefined();
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      {
+        ...makeMemoryOnlyCredentialOptions(),
+        entityMemoryRepository: { listCurrent, recordDerivedCopies } as never,
+      },
+    );
+  });
+
   it.effect(
     "denies the legacy MCP memory tool while Memory is off and restores it on re-enable",
     () => {

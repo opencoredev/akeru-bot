@@ -567,6 +567,34 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("clears observational memory when a fact is permanently deleted", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("delete-clears-observations-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("delete-clears-active", "bot:user", { rootId }),
+      });
+      const sql = yield* SqlClient.SqlClient;
+      const observedThreadId = "delete-clears-thread";
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("delete-clears-active")}, ${observedThreadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const cleared: Array<string> = [];
+      const unregister = registerEntityMemoryResource(
+        observedThreadId,
+        observedThreadId,
+        async (threadId) => {
+          cleared.push(threadId);
+        },
+      );
+      yield* repository
+        .deleteRoot({ access: botAccess, rootId })
+        .pipe(Effect.ensuring(Effect.sync(unregister)));
+
+      assert.deepEqual(cleared, [observedThreadId]);
+    }),
+  );
+
   it.effect("rejects a second current head for the same tenant and root", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;

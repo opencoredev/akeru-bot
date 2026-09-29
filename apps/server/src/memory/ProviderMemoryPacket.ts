@@ -59,7 +59,8 @@ export function buildProviderMemoryPacket(
       nextRendered.length > AKERU_MEMORY_PACKET_MAX_CHARS ||
       nextTokens > AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS
     ) {
-      break;
+      // A long fact must not hide smaller lower-ranked facts that still fit.
+      continue;
     }
     facts.push(fact);
     rendered = nextRendered;
