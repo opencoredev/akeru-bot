@@ -94,6 +94,21 @@ describe("image provider rows", () => {
     expect(chatgpt?.healthTest).toEqual({ status: "not-run" });
   });
 
+  it("offers reconnect for an expired OAuth credential before any image request", () => {
+    const { authPath } = fixture();
+    seedOAuth(authPath, "openai-codex");
+    const service = new SubscriptionAuthService(authPath);
+    const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
+      (row) => row.provider === "chatgpt",
+    );
+    expect(chatgpt).toMatchObject({
+      connected: true,
+      health: "expired",
+      repairAction: "Reconnect ChatGPT subscription",
+      healthTest: { status: "not-run" },
+    });
+  });
+
   it("reports disabled for a connected-but-disabled provider", () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");

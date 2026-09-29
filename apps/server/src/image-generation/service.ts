@@ -67,11 +67,15 @@ function subscriptionStatusFor(
 function rowHealth(input: {
   connected: boolean;
   enabled: boolean;
+  subscriptionHealth: SubscriptionProviderStatus["health"];
   requestHealth: ImageRequestHealth;
 }): ImageProviderStatus["health"] {
   if (!input.connected) return "missing";
   if (!input.enabled) return "disabled";
   if (input.requestHealth?.lastCredentialProbeFailure?.failureKind === "revoked") return "revoked";
+  if (input.subscriptionHealth === "expired" || input.subscriptionHealth === "revoked") {
+    return input.subscriptionHealth;
+  }
   return input.requestHealth?.health ?? "detected";
 }
 
@@ -92,7 +96,12 @@ export function imageProviderStatuses(input: {
     const enabled =
       provider === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
     const requestHealth = input.requestHealth(provider);
-    const health = rowHealth({ connected, enabled, requestHealth });
+    const health = rowHealth({
+      connected,
+      enabled,
+      subscriptionHealth: subscription?.health,
+      requestHealth,
+    });
     const healthTest = requestHealth?.healthTest;
     const probeFailure = requestHealth?.lastCredentialProbeFailure;
     const repairAction = !connected
