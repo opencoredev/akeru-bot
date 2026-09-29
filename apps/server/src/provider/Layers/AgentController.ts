@@ -2223,7 +2223,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
       fork(
         "Akeru workers could not settle after the parent turn.",
-        workerRuntime.parentTurnEnded(threadId),
+        workerRuntime.parentTurnEnded(threadId, turn.turnId),
         {
           threadId,
           turnId: turn.turnId,
@@ -2853,6 +2853,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
         approvalCeiling: "secrets",
       };
+      // A top-level bot's null sandbox is its local workspace, while a delegated
+      // null sandbox has none, so workers receive the local workspace explicitly.
+      const workerParentAccess: AkeruDelegationAccessGrant =
+        delegatedAccess || access.sandbox !== null ? access : { ...access, sandbox: "local" };
       const mcpServers = (input.mcpServers ?? []).filter(
         (server) =>
           access.enabledMcpServerIds.includes(server.id) &&
@@ -3007,7 +3011,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               }
             : {}),
           ...(wired().workerOrchestration && botId && !isWorkerThread
-            ? { workers: workersFor(threadId, access) }
+            ? { workers: workersFor(threadId, workerParentAccess) }
             : {}),
           ...(input.botId && wired().botStateRuntime ? { botState: wired().botStateRuntime } : {}),
           imageGeneration,
@@ -3335,7 +3339,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             }
           : {}),
         ...(wired().workerOrchestration && botId && !isWorkerThread
-          ? { workers: workersFor(threadId, access) }
+          ? { workers: workersFor(threadId, workerParentAccess) }
           : {}),
         ...(input.botId && wired().channelRuntime
           ? {

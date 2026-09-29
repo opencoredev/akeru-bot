@@ -114,13 +114,13 @@ export const AKERU_WORKER_EXCLUDED_TOOL_IDS: ReadonlySet<AkeruToolId> = new Set(
  * A worker runs in a hidden thread where nobody can answer an approval prompt.
  * The `none` ceiling makes approval-gated tools fail fast instead of waiting,
  * and without the user's computer the ExternalShell tools drop out.
- * A delegated grant with a null sandbox has no workspace, so a local parent
- * passes its workspace on as an explicit `local` sandbox.
+ * The worker keeps the parent's sandbox. Callers pass a top-level bot's local
+ * workspace as an explicit `local` sandbox, because a null sandbox on a
+ * delegated grant means no workspace at all.
  */
 export function workerAccess(parent: AkeruDelegationAccessGrant): AkeruDelegationAccessGrant {
   return {
     ...parent,
-    sandbox: parent.sandbox ?? "local",
     allowedToolIds: parent.allowedToolIds.filter(
       (toolId) => !AKERU_WORKER_EXCLUDED_TOOL_IDS.has(toolId),
     ),
@@ -147,6 +147,7 @@ function workerTitle(task: string): string {
 interface WorkerEntry {
   readonly workerId: AkeruWorkerId;
   readonly parentThreadId: ThreadId;
+  readonly parentTurnId: TurnId;
   readonly task: string;
   readonly phase: Ref.Ref<AkeruWorkerPhase>;
   readonly done: Deferred.Deferred<AkeruWorkerStatus>;
@@ -238,6 +239,11 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
         const outcome = yield* Queue.take(entry.outcomes);
         const finished = yield* locked(
           Effect.gen(function* () {
+            const open = yield* Ref.updateAndGet(entry.openTurns, (count) =>
+              Math.max(0, count - 1),
+            );
+            // A queued follow-up can still answer, so only the last open turn decides.
+            if (open > 0) return false;
             if (outcome.state === "failed") {
               return yield* settleUnlocked(entry, (running, completedAt) => ({
                 _tag: "Failed",
@@ -248,10 +254,6 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
                 message: outcome.error?.trim() || "The worker turn failed.",
               }));
             }
-            const open = yield* Ref.updateAndGet(entry.openTurns, (count) =>
-              Math.max(0, count - 1),
-            );
-            if (open > 0) return false;
             return yield* settleUnlocked(entry, (running, completedAt) =>
               running.childThreadId === null
                 ? undefined
@@ -271,23 +273,26 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
 
   const runWorker = (entry: WorkerEntry, input: (typeof AkeruToolInputSchemas.Task)["Type"]) =>
     Effect.gen(function* () {
-      const childThreadId = yield* port
-        .createChild({
+      // A half-created child would be unreachable by stop, so creation and
+      // attachment finish together. A worker stopped meanwhile discards its child.
+      const { childThreadId, attached } = yield* Effect.gen(function* () {
+        const childThreadId = yield* port.createChild({
           parentThreadId: entry.parentThreadId,
           workerId: entry.workerId,
           title: workerTitle(input.task),
-        })
-        // A half-created child would be unreachable by stop, so creation finishes first.
-        .pipe(Effect.uninterruptible);
-      const attached = yield* locked(
-        Effect.gen(function* () {
-          const phase = yield* Ref.get(entry.phase);
-          if (phase._tag !== "Running") return false;
-          yield* Ref.set(entry.phase, { ...phase, childThreadId });
-          byChildThread.set(childThreadId, entry);
-          return true;
-        }),
-      );
+        });
+        const attached = yield* locked(
+          Effect.gen(function* () {
+            const phase = yield* Ref.get(entry.phase);
+            if (phase._tag !== "Running") return false;
+            yield* Ref.set(entry.phase, { ...phase, childThreadId });
+            byChildThread.set(childThreadId, entry);
+            return true;
+          }),
+        );
+        if (!attached) yield* port.discardChild(childThreadId);
+        return { childThreadId, attached };
+      }).pipe(Effect.uninterruptible);
       // Stopped while the child was being created: no turn ever starts there.
       if (!attached) return;
       yield* port.messageChild(childThreadId, workerInstructions(input)).pipe(
@@ -357,6 +362,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
         const entry: WorkerEntry = {
           workerId: AkeruWorkerId.make(`worker-${makeId()}`),
           parentThreadId: parent.threadId,
+          parentTurnId: parent.turnId,
           task: input.task,
           phase: yield* Ref.make<AkeruWorkerPhase>({
             _tag: "Running",
@@ -427,25 +433,32 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
       return entry ? Effect.asVoid(Queue.offer(entry.outcomes, outcome)) : Effect.void;
     });
 
-  /** Cancels every running worker owned by a parent turn that ended or was interrupted. */
-  const parentTurnEnded = (parentThreadId: ThreadId) =>
+  /**
+   * Cancels every running worker owned by a parent turn that ended or was interrupted.
+   * Without a turn id it cancels every worker of the thread.
+   */
+  const parentTurnEnded = (parentThreadId: ThreadId, parentTurnId?: TurnId) =>
     Effect.suspend(() =>
       Effect.forEach(
-        [...workers.values()].filter((entry) => entry.parentThreadId === parentThreadId),
+        [...workers.values()].filter(
+          (entry) =>
+            entry.parentThreadId === parentThreadId &&
+            (parentTurnId === undefined || entry.parentTurnId === parentTurnId),
+        ),
         (entry) => cancel(entry, "parent-turn-ended"),
         { discard: true },
       ),
     );
 
-  /** Forgets finished workers of a thread whose session stopped. */
+  /**
+   * Forgets finished workers of a thread whose session stopped. Their child
+   * threads keep the worker grant, so a resumed child never gains the default one.
+   */
   const releaseThread = (parentThreadId: ThreadId) =>
     Effect.gen(function* () {
       yield* parentTurnEnded(parentThreadId);
       for (const [workerId, entry] of workers) {
-        if (entry.parentThreadId !== parentThreadId) continue;
-        workers.delete(workerId);
-        const childThreadId = childThreadOf(yield* Ref.get(entry.phase));
-        if (childThreadId) byChildThread.delete(childThreadId);
+        if (entry.parentThreadId === parentThreadId) workers.delete(workerId);
       }
     });
 

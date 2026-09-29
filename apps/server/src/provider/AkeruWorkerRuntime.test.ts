@@ -8,6 +8,7 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -43,7 +44,11 @@ const parent: AkeruWorkerParent = {
  * A fake orchestration port. `turns` receives each child turn as it starts.
  * `failTurns` makes every turn dispatch fail.
  */
-const makeHarnessWith = (options?: { readonly failTurns?: boolean }) =>
+const makeHarnessWith = (options?: {
+  readonly failTurns?: boolean;
+  /** Holds child creation until the deferred completes. */
+  readonly createGate?: Deferred.Deferred<void>;
+}) =>
   Effect.gen(function* () {
     const turns = yield* Queue.unbounded<{
       readonly childThreadId: ThreadId;
@@ -54,7 +59,10 @@ const makeHarnessWith = (options?: { readonly failTurns?: boolean }) =>
     let created = 0;
     let ids = 0;
     const port: AkeruWorkerPort = {
-      createChild: () => Effect.sync(() => ThreadId.make(`child-${++created}`)),
+      createChild: () =>
+        (options?.createGate ? Deferred.await(options.createGate) : Effect.void).pipe(
+          Effect.andThen(Effect.sync(() => ThreadId.make(`child-${++created}`))),
+        ),
       messageChild: (childThreadId, text) =>
         options?.failTurns
           ? Effect.fail(new AkeruWorkerError({ reason: "start_failed", detail: "rejected" }))
@@ -84,7 +92,8 @@ it.effect("returns the worker result and runs the child with a narrowed grant", 
       assert.isDefined(childAccess);
       assert.deepStrictEqual(childAccess!.memoryScopes, []);
       assert.strictEqual(childAccess!.approvalCeiling, "none");
-      assert.strictEqual(childAccess!.sandbox, "local");
+      // A null sandbox stays without a workspace; top-level callers pass `local` explicitly.
+      assert.strictEqual(childAccess!.sandbox, null);
       assert.isFalse(childAccess!.hasUserComputer);
       assert.notInclude(childAccess!.allowedToolIds, "Task");
       assert.notInclude(childAccess!.allowedToolIds, "SendToAgent");
@@ -286,6 +295,75 @@ it.effect("hides workers from other chats", () =>
         ),
       );
       assert.strictEqual(error.reason, "not_found");
+    }),
+  ),
+);
+
+it.effect("discards the child of a worker stopped while the child was created", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const createGate = yield* Deferred.make<void>();
+      const { runtime, turns, discarded } = yield* makeHarnessWith({ createGate });
+      const running = yield* runtime.spawn(parent, { task: "Early stop", background: true });
+      const stopping = yield* Effect.forkChild(
+        runtime.stop(parent, { workerId: running.workerId }),
+      );
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(createGate, undefined);
+      const stopped = yield* Fiber.join(stopping);
+      assert.strictEqual(phaseOf(stopped), "Canceled");
+      assert.deepStrictEqual(discarded, [ThreadId.make("child-1")]);
+      assert.strictEqual(yield* Queue.size(turns), 0);
+    }),
+  ),
+);
+
+it.effect("keeps workers of a newer turn when an earlier turn ends", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turns } = yield* makeHarness;
+      const running = yield* runtime.spawn(
+        { ...parent, turnId: TurnId.make("next-turn") },
+        { task: "Next turn work", background: true },
+      );
+      yield* Queue.take(turns);
+      yield* runtime.parentTurnEnded(parent.threadId, parent.turnId);
+      const checked = yield* runtime.check(parent, { workerId: running.workerId });
+      assert.strictEqual(phaseOf(checked), "Running");
+    }),
+  ),
+);
+
+it.effect("lets a queued follow-up answer after an earlier turn fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turns } = yield* makeHarness;
+      const running = yield* runtime.spawn(parent, { task: "Retry", background: true });
+      const first = yield* Queue.take(turns);
+      yield* runtime.message(parent, { workerId: running.workerId, message: "Try again" });
+      yield* Queue.take(turns);
+      yield* runtime.childTurnFinished(first.childThreadId, { state: "failed", error: "boom" });
+      const between = yield* runtime.check(parent, { workerId: running.workerId });
+      assert.strictEqual(phaseOf(between), "Running");
+      yield* runtime.childTurnFinished(first.childThreadId, {
+        state: "completed",
+        summary: "fixed",
+      });
+      const done = yield* runtime.check(parent, { workerId: running.workerId, wait: true });
+      assert.deepInclude(done.phase, { _tag: "Completed", result: "fixed" });
+    }),
+  ),
+);
+
+it.effect("keeps the worker grant on a child after its parent session is released", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turns } = yield* makeHarness;
+      yield* runtime.spawn(parent, { task: "Released", background: true });
+      const turn = yield* Queue.take(turns);
+      yield* runtime.releaseThread(parent.threadId);
+      assert.strictEqual(runtime.accessForThread(turn.childThreadId)?.approvalCeiling, "none");
+      assert.strictEqual(runtime.depthForThread(turn.childThreadId), 1);
     }),
   ),
 );
