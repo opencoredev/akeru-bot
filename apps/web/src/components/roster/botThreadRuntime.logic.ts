@@ -405,14 +405,17 @@ export function nextRetainedChat(
   current: RetainedChat,
   linkedThreadRef: ScopedThreadRef | null,
   bootstrapped: boolean,
+  openThreadId: string | null = null,
 ): RetainedChat {
   if (linkedThreadRef) {
     if (current.linked && current.threadRef === linkedThreadRef) return current;
     // A just-created chat stays the target while the list still shows the
-    // previous chat, so a send in between cannot land in the old one.
+    // previous chat, so a send in between cannot land in the old one. Opening
+    // another chat on purpose releases it, so sends follow the opened chat.
     if (
       !current.linked &&
       current.threadRef !== null &&
+      (openThreadId === null || openThreadId === current.threadRef.threadId) &&
       (current.threadRef.environmentId !== linkedThreadRef.environmentId ||
         current.threadRef.threadId !== linkedThreadRef.threadId)
     ) {

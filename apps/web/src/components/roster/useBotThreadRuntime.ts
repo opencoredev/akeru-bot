@@ -147,6 +147,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     retainedThreadRef.current,
     linkedThreadRef,
     bootstrapped,
+    openThreadId,
   );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);

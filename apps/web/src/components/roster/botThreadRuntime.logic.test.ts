@@ -637,6 +637,16 @@ describe("nextRetainedChat", () => {
     });
   });
 
+  it("releases a just-created chat when another chat is opened on purpose", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, chat("older"), true, "older")).toEqual({
+      ownerId: "bot-1",
+      threadRef: chat("older"),
+      linked: true,
+    });
+    expect(nextRetainedChat(created, chat("old"), true, "new")).toBe(created);
+  });
+
   it("follows the linked chat once the shell list shows it", () => {
     const linked = chat("new");
     const next = nextRetainedChat(
