@@ -59,6 +59,17 @@ export function channelBindingPresentation(
   };
 }
 
+/** Where a failed reassignment puts the channel back: its old project while live, else the attempted one. */
+export function channelRestoreProjectId(
+  previousProjectId: ProjectId | undefined,
+  attemptedProjectId: ProjectId,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): ProjectId {
+  return previousProjectId && liveProjects.some((project) => project.id === previousProjectId)
+    ? previousProjectId
+    : attemptedProjectId;
+}
+
 /** A binding needs a new project when the server blocked it or its project is no longer live. */
 export function channelBindingNeedsProject(
   binding: Pick<ChannelBinding, "status" | "projectId">,

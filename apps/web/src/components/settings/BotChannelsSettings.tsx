@@ -12,6 +12,7 @@ import {
   canChangeChannelProject,
   channelBindingNeedsProject,
   channelPickerProjectId,
+  channelRestoreProjectId,
 } from "@t3tools/client-runtime/channel-presentation";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import { PlusIcon } from "lucide-react";
@@ -204,7 +205,11 @@ export function BotChannelsSettingsPanel() {
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
-                projectId: assignedBinding?.projectId ?? projectId,
+                projectId: channelRestoreProjectId(
+                  assignedBinding?.projectId,
+                  projectId,
+                  liveProjects,
+                ),
                 provider: connection.provider,
               },
             })

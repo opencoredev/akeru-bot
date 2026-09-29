@@ -6,6 +6,7 @@ import {
   channelBindingNeedsProject,
   channelBindingPresentation,
   channelPickerProjectId,
+  channelRestoreProjectId,
   channelHealthLabel,
   channelOriginLabel,
   channelProviderLabel,
@@ -79,6 +80,19 @@ describe("channel presentation", () => {
       channelBindingPresentation({ ...binding, projectId }, [{ id: projectId, title: "Workspace" }])
         .project,
     ).toBe("Workspace");
+  });
+
+  it("restores a failed reassignment to a live project", () => {
+    const live = ProjectId.make("project-live");
+    const gone = ProjectId.make("project-gone");
+    const target = ProjectId.make("project-target");
+    const projects = [
+      { id: live, title: "Workspace" },
+      { id: target, title: "Target" },
+    ];
+    expect(channelRestoreProjectId(live, target, projects)).toBe(live);
+    expect(channelRestoreProjectId(gone, target, projects)).toBe(target);
+    expect(channelRestoreProjectId(undefined, target, projects)).toBe(target);
   });
 
   it("asks for a live project when the binding is blocked or its project is gone", () => {
