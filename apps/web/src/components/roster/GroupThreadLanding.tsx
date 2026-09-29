@@ -237,10 +237,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               );
             })
           )}
-          {!working && runtime.failure && messages.at(-1)?.role === "user" ? (
+          {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
             <BotTurnFailureRow
               botName={activeBot?.name ?? group.name}
-              title={presentThreadError(runtime.failure.message, failureContext).title}
+              title={presentThreadError(runtime.turnFailure.message, failureContext).title}
             />
           ) : null}
           {delegations.map((delegation) => (
@@ -329,12 +329,14 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             !runtime.groupReady ||
             !runtime.bootstrapped ||
             runtime.defaultProject === null ||
-            !runtime.providerAvailable
+            (!waitingForUserInput && !runtime.providerAvailable)
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
           replyPreview={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
-          sendBlockedDescriptionId={runtime.providerAvailable ? undefined : noProviderNoticeId}
+          sendBlockedDescriptionId={
+            runtime.providerAvailable || waitingForUserInput ? undefined : noProviderNoticeId
+          }
           onSubmit={async (prompt, files, respondingBotId) => {
             const sent = await runtime.send(
               buildReplyPrompt(replyTarget, prompt),

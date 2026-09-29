@@ -530,14 +530,15 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
 
   const lastUserMessageAt = messages?.findLast((message) => message.role === "user")?.createdAt;
   const session = rememberedThread?.session ?? null;
+  const turnFailure = latestBotThreadFailure({
+    activities,
+    latestTurn: rememberedThread?.latestTurn ?? null,
+    session,
+    lastUserMessageAt: lastUserMessageAt ?? null,
+  });
   const failure: BotThreadFailure | null =
     error ??
-    latestBotThreadFailure({
-      activities,
-      latestTurn: rememberedThread?.latestTurn ?? null,
-      session,
-      lastUserMessageAt: lastUserMessageAt ?? null,
-    }) ??
+    turnFailure ??
     (session?.lastError
       ? { message: session.lastError, unavailability: session.unavailability ?? null }
       : null);
@@ -550,6 +551,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     defaultProject: activeProject,
     error: failure?.message ?? null,
     failure,
+    turnFailure,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

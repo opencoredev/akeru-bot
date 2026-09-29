@@ -509,15 +509,15 @@ export function useGroupThreadRuntime(groupId: string) {
       );
     });
   const session = rememberedThread?.session ?? null;
+  const turnFailure = latestBotThreadFailure({
+    activities,
+    latestTurn: rememberedThread?.latestTurn ?? null,
+    session,
+    lastUserMessageAt: messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
+  });
   const failure: BotThreadFailure | null =
     error ??
-    latestBotThreadFailure({
-      activities,
-      latestTurn: rememberedThread?.latestTurn ?? null,
-      session,
-      lastUserMessageAt:
-        messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
-    }) ??
+    turnFailure ??
     (session?.lastError
       ? { message: session.lastError, unavailability: session.unavailability ?? null }
       : null);
@@ -528,6 +528,7 @@ export function useGroupThreadRuntime(groupId: string) {
     defaultProject: activeProject,
     error: failure?.message ?? null,
     failure,
+    turnFailure,
     groupReady,
     providerAvailable,
     linkedThreadRef,

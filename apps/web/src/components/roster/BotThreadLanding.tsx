@@ -15,12 +15,6 @@ import { cn } from "~/lib/utils";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
-import { resolveAppModelSelectionState } from "../../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  sortProviderInstanceEntries,
-} from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
@@ -557,10 +551,10 @@ export function BotThreadLanding({
                 </div>
               </div>
             ) : null}
-            {!working && runtime.failure && messages.at(-1)?.role === "user" ? (
+            {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
               <BotTurnFailureRow
                 botName={bot.name}
-                title={presentThreadError(runtime.failure.message, failureContext).title}
+                title={presentThreadError(runtime.turnFailure.message, failureContext).title}
               />
             ) : null}
             {delegations.map((delegation) => (
