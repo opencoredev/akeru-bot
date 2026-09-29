@@ -222,7 +222,13 @@ import {
   PortabilityImportPreview,
   PortabilityPreviewImportInput,
 } from "./portability.ts";
-import { RoutineListRunsInput, RoutineListRunsResult, RoutineReadError } from "./routines.ts";
+import {
+  RoutineListRunsInput,
+  RoutineListRunsResult,
+  RoutineListThreadRunsInput,
+  RoutineReadError,
+  RoutineThreadReadError,
+} from "./routines.ts";
 import {
   ComposioAuthorizeInput,
   ComposioAuthorizeResult,
@@ -349,6 +355,7 @@ export const WS_METHODS = {
   portabilityPreviewImport: "portability.previewImport",
   portabilityApplyImport: "portability.applyImport",
   routinesListRuns: "routines.listRuns",
+  routinesListThreadRuns: "routines.listThreadRuns",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -688,6 +695,12 @@ export const WsRoutinesListRunsRpc = Rpc.make(WS_METHODS.routinesListRuns, {
   payload: RoutineListRunsInput,
   success: RoutineListRunsResult,
   error: Schema.Union([RoutineReadError, EnvironmentAuthorizationError]),
+});
+
+export const WsRoutinesListThreadRunsRpc = Rpc.make(WS_METHODS.routinesListThreadRuns, {
+  payload: RoutineListThreadRunsInput,
+  success: RoutineListRunsResult,
+  error: Schema.Union([RoutineThreadReadError, EnvironmentAuthorizationError]),
 });
 
 export const WsSourceControlLookupRepositoryRpc = Rpc.make(
@@ -1147,6 +1160,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPortabilityPreviewImportRpc,
   WsPortabilityApplyImportRpc,
   WsRoutinesListRunsRpc,
+  WsRoutinesListThreadRunsRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,

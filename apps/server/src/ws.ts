@@ -62,6 +62,7 @@ import {
   ProjectWriteFileError,
   ProviderUploadFeedbackError,
   RoutineReadError,
+  RoutineThreadReadError,
   type ServerSelfUpdateError,
   type ServerSelfUpdateProgressEvent,
   type ServerProvider,
@@ -2655,6 +2656,28 @@ const makeWsRpcLayer = (
                 (cause) =>
                   new RoutineReadError({
                     routineId: input.routineId,
+                    message: cause.message,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "routines" },
+          ),
+        [WS_METHODS.routinesListThreadRuns]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.routinesListThreadRuns,
+            Effect.gen(function* () {
+              const routines = yield* routineRepository.listAll;
+              const runs = yield* Effect.forEach(
+                routines.filter((routine) => routine.targetThreadId === input.threadId),
+                (routine) => routineRepository.listRuns(routine.id),
+                { concurrency: 4 },
+              );
+              return { runs: runs.flat() };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new RoutineThreadReadError({
+                    threadId: input.threadId,
                     message: cause.message,
                   }),
               ),

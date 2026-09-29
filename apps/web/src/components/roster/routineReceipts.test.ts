@@ -1,7 +1,7 @@
 import { RoutineId, ThreadId, type Routine, type RoutineRun } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveRoutineReceipts } from "./routineReceipts";
+import { deriveRoutineReceipts, mergeRoutineRunHistory } from "./routineReceipts";
 
 const routine = {
   id: RoutineId.make("routine-1"),
@@ -47,6 +47,18 @@ const run = {
 } as unknown as RoutineRun;
 
 describe("deriveRoutineReceipts", () => {
+  it("retains older persisted runs while applying current shell updates", () => {
+    const history = Array.from({ length: 6 }, (_, index) => ({
+      ...run,
+      id: `run-${index}`,
+    })) as RoutineRun[];
+    const latest = { ...history[5]!, status: "failed" as const };
+    const merged = mergeRoutineRunHistory(history, [latest]);
+    expect(merged).toHaveLength(6);
+    expect(merged[0]?.id).toBe("run-0");
+    expect(merged[5]?.status).toBe("failed");
+  });
+
   it("keeps creation and run notes for a deleted routine's compact receipt source", () => {
     const receiptSource = {
       id: routine.id,

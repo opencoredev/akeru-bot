@@ -799,6 +799,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.subscriptionAuthList,
       staleTimeMs: 5_000,
     }),
+    routineThreadRuns: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:routine-thread-runs",
+      tag: WS_METHODS.routinesListThreadRuns,
+      staleTimeMs: 0,
+    }),
     composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:composio-status",
       tag: WS_METHODS.composioGetStatus,

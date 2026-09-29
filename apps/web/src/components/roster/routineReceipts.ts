@@ -7,6 +7,13 @@ export interface RoutineReceipt {
   readonly tone: "info" | "success" | "error";
 }
 
+export function mergeRoutineRunHistory(
+  history: ReadonlyArray<RoutineRun>,
+  recent: ReadonlyArray<RoutineRun>,
+): RoutineRun[] {
+  return [...new Map([...history, ...recent].map((run) => [run.id, run])).values()];
+}
+
 function withDetail(summary: string, detail: string | undefined): string {
   const trimmed = detail?.trim();
   return trimmed ? `${summary}: ${trimmed}` : summary;

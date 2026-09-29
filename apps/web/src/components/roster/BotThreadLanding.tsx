@@ -62,7 +62,11 @@ import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
-import { deriveRoutineReceipts, type RoutineReceipt } from "./routineReceipts";
+import {
+  deriveRoutineReceipts,
+  mergeRoutineRunHistory,
+  type RoutineReceipt,
+} from "./routineReceipts";
 import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
@@ -212,13 +216,21 @@ export function BotThreadLanding({
   );
   const today = useLocalDay();
   const entries = useMemo(() => buildBotConversationEntries(messages, today), [messages, today]);
+  const routineRunHistory = useEnvironmentQuery(
+    runtime.linkedThreadRef
+      ? serverEnvironment.routineThreadRuns({
+          environmentId: runtime.linkedThreadRef.environmentId,
+          input: { threadId: runtime.linkedThreadRef.threadId },
+        })
+      : null,
+  );
   const routineReceipts = useMemo(
     () =>
       runtime.linkedThreadRef
         ? deriveRoutineReceipts(
             runtime.linkedThreadRef.threadId,
             [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])],
-            snapshot?.routineRuns ?? [],
+            mergeRoutineRunHistory(routineRunHistory.data?.runs ?? [], snapshot?.routineRuns ?? []),
           )
         : [],
     [
@@ -226,6 +238,7 @@ export function BotThreadLanding({
       snapshot?.routines,
       snapshot?.routineReceiptSources,
       snapshot?.routineRuns,
+      routineRunHistory.data,
     ],
   );
   // Each message carries the index it had in `messages`, because the merge below

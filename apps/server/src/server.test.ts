@@ -33,6 +33,8 @@ import {
   ProviderInstanceId,
   RoutineId,
   RoutineRunId,
+  type Routine,
+  type RoutineRun,
   ResolvedKeybindingRule,
   ThreadId,
   TurnId,
@@ -3309,6 +3311,50 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.deepEqual(response.issues, []);
       assert.deepEqual(response.keybindings, [resolved]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("reads every run for one chat, including runs beyond the shell snapshot cap", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("routine-history-thread");
+      const otherThreadId = ThreadId.make("other-routine-history-thread");
+      const routineId = RoutineId.make("routine-history");
+      const otherRoutineId = RoutineId.make("other-routine-history");
+      const routine = { id: routineId, targetThreadId: threadId } as Routine;
+      const otherRoutine = { id: otherRoutineId, targetThreadId: otherThreadId } as Routine;
+      const runs: RoutineRun[] = Array.from({ length: 6 }, (_, index) => ({
+        id: RoutineRunId.make(`history-run-${index}`),
+        routineId,
+        procedureVersion: 1,
+        trigger: "manual",
+        scheduledFor: null,
+        status: "completed",
+        result: null,
+        failure: null,
+        usageRef: null,
+        threadRef: threadId,
+        startedAt: "2026-09-29T00:00:00.000Z",
+        completedAt: "2026-09-29T00:01:00.000Z",
+        createdAt: "2026-09-29T00:00:00.000Z",
+        updatedAt: "2026-09-29T00:01:00.000Z",
+      }));
+      yield* buildAppUnderTest({
+        layers: {
+          routineRepository: {
+            listAll: Effect.succeed([routine, otherRoutine]),
+            listRuns: (id) => Effect.succeed(id === routineId ? runs : []),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) => client[WS_METHODS.routinesListThreadRuns]({ threadId })),
+      );
+      assert.deepEqual(
+        result.runs.map((run) => run.id),
+        runs.map((run) => run.id),
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
