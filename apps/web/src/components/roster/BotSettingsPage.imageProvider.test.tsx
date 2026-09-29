@@ -202,6 +202,7 @@ function modelPicker(tree: Tree) {
   );
   expect(picker).not.toBeNull();
   return picker!.props as {
+    readonly activeInstanceId: string;
     readonly model: string;
     readonly onChange: (instanceId: string, model: string) => void;
   };
@@ -250,6 +251,26 @@ describe("bot settings image provider", () => {
     expect(imageSelect(tree).value).toBe("default");
     expect(selectedLabel(tree)).toBe("Use global default (ChatGPT)");
     expect(saveButton(tree).disabled).toBe(true);
+  });
+
+  it("keeps a removed saved provider visible while editing another field", async () => {
+    const missingId = ProviderInstanceId.make("removed_claude");
+    state.bots = [makeBot({ engine: { provider: missingId, model: "sonnet" } })];
+
+    let tree = renderForm();
+    expect(modelPicker(tree).activeInstanceId).toBe(missingId);
+    const notice = visitElements(tree, (element) =>
+      Boolean(element.props.presentation && typeof element.props.presentation === "object"),
+    );
+    expect(notice?.props.presentation).toMatchObject({ reason: "missing-provider" });
+
+    imageSelect(tree).onValueChange("grok");
+    tree = renderForm();
+    saveButton(tree).onClick();
+    await flushPromises();
+    expect(state.updateBot).toHaveBeenCalledWith(
+      expectedUpdate(state.bots[0]!, { imageProvider: "grok" }),
+    );
   });
 
   it.each([

@@ -131,7 +131,7 @@ describe("isProviderInstancePickerSelectable", () => {
 });
 
 describe("isProviderInstancePickerVisible", () => {
-  it("shows every enabled instance, including ones that cannot run yet", () => {
+  it("shows disabled instances with known models so their reason remains visible", () => {
     const [enabledEntry, disabledEntry, missingEntry, signedOutEntry] =
       deriveProviderInstanceEntries([
         provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
@@ -139,6 +139,7 @@ describe("isProviderInstancePickerVisible", () => {
           provider: ProviderDriverKind.make("claudeAgent"),
           instanceId: "claudeAgent",
           enabled: false,
+          models: [model("sonnet")],
         }),
         provider({
           provider: ProviderDriverKind.make("kimi"),
@@ -153,7 +154,11 @@ describe("isProviderInstancePickerVisible", () => {
       ]);
 
     expect(enabledEntry && isProviderInstancePickerVisible(enabledEntry)).toBe(true);
-    expect(disabledEntry && isProviderInstancePickerVisible(disabledEntry)).toBe(false);
+    expect(disabledEntry && isProviderInstancePickerVisible(disabledEntry)).toBe(true);
+    expect(disabledEntry && isProviderInstancePickerSelectable(disabledEntry)).toBe(false);
+    expect(disabledEntry && providerInstancePickerBlockReason(disabledEntry)).toContain(
+      "turned off",
+    );
     expect(missingEntry && isProviderInstancePickerVisible(missingEntry)).toBe(true);
     expect(signedOutEntry && isProviderInstancePickerVisible(signedOutEntry)).toBe(true);
     expect(signedOutEntry && isProviderInstancePickerSelectable(signedOutEntry)).toBe(false);

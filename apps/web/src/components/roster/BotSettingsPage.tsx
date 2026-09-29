@@ -314,9 +314,9 @@ function BotSettingsForm({
             title="Model"
             description="The provider and model this bot runs on."
             control={
-              draft.activeEntry && draft.model ? (
+              draft.model ? (
                 <BotModelPicker
-                  activeInstanceId={draft.activeEntry.instanceId}
+                  activeInstanceId={draft.providerInstanceId}
                   model={draft.model}
                   instanceEntries={draft.instanceEntries}
                   modelOptionsByInstance={draft.modelOptionsByInstance}

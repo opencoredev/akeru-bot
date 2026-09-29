@@ -101,13 +101,11 @@ export function isProviderInstancePickerSelectable(entry: ProviderInstanceEntry)
 }
 
 /**
- * Picker rails show every instance the user has turned on, including ones
- * that cannot run right now. Those render disabled with
- * `providerInstanceUnavailableReason` so a missing login is visible instead of
- * a silently missing provider.
+ * Keep a turned-off instance visible when it still has known models, so a
+ * saved choice can show why its rows are disabled.
  */
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled;
+  return entry.enabled || entry.models.length > 0;
 }
 
 /**

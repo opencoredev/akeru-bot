@@ -138,9 +138,15 @@ export function useBotProfileDraft(
   const activeEntry = useMemo(
     () =>
       instanceEntries.find((entry) => entry.instanceId === provider) ??
-      resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider)),
-    [instanceEntries, provider],
+      (bot.engine === null && !engineChanged
+        ? resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider))
+        : undefined),
+    [bot.engine, engineChanged, instanceEntries, provider],
   );
+  const providerInstanceId =
+    bot.engine === null && !engineChanged && activeEntry
+      ? activeEntry.instanceId
+      : ProviderInstanceId.make(provider);
   const [model, setModel] = useState<string>(
     () =>
       bot.engine?.model ??
@@ -170,10 +176,10 @@ export function useBotProfileDraft(
   const engineUnavailability = useMemo(
     () =>
       botEngineUnavailability(
-        activeEntry && model ? { instanceId: activeEntry.instanceId, model } : null,
+        model ? { instanceId: providerInstanceId, model } : null,
         instanceEntries,
       ),
-    [activeEntry, instanceEntries, model],
+    [instanceEntries, model, providerInstanceId],
   );
 
   useEffect(() => {
@@ -282,6 +288,7 @@ export function useBotProfileDraft(
     instanceEntries,
     defaultSelection,
     activeEntry,
+    providerInstanceId,
     engineUnavailability,
     modelOptionsByInstance,
     showModelOptions,
