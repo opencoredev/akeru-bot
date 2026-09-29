@@ -13,6 +13,7 @@ import {
   type OrchestrationEvent,
   isGroupBotMember,
   PLACEHOLDER_THREAD_TITLE,
+  releaseAkeruDelegationAcknowledgement,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -1597,6 +1598,44 @@ const make = Effect.gen(function* () {
           ),
         );
 
+  // A turn that fails before its provider reads the results it acknowledged
+  // hands them back, so the parent's next turn still receives them.
+  const releaseDelegationResults = (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+  ) => {
+    const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
+    if (delegationIds.length === 0) return Effect.void;
+    return projectionSnapshotQuery.getCommandReadModel().pipe(
+      Effect.flatMap((readModel) =>
+        Effect.forEach(
+          readModel.delegations.filter(
+            (delegation) =>
+              delegationIds.includes(delegation.delegationId) &&
+              (delegation.phase._tag === "Completed" || delegation.phase._tag === "Failed") &&
+              delegation.phase.acknowledgedAt === event.payload.createdAt,
+          ),
+          (delegation) =>
+            serverCommandId("delegation-release").pipe(
+              Effect.flatMap((commandId) =>
+                orchestrationEngine.dispatch({
+                  type: "delegation.state.set",
+                  commandId,
+                  delegation: releaseAkeruDelegationAcknowledgement(delegation),
+                }),
+              ),
+            ),
+          { discard: true },
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("failed to release delegated work results after turn start failure", {
+          threadId: event.payload.threadId,
+          cause: Cause.pretty(cause),
+        }),
+      ),
+    );
+  };
+
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
@@ -1677,6 +1716,7 @@ const make = Effect.gen(function* () {
         ),
         Effect.asVoid,
         Effect.ensuring(failDelegation(event.payload.threadId, detail)),
+        Effect.ensuring(releaseDelegationResults(event)),
       );
     };
 

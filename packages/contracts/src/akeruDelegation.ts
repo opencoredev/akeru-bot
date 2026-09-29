@@ -339,6 +339,18 @@ export const acknowledgeAkeruDelegation = (
     : record;
 
 /**
+ * Returns an acknowledged result to pending when the turn that acknowledged it
+ * never reached its provider, so the next parent turn receives it instead.
+ */
+export const releaseAkeruDelegationAcknowledgement = (
+  record: AkeruDelegationRecord,
+): AkeruDelegationRecord =>
+  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  record.phase.acknowledgedAt !== null
+    ? { ...record, phase: { ...record.phase, acknowledgedAt: null } }
+    : record;
+
+/**
  * True while any child delegation started from this parent thread is still
  * working. Derived from the delegation records so every client and the server
  * agree without a second persisted flag.

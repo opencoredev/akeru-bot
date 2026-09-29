@@ -5,6 +5,7 @@ import {
   AKERU_DELEGATION_TRANSITIONS,
   acknowledgeAkeruDelegation,
   isAkeruDelegationResultPending,
+  releaseAkeruDelegationAcknowledgement,
   type AkeruDelegationPhase,
   type AkeruDelegationRecord,
   BALANCED_BOT_PERSONALITY_TONE,
@@ -1429,9 +1430,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             acknowledgeAkeruDelegation(current, next.phase.acknowledgedAt),
             next,
           );
+        // A turn start that fails before its provider reads the results
+        // hands them back, clearing only the stamp.
+        const released = releaseAkeruDelegationAcknowledgement(current);
+        const releasesOnly = released !== current && NodeUtil.isDeepStrictEqual(released, next);
         if (
           !NodeUtil.isDeepStrictEqual(current, next) &&
           !acknowledgesOnly &&
+          !releasesOnly &&
           (!assignsChildOwnership || !changesOnlyChildOwnership)
         ) {
           return yield* new OrchestrationCommandInvariantError({

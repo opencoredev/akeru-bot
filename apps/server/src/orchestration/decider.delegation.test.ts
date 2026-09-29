@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   acknowledgeAkeruDelegation,
+  releaseAkeruDelegationAcknowledgement,
   BotId,
   CommandId,
   DelegationId,
@@ -532,6 +533,47 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
       }).pipe(Effect.flip);
       expect(String(reacknowledged)).toContain("without a state transition");
+    }),
+  );
+
+  it.effect("lets an acknowledged result return to pending without other changes", () =>
+    Effect.gen(function* () {
+      const completed = makeDelegation({
+        phase: {
+          _tag: "Completed",
+          childThreadId: CHILD_THREAD_ID,
+          childTurnId: CHILD_TURN_ID,
+          startedAt: NOW,
+          completedAt: LATER,
+          acknowledgedAt: null,
+          result: { summary: "Done.", childThreadId: CHILD_THREAD_ID, childTurnId: CHILD_TURN_ID },
+        },
+        updatedAt: LATER,
+      });
+      const acknowledged = acknowledgeAkeruDelegation(completed, "2026-08-31T12:05:00.000Z");
+      const released = releaseAkeruDelegationAcknowledgement(acknowledged);
+      const event = yield* decideOne(makeReadModel([acknowledged]), {
+        type: "delegation.state.set",
+        commandId: CommandId.make("command-release"),
+        delegation: released,
+      });
+      expect(event.payload.delegation.phase).toMatchObject({ acknowledgedAt: null });
+
+      const rewritten = yield* decideOrchestrationCommand({
+        readModel: makeReadModel([acknowledged]),
+        command: {
+          type: "delegation.state.set",
+          commandId: CommandId.make("command-release-rewrite"),
+          delegation: {
+            ...released,
+            phase:
+              released.phase._tag === "Completed"
+                ? { ...released.phase, result: { ...released.phase.result, summary: "Rewritten." } }
+                : released.phase,
+          },
+        },
+      }).pipe(Effect.flip);
+      expect(String(rewritten)).toContain("without a state transition");
     }),
   );
 
