@@ -2029,7 +2029,19 @@ export function makeOpenCodeAdapter(
           requestID: requestId,
           answers: toOpenCodeQuestionAnswers(request, answers),
         }),
-      ).pipe(Effect.mapError(toRequestError));
+      ).pipe(
+        // The question stays pending until OpenCode reports it replied, so the answer can be sent again.
+        Effect.mapError(
+          (cause) =>
+            new ProviderAdapterRequestError({
+              provider: PROVIDER,
+              method: cause.operation,
+              detail: cause.detail,
+              cause: cause.cause,
+              retryable: true,
+            }),
+        ),
+      );
     });
 
     const stopSession: OpenCodeAdapterShape["stopSession"] = Effect.fn("stopSession")(

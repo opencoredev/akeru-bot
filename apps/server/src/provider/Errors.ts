@@ -61,6 +61,8 @@ export class ProviderAdapterRequestError extends Schema.TaggedErrorClass<Provide
     method: Schema.String,
     detail: Schema.String,
     cause: Schema.optional(Schema.Defect()),
+    // True when the request is still pending after the failure and can be sent again.
+    retryable: Schema.optional(Schema.Boolean),
   },
 ) {
   override get message(): string {

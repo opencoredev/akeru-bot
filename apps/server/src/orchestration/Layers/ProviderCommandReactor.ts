@@ -360,9 +360,11 @@ function isUnknownPendingUserInputRequestError(cause: Cause.Cause<AgentControlle
 }
 
 function isRetryableUserInputResponseError(cause: Cause.Cause<AgentControllerError>): boolean {
-  const failReason = cause.reasons.find(Cause.isFailReason);
+  const error = cause.reasons.find(Cause.isFailReason)?.error;
   return (
-    failReason?.error._tag === "AgentControllerRuntimeError" && failReason.error.retryable === true
+    (error?._tag === "AgentControllerRuntimeError" ||
+      error?._tag === "ProviderAdapterRequestError") &&
+    error.retryable === true
   );
 }
 
