@@ -142,6 +142,17 @@ describe("normalized realtime voice session", () => {
     }
     expect(handlers.sendGoalMessage).toHaveBeenCalledTimes(2);
   });
+
+  it("does not show provider diagnostics from realtime error events", () => {
+    const handlers = makeHandlers();
+    const session = createRealtimeVoiceSession(createVoiceCallScope(identity), handlers, vi.fn());
+    session.receive(
+      JSON.stringify({ type: "error", error: { message: "secret token in upstream trace" } }),
+    );
+    expect(handlers.sessionFailed).toHaveBeenCalledWith(
+      "The voice session failed. Start a new call to continue.",
+    );
+  });
 });
 
 describe("composed voice lifecycle", () => {

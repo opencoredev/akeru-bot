@@ -320,10 +320,6 @@ export function handleVoiceChannelMessage(
     return;
   }
   if (type === "error") {
-    const realtimeError =
-      typeof event === "object" && event !== null
-        ? stringField((event as Record<string, unknown>).error, "message")
-        : null;
-    handlers.sessionFailed(realtimeError ?? "The voice session failed.");
+    handlers.sessionFailed("The voice session failed. Start a new call to continue.");
   }
 }
