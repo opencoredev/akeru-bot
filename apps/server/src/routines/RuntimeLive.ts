@@ -196,7 +196,7 @@ const make = Effect.gen(function* () {
     }
     if (phase._tag === "Canceled") {
       yield* adapter.recordCanceled(run, completedAt);
-      yield* repository.markSettled(run.id, "failed", completedAt);
+      yield* repository.markSettled(run.id, "canceled", completedAt);
       return;
     }
     const failure = {
@@ -222,7 +222,9 @@ const make = Effect.gen(function* () {
     }
     // Canceling a run also cancels the bot work it started. Pausing does not.
     if (event.type === "routine.run-canceled") {
-      yield* adapter.cancelDelegatedRun(event.payload.run);
+      const run = event.payload.run;
+      yield* repository.markSettled(run.id, "canceled", run.completedAt ?? event.occurredAt);
+      yield* adapter.cancelDelegatedRun(run);
       return;
     }
     if (event.type !== "thread.turn-diff-completed" && event.type !== "thread.session-set") return;

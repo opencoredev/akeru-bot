@@ -300,7 +300,12 @@ const make = Effect.gen(function* () {
       routineId: run.routineId,
       runId: run.id,
       createdAt: completedAt,
-    }).pipe(Effect.asVoid, Effect.orDie);
+    }).pipe(
+      Effect.asVoid,
+      // A run that ended meanwhile keeps its outcome.
+      Effect.catchTag("OrchestrationCommandInvariantError", () => Effect.void),
+      Effect.orDie,
+    );
 
   const cancelDelegatedRun: RoutineRuntimeAdapterShape["cancelDelegatedRun"] = (run) =>
     Effect.gen(function* () {
@@ -339,7 +344,8 @@ const make = Effect.gen(function* () {
   ) => Effect.sync(() => void inbox.resolve(`routine:${routineId}`));
 
   // Records the run as started. The decider refuses a run that was canceled or
-  // settled first, and then nothing may start for it.
+  // settled first, and then nothing may start for it. Any other failure blocks
+  // the run with its reason instead of passing for a cancellation.
   const startRun = (routine: Routine, run: RoutineRun, threadRef: ThreadId) =>
     Effect.gen(function* () {
       const started = yield* dispatch({
@@ -350,7 +356,20 @@ const make = Effect.gen(function* () {
         threadRef,
         startedAt: DateTime.formatIso(yield* DateTime.now),
       }).pipe(Effect.result);
-      return started._tag === "Success";
+      if (started._tag === "Success") return "started" as const;
+      if (
+        started.failure._tag === "OrchestrationCommandInvariantError" ||
+        started.failure._tag === "OrchestrationCommandPreviouslyRejectedError"
+      ) {
+        return "ended" as const;
+      }
+      return {
+        failure: {
+          kind: "execution",
+          reason: `The routine run could not start: ${started.failure.message}`,
+          nextAction: "Resume the routine to try again.",
+        },
+      } as const;
     });
 
   const cancelDelegation = (run: RoutineRun, delegationId: DelegationId) =>
@@ -402,9 +421,10 @@ const make = Effect.gen(function* () {
       const { childThreadId: threadRef, delegationId } = handle.success;
       // A run canceled while its work was starting has no threadRef for
       // cancelDelegatedRun to match, so cancel the work by its id here.
-      if (!(yield* startRun(routine, run, threadRef))) {
+      const started = yield* startRun(routine, run, threadRef);
+      if (started !== "started") {
         yield* cancelDelegation(run, delegationId);
-        return { canceled: true } satisfies RoutineDispatchResult;
+        return started === "ended" ? ({ canceled: true } satisfies RoutineDispatchResult) : started;
       }
       return { threadRef } satisfies RoutineDispatchResult;
     });
@@ -443,9 +463,9 @@ const make = Effect.gen(function* () {
             ),
           );
       }
-      if (!(yield* startRun(routine, run, threadRef))) {
-        return { canceled: true } satisfies RoutineDispatchResult;
-      }
+      const started = yield* startRun(routine, run, threadRef);
+      if (started === "ended") return { canceled: true } satisfies RoutineDispatchResult;
+      if (started !== "started") return started;
       yield* dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make(`server:routine.turn:${run.id}`),

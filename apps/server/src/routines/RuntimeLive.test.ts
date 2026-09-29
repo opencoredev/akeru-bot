@@ -624,10 +624,13 @@ it.effect("cancels scheduled bot work with its run and cancels the run with its 
       }).pipe(Effect.provide(test.layer)),
     );
     assert.deepEqual(test.events.slice(4), [
+      "claim-settled",
       `delegation-canceled:${helperThreadId}`,
       "run-canceled",
       "claim-settled",
     ]);
+    // The claim agrees with the canceled run instead of reporting a failure.
+    assert.deepEqual(test.settledStatuses, ["canceled", "canceled"]);
   }),
 );
 

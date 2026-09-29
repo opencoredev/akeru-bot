@@ -1874,9 +1874,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Routine run '${command.runId}' does not exist.`,
         });
       }
-      // A run canceled or settled before it started stays ended.
+      // A run canceled or settled before it started stays ended, and a
+      // cancellation never overwrites a run that already ended.
       if (
-        command.type === "routine.run.start" &&
+        (command.type === "routine.run.start" || command.type === "routine.run.cancel") &&
         existingRun.status !== "queued" &&
         existingRun.status !== "waiting-for-approval" &&
         existingRun.status !== "running"

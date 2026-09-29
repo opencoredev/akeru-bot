@@ -238,4 +238,84 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
       });
     }),
   );
+
+  it.effect("keeps a completed run when a late cancellation arrives", () =>
+    Effect.gen(function* () {
+      let readModel = createEmptyReadModel(NOW);
+      let sequence = 0;
+      const apply = (command: Parameters<typeof decideOrchestrationCommand>[0]["command"]) =>
+        Effect.gen(function* () {
+          const decided = yield* decideOrchestrationCommand({ command, readModel });
+          for (const event of Array.isArray(decided) ? decided : [decided]) {
+            sequence += 1;
+            readModel = yield* projectEvent(readModel, {
+              ...event,
+              sequence,
+              eventId: EventId.make(`event-late-cancel-${sequence}`),
+            });
+          }
+        });
+      const routineId = RoutineId.make("routine-late-cancel");
+      const runId = RoutineRunId.make("run-late-cancel");
+      yield* apply({
+        type: "routine.create-approved",
+        commandId: CommandId.make("command-late-cancel-create"),
+        routineId,
+        botId: BotId.make("bot-1"),
+        targetThreadId: ThreadId.make("thread-1"),
+        job: "Daily brief",
+        procedure: "Summarize this chat.",
+        schedule: { kind: "daily", time: "09:00" },
+        timezone: "America/New_York",
+        skillAssignmentIds: [],
+        connectorDependencies: [],
+        projectId: ProjectId.make("project-1"),
+        sandbox: "local",
+        approvalPolicy: "approval-required",
+        delegateToBotId: BotId.make("bot-helper"),
+        createdAt: NOW,
+      });
+      yield* apply({
+        type: "routine.run",
+        commandId: CommandId.make("command-late-cancel-run"),
+        routineId,
+        runId,
+        trigger: "manual",
+        createdAt: NOW,
+      });
+      yield* apply({
+        type: "routine.run.start",
+        commandId: CommandId.make("command-late-cancel-start"),
+        routineId,
+        runId,
+        threadRef: ThreadId.make("thread-helper"),
+        startedAt: NOW,
+      });
+      yield* apply({
+        type: "routine.run.complete",
+        commandId: CommandId.make("command-late-cancel-complete"),
+        routineId,
+        runId,
+        result: { summary: "Done" },
+        usageRef: null,
+        nextRunAt: null,
+        createdAt: NOW,
+      });
+
+      const error = yield* Effect.flip(
+        apply({
+          type: "routine.run.cancel",
+          commandId: CommandId.make("command-late-cancel-cancel"),
+          routineId,
+          runId,
+          createdAt: NOW,
+        }),
+      );
+
+      expect(error.message).toContain("already ended with status 'completed'");
+      expect(readModel.routineRuns?.find((run) => run.id === runId)).toMatchObject({
+        status: "completed",
+      });
+    }),
+  );
 });

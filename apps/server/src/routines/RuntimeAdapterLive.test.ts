@@ -16,7 +16,10 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as ServerConfig from "../config.ts";
-import { OrchestrationCommandInvariantError } from "../orchestration/Errors.ts";
+import {
+  OrchestrationCommandInvariantError,
+  OrchestrationListenerCallbackError,
+} from "../orchestration/Errors.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -93,6 +96,8 @@ const bot = (botId: string, name: string, provider: string): ProjectionBot =>
 const makeLayer = (options: {
   readonly bots: ReadonlyArray<ProjectionBot>;
   readonly runEnded?: boolean;
+  /** Makes `routine.run.start` fail for a reason other than an ended run. */
+  readonly startFailure?: boolean;
   readonly usageRecordFailure?: boolean;
   readonly commands: Array<OrchestrationCommand>;
 }) =>
@@ -102,6 +107,14 @@ const makeLayer = (options: {
         Layer.succeed(OrchestrationEngineService, {
           dispatch: (command: OrchestrationCommand) => {
             options.commands.push(command);
+            if (command.type === "routine.run.start" && options.startFailure) {
+              return Effect.fail(
+                new OrchestrationListenerCallbackError({
+                  listener: "read-model",
+                  detail: "storage unavailable",
+                }),
+              );
+            }
             return command.type === "routine.run.start" && options.runEnded
               ? Effect.fail(
                   new OrchestrationCommandInvariantError({
@@ -170,6 +183,29 @@ it.effect("cancels bot work by its id when the run was canceled while the work s
       makeLayer({
         bots: [bot("bot-owner", "Ada", "codex"), bot("bot-helper", "Grace", "codex")],
         runEnded: true,
+        commands,
+      }),
+    ),
+  );
+});
+
+it.effect("blocks the run and cancels its bot work when the run cannot start", () => {
+  const commands: Array<OrchestrationCommand> = [];
+  return Effect.gen(function* () {
+    const adapter = yield* RoutineRuntimeAdapter;
+    const result = yield* adapter.dispatchTurn(routine(), run);
+
+    assert.ok("failure" in result);
+    assert.include(result.failure.reason, "storage unavailable");
+    assert.deepEqual(
+      commands.map((command) => command.type),
+      ["routine.run.start", "delegation.cancel"],
+    );
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        bots: [bot("bot-owner", "Ada", "codex"), bot("bot-helper", "Grace", "codex")],
+        startFailure: true,
         commands,
       }),
     ),
