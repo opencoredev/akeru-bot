@@ -42,7 +42,7 @@ export function createReplyPlaybackSession(options: {
   ) => Promise<ReplyAudioHandle>;
   readonly synthesis?: StoredReplySynthesisCapability;
 }) {
-  const synthesis = options.synthesis ?? storedReplySynthesisCapability();
+  let synthesis = options.synthesis ?? storedReplySynthesisCapability();
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
   const preference = createReplyReadoutPreference(options.storage, () => {
@@ -116,7 +116,12 @@ export function createReplyPlaybackSession(options: {
   return {
     controller,
     preference,
-    synthesis,
+    get synthesis() {
+      return synthesis;
+    },
+    setSynthesis: (next: StoredReplySynthesisCapability) => {
+      synthesis = next;
+    },
     actionFor,
     setContext: (next: ReplyPlaybackContext | null) => {
       context = next;

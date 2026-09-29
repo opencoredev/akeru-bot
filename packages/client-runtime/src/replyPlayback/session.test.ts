@@ -108,6 +108,16 @@ describe("reply playback session", () => {
     });
     expect(storedReplySynthesisCapability({ provider: "chatgpt" }).available).toBe(false);
   });
+
+  it("keeps the readout preference while the selected environment changes voice settings", async () => {
+    const { session } = setup();
+    await session.preference.load();
+    expect(session.preference.getSnapshot().enabled).toBe(true);
+    expect(session.actionFor(message)?.unavailableReason).toBe(STORED_REPLY_SYNTHESIS_UNAVAILABLE);
+    session.setSynthesis({ available: true, provider: "openai", voice: "alloy" });
+    expect(session.actionFor(message)?.unavailableReason).toBeUndefined();
+    expect(session.preference.getSnapshot().enabled).toBe(true);
+  });
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({
