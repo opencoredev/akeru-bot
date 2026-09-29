@@ -43,6 +43,7 @@ import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
+import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
@@ -106,7 +107,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
-  const entries = useMemo(() => buildBotConversationEntries(messages), [messages]);
+  const today = useLocalDay();
+  const entries = useMemo(() => buildBotConversationEntries(messages, today), [messages, today]);
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,

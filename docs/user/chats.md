@@ -1,6 +1,7 @@
 # Organize chats
 
 Use a chat's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
+Date labels in bot and group chats follow your device's local day and update when the day changes.
 
 ## Active and settled chats
 

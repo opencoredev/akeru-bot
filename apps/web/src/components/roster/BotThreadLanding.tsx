@@ -58,6 +58,7 @@ import { BotVoiceCallButton, useVoiceCall } from "../voice/VoiceCall";
 import { useBotPresence } from "./botPresence";
 import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
+import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
@@ -209,7 +210,8 @@ export function BotThreadLanding({
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
-  const entries = useMemo(() => buildBotConversationEntries(messages), [messages]);
+  const today = useLocalDay();
+  const entries = useMemo(() => buildBotConversationEntries(messages, today), [messages, today]);
   const routineReceipts = useMemo(
     () =>
       runtime.linkedThreadRef
