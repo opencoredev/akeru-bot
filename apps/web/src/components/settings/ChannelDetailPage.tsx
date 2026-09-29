@@ -4,7 +4,12 @@ import {
   channelPickerProjectId,
   channelRepairAction,
 } from "@t3tools/client-runtime/channel-presentation";
-import type { ChannelConnectionProfile, ChannelProvider, ProjectId } from "@t3tools/contracts";
+import {
+  BotId,
+  type ChannelConnectionProfile,
+  type ChannelProvider,
+  type ProjectId,
+} from "@t3tools/contracts";
 import { EllipsisIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -221,9 +226,19 @@ export function ChannelConnectionRow({
           <span className="text-xs font-medium text-muted-foreground">{t("Bot that answers")}</span>
           <Select
             value={bot?.id ?? UNASSIGNED}
-            onValueChange={(next) =>
-              next && void settings.updateAssignment(connection, next, projectId)
-            }
+            onValueChange={(next) => {
+              if (!next) return;
+              if (next === UNASSIGNED) {
+                void settings.updateAssignment(connection, next, null);
+                return;
+              }
+              const selectedProject = liveProjects.some((project) => project.id === pickedProjectId)
+                ? pickedProjectId
+                : null;
+              const destinationProject = selectedProject ?? settings.projectHint(BotId.make(next));
+              if (!destinationProject) return;
+              void settings.updateAssignment(connection, next, destinationProject);
+            }}
           >
             <SelectTrigger
               size="xs"

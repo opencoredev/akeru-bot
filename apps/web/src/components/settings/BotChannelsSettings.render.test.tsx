@@ -30,6 +30,7 @@ const fixtures = vi.hoisted(() => ({
       updatedAt: "2026-09-01T00:00:00.000Z",
     },
   ] as Array<{ id: string; title: string; workspaceRoot: string; updatedAt: string }>,
+  threads: [] as Array<{ projectId: string; botId: string; updatedAt: string; archivedAt: null }>,
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
   ] as Array<Record<string, unknown>>,
@@ -43,7 +44,7 @@ const fixtures = vi.hoisted(() => ({
 
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) =>
-    atom === "bots" ? fixtures.bots : { projects: fixtures.projects, threads: [] },
+    atom === "bots" ? fixtures.bots : { projects: fixtures.projects, threads: fixtures.threads },
 }));
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
 vi.mock("../../state/bots", () => ({
@@ -189,6 +190,7 @@ const renderPage = (provider: "imessage" | "whatsapp" = "imessage") =>
 beforeEach(() => {
   fixtures.bots = [];
   fixtures.projects = [liveProject];
+  fixtures.threads = [];
   fixtures.connections = [fixtureConnection];
   fixtures.selects = [];
   fixtures.buttons = new Map();
@@ -239,6 +241,49 @@ describe("channel project selection", () => {
         connectionId: "profile-1",
         provider: "imessage",
         projectId: "project-uuid",
+      },
+    });
+  });
+
+  it("uses the destination bot's recent project when changing an existing assignment", async () => {
+    fixtures.projects = [
+      liveProject,
+      {
+        id: "project-other",
+        title: "Mira's workspace",
+        workspaceRoot: "/Users/leo/code/other",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      },
+    ];
+    fixtures.bots = [
+      boundBot("connected"),
+      { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
+    ];
+    fixtures.threads = [
+      {
+        projectId: "project-other",
+        botId: "bot-other",
+        updatedAt: "2026-09-02T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ];
+
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-other");
+    await fixtures.command.mock.results[0]!.value;
+    await fixtures.command.mock.results[1]!.value;
+
+    expect(fixtures.command).toHaveBeenNthCalledWith(1, {
+      environmentId: "environment-1",
+      input: { botId: "bot-uuid", provider: "imessage" },
+    });
+    expect(fixtures.command).toHaveBeenNthCalledWith(2, {
+      environmentId: "environment-1",
+      input: {
+        botId: "bot-other",
+        connectionId: "profile-1",
+        provider: "imessage",
+        projectId: "project-other",
       },
     });
   });
