@@ -2017,6 +2017,7 @@ const makeWsRpcLayer = (
                   subscriptionStatuses: subscriptionAuth.statuses(),
                   subscriptionHealth: (instanceId) =>
                     subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                  now: yield* Clock.currentTimeMillis,
                   requireSettledCatalog: true,
                 });
                 if (verdict?.category === "unsupported-model") {

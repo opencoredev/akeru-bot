@@ -297,7 +297,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 });
               }
             }
-            if (bot?.usageCap && (!groupId || normalizedCommand.respondingBotId !== undefined)) {
+            if (bot?.usageCap) {
               const usage = yield* botUsageLedger
                 .summarize(bot.botId)
                 .pipe(

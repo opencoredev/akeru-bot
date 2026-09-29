@@ -9989,6 +9989,33 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         }
       }
       assert.equal(dispatch.mock.calls.length, 0);
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:operate",
+      });
+      for (const [index, text] of ["Ask the team", `Ask @bot:${memberId} now`].entries()) {
+        const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+          headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+          body: yield* HttpBody.json({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`cmd-http-group-cap-${index}`),
+            threadId: defaultThreadId,
+            message: {
+              messageId: MessageId.make(`msg-http-group-cap-${index}`),
+              role: "user",
+              text,
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+        });
+        assert.equal(response.status, 400);
+        const error = (yield* response.json) as Record<string, unknown>;
+        assert.equal(error.unavailability, "usage-cap");
+      }
+      assert.equal(dispatch.mock.calls.length, 0);
       memberCapped = false;
       yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
