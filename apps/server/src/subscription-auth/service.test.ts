@@ -265,6 +265,51 @@ describe("subscription auth storage", () => {
     }
   });
 
+  it.each(["api-key", "oauth"] as const)(
+    "ignores a rejected health check for replaced %s credentials",
+    async (authMode) => {
+      const { authPath } = fixture();
+      const credential = (access: string) =>
+        authMode === "api-key"
+          ? { type: "api-key", access }
+          : { type: "oauth", access, refresh: `${access}-refresh`, expires: Date.now() + 60_000 };
+      NodeFS.writeFileSync(authPath, JSON.stringify({ xai: credential("old-key") }));
+      const responses = new Map<string, (response: Response) => void>();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          (_url: string, init: RequestInit) =>
+            new Promise<Response>((resolve) => {
+              const authorization = new Headers(init.headers).get("Authorization");
+              if (authorization) responses.set(authorization, resolve);
+            }),
+        ),
+      );
+      try {
+        const oldService = new SubscriptionAuthService(authPath);
+        const oldCheck = oldService.testHealth("xai");
+        NodeFS.writeFileSync(authPath, JSON.stringify({ xai: credential("new-key") }));
+        const newService = new SubscriptionAuthService(authPath);
+        const newCheck = newService.testHealth("xai");
+        const respondNew = responses.get("Bearer new-key");
+        const respondOld = responses.get("Bearer old-key");
+        if (!respondNew || !respondOld) throw new TypeError("Expected both health requests.");
+        respondNew(new Response("{}", { status: 200 }));
+        await newCheck;
+        respondOld(new Response("{}", { status: 401 }));
+        await oldCheck;
+
+        oldService.reload();
+        expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8")).xai.access).toBe("new-key");
+        expect(oldService.statuses().find((entry) => entry.provider === "xai")?.health).toBe(
+          "healthy",
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it("removes pending API-key logins on logout and reads cancellations from disk", async () => {
     const { authPath } = fixture();
     const first = new SubscriptionAuthService(authPath);

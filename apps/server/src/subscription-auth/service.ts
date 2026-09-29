@@ -240,6 +240,7 @@ export class SubscriptionAuthService {
   private readonly pendingLogins = new Map<string, PendingLogin>();
   private readonly refreshInFlight = new Map<string, Promise<string | undefined>>();
   private readonly healthChecks = new Map<SubscriptionProviderId, Promise<void>>();
+  private readonly healthProbeVersions = new Map<SubscriptionProviderId, number>();
   private readonly checkHealthOnConnect: boolean;
 
   /**
@@ -607,9 +608,25 @@ export class SubscriptionAuthService {
       : undefined;
   }
 
+  private isCurrentHealthCredential(
+    provider: SubscriptionProviderId,
+    credential: ApiKeyCredential | OAuthCredential,
+    version: number,
+  ): boolean {
+    if (this.healthProbeVersions.get(provider) !== version) return false;
+    this.reload();
+    const current = this.data[provider];
+    if (current?.type !== credential.type || current.access !== credential.access) return false;
+    return credential.type === "api-key"
+      ? current.type === "api-key" && current.baseUrl === credential.baseUrl
+      : current.type === "oauth" && current.refresh === credential.refresh;
+  }
+
   async testHealth(provider: SubscriptionProviderId): Promise<void> {
     this.reload();
     if (provider === "cursor") return;
+    const version = (this.healthProbeVersions.get(provider) ?? 0) + 1;
+    this.healthProbeVersions.set(provider, version);
     const credential = this.data[provider];
     if (!credential) {
       this.recordOAuthFailure(provider, "No account is connected.");
@@ -641,6 +658,7 @@ export class SubscriptionAuthService {
             ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
           },
         });
+        if (!this.isCurrentHealthCredential(provider, credential, version)) return;
         if (!response.ok) {
           this.recordRequestFailure(
             provider,
@@ -652,6 +670,7 @@ export class SubscriptionAuthService {
           this.recordRequestSuccess(provider);
         }
       } catch {
+        if (!this.isCurrentHealthCredential(provider, credential, version)) return;
         this.recordRequestFailure(
           provider,
           "The API-key check failed. Check the base URL and connection.",
@@ -659,13 +678,13 @@ export class SubscriptionAuthService {
       }
       return;
     }
+    let testedCredential = credential;
     try {
       const refreshed =
         credential.expires > Date.now() ? credential : await this.runRefresh(provider, credential);
-      this.reload();
-      const current = this.data[provider];
-      if (current?.type !== "oauth" || current.refresh !== credential.refresh) return;
+      if (!this.isCurrentHealthCredential(provider, credential, version)) return;
       this.setCredential(provider, refreshed);
+      testedCredential = { type: "oauth", ...refreshed };
       const request = oauthHealthRequest(provider, refreshed);
       if (!request) throw new Error("This subscription does not expose a health endpoint.");
       const response = await fetch(request.url, {
@@ -673,6 +692,7 @@ export class SubscriptionAuthService {
         headers: request.headers,
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
       });
+      if (!this.isCurrentHealthCredential(provider, testedCredential, version)) return;
       if (!response.ok) {
         throw new Error(`The provider rejected the health request (${response.status}).`);
       }
@@ -685,6 +705,7 @@ export class SubscriptionAuthService {
       };
       this.saveHealth();
     } catch (cause) {
+      if (!this.isCurrentHealthCredential(provider, testedCredential, version)) return;
       this.recordRequestFailure(
         provider,
         cause instanceof Error ? cause.message : "The provider rejected the health request.",
@@ -708,6 +729,7 @@ export class SubscriptionAuthService {
     this.saveHealth();
     const check = this.testHealth(provider)
       .finally(() => {
+        if (this.healthChecks.get(provider) !== check) return;
         this.reloadHealth();
         const current = this.health[provider];
         if (current?.healthCheckStartedAt === undefined) return;
