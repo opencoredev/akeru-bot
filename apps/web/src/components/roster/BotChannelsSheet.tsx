@@ -341,6 +341,7 @@ export function BotChannelsSheet({
                   ) : (
                     <ChannelRepairButton
                       action={repairAction}
+                      status={binding.status}
                       disabled={busyId !== null || (repairAction === "choose-project" && !canMove)}
                       managementUrl={connection.managementUrl}
                       onRepair={(action) => {
