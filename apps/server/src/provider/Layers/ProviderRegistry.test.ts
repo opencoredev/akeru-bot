@@ -712,7 +712,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         ]);
       });
 
-      it("drops Grok models a clean probe no longer lists and keeps them when a probe fails", () => {
+      it("drops Grok models only after a complete probe", () => {
         const model = (slug: string) => ({
           slug,
           name: slug,
@@ -745,6 +745,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [model("grok-build")],
           message: "Failed to execute Grok CLI health check.",
         } satisfies ServerProvider;
+        const partialProbe = {
+          ...cleanProbe,
+          status: "warning",
+          message: "Grok ACP initialize failed. Model options may be incomplete.",
+        } satisfies ServerProvider;
         const signedOut = {
           ...failedProbe,
           auth: { status: "unauthenticated" },
@@ -757,6 +762,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         );
         assert.deepStrictEqual(
           mergeProviderSnapshot(previousProvider, failedProbe).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, partialProbe).models.map((entry) => entry.slug),
           ["grok-build", "stale-alias"],
         );
         assert.deepStrictEqual(

@@ -404,8 +404,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     probe: {
       installed: true,
       version,
-      // A successful CLI listing is authoritative even if ACP metadata failed.
-      status: acpFailed && cliModels.models.length === 0 ? "warning" : "ready",
+      status: acpFailed ? "warning" : "ready",
       auth,
       ...(acpFailed
         ? {
