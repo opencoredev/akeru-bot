@@ -17,7 +17,8 @@ Pass `--base-dir PATH` to an `akeru` server command to choose another directory 
 ```sh
 curl -fsSL --proto '=https' https://github.com/opencoredev/akeru-bot/releases/latest/download/install-remote.sh | sh
 # or, on Windows:
-# irm https://github.com/opencoredev/akeru-bot/releases/latest/download/install-remote.ps1 | iex
+# irm https://github.com/opencoredev/akeru-bot/releases/latest/download/install-remote.ps1 -OutFile install-remote.ps1
+# powershell -NoProfile -ExecutionPolicy Bypass -File .\install-remote.ps1
 ```
 
 Release archives are published for Linux x64, macOS arm64, and Windows x64. The installers refuse
