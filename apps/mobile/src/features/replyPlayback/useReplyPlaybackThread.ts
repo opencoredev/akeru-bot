@@ -59,7 +59,7 @@ export function useReplyPlaybackThread(options: {
       }
       const environmentId = options.environmentId;
       const threadId = options.threadId;
-      session.setSynthesis(synthesis);
+      session.setSynthesis(synthesis, environmentId);
       session.setContext({
         environmentId,
         threadId,

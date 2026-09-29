@@ -152,6 +152,32 @@ describe("reply playback session", () => {
     expect(session.synthesisFor("other").available).toBe(false);
   });
 
+  it("keeps an environment's applied voice settings out of other environments", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: () => ({
+        available: false,
+        provider: "unavailable",
+        voice: "unavailable",
+        reason: "no",
+      }),
+    });
+    session.setSynthesis({ available: true, provider: "speech", voice: "voice" }, "a");
+    const context = {
+      threadId: "thread",
+      provider: "p",
+      voice: "v",
+      connected: true,
+      mediaBlocked: false,
+    };
+    session.setContext({ ...context, environmentId: "a" });
+    expect(session.actionFor(message)?.unavailableReason).toBeUndefined();
+    session.setContext({ ...context, environmentId: "b" });
+    expect(session.actionFor(message)?.unavailableReason).toBe("no");
+    expect(session.getSynthesisSnapshot().available).toBe(false);
+  });
+
   it("returns the default capability for a null or empty environment", () => {
     const lookup = vi.fn(() => ({
       available: true as const,

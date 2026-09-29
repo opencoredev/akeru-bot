@@ -50,9 +50,13 @@ export function createReplyPlaybackSession(options: {
         ? options.synthesis(environmentId)
         : storedReplySynthesisCapability()
       : (options.synthesis ?? storedReplySynthesisCapability());
+  // Environment-scoped overrides keep one chat's voice settings out of another environment.
   let synthesisOverride: StoredReplySynthesisCapability | null = null;
+  const environmentSynthesisOverrides = new Map<string, StoredReplySynthesisCapability>();
   const currentSynthesis = (environmentId: string | null) =>
-    synthesisOverride ?? synthesisFor(environmentId);
+    (environmentId ? environmentSynthesisOverrides.get(environmentId) : undefined) ??
+    synthesisOverride ??
+    synthesisFor(environmentId);
   const synthesisListeners = new Set<() => void>();
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
@@ -137,8 +141,10 @@ export function createReplyPlaybackSession(options: {
       synthesisListeners.add(listener);
       return () => synthesisListeners.delete(listener);
     },
-    setSynthesis: (next: StoredReplySynthesisCapability) => {
-      synthesisOverride = next;
+    /** Pass `environmentId` when the capability belongs to one environment's settings. */
+    setSynthesis: (next: StoredReplySynthesisCapability, environmentId?: string) => {
+      if (environmentId) environmentSynthesisOverrides.set(environmentId, next);
+      else synthesisOverride = next;
       for (const listener of synthesisListeners) listener();
     },
     actionFor,
