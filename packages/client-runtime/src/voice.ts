@@ -73,11 +73,14 @@ export async function runVoiceOperation<T>(
  * Finds the reply to speak for the voice turn started by `requestMessageId`.
  * If a newer chat turn has already replaced it as the latest turn, the voice
  * turn's final reply is still spoken, once none of its messages are streaming.
+ * `observedTurnId` is the voice turn's id seen while it was the latest turn;
+ * request messages carry no turn id, so it is how a late reply is found.
  */
 export function correlatedVoiceReply(
   requestMessageId: string,
   latestTurn: OrchestrationLatestTurn | null,
   messages: readonly OrchestrationMessage[],
+  observedTurnId: OrchestrationLatestTurn["turnId"] | null = null,
 ): string | null {
   if (latestTurn?.requestMessageId === requestMessageId) {
     if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
@@ -90,14 +93,16 @@ export function correlatedVoiceReply(
     return message?.role === "assistant" && !message.streaming ? message.text : null;
   }
   const request = messages.find((item) => item.id === requestMessageId && item.role === "user");
-  if (!request?.turnId) return null;
-  const replies = messages.filter(
-    (item) => item.turnId === request.turnId && item.role === "assistant",
-  );
+  const turnId = observedTurnId ?? request?.turnId;
+  if (!turnId) return null;
+  const replies = messages.filter((item) => item.turnId === turnId && item.role === "assistant");
   if (replies.some((item) => item.streaming)) return null;
   const reply = replies.at(-1);
   if (reply) return reply.text;
-  if (latestTurn && latestTurn.requestedAt > request.createdAt) {
+  // The voice turn was last seen still running, since it ends only while it is
+  // the latest turn, so its reply may still arrive.
+  if (observedTurnId !== null) return null;
+  if (latestTurn && request && latestTurn.requestedAt > request.createdAt) {
     throw new Error("The bot turn did not complete. Continue in chat.");
   }
   return null;

@@ -287,6 +287,43 @@ const assistant: OrchestrationMessage = {
 };
 
 describe("accepted bot turn correlation", () => {
+  it("uses the observed turn when the request message has no turnId", () => {
+    const request: OrchestrationMessage = {
+      ...assistant,
+      id: MessageId.make("request-1"),
+      role: "user",
+      turnId: null,
+      createdAt: latestTurn.requestedAt,
+    };
+    const newerTurn: OrchestrationLatestTurn = {
+      ...latestTurn,
+      turnId: TurnId.make("turn-2"),
+      requestMessageId: MessageId.make("request-2"),
+      requestedAt: "2026-09-07T00:00:02.000Z",
+    };
+    const unrelated = { ...assistant, turnId: newerTurn.turnId, text: "Other reply" };
+    expect(
+      correlatedVoiceReply(
+        "request-1",
+        newerTurn,
+        [request, assistant, unrelated],
+        latestTurn.turnId,
+      ),
+    ).toBe("Exact reply");
+    expect(
+      correlatedVoiceReply(
+        "request-1",
+        newerTurn,
+        [request, { ...assistant, streaming: true }],
+        latestTurn.turnId,
+      ),
+    ).toBeNull();
+    // Still running when replaced, so the call keeps waiting for its reply.
+    expect(
+      correlatedVoiceReply("request-1", newerTurn, [request, unrelated], latestTurn.turnId),
+    ).toBeNull();
+  });
+
   it("finds a completed voice reply after a newer chat turn replaces latestTurn", () => {
     const request: OrchestrationMessage = {
       ...assistant,
