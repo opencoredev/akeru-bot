@@ -651,6 +651,46 @@ function RailBotButton({
   );
 }
 
+/** One group in the icon-collapsed rail, with a name tooltip and its unread dot. */
+function RailGroupButton({
+  group,
+  bots,
+  isActive,
+  onSelect,
+}: {
+  group: Group;
+  bots: readonly Bot[];
+  isActive: boolean;
+  onSelect: (group: Group) => void;
+}) {
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-current={isActive || undefined}
+            onClick={() => onSelect(group)}
+            className={cn(
+              "relative flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive ? "bg-sidebar-row-active" : "hover:bg-sidebar-row-hover",
+            )}
+          >
+            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
+          </button>
+        }
+      />
+      <TooltipPopup side="right">{group.name}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 const GroupRosterRow = memo(function GroupRosterRow({
   group,
   bots,
@@ -1421,31 +1461,17 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
               <ul data-testid="roster-rail" className="flex flex-col items-center gap-1">
                 {visibleGroups.map((group) => (
                   <li key={group.id} className="list-none">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-current={pathname === `/groups/${group.id}` || undefined}
-                            onClick={() =>
-                              void navigate({
-                                to: "/groups/$groupId",
-                                params: { groupId: group.id },
-                              })
-                            }
-                            className={cn(
-                              "flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              pathname === `/groups/${group.id}`
-                                ? "bg-sidebar-row-active"
-                                : "hover:bg-sidebar-row-hover",
-                            )}
-                          >
-                            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
-                          </button>
-                        }
-                      />
-                      <TooltipPopup side="right">{group.name}</TooltipPopup>
-                    </Tooltip>
+                    <RailGroupButton
+                      group={group}
+                      bots={bots}
+                      isActive={pathname === `/groups/${group.id}`}
+                      onSelect={(selected) =>
+                        void navigate({
+                          to: "/groups/$groupId",
+                          params: { groupId: selected.id },
+                        })
+                      }
+                    />
                   </li>
                 ))}
                 {visibleBots.map((bot) => (
