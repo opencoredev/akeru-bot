@@ -291,6 +291,60 @@ describe("group runtime errors", () => {
     expect(secondInput.threadId).toBe(firstInput.threadId);
   });
 
+  it("keeps a follow-up in the same chat after switching groups mid-send", async () => {
+    let acceptFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstAccepted = new Promise<void>((resolve) => (acceptFirst = resolve));
+    const firstStartedPromise = new Promise<void>((resolve) => (firstStarted = resolve));
+    mocks.startTurn = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        firstStarted();
+        await firstAccepted;
+        return { _tag: "Success" };
+      })
+      .mockResolvedValue({ _tag: "Success" });
+    mocks.serverGroups = [{ id: "group-1" }, { id: "group-2" }];
+    mocks.projects = [
+      {
+        id: "project-1",
+        environmentId: mocks.primaryEnvironmentId,
+        defaultModelSelection: null,
+      },
+    ];
+    mocks.groups = ["group-1", "group-2"].map((id) => ({
+      id,
+      name: id,
+      bossBotId: "bot-1",
+      members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+      createdAt: "2026-09-13T00:00:00.000Z",
+      updatedAt: "2026-09-13T00:00:00.000Z",
+    })) as Group[];
+    mocks.bots = [
+      {
+        id: "bot-1",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
+        runtimeMode: "full-access",
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const first = useGroupThreadRuntime("group-1").send("Compare A and B", []);
+    hooks.beginRender();
+    useGroupThreadRuntime("group-2");
+    hooks.beginRender();
+    const followUp = useGroupThreadRuntime("group-1").send("Also include C", []);
+    await firstStartedPromise;
+
+    acceptFirst();
+    expect(await Promise.all([first, followUp])).toEqual([true, true]);
+    const firstInput = mocks.startTurn.mock.calls[0]?.[0].input;
+    const secondInput = mocks.startTurn.mock.calls[1]?.[0].input;
+    expect(secondInput.bootstrap).toBeUndefined();
+    expect(secondInput.threadId).toBe(firstInput.threadId);
+  });
+
   it("surfaces the persisted provider error for a failed turn", () => {
     mocks.threadShells = [
       {

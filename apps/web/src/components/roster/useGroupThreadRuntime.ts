@@ -315,10 +315,13 @@ export function useGroupThreadRuntime(groupId: string) {
       setSending(true);
       setError(null);
       // Bind the queued send to this group's chat; the ref moves on if the user switches groups.
-      const retained = retainedThreadRef.current;
+      const queuedRetained = retainedThreadRef.current;
       return sendQueueRef.current.enqueue(async () => {
         setError(null);
         const createdAt = new Date().toISOString();
+        // Leaving and returning to this group replaces the ref, so prefer the live one.
+        const live = retainedThreadRef.current;
+        const retained = live.groupId === groupId ? live : queuedRetained;
         const currentThreadRef = retained.threadRef;
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
@@ -373,6 +376,9 @@ export function useGroupThreadRuntime(groupId: string) {
             return false;
           }
           retained.threadRef = scopeThreadRef(environmentId, threadId);
+          if (retainedThreadRef.current.groupId === groupId) {
+            retainedThreadRef.current.threadRef ??= retained.threadRef;
+          }
           return true;
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : "Could not send the message.");
