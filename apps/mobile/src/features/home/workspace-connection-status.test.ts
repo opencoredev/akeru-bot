@@ -199,4 +199,26 @@ describe("workspace connection status", () => {
       showsProgress: false,
     });
   });
+
+  it("stays quiet offline with no environments configured", () => {
+    const state = workspaceState({
+      hasConnections: false,
+      hasReadyEnvironment: false,
+      networkStatus: "offline",
+    });
+
+    expect(workspaceConnectionStatusPresentation(state, t)).toBeNull();
+  });
+
+  it("shows chat syncing ahead of another environment's error", () => {
+    const state = workspaceState({
+      hasPendingShellSnapshot: true,
+      connectionError: "Could not reach ms-a2",
+    });
+
+    expect(workspaceConnectionStatusPresentation(state, t)).toEqual({
+      label: "Syncing chats…",
+      showsProgress: true,
+    });
+  });
 });

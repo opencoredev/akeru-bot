@@ -18,7 +18,7 @@ export function shouldShowWorkspaceConnectionStatus(state: WorkspaceState): bool
   // in Settings → Environments carries the per-environment state, and the
   // banner would just replace the header menu with an indefinite spinner.
   return (
-    state.networkStatus === "offline" ||
+    (state.hasConnections && state.networkStatus === "offline") ||
     state.hasPendingShellSnapshot ||
     (state.hasConnections && !state.isLoadingConnections && !state.hasReadyEnvironment)
   );
@@ -35,10 +35,11 @@ export function workspaceConnectionStatusLabel(state: WorkspaceState, t: Transla
   if (connectingCount > 1) {
     return t("Reconnecting {count} environments…", { count: connectingCount });
   }
-  if (state.connectionError !== null) return state.connectionError;
+  // A syncing shell outranks an error that may belong to another environment.
   if (state.hasPendingShellSnapshot) {
     return state.hasLoadedShellSnapshot ? t("Syncing chats…") : t("Loading chats…");
   }
+  if (state.connectionError !== null) return state.connectionError;
   return t("Not connected");
 }
 
@@ -52,7 +53,6 @@ export function workspaceConnectionStatusPresentation(
     label: workspaceConnectionStatusLabel(state, t),
     showsProgress:
       state.networkStatus !== "offline" &&
-      state.connectionError === null &&
       (state.connectingEnvironments.length > 0 || state.hasPendingShellSnapshot),
   };
 }

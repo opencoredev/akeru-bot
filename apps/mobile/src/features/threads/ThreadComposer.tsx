@@ -329,9 +329,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   });
   // Plain chats without a bot or group get no name prompt — the composer
   // placeholder stays neutral rather than echoing the chat title.
-  const composerBotName =
-    bot?.name ??
-    (composerIdentity.isGroup ? composerIdentity.title : providerBotName(composerProviderDriver));
+  const composerBotName = composerIdentity.isGroup
+    ? composerIdentity.title
+    : (bot?.name ?? providerBotName(composerProviderDriver));
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);

@@ -1493,7 +1493,7 @@ describe("deriveGroupSpeakerLabels", () => {
       message("ren-2", 8, "assistant", ren),
     ]);
 
-    expect(Object.fromEntries(deriveGroupSpeakerLabels(feed, mira))).toEqual({
+    expect(Object.fromEntries(deriveGroupSpeakerLabels(feed, { bossBotId: mira }))).toEqual({
       "boss-1": mira,
       "ren-1": ren,
     });
@@ -1502,5 +1502,19 @@ describe("deriveGroupSpeakerLabels", () => {
   it("labels nothing outside a group chat", () => {
     const feed = feedOf([message("mira-1", 1, "assistant", mira)]);
     expect(deriveGroupSpeakerLabels(feed, null).size).toBe(0);
+  });
+
+  it("labels named replies in a group without a boss", () => {
+    const feed = feedOf([
+      message("user-1", 1, "user"),
+      message("unnamed", 2, "assistant"),
+      message("mira-1", 3, "assistant", mira),
+      message("ren-1", 4, "assistant", ren),
+    ]);
+
+    expect(Object.fromEntries(deriveGroupSpeakerLabels(feed, { bossBotId: null }))).toEqual({
+      "mira-1": mira,
+      "ren-1": ren,
+    });
   });
 });

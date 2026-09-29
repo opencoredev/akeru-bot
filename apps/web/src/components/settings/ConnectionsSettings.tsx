@@ -2141,9 +2141,11 @@ export function ConnectionsSettings() {
         : visibleDesktopNetworkAdvertisedEndpoints,
     [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
-  const isLocalBackendRemotelyReachable = isAdvertisedEndpointRemotelyReachable(
-    desktopAdvertisedEndpoints,
-  );
+  // Desktop reports what it exposes; a browser has no endpoint list and relies
+  // on the server's auth policy.
+  const isLocalBackendRemotelyReachable = desktopBridge
+    ? isAdvertisedEndpointRemotelyReachable(visibleDesktopAdvertisedEndpoints)
+    : currentAuthPolicy === "remote-reachable";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),

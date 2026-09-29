@@ -1800,21 +1800,22 @@ function mergeDelegationCards(
  * In a group chat, the assistant messages that start a new speaker run, keyed
  * by message id to the bot that spoke. A message without `respondingBotId` is
  * the boss's, as on web. Pass the presented feed so labels follow what is
- * visible; direct chats (no `groupBossBotId`) get no labels.
+ * visible; direct chats (no `group`) get no labels. A group without a boss
+ * labels only replies that name their bot.
  */
 export function deriveGroupSpeakerLabels(
   feed: ReadonlyArray<ThreadFeedEntry>,
-  groupBossBotId: BotId | null,
+  group: { readonly bossBotId: BotId | null } | null,
 ): ReadonlyMap<string, BotId> {
   const labels = new Map<string, BotId>();
-  if (groupBossBotId === null) return labels;
+  if (group === null) return labels;
   let previousSpeaker: BotId | null = null;
   for (const entry of feed) {
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     const { message } = entry;
     if (message.text.trim().length === 0 && (message.attachments ?? []).length === 0) continue;
-    const speaker = message.respondingBotId ?? groupBossBotId;
-    if (speaker !== previousSpeaker) labels.set(message.id, speaker);
+    const speaker = message.respondingBotId ?? group.bossBotId;
+    if (speaker !== null && speaker !== previousSpeaker) labels.set(message.id, speaker);
     previousSpeaker = speaker;
   }
   return labels;

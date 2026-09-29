@@ -22,12 +22,16 @@ const COMMAND_TIMEOUT_MS = 10_000;
 
 const commandOutput = (command: string, args: ReadonlyArray<string>) =>
   Effect.callback<{ readonly ok: boolean; readonly stdout: string }, never>((resume) => {
-    NodeChildProcess.execFile(
+    const child = NodeChildProcess.execFile(
       command,
       args,
       { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
       (error, stdout) => resume(Effect.succeed({ ok: error === null, stdout })),
     );
+    // An interrupted doctor request stops its probe instead of waiting out the timeout.
+    return Effect.sync(() => {
+      child.kill();
+    });
   });
 
 const commandOk = async (command: string, args: ReadonlyArray<string>) =>

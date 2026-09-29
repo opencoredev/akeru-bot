@@ -183,8 +183,8 @@ export interface ThreadFeedProps {
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   /** Bots by id, so delegation cards can show the child bot's name and avatar. */
   readonly botsById?: ReadonlyMap<string, OrchestrationBot>;
-  /** Set in group chats: assistant messages without a responding bot belong to the boss. */
-  readonly groupBossBotId?: BotId | null;
+  /** Set in group chats: assistant messages without a responding bot belong to the boss, if any. */
+  readonly speakerGroup?: { readonly bossBotId: BotId | null } | null;
   readonly contentPresentation: ThreadContentPresentation;
   readonly agentLabel: string;
   readonly latestTurn: ThreadFeedLatestTurn | null;
@@ -2082,34 +2082,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       ? props.latestTurn.turnId
       : null;
   const speakerLabels = useMemo(
-    () => deriveGroupSpeakerLabels(presentedFeed, props.groupBossBotId ?? null),
-    [presentedFeed, props.groupBossBotId],
+    () => deriveGroupSpeakerLabels(presentedFeed, props.speakerGroup ?? null),
+    [presentedFeed, props.speakerGroup],
   );
-  // LegendList does not invalidate visible rows when only the renderItem closure changes.
-  // Keep row-local interaction props in extraData so disclosures and copy feedback repaint.
-  const listAppearanceData = useMemo(
-    () => ({
-      copiedRowId,
-      expandedWorkRows,
-      iconSubtleColor,
-      markdownStyles,
-      reviewCommentColors,
-      speakerLabels,
-      userBubbleColor,
-      viewportWidth,
-    }),
-    [
-      copiedRowId,
-      expandedWorkRows,
-      iconSubtleColor,
-      markdownStyles,
-      reviewCommentColors,
-      speakerLabels,
-      userBubbleColor,
-      viewportWidth,
-    ],
-  );
-
   useEffect(() => {
     const previous = previousLatestTurnRef.current;
     previousLatestTurnRef.current = props.latestTurn;

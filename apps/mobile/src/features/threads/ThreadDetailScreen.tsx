@@ -283,6 +283,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const groupId = props.selectedThread.groupId ?? null;
   const groupBossBotId =
     groupId === null ? null : (groups.find((group) => group.id === groupId)?.bossBotId ?? null);
+  const speakerGroup = useMemo(
+    () => (groupId === null ? null : { bossBotId: groupBossBotId }),
+    [groupBossBotId, groupId],
+  );
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can swallow the IME hide callbacks when the app is backgrounded
@@ -694,7 +698,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             workspaceRoot={props.threadCwd}
             feed={props.selectedThreadFeed}
             botsById={props.botsById}
-            groupBossBotId={groupBossBotId}
+            speakerGroup={speakerGroup}
             contentPresentation={props.contentPresentation}
             agentLabel={agentLabel}
             latestTurn={props.selectedThread.latestTurn}

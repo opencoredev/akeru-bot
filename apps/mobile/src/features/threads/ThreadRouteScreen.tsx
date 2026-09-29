@@ -382,9 +382,11 @@ function ThreadRouteContent(
       })
     : null;
   const headerBotName = headerIdentity?.title ?? "Bot";
+  // A group keeps its name in the title; its chat title stays in the subtitle.
   const headerTitle =
     !usesNativeHeaderGlass &&
     selectedThread !== null &&
+    (selectedThread.groupId ?? null) === null &&
     selectedThread.title !== PLACEHOLDER_THREAD_TITLE
       ? selectedThread.title
       : headerBotName;
