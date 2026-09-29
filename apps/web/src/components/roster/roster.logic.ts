@@ -289,8 +289,10 @@ function collectPreviewText(node: MarkdownNode, parts: string[]): void {
     case "text":
     case "inlineCode":
     case "code":
-    case "html":
       parts.push(node.value);
+      break;
+    case "html":
+      parts.push(visibleHtmlText(node.value));
       break;
     case "image":
     case "imageReference":
@@ -307,6 +309,17 @@ function collectPreviewText(node: MarkdownNode, parts: string[]): void {
   // Block boundaries become spaces so adjacent paragraphs or list items never
   // glue their words together.
   if (node.type !== "text" && !isPhrasingNode(node)) parts.push(" ");
+}
+
+/**
+ * The words raw HTML shows once the chat renders it: tags and comments go,
+ * and line-breaking elements leave a space so their words do not glue.
+ */
+function visibleHtmlText(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+    .replace(/<\/?(?:br|p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|pre|hr)\b[^>]*>/gi, " ")
+    .replace(/<[^>]*>/g, "");
 }
 
 function isPhrasingNode(node: MarkdownNode): boolean {

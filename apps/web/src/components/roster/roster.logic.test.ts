@@ -474,6 +474,16 @@ describe("resolveBotPresence", () => {
   });
 });
 
+describe("flattenMarkdownPreview with raw HTML", () => {
+  it("shows the text HTML renders, not its tags", () => {
+    expect(flattenMarkdownPreview("<b>Done</b> and <i>shipped</i>")).toBe("Done and shipped");
+    expect(flattenMarkdownPreview("First<br>second")).toBe("First second");
+    expect(flattenMarkdownPreview("<div>\nBlock\n</div>\n\nAfter <!-- note -->")).toBe(
+      "Block After",
+    );
+  });
+});
+
 describe("resolveLatestRosterMessage", () => {
   const messages = (
     entries: Array<{ role: "user" | "assistant" | "system"; text: string; at: string }>,
