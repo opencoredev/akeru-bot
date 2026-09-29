@@ -276,15 +276,16 @@ const make = Effect.gen(function* () {
           input.inputTokens === current.inputTokens &&
           input.outputTokens === current.outputTokens
         ) {
-          const cachedInputTokens = Math.max(
-            current.cachedInputTokens,
-            input.cachedInputTokens ?? 0,
-          );
-          const cacheCreationTokens = Math.max(
-            current.cacheCreationTokens,
-            input.cacheCreationTokens ?? 0,
-          );
+          const completeBreakdown =
+            input.cachedInputTokens !== undefined && input.cacheCreationTokens !== undefined;
+          const cachedInputTokens = completeBreakdown
+            ? input.cachedInputTokens!
+            : Math.max(current.cachedInputTokens, input.cachedInputTokens ?? 0);
+          const cacheCreationTokens = completeBreakdown
+            ? input.cacheCreationTokens!
+            : Math.max(current.cacheCreationTokens, input.cacheCreationTokens ?? 0);
           if (
+            (!current.settledAt || input.settledAt > current.settledAt) &&
             cachedInputTokens + cacheCreationTokens <= input.inputTokens &&
             (cachedInputTokens !== current.cachedInputTokens ||
               cacheCreationTokens !== current.cacheCreationTokens)

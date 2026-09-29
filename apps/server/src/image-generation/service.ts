@@ -73,9 +73,7 @@ function rowHealth(input: {
   if (!input.connected) return "missing";
   if (!input.enabled) return "disabled";
   if (input.requestHealth?.lastCredentialProbeFailure?.failureKind === "revoked") return "revoked";
-  if (input.subscriptionHealth === "expired" || input.subscriptionHealth === "revoked") {
-    return input.subscriptionHealth;
-  }
+  if (input.subscriptionHealth === "revoked") return "revoked";
   return input.requestHealth?.health ?? "detected";
 }
 

@@ -27,6 +27,8 @@ environments that are still loading, stale, or unavailable.
 Per-bot usage keeps estimated model cost separate from subscription limits. A cost estimate is based
 on the model rate table and is not money spent. Subscription pool meters are provider-reported
 percentages; when a provider does not expose a meter, the value is shown as unavailable.
+If a provider later corrects the cache token breakdown for a turn, the cost estimate updates
+without counting the turn's tokens again.
 Tool executions and routine runs are recorded as separate zero-token lifecycle entries because those
 boundaries do not expose a separate provider bill. Their model tokens remain in the surrounding turn.
 Recall and extraction are internal memory stages without a separately billed provider boundary, so

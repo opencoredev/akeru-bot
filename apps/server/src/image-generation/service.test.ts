@@ -38,6 +38,7 @@ function seedOAuth(authPath: string, provider: string) {
     type: "oauth",
     access: `${provider}-expired-access`,
     refresh: `${provider}-refresh`,
+    accountId: "chatgpt-test-account",
     expires: 0,
   };
   NodeFS.writeFileSync(authPath, JSON.stringify(existing));
@@ -94,7 +95,7 @@ describe("image provider rows", () => {
     expect(chatgpt?.healthTest).toEqual({ status: "not-run" });
   });
 
-  it("offers reconnect for an expired OAuth credential before any image request", () => {
+  it("keeps an expired but refreshable OAuth credential connected", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "openai-codex");
     const service = new SubscriptionAuthService(authPath);
@@ -103,10 +104,53 @@ describe("image provider rows", () => {
     );
     expect(chatgpt).toMatchObject({
       connected: true,
-      health: "expired",
-      repairAction: "Reconnect ChatGPT subscription",
+      health: "detected",
       healthTest: { status: "not-run" },
     });
+    expect(chatgpt?.repairAction).toBeUndefined();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ access_token: "refreshed", refresh_token: "rotated", expires_in: 3600 }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+    try {
+      expect(await service.getAccessToken("openai-codex")).toBe("refreshed");
+      expect(rows(service, { ...baseSettings, chatgptEnabled: true })[0]?.health).toBe("detected");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("offers reconnect after an OAuth refresh grant is rejected", async () => {
+    const { authPath } = fixture();
+    seedOAuth(authPath, "openai-codex");
+    const service = new SubscriptionAuthService(authPath);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "invalid_grant" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    try {
+      expect(await service.getAccessToken("openai-codex")).toBeUndefined();
+      expect(rows(service, { ...baseSettings, chatgptEnabled: true })[0]).toMatchObject({
+        health: "revoked",
+        repairAction: "Reconnect ChatGPT subscription",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("reports disabled for a connected-but-disabled provider", () => {

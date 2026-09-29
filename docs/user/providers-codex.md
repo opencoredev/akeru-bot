@@ -12,7 +12,8 @@ Akeru. You do not need the Codex CLI for Akeru bot turns.
 5. Return to Akeru and wait for the account status to update.
 
 Akeru supports ChatGPT Plus, Pro, Business, Enterprise, and Edu. Select **Check OAuth** to test the
-stored login. Use **Reconnect** after an expired or revoked login.
+stored login. Akeru refreshes an elapsed access token when it next needs one. Use **Reconnect** if
+the refresh grant is rejected or **Check OAuth** reports a revoked login.
 
 ## How Codex runs
 

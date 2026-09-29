@@ -682,6 +682,55 @@ it.layer(layer)("BotUsageLedger", (it) => {
       ]);
     }),
   );
+
+  it.effect("accepts a newer corrected cache mix and ignores an older replay", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-corrected-cache-breakdown");
+      const reservation = yield* ledger.reserve(reserveInput("corrected-cache", { botId }));
+      const reported = {
+        reservationId: reservation.reservationId,
+        state: "reported" as const,
+        inputTokens: 100,
+        outputTokens: 5,
+        reasoningTokens: null,
+      };
+      yield* ledger.settle({
+        ...reported,
+        cachedInputTokens: 80,
+        cacheCreationTokens: 10,
+        settledAt: "2026-08-30T20:01:00.000Z",
+      });
+      yield* ledger.settle({
+        ...reported,
+        cachedInputTokens: 70,
+        cacheCreationTokens: 20,
+        settledAt: "2026-08-30T20:03:00.000Z",
+      });
+      yield* ledger.settle({
+        ...reported,
+        cachedInputTokens: 80,
+        cacheCreationTokens: 10,
+        settledAt: "2026-08-30T20:02:00.000Z",
+      });
+      yield* ledger.settle({ ...reported, settledAt: "2026-08-30T20:04:00.000Z" });
+
+      const summary = yield* ledger.summarize(botId);
+      assert.equal(summary.consumedTokens, 105);
+      assert.equal(summary.entries[0]?.cachedInputTokens, 70);
+      assert.equal(summary.entries[0]?.cacheCreationTokens, 20);
+      assert.deepEqual((yield* ledger.pricingTotals(botId)).models, [
+        {
+          model: "gpt-5.6-sol",
+          inputTokens: 100,
+          cachedInputTokens: 70,
+          cacheCreationTokens: 20,
+          outputTokens: 5,
+          reasoningTokens: 0,
+        },
+      ]);
+    }),
+  );
 });
 
 it("reconciles persisted reservations when the ledger restarts", () =>
