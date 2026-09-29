@@ -385,22 +385,30 @@ describe("subscription auth storage", () => {
           : { type: "oauth", access, refresh: `${access}-refresh`, expires: Date.now() + 60_000 };
       NodeFS.writeFileSync(authPath, JSON.stringify({ xai: credential("old-key") }));
       const responses = new Map<string, (response: Response) => void>();
+      const oldRequest = requestSignal();
+      const newRequest = requestSignal();
       vi.stubGlobal(
         "fetch",
         vi.fn(
           (_url: string, init: RequestInit) =>
             new Promise<Response>((resolve) => {
               const authorization = new Headers(init.headers).get("Authorization");
-              if (authorization) responses.set(authorization, resolve);
+              if (authorization) {
+                responses.set(authorization, resolve);
+                if (authorization === "Bearer old-key") oldRequest.markRequested();
+                if (authorization === "Bearer new-key") newRequest.markRequested();
+              }
             }),
         ),
       );
       try {
-        const oldService = new SubscriptionAuthService(authPath);
+        const oldService = await makeTestSubscriptionAuthService(authPath);
         const oldCheck = oldService.testHealth("xai");
+        await oldRequest.requested;
         NodeFS.writeFileSync(authPath, JSON.stringify({ xai: credential("new-key") }));
-        const newService = new SubscriptionAuthService(authPath);
+        const newService = await makeTestSubscriptionAuthService(authPath);
         const newCheck = newService.testHealth("xai");
+        await newRequest.requested;
         const respondNew = responses.get("Bearer new-key");
         const respondOld = responses.get("Bearer old-key");
         if (!respondNew || !respondOld) throw new TypeError("Expected both health requests.");
@@ -409,7 +417,7 @@ describe("subscription auth storage", () => {
         respondOld(new Response("{}", { status: 401 }));
         await oldCheck;
 
-        oldService.reload();
+        await runWithNodeServices(oldService.reload());
         expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8")).xai.access).toBe("new-key");
         expect(oldService.statuses().find((entry) => entry.provider === "xai")?.health).toBe(
           "healthy",
