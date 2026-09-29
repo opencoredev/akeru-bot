@@ -939,7 +939,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       if (scopes.has("private")) targets.add("user");
       if (scopes.has("bot")) targets.add("memory");
       if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
-      if (targets.size === 0) return undefined;
+      const canShare =
+        scopes.has("project") ||
+        scopes.has("workspace") ||
+        (resolved.groupId !== null && scopes.has("group"));
+      if (targets.size === 0 && !(canShare && Option.isSome(memoryApprovals))) return undefined;
       // Shared facts go through MemoryApprovals, which saves them directly in
       // auto mode or opens an approval card and inbox item in ask mode.
       const shareFact: AkeruMemoryShareFact | undefined =

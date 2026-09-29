@@ -53,6 +53,26 @@ describe("memory tool shared facts", () => {
     });
   });
 
+  it("shares for an agent granted only shared scopes, but keeps its documents closed", async () => {
+    const shareFact = vi.fn<AkeruMemoryShareFact>(async () => ({ status: "pending" }));
+    const sharedOnly = createBotMemoryToolHandler(untouchedStore, access, new Set(), shareFact);
+    const invoke = (input: Record<string, unknown>) =>
+      sharedOnly.memory({ toolId: "memory", toolCallId: "call-1", input } as Parameters<
+        typeof sharedOnly.memory
+      >[0]);
+
+    await expect(
+      invoke({
+        target: "user",
+        operations: [],
+        share: { fact: "Deploys happen on Fridays.", scope: "project" },
+      }),
+    ).resolves.toMatchObject({ share: { scope: "project", status: "pending" } });
+    await expect(invoke({ target: "user", operations: [] })).rejects.toThrow(
+      "outside this bot's access grant",
+    );
+  });
+
   it("passes sensitivity through and reports a saved share", async () => {
     const shareFact = vi.fn<AkeruMemoryShareFact>(async () => ({ status: "saved" }));
     const result = await call(shareFact, {

@@ -64,7 +64,10 @@ export function createBotMemoryToolHandler(
   return {
     memory: async ({ input }) => {
       const decoded = input as AkeruMemoryToolInput;
-      if (!allowedTargets.has(decoded.target)) {
+      // A share with no document edits never touches the target document, so an agent
+      // granted only shared scopes can still share.
+      const shareOnly = decoded.share !== undefined && decoded.operations.length === 0;
+      if (!shareOnly && !allowedTargets.has(decoded.target)) {
         throw new Error(`Memory target '${decoded.target}' is outside this bot's access grant.`);
       }
       if (decoded.share) {
