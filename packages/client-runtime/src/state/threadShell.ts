@@ -68,7 +68,7 @@ export function latestOwnerThreadIds(
   const byBot = new Map<string, OrchestrationThreadShell>();
   const byGroup = new Map<string, OrchestrationThreadShell>();
   for (const thread of threads) {
-    if (thread.archivedAt !== null) continue;
+    if (thread.archivedAt !== null || thread.parentThreadId != null) continue;
     if (thread.botId) {
       const current = byBot.get(thread.botId);
       if (current === undefined || isNewerThread(thread, current)) byBot.set(thread.botId, thread);

@@ -64,7 +64,15 @@ describe("latestOwnerThreadIds", () => {
       thread("a-old", "2026-06-01T00:00:00.000Z", { botId: "a" }),
       thread("a-new", "2026-06-02T00:00:00.000Z", { botId: "a" }),
       thread("a-archived", "2026-06-03T00:00:00.000Z", { botId: "a", archived: true }),
+      {
+        ...thread("a-delegated", "2026-06-04T00:00:00.000Z", { botId: "a" }),
+        parentThreadId: ThreadId.make("a-new"),
+      },
       thread("g-1", "2026-06-01T00:00:00.000Z", { groupId: "g" }),
+      {
+        ...thread("g-delegated", "2026-06-04T00:00:00.000Z", { groupId: "g" }),
+        parentThreadId: ThreadId.make("g-1"),
+      },
       thread("plain", "2026-06-04T00:00:00.000Z", {}),
     ]);
     expect(latest.byBot.get("a")).toBe("a-new");
