@@ -82,13 +82,21 @@ async function syncFile(filePath: string): Promise<void> {
   }
 }
 
+const UNSUPPORTED_DIRECTORY_SYNC = new Set(["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]);
+
+/** Flushes a directory entry where the platform allows it. Windows cannot sync a directory. */
 async function syncDirectory(directory: string): Promise<void> {
-  if (process.platform === "win32") return;
-  const handle = await NodeFSP.open(directory, "r");
   try {
-    await handle.sync();
-  } finally {
-    await handle.close();
+    const handle = await NodeFSP.open(directory, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== undefined && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
+    throw error;
   }
 }
 
