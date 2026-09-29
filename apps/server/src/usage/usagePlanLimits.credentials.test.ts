@@ -47,7 +47,7 @@ it.effect("drops the previous account's windows when credentials change", () =>
   }),
 );
 
-it.effect("keeps meters across token rotation, usage failures and credential lookup failures", () =>
+it.effect("keeps meters across token rotation, usage failures and unavailable tokens", () =>
   Effect.gen(function* () {
     fetchMock
       .mockReset()
@@ -70,8 +70,7 @@ it.effect("keeps meters across token rotation, usage failures and credential loo
     let accountId = "same-account";
     const read = yield* makePlanLimitsReader(async (provider) => {
       if (provider !== "anthropic" || !connected) return undefined;
-      if (lookupFails) throw new Error("refresh temporarily failed");
-      return { accessToken, accountId };
+      return { accessToken: lookupFails ? null : accessToken, accountId };
     });
     try {
       const first = yield* read("anthropic");
@@ -90,6 +89,9 @@ it.effect("keeps meters across token rotation, usage failures and credential loo
       expect(fetchMock).toHaveBeenCalledTimes(2);
       lookupFails = true;
       expect(yield* read("anthropic")).toEqual(first);
+      // A replacement account whose token is unavailable never shows the old account's meters.
+      accountId = "replacement-account";
+      expect((yield* read("anthropic"))[0]?.windows).toEqual([]);
       lookupFails = false;
       accountId = "different-account";
       expect((yield* read("anthropic"))[0]?.windows).toEqual([]);

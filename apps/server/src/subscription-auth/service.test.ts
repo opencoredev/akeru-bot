@@ -107,9 +107,10 @@ describe("subscription auth storage", () => {
       vi.fn(async () => new Response("unavailable", { status: 503 })),
     );
     try {
-      await expect(service.getPlanAccess("openai-codex")).rejects.toThrow(
-        "temporarily unavailable",
-      );
+      expect(await service.getPlanAccess("openai-codex")).toEqual({
+        accessToken: null,
+        accountId: "account-123",
+      });
       expect(
         service.statuses().find((status) => status.provider === "openai-codex")?.connected,
       ).toBe(true);

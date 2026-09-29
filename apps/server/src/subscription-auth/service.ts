@@ -953,9 +953,13 @@ export class SubscriptionAuthService {
     return this.getAccessToken(provider);
   }
 
+  /**
+   * The stored plan account and its access token. `accessToken` is null while the token is
+   * temporarily unavailable, so callers still know which account is connected.
+   */
   async getPlanAccess(
     provider: SubscriptionProviderId,
-  ): Promise<{ readonly accessToken: string; readonly accountId: string } | undefined> {
+  ): Promise<{ readonly accessToken: string | null; readonly accountId: string } | undefined> {
     this.reload();
     const credential = this.data[provider];
     if (
@@ -967,18 +971,17 @@ export class SubscriptionAuthService {
       this.data[provider] = { ...credential, connectionId: NodeCrypto.randomUUID() };
       this.save();
     }
-    const accessToken = await this.getPlanAccessToken(provider);
+    const accessToken = await this.getPlanAccessToken(provider).catch(() => undefined);
     this.reload();
     const current = this.data[provider];
     if (!current) return undefined;
-    if (!accessToken) throw new Error("Plan access is temporarily unavailable.");
     const accountId =
       current.type === "oauth" && typeof current.accountId === "string" && current.accountId
         ? current.accountId
         : current.connectionId;
     if (typeof accountId !== "string" || !accountId)
       throw new Error("Plan account identity is unavailable.");
-    return { accessToken: current.access, accountId };
+    return { accessToken: accessToken ? current.access : null, accountId };
   }
 
   getApiKeyCredential(provider: SubscriptionProviderId): ApiKeyCredential | undefined {

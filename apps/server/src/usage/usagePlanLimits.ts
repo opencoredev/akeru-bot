@@ -39,7 +39,8 @@ const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
 ];
 
 export interface PlanAccess {
-  readonly accessToken: string;
+  /** Null while the stored account's token is temporarily unavailable. */
+  readonly accessToken: string | null;
   readonly accountId: string;
 }
 
@@ -510,7 +511,7 @@ function makePlanLimitCache(getPlanAccess: GetPlanAccess) {
   const providerKeys = new Map<LiveSubscriptionProviderId, string>();
   const connections = new Map<
     string,
-    PlanAccess & { readonly provider: LiveSubscriptionProviderId }
+    { readonly accessToken: string; readonly provider: LiveSubscriptionProviderId }
   >();
   const cache = Cache.makeWith<string, CachedPlanLimits>(
     (key) =>
@@ -557,15 +558,15 @@ function makePlanLimitCache(getPlanAccess: GetPlanAccess) {
                 if (previous !== undefined) yield* forget(previous);
                 return null;
               }
-              // A failed credential lookup keeps the last good account's meters.
-              if (access === null)
-                return previous === undefined
-                  ? emptyConnectedLimits(provider)
-                  : (lastGoodPlanLimits.get(previous) ?? emptyConnectedLimits(provider));
+              // Without a known stored account, no cached meters can be attributed to it.
+              if (access === null) return emptyConnectedLimits(provider);
               const key = `${provider}:${access.accountId}`;
               if (previous !== undefined && previous !== key) yield* forget(previous);
               providerKeys.set(provider, key);
-              connections.set(key, { ...access, provider });
+              // A temporarily unavailable token keeps this same account's last good meters.
+              if (access.accessToken === null)
+                return lastGoodPlanLimits.get(key) ?? emptyConnectedLimits(provider);
+              connections.set(key, { accessToken: access.accessToken, provider });
               return (yield* Cache.get(entries, key)).limits;
             }),
           ),
