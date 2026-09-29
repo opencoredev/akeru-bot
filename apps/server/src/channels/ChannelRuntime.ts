@@ -2535,7 +2535,6 @@ const readBoundedWebhookBody = async (
 
 const parseWebhookJson = (body: Buffer): unknown => {
   try {
-    // @effect-diagnostics-next-line preferSchemaOverJson:off - payload shape is checked field by field.
     return JSON.parse(body.toString("utf8")) as unknown;
   } catch {
     return null;

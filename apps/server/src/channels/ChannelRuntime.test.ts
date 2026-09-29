@@ -1683,7 +1683,6 @@ describe("channel runtime", () => {
       const harness = makeHarness({ startTransport: null });
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
       const message = (phoneNumberId: string) =>
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - the webhook signs raw JSON text.
         JSON.stringify({
           object: "whatsapp_business_account",
           entry: [
