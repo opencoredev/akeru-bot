@@ -5804,7 +5804,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("preserves remote workspace identity when only cwd changes", () => {
+  it.effect("reuses the remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
