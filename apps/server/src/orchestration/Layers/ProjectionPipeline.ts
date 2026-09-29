@@ -9,6 +9,7 @@ import {
   type ChatAttachment,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
+  DelegationId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -816,21 +817,54 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       if (event.type !== "delegation.created" && event.type !== "delegation.updated") {
         return Effect.void;
       }
-      return sql`
-        INSERT INTO projection_delegations (delegation_id, record_json)
-        VALUES (
-          ${event.payload.delegation.delegationId},
-          ${JSON.stringify(event.payload.delegation)}
-        )
-        ON CONFLICT (delegation_id) DO UPDATE SET
-          record_json = excluded.record_json
-      `.pipe(
+      const delegation = event.payload.delegation;
+      const recordJson = JSON.stringify(delegation);
+      return Effect.gen(function* () {
+        yield* sql`
+          INSERT INTO projection_delegations (delegation_id, record_json)
+          VALUES (
+            ${delegation.delegationId},
+            ${recordJson}
+          )
+          ON CONFLICT (delegation_id) DO UPDATE SET
+            record_json = excluded.record_json
+        `;
+        // Children created before thread.created carried parent links get
+        // them from their delegation record, whichever projector runs first.
+        if (delegation.childThreadId !== null) {
+          yield* sql`
+            UPDATE projection_threads
+            SET
+              parent_thread_id = ${delegation.parentThreadId},
+              parent_delegation_id = ${delegation.delegationId}
+            WHERE thread_id = ${delegation.childThreadId}
+              AND parent_thread_id IS NULL
+          `;
+        }
+      }).pipe(
         Effect.mapError(
           toPersistenceSqlError("ProjectionPipeline.applyDelegationsProjection:query"),
         ),
-        Effect.asVoid,
       );
     });
+
+    // Parent link for a delegated child whose thread.created event predates
+    // parent fields. Delegations project before threads, so a replay finds it.
+    const delegationParentLink = (threadId: string) =>
+      sql<{ readonly parentThreadId: string; readonly parentDelegationId: string }>`
+        SELECT
+          json_extract(record_json, '$.parentThreadId') AS "parentThreadId",
+          delegation_id AS "parentDelegationId"
+        FROM projection_delegations
+        WHERE json_extract(record_json, '$.childThreadId') = ${threadId}
+        LIMIT 1
+      `.pipe(
+        Effect.map(([row]) => ({
+          parentThreadId: row ? ThreadId.make(row.parentThreadId) : null,
+          parentDelegationId: row ? DelegationId.make(row.parentDelegationId) : null,
+        })),
+        Effect.mapError(toPersistenceSqlError("ProjectionPipeline.delegationParentLink:query")),
+      );
 
     const applyRoutinesProjection: ProjectorDefinition["apply"] = Effect.fn(
       "applyRoutinesProjection",
@@ -999,14 +1033,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadsProjection",
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
-        case "thread.created":
+        case "thread.created": {
+          const parentLink = event.payload.parentThreadId
+            ? {
+                parentThreadId: event.payload.parentThreadId,
+                parentDelegationId: event.payload.parentDelegationId ?? null,
+              }
+            : yield* delegationParentLink(event.payload.threadId);
           yield* projectionThreadRepository.upsert({
             threadId: event.payload.threadId,
             projectId: event.payload.projectId,
             botId: event.payload.botId ?? null,
             groupId: event.payload.groupId ?? null,
-            parentThreadId: event.payload.parentThreadId ?? null,
-            parentDelegationId: event.payload.parentDelegationId ?? null,
+            ...parentLink,
             respondingBotId: null,
             title: event.payload.title,
             modelSelection: event.payload.modelSelection,
@@ -1035,6 +1074,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedAt: null,
           });
           return;
+        }
 
         case "thread.ownership-updated": {
           const existingRow = yield* projectionThreadRepository.getById({
