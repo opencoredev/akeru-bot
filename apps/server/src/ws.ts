@@ -3653,11 +3653,10 @@ const makeWsRpcLayer = (
                       usd: priced.reduce((total, entry) => total + entry.costUsd, 0),
                     }
                   : { status: "unavailable" as const, usd: null };
-              const driverConnection: Record<string, SubscriptionProviderId> = {
+              const driverConnection: Record<string, Exclude<SubscriptionProviderId, "cursor">> = {
                 claude: "anthropic",
                 claudeAgent: "anthropic",
                 codex: "openai-codex",
-                cursor: "cursor",
                 grok: "xai",
                 kimi: "kimi-for-coding",
                 opencode: "opencode-go",
