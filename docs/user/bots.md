@@ -13,6 +13,8 @@ or **Looks right** to move on to naming your bot.
 
 The last step drafts your first message from that plan. Edit it if you like, then send it. Once your
 bot has started on it, the chat opens with your message already in it, and setup fades away.
+If the bot is archived before the chat opens, Akeru clears the pending opening and tells you to
+create or select another bot.
 
 Setup does not ask where the work should go, how often it should run, or which actions it may
 take on its own. Your bot raises those when it reaches the point of needing them.

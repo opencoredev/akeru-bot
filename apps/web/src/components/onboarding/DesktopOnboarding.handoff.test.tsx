@@ -22,7 +22,10 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   environmentId: "onboarding-environment",
   rosterLoaded: true,
-  serverBots: [{ id: "bot-ada" }],
+  serverBots: [{ id: "bot-ada", archivedAt: null }] as Array<{
+    id: string;
+    archivedAt: string | null;
+  }>,
   preview: null as ComponentProps<typeof OnboardingPreview> | null,
   previewMounted: false,
 }));
@@ -191,7 +194,7 @@ beforeEach(() => {
   mocks.previewMounted = false;
   mocks.rosterLoaded = true;
   mocks.environmentId = "onboarding-environment";
-  mocks.serverBots = [{ id: BOT_ID }];
+  mocks.serverBots = [{ id: BOT_ID, archivedAt: null }];
   mocks.navigate.mockResolvedValue(undefined);
   storage = new Map([
     [
@@ -328,7 +331,7 @@ describe("onboarding handoff", () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
 
-    mocks.serverBots = [{ id: BOT_ID }];
+    mocks.serverBots = [{ id: BOT_ID, archivedAt: null }];
     await act(async () => root.render(<DesktopOnboarding />));
     expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith({
       to: "/bots/$botId",
@@ -336,6 +339,24 @@ describe("onboarding handoff", () => {
       replace: true,
     });
     expect(storage.has(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(false);
+  });
+
+  it("clears a pending chat when its bot was archived", async () => {
+    storage.set(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
+    storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, HANDOFF);
+    storage.delete(DESKTOP_ONBOARDING_STORAGE_KEY);
+    mocks.serverBots = [{ id: BOT_ID, archivedAt: "2026-09-29T00:00:00.000Z" }];
+
+    await mount();
+
+    expect(storage.has(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(false);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        title: "Your new bot was archived before its chat opened. Create or select another bot.",
+      }),
+    );
   });
 
   it("keeps the handoff when navigation fails so reload can retry", async () => {

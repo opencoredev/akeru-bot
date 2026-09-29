@@ -1052,7 +1052,16 @@ export function DesktopOnboarding({
       attemptedHandoffRef.current === handoff.botId
     )
       return;
-    if (!serverBots.some((bot) => bot.id === handoff.botId)) {
+    const handoffBot = serverBots.find((bot) => bot.id === handoff.botId);
+    if (handoffBot?.archivedAt) {
+      clearDesktopOnboardingHandoff(window.localStorage);
+      toastManager.add({
+        type: "error",
+        title: "Your new bot was archived before its chat opened. Create or select another bot.",
+      });
+      return;
+    }
+    if (!handoffBot) {
       return;
     }
     const botId = handoff.botId;
