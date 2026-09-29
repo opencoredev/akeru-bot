@@ -259,6 +259,7 @@ export function ChannelConnectionRow({
           <ChannelRepairButton
             size="xs"
             action={repairAction}
+            status={binding.status}
             disabled={locked || (repairAction === "choose-project" && !canMove)}
             managementUrl={connection.managementUrl}
             onRepair={(action) => {
