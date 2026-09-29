@@ -239,7 +239,12 @@ export function ChannelSetupDialog({
           projectId: current.projectId ?? projectId,
         },
       });
-      await discardNew();
+      if (restored._tag === "Failure") {
+        // The failed attach may still have persisted a binding to the new connection.
+        onSaved(connectionId);
+      } else {
+        await discardNew();
+      }
       setBusy(false);
       setConnectError(
         isChannelIdentityConflict(attached)

@@ -446,6 +446,13 @@ describe("ChannelSetupDialog credential update", () => {
     mocks.attach.mockResolvedValue({ _tag: "Failure" });
     await enterNewToken();
     await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(mocks.attach.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+      oldConnection,
+    ]);
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledWith(newConnection);
     expect(container.textContent).toContain(
       "Could not connect with the new credentials or restore the old connection.",
     );
