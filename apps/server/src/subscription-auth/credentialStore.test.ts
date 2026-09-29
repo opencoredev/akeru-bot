@@ -200,6 +200,36 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("restores a damaged credential file when its replacement write fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { authPath } = yield* authFile;
+      yield* fs.writeFileString(authPath, encodeJson({ xai: currentFormat.xai }));
+      const failingFs = {
+        ...fs,
+        writeFileString: (...args: Parameters<typeof fs.writeFileString>) =>
+          fs.writeFileString(
+            args[0].endsWith(".tmp") ? `${authPath}/missing-parent` : args[0],
+            args[1],
+            args[2],
+          ),
+      };
+      const store = yield* subscriptionCredentialStore(authPath).pipe(
+        Effect.provideService(FileSystem.FileSystem, failingFs),
+      );
+      yield* fs.writeFileString(authPath, "{damaged credential file");
+      assert.strictEqual(store.current().servingLastGood, true);
+
+      const error = yield* Effect.flip(
+        store.update((data) => ({ ...data, anthropic: currentFormat.anthropic })),
+      );
+      assert.strictEqual(error.reason, "write");
+      assert.strictEqual(yield* fs.readFileString(authPath), "{damaged credential file");
+      assert.isFalse(yield* fs.exists(`${authPath}.corrupt`));
+      assert.deepStrictEqual(store.current().data, { xai: currentFormat.xai });
+    }),
+  );
+
   it.effect("writes atomically with owner-only permissions and no temp files left", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

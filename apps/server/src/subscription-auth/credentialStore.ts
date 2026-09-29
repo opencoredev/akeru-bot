@@ -295,13 +295,20 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
         Effect.gen(function* () {
           const loaded = settle(state, yield* Effect.result(read), yield* now);
           if (loaded.loadError?.reason === "unreadable") return yield* loaded.loadError;
+          const backupPath = `${filePath}.corrupt`;
           if (loaded.loadError?.reason === "corrupt") {
             yield* fs
-              .rename(filePath, `${filePath}.corrupt`)
+              .rename(filePath, backupPath)
               .pipe(Effect.mapError((cause) => storeError("write", cause)));
           }
           const next = f(loaded.data);
-          fingerprint = yield* writeAtomically(next);
+          fingerprint = yield* writeAtomically(next).pipe(
+            Effect.tapError(() =>
+              loaded.loadError?.reason === "corrupt"
+                ? fs.rename(backupPath, filePath).pipe(Effect.ignore)
+                : Effect.void,
+            ),
+          );
           state = { data: next };
           return next;
         }),
