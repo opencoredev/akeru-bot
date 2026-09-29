@@ -2169,7 +2169,8 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           Effect.catchCause((cause) => {
-            const detail = isUnknownPendingUserInputRequestError(cause)
+            const stale = isUnknownPendingUserInputRequestError(cause);
+            const detail = stale
               ? stalePendingRequestDetail("user-input", event.payload.requestId)
               : Cause.pretty(cause);
             return Effect.gen(function* () {
@@ -2182,6 +2183,8 @@ const make = Effect.gen(function* () {
                 createdAt: event.payload.createdAt,
                 requestId: event.payload.requestId,
               });
+              // Any other failure leaves the question open in its live turn, so it can be answered again.
+              if (!stale) return;
               yield* appendUserInputFailureReply({
                 threadId: event.payload.threadId,
                 requestId: event.payload.requestId,
