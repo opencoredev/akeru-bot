@@ -69,6 +69,7 @@ const harness = (
   options: {
     readonly dispatched?: RoutineDispatchResult;
     readonly signals?: Queue.Queue<string>;
+    readonly delegation?: AkeruDelegationRecord;
   } = {},
 ) => {
   const claims = new Map<string, RoutineClaim>();
@@ -163,7 +164,7 @@ const harness = (
     recordCanceled: () => Effect.sync(() => events.push("run-canceled")),
     cancelDelegatedRun: (run) =>
       Effect.sync(() => events.push(`delegation-canceled:${run.threadRef}`)),
-    findDelegatedRunDelegation: () => Effect.succeed(null),
+    findDelegatedRunDelegation: () => Effect.succeed(options.delegation ?? null),
     openFailureIncident: () => Effect.sync(() => events.push("incident")),
     resolveFailureIncident: (routineId) =>
       Effect.sync(() => events.push(`incident-resolved:${routineId}`)),
@@ -360,6 +361,46 @@ it.effect("blocks a dispatched run whose session stopped before a turn", () => {
       sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
     },
   ]);
+  return Effect.gen(function* () {
+    const runtime = yield* RoutineRuntime;
+    yield* runtime.recover;
+    assert.deepEqual(test.events, ["incident", "claim-blocked"]);
+  }).pipe(Effect.provide(test.layer));
+});
+
+it.effect("blocks a stopped delegated session whose delegation is still running", () => {
+  const value = routine({ delegateToBotId: BotId.make("bot-helper") });
+  const test = harness(
+    value,
+    [
+      {
+        runId: RoutineRunId.make("run-delegated-stopped"),
+        routineId: value.id,
+        trigger: "scheduled",
+        scheduledFor: "2026-08-31T13:00:00.000Z",
+        claimedAt: "2026-08-31T13:00:00.000Z",
+        status: "dispatched",
+        threadRef: "thread-helper",
+        terminalState: null,
+        terminalAt: null,
+        sessionState: "stopped",
+        sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
+      },
+    ],
+    null,
+    false,
+    Stream.empty,
+    null,
+    {
+      delegation: scheduledDelegation({
+        _tag: "Running",
+        childThreadId: helperThreadId,
+        childTurnId: TurnId.make("turn-helper"),
+        startedAt: "2026-08-31T13:00:00.000Z",
+        progress: null,
+      }),
+    },
+  );
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
