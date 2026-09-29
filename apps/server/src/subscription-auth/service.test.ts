@@ -505,10 +505,10 @@ describe("subscription auth storage", () => {
       `${authPath}.pending`,
       JSON.stringify([["login-cursor", { provider: "cursor", authMode: "api-key" }]]),
     );
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     expect(await service.pollLogin("login-cursor")).toMatchObject({ status: "failed" });
     expect(await service.completeLogin("login-cursor", "key")).toMatchObject({ status: "failed" });
-    expect(service.getApiKeyCredential("cursor")).toBeUndefined();
+    expect(service.getApiKeyCredential("cursor" as never)).toBeUndefined();
   });
   it.each(["anthropic", "openai-codex", "xai", "kimi-for-coding", "opencode-go"] as const)(
     "saves %s API keys through complete and never returns the key",
