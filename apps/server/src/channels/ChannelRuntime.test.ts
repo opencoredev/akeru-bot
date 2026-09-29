@@ -1392,7 +1392,7 @@ describe("channel runtime", () => {
 
         yield* expectFailureMessage(
           changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID),
-          "shutdown failed",
+          "Channel provider request failed.",
         );
 
         expect(events).toEqual([`start:${PROJECT_ID}`, `stop:${PROJECT_ID}`]);
