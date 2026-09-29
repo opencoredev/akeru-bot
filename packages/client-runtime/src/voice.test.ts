@@ -262,6 +262,26 @@ const assistant: OrchestrationMessage = {
 };
 
 describe("accepted bot turn correlation", () => {
+  it("finds a completed voice reply after a newer chat turn replaces latestTurn", () => {
+    const request: OrchestrationMessage = {
+      ...assistant,
+      id: MessageId.make("request-1"),
+      role: "user",
+      text: "Voice request",
+      createdAt: "2026-09-07T00:00:00.000Z",
+    };
+    const newerTurn: OrchestrationLatestTurn = {
+      ...latestTurn,
+      turnId: TurnId.make("turn-2"),
+      requestMessageId: MessageId.make("request-2"),
+      requestedAt: "2026-09-07T00:00:02.000Z",
+    };
+    expect(correlatedVoiceReply("request-1", newerTurn, [request, assistant])).toBe("Exact reply");
+    expect(() => correlatedVoiceReply("request-1", newerTurn, [request])).toThrow(
+      "The bot turn did not complete",
+    );
+  });
+
   it("requires both accepted requestMessageId and assistantMessageId, never the last message", () => {
     const unrelated = { ...assistant, id: MessageId.make("other"), text: "Unrelated" };
     expect(correlatedVoiceReply("request-1", latestTurn, [assistant, unrelated])).toBe(

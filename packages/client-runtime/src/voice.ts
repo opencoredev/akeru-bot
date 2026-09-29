@@ -74,13 +74,24 @@ export function correlatedVoiceReply(
   latestTurn: OrchestrationLatestTurn | null,
   messages: readonly OrchestrationMessage[],
 ): string | null {
-  if (latestTurn?.requestMessageId !== requestMessageId) return null;
-  if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
+  if (latestTurn?.requestMessageId === requestMessageId) {
+    if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
+      throw new Error("The bot turn did not complete. Continue in chat.");
+    }
+    if (latestTurn.state !== "completed" || latestTurn.assistantMessageId === null) return null;
+    const message = messages.find((item) => item.id === latestTurn.assistantMessageId);
+    return message?.role === "assistant" && !message.streaming ? message.text : null;
+  }
+  const request = messages.find((item) => item.id === requestMessageId && item.role === "user");
+  if (!request?.turnId) return null;
+  const reply = messages.findLast(
+    (item) => item.turnId === request.turnId && item.role === "assistant" && !item.streaming,
+  );
+  if (reply) return reply.text;
+  if (latestTurn && latestTurn.requestedAt > request.createdAt) {
     throw new Error("The bot turn did not complete. Continue in chat.");
   }
-  if (latestTurn.state !== "completed" || latestTurn.assistantMessageId === null) return null;
-  const message = messages.find((item) => item.id === latestTurn.assistantMessageId);
-  return message?.role === "assistant" && !message.streaming ? message.text : null;
+  return null;
 }
 
 export function waitForVoiceReply(
