@@ -116,15 +116,16 @@ describe("resolveStickyBotEngine", () => {
       { ...makeComposerTestProvider(), instanceId: fallbackId },
     ];
 
-    expect(
-      resolveStickyBotEngine({
-        engine: { provider: savedId, model: "gpt-5-codex" },
-        instanceEntries: deriveProviderInstanceEntries(providers),
-        settings,
-        providers,
-        defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
-      }),
-    ).toEqual({ instanceId: savedId, model: "gpt-5-codex" });
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const selected = resolveStickyBotEngine({
+      engine: { provider: savedId, model: "gpt-5-codex" },
+      instanceEntries,
+      settings,
+      providers,
+      defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
+    });
+    expect(selected).toEqual({ instanceId: savedId, model: "gpt-5-codex" });
+    expect(botEngineUnavailability(selected, instanceEntries)?.reason).not.toBeNull();
   });
 
   it("keeps the bot engine model instead of the app default", () => {
