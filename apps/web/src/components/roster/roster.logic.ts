@@ -319,7 +319,27 @@ function visibleHtmlText(html: string): string {
   return html
     .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
     .replace(/<\/?(?:br|p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|pre|hr)\b[^>]*>/gi, " ")
-    .replace(/<[^>]*>/g, "");
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, decodeHtmlEntity);
+}
+
+const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/** Decodes the entities chat text commonly carries; unknown names stay as written. */
+function decodeHtmlEntity(entity: string, name: string): string {
+  if (name.startsWith("#")) {
+    const hex = name[1] === "x" || name[1] === "X";
+    const code = Number.parseInt(name.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+  }
+  return NAMED_HTML_ENTITIES[name.toLowerCase()] ?? entity;
 }
 
 function isPhrasingNode(node: MarkdownNode): boolean {
@@ -362,11 +382,10 @@ export function resolveLatestRosterMessage(
   // A fallback that flattens to nothing (an image-only attachment, say) must
   // not beat an older visible answer on timestamp alone.
   // The fallback is kept per bot, so one sent to another chat does not
-  // describe the chat that is open.
+  // describe the chat that is open. With no open chat (its last chat was
+  // archived or deleted) no fallback describes anything current.
   const sameChatFallback =
-    fallback && (fallback.threadId === undefined || !threadId || fallback.threadId === threadId)
-      ? fallback
-      : null;
+    fallback && threadId !== null && (fallback.threadId ?? threadId) === threadId ? fallback : null;
   const flatFallback = sameChatFallback
     ? { ...sameChatFallback, text: flattenMarkdownPreview(sameChatFallback.text) }
     : null;

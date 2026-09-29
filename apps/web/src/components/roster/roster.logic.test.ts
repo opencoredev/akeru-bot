@@ -478,6 +478,9 @@ describe("flattenMarkdownPreview with raw HTML", () => {
   it("shows the text HTML renders, not its tags", () => {
     expect(flattenMarkdownPreview("<b>Done</b> and <i>shipped</i>")).toBe("Done and shipped");
     expect(flattenMarkdownPreview("First<br>second")).toBe("First second");
+    expect(flattenMarkdownPreview("<div>Tom &amp; Jerry &#8217;s &#x1F680; &bogus;</div>")).toBe(
+      "Tom & Jerry \u2019s \u{1F680} &bogus;",
+    );
     expect(flattenMarkdownPreview("<div>\nBlock\n</div>\n\nAfter <!-- note -->")).toBe(
       "Block After",
     );
@@ -536,6 +539,14 @@ describe("resolveLatestRosterMessage", () => {
     expect(resolveLatestRosterMessage(fallback, answer, "chat-b")).toMatchObject({
       text: "Today",
     });
+  });
+
+  it("drops the fallback once the bot has no open chat", () => {
+    const at = "2026-08-20T12:00:00.000Z";
+    expect(resolveLatestRosterMessage({ text: "Ship it", at, threadId: "chat-a" }, [], null)).toBe(
+      null,
+    );
+    expect(resolveLatestRosterMessage({ text: "Ship it", at }, [], null)).toBeNull();
   });
 
   it("flattens markdown and skips messages that flatten to nothing", () => {
