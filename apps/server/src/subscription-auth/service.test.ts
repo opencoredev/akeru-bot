@@ -4,7 +4,9 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import { describe, expect, it, vi } from "vite-plus/test";
+import * as Effect from "effect/Effect";
 
+import type { SubscriptionCredentialStore } from "./credentialStore.ts";
 import {
   makeTestSubscriptionAuthService,
   runWithNodeServices,
@@ -335,6 +337,53 @@ describe("subscription auth storage", () => {
       }
     },
   );
+
+  it("does not save a refreshed token after a concurrent logout reaches the store", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({ xai: { type: "oauth", access: "old", refresh: "old-refresh", expires: 0 } }),
+    );
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const other = await makeTestSubscriptionAuthService(authPath);
+    const store = Reflect.get(service, "store") as SubscriptionCredentialStore;
+    const originalUpdate = store.update;
+    let releaseUpdate!: () => void;
+    const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
+    let reachedUpdate!: () => void;
+    const reached = new Promise<void>((resolve) => (reachedUpdate = resolve));
+    const updateSpy = vi.spyOn(store, "update").mockImplementationOnce((f) => {
+      reachedUpdate();
+      return Effect.promise(() => held).pipe(Effect.andThen(originalUpdate(f)));
+    });
+    let completeRequest!: (response: Response) => void;
+    const { requested, markRequested } = requestSignal();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        markRequested();
+        return new Promise<Response>((resolve) => (completeRequest = resolve));
+      }),
+    );
+    try {
+      const refreshing = service.getAccessToken("xai");
+      await requested;
+      completeRequest(
+        new Response(JSON.stringify({ access_token: "late-token", expires_in: 3600 }), {
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      await reached;
+      await other.logout("xai");
+      releaseUpdate();
+      expect(await refreshing).toBeUndefined();
+      expect(service.isConnected("xai")).toBe(false);
+      expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
+    } finally {
+      updateSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
 
   it("does not let an OAuth health check undo logout from another service", async () => {
     const { authPath } = fixture();

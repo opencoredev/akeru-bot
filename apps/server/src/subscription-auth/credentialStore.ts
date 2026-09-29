@@ -302,6 +302,11 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
               .pipe(Effect.mapError((cause) => storeError("write", cause)));
           }
           const next = f(loaded.data);
+          if (next === loaded.data && !loaded.loadError) {
+            state = loaded;
+            fingerprint = fileFingerprint(filePath);
+            return next;
+          }
           fingerprint = yield* writeAtomically(next).pipe(
             Effect.tapError(() =>
               loaded.loadError?.reason === "corrupt"

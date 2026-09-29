@@ -1251,8 +1251,13 @@ export class SubscriptionAuthService {
       if (current?.type !== "oauth" || current.refresh !== credential.refresh) {
         return current?.access;
       }
-      await this.setCredential(provider, refreshed);
-      return refreshed.access;
+      const saved = await this.updateCredentials((data) => {
+        const latest = data[provider];
+        return latest?.type === "oauth" && latest.refresh === credential.refresh
+          ? { ...data, [provider]: { ...refreshed, type: "oauth" } }
+          : data;
+      });
+      return saved[provider]?.access;
     } catch (cause) {
       // Refresh failed — the user must re-connect. Keep the stored credential
       // so status still shows which account was linked.
