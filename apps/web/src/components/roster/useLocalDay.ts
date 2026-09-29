@@ -5,16 +5,24 @@ export function useLocalDay(): Date {
 
   useEffect(() => {
     let timer: number;
-    const schedule = () => {
+    const refresh = () => {
       const now = new Date();
+      setDay((previous) => (previous.toDateString() === now.toDateString() ? previous : now));
       const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      timer = window.setTimeout(() => {
-        setDay(new Date());
-        schedule();
-      }, next.getTime() - now.getTime());
+      window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, Math.min(next.getTime() - now.getTime(), 60_000));
     };
-    schedule();
-    return () => window.clearTimeout(timer);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   return day;
