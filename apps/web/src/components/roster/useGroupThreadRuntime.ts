@@ -275,7 +275,8 @@ export function useGroupThreadRuntime(groupId: string) {
 
       const respondingBotId = requestedBotId ?? group.bossBotId;
       const respondingBot = bots.find(
-        (bot) => bot.id === respondingBotId && groupContainsBot(group, bot.id),
+        (bot) =>
+          bot.id === respondingBotId && bot.archivedAt === null && groupContainsBot(group, bot.id),
       );
       if (!respondingBot) {
         setError("Choose a current group member.");
@@ -287,7 +288,9 @@ export function useGroupThreadRuntime(groupId: string) {
         appDefaultModelSelection,
       );
       if (!modelSelection || modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId) {
-        setError("Connect at least one provider before messaging a group.");
+        setError(
+          "Mention a group member with a connected provider, or connect the boss's provider.",
+        );
         return false;
       }
 
@@ -458,7 +461,7 @@ export function useGroupThreadRuntime(groupId: string) {
   const providerAvailable =
     group !== undefined &&
     bots.some((bot) => {
-      if (!groupContainsBot(group, bot.id)) return false;
+      if (bot.archivedAt !== null || !groupContainsBot(group, bot.id)) return false;
       const selection = groupModelSelection(
         bot.engine,
         activeProject?.defaultModelSelection,

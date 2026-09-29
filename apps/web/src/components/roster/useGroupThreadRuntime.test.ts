@@ -96,6 +96,7 @@ describe("group runtime errors", () => {
       {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
       } as Bot,
     ];
 
@@ -120,14 +121,43 @@ describe("group runtime errors", () => {
       },
     ];
     mocks.bots = [
-      { id: "bot-1", engine: null } as Bot,
-      { id: "bot-2", engine: { provider: "codex", model: "gpt-5.6-sol" } } as Bot,
+      { id: "bot-1", engine: null, archivedAt: null } as Bot,
+      { id: "bot-2", engine: { provider: "codex", model: "gpt-5.6-sol" }, archivedAt: null } as Bot,
     ];
 
     hooks.beginRender();
     const runtime = useGroupThreadRuntime("group-1");
 
     expect(runtime.providerAvailable).toBe(true);
+  });
+
+  it("does not count an archived member as an available group provider", () => {
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [
+          { kind: "bot", botId: BotId.make("bot-1"), role: "boss" },
+          { kind: "bot", botId: BotId.make("bot-2"), role: "specialist" },
+        ],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      { id: "bot-1", engine: null, archivedAt: null } as Bot,
+      {
+        id: "bot-2",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: "2026-09-14T00:00:00.000Z",
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(false);
   });
 
   it("queues a group follow-up while the first send is still being accepted", async () => {
@@ -165,6 +195,7 @@ describe("group runtime errors", () => {
       {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
         runtimeMode: "full-access",
       } as Bot,
     ];
