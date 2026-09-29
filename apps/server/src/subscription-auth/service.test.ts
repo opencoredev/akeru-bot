@@ -1373,6 +1373,21 @@ describe("provider health checks", () => {
     vi.unstubAllGlobals();
   });
 
+  it("clears checking state for a custom provider instance", async () => {
+    const { authPath } = fixture();
+    recordRequests();
+    const service = await makeTestSubscriptionAuthService(authPath, { checkHealthOnConnect: true });
+    const instanceId = ProviderInstanceId.make("grok_work");
+    const login = await service.startLogin("xai", { instanceId, authMode: "api-key" });
+    await service.completeLogin(login.loginId, "work-key");
+    await service.awaitHealthCheck("xai", instanceId);
+
+    const status = service.accountStatus("xai", instanceId);
+    expect(status.health).toBe("healthy");
+    expect(status.healthChecking).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
   it("treats an abandoned post-login check as finished", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "xai");

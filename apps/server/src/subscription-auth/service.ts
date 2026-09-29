@@ -927,7 +927,7 @@ export class SubscriptionAuthService {
     this.saveHealth();
     const check = this.testHealth(provider, instanceId)
       .finally(() => {
-        if (this.healthChecks.get(provider) !== check) return;
+        if (this.healthChecks.get(key) !== check) return;
         this.reloadHealth();
         const current = this.health[key];
         if (current?.healthCheckStartedAt === undefined) return;
