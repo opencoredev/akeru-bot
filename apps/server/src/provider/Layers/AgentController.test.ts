@@ -373,11 +373,13 @@ function makeUsageLedger() {
   const recordMeasurement = vi.fn<BotUsageLedgerShape["recordMeasurement"]>(() =>
     Effect.succeed({} as never),
   );
+  const recordStart = vi.fn<BotUsageLedgerShape["recordStart"]>(() => Effect.succeed({} as never));
   const unused = () => Effect.die("unused");
   return {
     reserve,
     settle,
     recordMeasurement,
+    recordStart,
     service: BotUsageLedger.of({
       reserve,
       settle,
@@ -385,6 +387,7 @@ function makeUsageLedger() {
       settleForTurn: unused,
       finalizeForTurn: unused,
       recordMeasurement,
+      recordStart,
       summarize: unused,
       pricingTotals: unused,
     }),
@@ -1142,11 +1145,17 @@ describe("AgentControllerLive", () => {
         );
 
         expect(usage.reserve).not.toHaveBeenCalled();
-        expect(usage.recordMeasurement).toHaveBeenCalledTimes(1);
-        expect(usage.recordMeasurement.mock.calls[0]?.[0]).toMatchObject({
+        expect(usage.recordStart).toHaveBeenCalledTimes(1);
+        expect(usage.recordStart.mock.calls[0]?.[0]).toMatchObject({
+          reservationId: `tool:${codexThreadId}:usage-tool-call`,
           sourceKey: `tool:${codexThreadId}:usage-tool-call`,
           botId,
           category: "tool",
+        });
+        expect(usage.settle).toHaveBeenCalledTimes(1);
+        expect(usage.settle.mock.calls[0]?.[0]).toMatchObject({
+          reservationId: `tool:${codexThreadId}:usage-tool-call`,
+          state: "reported",
           inputTokens: 0,
           outputTokens: 0,
         });

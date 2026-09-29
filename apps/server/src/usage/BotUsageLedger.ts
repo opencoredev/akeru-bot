@@ -141,6 +141,10 @@ export interface BotUsageLedgerShape {
     readonly includedInReservation?: boolean;
     readonly createdAt: string;
   }) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
+  /** Records work that charges no tokens so a restart before it settles marks it interrupted. */
+  readonly recordStart: (
+    input: Omit<ReserveBotUsageInput, "maximumTokens" | "capLimit">,
+  ) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
   readonly summarize: (
     botId: BotId,
   ) => Effect.Effect<AkeruBotUsageSummary, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
@@ -629,6 +633,37 @@ const make = Effect.gen(function* () {
         ),
     );
 
+  const recordStart: BotUsageLedgerShape["recordStart"] = (input) =>
+    writeLock.withPermit(
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
+            if (prior[0]) return yield* decodeEntry(prior[0]);
+            yield* sql`
+          INSERT INTO akeru_bot_usage_entries (
+            reservation_id, source_key, bot_id, thread_id, turn_id, category, state,
+            reserved_tokens, held_tokens, input_tokens, output_tokens, reasoning_tokens, provider,
+            model, unavailable_reason, created_at, settled_at
+          ) VALUES (
+            ${input.reservationId}, ${input.sourceKey}, ${input.botId}, ${input.threadId},
+            ${input.turnId}, ${input.category}, 'reserved', 0, 0, NULL, NULL, NULL,
+            ${input.provider}, ${input.model}, NULL, ${input.createdAt}, NULL
+          )
+        `;
+            const rows = yield* selectEntryByReservation(sql, input.reservationId);
+            return yield* decodeEntry(rows[0]!);
+          }),
+        )
+        .pipe(
+          Effect.mapError((cause) =>
+            cause._tag === "PersistenceDecodeError"
+              ? cause
+              : toPersistenceSqlError("BotUsageLedger.recordStart")(cause),
+          ),
+        ),
+    );
+
   const summarize: BotUsageLedgerShape["summarize"] = (botId) =>
     Effect.gen(function* () {
       const balances = yield* sql<{
@@ -760,7 +795,7 @@ const make = Effect.gen(function* () {
           const rows = yield* sql<UsageRow>`
         SELECT ${entryColumns(sql)}
         FROM akeru_bot_usage_entries
-        WHERE held_tokens > 0
+        WHERE held_tokens > 0 OR state = 'reserved'
       `;
           for (const row of rows) {
             if (row.state === "reported") {
@@ -803,6 +838,7 @@ const make = Effect.gen(function* () {
     settleForTurn,
     finalizeForTurn,
     recordMeasurement,
+    recordStart,
     summarize,
     pricingTotals,
   } satisfies BotUsageLedgerShape;

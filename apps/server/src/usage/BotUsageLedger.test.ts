@@ -773,6 +773,19 @@ it("reconciles persisted reservations when the ledger restarts", () =>
           capLimit: 1_000,
         }),
       );
+      const {
+        maximumTokens: _maximumTokens,
+        capLimit: _capLimit,
+        ...toolStart
+      } = reserveInput("tool-before-restart", {
+        botId,
+        threadId,
+        turnId: TurnId.make("turn-interrupted"),
+        category: "tool",
+      });
+      const tool = yield* ledger.recordStart(toolStart);
+      assert.equal(tool.state, "reserved");
+      assert.equal(tool.reservedTokens, 0);
       yield* ledger.settleForTurn({
         botId,
         threadId,
@@ -822,6 +835,10 @@ it("reconciles persisted reservations when the ledger restarts", () =>
       afterRestart.entries.find((entry) => entry.sourceKey.includes("reported-before-restart"))
         ?.state,
       "reported",
+    );
+    assert.equal(
+      afterRestart.entries.find((entry) => entry.sourceKey.includes("tool-before-restart"))?.state,
+      "unavailable",
     );
     assert.equal(afterLateReport.consumedTokens, 280);
     assert.equal(afterLateReport.reservedTokens, 0);

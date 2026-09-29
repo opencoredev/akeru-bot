@@ -622,15 +622,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
     >();
     const sessions = new Map<string, ActiveSession>();
-    // Tool calls consume no model tokens, so they are recorded on finish without holding cap.
-    const toolUsageStarts = new Map<
-      string,
-      {
-        readonly turnId: TurnId | null;
-        readonly provider: ProviderDriverKind | null;
-        readonly model: string | null;
-      }
-    >();
+    // Tool calls consume no model tokens, so their entries hold no cap while they run.
+    const toolUsageStarts = new Set<string>();
     // Providers only promise tool-call ids unique within a chat.
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
@@ -791,33 +784,44 @@ const make = (options?: AgentControllerLiveOptions) =>
       },
       onToolStart: async (input, session) => {
         if (!session.botId) return;
-        const active = sessions.get(input.threadId);
-        toolUsageStarts.set(toolUsageKey(input), {
-          turnId: active?.activeTurn?.turnId ?? null,
-          provider: active?.provider ?? null,
-          model: active?.model ?? null,
-        });
-      },
-      onToolFinish: async (input, session) => {
         const key = toolUsageKey(input);
-        const started = toolUsageStarts.get(key);
-        toolUsageStarts.delete(key);
-        if (!session.botId || !started) return;
+        const active = sessions.get(input.threadId);
         await runPromise(
           botUsageLedger
-            .recordMeasurement({
+            .recordStart({
               reservationId: AkeruUsageReservationId.make(key),
               sourceKey: key,
               botId: session.botId,
               threadId: ThreadId.make(input.threadId),
-              turnId: started.turnId,
+              turnId: active?.activeTurn?.turnId ?? null,
               category: "tool",
+              provider: active?.provider ?? null,
+              model: active?.model ?? null,
+              createdAt: nowIso(),
+            })
+            .pipe(
+              Effect.tap(() => Effect.sync(() => toolUsageStarts.add(key))),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("failed to record tool start", {
+                  toolCallId: input.toolCallId,
+                  cause,
+                }),
+              ),
+            ),
+        );
+      },
+      onToolFinish: async (input, session) => {
+        const key = toolUsageKey(input);
+        if (!session.botId || !toolUsageStarts.delete(key)) return;
+        await runPromise(
+          botUsageLedger
+            .settle({
+              reservationId: AkeruUsageReservationId.make(key),
+              state: "reported",
               inputTokens: 0,
               outputTokens: 0,
               reasoningTokens: null,
-              provider: started.provider,
-              model: started.model,
-              createdAt: nowIso(),
+              settledAt: nowIso(),
             })
             .pipe(
               Effect.catchCause((cause) =>
