@@ -2024,6 +2024,49 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("stops routing messages from a disconnected transport that fails to shut down", () =>
+    Effect.gen(function* () {
+      const callbacks: Array<
+        Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
+      > = [];
+      let stops = 0;
+      const harness = makeHarness({
+        startTransport: async (_input, onDirectMessage) => {
+          callbacks.push(onDirectMessage);
+          return {
+            externalIdentity: "@akeru",
+            runtime: {
+              post: async () => undefined,
+              shutdown: async () => {
+                stops += 1;
+                throw new Error("shutdown failed");
+              },
+            },
+          };
+        },
+      });
+      yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+
+      yield* expectFailureMessage(
+        disconnectChannel(harness.dependencies, BOT_ID, "telegram"),
+        "Channel provider request failed.",
+      );
+      expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("disconnected");
+      yield* Effect.promise(async () =>
+        callbacks[0]?.({
+          externalThreadId: "telegram:retired",
+          externalMessageId: "late",
+          text: "Late event",
+        }),
+      );
+      expect(
+        harness.commands.filter((command) => command.type === "thread.turn.start"),
+      ).toHaveLength(0);
+      yield* stopChannelsForBot(BOT_ID);
+      expect(stops).toBe(1);
+    }),
+  );
+
   it.effect("ignores callbacks from a disconnected or replaced transport", () =>
     Effect.gen(function* () {
       const callbacks: Array<

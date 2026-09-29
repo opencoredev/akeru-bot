@@ -1061,13 +1061,23 @@ const withConnectionOperation = (ctx: ChannelRuntimeContext, connectionId: Chann
 const withConnectionSettingsOperation = (ctx: ChannelRuntimeContext) =>
   ctx.withLock("connection-settings");
 
-const stopRuntime = (ctx: ChannelRuntimeContext, botId: BotId, provider: ChannelProvider) =>
+/**
+ * Unregisters and stops a bot's transport. Pass `keepOnFailure` when the caller still owns the
+ * channel (a project move), so a transport that fails to stop stays registered and blocks a
+ * competing listener. Otherwise it stays unregistered and its inbound callbacks are ignored.
+ */
+const stopRuntime = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  options?: { readonly keepOnFailure?: boolean },
+) =>
   Effect.suspend(() => {
     const key = runtimeKey(botId, provider);
     const runtime = ctx.runtimes.get(key);
     if (!runtime) return Effect.void;
     ctx.runtimes.delete(key);
-    // A failed shutdown may leave the listener running, so keep owning it.
+    if (!options?.keepOnFailure) return runtime.shutdown;
     return runtime.shutdown.pipe(
       Effect.onError(() =>
         Effect.sync(() => {
@@ -2273,7 +2283,7 @@ const changeChannelProject = (
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
       // A transport that fails to stop stays registered, and no competing one starts.
-      yield* stopRuntime(ctx, botId, provider);
+      yield* stopRuntime(ctx, botId, provider, { keepOnFailure: true });
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
           const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
