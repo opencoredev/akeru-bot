@@ -180,6 +180,15 @@ export const Routine = Schema.Struct({
 });
 export type Routine = typeof Routine.Type;
 
+/** The small piece of a deleted routine needed to keep its chat receipts readable. */
+export const RoutineReceiptSource = Schema.Struct({
+  id: RoutineId,
+  targetThreadId: ThreadId,
+  job: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+export type RoutineReceiptSource = typeof RoutineReceiptSource.Type;
+
 const RoutineRunFields = {
   id: RoutineRunId,
   routineId: RoutineId,

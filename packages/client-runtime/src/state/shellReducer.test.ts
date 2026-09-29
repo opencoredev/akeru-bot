@@ -322,14 +322,21 @@ describe("applyShellStreamEvent", () => {
       expect(updated.snapshotSequence).toBe(2);
     });
 
-    it("removes a routine with its run history", () => {
+    it("keeps a deleted routine's receipt source and run history", () => {
+      const receiptSource = {
+        id: stubRoutine.id,
+        targetThreadId: stubRoutine.targetThreadId,
+        job: stubRoutine.job,
+        createdAt: stubRoutine.createdAt,
+      };
       const next = applyShellStreamEvent(
         { ...baseSnapshot, routines: [stubRoutine], routineRuns: [stubRoutineRun] },
-        { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id },
+        { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id, receiptSource },
       );
 
       expect(next.routines).toEqual([]);
-      expect(next.routineRuns).toEqual([]);
+      expect(next.routineReceiptSources).toEqual([receiptSource]);
+      expect(next.routineRuns).toEqual([stubRoutineRun]);
     });
   });
 

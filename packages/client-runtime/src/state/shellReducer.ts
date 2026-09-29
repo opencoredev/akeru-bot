@@ -113,10 +113,17 @@ export function applyShellStreamEvent(
       return {
         ...snapshot,
         routines: Arr.filter(snapshot.routines ?? [], (routine) => routine.id !== event.routineId),
-        routineRuns: Arr.filter(
-          snapshot.routineRuns ?? [],
-          (run) => run.routineId !== event.routineId,
-        ),
+        routineReceiptSources: event.receiptSource
+          ? [
+              ...(snapshot.routineReceiptSources ?? []).filter(
+                (source) => source.id !== event.routineId,
+              ),
+              event.receiptSource,
+            ]
+          : snapshot.routineReceiptSources,
+        routineRuns: event.receiptSource
+          ? snapshot.routineRuns
+          : Arr.filter(snapshot.routineRuns ?? [], (run) => run.routineId !== event.routineId),
         snapshotSequence: event.sequence,
       };
     case "skill-assignment-upserted": {

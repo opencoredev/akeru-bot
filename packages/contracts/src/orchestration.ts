@@ -43,6 +43,7 @@ import {
   RoutineId,
   RoutinePausedPayload,
   RoutineRun,
+  RoutineReceiptSource,
   RoutineRunCanceledPayload,
   RoutineRunId,
   RoutineRunningPayload,
@@ -883,6 +884,7 @@ export const OrchestrationShellSnapshot = Schema.Struct({
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
   routines: Schema.optional(Schema.Array(Routine)),
+  routineReceiptSources: Schema.optional(Schema.Array(RoutineReceiptSource)),
   routineRuns: Schema.optional(Schema.Array(RoutineRun)),
   skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThreadShell),
@@ -941,6 +943,7 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("routine-removed"),
     sequence: NonNegativeInt,
     routineId: RoutineId,
+    receiptSource: Schema.optional(RoutineReceiptSource),
   }),
   Schema.Struct({
     kind: Schema.Literal("skill-assignment-upserted"),

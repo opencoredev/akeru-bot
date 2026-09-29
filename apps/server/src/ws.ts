@@ -122,6 +122,7 @@ import { decideCommandSequence } from "./orchestration/decider.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
+import { toRoutineReceiptSource } from "./orchestration/routineReceiptSources.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
@@ -1117,6 +1118,7 @@ const makeWsRpcLayer = (
                 kind: "routine-removed" as const,
                 sequence: event.sequence,
                 routineId: event.payload.routine.id,
+                receiptSource: toRoutineReceiptSource(event.payload.routine),
               }),
             );
           case "skill-assignment.assigned":

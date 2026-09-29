@@ -215,11 +215,16 @@ export function BotThreadLanding({
       runtime.linkedThreadRef
         ? deriveRoutineReceipts(
             runtime.linkedThreadRef.threadId,
-            snapshot?.routines ?? [],
+            [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])],
             snapshot?.routineRuns ?? [],
           )
         : [],
-    [runtime.linkedThreadRef, snapshot?.routines, snapshot?.routineRuns],
+    [
+      runtime.linkedThreadRef,
+      snapshot?.routines,
+      snapshot?.routineReceiptSources,
+      snapshot?.routineRuns,
+    ],
   );
   // Each message carries the index it had in `messages`, because the merge below
   // reorders it away from that position and a row must not go looking for itself.

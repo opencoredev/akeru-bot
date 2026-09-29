@@ -47,6 +47,18 @@ const run = {
 } as unknown as RoutineRun;
 
 describe("deriveRoutineReceipts", () => {
+  it("keeps creation and run notes for a deleted routine's compact receipt source", () => {
+    const receiptSource = {
+      id: routine.id,
+      targetThreadId: routine.targetThreadId,
+      job: routine.job,
+      createdAt: routine.createdAt,
+    };
+    expect(deriveRoutineReceipts(routine.targetThreadId, [receiptSource], [run])).toEqual(
+      deriveRoutineReceipts(routine.targetThreadId, [routine], [run]),
+    );
+  });
+
   it("derives durable creation, enablement, start, and completion rows", () => {
     expect(deriveRoutineReceipts(routine.targetThreadId, [routine], [run])).toEqual([
       {

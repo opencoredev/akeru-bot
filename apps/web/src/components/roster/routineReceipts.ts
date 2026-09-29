@@ -1,4 +1,4 @@
-import type { Routine, RoutineRun, ThreadId } from "@t3tools/contracts";
+import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@t3tools/contracts";
 
 export interface RoutineReceipt {
   readonly id: string;
@@ -14,7 +14,7 @@ function withDetail(summary: string, detail: string | undefined): string {
 
 export function deriveRoutineReceipts(
   threadId: ThreadId,
-  routines: ReadonlyArray<Routine>,
+  routines: ReadonlyArray<Routine | RoutineReceiptSource>,
   runs: ReadonlyArray<RoutineRun>,
 ): RoutineReceipt[] {
   const threadRoutines = routines.filter((routine) => routine.targetThreadId === threadId);

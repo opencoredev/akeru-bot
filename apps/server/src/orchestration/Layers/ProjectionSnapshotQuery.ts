@@ -65,6 +65,7 @@ import { RoutineRepository } from "../../routines/Repository.ts";
 import { RoutineRepositoryLive } from "../../routines/RepositoryLive.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
+import { deletedRoutineReceiptSources } from "../routineReceiptSources.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionState } from "../../persistence/Services/ProjectionState.ts";
 import { ProjectionThreadActivity } from "../../persistence/Services/ProjectionThreadActivities.ts";
@@ -2820,6 +2821,7 @@ pending_approval_requests AS (
                 delegations: delegationRows.map((row) => toShellDelegation(row.delegation)),
                 mcpServers,
                 routines: routines.filter((routine) => routine.deletedAt === null),
+                routineReceiptSources: deletedRoutineReceiptSources(routines),
                 routineRuns,
                 skillAssignments,
                 threads: Arr.filterMap(threadRows, (row) =>
