@@ -63,6 +63,15 @@ describe("providerAvailabilityReason", () => {
     expect(providerAvailabilityReason(provider({ auth: { status: "unauthenticated" } }))).toBe(
       "missing-login",
     );
+    expect(
+      providerAvailabilityReason(
+        provider({
+          status: "error",
+          unavailability: "temporary-failure",
+          auth: { status: "unauthenticated" },
+        }),
+      ),
+    ).toBe("missing-login");
     expect(providerAvailabilityReason(provider(), "claude-9")).toBe("unsupported-model");
   });
 

@@ -31,9 +31,17 @@ export function providerAvailabilityReason(
 ): ProviderAvailabilityReason | null {
   if (!provider) return "missing-provider";
   if (!provider.enabled) return "disabled";
-  if (provider.unavailability) return provider.unavailability;
-  if (!provider.installed || provider.availability === "unavailable") return "not-installed";
+  if (provider.unavailability && provider.unavailability !== "temporary-failure") {
+    return provider.unavailability;
+  }
+  if (
+    !provider.installed ||
+    (provider.availability === "unavailable" && provider.status !== "error")
+  ) {
+    return "not-installed";
+  }
   if (provider.auth.status === "unauthenticated") return "missing-login";
+  if (provider.unavailability === "temporary-failure") return "temporary-failure";
   if (
     model &&
     provider.models.length > 0 &&

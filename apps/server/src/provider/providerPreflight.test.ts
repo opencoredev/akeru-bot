@@ -246,6 +246,18 @@ describe("preflightProvider", () => {
         providers: [claude],
         providerId: "claude",
         model: "claude-sonnet",
+        subscriptionStatuses: [status],
+        subscriptionHealth: () => ({
+          health: "failed",
+          lastFailedRequest: { message: "401 Unauthorized" },
+        }),
+      }),
+    ).toBeUndefined();
+    expect(
+      preflightProvider({
+        providers: [claude],
+        providerId: "claude",
+        model: "claude-sonnet",
         subscriptionStatuses: [{ ...status, health: "revoked" }],
       })?.category,
     ).toBe("expired-login");

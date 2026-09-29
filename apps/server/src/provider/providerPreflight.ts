@@ -124,7 +124,10 @@ export const preflightProvider = (input: {
     const detail = failure?.message ?? "The provider request failed.";
     const category = providerUnavailabilityFromDetail(provider.driver, detail);
     const nextRetryAt = requestHealth ? requestHealth.nextRetryAt : subscription?.nextRetryAt;
-    if (recordedFailureStillBlocks(category, failure, nextRetryAt, input.model, input.now)) {
+    if (
+      recordedFailureStillBlocks(category, failure, nextRetryAt, input.model, input.now) &&
+      !(canRefreshExpiredLogin && category === "expired-login")
+    ) {
       return withRepair(category, detail);
     }
   }
