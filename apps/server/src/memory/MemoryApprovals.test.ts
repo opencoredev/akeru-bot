@@ -8,6 +8,7 @@ import {
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   BotId,
+  GroupId,
   ProjectId,
   ThreadId,
   type OrchestrationCommand,
@@ -510,6 +511,40 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
       assert.equal(retried.status, "rejected");
+    }),
+  );
+
+  it.effect("saves a group approval under the bot that asked", () =>
+    Effect.gen(function* () {
+      const approvals = yield* MemoryApprovals;
+      const repository = yield* EntityMemoryRepository;
+      const otherBotId = BotId.make("bot-bob");
+      const groupAccess = {
+        ...access,
+        groupId: GroupId.make("group-release"),
+        respondingBotId: botId,
+        groupMemberBotIds: [botId, otherBotId],
+      };
+      const proposed = yield* approvals.propose({
+        access: groupAccess,
+        fact: "Ada owns the release checklist.",
+        scope: "group",
+        sensitive: false,
+        mode: "ask",
+      });
+      assert.equal(proposed.status, "pending");
+      if (proposed.status !== "pending") return;
+      const decided = yield* approvals.decide({
+        access: { ...groupAccess, respondingBotId: otherBotId },
+        decision: { candidateId: proposed.candidateId, decision: "approve" },
+      });
+      assert.equal(decided.status, "approved");
+      if (decided.memoryRootId === null) return assert.fail("expected a saved memory");
+      const saved = yield* repository.getCurrent({
+        access: groupAccess,
+        rootId: decided.memoryRootId,
+      });
+      assert.equal(saved.authorBotId, botId);
     }),
   );
 

@@ -330,7 +330,8 @@ const make = Effect.gen(function* () {
     decideLock
       .withPermit(
         Effect.gen(function* () {
-          const { access, decision } = input;
+          const { decision } = input;
+          let access = input.access;
           const rows = yield* sql`
           SELECT candidate_id AS candidateId, tenant_id AS tenantId,
             source_thread_id AS sourceThreadId, source_message_id AS sourceMessageId,
@@ -359,6 +360,11 @@ const make = Effect.gen(function* () {
             });
           }
 
+          // Save under the bot that asked, even if a different group bot is
+          // responding by the time the user decides.
+          if (candidate.authorBotId !== null) {
+            access = { ...access, respondingBotId: BotId.make(candidate.authorBotId) };
+          }
           const createdAt = yield* nowIso;
           let fact =
             decision.decision === "approve" ? (decision.fact ?? candidate.fact) : candidate.fact;
