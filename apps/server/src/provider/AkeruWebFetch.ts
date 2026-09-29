@@ -47,8 +47,14 @@ const PRIVATE_IPV6 = (() => {
     // IPv4-mapped and IPv4-compatible forms can smuggle any IPv4 address.
     ["::ffff:0:0", 96],
     ["::", 96],
+    // NAT64 and 6to4 prefixes also embed an IPv4 address the network can reach.
+    ["64:ff9b::", 96],
+    ["64:ff9b:1::", 48],
+    ["2002::", 16],
     ["fc00::", 7],
     ["fe80::", 10],
+    // Deprecated site-local space is still routed on some internal networks.
+    ["fec0::", 10],
     ["ff00::", 8],
   ] as const) {
     list.addSubnet(network, prefix, "ipv6");
@@ -168,6 +174,9 @@ function requestHop(
       url,
       {
         method: "GET",
+        // A dedicated agent never picks up an environment proxy, which would
+        // resolve the hostname itself and bypass the pinned address.
+        agent: false,
         lookup: pinnedLookup(pinned),
         timeout: timeoutMs,
         headers: {
@@ -225,12 +234,35 @@ function requestHop(
   });
 }
 
+// A stalled resolver must not hold the tool call open past the fetch deadline.
+function lookupWithDeadline(lookup: AkeruWebFetchLookup, timeoutMs: number): AkeruWebFetchLookup {
+  return (hostname) =>
+    new Promise((resolve, reject) => {
+      const deadline = setTimeout(
+        () => reject(new Error(`WebFetch timed out resolving ${hostname}.`)),
+        timeoutMs,
+      );
+      lookup(hostname).then(
+        (records) => {
+          clearTimeout(deadline);
+          resolve(records);
+        },
+        (cause: unknown) => {
+          clearTimeout(deadline);
+          reject(cause);
+        },
+      );
+    });
+}
+
 export function createAkeruWebFetch(options: AkeruWebFetchOptions = {}) {
-  const lookup: AkeruWebFetchLookup =
-    options.lookup ?? ((hostname) => NodeDnsPromises.lookup(hostname, { all: true }));
+  const timeoutMs = options.timeoutMs ?? AKERU_WEB_FETCH_TIMEOUT_MS;
+  const lookup = lookupWithDeadline(
+    options.lookup ?? ((hostname) => NodeDnsPromises.lookup(hostname, { all: true })),
+    timeoutMs,
+  );
   const allowAddress = options.allowAddress ?? ((address) => !isAkeruPrivateAddress(address));
   const maxBytes = options.maxBytes ?? AKERU_WEB_FETCH_MAX_BYTES;
-  const timeoutMs = options.timeoutMs ?? AKERU_WEB_FETCH_TIMEOUT_MS;
   const maxRedirects = options.maxRedirects ?? AKERU_WEB_FETCH_MAX_REDIRECTS;
 
   return async (input: { readonly url: string }): Promise<AkeruWebFetchResult> => {

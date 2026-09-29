@@ -48,6 +48,10 @@ describe("Akeru WebFetch", () => {
     "fe80::1",
     "::ffff:127.0.0.1",
     "::ffff:7f00:1",
+    "fec0::1",
+    "64:ff9b::a00:1",
+    "64:ff9b:1::a00:1",
+    "2002:a00:1::1",
   ])("treats %s as private", (address) => {
     expect(isAkeruPrivateAddress(address)).toBe(true);
   });
@@ -74,6 +78,14 @@ describe("Akeru WebFetch", () => {
       lookup: async () => [{ address: "10.0.0.2", family: 4 }],
     });
     await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("private");
+  });
+
+  it("times out a hostname whose lookup never answers", async () => {
+    const webFetch = createAkeruWebFetch({
+      lookup: () => new Promise(() => undefined),
+      timeoutMs: 20,
+    });
+    await expect(webFetch({ url: "https://stalled.example/" })).rejects.toThrow("timed out");
   });
 
   it("pins the validated address so a rebinding resolver never reaches the connection", async () => {
