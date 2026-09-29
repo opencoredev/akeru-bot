@@ -13,7 +13,9 @@ import {
   providerConnectionLabel,
   providerUsesApiKey,
   providerSupportsBaseUrl,
+  withRefreshableSubscriptionLogin,
 } from "./providerAuth.ts";
+import { providerAvailabilityReason } from "./providerAvailability.ts";
 
 const status: SubscriptionProviderStatus = {
   provider: "anthropic",
@@ -137,5 +139,43 @@ describe("filterProvidersBySubscriptionConnection", () => {
     const providers = [provider("codex"), provider("claudeAgent")];
 
     expect(filterProvidersBySubscriptionConnection(providers, undefined)).toEqual(providers);
+  });
+});
+
+describe("withRefreshableSubscriptionLogin", () => {
+  const expiredClaude = (instanceId = "claudeAgent"): ServerProvider => ({
+    instanceId: ProviderInstanceId.make(instanceId),
+    driver: ProviderDriverKind.make("claudeAgent"),
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "error",
+    auth: { status: "unauthenticated" },
+    checkedAt: "2026-09-13T00:00:00.000Z",
+    unavailability: "expired-login",
+    unavailabilityDetail: "Login expired.",
+    models: [],
+    slashCommands: [],
+    skills: [],
+  });
+  const reason = (provider: ServerProvider, statuses: ReadonlyArray<SubscriptionProviderStatus>) =>
+    providerAvailabilityReason(withRefreshableSubscriptionLogin(provider, statuses));
+
+  it("lets an expired OAuth login on the saved connection try a refresh", () => {
+    expect(reason(expiredClaude(), [{ ...status, health: "expired", authMode: "oauth" }])).toBe(
+      null,
+    );
+  });
+
+  it("keeps revoked, API-key, and custom-instance logins blocked", () => {
+    expect(reason(expiredClaude(), [{ ...status, health: "revoked", authMode: "oauth" }])).toBe(
+      "expired-login",
+    );
+    expect(reason(expiredClaude(), [{ ...status, health: "expired", authMode: "api-key" }])).toBe(
+      "expired-login",
+    );
+    expect(
+      reason(expiredClaude("claude_work"), [{ ...status, health: "expired", authMode: "oauth" }]),
+    ).toBe("expired-login");
   });
 });

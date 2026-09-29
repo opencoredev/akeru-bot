@@ -80,3 +80,34 @@ export function filterProvidersBySubscriptionConnection(
     return connected.has(subscriptionProvider);
   });
 }
+
+/**
+ * Server turn preflight lets an expired OAuth login on a saved connection try a
+ * token refresh, so clients must not block Send on it. Returns the provider
+ * with that expired login cleared; revoked and API-key logins stay blocked.
+ */
+export function withRefreshableSubscriptionLogin(
+  provider: ServerProvider,
+  statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
+): ServerProvider {
+  const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+  if (!subscriptionProvider) return provider;
+  if (provider.instanceId !== defaultInstanceIdForDriver(provider.driver)) return provider;
+  const status = statuses?.find((candidate) => candidate.provider === subscriptionProvider);
+  if (status?.health !== "expired" || status.authMode !== "oauth") return provider;
+  const expired = provider.unavailability === "expired-login";
+  if (!expired && provider.auth.status !== "unauthenticated") return provider;
+  const {
+    unavailability: _unavailability,
+    unavailabilityDetail: _unavailabilityDetail,
+    repairAction: _repairAction,
+    ...rest
+  } = provider;
+  return {
+    ...(expired ? rest : provider),
+    auth:
+      provider.auth.status === "unauthenticated"
+        ? { ...provider.auth, status: "unknown" }
+        : provider.auth,
+  };
+}

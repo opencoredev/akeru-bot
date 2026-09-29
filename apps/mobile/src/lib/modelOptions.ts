@@ -5,7 +5,10 @@ import type {
   SubscriptionProviderStatus,
 } from "@t3tools/contracts";
 import { PROVIDER_DISPLAY_NAMES, type ProviderDriverKind } from "@t3tools/contracts";
-import { filterProvidersBySubscriptionConnection } from "@t3tools/client-runtime/provider-auth";
+import {
+  filterProvidersBySubscriptionConnection,
+  withRefreshableSubscriptionLogin,
+} from "@t3tools/client-runtime/provider-auth";
 import {
   presentProviderUnavailability,
   providerAvailabilityReason,
@@ -67,7 +70,10 @@ export function resolveModelSendBlock(
   const reason =
     provider && !connected.includes(provider)
       ? "missing-login"
-      : providerAvailabilityReason(provider, selection.model);
+      : providerAvailabilityReason(
+          provider && withRefreshableSubscriptionLogin(provider, subscriptionStatuses),
+          selection.model,
+        );
   if (reason === null || reason === "temporary-failure") return null;
   const modelName =
     provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??
@@ -121,7 +127,8 @@ export function resolveSelectableModelSelection(
   const providers = subscriptionStatuses
     ? filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses)
     : config.providers;
-  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const found = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const provider = found && withRefreshableSubscriptionLogin(found, subscriptionStatuses);
   return provider &&
     provider.enabled &&
     provider.installed &&
@@ -169,7 +176,10 @@ export function buildModelOptions(
     model?: string,
   ): ProviderAvailabilityReason | null => {
     if (provider && !connected.has(provider)) return "missing-login";
-    const reason = providerAvailabilityReason(provider, model);
+    const reason = providerAvailabilityReason(
+      provider && withRefreshableSubscriptionLogin(provider, subscriptionStatuses),
+      model,
+    );
     return reason === "temporary-failure" ? null : reason;
   };
   const summary = (
