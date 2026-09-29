@@ -356,6 +356,20 @@ describe("DurableFactList", () => {
     expect(onIntent).toHaveBeenCalledWith(fact, { action: "delete" });
   });
 
+  it("closes an open edit or delete confirmation once Memory turns off", () => {
+    const off = { canOperate: true, memoryEnabled: false, privateBotMemory: true };
+    const fact = listedFact();
+    const editing = renderFactList({
+      facts: [fact],
+      policy: off,
+      editing: { rootId: "m1", draft: "Prefers bullet points." },
+    });
+    expect(labels(editing)).toEqual([]);
+    expect(renderToStaticMarkup(editing)).toContain("Prefers detailed replies.");
+    const confirming = renderFactList({ facts: [fact], policy: off, confirmingDeleteRootId: "m1" });
+    expect(labels(confirming)).toEqual([]);
+  });
+
   it("disables actions while a change is in flight", () => {
     const tree = renderFactList({ facts: [listedFact()], busyRootId: "m1" });
     expect(buttons(tree).every((item) => item.props.disabled)).toBe(true);

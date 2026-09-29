@@ -206,7 +206,13 @@ export function DurableFactsCard(props: {
       {props.error
         ? null
         : props.facts?.map((fact) => {
-            const editing = props.editing?.rootId === fact.rootId ? props.editing : null;
+            // An open draft closes if the policy stops allowing edits.
+            const editing =
+              props.editing?.rootId === fact.rootId &&
+              props.policy &&
+              durableFactActions(fact, props.policy).includes("edit")
+                ? props.editing
+                : null;
             const sourceLabel = durableFactSourceLabel(fact, {
               currentThreadId: props.currentThreadId,
               threadTitles: props.threadTitles,

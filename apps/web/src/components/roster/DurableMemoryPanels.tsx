@@ -121,9 +121,11 @@ export function DurableFactList({
     <ul className="space-y-2" data-testid="durable-facts">
       {facts.map((fact) => {
         const busy = busyRootId !== null;
-        const isEditing = editing?.rootId === fact.rootId;
-        const confirmingDelete = confirmingDeleteRootId === fact.rootId;
         const actions = durableFactActions(fact, policy);
+        // An open draft or confirmation closes if the policy stops allowing its action.
+        const isEditing = editing?.rootId === fact.rootId && actions.includes("edit");
+        const confirmingDelete =
+          confirmingDeleteRootId === fact.rootId && actions.includes("delete");
         const sourceLabel = durableFactSourceLabel(fact, { currentThreadId, threadTitles });
         return (
           <li
