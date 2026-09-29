@@ -144,6 +144,8 @@ describe("orchestration projector", () => {
         projectId: "project-1",
         botId: null,
         groupId: null,
+        parentThreadId: null,
+        parentDelegationId: null,
         respondingBotId: null,
         title: "demo",
         modelSelection: {

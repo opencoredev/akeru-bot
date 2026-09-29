@@ -461,6 +461,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           projectId: asProjectId("project-1"),
           botId: null,
           groupId: null,
+          parentThreadId: null,
+          parentDelegationId: null,
           respondingBotId: null,
           title: "Thread 1",
           modelSelection: {
@@ -597,6 +599,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           projectId: asProjectId("project-1"),
           botId: null,
           groupId: null,
+          parentThreadId: null,
+          parentDelegationId: null,
           respondingBotId: null,
           title: "Thread 1",
           modelSelection: {
