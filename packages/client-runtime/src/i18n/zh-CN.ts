@@ -1087,6 +1087,7 @@ export const zhCNCatalog: TranslationCatalog = {
     "写给自己的备注，说明此机器人的用途。可在机器人列表中搜索。",
   "Bot description": "机器人描述",
   "What this bot is for": "此机器人的用途",
+  "What it does": "它会做什么",
   "Voice and personality": "语音与性格",
   Personality: "性格",
   "Choose how this bot usually sounds. It is a baseline, not a costume. The bot still adapts to you and to the task, so serious work stays serious in every mode.":

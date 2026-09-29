@@ -1136,6 +1136,7 @@ export const englishCatalog = {
     "A note to yourself about what this bot is for. Searchable from the roster.",
   "Bot description": "Bot description",
   "What this bot is for": "What this bot is for",
+  "What it does": "What it does",
   "Voice and personality": "Voice and personality",
   Personality: "Personality",
   "Choose how this bot usually sounds. It is a baseline, not a costume. The bot still adapts to you and to the task, so serious work stays serious in every mode.":
