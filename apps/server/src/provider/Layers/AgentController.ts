@@ -240,6 +240,8 @@ interface ActiveTurn {
   readonly turnId: TurnId;
   readonly assistantMessages: Map<string, ActiveAssistantMessage>;
   waiting: boolean;
+  /** Suspended tool calls still waiting for a user answer. */
+  readonly suspendedToolCalls: Set<string>;
   finished: boolean;
   inputTokens: number;
   outputTokens: number;
@@ -847,10 +849,11 @@ const make = (options?: AgentControllerLiveOptions) =>
     >("The agent controller stopped before the routine review finished.");
     // Accepted routine reviews whose routine is still being created, by tool call.
     const creatingRoutineReviews = new Map<string, string>();
-    // A turn waits on the user while any tool approval or routine review it
-    // opened is unanswered, or an accepted routine is still being created.
+    // A turn waits on the user while any tool approval, question, or routine review
+    // it opened is unanswered, or an accepted routine is still being created.
     const turnStillWaiting = (threadId: string, active: ActiveSession) =>
       active.pendingApprovals.size > 0 ||
+      (active.activeTurn?.suspendedToolCalls.size ?? 0) > 0 ||
       pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
       [...creatingRoutineReviews.values()].includes(threadId);
 
@@ -1822,6 +1825,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         turnId,
         assistantMessages: new Map(),
         waiting: false,
+        suspendedToolCalls: new Set(),
         finished: false,
         inputTokens: 0,
         outputTokens: 0,
@@ -2344,6 +2348,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          turn.suspendedToolCalls.add(event.toolCallId);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
           const suspendPayload =
@@ -3773,7 +3778,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             if (!activeTurn || active.activeTurn !== activeTurn) {
               return { _tag: "Stale" as const };
             }
-            if (active.activeTurn) active.activeTurn.waiting = turnStillWaiting(key, active);
+            activeTurn.suspendedToolCalls.delete(toolCallId);
+            activeTurn.waiting = turnStillWaiting(key, active);
             return {
               _tag: "Dispatched" as const,
               resume: active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
