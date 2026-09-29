@@ -187,7 +187,7 @@ describe("channel presentation", () => {
     ).toBeNull();
   });
 
-  it("allows a project change only to a different live project or to repair a blocked binding", () => {
+  it("allows a project change only to a different live project or to repair a blocked or orphaned binding", () => {
     const first = ProjectId.make("project-1");
     const second = ProjectId.make("project-2");
     const liveProjects = [{ id: first }, { id: second }];
@@ -202,6 +202,17 @@ describe("channel presentation", () => {
     expect(
       canChangeChannelProject({ status: "disconnected", projectId: first }, second, liveProjects),
     ).toBe(false);
+    const deleted = ProjectId.make("deleted");
+    expect(
+      canChangeChannelProject({ status: "disconnected", projectId: deleted }, second, liveProjects),
+    ).toBe(true);
+    expect(
+      canChangeChannelProject(
+        { status: "disconnected", projectId: undefined },
+        second,
+        liveProjects,
+      ),
+    ).toBe(true);
   });
 
   it("labels every advertised provider", () => {
