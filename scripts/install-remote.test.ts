@@ -33,6 +33,18 @@ describe("remote installer", () => {
     });
     expect(result.stdout).toBe("v1.2.3\n");
   });
+  it("quotes custom paths in the update unit", () => {
+    expect(script).toContain('Environment=$(systemd_quote "AKERU_HOME=$runtime_home")');
+    expect(script).toContain('ExecStart=$(systemd_quote "$bin_dir/akeru") remote update');
+    const quote = /^systemd_quote\(\) \{\n[\s\S]*?\n\}$/m.exec(script)?.[0];
+    expect(quote).toBeDefined();
+    const result = NodeChildProcess.spawnSync(
+      "sh",
+      ["-c", `${quote}\nsystemd_quote "$1"`, "sh", '/home/lee/My Bins/50%/a"b\\c/akeru'],
+      { encoding: "utf8" },
+    );
+    expect(result.stdout).toBe('"/home/lee/My Bins/50%%/a\\"b\\\\c/akeru"');
+  });
   it("is served unchanged as the public installer", () => {
     expect(
       NodeFS.readFileSync(new URL("../apps/web/public/install", import.meta.url), "utf8"),

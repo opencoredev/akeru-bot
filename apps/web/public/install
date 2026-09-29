@@ -28,6 +28,10 @@ done
 for command_name in curl tar openssl; do
   command -v "$command_name" >/dev/null 2>&1 || { printf '%s is required.\n' "$command_name" >&2; exit 1; }
 done
+# Quotes one value for a systemd unit line; %% keeps systemd specifiers literal.
+systemd_quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed -e 's/%/%%/g' -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+}
 verify_checksum() {
   expected="$1"; file="$2"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -240,8 +244,8 @@ if [ "$install_updates" -eq 1 ] && command -v systemctl >/dev/null 2>&1; then
 Description=Update Akeru Remote
 [Service]
 Type=oneshot
-Environment=AKERU_HOME=$runtime_home
-ExecStart=$bin_dir/akeru remote update
+Environment=$(systemd_quote "AKERU_HOME=$runtime_home")
+ExecStart=$(systemd_quote "$bin_dir/akeru") remote update
 SERVICE
   cat > "$unit_dir/akeru-update.timer" <<TIMER
 [Unit]
