@@ -78,6 +78,24 @@ describe("buildArchivedChatSections", () => {
     expect(sections).toEqual([]);
   });
 
+  it("leaves restored chats out of a stale archive snapshot", () => {
+    const restored = {
+      ...thread("restored", "2026-09-20T00:00:00.000Z", { botId: "bot-mori" }),
+      archivedAt: null,
+    };
+    const sections = buildArchivedChatSections({
+      environmentId,
+      snapshot: snapshot([
+        thread("archived", "2026-09-10T00:00:00.000Z", { botId: "bot-mori" }),
+        restored,
+      ]),
+      bots: [mori],
+      groups: [],
+    });
+
+    expect(sections[0]?.chats.map((chat) => chat.threadId)).toEqual(["archived"]);
+  });
+
   it("names owners from the archived snapshot and keeps unknown owners visible", () => {
     const sections = buildArchivedChatSections({
       environmentId,

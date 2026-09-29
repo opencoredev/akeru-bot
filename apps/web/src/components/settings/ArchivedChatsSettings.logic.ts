@@ -46,7 +46,7 @@ export function buildArchivedChatSections(input: {
     { section: Omit<ArchivedChatSection, "chats">; chats: ArchivedChat[] }
   >();
   for (const thread of snapshot.threads) {
-    if (thread.parentThreadId != null) continue;
+    if (thread.parentThreadId != null || thread.archivedAt === null) continue;
     const owner = thread.groupId
       ? { kind: "group" as const, ownerId: thread.groupId, name: groupNames.get(thread.groupId) }
       : thread.botId
@@ -61,7 +61,7 @@ export function buildArchivedChatSections(input: {
       environmentId: input.environmentId,
       threadId: thread.id,
       title: thread.title,
-      archivedAt: thread.archivedAt ?? thread.updatedAt,
+      archivedAt: thread.archivedAt,
     });
     sections.set(key, entry);
   }
