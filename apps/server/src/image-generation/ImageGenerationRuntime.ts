@@ -154,6 +154,17 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     grok: makeGrokImageAdapter({ subscriptionAuth: yield* sharedStore }),
   };
   const inFlight = new Map<string, Set<Fiber.Fiber<ImageGenerationResult>>>();
+  // Requests run detached from their caller, so shutdown interrupts them explicitly
+  // before anything else can write an attachment into a closing server.
+  yield* Effect.addFinalizer(() =>
+    Effect.forEach(
+      [...inFlight.values()].flatMap((fibers) => [...fibers]),
+      Fiber.interrupt,
+      {
+        discard: true,
+      },
+    ),
+  );
 
   const availability = (provider: ImageProviderId): ImageProviderAvailability => {
     const label = provider === "chatgpt" ? "ChatGPT" : "Grok";

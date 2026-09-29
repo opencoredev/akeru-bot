@@ -19,8 +19,10 @@ import {
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
@@ -755,6 +757,33 @@ describe("ImageGenerationRuntime", () => {
       assert.equal(adapters.grok.calls.length, 0);
       assert.equal((yield* generatedMessages(threadId)).length, 0);
       assert.equal((yield* ledger.summarize(botId)).entries.length, 0);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("aborts in-flight requests when the runtime shuts down", () => {
+    const adapters = { chatgpt: fakeAdapter("chatgpt", "hang"), grok: fakeAdapter("grok") };
+    return Effect.gen(function* () {
+      const botId = BotId.make("bot-shutdown");
+      const threadId = ThreadId.make("thread-shutdown");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+
+      const scope = yield* Scope.make();
+      const runtime = yield* makeImageGenerationRuntime({
+        adapters,
+        subscriptionAuth: fakeSubscriptions(),
+      }).pipe(Scope.provide(scope));
+      const fiber = yield* runtime
+        .generate(threadId, { operation: "generate", prompt: PROMPT })
+        .pipe(Effect.forkChild);
+      yield* Deferred.await(adapters.chatgpt.started);
+      yield* Scope.close(scope, Exit.void);
+      const result = yield* Fiber.join(fiber);
+
+      assert.equal(result.status === "failed" && result.kind, "cancelled");
+      assert.equal(adapters.chatgpt.signals[0]!.aborted, true);
+      assert.equal((yield* generatedMessages(threadId)).length, 0);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 
