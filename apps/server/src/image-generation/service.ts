@@ -28,6 +28,7 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
+import { readBoundedText } from "./boundedResponse.ts";
 import {
   SubscriptionAuthService,
   type SubscriptionProviderId,
@@ -402,7 +403,7 @@ async function generateWithProvider(input: {
       response.status === 401 || response.status === 403;
     throw error;
   }
-  const body = (await response.json()) as {
+  const body = JSON.parse(await readBoundedText(response, meta.label)) as {
     readonly data?: ReadonlyArray<{ readonly b64_json?: string; readonly revised_prompt?: string }>;
   };
   const image = body.data?.[0];
