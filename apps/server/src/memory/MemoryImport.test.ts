@@ -170,16 +170,16 @@ it.effect("rejects target, checksum, and readable-file mismatches", () =>
   }),
 );
 
-it.effect("rejects unapproved and resurrected archive revisions", () =>
+it.effect("accepts pending facts and rejects resurrected archive revisions", () =>
   Effect.gen(function* () {
-    const unapproved = yield* archiveWithRevisions([{ ...revision, approvalState: "pending" }]);
-    const unapprovedFailure = yield* previewAkeruMemoryImport({
+    const pending = yield* archiveWithRevisions([{ ...revision, approvalState: "pending" }]);
+    const pendingPreview = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
-      archive: unapproved,
-    }).pipe(Effect.flip);
-    assert.match(unapprovedFailure.message, /must already be approved/);
+      archive: pending,
+    });
+    assert.equal(pendingPreview.previewHash, "a".repeat(64));
 
     const tombstoneId = AkeruMemoryId.make("revision-import-tombstone");
     const activeId = AkeruMemoryId.make("revision-import-resurrected");

@@ -591,15 +591,34 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         (candidate) =>
           sql
             .unsafe<EntityMemoryDbRow>(
-              `SELECT ${selectColumns} FROM akeru_memory_revisions
+              // A complete export carries the whole history of every fact that currently
+              // lives here, including revisions written before a scope move.
+              input.complete
+                ? `SELECT ${selectColumns} FROM akeru_memory_revisions
+             WHERE tenant_id = ? AND root_id IN (
+               SELECT root_id FROM akeru_memory_revisions
+               WHERE tenant_id = ? AND scope = ? AND partition_id = ? AND visibility = ?
+                 AND superseded_by_id IS NULL
+             )
+             ORDER BY root_id ASC, revision ASC`
+                : `SELECT ${selectColumns} FROM akeru_memory_revisions
              WHERE tenant_id = ? AND scope = ? AND partition_id = ? AND visibility = ?
-               ${
-                 input.complete
-                   ? ""
-                   : "AND superseded_by_id IS NULL AND approval_state = 'approved' AND deletion_state = 'active'"
-               }
+               AND superseded_by_id IS NULL AND approval_state = 'approved' AND deletion_state = 'active'
              ORDER BY root_id ASC, revision ASC`,
-              [candidate.tenantId, candidate.scope, candidate.partitionId, candidate.visibility],
+              input.complete
+                ? [
+                    candidate.tenantId,
+                    candidate.tenantId,
+                    candidate.scope,
+                    candidate.partitionId,
+                    candidate.visibility,
+                  ]
+                : [
+                    candidate.tenantId,
+                    candidate.scope,
+                    candidate.partitionId,
+                    candidate.visibility,
+                  ],
             )
             .pipe(
               Effect.mapError(
@@ -666,31 +685,38 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           reason: "An imported memory scope is not valid for the selected target.",
         });
       }
-      const sourcePartition = input.partitions.find(
-        (partition) =>
-          partition.scope === revision.partition.scope &&
-          partition.partitionId === revision.partition.partitionId &&
-          partition.tenantId === revision.partition.tenantId &&
-          partition.visibility === revision.visibility,
-      );
+      const matchesRevision = (partition: AuthorizedMemoryPartition) =>
+        partition.scope === revision.partition.scope &&
+        partition.partitionId === revision.partition.partitionId &&
+        partition.tenantId === revision.partition.tenantId &&
+        partition.visibility === revision.visibility;
+      // Superseded revisions may predate a scope move, so they are checked against the
+      // authorized partition they were written in and then rehomed with the fact.
+      const sourcePartition =
+        input.partitions.find(matchesRevision) ??
+        (revision.supersededById === null ? undefined : authorized.find(matchesRevision));
+      const owner =
+        sourcePartition === undefined || input.partitions.includes(sourcePartition)
+          ? selected
+          : sourcePartition;
       const expectedEntityId =
-        selected.scope === "project"
+        owner.scope === "project"
           ? input.access.projectId
-          : selected.scope === "workspace"
-            ? selected.partitionId
-            : selected.scope === "bot"
+          : owner.scope === "workspace"
+            ? owner.partitionId
+            : owner.scope === "bot"
               ? input.access.botId
-              : selected.scope === "user"
+              : owner.scope === "user"
                 ? input.access.userId
-                : selected.scope === "bot-user"
+                : owner.scope === "bot-user"
                   ? input.access.userId
-                  : selected.scope === "thread" && input.access.groupId !== null
+                  : owner.scope === "thread" && input.access.groupId !== null
                     ? input.access.groupId
-                    : selected.scope === "thread" && input.access.botId !== null
+                    : owner.scope === "thread" && input.access.botId !== null
                       ? input.access.botId
                       : input.access.projectId;
       const expectedAffected =
-        selected.visibility === "shared"
+        owner.visibility === "shared"
           ? new Set([
               ...input.access.groupMemberBotIds,
               ...(authorBotId === null ? [] : [authorBotId]),
@@ -700,7 +726,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         !sourcePartition ||
         String(revision.entityId) !== String(expectedEntityId) ||
         revision.entityKind !==
-          expectedEntity(input.access, { ...revision, partition: selected })?.kind ||
+          expectedEntity(input.access, { ...revision, partition: owner })?.kind ||
         revision.initiatingUserId !== input.access.userId ||
         (revision.authorBotId !== null &&
           authorBotId !== null &&

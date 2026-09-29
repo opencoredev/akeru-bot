@@ -115,11 +115,6 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
   }
   for (const revisions of revisionsByRoot.values()) {
     const ordered = [...revisions].sort((left, right) => left.revision - right.revision);
-    if (ordered.some((revision) => revision.approvalState !== "approved")) {
-      return yield* new EntityMemoryImportError({
-        detail: "Every imported memory revision must already be approved.",
-      });
-    }
     if (ordered.some((revision) => revision.deletionState === "deleted")) {
       return yield* new EntityMemoryImportError({
         detail: "Deleted memory revisions cannot be restored from an archive.",

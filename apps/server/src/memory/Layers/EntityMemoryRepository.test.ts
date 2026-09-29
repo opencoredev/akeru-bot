@@ -988,6 +988,90 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("roundtrips a pending fact that moved scopes with its full history", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const moveAccess = {
+        ...privateAccess("bot-move-archive"),
+        projectId: ProjectId.make("project-move-archive"),
+        legacyWorkspaceOwnerProjectId: ProjectId.make("project-move-archive"),
+      } as const;
+      const rootId = AkeruMemoryRootId.make("move-archive-root");
+      yield* repository.insert({
+        access: moveAccess,
+        revision: makeRevision("move-archive-1", "bot", {
+          rootId,
+          partition: {
+            tenantId: moveAccess.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(moveAccess.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(moveAccess.botId),
+          sourceThreadId: moveAccess.threadId,
+          authorBotId: moveAccess.botId,
+          affectedBotIds: [moveAccess.botId],
+        }),
+      });
+      const moved = yield* repository.applyMutation({
+        access: moveAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("move-archive-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "pending",
+      });
+      assert.equal(moved!.approvalState, "pending");
+      const exportTarget = (target: "bot" | "project") =>
+        exportAkeruMemory({
+          repository,
+          access: moveAccess,
+          target,
+          complete: true,
+          createdAt: "2026-08-30T23:00:00.000Z",
+          conversations: [],
+        });
+      const botArchive = yield* exportTarget("bot");
+      if (botArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(botArchive.revisions, []);
+      const archive = yield* exportTarget("project");
+      if (archive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        archive.revisions.map(({ revision }) => revision.revision),
+        [1, 2],
+      );
+
+      yield* repository.deleteRoot({ access: moveAccess, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+      });
+      assert.deepEqual(
+        preview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+        previewHash: preview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const restored = yield* repository.getCurrent({ access: moveAccess, rootId });
+      assert.equal(restored.id, moved!.id);
+      assert.equal(restored.partition.scope, "project");
+      assert.equal(restored.approvalState, "pending");
+      assert.lengthOf(yield* repository.listHistory({ access: moveAccess, rootId }), 2);
+    }),
+  );
+
   it.effect("roundtrips workspace memory with its derived workspace identity", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
