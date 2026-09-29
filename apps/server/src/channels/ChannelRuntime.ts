@@ -1897,6 +1897,14 @@ const changeChannelProject = (
         return yield* failWith("The selected project is unavailable. Choose another project.");
       const binding = bot.channelBindings?.find((candidate) => candidate.provider === provider);
       if (!binding) return yield* failWith(`No ${provider} channel is assigned to this bot.`);
+      // A running channel already in the target project has nowhere to move.
+      if (
+        binding.status === "connected" &&
+        binding.projectId === projectId &&
+        ctx.runtimes.has(runtimeKey(botId, provider))
+      ) {
+        return model.snapshotSequence;
+      }
       const secret = binding.connectionId
         ? yield* loadConnectionSecret(ctx, binding.connectionId)
         : yield* loadSecret(ctx, botId, provider);

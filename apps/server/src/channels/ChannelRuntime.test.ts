@@ -1194,6 +1194,28 @@ describe("channel runtime", () => {
       }),
     );
 
+    it.effect("leaves a running channel alone when the target is its current project", () =>
+      Effect.gen(function* () {
+        let stops = 0;
+        const harness = makeHarness({ shutdown: async () => void (stops += 1) });
+        yield* saveConnection(harness);
+        yield* attachChannelConnection(
+          harness.dependencies,
+          BOT_ID,
+          changeProjectConnectionId,
+          PROJECT_ID,
+          "telegram",
+        );
+        const before = harness.readModel().bots[0]?.channelBindings[0];
+
+        yield* changeChannelProject(harness.dependencies, BOT_ID, "telegram", PROJECT_ID);
+
+        expect(stops).toBe(0);
+        expect(harness.readModel().bots[0]?.channelBindings[0]).toEqual(before);
+        yield* stopChannelsForBot(BOT_ID);
+      }),
+    );
+
     it.effect("rejects missing credentials without stopping the running channel", () =>
       Effect.gen(function* () {
         let stops = 0;
