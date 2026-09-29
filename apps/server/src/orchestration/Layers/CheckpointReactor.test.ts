@@ -1878,7 +1878,7 @@ describe("CheckpointReactor", () => {
     );
   }
 
-  it("completes the revert when the provider cannot rewind its conversation", async () => {
+  it("fails the revert instead of keeping stale context when provider rollback is unsupported", async () => {
     const harness = await createHarness();
     harness.provider.rollbackConversation.mockImplementationOnce((input) =>
       Effect.fail(
@@ -1891,15 +1891,10 @@ describe("CheckpointReactor", () => {
 
     await seedTwoTurnsAndRevertToFirst(harness);
 
-    await waitForEvent(harness.engine, (event) => event.type === "thread.reverted");
-    const thread = await waitForThread(
-      harness.readModel,
-      (entry) => entry.checkpoints.length === 1,
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
     );
-    expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
-    expect(thread.activities.some((activity) => activity.kind === "checkpoint.revert.failed")).toBe(
-      false,
-    );
+    expect(thread.checkpoints).toHaveLength(2);
     expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
   });
 

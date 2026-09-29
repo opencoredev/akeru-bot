@@ -759,23 +759,10 @@ const make = Effect.gen(function* () {
 
     const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
     if (rolledBackTurns > 0) {
-      // Mastra-backed bots cannot rewind their own transcript. The workspace is
-      // already restored, so finish the revert instead of leaving stale
-      // checkpoints projected. Any other rollback failure still fails the revert.
-      yield* agentController
-        .rollbackConversation({
-          threadId: sessionRuntime.value.threadId,
-          numTurns: rolledBackTurns,
-        })
-        .pipe(
-          Effect.catchTag("AgentControllerRollbackUnsupportedError", (error) =>
-            Effect.logInfo("provider cannot roll back its conversation; workspace revert kept", {
-              threadId: event.payload.threadId,
-              numTurns: rolledBackTurns,
-              detail: error.detail,
-            }),
-          ),
-        );
+      yield* agentController.rollbackConversation({
+        threadId: sessionRuntime.value.threadId,
+        numTurns: rolledBackTurns,
+      });
     }
 
     const staleCheckpointRefs: Array<CheckpointRef> = [];

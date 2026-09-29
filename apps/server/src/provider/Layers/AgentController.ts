@@ -55,6 +55,7 @@ import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -93,6 +94,11 @@ import {
 import { buildProviderMemoryPacket } from "../../memory/ProviderMemoryPacket.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { retainProjectionMessagesAfterRevert } from "../../orchestration/RetainedRevertMessages.ts";
+import { ProjectionThreadMessageRepository } from "../../persistence/Services/ProjectionThreadMessages.ts";
+import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
+import { ProjectionThreadMessageRepositoryLive } from "../../persistence/Layers/ProjectionThreadMessages.ts";
+import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import * as McpInvocationContext from "../../mcp/McpInvocationContext.ts";
@@ -186,7 +192,6 @@ import {
 } from "../botWorkspacePool.ts";
 import {
   AgentControllerRuntimeError,
-  AgentControllerRollbackUnsupportedError,
   AgentControllerUnsupportedEngineError,
   ProviderValidationError,
 } from "../Errors.ts";
@@ -276,6 +281,7 @@ interface PendingTurn {
 }
 
 interface ActiveSession {
+  startInput: Parameters<AgentControllerShape["startSession"]>[1];
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
@@ -289,6 +295,7 @@ interface ActiveSession {
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
+  readonly pendingDispatches: Set<Promise<void>>;
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
@@ -751,6 +758,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
     const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
+    const projectionMessages = yield* Effect.serviceOption(ProjectionThreadMessageRepository);
+    const projectionTurns = yield* Effect.serviceOption(ProjectionTurnRepository);
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const webFetch = createAkeruWebFetch(options?.webFetch);
     const modelConnections = new Map<
@@ -2164,6 +2173,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           }
         }
       })();
+      active.pendingDispatches.add(dispatch);
+      void dispatch.then(
+        () => active.pendingDispatches.delete(dispatch),
+        () => active.pendingDispatches.delete(dispatch),
+      );
       forkPromise(
         "Akeru turn dispatch failed.",
         () =>
@@ -3080,6 +3094,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           imageGeneration,
         };
         existing.configuredToolSession = configuredToolSession;
+        existing.startInput = input;
         existing.configuredMemoryAccess = delegatedAccess
           ? undefined
           : memoryAccessFor(input.memoryAccess);
@@ -3498,6 +3513,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
         return {
           session,
+          startInput: input,
+          pendingDispatches: new Set<Promise<void>>(),
           provider: resolved.provider,
           providerInstanceId: resolved.providerInstanceId,
           cwd: input.cwd,
@@ -4201,21 +4218,134 @@ const make = (options?: AgentControllerLiveOptions) =>
     const stopSession: AgentControllerShape["stopSession"] = (input) =>
       stopSessionWithResources(input, false);
 
-    const rollbackConversation: AgentControllerShape["rollbackConversation"] = (input) => {
+    const rollbackConversation: AgentControllerShape["rollbackConversation"] = Effect.fn(
+      "AgentController.rollbackConversation",
+    )(function* (input) {
+      if (input.numTurns === 0) return;
       const resolved = resolvedByThread.get(String(input.threadId));
       if (!sessions.has(String(input.threadId)) && !resolved) {
-        return legacyProviderBridge.rollbackConversation(input);
+        return yield* legacyProviderBridge.rollbackConversation(input);
       }
       if (resolved && !usesMastraCode(resolved.provider)) {
-        return legacyProviderBridge.rollbackConversation(input);
+        return yield* legacyProviderBridge.rollbackConversation(input);
       }
-      return Effect.fail(
-        new AgentControllerRollbackUnsupportedError({
-          threadId: input.threadId,
-          detail: "Mastra conversation rollback is not available.",
+      const active = sessions.get(String(input.threadId));
+      if (
+        !active ||
+        !bundle.rebuildConversation ||
+        Option.isNone(projectionMessages) ||
+        Option.isNone(projectionTurns)
+      ) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "rollbackConversation",
+          detail: "Conversation history is unavailable for rebuilding the provider session.",
+        });
+      }
+      const turns = yield* projectionTurns.value.listByThreadId({ threadId: input.threadId });
+      const messages = yield* projectionMessages.value.listByThreadId({ threadId: input.threadId });
+      const currentTurnCount = turns.reduce(
+        (count, turn) => Math.max(count, turn.checkpointTurnCount ?? 0),
+        0,
+      );
+      const retained = retainProjectionMessagesAfterRevert(
+        messages,
+        turns,
+        Math.max(0, currentTurnCount - input.numTurns),
+      );
+      const key = String(input.threadId);
+      const transcript: MastraDBMessage[] = yield* Effect.forEach(retained, (message) =>
+        Effect.try({
+          try: () => ({
+            id: String(message.messageId),
+            role: message.role,
+            content: {
+              format: 2 as const,
+              parts: [
+                {
+                  type: "text" as const,
+                  text: [
+                    message.text,
+                    ...(message.attachments ?? []).map((attachment) => {
+                      const path = resolveAttachmentPath({
+                        attachmentsDir: config.attachmentsDir,
+                        attachment,
+                      });
+                      return `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
+                    }),
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n"),
+                },
+              ],
+              ...(message.attachments?.length
+                ? {
+                    experimental_attachments: message.attachments.map((attachment) => {
+                      const path = resolveAttachmentPath({
+                        attachmentsDir: config.attachmentsDir,
+                        attachment,
+                      });
+                      if (path === null) throw new Error(`Invalid attachment '${attachment.id}'.`);
+                      return {
+                        name: attachment.name,
+                        contentType: attachment.mimeType,
+                        url: `data:${attachment.mimeType};base64,${NodeFS.readFileSync(path).toString("base64")}`,
+                      };
+                    }),
+                  }
+                : {}),
+            },
+            createdAt: DateTime.toDate(DateTime.makeUnsafe(message.createdAt)),
+            threadId: key,
+            resourceId: key,
+          }),
+          catch: (cause) =>
+            new AgentControllerRuntimeError({
+              operation: "rollbackConversation",
+              detail: "Could not rebuild retained conversation attachments.",
+              cause,
+            }),
         }),
       );
-    };
+      const startInput = {
+        ...active.startInput,
+        runtimeMode: active.runtimeMode,
+        ...(resolved ? { modelSelection: resolved.modelSelection } : {}),
+      };
+      const drainLifetime = new AbortController();
+      const drained = (async () => {
+        while (
+          !drainLifetime.signal.aborted &&
+          (active.session.stream.isActive() || active.session.run.getRunId() !== null)
+        ) {
+          const wake = new AbortController();
+          const cancel = () => wake.abort();
+          drainLifetime.signal.addEventListener("abort", cancel, { once: true });
+          try {
+            await Promise.race([
+              active.session.stream.waitForTeardown(wake.signal),
+              active.session.run.waitForTeardown(wake.signal),
+            ]);
+          } finally {
+            drainLifetime.signal.removeEventListener("abort", cancel);
+            wake.abort();
+          }
+        }
+      })();
+      yield* interruptTurn({ threadId: input.threadId });
+      yield* runMastra("drainConversation", async () => {
+        await Promise.allSettled([...active.pendingDispatches]);
+        await drained;
+      }).pipe(Effect.ensuring(Effect.sync(() => drainLifetime.abort())));
+      yield* stopSession({ threadId: input.threadId });
+      const restore = yield* runMastra("rebuildConversation", () =>
+        bundle.rebuildConversation!(key, transcript),
+      );
+      yield* startSession(input.threadId, startInput).pipe(
+        Effect.catch((error) =>
+          runMastra("restoreConversation", restore).pipe(Effect.andThen(Effect.fail(error))),
+        ),
+      );
+    });
 
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
@@ -4484,4 +4614,7 @@ export const AgentControllerLive = Layer.effect(
     const entityMemoryRepository = yield* EntityMemoryRepository;
     return yield* make({ entityMemoryRepository });
   }),
+).pipe(
+  Layer.provide(ProjectionThreadMessageRepositoryLive),
+  Layer.provide(ProjectionTurnRepositoryLive),
 );

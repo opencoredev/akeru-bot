@@ -13,6 +13,7 @@ import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
 import type { ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
+  type MastraDBMessage,
   type Session,
 } from "@mastra/core/agent-controller";
 import { createCodingAgent } from "@mastra/core/coding-agent";
@@ -270,6 +271,10 @@ export interface AkeruMastraHarnessOptions {
 }
 
 export interface AkeruMastraHarness {
+  readonly rebuildConversation?: (
+    threadId: string,
+    messages: ReadonlyArray<MastraDBMessage>,
+  ) => Promise<() => Promise<void>>;
   readonly controller: Pick<
     MastraAgentController<AkeruMastraState>,
     "init" | "createSession" | "deleteSession"
@@ -1878,6 +1883,47 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
 
   const harness: AkeruMastraHarness = {
     controller,
+    rebuildConversation: (threadId, messages) =>
+      queueObservation(threadId, threadId, async () => {
+        const originalThread = await observationalMemory.memory.getThreadById({
+          threadId,
+          resourceId: threadId,
+        });
+        const originals = originalThread
+          ? (await observationalMemory.memory.recall({ threadId, perPage: false })).messages
+          : [];
+        const store = observationalMemory.engine.getStorage();
+        const observations = await store.getObservationalMemoryHistory(
+          threadId,
+          threadId,
+          Number.MAX_SAFE_INTEGER,
+        );
+        const replace = async (transcript: ReadonlyArray<MastraDBMessage>) => {
+          discardQueuedObservations.run(threadId, threadId);
+          await observationalMemory.engine.clear(threadId, threadId);
+          await observationalMemory.memory.deleteThread(threadId);
+          await observationalMemory.memory.createThread({
+            threadId,
+            resourceId: threadId,
+            ...(originalThread?.title ? { title: originalThread.title } : {}),
+            ...(originalThread?.metadata ? { metadata: originalThread.metadata } : {}),
+          });
+          if (transcript.length > 0) {
+            await observationalMemory.memory.persistMessages([...transcript]);
+          }
+        };
+        const restore = async () => {
+          await replace(originals);
+          for (const record of observations) await store.insertObservationalMemoryRecord(record);
+        };
+        try {
+          await replace(messages);
+        } catch (cause) {
+          await restore();
+          throw cause;
+        }
+        return () => queueObservation(threadId, threadId, restore);
+      }),
     clearObservationalMemory,
     readObservationalMemory,
     restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) => {
