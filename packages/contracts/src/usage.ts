@@ -12,7 +12,7 @@
  */
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ForwardCompatibleArray, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { SubscriptionProviderId } from "./subscriptionAuth.ts";
 
 /**
@@ -206,13 +206,16 @@ export const UsageSummary = Schema.Struct({
   timeZone: TrimmedNonEmptyString,
   sinceDay: UsageDay,
   untilDay: UsageDay,
-  buckets: Schema.Array(UsageBucket),
-  sources: Schema.Array(UsageSource),
+  // Same-version servers may still report retired providers such as Cursor, and
+  // newer ones may add providers. Drop entries this build cannot read so the
+  // rest of that environment's usage still shows.
+  buckets: ForwardCompatibleArray(UsageBucket),
+  sources: ForwardCompatibleArray(UsageSource),
   pricing: UsagePricing,
   /** Wall-clock cost of the scan, surfaced in diagnostics. */
   scanDurationMs: NonNegativeInt,
   /** Live plan windows for connected provider subscriptions. */
-  planLimits: Schema.optional(Schema.Array(UsageProviderPlanLimits)),
+  planLimits: Schema.optional(ForwardCompatibleArray(UsageProviderPlanLimits)),
   /** Settings -> Providers connections that may contribute usage. Absent on older servers. */
   connectedProviders: Schema.optional(Schema.Array(SubscriptionProviderId)),
 });
