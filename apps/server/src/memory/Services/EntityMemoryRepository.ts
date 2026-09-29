@@ -53,7 +53,7 @@ export interface ListEntityMemoryInput {
 }
 
 export interface ListEntityMemoryPartitionsInput {
-  readonly tenantId: AkeruMemoryThreadAccess["tenantId"];
+  readonly access: AkeruMemoryThreadAccess;
   readonly partitions: ReadonlyArray<AuthorizedMemoryPartition>;
   readonly complete: boolean;
 }

@@ -1089,6 +1089,93 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("keeps a moved fact's private revisions out of another bot's project export", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const projectId = ProjectId.make("project-private-history");
+      const accessFor = (botId: string) =>
+        ({
+          ...privateAccess(botId),
+          projectId,
+          legacyWorkspaceOwnerProjectId: projectId,
+        }) as const;
+      const alice = accessFor("bot-private-history-alice");
+      const bob = accessFor("bot-private-history-bob");
+      const rootId = AkeruMemoryRootId.make("private-history-root");
+      yield* repository.insert({
+        access: alice,
+        revision: makeRevision("private-history-1", "bot", {
+          rootId,
+          fact: "Alice's private deploy token is hunter2.",
+          partition: {
+            tenantId: alice.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(alice.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(alice.botId),
+          sourceThreadId: alice.threadId,
+          authorBotId: alice.botId,
+          affectedBotIds: [alice.botId],
+        }),
+      });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 1,
+          fact: "Deploys use the shared release checklist.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("private-history-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const exportAs = (access: typeof alice) =>
+        exportAkeruMemory({
+          repository,
+          access,
+          target: "project",
+          complete: true,
+          createdAt: "2026-08-30T23:00:00.000Z",
+          conversations: [],
+        });
+
+      const bobArchive = yield* exportAs(bob);
+      if (bobArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        bobArchive.revisions.map(({ revision }) => revision.revision),
+        (yield* repository.listHistory({ access: bob, rootId }))
+          .map((revision) => revision.revision)
+          .toReversed(),
+      );
+      assert.deepEqual(
+        bobArchive.revisions.map(({ revision }) => revision.revision),
+        [3],
+      );
+      assert.isFalse(bobArchive.files.some((file) => file.content.includes("hunter2")));
+
+      const aliceArchive = yield* exportAs(alice);
+      if (aliceArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        aliceArchive.revisions.map(({ revision }) => revision.revision),
+        [1, 2, 3],
+      );
+    }),
+  );
+
   it.effect("roundtrips workspace memory with its derived workspace identity", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;

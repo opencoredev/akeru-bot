@@ -556,6 +556,18 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       ),
     );
 
+  // Keeps only revisions stored in a partition the caller can read, so a fact moved out of
+  // a private scope does not reveal its earlier private text.
+  const isRevisionAuthorized =
+    (partitions: ReadonlyArray<AuthorizedMemoryPartition>) => (revision: AkeruMemoryRevision) =>
+      partitions.some(
+        (partition) =>
+          partition.tenantId === revision.partition.tenantId &&
+          partition.scope === revision.partition.scope &&
+          partition.partitionId === revision.partition.partitionId &&
+          partition.visibility === revision.visibility,
+      );
+
   const listHistory: EntityMemoryRepositoryShape["listHistory"] = (input) =>
     Effect.gen(function* () {
       yield* getCurrent(input);
@@ -568,20 +580,12 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         )
         .pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.listHistory:query")));
       const decoded = yield* Effect.forEach(rows, decodeRow);
-      return decoded.filter((revision) =>
-        partitions.some(
-          (partition) =>
-            partition.tenantId === revision.partition.tenantId &&
-            partition.scope === revision.partition.scope &&
-            partition.partitionId === revision.partition.partitionId &&
-            partition.visibility === revision.visibility,
-        ),
-      );
+      return decoded.filter(isRevisionAuthorized(partitions));
     });
 
   const listByPartitions: EntityMemoryRepositoryShape["listByPartitions"] = (input) =>
     Effect.gen(function* () {
-      if (input.partitions.some((candidate) => candidate.tenantId !== input.tenantId)) {
+      if (input.partitions.some((candidate) => candidate.tenantId !== input.access.tenantId)) {
         return yield* new AkeruMemoryAccessDenied({
           reason: "Every export partition must belong to the requested tenant.",
         });
@@ -628,7 +632,10 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             ),
         { concurrency: 1 },
       );
-      return groups.flat();
+      const revisions = groups.flat();
+      if (!input.complete) return revisions;
+      const authorized = yield* resolveAuthorizedMemoryPartitions(input.access);
+      return revisions.filter(isRevisionAuthorized(authorized));
     });
 
   const fingerprint = (revision: AkeruMemoryRevision, prefix = false) => {
