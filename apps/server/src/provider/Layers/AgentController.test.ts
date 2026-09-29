@@ -1984,6 +1984,71 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("reads entity memory from the current project after reusing a legacy session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const botId = BotId.make("bot-entity-memory-moved");
+    const accessFor = (project: string) =>
+      ({
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: claudeThreadId,
+        projectId: ProjectId.make(project),
+        workspaceRoot: "/workspace/entity-memory-moved",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      }) as const;
+    const listCurrent = vi.fn((_input: { access: { projectId: ProjectId } }) => Effect.succeed([]));
+    const startSession = (project: string) =>
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        return yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: accessFor(project),
+        });
+      });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* startSession("project-before-move");
+        yield* startSession("project-after-move");
+        expect(bridge.startSession).toHaveBeenCalledTimes(1);
+        listCurrent.mockClear();
+
+        yield* controller.sendTurn({ threadId: claudeThreadId, input: "After the move." });
+        expect(listCurrent.mock.calls.map(([input]) => String(input.access.projectId))).toEqual([
+          "project-after-move",
+        ]);
+      }),
+      {
+        ...bridge.service,
+        listSessions: () => Effect.succeed([makeProviderSession(claudeThreadId, "opencode")]),
+      },
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      {
+        ...makeMemoryOnlyCredentialOptions(),
+        entityMemoryRepository: { listCurrent, recordDerivedCopies: () => Effect.void } as never,
+      },
+    );
+  });
+
   it.effect(
     "denies the legacy MCP memory tool while Memory is off and restores it on re-enable",
     () => {

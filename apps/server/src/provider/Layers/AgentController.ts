@@ -2622,6 +2622,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
         if (live) {
           existingLegacy.memoryAccess = nextMemoryAccess;
+          existingLegacy.entityMemoryAccess = input.memoryAccess;
           existingLegacy.privateBotMemory = settings.privateBotMemory;
           if (nextMemoryHandlers?.memory) {
             McpMemoryToolSession.setMcpMemoryToolSession(threadId, nextMemoryHandlers.memory);
