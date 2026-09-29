@@ -178,4 +178,21 @@ describe("withRefreshableSubscriptionLogin", () => {
       reason(expiredClaude("claude_work"), [{ ...status, health: "expired", authMode: "oauth" }]),
     ).toBe("expired-login");
   });
+
+  it("keeps a default instance with its own credential blocked", () => {
+    const expired = [{ ...status, health: "expired" as const, authMode: "oauth" as const }];
+    const ownKey = {
+      claudeAgent: {
+        driver: ProviderDriverKind.make("claudeAgent"),
+        environment: [
+          { name: "ANTHROPIC_API_KEY", value: "", sensitive: true, valueRedacted: true },
+        ],
+      },
+    };
+    expect(
+      providerAvailabilityReason(
+        withRefreshableSubscriptionLogin(expiredClaude(), expired, ownKey),
+      ),
+    ).toBe("expired-login");
+  });
 });

@@ -1,5 +1,7 @@
 import {
   defaultInstanceIdForDriver,
+  instanceUsesSavedCredential,
+  type ProviderInstanceConfig,
   type ServerProvider,
   SubscriptionBaseUrl,
   type SubscriptionAuthStartInput,
@@ -84,15 +86,22 @@ export function filterProvidersBySubscriptionConnection(
 /**
  * Server turn preflight lets an expired OAuth login on a saved connection try a
  * token refresh, so clients must not block Send on it. Returns the provider
- * with that expired login cleared; revoked and API-key logins stay blocked.
+ * with that expired login cleared; revoked and API-key logins stay blocked, as
+ * do instances configured with their own credential in `providerInstances`.
  */
 export function withRefreshableSubscriptionLogin(
   provider: ServerProvider,
   statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
+  providerInstances?: Readonly<Record<string, ProviderInstanceConfig>>,
 ): ServerProvider {
   const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
   if (!subscriptionProvider) return provider;
   if (provider.instanceId !== defaultInstanceIdForDriver(provider.driver)) return provider;
+  if (
+    !instanceUsesSavedCredential(subscriptionProvider, providerInstances?.[provider.instanceId])
+  ) {
+    return provider;
+  }
   const status = statuses?.find((candidate) => candidate.provider === subscriptionProvider);
   if (status?.health !== "expired" || status.authMode !== "oauth") return provider;
   const expired = provider.unavailability === "expired-login";

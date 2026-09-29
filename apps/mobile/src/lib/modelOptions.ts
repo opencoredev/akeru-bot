@@ -71,7 +71,12 @@ export function resolveModelSendBlock(
     provider && !connected.includes(provider)
       ? "missing-login"
       : providerAvailabilityReason(
-          provider && withRefreshableSubscriptionLogin(provider, subscriptionStatuses),
+          provider &&
+            withRefreshableSubscriptionLogin(
+              provider,
+              subscriptionStatuses,
+              config.settings.providerInstances,
+            ),
           selection.model,
         );
   if (reason === null || reason === "temporary-failure") return null;
@@ -128,7 +133,13 @@ export function resolveSelectableModelSelection(
     ? filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses)
     : config.providers;
   const found = providers.find((candidate) => candidate.instanceId === selection.instanceId);
-  const provider = found && withRefreshableSubscriptionLogin(found, subscriptionStatuses);
+  const provider =
+    found &&
+    withRefreshableSubscriptionLogin(
+      found,
+      subscriptionStatuses,
+      config.settings.providerInstances,
+    );
   return provider &&
     provider.enabled &&
     provider.installed &&
@@ -177,7 +188,12 @@ export function buildModelOptions(
   ): ProviderAvailabilityReason | null => {
     if (provider && !connected.has(provider)) return "missing-login";
     const reason = providerAvailabilityReason(
-      provider && withRefreshableSubscriptionLogin(provider, subscriptionStatuses),
+      provider &&
+        withRefreshableSubscriptionLogin(
+          provider,
+          subscriptionStatuses,
+          config?.settings.providerInstances,
+        ),
       model,
     );
     return reason === "temporary-failure" ? null : reason;

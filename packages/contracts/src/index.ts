@@ -24,6 +24,7 @@ export * from "./keybindings.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
 export * from "./subscriptionAuth.ts";
+export * from "./providerCredential.ts";
 export * from "./imageGeneration.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";

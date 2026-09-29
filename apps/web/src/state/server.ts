@@ -86,8 +86,9 @@ export const primaryServerProvidersAtom = Atom.make((get): ReadonlyArray<ServerP
   const statuses = Option.getOrUndefined(
     AsyncResult.value(get(serverEnvironment.subscriptionAuth({ environmentId, input: {} }))),
   );
+  const providerInstances = get(primaryServerSettingsAtom).providerInstances;
   return filterProvidersBySubscriptionConnection(providers, statuses?.providers).map((provider) =>
-    withRefreshableSubscriptionLogin(provider, statuses?.providers),
+    withRefreshableSubscriptionLogin(provider, statuses?.providers, providerInstances),
   );
 }).pipe(Atom.withLabel("web-primary-server-providers"));
 
