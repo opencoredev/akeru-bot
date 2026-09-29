@@ -1540,6 +1540,55 @@ describe("AkeruMastraHarness", () => {
     }),
   );
 
+  it.effect("waits for external-turn persistence before closing memory", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-ext-close-"));
+      const persisting = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockResolvedValue({ observed: true, reflected: false, record: {} } as never);
+      const persist = vi.spyOn(Memory.prototype, "persistMessages").mockImplementation(async () => {
+        persisting.resolve();
+        await release.promise;
+        return [] as never;
+      });
+      const harness = await makeObservationHarness(open, directory);
+      const turn = {
+        threadId: "thread-external-close",
+        turnId: "turn-external-close",
+        modelId: "openai/gpt-5.6-sol",
+        userMessages: [{ id: "u1", text: "Remember this." }],
+        assistant: "Noted.",
+        createdAt: "2026-09-20T12:00:00.000Z",
+      };
+      try {
+        const observed = harness.observeExternalTurn!(turn).catch((cause: unknown) => cause);
+        await persisting.promise;
+        let closedStore = false;
+        const closing = harness.close().then(() => {
+          closedStore = true;
+        });
+        await Promise.resolve();
+        assert.isFalse(closedStore);
+        release.resolve();
+        await closing;
+        await observed;
+        // A turn arriving after close is refused and leaves no callback behind.
+        assert.instanceOf(
+          await harness.observeExternalTurn!(turn).catch((cause: unknown) => cause),
+          AkeruObservationQueueClosedError,
+        );
+        await invalidateEntityMemoryObservations([[turn.threadId, turn.threadId]]);
+        assert.strictEqual(persist.mock.calls.length, 1);
+      } finally {
+        observe.mockRestore();
+        persist.mockRestore();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
   it("routes Codex API keys through OpenAI Responses instead of the OAuth transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-api-key-auth.json");
     const getCredential = vi.fn(() => ({

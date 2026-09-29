@@ -1644,6 +1644,20 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     input,
   ) => {
     registerResource(input.threadId);
+    // Persisting the turn is admitted like observation work, so close waits for it
+    // (or interrupts it) before the memory store closes.
+    await queueObservation(input.threadId, input.threadId, () => persistExternalTurn(input));
+    await observeAfterTurn({
+      threadId: input.threadId,
+      resourceId: input.threadId,
+      modelId: input.modelId,
+      turnId: input.turnId,
+    });
+  };
+
+  const persistExternalTurn = async (
+    input: Parameters<NonNullable<AkeruMastraHarness["observeExternalTurn"]>>[0],
+  ) => {
     const existingThread = await observationalMemory.memory.getThreadById({
       threadId: input.threadId,
       resourceId: input.threadId,
@@ -1673,12 +1687,6 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         resourceId: input.threadId,
       },
     ]);
-    await observeAfterTurn({
-      threadId: input.threadId,
-      resourceId: input.threadId,
-      modelId: input.modelId,
-      turnId: input.turnId,
-    });
   };
 
   void drainObservationQueue().catch(() => undefined);
@@ -1800,7 +1808,10 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     });
   const unregisterStore = registerEntityMemoryStore(clearObservationalMemory);
   const registeredResources = new Map<string, () => void>();
+  let resourcesUnregistered = false;
   const registerResource = (threadId: string, resourceId = threadId) => {
+    // A late call after close must not leave a callback into this closed harness.
+    if (closed || resourcesUnregistered) return;
     const key = `${threadId}\u0000${resourceId}`;
     registeredResources.get(key)?.();
     registeredResources.set(
@@ -1813,6 +1824,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
       unregisterStore();
+      resourcesUnregistered = true;
       for (const unregister of registeredResources.values()) unregister();
       registeredResources.clear();
     }),
