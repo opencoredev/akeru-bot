@@ -688,6 +688,32 @@ describe("BotMemoryStore", () => {
     },
   );
 
+  it("does not replace a file after losing its lock while staging the write", async () => {
+    const store = await fixture();
+    const lockPath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock");
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    let lockReads = 0;
+    let stealOnRead = Number.POSITIVE_INFINITY;
+    vi.mocked(NodeFS.readFile).mockImplementation(async (...args) => {
+      const contents = await actual.readFile(...args);
+      if (args[0] === lockPath && ++lockReads === stealOnRead) await takeLockFromOwner(lockPath);
+      return contents;
+    });
+    try {
+      await store.replaceDocument(privateAccess(), "memory", "Kept note.");
+      // The last ownership check passes, then another writer takes the lock.
+      stealOnRead = lockReads * 2 - 1;
+      await expect(
+        store.replaceDocument(privateAccess(), "memory", "Stale note."),
+      ).rejects.toMatchObject({ code: "lock-lost" });
+    } finally {
+      vi.mocked(NodeFS.readFile).mockImplementation(actual.readFile);
+    }
+    assert.include(await NodeFS.readFile(lockPath, "utf8"), "other-owner");
+    await NodeFS.unlink(lockPath);
+    assert.equal((await store.readDocument(privateAccess(), "memory")).content, "Kept note.");
+  });
+
   it("waits on a fresh partial lock record instead of quarantining it", async () => {
     const store = await fixture();
     const lockPath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock");

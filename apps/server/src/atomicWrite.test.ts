@@ -95,3 +95,42 @@ it.effect("keeps the previous file when syncing the replacement fails", () =>
     assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "previous");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
+
+it.effect("checks beforeReplace after syncing and keeps the previous file when it fails", () =>
+  Effect.gen(function* () {
+    const directory = yield* Effect.promise(() =>
+      NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-atomic-write-")),
+    );
+    directories.push(directory);
+    const filePath = NodePath.join(directory, "memory.md");
+    yield* Effect.promise(() => NodeFS.writeFile(filePath, "previous"));
+    const operations: string[] = [];
+    const fs = yield* FileSystem.FileSystem;
+    const observedFs = {
+      ...fs,
+      open: (...args: Parameters<typeof fs.open>) =>
+        fs.open(...args).pipe(
+          Effect.map((file) => ({
+            ...file,
+            sync: Effect.sync(() => {
+              operations.push("sync");
+            }).pipe(Effect.flatMap(() => file.sync)),
+          })),
+        ),
+    } satisfies FileSystem.FileSystem;
+    const result = yield* Effect.exit(
+      writeFileStringAtomically({
+        filePath,
+        contents: "replacement",
+        durable: true,
+        beforeReplace: Effect.suspend(() => {
+          operations.push("beforeReplace");
+          return Effect.fail("lock lost");
+        }),
+      }).pipe(Effect.provideService(FileSystem.FileSystem, observedFs)),
+    );
+    assert.isTrue(Exit.isFailure(result));
+    assert.deepEqual(operations, ["sync", "beforeReplace"]);
+    assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "previous");
+  }).pipe(Effect.provide(NodeServices.layer)),
+);

@@ -600,11 +600,27 @@ async function writeMemoryFile(
   await ensurePrivateDirectory(memoryRoot, NodePath.dirname(filePath));
   await assertNotSymlink(filePath);
   await verifyOwnership?.();
+  // Check again after the slow staging and sync, so a writer that lost the lock
+  // meanwhile never replaces the newer owner's file.
+  let lostLock: BotMemoryError | undefined;
   await Effect.runPromise(
-    writeFileStringAtomically({ filePath, contents, mode: 0o600, durable: true }).pipe(
-      Effect.provide(NodeServices.layer),
-    ),
-  );
+    writeFileStringAtomically({
+      filePath,
+      contents,
+      mode: 0o600,
+      durable: true,
+      ...(verifyOwnership
+        ? {
+            beforeReplace: Effect.tryPromise({
+              try: verifyOwnership,
+              catch: (cause) => (lostLock = toBotMemoryError(cause)),
+            }),
+          }
+        : {}),
+    }).pipe(Effect.provide(NodeServices.layer)),
+  ).catch((cause: unknown) => {
+    throw lostLock ?? cause;
+  });
 }
 
 export class BotMemoryStore {

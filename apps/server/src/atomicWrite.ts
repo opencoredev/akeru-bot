@@ -3,11 +3,13 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
-export const writeFileStringAtomically = (input: {
+export const writeFileStringAtomically = <E = never>(input: {
   readonly filePath: string;
   readonly contents: string;
   readonly mode?: number;
   readonly durable?: boolean;
+  /** Runs after the contents are staged, right before they replace the target. */
+  readonly beforeReplace?: Effect.Effect<void, E>;
 }) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -36,6 +38,7 @@ export const writeFileStringAtomically = (input: {
           }),
         );
       }
+      if (input.beforeReplace) yield* input.beforeReplace;
       yield* fs.rename(tempPath, input.filePath);
       if (input.durable && (yield* HostProcessPlatform) !== "win32") {
         yield* Effect.scoped(
