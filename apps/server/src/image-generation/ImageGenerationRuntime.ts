@@ -269,7 +269,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     readonly botId: BotId;
     readonly threadId: ThreadId;
     readonly turnId: TurnId | null;
-    readonly generationId: string;
+    readonly usageId: string;
     readonly provider: ImageProviderId;
     readonly model: string | undefined;
     readonly usage: { inputTokens: number; outputTokens: number; reasoningTokens: number | null };
@@ -277,8 +277,8 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     Effect.gen(function* () {
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       yield* usageLedger.recordMeasurement({
-        reservationId: AkeruUsageReservationId.make(`image:${input.generationId}`),
-        sourceKey: `image:${input.generationId}`,
+        reservationId: AkeruUsageReservationId.make(`image:${input.usageId}`),
+        sourceKey: `image:${input.usageId}`,
         botId: input.botId,
         threadId: input.threadId,
         turnId: input.turnId,
@@ -313,6 +313,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
           : { ok: true as const, images: [] };
       if (!inputImages.ok) return failed("invalid-request", inputImages.message);
 
+      const generationId = NodeCrypto.randomUUID();
       const routed = yield* routeImageRequest({
         request,
         inputImages: inputImages.images,
@@ -322,33 +323,60 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         adapters,
         ...(options.requestTimeout ? { timeout: options.requestTimeout } : {}),
         onAttempt: recordAttempt,
+        onOutput: (provider, output, requestIndex) =>
+          botId
+            ? recordUsage({
+                botId,
+                threadId,
+                turnId,
+                usageId: `${generationId}:${requestIndex}`,
+                provider,
+                model: output.model,
+                usage: output.usage ?? {
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  reasoningTokens: null,
+                },
+              }).pipe(
+                Effect.catch(() =>
+                  Effect.logWarning("Could not record image generation usage.", { threadId }),
+                ),
+              )
+            : Effect.void,
       });
-      if (routed.status !== "completed") return routed;
 
-      const generationId = NodeCrypto.randomUUID();
       const artifacts: ImageArtifact[] = [];
       const attachments: ChatImageAttachment[] = [];
-      for (const [index, bytes] of routed.output.images.entries()) {
-        const sniffed = sniffImage(bytes);
-        if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
-        const attachment = persistImage({
-          attachmentsDir: config.attachmentsDir,
-          threadId,
-          bytes,
-          mimeType: sniffed.mimeType,
-          index,
-        });
-        if (!attachment) continue;
-        attachments.push(attachment);
-        artifacts.push({
-          attachmentId: attachment.id,
-          mimeType: sniffed.mimeType,
-          width: sniffed.width,
-          height: sniffed.height,
-          sizeBytes: bytes.byteLength,
-          provider: routed.provider,
-          ...(routed.output.model ? { model: routed.output.model } : {}),
-        });
+      for (const part of routed.parts) {
+        for (const bytes of part.output.images) {
+          const sniffed = sniffImage(bytes);
+          if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
+          const attachment = persistImage({
+            attachmentsDir: config.attachmentsDir,
+            threadId,
+            bytes,
+            mimeType: sniffed.mimeType,
+            index: attachments.length,
+          });
+          if (!attachment) continue;
+          attachments.push(attachment);
+          artifacts.push({
+            attachmentId: attachment.id,
+            mimeType: sniffed.mimeType,
+            width: sniffed.width,
+            height: sniffed.height,
+            sizeBytes: bytes.byteLength,
+            provider: part.provider,
+            ...(part.output.model ? { model: part.output.model } : {}),
+          });
+        }
+      }
+      if (attachments.length > 0) {
+        yield* postAttachments({ threadId, turnId, generationId, attachments });
+      }
+      if (routed.status !== "completed") {
+        const { parts: _parts, ...result } = routed;
+        return result;
       }
       if (attachments.length === 0) {
         return {
@@ -359,26 +387,10 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         } satisfies ImageGenerationResult;
       }
 
-      yield* postAttachments({ threadId, turnId, generationId, attachments });
-      if (botId) {
-        yield* recordUsage({
-          botId,
-          threadId,
-          turnId,
-          generationId,
-          provider: routed.provider,
-          model: routed.output.model,
-          usage: routed.output.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: null },
-        }).pipe(
-          Effect.catch(() =>
-            Effect.logWarning("Could not record image generation usage.", { threadId }),
-          ),
-        );
-      }
       return {
         status: "completed",
         provider: routed.provider,
-        ...(routed.output.model ? { model: routed.output.model } : {}),
+        ...(routed.parts[0]?.output.model ? { model: routed.parts[0].output.model } : {}),
         artifacts,
         attempts: routed.attempts,
       } satisfies ImageGenerationResult;

@@ -84,7 +84,9 @@ function fakeAdapter(provider: ImageProviderId, behavior: Behavior = "ok"): Fake
       if (behavior === "hang") return new Promise(() => {});
       if (behavior !== "ok") return Promise.reject(behavior);
       return Promise.resolve({
-        images: [provider === "chatgpt" ? pngBytes(1024, 1024) : jpegBytes(1280, 720)],
+        images: Array.from({ length: request.count }, () =>
+          provider === "chatgpt" ? pngBytes(1024, 1024) : jpegBytes(1280, 720),
+        ),
         model: `${provider}-image-model`,
         usage: { inputTokens: 12, outputTokens: 1_000, reasoningTokens: null },
       });
@@ -328,6 +330,102 @@ describe("ImageGenerationRuntime", () => {
         })),
         [{ category: "tool", provider: "chatgpt", outputTokens: 1_000 }],
       );
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("posts and bills a successful image when the next ChatGPT request fails", () => {
+    const chatgpt = fakeAdapter("chatgpt");
+    const run = chatgpt.run;
+    let calls = 0;
+    const adapters = {
+      chatgpt: {
+        ...chatgpt,
+        run: (request: ImageAdapterRequest, signal: AbortSignal) => {
+          calls += 1;
+          return calls === 2
+            ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
+            : run(request, signal);
+        },
+      },
+      grok: fakeAdapter("grok"),
+    };
+    return Effect.gen(function* () {
+      const runtime = yield* ImageGenerationRuntime;
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-partial-failure");
+      const threadId = ThreadId.make("thread-partial-failure");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+
+      const result = yield* runtime.generate(threadId, {
+        operation: "generate",
+        prompt: PROMPT,
+        count: 2,
+        provider: "chatgpt",
+      });
+
+      assert.equal(result.status, "failed");
+      const messages = yield* generatedMessages(threadId);
+      assert.equal(messages.length, 1);
+      assert.equal(messages[0]?.attachments?.length, 1);
+      const usage = yield* ledger.summarize(botId);
+      assert.deepEqual(
+        usage.entries.map((entry) => String(entry.provider)),
+        ["chatgpt"],
+      );
+      assert.equal(calls, 2);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("attributes partial ChatGPT images and remaining Grok images separately", () => {
+    const chatgpt = fakeAdapter("chatgpt");
+    const run = chatgpt.run;
+    let calls = 0;
+    const adapters = {
+      chatgpt: {
+        ...chatgpt,
+        run: (request: ImageAdapterRequest, signal: AbortSignal) => {
+          calls += 1;
+          return calls === 2
+            ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
+            : run(request, signal);
+        },
+      },
+      grok: fakeAdapter("grok"),
+    };
+    return Effect.gen(function* () {
+      const runtime = yield* ImageGenerationRuntime;
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-partial-fallback");
+      const threadId = ThreadId.make("thread-partial-fallback");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+
+      const result = yield* runtime.generate(threadId, {
+        operation: "generate",
+        prompt: PROMPT,
+        count: 3,
+      });
+
+      assert.equal(result.status, "completed");
+      if (result.status !== "completed") return;
+      assert.deepEqual(
+        result.artifacts.map((artifact) => artifact.provider),
+        ["chatgpt", "grok", "grok"],
+      );
+      assert.deepEqual(
+        adapters.grok.calls.map((call) => call.count),
+        [2],
+      );
+      const messages = yield* generatedMessages(threadId);
+      assert.equal(messages[0]?.attachments?.length, 3);
+      const usage = yield* ledger.summarize(botId);
+      assert.deepEqual(usage.entries.map((entry) => String(entry.provider)).sort(), [
+        "chatgpt",
+        "grok",
+      ]);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 

@@ -227,6 +227,75 @@ describe("routeImageRequest", () => {
     }),
   );
 
+  it.effect("keeps a successful image when a later ChatGPT request fails", () =>
+    Effect.gen(function* () {
+      const chatgpt = fakeAdapter("chatgpt");
+      const run = chatgpt.run;
+      let calls = 0;
+      const input = routeInput({
+        request: { count: 2, provider: "chatgpt" },
+        adapters: {
+          chatgpt: {
+            ...chatgpt,
+            run: (request, signal) => {
+              calls += 1;
+              return calls === 2
+                ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
+                : run(request, signal);
+            },
+          },
+          grok: fakeAdapter("grok"),
+        },
+      });
+      const result = yield* routeImageRequest(input);
+      expect(result).toMatchObject({ status: "failed", kind: "provider-failed" });
+      expect(result.parts).toHaveLength(1);
+      expect(calls).toBe(2);
+      expect(input.adapters.grok.calls).toHaveLength(0);
+    }),
+  );
+
+  it.effect("asks fallback for only the images ChatGPT did not produce", () =>
+    Effect.gen(function* () {
+      const chatgpt = fakeAdapter("chatgpt");
+      const run = chatgpt.run;
+      let calls = 0;
+      const fallbackCounts: number[] = [];
+      const input = routeInput({
+        request: { count: 3 },
+        adapters: {
+          chatgpt: {
+            ...chatgpt,
+            run: (request, signal) => {
+              calls += 1;
+              if (calls === 2) {
+                chatgpt.calls.push(request);
+                return Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."));
+              }
+              return run(request, signal);
+            },
+          },
+          grok: {
+            ...fakeAdapter("grok"),
+            run: (request) => {
+              fallbackCounts.push(request.count);
+              return Promise.resolve({
+                images: Array.from({ length: request.count }, () => pngBytes(16, 16)),
+                model: "grok-model",
+              });
+            },
+          },
+        },
+      });
+      const result = yield* routeImageRequest(input);
+      expect(result.status).toBe("completed");
+      expect(input.adapters.chatgpt.calls.map((call) => call.count)).toEqual([1, 1]);
+      expect(fallbackCounts).toEqual([2]);
+      expect(result.parts[1]?.output.images).toHaveLength(2);
+      expect(result.parts.map((part) => part.provider)).toEqual(["chatgpt", "grok"]);
+    }),
+  );
+
   it.effect("does not fall back after an invalid request", () =>
     Effect.gen(function* () {
       const input = routeInput({

@@ -59,25 +59,38 @@ export interface ImageRouteInput {
     provider: ImageProviderId,
     outcome: { readonly ok: true } | { readonly ok: false; readonly failure: ImageAdapterFailure },
   ) => Effect.Effect<void>;
+  /** Called once per successful provider request, before another request can fail. */
+  readonly onOutput?: (
+    provider: ImageProviderId,
+    output: ImageAdapterOutput,
+    requestIndex: number,
+  ) => Effect.Effect<void>;
+}
+
+export interface ImageRoutePart {
+  readonly provider: ImageProviderId;
+  readonly output: ImageAdapterOutput;
 }
 
 export type ImageRouteResult =
   | {
       readonly status: "completed";
       readonly provider: ImageProviderId;
-      readonly output: ImageAdapterOutput;
+      readonly parts: ReadonlyArray<ImageRoutePart>;
       readonly attempts: ReadonlyArray<ImageGenerationAttempt>;
     }
   | {
       readonly status: "failed";
       readonly kind: ImageGenerationFailureKind;
       readonly message: string;
+      readonly parts: ReadonlyArray<ImageRoutePart>;
       readonly attempts: ReadonlyArray<ImageGenerationAttempt>;
     }
   | {
       readonly status: "needs-consent";
       readonly provider: ImageProviderId;
       readonly message: string;
+      readonly parts: ReadonlyArray<ImageRoutePart>;
       readonly attempts: ReadonlyArray<ImageGenerationAttempt>;
     };
 
@@ -143,6 +156,7 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     explicit: request.provider,
   });
   const attempts: ImageGenerationAttempt[] = [];
+  const parts: ImageRoutePart[] = [];
   const adapterRequest = {
     operation: request.operation,
     prompt: request.prompt,
@@ -160,10 +174,12 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
         ? `${IMAGE_PROVIDER_LABELS[request.provider]} image generation is turned off in Settings.`
         : "Image generation is turned off. Enable ChatGPT or Grok images in Settings.",
       attempts,
+      parts,
     };
   }
 
   let lastFailure: { kind: ImageGenerationFailureKind; message: string } | undefined;
+  let remainingCount = adapterRequest.count;
   for (const provider of plan.candidates) {
     const label = IMAGE_PROVIDER_LABELS[provider];
     if (!providerEnabled(settings, provider)) continue;
@@ -176,13 +192,14 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     }
 
     const adapter = input.adapters[provider];
-    const unsupported = unsupportedReason(label, adapter.capabilities, adapterRequest);
+    const providerRequest = { ...adapterRequest, count: remainingCount };
+    const unsupported = unsupportedReason(label, adapter.capabilities, providerRequest);
     if (unsupported) {
       attempts.push({ provider, outcome: "unsupported" });
       // The intended provider defines the request's capability. An unsupported
       // fallback cannot erase an earlier availability or provider failure.
       if (provider === plan.intended) {
-        return { status: "failed", kind: "unsupported", message: unsupported, attempts };
+        return { status: "failed", kind: "unsupported", message: unsupported, attempts, parts };
       }
       lastFailure ??= { kind: "unsupported", message: unsupported };
       continue;
@@ -201,32 +218,48 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
         provider,
         message: `${intendedLabel} could not take this edit. Ask the user whether their image may be sent to ${label}; if they agree, retry with allowProvider "${provider}".`,
         attempts,
+        parts,
       };
     }
 
-    const outcome = yield* runAdapter(
-      adapter,
-      adapterRequest,
-      input.timeout ?? IMAGE_REQUEST_TIMEOUT,
-    ).pipe(
-      Effect.map((output) => ({ ok: true as const, output })),
-      Effect.catch((failure: ImageAdapterFailure) =>
-        Effect.succeed({ ok: false as const, failure }),
-      ),
-    );
-    if (input.onAttempt) {
-      yield* input.onAttempt(
-        provider,
-        outcome.ok ? { ok: true } : { ok: false, failure: outcome.failure },
+    const callCount = provider === "chatgpt" ? remainingCount : 1;
+    for (let index = 0; index < callCount; index += 1) {
+      const outcome = yield* runAdapter(
+        adapter,
+        { ...providerRequest, count: provider === "chatgpt" ? 1 : remainingCount },
+        input.timeout ?? IMAGE_REQUEST_TIMEOUT,
+      ).pipe(
+        Effect.map((output) => ({ ok: true as const, output })),
+        Effect.catch((failure: ImageAdapterFailure) =>
+          Effect.succeed({ ok: false as const, failure }),
+        ),
       );
-    }
-    if (outcome.ok) {
+      if (input.onAttempt) {
+        yield* input.onAttempt(
+          provider,
+          outcome.ok ? { ok: true } : { ok: false, failure: outcome.failure },
+        );
+      }
+      if (!outcome.ok || outcome.output.images.length === 0) {
+        const failure = outcome.ok
+          ? new ImageAdapterFailure("provider-failed", `${label} returned no image.`)
+          : outcome.failure;
+        attempts.push({ provider, outcome: failure.kind });
+        lastFailure = { kind: failure.kind, message: failure.message };
+        if (!IMAGE_FALLBACK_FAILURE_KINDS.has(failure.kind)) {
+          return { status: "failed", ...lastFailure, attempts, parts };
+        }
+        break;
+      }
+      const output = { ...outcome.output, images: outcome.output.images.slice(0, remainingCount) };
+      if (input.onOutput) yield* input.onOutput(provider, output, parts.length);
+      parts.push({ provider, output });
       attempts.push({ provider, outcome: "completed" });
-      return { status: "completed", provider, output: outcome.output, attempts };
+      remainingCount -= output.images.length;
+      if (remainingCount === 0) {
+        return { status: "completed", provider: parts[0]!.provider, parts, attempts };
+      }
     }
-    attempts.push({ provider, outcome: outcome.failure.kind });
-    lastFailure = { kind: outcome.failure.kind, message: outcome.failure.message };
-    if (!IMAGE_FALLBACK_FAILURE_KINDS.has(outcome.failure.kind)) break;
   }
 
   return {
@@ -234,5 +267,6 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     kind: lastFailure?.kind ?? "unavailable",
     message: lastFailure?.message ?? "No image provider is available.",
     attempts,
+    parts,
   };
 });
