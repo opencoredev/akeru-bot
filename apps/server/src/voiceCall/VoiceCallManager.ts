@@ -280,6 +280,7 @@ const make = (options?: VoiceCallManagerOptions) =>
     >();
     const operationKey = (ownerId: string, id: string) => JSON.stringify([ownerId, id]);
     const secretName = (provider: VoiceApiProvider) => `voice-${provider}`;
+    const rejectedSecretName = (provider: VoiceApiProvider) => `voice-${provider}-rejected`;
     const getKey = Effect.fn("VoiceCallManager.getKey")(function* (provider: VoiceApiProvider) {
       if (Option.isNone(secrets)) return yield* voiceFailure("provider-unavailable");
       const value = yield* secrets.value
@@ -327,9 +328,11 @@ const make = (options?: VoiceCallManagerOptions) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const store = yield* assertMutable(provider);
-          yield* store
-            .remove(secretName(provider))
-            .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+          for (const name of [secretName(provider), rejectedSecretName(provider)]) {
+            yield* store
+              .remove(name)
+              .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+          }
           // Work that already read the removed key must not finish after the disconnect.
           for (const operation of operations.values()) {
             if (operation.provider === provider) operation.controller.abort();
@@ -337,27 +340,49 @@ const make = (options?: VoiceCallManagerOptions) =>
           return { provider, connected: false };
         }),
       );
-    // Digest of the saved key each provider rejected on its last Test, so every
-    // client sees the same verdict and a replaced key starts without one.
-    const rejectedKeys = new Map<VoiceApiProvider, string>();
+    // Digest of the saved key each provider rejected on its last Test. It lives
+    // beside the key so every client, and a restarted server, sees the same
+    // verdict, and a replaced key starts without one.
     const keyDigest = (key: Uint8Array | string) =>
       NodeCrypto.createHash("sha256").update(key).digest("hex");
     const providers = Effect.gen(function* () {
       const result = [];
       for (const provider of VOICE_API_PROVIDERS) {
-        const key = Option.isSome(secrets)
-          ? yield* secrets.value
-              .get(secretName(provider))
-              .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")))
-          : Option.none();
+        const read = (name: string) =>
+          Option.isSome(secrets)
+            ? secrets.value
+                .get(name)
+                .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")))
+            : Effect.succeed(Option.none<Uint8Array>());
+        const key = yield* read(secretName(provider));
+        const rejected = Option.isSome(key)
+          ? yield* read(rejectedSecretName(provider))
+          : Option.none<Uint8Array>();
         result.push({
           provider,
           connected: Option.isSome(key),
-          keyRejected: Option.isSome(key) && rejectedKeys.get(provider) === keyDigest(key.value),
+          keyRejected:
+            Option.isSome(key) &&
+            Option.isSome(rejected) &&
+            new TextDecoder().decode(rejected.value) === keyDigest(key.value),
         });
       }
       return { providers: result };
     });
+    // Records a Test verdict only while the tested key is still the saved one, so
+    // a slow Test of a replaced key cannot overwrite the replacement's verdict.
+    const recordVerdict = (provider: VoiceApiProvider, key: string, rejected: boolean) =>
+      lock.withPermits(1)(
+        Effect.gen(function* () {
+          if (Option.isNone(secrets)) return;
+          const store = secrets.value;
+          const current = yield* store.get(secretName(provider));
+          if (Option.isNone(current) || keyDigest(current.value) !== keyDigest(key)) return;
+          yield* rejected
+            ? store.set(rejectedSecretName(provider), new TextEncoder().encode(keyDigest(key)))
+            : store.remove(rejectedSecretName(provider));
+        }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable"))),
+      );
     const test = Effect.fn("VoiceCallManager.test")(function* (provider: VoiceApiProvider) {
       const key = yield* getKey(provider);
       yield* Effect.tryPromise({
@@ -365,12 +390,12 @@ const make = (options?: VoiceCallManagerOptions) =>
         catch: (cause) => classifyVoiceFailure(cause),
       }).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => {
-            if (error.reason === "provider-auth") rejectedKeys.set(provider, keyDigest(key));
-          }),
+          error.reason === "provider-auth"
+            ? recordVerdict(provider, key, true).pipe(Effect.ignore)
+            : Effect.void,
         ),
       );
-      rejectedKeys.delete(provider);
+      yield* recordVerdict(provider, key, false);
       return { provider, connected: true, keyRejected: false };
     });
     const listVoices = Effect.fn("VoiceCallManager.listVoices")(function* (

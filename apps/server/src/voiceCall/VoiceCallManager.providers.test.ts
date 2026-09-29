@@ -50,8 +50,11 @@ const defaults: VoiceAdapters = {
   synthesize: async () => ({ audioBase64: "bXAz", mimeType: "audio/mpeg" }),
   negotiate: async () => "answer-sdp",
 };
-const makeTest = (adapters: Partial<VoiceAdapters> = {}, voice: Partial<VoiceSettings> = {}) => {
-  const values = new Map<string, Uint8Array>();
+const makeTest = (
+  adapters: Partial<VoiceAdapters> = {},
+  voice: Partial<VoiceSettings> = {},
+  values = new Map<string, Uint8Array>(),
+) => {
   const secrets = ServerSecretStore.of({
     get: (name) => Effect.sync(() => Option.fromUndefinedOr(values.get(name))),
     set: (name, value) =>
@@ -400,6 +403,65 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
         },
         { synthesisProvider: "elevenlabs", synthesisVoices: { elevenlabs: "voice-id" } },
       ),
+    ),
+  );
+});
+
+it.effect("keeps a rejected key's verdict across a server restart", () => {
+  const values = new Map<string, Uint8Array>();
+  const rejected = (layer: ReturnType<typeof makeTest>) =>
+    Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      return (yield* manager.providers).providers.find((p) => p.provider === "elevenlabs")
+        ?.keyRejected;
+    }).pipe(Effect.provide(layer));
+  const failing = {
+    test: async () => {
+      throw voiceFailure("provider-auth");
+    },
+  };
+  return Effect.gen(function* () {
+    yield* Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      yield* manager.connect("elevenlabs", "rejected-key");
+      yield* Effect.result(manager.test("elevenlabs"));
+    }).pipe(Effect.provide(makeTest(failing, {}, values)));
+    // A fresh manager over the same secrets stands in for a restarted server.
+    assert.isTrue(yield* rejected(makeTest({}, {}, values)));
+    yield* Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      yield* manager.connect("elevenlabs", "replacement-key");
+    }).pipe(Effect.provide(makeTest({}, {}, values)));
+    assert.isFalse(yield* rejected(makeTest({}, {}, values)));
+  });
+});
+
+it.effect("ignores a Test verdict for a key that was replaced mid-Test", () => {
+  const pending = Promise.withResolvers<void>();
+  const began = Promise.withResolvers<void>();
+  return Effect.gen(function* () {
+    const manager = yield* VoiceCallManager;
+    const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
+      providers.find((status) => status.provider === "elevenlabs"),
+    );
+    yield* manager.connect("elevenlabs", "slow-valid-key");
+    const slow = yield* Effect.forkChild(manager.test("elevenlabs"));
+    yield* Effect.promise(() => began.promise);
+    yield* manager.connect("elevenlabs", "rejected-key");
+    yield* Effect.result(manager.test("elevenlabs"));
+    assert.isTrue((yield* elevenlabs)?.keyRejected);
+    pending.resolve();
+    yield* Fiber.join(slow);
+    assert.isTrue((yield* elevenlabs)?.keyRejected);
+  }).pipe(
+    Effect.provide(
+      makeTest({
+        test: async (_provider, key) => {
+          if (key === "rejected-key") throw voiceFailure("provider-auth");
+          began.resolve();
+          await pending.promise;
+        },
+      }),
     ),
   );
 });
