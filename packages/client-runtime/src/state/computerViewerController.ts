@@ -115,15 +115,18 @@ export function createComputerViewerController(options: {
           action,
         });
         if (state.lease?.sessionId !== lease.sessionId) continue;
-        if (!outcome.ok && outcome.code !== "transport") {
+        if (!outcome.ok) {
           dispatch({ type: "failed", code: outcome.code });
           // The server may still hold the lease this client just gave up, which
           // would keep the bot waiting. Hand it back before re-reading state.
+          // A transport failure can be one timed-out request on a live
+          // connection, so release then too; a real disconnect already ends
+          // the lease on the server.
           await port.release(lease.sessionId);
-          void refreshState();
+          if (outcome.code !== "transport") void refreshState();
           continue;
         }
-        settle(outcome, () => dispatch({ type: "input-sent" }));
+        dispatch({ type: "input-sent" });
       }
     } finally {
       draining = false;

@@ -188,6 +188,18 @@ describe("computer viewer controller", () => {
     });
   });
 
+  it("hands the lease back when an input request fails in transport", async () => {
+    const fake = fakePort();
+    const controller = createComputerViewerController({ port: fake.port });
+    await controller.show();
+    await controller.takeControl();
+    controller.sendInput(click(1));
+    await fake.settleInput({ ok: false, code: "transport" });
+    await Promise.resolve();
+    expect(fake.calls.filter((call) => call === "release")).toHaveLength(1);
+    expect(controller.getState().lease).toBeNull();
+  });
+
   it("expires control on the lease deadline", async () => {
     const fake = fakePort();
     const controller = createComputerViewerController({ port: fake.port });
