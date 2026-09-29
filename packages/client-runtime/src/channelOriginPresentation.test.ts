@@ -72,6 +72,14 @@ describe("channel origin presentation", () => {
     expect(channelDeliveryLabel(null, "telegram")).toBeNull();
   });
 
+  it("keeps the delivery label when the inbound message is not loaded", () => {
+    expect(channelDeliveryLabel("failed", undefined)).toEqual({
+      message: "Could not deliver to the channel",
+      tone: "error",
+    });
+    expect(channelDeliveryLabel(null, undefined)).toBeNull();
+  });
+
   it("finds the channel origin of the nearest preceding user message", () => {
     const origin = { provider: "telegram" as const, externalThreadId: "chat-1" };
     const messages = [

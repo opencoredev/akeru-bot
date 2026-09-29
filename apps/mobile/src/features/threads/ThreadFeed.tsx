@@ -1260,7 +1260,7 @@ function renderFeedEntry(
             />
           );
         })}
-        {message.channelDelivery && entry.channelProvider
+        {message.channelDelivery
           ? (() => {
               const delivery = channelDeliveryLabel(message.channelDelivery, entry.channelProvider);
               return delivery ? (

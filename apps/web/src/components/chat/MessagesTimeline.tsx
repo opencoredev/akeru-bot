@@ -1216,9 +1216,11 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 }
 
 function ChannelDeliveryLine({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
-  const origin = row.assistantChannelOrigin ?? null;
-  const delivery = channelDeliveryLabel(row.message.channelDelivery, origin?.provider ?? "slack");
-  if (!delivery || !origin) return null;
+  const delivery = channelDeliveryLabel(
+    row.message.channelDelivery,
+    row.assistantChannelOrigin?.provider,
+  );
+  if (!delivery) return null;
   return (
     <p
       className={cn(

@@ -36,13 +36,14 @@ export function channelOriginForAssistantMessage(
 /**
  * Delivery label for a channel-originated assistant reply. Returns null for
  * messages with no external delivery state so web and mobile can skip the
- * metadata chip entirely.
+ * metadata chip entirely. Without a provider, for a reply whose inbound
+ * message is on an older unloaded page, the label names no channel.
  */
 export function channelDeliveryLabel(
   delivery: ChannelDeliveryState | null | undefined,
-  provider: ChannelProvider,
+  provider: ChannelProvider | null | undefined,
 ): { readonly message: string; readonly tone: "neutral" | "warning" | "error" } | null {
-  const channel = channelProviderLabel(provider);
+  const channel = provider ? channelProviderLabel(provider) : "the channel";
   switch (delivery) {
     case "sent":
       return { message: `Sent to ${channel}`, tone: "neutral" };
