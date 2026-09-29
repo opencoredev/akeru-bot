@@ -734,11 +734,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           >
             {botName}
           </Text>
-          <View className="min-w-0 shrink-[2] rounded-lg bg-subtle px-2 py-[3px]">
-            <Text className={cn("text-[13px] font-t3-medium", metaMutedClass)} numberOfLines={1}>
-              {displayThreadTitle}
-            </Text>
-          </View>
+          {/* A title-derived identity already shows the title; skip the duplicate chip. */}
+          {displayThreadTitle !== botName ? (
+            <View className="min-w-0 shrink-[2] rounded-lg bg-subtle px-2 py-[3px]">
+              <Text className={cn("text-[13px] font-t3-medium", metaMutedClass)} numberOfLines={1}>
+                {displayThreadTitle}
+              </Text>
+            </View>
+          ) : null}
           <View className="flex-1" />
           {pinnedRow ? (
             <SymbolView name="pin" size={11} tintColor={pinTintColor} type="monochrome" />

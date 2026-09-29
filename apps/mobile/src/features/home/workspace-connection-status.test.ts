@@ -118,6 +118,30 @@ describe("workspace connection status", () => {
     expect(workspaceConnectionStatusPresentation(state, t)).toBeNull();
   });
 
+  it("names the chat sync over another environment reconnecting", () => {
+    const state = workspaceState({
+      hasPendingShellSnapshot: true,
+      hasConnectingEnvironment: true,
+      hasReadyEnvironment: true,
+      connectingEnvironments: [
+        {
+          environmentId: "environment-2" as never,
+          environmentLabel: "ms-a2",
+          displayUrl: "",
+          connectionState: "reconnecting",
+          connectionError: null,
+          connectionErrorCode: null,
+          connectionErrorTraceId: null,
+        },
+      ],
+    });
+
+    expect(workspaceConnectionStatusPresentation(state, t)).toEqual({
+      label: "Syncing chats…",
+      showsProgress: true,
+    });
+  });
+
   it("stays quiet with no environments configured", () => {
     const state = workspaceState({
       hasConnections: false,
