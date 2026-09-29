@@ -569,6 +569,34 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
     }),
   );
 
+  it.effect("unsettles for a memory approval request", () =>
+    Effect.gen(function* () {
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.activity.append",
+          commandId: CommandId.make("cmd-memory-approval"),
+          threadId: ThreadId.make("thread-1"),
+          activity: {
+            id: EventId.make("activity-memory-approval"),
+            tone: "approval",
+            kind: "memory.approval.requested",
+            summary: "Save to project memory?",
+            payload: null,
+            turnId: null,
+            createdAt: NOW,
+          },
+          createdAt: NOW,
+        },
+        readModel: makeReadModel("settled"),
+      });
+      const events = Array.isArray(result) ? result : [result];
+      expect(events.map((event) => event.type)).toEqual([
+        "thread.unsettled",
+        "thread.activity-appended",
+      ]);
+    }),
+  );
+
   it.effect("does not unsettle for session stop/error status writes", () =>
     Effect.gen(function* () {
       for (const status of ["stopped", "error", "ready", "idle"] as const) {

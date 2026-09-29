@@ -1,5 +1,6 @@
 import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
+  AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_DELEGATION_MAX_DEPTH,
   type AkeruDelegationRecord,
   type AkeruDelegationState,
@@ -3338,7 +3339,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // never stay hidden inside a settled slim row.
       const wakesSettledThread =
         command.activity.kind === "approval.requested" ||
-        command.activity.kind === "user-input.requested";
+        command.activity.kind === "user-input.requested" ||
+        command.activity.kind === AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY;
       // Real activity resets ANY override (settled wakes, active unpins).
       if (thread.settledOverride === null || !wakesSettledThread) {
         return activityAppendedEvent;
