@@ -64,7 +64,10 @@ import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 import { selectRecentConversation } from "./RecentConversation.ts";
-import { registerEntityMemoryResource } from "../memory/EntityMemoryInvalidation.ts";
+import {
+  registerEntityMemoryResource,
+  registerEntityMemoryStore,
+} from "../memory/EntityMemoryInvalidation.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -1548,6 +1551,7 @@ export async function createAkeruMastraHarness(
       discardQueuedObservations.run(threadId, resourceId);
       return observationalMemory.engine.clear(threadId, resourceId);
     });
+  const unregisterStore = registerEntityMemoryStore(clearObservationalMemory);
   const registeredResources = new Map<string, () => void>();
   const registerResource = (threadId: string, resourceId = threadId) => {
     const key = `${threadId}\u0000${resourceId}`;
@@ -1646,6 +1650,7 @@ export async function createAkeruMastraHarness(
     destroy: async () => {
       if (observationRetryTimer) await Effect.runPromise(Fiber.interrupt(observationRetryTimer));
       observationRetryTimer = undefined;
+      unregisterStore();
       for (const unregister of registeredResources.values()) unregister();
       registeredResources.clear();
       await observationDrain;
