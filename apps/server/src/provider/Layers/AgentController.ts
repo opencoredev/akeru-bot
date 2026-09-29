@@ -623,6 +623,9 @@ const make = (options?: AgentControllerLiveOptions) =>
     >();
     const sessions = new Map<string, ActiveSession>();
     const toolUsageReservations = new Set<string>();
+    // Providers only promise tool-call ids unique within a chat.
+    const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
+      `tool:${input.threadId}:${input.toolCallId}`;
     const memoryUsageByThread = new Map<
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
@@ -780,11 +783,12 @@ const make = (options?: AgentControllerLiveOptions) =>
       },
       onToolStart: async (input, session) => {
         if (!session.botId) return;
+        const key = toolUsageKey(input);
         await runPromise(
           botUsageLedger
             .reserve({
-              reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
-              sourceKey: `tool:${input.toolCallId}`,
+              reservationId: AkeruUsageReservationId.make(key),
+              sourceKey: key,
               botId: session.botId,
               threadId: ThreadId.make(input.threadId),
               turnId: sessions.get(input.threadId)?.activeTurn?.turnId ?? null,
@@ -796,7 +800,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               createdAt: nowIso(),
             })
             .pipe(
-              Effect.tap(() => Effect.sync(() => toolUsageReservations.add(input.toolCallId))),
+              Effect.tap(() => Effect.sync(() => toolUsageReservations.add(key))),
               Effect.catchCause((cause) =>
                 Effect.logWarning("failed to reserve tool usage", {
                   toolCallId: input.toolCallId,
@@ -807,11 +811,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
       },
       onToolFinish: async (input, session) => {
-        if (!session.botId || !toolUsageReservations.delete(input.toolCallId)) return;
+        const key = toolUsageKey(input);
+        if (!session.botId || !toolUsageReservations.delete(key)) return;
         await runPromise(
           botUsageLedger
             .settle({
-              reservationId: AkeruUsageReservationId.make(`tool:${input.toolCallId}`),
+              reservationId: AkeruUsageReservationId.make(key),
               state: "reported",
               inputTokens: 0,
               outputTokens: 0,

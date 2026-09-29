@@ -259,6 +259,8 @@ async function spawnRemoteBrowser(
     throw new Error(`Sandbox '${sandbox.provider}' did not return a browser process id.`);
   }
   let stopped = false;
+  // Aborted on kill so a pending retry delay cannot hold the process open.
+  const stopSignal = new AbortController();
   const monitorCommand =
     `count=0; while kill -0 ${pid} 2>/dev/null; do ` +
     'count=$((count + 1)); if [ "$count" -ge 20 ]; then printf alive; exit 0; fi; sleep 1; ' +
@@ -266,6 +268,7 @@ async function spawnRemoteBrowser(
   return {
     kill: async () => {
       stopped = true;
+      stopSignal.abort();
       return (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false;
     },
     wait: async () => {
@@ -282,7 +285,11 @@ async function spawnRemoteBrowser(
           // A command timeout or transport error does not mean the browser exited.
           // Keep watching; only an observed dead process settles this waiter.
           failures += 1;
-          if (!stopped) await NodeTimersPromises.setTimeout(browserMonitorRetryDelayMs(failures));
+          if (!stopped) {
+            await NodeTimersPromises.setTimeout(browserMonitorRetryDelayMs(failures), undefined, {
+              signal: stopSignal.signal,
+            }).catch(() => undefined);
+          }
         }
       }
     },
