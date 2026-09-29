@@ -8007,7 +8007,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             }),
         },
         layers: {
+          agentController: {
+            readConversationMemory: () => Effect.succeed({ current: null, history: [] }),
+          },
           projectionSnapshotQuery: {
+            getShellSnapshot: () =>
+              Effect.succeed({
+                snapshotSequence: 0,
+                bots: [],
+                groups: [],
+                delegations: [],
+                projects: [],
+                threads: [thread],
+                updatedAt: now,
+              }),
             getProjectShellById: (id) =>
               Effect.succeed(id === projectId ? Option.some(project) : Option.none()),
             getOriginalProjectIdByWorkspaceRoot: (root) =>
@@ -8046,6 +8059,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             ),
           ),
         );
+
+      const threadArchive = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.memoryArchiveExport]({ threadId, target: "thread", complete: true }),
+        ),
+      );
 
       // With "Private bot memory" off, existing bot-private facts are still
       // listed so the user can clean them up, but facts cannot be moved into a
@@ -8148,6 +8167,36 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.equal(deniedUserDoc._tag, "AkeruMemoryOperationError");
+
+      // Archive imports can still be previewed, but applying one is rejected
+      // and leaves the facts untouched.
+      const disabledPreview = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.memoryArchivePreviewImport]({
+            threadId,
+            target: "thread",
+            archive: threadArchive,
+          }),
+        ),
+      );
+      const deniedImport = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[WS_METHODS.memoryArchiveApplyImport]({
+              threadId,
+              target: "thread",
+              archive: threadArchive,
+              previewHash: disabledPreview.previewHash,
+              resolutions: [],
+            }),
+          ),
+        ),
+      );
+      if (deniedImport._tag !== "AkeruMemoryOperationError") {
+        return assert.fail("expected a memory operation error");
+      }
+      assert.include(deniedImport.detail, "Memory is turned off.");
+      assert.deepEqual(yield* listFacts("thread"), [threadFact.rootId]);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
