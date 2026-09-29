@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const native = vi.hoisted(() => ({
   granted: true,
+  listenerFails: false,
   mode: vi.fn(async (_mode: unknown) => {}),
   prepare: vi.fn(async (_options: unknown) => {}),
   record: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("expo-audio", () => ({
         return native.isRecording;
       }
       addListener(_event: string, listener: typeof native.emitStatus) {
+        if (native.listenerFails) throw new Error("listener registration failed");
         native.emitStatus = listener;
         return { remove: native.statusRemove };
       }
@@ -90,6 +92,7 @@ function start(signal = new AbortController().signal) {
 beforeEach(() => {
   vi.clearAllMocks();
   native.granted = true;
+  native.listenerFails = false;
   native.deleted = [];
   native.size = 4;
   native.isRecording = false;
@@ -106,6 +109,13 @@ describe("startExpoDictationCapture", () => {
     capture.dispose();
     capture.dispose();
     expect(native.deleted).toEqual(["file:///cache/recording.m4a"]);
+    expect(native.release).toHaveBeenCalledTimes(1);
+    expect(native.mode).toHaveBeenLastCalledWith({ allowsRecording: false });
+  });
+
+  it("leaves recording mode when recorder setup fails", async () => {
+    native.listenerFails = true;
+    await expect(start().capture).rejects.toThrow("listener registration failed");
     expect(native.release).toHaveBeenCalledTimes(1);
     expect(native.mode).toHaveBeenLastCalledWith({ allowsRecording: false });
   });

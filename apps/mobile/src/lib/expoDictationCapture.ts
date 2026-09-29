@@ -39,20 +39,36 @@ export const startExpoDictationCapture: DictationDependencies["capture"] = async
   signal.throwIfAborted();
   if (!permission.granted) throw new Error(PERMISSION_DENIED);
   await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+  // Until dispose exists, a setup failure must hand the audio session back itself.
+  const leaveRecordingMode = (cause: unknown, release?: () => void): never => {
+    release?.();
+    void setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+    throw cause;
+  };
 
-  const recorder = new AudioModule.AudioRecorder(DICTATION_RECORDING);
+  let recorder: InstanceType<typeof AudioModule.AudioRecorder>;
+  try {
+    recorder = new AudioModule.AudioRecorder(DICTATION_RECORDING);
+  } catch (cause) {
+    return leaveRecordingMode(cause);
+  }
   let disposed = false;
   let stopping = false;
   let startedAt = 0;
-  const statusSubscription = recorder.addListener(
-    "recordingStatusUpdate",
-    (status: RecordingStatus) => {
-      if (disposed || stopping) return;
-      if (status.hasError || status.mediaServicesDidReset) {
-        onError(new Error(status.error ?? "The microphone stopped recording."));
-      }
-    },
-  );
+  let statusSubscription: ReturnType<typeof recorder.addListener>;
+  try {
+    statusSubscription = recorder.addListener(
+      "recordingStatusUpdate",
+      (status: RecordingStatus) => {
+        if (disposed || stopping) return;
+        if (status.hasError || status.mediaServicesDidReset) {
+          onError(new Error(status.error ?? "The microphone stopped recording."));
+        }
+      },
+    );
+  } catch (cause) {
+    return leaveRecordingMode(cause, () => recorder.release());
+  }
   const appSubscription = AppState.addEventListener("change", (state) => {
     if (!disposed && state !== "active") {
       onError(new Error("Dictation stopped because Akeru Bot left the foreground."));
