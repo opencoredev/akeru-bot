@@ -18,6 +18,7 @@
 
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -123,7 +124,7 @@ export interface SubscriptionCredentialStore {
 }
 
 const stores = new Map<string, SubscriptionCredentialStore>();
-const initializing = new Map<string, Deferred.Deferred<SubscriptionCredentialStore>>();
+const initializing = new Map<string, Deferred.Deferred<SubscriptionCredentialStore | null>>();
 
 /** The process-wide store for `filePath`, created on first use and loaded from disk. */
 export const subscriptionCredentialStore = Effect.fn("subscriptionCredentialStore")(function* (
@@ -131,26 +132,36 @@ export const subscriptionCredentialStore = Effect.fn("subscriptionCredentialStor
 ) {
   const path = yield* Path.Path;
   const resolved = path.resolve(filePath);
-  const lookup = yield* Effect.sync(() => {
-    const existing = stores.get(resolved);
-    if (existing) return { type: "ready" as const, store: existing };
-    const pending = initializing.get(resolved);
-    if (pending) return { type: "pending" as const, pending };
-    const started = Deferred.makeUnsafe<SubscriptionCredentialStore>();
-    initializing.set(resolved, started);
-    return { type: "create" as const, pending: started };
-  });
-  if (lookup.type === "ready") return lookup.store;
-  if (lookup.type === "pending") return yield* Deferred.await(lookup.pending);
-  return yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      const result = yield* Effect.exit(restore(makeSubscriptionCredentialStore(resolved)));
-      if (Exit.isSuccess(result)) stores.set(resolved, result.value);
-      initializing.delete(resolved);
-      yield* Deferred.done(lookup.pending, result);
-      return yield* result;
-    }),
-  );
+  for (;;) {
+    const lookup = yield* Effect.sync(() => {
+      const existing = stores.get(resolved);
+      if (existing) return { type: "ready" as const, store: existing };
+      const pending = initializing.get(resolved);
+      if (pending) return { type: "pending" as const, pending };
+      const started = Deferred.makeUnsafe<SubscriptionCredentialStore | null>();
+      initializing.set(resolved, started);
+      return { type: "create" as const, pending: started };
+    });
+    if (lookup.type === "ready") return lookup.store;
+    if (lookup.type === "pending") {
+      const shared = yield* Deferred.await(lookup.pending);
+      if (shared) return shared;
+      continue;
+    }
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const result = yield* Effect.exit(restore(makeSubscriptionCredentialStore(resolved)));
+        if (Exit.isSuccess(result)) stores.set(resolved, result.value);
+        initializing.delete(resolved);
+        if (Exit.isFailure(result) && Cause.hasInterrupts(result.cause)) {
+          yield* Deferred.succeed(lookup.pending, null);
+        } else {
+          yield* Deferred.done(lookup.pending, result);
+        }
+        return yield* result;
+      }),
+    );
+  }
 });
 
 const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialStore")(function* (

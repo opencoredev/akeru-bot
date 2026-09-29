@@ -105,13 +105,12 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       );
       yield* Deferred.await(entered);
       const waiter = yield* subscriptionCredentialStore(authPath).pipe(
-        Effect.exit,
         Effect.forkChild({ startImmediately: true }),
       );
       yield* Fiber.interrupt(creator);
-      assert.isTrue(Exit.isFailure(yield* Fiber.join(waiter)));
-      const retry = yield* subscriptionCredentialStore(authPath);
+      const retry = yield* Fiber.join(waiter);
       assert.deepStrictEqual(retry.current(), { data: {} });
+      assert.strictEqual(yield* subscriptionCredentialStore(authPath), retry);
     }),
   );
 
