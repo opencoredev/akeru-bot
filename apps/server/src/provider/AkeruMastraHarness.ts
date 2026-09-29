@@ -1284,14 +1284,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   const discardQueuedObservations = observationQueueDb.prepare(
     `DELETE FROM akeru_observation_queue WHERE thread_id = ? AND resource_id = ?`,
   );
-  // A claimed row becomes eligible again when its lease expires, so a claim
-  // abandoned by a crashed process still wakes a drain.
+  // A claimed row becomes eligible again when its lease expires, which covers a
+  // claim left behind by a harness that stopped mid-observation.
   const nextQueuedObservationAt = observationQueueDb.prepare(
-    `SELECT MIN(
-        CASE WHEN claimed_at IS NULL THEN next_attempt_at
-             ELSE MAX(next_attempt_at,
-                      strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds'))
-        END) AS nextAttemptAt
+    `SELECT MIN(CASE WHEN claimed_at IS NULL THEN next_attempt_at
+                     ELSE MAX(next_attempt_at,
+                              strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, ?)) END)
+              AS nextAttemptAt
        FROM akeru_observation_queue`,
   );
   let observationDrain: Promise<void> | undefined;
@@ -1425,11 +1424,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     });
   };
 
-  // A backed-off row has no turn to wake it, so the drain that leaves it
-  // behind arms one timer for the earliest pending retry.
+  // A backed-off or stale-leased row has no turn to wake it, so the drain that
+  // leaves it behind arms one timer for the earliest pending retry.
   const scheduleObservationRetry = () => {
     if (closed) return;
-    const { nextAttemptAt } = nextQueuedObservationAt.get() as { nextAttemptAt: string | null };
+    const { nextAttemptAt } = nextQueuedObservationAt.get(
+      `+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`,
+    ) as { nextAttemptAt: string | null };
     if (nextAttemptAt === null) return;
     const delay = Math.max(
       0,
@@ -1445,6 +1446,58 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         ),
       ),
     );
+  };
+
+  type ClaimedObservation = {
+    readonly id: string;
+    readonly threadId: string;
+    readonly resourceId: string;
+    readonly modelId: string;
+    readonly turnId: string | null;
+  };
+  const releaseWithBackoff = (id: string, claim: string, attempts: number) =>
+    releaseQueuedObservation.run(
+      attempts,
+      DateTime.formatIso(
+        DateTime.addDuration(DateTime.nowUnsafe(), `${OBSERVATION_RETRY_BACKOFF_MS} millis`),
+      ),
+      id,
+      claim,
+    );
+  // Delivers a dropped row's notice, then removes the row. A failed notice
+  // keeps the row queued so later drains retry only the notice.
+  const reportDroppedObservation = async (
+    item: ClaimedObservation,
+    claim: string,
+    attempts: number,
+    cause: unknown,
+  ) => {
+    try {
+      await options.onObservationDropped?.({
+        observationId: item.id,
+        threadId: item.threadId,
+        ...(item.turnId !== null ? { turnId: item.turnId } : {}),
+        resourceId: item.resourceId,
+        modelId: item.modelId,
+        attempts,
+        error: cause instanceof Error ? cause : new Error(String(cause)),
+      });
+      removeQueuedObservation.run(item.id, claim);
+    } catch (callbackCause) {
+      await Effect.runPromise(
+        Effect.logWarning("Akeru observation-drop notification failed.", {
+          threadId: item.threadId,
+          attempts,
+          cause: callbackCause,
+        }),
+      );
+      // Keep the row so a later drain retries the notice.
+      if (attempts >= OBSERVATION_NOTICE_ATTEMPTS) {
+        removeQueuedObservation.run(item.id, claim);
+      } else {
+        releaseWithBackoff(item.id, claim, attempts);
+      }
+    }
   };
 
   const drainQueuedObservations = async (): Promise<void> => {
@@ -1471,6 +1524,16 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           scheduleObservationRetry();
           return;
         }
+        if (item.attempts >= OBSERVATION_DROP_ATTEMPTS) {
+          // The observer already failed its last attempt; only the notice is pending.
+          await reportDroppedObservation(
+            item,
+            now,
+            item.attempts + 1,
+            new Error("Observation failed repeatedly."),
+          );
+          continue;
+        }
         const held = { attempts: item.attempts, claim: now };
         claimedRows.set(item.id, held);
         let leaseRenewal: Fiber.Fiber<unknown, unknown> | undefined;
@@ -1480,11 +1543,6 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
         };
         try {
-          // A row past the drop threshold is waiting only on its drop notice,
-          // so retry the notice instead of observing again.
-          if (item.attempts >= OBSERVATION_DROP_ATTEMPTS) {
-            throw new Error("The observation failed repeatedly and was dropped.");
-          }
           leaseRenewal = forkObservation(
             Effect.forever(
               Effect.sleep(Duration.millis(OBSERVATION_CLAIM_LEASE_MS / 3)).pipe(
@@ -1536,18 +1594,6 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           claimedRows.delete(item.id);
           const claim = held.claim;
           const attempts = item.attempts + 1;
-          const releaseWithBackoff = () =>
-            releaseQueuedObservation.run(
-              attempts,
-              DateTime.formatIso(
-                DateTime.addDuration(
-                  DateTime.nowUnsafe(),
-                  `${OBSERVATION_RETRY_BACKOFF_MS} millis`,
-                ),
-              ),
-              item.id,
-              claim,
-            );
           if (attempts >= OBSERVATION_DROP_ATTEMPTS) {
             // A clear or restore discarded the row, so there is nothing to report.
             if (!isQueuedObservationClaimed.get(item.id, claim)) continue;
@@ -1559,37 +1605,12 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
                 cause,
               }),
             );
-            try {
-              await options.onObservationDropped?.({
-                observationId: item.id,
-                threadId: item.threadId,
-                ...(item.turnId !== null ? { turnId: item.turnId } : {}),
-                resourceId: item.resourceId,
-                modelId: item.modelId,
-                attempts,
-                error: cause instanceof Error ? cause : new Error(String(cause)),
-              });
-              removeQueuedObservation.run(item.id, claim);
-            } catch (callbackCause) {
-              await Effect.runPromise(
-                Effect.logWarning("Akeru observation-drop notification failed.", {
-                  threadId: item.threadId,
-                  attempts,
-                  cause: callbackCause,
-                }),
-              );
-              // Keep the row so a later drain retries the notice.
-              if (attempts >= OBSERVATION_NOTICE_ATTEMPTS) {
-                removeQueuedObservation.run(item.id, claim);
-              } else {
-                releaseWithBackoff();
-              }
-            }
+            await reportDroppedObservation(item, claim, attempts, cause);
             continue;
           }
           // Release the row with backoff so later rows are not stuck behind a
           // failing observation; a subsequent drain retries or drops it.
-          releaseWithBackoff();
+          releaseWithBackoff(item.id, claim, attempts);
         }
       }
     } finally {

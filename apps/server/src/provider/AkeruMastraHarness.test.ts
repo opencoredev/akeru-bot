@@ -1193,6 +1193,51 @@ describe("AkeruMastraHarness", () => {
       }),
   );
 
+  it.live("resumes a row left claimed by a stopped harness once its lease expires", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-stale-"));
+      const observed = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async () => {
+          observed.resolve();
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      await (await makeObservationHarness(open, directory)).close();
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      // A harness stopped mid-observation left this row claimed with a live lease.
+      {
+        const now = DateTime.formatIso(DateTime.nowUnsafe());
+        const db = new NodeSqlite.DatabaseSync(
+          NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+        );
+        db.prepare(
+          `INSERT INTO akeru_observation_queue
+            (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at,
+             next_attempt_at, created_at)
+            VALUES ('stale', 'thread-a', 'thread-a', 'openai/gpt-5.6-sol', NULL, 0, ?, ?, ?)`,
+        ).run(now, now, now);
+        db.close();
+      }
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        await harness.drainObservationQueue!();
+        expect(observe).not.toHaveBeenCalled();
+
+        // No turn follows: only the timer armed for the lease expiry can resume it.
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        await observed.promise;
+        await harness.drainObservationQueue!();
+        assert.deepEqual(queuedObservations(directory), []);
+      } finally {
+        vi.useRealTimers();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
   it.live("renews a running observation's lease so another drain cannot reclaim it", () =>
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-lease-"));
@@ -1363,6 +1408,8 @@ describe("AkeruMastraHarness", () => {
         await harness.drainObservationQueue!();
         assert.deepEqual(notices, [kept[0]!.id, kept[0]!.id]);
         assert.deepEqual(queuedObservations(directory), []);
+        // Retrying the notice does not run the observer again.
+        expect(observe).toHaveBeenCalledTimes(3);
       } finally {
         warn.mockRestore();
         observe.mockRestore();
