@@ -62,9 +62,13 @@ describe("BotUserInputPrompt", () => {
       onSelectSingleOption,
       onAdvance: vi.fn(),
     });
-    const panel = element?.props.children as ReactElement<{
-      onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
-    }>;
+    if (!element) throw new TypeError("Expected an unanswered prompt.");
+    const panel = (
+      element.props.children as ReactElement<{
+        onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
+      }>[]
+    )[0];
+    if (!panel) throw new TypeError("Expected a question panel.");
 
     expect(panel.props.onSelectSingleOption).toBe(onSelectSingleOption);
   });
