@@ -1447,6 +1447,85 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("restores a pending project fact from a complete export for review", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const access = { ...botAccess, projectId: ProjectId.make("project-pending-archive") };
+      const rootId = AkeruMemoryRootId.make("pending-archive-roundtrip-root");
+      const encodeJson = (value: unknown) => JSON.stringify(value) as string;
+      const pending = makeRevision("pending-archive-roundtrip-1", "project", {
+        rootId,
+        partition: {
+          tenantId: access.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(access.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(access.projectId),
+        visibility: "shared",
+        approvalState: "pending",
+      });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_revisions (
+        memory_id, root_id, revision, tenant_id, scope, partition_id,
+        entity_kind, entity_id, kind, value_json, fact_text,
+        source_thread_id, source_message_id, author_bot_id, initiating_user_id,
+        created_at, confirmed_at, updated_at, confidence, approval_state,
+        supersedes_id, superseded_by_id, visibility, deletion_state,
+        pinned, sensitive, affected_bot_ids_json
+      ) VALUES (
+        ${pending.id}, ${pending.rootId}, ${pending.revision}, ${pending.partition.tenantId},
+        ${pending.partition.scope}, ${pending.partition.partitionId}, ${pending.entityKind},
+        ${pending.entityId}, ${pending.kind}, ${encodeJson(pending.value)}, ${pending.fact},
+        ${pending.sourceThreadId}, ${pending.sourceMessageId}, ${pending.authorBotId},
+        ${pending.initiatingUserId}, ${pending.createdAt}, ${pending.confirmedAt},
+        ${pending.updatedAt}, ${pending.confidence}, ${pending.approvalState},
+        ${pending.supersedesId}, ${pending.supersededById}, ${pending.visibility},
+        ${pending.deletionState}, ${pending.pinned ? 1 : 0}, ${pending.sensitive ? 1 : 0},
+        ${encodeJson(pending.affectedBotIds)}
+      )`;
+      const archive = yield* exportAkeruMemory({
+        repository,
+        access: access,
+        target: "project",
+        complete: true,
+        createdAt: "2026-08-30T23:00:00.000Z",
+        conversations: [],
+      });
+      assert.isTrue(archive.revisions.some(({ revision }) => revision.rootId === rootId));
+      yield* repository.deleteRoot({ access: access, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: access,
+        target: "project",
+        archive,
+      });
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: access,
+        target: "project",
+        archive,
+        previewHash: preview.previewHash,
+      });
+
+      const restored = yield* repository.getCurrent({ access: access, rootId });
+      assert.equal(restored.approvalState, "pending");
+      const approved = yield* repository.applyMutation({
+        access: access,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: restored.revision,
+          decision: "approve",
+        },
+        memoryId: AkeruMemoryId.make("pending-archive-roundtrip-2"),
+        updatedAt: "2026-08-30T23:01:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(approved!.approvalState, "approved");
+    }),
+  );
+
   it.effect("approves a pending project fact when it moves back to private memory", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;

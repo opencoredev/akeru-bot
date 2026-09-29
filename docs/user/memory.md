@@ -123,8 +123,9 @@ the desktop or web app; mobile does not offer them.
 
 Choose a scope under Transfer memory, then select Export durable facts. You can export this chat,
 this bot, this project, or all memory. The export is a JSON archive with a versioned manifest,
-checksums, and the Markdown files it covers. Complete exports include revision history and
-forgotten facts. Export notes still exports the bot's notes and the chat's observations on their
+checksums, and the Markdown files it covers. Complete exports include revision history,
+forgotten facts, and facts waiting for approval or rejected. Import keeps each fact's approval
+state, so a restored fact that was waiting for approval still waits for it. Export notes still exports the bot's notes and the chat's observations on their
 own.
 
 Import accepts either kind of archive and always shows a preview first. For durable facts, the

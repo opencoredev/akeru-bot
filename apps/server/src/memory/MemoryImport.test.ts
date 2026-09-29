@@ -170,17 +170,31 @@ it.effect("rejects target, checksum, and readable-file mismatches", () =>
   }),
 );
 
-it.effect("accepts pending facts and rejects resurrected archive revisions", () =>
+it.effect("keeps pending and rejected revisions importable", () =>
   Effect.gen(function* () {
-    const pending = yield* archiveWithRevisions([{ ...revision, approvalState: "pending" }]);
-    const pendingPreview = yield* previewAkeruMemoryImport({
+    const pendingId = AkeruMemoryId.make("revision-import-pending");
+    const rejected = yield* archiveWithRevisions([
+      { ...revision, id: pendingId, approvalState: "pending", supersededById: revision.id },
+      {
+        ...revision,
+        revision: 2,
+        approvalState: "rejected",
+        supersedesId: pendingId,
+        updatedAt: "2026-08-30T20:01:00.000Z",
+      },
+    ]);
+    const preview = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
-      archive: pending,
+      archive: rejected,
     });
-    assert.equal(pendingPreview.previewHash, "a".repeat(64));
+    assert.equal(preview.previewHash, "a".repeat(64));
+  }),
+);
 
+it.effect("rejects resurrected archive revisions", () =>
+  Effect.gen(function* () {
     const tombstoneId = AkeruMemoryId.make("revision-import-tombstone");
     const activeId = AkeruMemoryId.make("revision-import-resurrected");
     const tombstone = {
