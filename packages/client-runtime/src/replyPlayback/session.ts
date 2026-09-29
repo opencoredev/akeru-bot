@@ -50,7 +50,9 @@ export function createReplyPlaybackSession(options: {
         ? options.synthesis(environmentId)
         : storedReplySynthesisCapability()
       : (options.synthesis ?? storedReplySynthesisCapability());
-  let synthesis = synthesisFor(null);
+  let synthesisOverride: StoredReplySynthesisCapability | null = null;
+  const currentSynthesis = (environmentId: string | null) =>
+    synthesisOverride ?? synthesisFor(environmentId);
   const synthesisListeners = new Set<() => void>();
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
@@ -95,7 +97,7 @@ export function createReplyPlaybackSession(options: {
     const spoken = spokenFor(message);
     const base = identityBase();
     if (!spoken || !base) return null;
-    const synthesis = synthesisFor(base.environmentId);
+    const synthesis = currentSynthesis(base.environmentId);
     const request: ReplyPlaybackRequest = {
       identity: {
         ...base,
@@ -127,16 +129,16 @@ export function createReplyPlaybackSession(options: {
     controller,
     preference,
     get synthesis() {
-      return synthesis;
+      return currentSynthesis(context?.environmentId ?? null);
     },
     synthesisFor,
-    getSynthesisSnapshot: () => synthesis,
+    getSynthesisSnapshot: () => currentSynthesis(context?.environmentId ?? null),
     subscribeSynthesis: (listener: () => void) => {
       synthesisListeners.add(listener);
       return () => synthesisListeners.delete(listener);
     },
     setSynthesis: (next: StoredReplySynthesisCapability) => {
-      synthesis = next;
+      synthesisOverride = next;
       for (const listener of synthesisListeners) listener();
     },
     actionFor,
@@ -198,7 +200,7 @@ export function createReplyPlaybackSession(options: {
         sequence += 1;
         if (reply.contentVersion <= baseline) continue;
         const next = tracker.completed(scope, sequence, reply);
-        if (next && base && synthesisFor(base.environmentId).available) {
+        if (next && base && currentSynthesis(base.environmentId).available) {
           void controller.start({
             identity: { ...base, messageId: next.messageId, contentVersion: next.contentVersion },
             text: next.text,
