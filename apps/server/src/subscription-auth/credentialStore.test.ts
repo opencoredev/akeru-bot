@@ -4,6 +4,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Deferred from "effect/Deferred";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
@@ -79,6 +82,36 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
         anthropic: currentFormat.anthropic,
         xai: currentFormat.xai,
       });
+    }),
+  );
+
+  it.effect("releases concurrent callers when an interrupted initial read stalls", () =>
+    Effect.gen(function* () {
+      const { authPath } = yield* authFile;
+      const fs = yield* FileSystem.FileSystem;
+      const entered = yield* Deferred.make<void>();
+      const blocked = yield* Deferred.make<boolean>();
+      const stalledFs = {
+        ...fs,
+        exists: (filePath: string) =>
+          filePath === authPath
+            ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(blocked)))
+            : fs.exists(filePath),
+      };
+      const creator = yield* subscriptionCredentialStore(authPath).pipe(
+        Effect.provideService(FileSystem.FileSystem, stalledFs),
+        Effect.exit,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.await(entered);
+      const waiter = yield* subscriptionCredentialStore(authPath).pipe(
+        Effect.exit,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Fiber.interrupt(creator);
+      assert.isTrue(Exit.isFailure(yield* Fiber.join(waiter)));
+      const retry = yield* subscriptionCredentialStore(authPath);
+      assert.deepStrictEqual(retry.current(), { data: {} });
     }),
   );
 

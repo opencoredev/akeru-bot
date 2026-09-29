@@ -142,9 +142,9 @@ export const subscriptionCredentialStore = Effect.fn("subscriptionCredentialStor
   });
   if (lookup.type === "ready") return lookup.store;
   if (lookup.type === "pending") return yield* Deferred.await(lookup.pending);
-  return yield* Effect.uninterruptible(
+  return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const result = yield* Effect.exit(makeSubscriptionCredentialStore(resolved));
+      const result = yield* Effect.exit(restore(makeSubscriptionCredentialStore(resolved)));
       if (Exit.isSuccess(result)) stores.set(resolved, result.value);
       initializing.delete(resolved);
       yield* Deferred.done(lookup.pending, result);
