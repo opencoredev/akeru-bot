@@ -162,7 +162,9 @@ export function DelegationCard({
       ? (delegation.phase.failure?.message ?? t("Failure details unavailable"))
       : delegation.phase._tag === "Completed"
         ? (delegation.phase.result?.summary ?? t("Result unavailable"))
-        : null;
+        : delegation.phase._tag === "Blocked"
+          ? delegation.phase.reason
+          : null;
 
   return (
     <article

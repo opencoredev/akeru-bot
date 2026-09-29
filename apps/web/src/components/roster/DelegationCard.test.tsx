@@ -219,6 +219,10 @@ describe("DelegationCard", () => {
     expect(failed).not.toContain("Release comparison complete.");
   });
 
+  it("shows why blocked work is waiting", () => {
+    expect(renderCard("blocked")).toContain("The provider is blocked.");
+  });
+
   it("shows fallback text when terminal details are missing", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
