@@ -259,11 +259,14 @@ export interface RetainedChat {
   readonly threadRef: ScopedThreadRef | null;
   /** Whether the shell list has shown this chat since it was retained. */
   readonly linked: boolean;
+  /** Whether the user started this chat, so it stays shown until they change chats. */
+  readonly picked: boolean;
 }
 
 /**
- * The chat the bot shows. A just-created chat wins once its shell arrives, even
- * when an older chat finished a reply after it, so the screen and sends agree.
+ * The chat the bot shows. A just-created chat wins once its shell arrives, and
+ * a chat the user picked keeps winning while its shell is live, even when an
+ * older chat finished a reply after it, so the screen and sends agree.
  */
 export function preferRetainedChatTarget(
   retained: RetainedChat,
@@ -275,7 +278,7 @@ export function preferRetainedChatTarget(
     deletedAt?: string | null | undefined;
   }[],
 ): { environmentId: string; threadId: string } | null {
-  const pending = retained.linked ? null : retained.threadRef;
+  const pending = retained.linked && !retained.picked ? null : retained.threadRef;
   if (
     pending &&
     shells.some(
@@ -324,10 +327,19 @@ export function nextRetainedChat(
     ) {
       return current;
     }
-    return { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
+    const same =
+      current.threadRef !== null &&
+      current.threadRef.environmentId === linkedThreadRef.environmentId &&
+      current.threadRef.threadId === linkedThreadRef.threadId;
+    return {
+      ownerId: current.ownerId,
+      threadRef: linkedThreadRef,
+      linked: true,
+      picked: same && current.picked,
+    };
   }
   if (current.linked && bootstrapped) {
-    return { ownerId: current.ownerId, threadRef: null, linked: false };
+    return { ownerId: current.ownerId, threadRef: null, linked: false, picked: false };
   }
   return current;
 }

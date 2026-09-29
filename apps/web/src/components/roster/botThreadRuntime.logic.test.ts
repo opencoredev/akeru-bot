@@ -21,6 +21,7 @@ import {
   preferRetainedChatTarget,
   resolveBotThreadTarget,
   shouldTitlePlaceholderChat,
+  type RetainedChat,
 } from "./botThreadRuntime.logic";
 
 describe.each([
@@ -416,6 +417,7 @@ describe("preferRetainedChatTarget", () => {
     ownerId: "bot-1",
     threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("new") },
     linked: false,
+    picked: true,
   };
   const older = { environmentId: "env-1", threadId: "old" };
   const shell = (id: string) => ({ environmentId: "env-1", id, archivedAt: null });
@@ -427,11 +429,39 @@ describe("preferRetainedChatTarget", () => {
     });
   });
 
-  it("keeps the resolved chat before the new shell arrives or once the new chat is linked", () => {
+  it("keeps a picked chat after it is linked while its shell is live", () => {
+    const linked = { ...created, linked: true };
+    expect(preferRetainedChatTarget(linked, older, [shell("old"), shell("new")])).toEqual({
+      environmentId: "env-1",
+      threadId: "new",
+    });
+    expect(
+      preferRetainedChatTarget(linked, older, [
+        shell("old"),
+        { ...shell("new"), archivedAt: "2026-09-01T00:00:00.000Z" },
+      ]),
+    ).toBe(older);
+  });
+
+  it("keeps the resolved chat before the new shell arrives or for a chat the user did not pick", () => {
     expect(preferRetainedChatTarget(created, older, [shell("old")])).toBe(older);
     expect(
-      preferRetainedChatTarget({ ...created, linked: true }, older, [shell("old"), shell("new")]),
+      preferRetainedChatTarget({ ...created, linked: true, picked: false }, older, [
+        shell("old"),
+        shell("new"),
+      ]),
     ).toBe(older);
+  });
+
+  it("does not snap back to an older chat that replied after the new chat was linked", () => {
+    const shells = [shell("old"), shell("new")];
+    let retained: RetainedChat = created;
+    for (let render = 0; render < 3; render += 1) {
+      const target = preferRetainedChatTarget(retained, older, shells);
+      expect(target).toEqual({ environmentId: "env-1", threadId: "new" });
+      retained = nextRetainedChat(retained, created.threadRef, true);
+    }
+    expect(retained).toEqual({ ...created, linked: true });
   });
 });
 
@@ -451,42 +481,54 @@ describe("nextRetainedChat", () => {
   });
 
   it("keeps a just-created chat until its shell arrives", () => {
-    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false, picked: true };
     expect(nextRetainedChat(created, null, true)).toBe(created);
   });
 
   it("keeps a just-created chat while the list still shows the previous chat", () => {
-    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false, picked: true };
     expect(nextRetainedChat(created, chat("old"), true)).toBe(created);
     expect(nextRetainedChat(created, chat("new"), true)).toEqual({
       ownerId: "bot-1",
       threadRef: chat("new"),
       linked: true,
+      picked: true,
     });
   });
 
   it("follows the linked chat once the shell list shows it", () => {
     const linked = chat("new");
     const next = nextRetainedChat(
-      { ownerId: "bot-1", threadRef: null, linked: false },
+      { ownerId: "bot-1", threadRef: null, linked: false, picked: false },
       linked,
       true,
     );
-    expect(next).toEqual({ ownerId: "bot-1", threadRef: linked, linked: true });
+    expect(next).toEqual({ ownerId: "bot-1", threadRef: linked, linked: true, picked: false });
     expect(nextRetainedChat(next, linked, true)).toBe(next);
   });
 
   it("releases a chat that left the shell list, so the next send starts a new one", () => {
-    const shown = { ownerId: "bot-1", threadRef: chat("archived"), linked: true };
+    const shown = { ownerId: "bot-1", threadRef: chat("archived"), linked: true, picked: true };
     expect(nextRetainedChat(shown, null, true)).toEqual({
       ownerId: "bot-1",
       threadRef: null,
       linked: false,
+      picked: false,
+    });
+  });
+
+  it("drops the pick when the list moves to another chat after the picked one left", () => {
+    const shown = { ownerId: "bot-1", threadRef: chat("archived"), linked: true, picked: true };
+    expect(nextRetainedChat(shown, chat("old"), true)).toEqual({
+      ownerId: "bot-1",
+      threadRef: chat("old"),
+      linked: true,
+      picked: false,
     });
   });
 
   it("holds a shown chat while the shell list is still loading", () => {
-    const shown = { ownerId: "bot-1", threadRef: chat("current"), linked: true };
+    const shown = { ownerId: "bot-1", threadRef: chat("current"), linked: true, picked: false };
     expect(nextRetainedChat(shown, null, false)).toBe(shown);
   });
 });
