@@ -87,13 +87,15 @@ function isSameDay(left: Date, right: Date): boolean {
  * Label for the separator above a message, or null when it continues the same sitting.
  * A separator appears for the first message, when the day changes, and after a long
  * enough gap that the next message reads as a new session. Callers pass the translated
- * `todayLabel`; other dates keep their English short form.
+ * `todayLabel` and the interface language's `formatDate`; without it, other dates keep
+ * their English short form.
  */
 export function conversationSeparatorLabel(
   createdAt: string,
   previousCreatedAt: string | null,
   now: Date = new Date(),
   todayLabel = "Today",
+  formatDate?: (value: Date, options: Intl.DateTimeFormatOptions) => string,
 ): string | null {
   const current = new Date(createdAt);
   if (Number.isNaN(current.getTime())) return null;
@@ -109,7 +111,9 @@ export function conversationSeparatorLabel(
 
   const day = isSameDay(current, now)
     ? todayLabel
-    : `${WEEKDAY_NAMES[current.getDay()]}, ${MONTH_NAMES[current.getMonth()]} ${current.getDate()}`;
+    : formatDate
+      ? formatDate(current, { weekday: "short", month: "short", day: "numeric" })
+      : `${WEEKDAY_NAMES[current.getDay()]}, ${MONTH_NAMES[current.getMonth()]} ${current.getDate()}`;
   return `${day} ${clockLabel(current)}`;
 }
 
@@ -129,6 +133,7 @@ export function buildBotConversationEntries(
   messages: ReadonlyArray<OrchestrationMessage>,
   now: Date = new Date(),
   todayLabel = "Today",
+  formatDate?: (value: Date, options: Intl.DateTimeFormatOptions) => string,
 ): ReadonlyArray<BotConversationEntry> {
   return messages.map((message, index) => {
     const previous = index === 0 ? null : messages[index - 1];
@@ -137,6 +142,7 @@ export function buildBotConversationEntries(
       previous?.createdAt ?? null,
       now,
       todayLabel,
+      formatDate,
     );
     const sameAuthor =
       previous !== null &&

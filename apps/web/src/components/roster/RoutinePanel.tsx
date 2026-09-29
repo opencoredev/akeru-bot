@@ -872,8 +872,15 @@ export function RoutinePanel({
   const deleteBusyRef = useRef(false);
   const [deleteError, setDeleteError] = useState(false);
   const [openRoutineId, setOpenRoutineId] = useState<string | null>(null);
+  // A list request (a receipt opening the routine list) lands on the heading,
+  // not on the row of the routine it closed.
+  const listRequested = useRef(false);
   useEffect(() => {
-    if (listRequest > 0) setOpenRoutineId(null);
+    if (listRequest === 0) return;
+    setOpenRoutineId((current) => {
+      if (current !== null) listRequested.current = true;
+      return null;
+    });
   }, [listRequest]);
   const openRoutine = routines.find((routine) => routine.id === openRoutineId) ?? null;
 
@@ -897,10 +904,12 @@ export function RoutinePanel({
     if (openRoutineId !== null && previousOpenId.current === null) {
       detailRef.current?.querySelector<HTMLElement>("[data-routine-back]")?.focus();
     } else if (openRoutineId === null && previousOpenId.current !== null) {
-      const target =
-        deletedFocusTarget.current === undefined
+      const target = listRequested.current
+        ? null
+        : deletedFocusTarget.current === undefined
           ? previousOpenId.current
           : deletedFocusTarget.current;
+      listRequested.current = false;
       const rows =
         target === null
           ? []
@@ -1072,7 +1081,7 @@ export function RoutinePanel({
                   });
               }}
             >
-              {t("Delete")}
+              {deleteBusy ? t("Deleting…") : t("Delete")}
             </Button>
           </AlertDialogFooter>
           {deleteError ? (

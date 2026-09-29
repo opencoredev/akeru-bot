@@ -102,6 +102,8 @@ export function botPromptMention(
 export function buildBotPromptMentionItems(input: {
   readonly query: string;
   readonly browserAvailable: boolean;
+  /** The browser row's displayed name, so a translated name is searchable too. */
+  readonly browserLabel?: string;
   readonly bots: ReadonlyArray<BotPromptMentionBot>;
   readonly threads: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly paths?: ReadonlyArray<{ readonly path: string }>;
@@ -110,7 +112,11 @@ export function buildBotPromptMentionItems(input: {
   const threadOnly = isBotPromptThreadQuery(query);
   const pathLike = isBotPromptPathQuery(query);
   const items: BotPromptMentionItem[] = [];
-  if (input.browserAvailable && !threadOnly && "browser".startsWith(query)) {
+  if (
+    input.browserAvailable &&
+    !threadOnly &&
+    ("browser".startsWith(query) || input.browserLabel?.toLowerCase().startsWith(query))
+  ) {
     items.push({ kind: "browser", key: "browser", label: BROWSER_MENTION_LABEL });
   }
   if (!threadOnly) {

@@ -8,7 +8,7 @@ import {
   getDefaultCloneUrl,
   normalizePastedCloneUrl,
 } from "@t3tools/client-runtime/operations/projects";
-import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
+import { translateConnectionStatusWithDiagnostic } from "@t3tools/client-runtime/i18n";
 import {
   canPreloadBrowsePath,
   createBrowseNavigationCoordinator,
@@ -740,7 +740,7 @@ function OpenCommandPaletteDialog(props: {
         }),
         isPrimary,
         isConnected: canCreateProjectInEnvironment(environment.connection.phase),
-        status: translateConnectionStatus(t, environment.connection),
+        status: translateConnectionStatusWithDiagnostic(t, environment.connection),
       };
     });
 

@@ -12,6 +12,7 @@ import {
   resolveLocale,
   translate,
   translateConnectionStatus,
+  translateConnectionStatusWithDiagnostic,
   validateCatalog,
 } from "./index.ts";
 
@@ -155,5 +156,17 @@ describe("Intl helpers", () => {
     expect(
       translateConnectionStatus(createTranslator("en").translate, { phase: "reconnecting" }),
     ).toBe("Reconnecting…");
+    expect(
+      translateConnectionStatusWithDiagnostic(createTranslator("en").translate, {
+        phase: "error",
+        error: "ECONNREFUSED 10.0.0.2:3773",
+      }),
+    ).toBe("Connection failed (ECONNREFUSED 10.0.0.2:3773)");
+    expect(
+      translateConnectionStatusWithDiagnostic(createTranslator("en").translate, {
+        phase: "connected",
+        error: "stale",
+      }),
+    ).toBe("Connected");
   });
 });

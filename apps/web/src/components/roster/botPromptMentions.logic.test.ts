@@ -47,6 +47,17 @@ describe("buildBotPromptMentionItems", () => {
     expect(gated.some((item) => item.kind === "browser")).toBe(false);
   });
 
+  it("finds the browser by its displayed name", () => {
+    const items = buildBotPromptMentionItems({
+      query: "浏览",
+      browserAvailable: true,
+      browserLabel: "浏览器",
+      bots,
+      threads,
+    });
+    expect(items[0]?.kind).toBe("browser");
+  });
+
   it("filters by query and keeps @chat: to chats", () => {
     expect(
       buildBotPromptMentionItems({ query: "bro", browserAvailable: true, bots, threads: [] }),

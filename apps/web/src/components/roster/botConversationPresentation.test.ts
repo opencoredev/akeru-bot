@@ -120,6 +120,21 @@ describe("bot conversation presentation", () => {
     expect(conversationSeparatorLabel("not-a-date", null, now)).toBeNull();
   });
 
+  it("formats older separators in the interface language", () => {
+    const now = new Date(2026, 7, 17, 18, 30);
+    const formatDate = (value: Date, options: Intl.DateTimeFormatOptions) =>
+      new Intl.DateTimeFormat("zh-CN", options).format(value);
+    const label = conversationSeparatorLabel(
+      new Date(2026, 7, 16, 13, 54).toISOString(),
+      null,
+      now,
+      "今天",
+      formatDate,
+    );
+    expect(label).toContain(formatDate(new Date(2026, 7, 16), { month: "short", day: "numeric" }));
+    expect(label).not.toContain("Aug");
+  });
+
   it("starts a group per author run so one long answer is not a stack of replies", () => {
     const at = (minutes: number) => new Date(2026, 7, 17, 10, minutes).toISOString();
     const now = new Date(2026, 7, 17, 11, 0);

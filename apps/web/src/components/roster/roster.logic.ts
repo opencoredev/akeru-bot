@@ -783,16 +783,9 @@ export function buildGroupedRosterSections(
   ];
 }
 
-const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });
-const numericDateFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "numeric",
-  day: "numeric",
-});
-const numericDateWithYearFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "numeric",
-  day: "numeric",
-  year: "numeric",
-});
+type FormatDate = (value: Date, options: Intl.DateTimeFormatOptions) => string;
+const browserFormatDate: FormatDate = (value, options) =>
+  new Intl.DateTimeFormat(undefined, options).format(value);
 
 /**
  * Compact roster timestamp, iMessage-style: today shows the clock time,
@@ -804,6 +797,7 @@ export function formatRosterTimestamp(
   timestampFormat: TimestampFormat,
   nowMs: number = Date.now(),
   t: Translate = englishTranslate,
+  formatDate: FormatDate = browserFormatDate,
 ): string {
   const date = parseTimestampDate(isoDate);
   if (!date) return "";
@@ -815,10 +809,10 @@ export function formatRosterTimestamp(
 
   if (dayDiff <= 0) return formatShortTimestamp(isoDate, timestampFormat);
   if (dayDiff === 1) return t("Yesterday");
-  if (dayDiff < 7) return weekdayFormatter.format(date);
+  if (dayDiff < 7) return formatDate(date, { weekday: "short" });
   return date.getFullYear() === now.getFullYear()
-    ? numericDateFormatter.format(date)
-    : numericDateWithYearFormatter.format(date);
+    ? formatDate(date, { month: "numeric", day: "numeric" })
+    : formatDate(date, { month: "numeric", day: "numeric", year: "numeric" });
 }
 
 // Route prefixes that also produce one- or two-segment paths but are never a

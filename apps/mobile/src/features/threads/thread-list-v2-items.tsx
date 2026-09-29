@@ -158,7 +158,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-blue-600 dark:text-blue-400">
-        {props.expanded ? t("Snoozed") : `Snoozed (${props.count})`}
+        {props.expanded ? t("Snoozed") : `${t("Snoozed")} (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-blue-500/20 dark:bg-blue-400/15" />
       <SymbolView
@@ -198,7 +198,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-foreground-tertiary">
-        {props.expanded ? t("Settled") : `Settled (${props.count})`}
+        {props.expanded ? t("Settled") : `${t("Settled")} (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-border" />
       <SymbolView

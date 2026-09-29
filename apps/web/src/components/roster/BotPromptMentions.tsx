@@ -141,6 +141,7 @@ export function BotPromptMentionMenu({
   const items = buildBotPromptMentionItems({
     query: trigger.query,
     browserAvailable: scope !== null && browserAccess,
+    browserLabel: t("Browser"),
     bots,
     threads,
     paths: pathSearch.entries,

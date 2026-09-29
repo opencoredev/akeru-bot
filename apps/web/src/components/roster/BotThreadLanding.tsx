@@ -134,7 +134,7 @@ export function BotThreadLanding({
   readonly botId: string;
   readonly onOpenRoutines?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
@@ -229,8 +229,8 @@ export function BotThreadLanding({
   const today = useLocalDay();
   const todayLabel = t("Today");
   const entries = useMemo(
-    () => buildBotConversationEntries(messages, today, todayLabel),
-    [messages, today, todayLabel],
+    () => buildBotConversationEntries(messages, today, todayLabel, formatDate),
+    [messages, today, todayLabel, formatDate],
   );
   const routineRunHistory = useEnvironmentQuery(
     runtime.linkedThreadRef

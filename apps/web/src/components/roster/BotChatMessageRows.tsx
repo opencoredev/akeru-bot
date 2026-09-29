@@ -265,7 +265,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   const { t } = useI18n();
   const readAloud = replyPlaybackControlProps(playback, message);
   const copyText = message.text || "Attachment";
-  const label = author?.name ?? "Unavailable bot";
+  const label = author?.name ?? t("Unavailable bot");
   const markdown = (
     <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />
   );
@@ -275,7 +275,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
         className={`group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`}
         data-testid={testId}
       >
-        <div className="text-sm font-medium">{t("Unavailable bot")}</div>
+        <div className="text-sm font-medium">{label}</div>
         {markdown}
         <div className={`mt-0.5 flex ${HOVER_CONTROLS_CLASS}`}>
           <MessageControls

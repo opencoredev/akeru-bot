@@ -441,6 +441,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "The environment could not be updated.": "无法更新该环境。",
   "Delete {title}": "删除 {title}",
   Delete: "删除",
+  "Deleting…": "正在删除…",
   "Delete pending chat?": "删除待发送聊天？",
   "“{title}” has not been sent yet and will be removed from the outbox.":
     "“{title}”尚未发送，将从发件箱中移除。",
@@ -1255,6 +1256,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Source chat": "来源聊天",
   None: "无",
   Created: "创建时间",
+  "Created at": "创建时间",
+  "Last user message": "最后一条用户消息",
   Updated: "更新时间",
   "Bots: {bots}": "机器人：{bots}",
   "this chat": "此聊天",

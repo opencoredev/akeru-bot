@@ -349,7 +349,7 @@ const BotRosterRow = memo(function BotRosterRow({
   onArchive: (bot: Bot) => void;
   sortable: SortableRosterRowBag;
 }) {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -424,7 +424,13 @@ const BotRosterRow = memo(function BotRosterRow({
                     })}
                     className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground"
                   >
-                    {formatRosterTimestamp(latestMessage.at, timestampFormat, Date.now(), t)}
+                    {formatRosterTimestamp(
+                      latestMessage.at,
+                      timestampFormat,
+                      Date.now(),
+                      t,
+                      formatDate,
+                    )}
                   </time>
                 ) : null}
               </span>

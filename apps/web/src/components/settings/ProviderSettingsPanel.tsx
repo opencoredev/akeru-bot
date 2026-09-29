@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
+import { translateConnectionStatusWithDiagnostic } from "@t3tools/client-runtime/i18n";
 import { useI18n } from "../../i18n";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import {
@@ -179,7 +179,7 @@ function EnvironmentUnavailableRow({
     ? access.reason === "permissions"
       ? "Checking what this session is allowed to change."
       : `Waiting for ${environment.label}'s configuration.`
-    : translateConnectionStatus(t, environment.connection);
+    : translateConnectionStatusWithDiagnostic(t, environment.connection);
   // No spinner: this state can persist indefinitely for a wedged device, and a
   // continuously repainting animation would run the whole time.
   return (
@@ -233,7 +233,10 @@ export function ProviderSettingsPanel() {
               {options.map((environment) => {
                 const Icon = providerEnvironmentIcon(environment);
                 const selected = environment.environmentId === effectiveEnvironmentId;
-                const statusText = translateConnectionStatus(t, environment.connection);
+                const statusText = translateConnectionStatusWithDiagnostic(
+                  t,
+                  environment.connection,
+                );
                 return (
                   <button
                     key={environment.environmentId}

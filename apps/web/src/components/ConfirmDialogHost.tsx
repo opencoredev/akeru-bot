@@ -33,7 +33,8 @@ export function resolveConfirmDialogCopy(
 ): ConfirmationCopy {
   const normalizedMessage = message.trim();
   const lines = normalizedMessage.split("\n");
-  const questionLineIndex = lines.findIndex((line) => line.trim().endsWith("?"));
+  // Chinese copy ends questions with a fullwidth question mark.
+  const questionLineIndex = lines.findIndex((line) => /[?？]$/.test(line.trim()));
 
   if (questionLineIndex >= 0) {
     const title = lines[questionLineIndex]!.trim();
@@ -44,7 +45,7 @@ export function resolveConfirmDialogCopy(
     return { title, description: description || null };
   }
 
-  const questionMarkIndex = normalizedMessage.indexOf("?");
+  const questionMarkIndex = normalizedMessage.search(/[?？]/);
   if (questionMarkIndex >= 0) {
     return {
       title: normalizedMessage.slice(0, questionMarkIndex + 1).trim(),

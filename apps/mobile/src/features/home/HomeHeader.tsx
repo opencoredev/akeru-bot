@@ -147,7 +147,7 @@ export function HomeHeader(props: {
               title: t("Sort projects"),
               subactions: PROJECT_SORT_OPTIONS.map((option) => ({
                 id: `project-sort:${option.value}`,
-                title: option.label,
+                title: option.value === "created_at" ? t("Created at") : t("Last user message"),
                 state: checkedMenuState(props.projectSortOrder === option.value),
               })),
             },
@@ -156,7 +156,7 @@ export function HomeHeader(props: {
               title: t("Sort chats"),
               subactions: THREAD_SORT_OPTIONS.map((option) => ({
                 id: `thread-sort:${option.value}`,
-                title: option.label,
+                title: option.value === "created_at" ? t("Created at") : t("Last user message"),
                 state: checkedMenuState(props.threadSortOrder === option.value),
               })),
             },

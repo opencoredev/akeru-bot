@@ -466,6 +466,7 @@ export const englishCatalog = {
   "The environment could not be updated.": "The environment could not be updated.",
   "Delete {title}": "Delete {title}",
   Delete: "Delete",
+  "Deleting…": "Deleting…",
   "Delete pending chat?": "Delete pending chat?",
   "“{title}” has not been sent yet and will be removed from the outbox.":
     "“{title}” has not been sent yet and will be removed from the outbox.",
@@ -1307,6 +1308,8 @@ export const englishCatalog = {
   "Source chat": "Source chat",
   None: "None",
   Created: "Created",
+  "Created at": "Created at",
+  "Last user message": "Last user message",
   Updated: "Updated",
   "Bots: {bots}": "Bots: {bots}",
   "this chat": "this chat",
@@ -1818,4 +1821,16 @@ export function translateConnectionStatus(
         ? `${translateMessage("Connection failed.")} ${reason}`
         : translateMessage("Connection failed");
   }
+}
+
+/** The translated status plus the raw diagnostic, for surfaces with no separate error slot. */
+export function translateConnectionStatusWithDiagnostic(
+  translateMessage: (message: MessageKey) => string,
+  connection: Parameters<typeof translateConnectionStatus>[1] & {
+    readonly error?: string | null;
+  },
+): string {
+  const status = translateConnectionStatus(translateMessage, connection);
+  const failed = connection.phase === "error" || connection.phase === "reconnecting";
+  return failed && connection.error ? `${status} (${connection.error})` : status;
 }

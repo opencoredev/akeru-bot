@@ -15,9 +15,10 @@ const translateEnglish: Translate = createTranslator("en").translate;
 export function formatUsageMeasurement(
   measurement: UsageMeasurement,
   t: Translate = translateEnglish,
+  formatNumber: (value: number) => string = (value) => value.toLocaleString(),
 ): string {
-  if (measurement.unavailableEntries === 0) return measurement.tokens.toLocaleString();
-  return measurement.tokens === 0 ? t("Unavailable") : `${measurement.tokens.toLocaleString()}+`;
+  if (measurement.unavailableEntries === 0) return formatNumber(measurement.tokens);
+  return measurement.tokens === 0 ? t("Unavailable") : `${formatNumber(measurement.tokens)}+`;
 }
 
 export function BotUsageSection({
@@ -27,7 +28,7 @@ export function BotUsageSection({
   readonly environmentId: EnvironmentId | null;
   readonly botId: string;
 }) {
-  const { t } = useI18n();
+  const { t, formatNumber } = useI18n();
   const usageAtom = useMemo(
     () =>
       environmentId
@@ -58,33 +59,33 @@ export function BotUsageSection({
           <div className="grid grid-cols-2 gap-x-5 gap-y-2">
             <span className="text-muted-foreground">{t("Input")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.input, t)}
+              {formatUsageMeasurement(snapshot.measurements.input, t, formatNumber)}
             </span>
             <span className="text-muted-foreground">{t("Output")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.output, t)}
+              {formatUsageMeasurement(snapshot.measurements.output, t, formatNumber)}
             </span>
             <span className="text-muted-foreground">{t("Observer")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.observer, t)}
+              {formatUsageMeasurement(snapshot.measurements.observer, t, formatNumber)}
             </span>
             <span className="text-muted-foreground">{t("Reflector")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.reflector, t)}
+              {formatUsageMeasurement(snapshot.measurements.reflector, t, formatNumber)}
             </span>
             <span className="text-muted-foreground">{t("Cap")}</span>
             <span className="text-right">
               {snapshot.usageCap
                 ? t("{consumed} / {limit} tokens", {
-                    consumed: snapshot.consumedTokens.toLocaleString(),
-                    limit: snapshot.usageCap.limit.toLocaleString(),
+                    consumed: formatNumber(snapshot.consumedTokens),
+                    limit: formatNumber(snapshot.usageCap.limit),
                   })
                 : t("No cap")}
             </span>
             <span className="text-muted-foreground">{t("Estimated cost")}</span>
             <span className="text-right">
               {snapshot.estimatedCost.status === "available"
-                ? `$${snapshot.estimatedCost.usd.toLocaleString(undefined, {
+                ? `$${formatNumber(snapshot.estimatedCost.usd, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}`
@@ -98,20 +99,20 @@ export function BotUsageSection({
               {snapshot.subscriptionPool.status === "available"
                 ? snapshot.subscriptionPool.unit === "percent"
                   ? t("{percent}% of pool", {
-                      percent: snapshot.subscriptionPool.used.toLocaleString(),
+                      percent: formatNumber(snapshot.subscriptionPool.used),
                     })
                   : snapshot.subscriptionPool.unit === "tokens"
                     ? t("{consumed} / {limit} tokens", {
-                        consumed: snapshot.subscriptionPool.used.toLocaleString(),
-                        limit: snapshot.subscriptionPool.limit.toLocaleString(),
+                        consumed: formatNumber(snapshot.subscriptionPool.used),
+                        limit: formatNumber(snapshot.subscriptionPool.limit),
                       })
-                    : `${snapshot.subscriptionPool.used.toLocaleString()} / ${snapshot.subscriptionPool.limit.toLocaleString()} ${snapshot.subscriptionPool.unit}`
+                    : `${formatNumber(snapshot.subscriptionPool.used)} / ${formatNumber(snapshot.subscriptionPool.limit)} ${snapshot.subscriptionPool.unit}`
                 : t("Unavailable")}
             </span>
             {snapshot.reservedTokens > 0 ? (
               <>
                 <span className="text-muted-foreground">{t("Reserved")}</span>
-                <span className="text-right">{snapshot.reservedTokens.toLocaleString()}</span>
+                <span className="text-right">{formatNumber(snapshot.reservedTokens)}</span>
               </>
             ) : null}
             {hasUnavailable ? (
