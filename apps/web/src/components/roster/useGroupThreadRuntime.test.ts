@@ -1,6 +1,8 @@
 import { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { makeComposerTestProvider } from "../../test/chatComposerProps";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import type { Bot, Group } from "./types";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
@@ -9,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   primaryEnvironmentId: "env-a" as EnvironmentId,
   groupAtom: Symbol("groups"),
   startTurnAtom: Symbol("start-turn"),
+  providersAtom: Symbol("providers"),
+  providers: [] as ReturnType<typeof makeComposerTestProvider>[],
   serverGroups: [] as Array<{ id: string }>,
   projects: [] as Array<Record<string, unknown>>,
   startTurn: null as unknown as ReturnType<typeof vi.fn>,
@@ -35,9 +39,16 @@ vi.mock("react/compiler-runtime", async () => {
   return { c: reactHookHarness.useMemoCache };
 });
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) => (atom === mocks.groupAtom ? mocks.serverGroups : []),
+  useAtomValue: (atom: unknown) =>
+    atom === mocks.groupAtom
+      ? mocks.serverGroups
+      : atom === mocks.providersAtom
+        ? mocks.providers
+        : [],
 }));
-vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
+vi.mock("../../hooks/useSettings", () => ({
+  usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
+}));
 vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
 vi.mock("../../state/entities", () => ({
   useProjects: () => mocks.projects,
@@ -52,7 +63,7 @@ vi.mock("../../state/bots", () => ({ environmentGroupsAtom: () => mocks.groupAto
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
 }));
-vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: null }));
+vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: mocks.providersAtom }));
 vi.mock("../../state/threads", () => ({
   threadEnvironment: { startTurn: mocks.startTurnAtom },
 }));
@@ -75,7 +86,8 @@ beforeEach(() => {
   mocks.threadShell = null;
   mocks.serverGroups = [];
   mocks.projects = [];
-  mocks.startTurn = vi.fn();
+  mocks.startTurn = vi.fn().mockResolvedValue({ _tag: "Success" });
+  mocks.providers = [makeComposerTestProvider()];
   mocks.bots = [];
   mocks.groups = [];
 });
@@ -158,6 +170,68 @@ describe("group runtime errors", () => {
     const runtime = useGroupThreadRuntime("group-1");
 
     expect(runtime.providerAvailable).toBe(false);
+  });
+
+  it("does not count a disabled provider as available for the group", () => {
+    mocks.providers = [{ ...makeComposerTestProvider(), enabled: false, status: "disabled" }];
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      {
+        id: "bot-1",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(false);
+  });
+
+  it("accepts an explicit specialist when the boss is missing", async () => {
+    mocks.serverGroups = [{ id: "group-1" }];
+    mocks.projects = [
+      {
+        id: "project-1",
+        environmentId: mocks.primaryEnvironmentId,
+        defaultModelSelection: null,
+      },
+    ];
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "missing-boss",
+        members: [{ kind: "bot", botId: BotId.make("bot-2"), role: "specialist" }],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      {
+        id: "bot-2",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        archivedAt: null,
+        runtimeMode: "full-access",
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(true);
+    expect(await runtime.send("@Scout, check this", [], "bot-2")).toBe(true);
+    expect(mocks.startTurn.mock.calls[0]?.[0].input.respondingBotId).toBe("bot-2");
   });
 
   it("queues a group follow-up while the first send is still being accepted", async () => {

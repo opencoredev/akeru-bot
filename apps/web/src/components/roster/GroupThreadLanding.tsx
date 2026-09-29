@@ -294,8 +294,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             !runtime.groupReady ||
             !runtime.bootstrapped ||
             runtime.defaultProject === null ||
-            !runtime.providerAvailable ||
-            boss === null
+            !runtime.providerAvailable
           }
           mentionBots={members.map((bot) => ({ id: bot.id, name: bot.name }))}
           replyPreview={replyTarget}

@@ -17,7 +17,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
 import { resolveAppModelSelectionState } from "../../modelSelection";
-import { NO_PROVIDER_MODEL_SELECTION } from "../../providerInstances";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  isProviderInstancePickerSelectable,
+  NO_PROVIDER_MODEL_SELECTION,
+} from "../../providerInstances";
 import { environmentGroupsAtom } from "../../state/bots";
 import {
   useAllEnvironmentShellsBootstrapped,
@@ -105,6 +110,10 @@ export function useGroupThreadRuntime(groupId: string) {
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const providerEntries = useMemo(
+    () => applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+    [providers, settings],
+  );
   const bots = useRosterStore((state) => state.bots);
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
@@ -287,7 +296,15 @@ export function useGroupThreadRuntime(groupId: string) {
         activeProject.defaultModelSelection,
         appDefaultModelSelection,
       );
-      if (!modelSelection || modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId) {
+      if (
+        !modelSelection ||
+        modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId ||
+        !providerEntries.some(
+          (entry) =>
+            entry.instanceId === modelSelection.instanceId &&
+            isProviderInstancePickerSelectable(entry),
+        )
+      ) {
         setError(
           "Mention a group member with a connected provider, or connect the boss's provider.",
         );
@@ -375,6 +392,7 @@ export function useGroupThreadRuntime(groupId: string) {
       pendingUserInputAnswers,
       pendingUserInputQuestionIndex,
       pendingUserInputs,
+      providerEntries,
       rememberedThread?.runtimeMode,
       respondingRequestIds,
       settings.localExecutionMode,
@@ -467,7 +485,14 @@ export function useGroupThreadRuntime(groupId: string) {
         activeProject?.defaultModelSelection,
         appDefaultModelSelection,
       );
-      return selection !== null && selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId;
+      return (
+        selection !== null &&
+        selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId &&
+        providerEntries.some(
+          (entry) =>
+            entry.instanceId === selection.instanceId && isProviderInstancePickerSelectable(entry),
+        )
+      );
     });
 
   return {
