@@ -18,6 +18,21 @@ describe("delegationSummaryText", () => {
     );
   });
 
+  it("drops italic and list markers but keeps snake_case words", () => {
+    expect(
+      delegationSummaryText({
+        botName: "Scout",
+        task: "Check flights",
+        outcome: {
+          _tag: "Completed",
+          summary: "Found *two* options for _you_:\n* flight_a at 9:40\n+ flight_b at 12:10",
+        },
+      }),
+    ).toBe(
+      'Scout finished "Check flights": Found two options for you:\n- flight_a at 9:40\n- flight_b at 12:10',
+    );
+  });
+
   it("reports a failure without markdown", () => {
     expect(
       delegationSummaryText({

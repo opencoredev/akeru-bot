@@ -20,6 +20,9 @@ function plainText(value: string): string {
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(/^\s{0,3}>\s?/gm, "")
     .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(?<![\w*])\*(?![\s*])([^*\n]+?)\*(?![\w*])/g, "$1")
+    .replace(/(?<![\w_])_(?![\s_])([^_\n]+?)_(?![\w_])/g, "$1")
+    .replace(/^(\s*)[*+]\s+/gm, "$1- ")
     .replace(/`([^`\n]+)`/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
