@@ -243,6 +243,46 @@ it.layer(layer)("BotUsageLedger", (it) => {
     }),
   );
 
+  it.effect("a late cancellation cannot release the next turn's reservation", () =>
+    Effect.gen(function* () {
+      const ledger = yield* BotUsageLedger;
+      const botId = BotId.make("bot-late-cancellation");
+      const threadId = ThreadId.make("thread-1");
+      const oldTurnId = TurnId.make("turn-old");
+      yield* ledger.reserve(
+        reserveInput("old-turn", { botId, threadId, maximumTokens: 500, capLimit: 1_000 }),
+      );
+      yield* ledger.finalizeForTurn({
+        botId,
+        threadId,
+        turnId: oldTurnId,
+        settledAt: "2026-08-30T20:01:00.000Z",
+        cancelled: true,
+      });
+      yield* ledger.reserve(
+        reserveInput("new-turn", { botId, threadId, maximumTokens: 500, capLimit: 1_000 }),
+      );
+      yield* ledger.finalizeForTurn({
+        botId,
+        threadId,
+        turnId: oldTurnId,
+        settledAt: "2026-08-30T20:02:00.000Z",
+        cancelled: true,
+      });
+
+      const summary = yield* ledger.summarize(botId);
+      assert.equal(summary.reservedTokens, 500);
+      assert.equal(
+        summary.entries.find((entry) => entry.sourceKey === "turn-start:new-turn")?.state,
+        "reserved",
+      );
+      assert.equal(
+        summary.entries.find((entry) => entry.sourceKey === "turn-start:old-turn")?.turnId,
+        oldTurnId,
+      );
+    }),
+  );
+
   it.effect("preserves reported usage when a turn is cancelled", () =>
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;

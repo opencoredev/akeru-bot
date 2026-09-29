@@ -467,6 +467,12 @@ const make = Effect.gen(function* () {
             const rows = yield* selectEntryForTurn(sql, input.botId, input.threadId, input.turnId);
             const current = rows[0];
             if (!current) return [];
+            if (current.turnId === null) {
+              yield* sql`
+                UPDATE akeru_bot_usage_entries SET turn_id = ${input.turnId}
+                WHERE reservation_id = ${current.reservationId} AND turn_id IS NULL
+              `;
+            }
             if (input.cancelled) {
               if (current.heldTokens > 0) {
                 yield* sql`
