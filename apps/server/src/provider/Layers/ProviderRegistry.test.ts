@@ -2104,7 +2104,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 "codex",
                 "grok",
                 "kimi",
-                "opencode",
                 "opencodeGo",
               ]);
               assert.strictEqual(cursorSpawned, false);

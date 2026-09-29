@@ -213,7 +213,7 @@ if [ -n "$remote_endpoint" ]; then
     attempts=$((attempts + 1))
     sleep 2
   done
-elif command -v systemctl >/dev/null 2>&1 && systemctl --user is-active t3code.service >/dev/null 2>&1; then
+elif command -v systemctl >/dev/null 2>&1 && systemctl --user is-active akeru-bot.service >/dev/null 2>&1; then
   healthy=1
 fi
 if [ "$healthy" -ne 1 ]; then
