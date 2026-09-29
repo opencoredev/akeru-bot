@@ -67,6 +67,8 @@ expand it, and select the collapse button or press Esc to shrink it again.
 
 Bots can use Local, E2B, Daytona, Vercel Sandbox, or Upstash Box. Connect remote services under
 **Settings > Sandbox**. A bot-specific sandbox overrides the environment default.
+If a managed browser stops unexpectedly, Akeru records the failure in the bot inbox so you can
+retry the browser task after it is available again.
 
 Local bots use **Auto review** by default. Safe actions continue without a prompt. Actions that send,
 pay, delete, change production, use secrets, or have unclear intent still ask. Select **Settings >

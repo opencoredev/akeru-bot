@@ -254,11 +254,34 @@ async function spawnRemoteBrowser(
   if (!/^[1-9]\d*$/.test(pid)) {
     throw new Error(`Sandbox '${sandbox.provider}' did not return a browser process id.`);
   }
+  let stopped = false;
+  const monitorCommand =
+    `count=0; while kill -0 ${pid} 2>/dev/null; do ` +
+    'count=$((count + 1)); if [ "$count" -ge 20 ]; then printf alive; exit 0; fi; sleep 1; ' +
+    "done; printf dead";
   return {
-    kill: async () =>
-      (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false,
-    wait: () =>
-      execute(sandbox, "sh", ["-lc", `while kill -0 ${pid} 2>/dev/null; do sleep 1; done`]),
+    kill: async () => {
+      stopped = true;
+      return (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false;
+    },
+    wait: async () => {
+      let failures = 0;
+      while (true) {
+        if (stopped) return;
+        try {
+          const status = (await execute(sandbox, "sh", ["-lc", monitorCommand])).trim();
+          failures = 0;
+          if (status === "dead") return;
+          if (status !== "alive")
+            throw new Error("Sandbox browser monitor returned an unknown state.");
+        } catch {
+          // A command timeout or transport error does not mean the browser exited.
+          // Keep watching; only an observed dead process settles this waiter.
+          failures += 1;
+          if (failures > 1 && !stopped) await NodeTimersPromises.setTimeout(1_000);
+        }
+      }
+    },
   };
 }
 

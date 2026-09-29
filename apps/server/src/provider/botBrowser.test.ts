@@ -300,7 +300,7 @@ describe("sandbox bot browser", () => {
       }
       if (command === "sh" && args[1]?.includes("while kill")) {
         await monitor;
-        return { exitCode: 0, stdout: "", stderr: "", success: true, executionTimeMs: 1 };
+        return { exitCode: 0, stdout: "dead", stderr: "", success: true, executionTimeMs: 1 };
       }
       return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
     });
@@ -335,14 +335,19 @@ describe("sandbox bot browser", () => {
   });
 
   it.each(["timed out", "rejected"])(
-    "keeps a live remote browser attached when its monitor %s",
+    "continues monitoring a live remote browser after a command %s",
     async (failure) => {
       let finishMonitor!: () => void;
       const monitor = new Promise<void>((resolve) => (finishMonitor = resolve));
+      let finishSecondMonitor!: () => void;
+      const secondMonitor = new Promise<void>((resolve) => (finishSecondMonitor = resolve));
+      let secondMonitorReceipt!: () => void;
+      const secondMonitorStarted = new Promise<void>((resolve) => (secondMonitorReceipt = resolve));
       let failureReceipt!: () => void;
       const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
       const onFailure = vi.fn((_error: unknown) => failureReceipt());
       const onReady = vi.fn();
+      let monitorCalls = 0;
       const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
         if (command === "uname") {
           return {
@@ -354,15 +359,21 @@ describe("sandbox bot browser", () => {
           };
         }
         if (command === "sh" && args[1]?.includes("while kill")) {
-          await monitor;
-          if (failure === "rejected") throw new Error("monitor connection lost");
-          return {
-            exitCode: 124,
-            stdout: "",
-            stderr: "monitor timed out",
-            success: false,
-            executionTimeMs: 30_000,
-          };
+          monitorCalls += 1;
+          if (monitorCalls === 1) {
+            await monitor;
+            if (failure === "rejected") throw new Error("monitor connection lost");
+            return {
+              exitCode: 124,
+              stdout: "",
+              stderr: "monitor timed out",
+              success: false,
+              executionTimeMs: 30_000,
+            };
+          }
+          secondMonitorReceipt();
+          await secondMonitor;
+          return { exitCode: 0, stdout: "dead", stderr: "", success: true, executionTimeMs: 1 };
         }
         return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
       });
@@ -389,11 +400,8 @@ describe("sandbox bot browser", () => {
       try {
         const attachment = await browser.attachment();
         finishMonitor();
-        await failureObserved;
-        expect(onFailure).toHaveBeenCalledOnce();
-        expect(String(onFailure.mock.calls[0]?.[0])).toContain(
-          failure === "rejected" ? "monitor connection lost" : "monitor timed out",
-        );
+        await secondMonitorStarted;
+        expect(onFailure).not.toHaveBeenCalled();
         await expect(browser.attachment()).resolves.toEqual(attachment);
         const readyBeforeSuccessfulTool = onReady.mock.calls.length;
         await expect(executeTool(browser.tools.browser_snapshot, {})).resolves.toEqual({
@@ -401,7 +409,10 @@ describe("sandbox bot browser", () => {
           truncated: false,
         });
         expect(onReady).toHaveBeenCalledTimes(readyBeforeSuccessfulTool + 1);
-        expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
+        finishSecondMonitor();
+        await failureObserved;
+        expect(onFailure).toHaveBeenCalledOnce();
+        expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(3);
       } finally {
         await browser.close();
         vi.unstubAllGlobals();
