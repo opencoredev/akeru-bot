@@ -206,7 +206,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("clears a missing bot handoff only after the roster has loaded", async () => {
+it("keeps a pending bot handoff through a loaded but empty roster", async () => {
   const handoff = JSON.stringify({ environmentId: "onboarding-environment", botId: "bot-deleted" });
   window.localStorage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, handoff);
   window.localStorage.setItem("akeru:desktop-onboarding-completed:v1", "1");
@@ -219,11 +219,8 @@ it("clears a missing bot handoff only after the roster has loaded", async () => 
 
   mocks.rosterLoaded = true;
   await act(async () => root.render(<DesktopOnboarding Surface={Surface} />));
-  expect(window.localStorage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBeNull();
-  expect(mocks.toast).toHaveBeenCalledWith({
-    type: "error",
-    title: "Your new bot is no longer available.",
-  });
+  expect(window.localStorage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(handoff);
+  expect(mocks.toast).not.toHaveBeenCalled();
   expect(mocks.navigate).not.toHaveBeenCalled();
 });
 
