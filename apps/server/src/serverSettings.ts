@@ -348,6 +348,8 @@ function restoreUsedProviders(
 
 // Drivers kept in settings for compatibility that no longer have a runtime.
 const RETIRED_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["cursor"]);
+// Live drivers whose instances expose no text generation.
+const NO_TEXT_GENERATION_DRIVERS: ReadonlySet<string> = new Set(["kimi", "opencodeGo"]);
 
 function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
   const driver = settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver;
@@ -367,7 +369,9 @@ function fallbackTextGenerationProvider(settings: ServerSettings): ServerSetting
   // instance wins over the legacy providers map, which decodes to defaults
   // (codex enabled) when the Providers UI has only written providerInstances.
   const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
-    if (RETIRED_PROVIDER_DRIVERS.has(driver)) return false;
+    if (RETIRED_PROVIDER_DRIVERS.has(driver) || NO_TEXT_GENERATION_DRIVERS.has(driver)) {
+      return false;
+    }
     const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
     return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
   });
