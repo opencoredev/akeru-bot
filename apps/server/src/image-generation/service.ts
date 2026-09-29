@@ -303,6 +303,7 @@ export async function runImageProviderHealthTest(input: {
       headers,
     });
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       subscriptionAuth.recordImageCredentialProbeFailure(
         provider,
         `${meta.label} image health check was rejected (${response.status}).`,
@@ -398,6 +399,7 @@ async function generateWithProvider(input: {
     }),
   });
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     const error = new Error(`${meta.label} image generation was rejected (${response.status}).`);
     (error as Error & { revoked?: boolean }).revoked =
       response.status === 401 || response.status === 403;

@@ -607,6 +607,28 @@ describe("image generation", () => {
     expect(service.imageRequestHealth("grok")?.health).toBe("healthy");
   });
 
+  it("closes a rejected response before falling back", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "openai-codex");
+    seedApiKey(authPath, "xai");
+    const service = new SubscriptionAuthService(authPath);
+    const cancel = vi.fn();
+    const fetchFn = vi.fn(async (url: string | URL) =>
+      String(url).includes("openai")
+        ? new Response(new ReadableStream({ cancel }), { status: 503 })
+        : Response.json({ data: [{ b64_json: PNG_BASE64 }] }),
+    );
+
+    await generateImageWithProviders({
+      prompt: "a fox",
+      settings: { ...baseSettings, chatgptEnabled: true, grokEnabled: true },
+      subscriptionAuth: service,
+      fetchFn,
+    });
+
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("rejects a response that is not an image", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
