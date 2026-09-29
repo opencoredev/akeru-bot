@@ -2054,14 +2054,15 @@ export const make = Effect.gen(function* () {
         const candidates = pullRequestWithRemoteInfo.isCrossRepository
           ? pullRequestWorktreeBranchCandidates(pullRequest.number, pullRequest.headBranch)
           : [localPullRequestBranch];
-        for (const candidate of candidates) {
-          const localBranch = result.refs.find(
-            (branch) => !branch.isRemote && branch.name === candidate,
-          );
-          if (localBranch) {
-            return localBranch;
-          }
+        const localBranches = candidates.flatMap((candidate) =>
+          result.refs.filter((branch) => !branch.isRemote && branch.name === candidate),
+        );
+        for (const branch of localBranches) {
+          if (!branch.worktreePath) continue;
+          const worktreePath = yield* canonicalizeExistingPath(branch.worktreePath);
+          if (worktreePath !== rootWorktreePath) return branch;
         }
+        if (localBranches[0]) return localBranches[0];
         if (localPullRequestBranch === pullRequest.headBranch) {
           return null;
         }

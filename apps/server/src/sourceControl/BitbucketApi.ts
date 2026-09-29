@@ -1071,6 +1071,14 @@ export const make = Effect.gen(function* () {
         );
         const effectiveLocalBranch = existingLocalBranch ?? localBranch;
         const localBranchExists = existingLocalBranch !== undefined;
+        const upstreamCommitBeforeFetch = localBranchExists
+          ? yield* git
+              .resolveCommit({ cwd: input.cwd, revision: `${effectiveLocalBranch}@{upstream}` })
+              .pipe(
+                Effect.map((result) => result.commitSha),
+                Effect.orElseSucceed(() => null),
+              )
+          : null;
 
         if (input.force === true || !localBranchExists) {
           yield* git.fetchRemoteBranch({
@@ -1094,6 +1102,17 @@ export const make = Effect.gen(function* () {
           remoteBranch,
         });
         yield* Effect.scoped(git.switchRef({ cwd: input.cwd, refName: effectiveLocalBranch }));
+        if (localBranchExists) {
+          const target = yield* git.resolveCommit({
+            cwd: input.cwd,
+            revision: `refs/remotes/${remoteName}/${remoteBranch}`,
+          });
+          yield* git.refreshCheckedOutBranch({
+            cwd: input.cwd,
+            targetCommit: target.commitSha,
+            resetWhenHeadCommit: upstreamCommitBeforeFetch,
+          });
+        }
       }).pipe(
         Effect.mapError((cause) =>
           isBitbucketApiError(cause)

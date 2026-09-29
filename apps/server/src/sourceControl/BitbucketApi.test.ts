@@ -86,6 +86,12 @@ function makeLayer(input: {
     fetchRemoteTrackingBranch: vi.fn<
       GitVcsDriver.GitVcsDriver["Service"]["fetchRemoteTrackingBranch"]
     >(() => Effect.void),
+    resolveCommit: vi.fn<GitVcsDriver.GitVcsDriver["Service"]["resolveCommit"]>((input) =>
+      Effect.succeed({ commitSha: input.revision.includes("upstream") ? "before" : "after" }),
+    ),
+    refreshCheckedOutBranch: vi.fn<GitVcsDriver.GitVcsDriver["Service"]["refreshCheckedOutBranch"]>(
+      () => Effect.succeed({ headCommit: "after", moved: true, onTarget: true }),
+    ),
     setBranchUpstream: vi.fn<GitVcsDriver.GitVcsDriver["Service"]["setBranchUpstream"]>(
       () => Effect.void,
     ),
@@ -709,6 +715,14 @@ it.effect("refreshes an existing same-repository pull request branch", () => {
       remoteName: "origin",
       remoteBranch: "feature/source-control",
     });
+    assert.deepStrictEqual(git.resolveCommit.mock.calls[0]?.[0], {
+      cwd: "/repo",
+      revision: "feature/source-control@{upstream}",
+    });
+    assert.deepStrictEqual(git.resolveCommit.mock.calls[1]?.[0], {
+      cwd: "/repo",
+      revision: "refs/remotes/origin/feature/source-control",
+    });
     assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
       cwd: "/repo",
       branch: "feature/source-control",
@@ -718,6 +732,11 @@ it.effect("refreshes an existing same-repository pull request branch", () => {
     assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
       cwd: "/repo",
       refName: "feature/source-control",
+    });
+    assert.deepStrictEqual(git.refreshCheckedOutBranch.mock.calls[0]?.[0], {
+      cwd: "/repo",
+      targetCommit: "after",
+      resetWhenHeadCommit: "before",
     });
   }).pipe(Effect.provide(layer));
 });

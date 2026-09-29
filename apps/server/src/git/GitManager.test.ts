@@ -4656,6 +4656,11 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         worktreePath,
         "t3code/pr-84/feature/pr-legacy-fork",
       ]);
+      yield* runGit(repoDir, [
+        "branch",
+        "akeru/pr-84/feature/pr-legacy-fork",
+        "feature/pr-legacy-fork",
+      ]);
 
       yield* runGit(repoDir, ["checkout", "feature/pr-legacy-fork"]);
       NodeFS.writeFileSync(NodePath.join(repoDir, "legacy-fork.txt"), "advanced fork head\n");
@@ -4693,8 +4698,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         mode: "worktree",
       });
 
-      // The legacy worktree is reused and reported under its actual branch;
-      // no second akeru/pr-84 branch is created.
+      // The legacy worktree wins over a newer alias without a checkout.
       expect(result.worktreePath && NodeFS.realpathSync.native(result.worktreePath)).toBe(
         NodeFS.realpathSync.native(worktreePath),
       );
@@ -4702,7 +4706,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       expect(result.isOnPullRequestHead).toBe(true);
       expect((yield* runGit(worktreePath, ["rev-parse", "HEAD"])).stdout.trim()).toBe(advancedHead);
       const branches = (yield* runGit(repoDir, ["branch", "--list", "akeru/*"])).stdout.trim();
-      expect(branches).toBe("");
+      expect(branches).toBe("akeru/pr-84/feature/pr-legacy-fork");
       expect(
         (yield* runGit(worktreePath, ["rev-parse", "--abbrev-ref", "@{upstream}"])).stdout.trim(),
       ).toBe("fork-seed/feature/pr-legacy-fork");
