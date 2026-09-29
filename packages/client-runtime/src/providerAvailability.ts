@@ -41,7 +41,6 @@ export function providerAvailabilityReason(
     return "not-installed";
   }
   if (provider.auth.status === "unauthenticated") return "missing-login";
-  if (provider.unavailability === "temporary-failure") return "temporary-failure";
   if (
     model &&
     provider.models.length > 0 &&
@@ -49,6 +48,7 @@ export function providerAvailabilityReason(
   ) {
     return "unsupported-model";
   }
+  if (provider.unavailability === "temporary-failure") return "temporary-failure";
   return null;
 }
 

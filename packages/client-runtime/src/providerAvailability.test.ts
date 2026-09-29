@@ -73,6 +73,12 @@ describe("providerAvailabilityReason", () => {
       ),
     ).toBe("missing-login");
     expect(providerAvailabilityReason(provider(), "claude-9")).toBe("unsupported-model");
+    expect(
+      providerAvailabilityReason(
+        provider({ status: "error", unavailability: "temporary-failure" }),
+        "claude-9",
+      ),
+    ).toBe("unsupported-model");
   });
 
   it("reports a recorded category before a missing install, like the server", () => {
