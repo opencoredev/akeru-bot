@@ -63,6 +63,7 @@ function rows(service: SubscriptionAuthService, settings: ImageGenerationSetting
   return imageProviderStatuses({
     settings,
     subscriptionStatuses: service.statuses(),
+    chatgptAccountConnected: service.hasOpenAICodexAccount(),
     requestHealth: (provider: ImageProviderId) => service.imageRequestHealth(provider),
   });
 }
@@ -83,15 +84,16 @@ describe("image provider rows", () => {
     expect(chatgpt?.healthTest).toEqual({ status: "not-run" });
   });
 
-  it("reports detected (not healthy) for a connected credential before any request", () => {
+  it("requires a ChatGPT account instead of an OpenAI API key", () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
     const service = new SubscriptionAuthService(authPath);
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
-    expect(chatgpt?.connected).toBe(true);
-    expect(chatgpt?.health).toBe("detected");
+    expect(chatgpt?.connected).toBe(false);
+    expect(chatgpt?.health).toBe("missing");
+    expect(chatgpt?.repairAction).toBe("Connect ChatGPT subscription");
     expect(chatgpt?.healthTest).toEqual({ status: "not-run" });
   });
 

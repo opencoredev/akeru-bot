@@ -633,6 +633,16 @@ export class SubscriptionAuthService {
     return this.data[provider] !== undefined;
   }
 
+  hasOpenAICodexAccount(): boolean {
+    this.reload();
+    const credential = this.data["openai-codex"];
+    return (
+      credential?.type === "oauth" &&
+      typeof credential.accountId === "string" &&
+      credential.accountId.length > 0
+    );
+  }
+
   async startLogin(
     provider: SubscriptionProviderId,
     options: Omit<SubscriptionAuthStartInput, "provider"> = {},

@@ -898,6 +898,7 @@ const makeWsRpcLayer = (
           providers: imageProviderStatuses({
             settings: settings.imageGeneration,
             subscriptionStatuses: subscriptionAuth.statuses(),
+            chatgptAccountConnected: subscriptionAuth.hasOpenAICodexAccount(),
             requestHealth: (provider) => subscriptionAuth.imageRequestHealth(provider),
           }),
         };

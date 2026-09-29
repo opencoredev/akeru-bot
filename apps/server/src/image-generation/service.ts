@@ -85,12 +85,14 @@ function rowHealth(input: {
 export function imageProviderStatuses(input: {
   readonly settings: ImageGenerationSettings;
   readonly subscriptionStatuses: ReadonlyArray<SubscriptionProviderStatus>;
+  readonly chatgptAccountConnected: boolean;
   readonly requestHealth: (provider: ImageProviderId) => ImageRequestHealth;
 }): ImageProviderStatus[] {
   return IMAGE_PROVIDER_IDS.map((provider) => {
     const meta = IMAGE_PROVIDER_META[provider];
     const subscription = subscriptionStatusFor(input.subscriptionStatuses, provider);
-    const connected = subscription?.connected ?? false;
+    const connected =
+      provider === "chatgpt" ? input.chatgptAccountConnected : (subscription?.connected ?? false);
     const enabled =
       provider === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
     const requestHealth = input.requestHealth(provider);
