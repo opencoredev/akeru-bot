@@ -944,7 +944,8 @@ const make = (options?: AgentControllerLiveOptions) =>
               enabled: settings.memory.enabled,
               privateBotMemory: settings.memory.privateBotMemory,
             })),
-            Effect.orElseSucceed(() => ({ enabled: true, privateBotMemory: true })),
+            // Fail closed: an unreadable setting must not re-enable memory the user turned off.
+            Effect.orElseSucceed(() => ({ enabled: false, privateBotMemory: false })),
           )
         : Effect.succeed({ enabled: true, privateBotMemory: true });
     const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>

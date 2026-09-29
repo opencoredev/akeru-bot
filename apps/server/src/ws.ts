@@ -3192,6 +3192,21 @@ const makeWsRpcLayer = (
             WS_METHODS.memoryImportApply,
             Effect.all({
               access: resolveBotMemoryAccess("documents.importApply", input.threadId),
+              settings: serverSettings.getSettings.pipe(
+                Effect.mapError((cause) => memoryOperationError("documents.importApply", cause)),
+                Effect.flatMap((settings) =>
+                  settings.memory.enabled === false || settings.memory.privateBotMemory === false
+                    ? Effect.fail(
+                        memoryOperationError(
+                          "documents.importApply",
+                          settings.memory.enabled === false
+                            ? "Memory is turned off."
+                            : "Private bot memory is turned off.",
+                        ),
+                      )
+                    : Effect.void,
+                ),
+              ),
               conversation: agentController.readConversationMemory
                 ? agentController
                     .readConversationMemory(input.threadId)
@@ -3515,11 +3530,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.memoryObservationsClear,
             agentController.clearConversationMemory
-              ? agentController
-                  .clearConversationMemory(input.threadId)
-                  .pipe(
-                    Effect.mapError((cause) => memoryOperationError("observations.clear", cause)),
-                  )
+              ? resolveMemoryAccess("observations.clear", input.threadId).pipe(
+                  Effect.flatMap(() =>
+                    (agentController.clearConversationMemory?.(input.threadId) ?? Effect.void).pipe(
+                      Effect.mapError((cause) => memoryOperationError("observations.clear", cause)),
+                    ),
+                  ),
+                )
               : Effect.fail(
                   memoryOperationError(
                     "observations.clear",
