@@ -229,9 +229,9 @@ export class AkeruSessionResources {
           });
         }
       }
-      const browser =
-        existingBrowser ??
-        (this.options.makeBotBrowser ?? createBotBrowser)({
+      let browser = existingBrowser;
+      if (!browser) {
+        browser = (this.options.makeBotBrowser ?? createBotBrowser)({
           threadId: input.resourceScope,
           workspace: workspaceLease.workspace.workspace,
           cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
@@ -240,14 +240,24 @@ export class AkeruSessionResources {
             : {}),
           ...(this.options.onBrowserFailure
             ? {
-                onFailure: (error: unknown) =>
-                  this.reportBrowserFailure(input.workspaceResourceKey, error),
+                onFailure: (error: unknown) => {
+                  if (this.resourceBrowsers.get(input.workspaceResourceKey) === browser) {
+                    this.reportBrowserFailure(input.workspaceResourceKey, error);
+                  }
+                },
               }
             : {}),
           ...(this.options.onBrowserReady
-            ? { onReady: () => this.resolveBrowserFailures(input.workspaceResourceKey) }
+            ? {
+                onReady: () => {
+                  if (this.resourceBrowsers.get(input.workspaceResourceKey) === browser) {
+                    this.resolveBrowserFailures(input.workspaceResourceKey);
+                  }
+                },
+              }
             : {}),
         });
+      }
 
       this.resourceBrowsers.set(input.workspaceResourceKey, browser);
       this.threadBrowsers.set(key, browser);

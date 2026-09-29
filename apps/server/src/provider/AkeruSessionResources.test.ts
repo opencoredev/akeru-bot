@@ -223,9 +223,9 @@ describe("AkeruSessionResources", () => {
 
   it("does not pass a discarded browser failure to a replacement browser's bot", async () => {
     const browserFailure = vi.fn();
-    let onFailure!: (error: unknown) => void;
+    const callbacks: Array<(error: unknown) => void> = [];
     const makeBotBrowser = vi.fn((input: { onFailure?: (error: unknown) => void }) => {
-      onFailure = input.onFailure!;
+      callbacks.push(input.onFailure!);
       return browser();
     });
     const resources = new AkeruSessionResources({
@@ -247,12 +247,13 @@ describe("AkeruSessionResources", () => {
     };
 
     await resources.acquire(first);
-    onFailure(new Error("browser exited"));
+    callbacks[0]!(new Error("browser exited"));
     expect(browserFailure).toHaveBeenCalledOnce();
     await resources.release(first.threadId, { destroy: true });
     await resources.acquire(second);
 
     expect(makeBotBrowser).toHaveBeenCalledTimes(2);
+    callbacks[0]!(new Error("old request rejected after replacement"));
     expect(browserFailure).toHaveBeenCalledOnce();
     await resources.shutdown();
   });
