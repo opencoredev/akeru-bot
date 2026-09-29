@@ -5617,6 +5617,9 @@ describe("AgentControllerLive", () => {
           })
           .pipe(Effect.exit);
         assert.isTrue(Exit.isFailure(failedExit));
+        expect(failedExit).toMatchObject({
+          cause: { reasons: [{ error: { retryable: true } }] },
+        });
 
         yield* controller.respondToUserInput({
           threadId: codexThreadId,
@@ -5679,6 +5682,9 @@ describe("AgentControllerLive", () => {
           })
           .pipe(Effect.exit);
         assert.isTrue(Exit.isFailure(failedExit));
+        expect(failedExit).not.toMatchObject({
+          cause: { reasons: [{ error: { retryable: true } }] },
+        });
 
         yield* controller.respondToUserInput({
           threadId: codexThreadId,

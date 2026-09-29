@@ -359,6 +359,13 @@ function isUnknownPendingUserInputRequestError(cause: Cause.Cause<AgentControlle
   );
 }
 
+function isRetryableUserInputResponseError(cause: Cause.Cause<AgentControllerError>): boolean {
+  const failReason = cause.reasons.find(Cause.isFailReason);
+  return (
+    failReason?.error._tag === "AgentControllerRuntimeError" && failReason.error.retryable === true
+  );
+}
+
 function stalePendingRequestDetail(
   requestKind: "approval" | "user-input",
   requestId: string,
@@ -2169,10 +2176,13 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           Effect.catchCause((cause) => {
-            const stale = isUnknownPendingUserInputRequestError(cause);
-            const detail = stale
-              ? stalePendingRequestDetail("user-input", event.payload.requestId)
-              : Cause.pretty(cause);
+            const retryable = isRetryableUserInputResponseError(cause);
+            const staleDetail = stalePendingRequestDetail("user-input", event.payload.requestId);
+            const detail = retryable
+              ? Cause.pretty(cause)
+              : isUnknownPendingUserInputRequestError(cause)
+                ? staleDetail
+                : `${staleDetail} ${Cause.pretty(cause)}`;
             return Effect.gen(function* () {
               yield* appendProviderFailureActivity({
                 threadId: event.payload.threadId,
@@ -2183,8 +2193,8 @@ const make = Effect.gen(function* () {
                 createdAt: event.payload.createdAt,
                 requestId: event.payload.requestId,
               });
-              // Any other failure leaves the question open in its live turn, so it can be answered again.
-              if (!stale) return;
+              // The controller restored the question in its live turn, so it can be answered again.
+              if (retryable) return;
               yield* appendUserInputFailureReply({
                 threadId: event.payload.threadId,
                 requestId: event.payload.requestId,

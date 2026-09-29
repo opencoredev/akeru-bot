@@ -3764,6 +3764,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       const activeTurn = active.activeTurn;
       // Only a question this turn was waiting on goes back into its set on failure.
       let ownedByTurn = false;
+      let restored = false;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
         if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
@@ -3807,7 +3808,18 @@ const make = (options?: AgentControllerLiveOptions) =>
                 return;
               activeTurn.suspendedToolCalls.add(toolCallId);
               activeTurn.waiting = turnStillWaiting(key, active);
+              restored = true;
             }),
+          ),
+          Effect.mapError((error) =>
+            restored
+              ? new AgentControllerRuntimeError({
+                  operation: error.operation,
+                  detail: error.detail,
+                  cause: error.cause,
+                  retryable: true,
+                })
+              : error,
           ),
         );
       }).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
