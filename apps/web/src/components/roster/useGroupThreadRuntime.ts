@@ -41,7 +41,11 @@ import {
 import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
-import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
+import {
+  buildGroupTurnStartInput,
+  createBotTurnSubmissionQueue,
+  findLatestGroupThreadTarget,
+} from "./botThreadRuntime.logic";
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
@@ -167,7 +171,8 @@ export function useGroupThreadRuntime(groupId: string) {
     reportFailure: false,
   });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
-  const sendInFlightRef = useRef(false);
+  const sendQueueRef = useRef(createBotTurnSubmissionQueue());
+  const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
@@ -229,7 +234,6 @@ export function useGroupThreadRuntime(groupId: string) {
 
   const send = useCallback(
     async (prompt: string, files: readonly File[], requestedBotId?: string): Promise<boolean> => {
-      if (sendInFlightRef.current) return false;
       const pendingUserInput = pendingUserInputs[0];
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
         if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
@@ -287,72 +291,75 @@ export function useGroupThreadRuntime(groupId: string) {
         return false;
       }
 
-      sendInFlightRef.current = true;
+      queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
-      const createdAt = new Date().toISOString();
-      const currentThreadRef = retainedThreadRef.current.threadRef;
-      const threadId = currentThreadRef?.threadId ?? newThreadId();
-      const runtimeMode = respondingBot.runtimeMode;
+      return sendQueueRef.current.enqueue(async () => {
+        setError(null);
+        const createdAt = new Date().toISOString();
+        const currentThreadRef = retainedThreadRef.current.threadRef;
+        const threadId = currentThreadRef?.threadId ?? newThreadId();
+        const runtimeMode = respondingBot.runtimeMode;
 
-      try {
-        const attachments = await Promise.all(
-          files.map(async (file) => {
-            const attachment = resolveBotFileAttachment(file);
-            if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
-            return {
-              ...attachment,
-              name: file.name,
-              sizeBytes: file.size,
-              dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
-            };
-          }),
-        );
-        const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
-        if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
-          const modeResult = await setRuntimeMode({
+        try {
+          const attachments = await Promise.all(
+            files.map(async (file) => {
+              const attachment = resolveBotFileAttachment(file);
+              if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
+              return {
+                ...attachment,
+                name: file.name,
+                sizeBytes: file.size,
+                dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
+              };
+            }),
+          );
+          const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
+          if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
+            const modeResult = await setRuntimeMode({
+              environmentId,
+              input: { threadId, runtimeMode },
+            });
+            if (modeResult._tag === "Failure") {
+              setError(errorMessage(modeResult));
+              return false;
+            }
+          }
+          const result = await startTurn({
             environmentId,
-            input: { threadId, runtimeMode },
+            input: buildGroupTurnStartInput({
+              groupId: GroupId.make(groupId),
+              respondingBotId: BotId.make(respondingBot.id),
+              threadId,
+              projectId: activeProject.id,
+              title: threadTitle(prompt, files),
+              message: {
+                messageId: newMessageId(),
+                role: "user",
+                text: prompt,
+                attachments,
+              },
+              modelSelection,
+              runtimeMode,
+              interactionMode: DEFAULT_INTERACTION_MODE,
+              createdAt,
+              createThread: currentThreadRef === null,
+            }),
           });
-          if (modeResult._tag === "Failure") {
-            setError(errorMessage(modeResult));
+          if (result._tag === "Failure") {
+            setError(errorMessage(result));
             return false;
           }
-        }
-        const result = await startTurn({
-          environmentId,
-          input: buildGroupTurnStartInput({
-            groupId: GroupId.make(groupId),
-            respondingBotId: BotId.make(respondingBot.id),
-            threadId,
-            projectId: activeProject.id,
-            title: threadTitle(prompt, files),
-            message: {
-              messageId: newMessageId(),
-              role: "user",
-              text: prompt,
-              attachments,
-            },
-            modelSelection,
-            runtimeMode,
-            interactionMode: DEFAULT_INTERACTION_MODE,
-            createdAt,
-            createThread: currentThreadRef === null,
-          }),
-        });
-        if (result._tag === "Failure") {
-          setError(errorMessage(result));
+          retainedThreadRef.current.threadRef = scopeThreadRef(environmentId, threadId);
+          return true;
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not send the message.");
           return false;
+        } finally {
+          queuedSendCountRef.current -= 1;
+          if (queuedSendCountRef.current === 0) setSending(false);
         }
-        retainedThreadRef.current.threadRef = scopeThreadRef(environmentId, threadId);
-        return true;
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not send the message.");
-        return false;
-      } finally {
-        sendInFlightRef.current = false;
-        setSending(false);
-      }
+      });
     },
     [
       activeProject,

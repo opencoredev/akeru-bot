@@ -289,7 +289,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           }
           {...(waitingForUserInput ? { placeholder: "Write a custom answer..." } : {})}
           disabled={
-            runtime.sending ||
             pendingApproval !== null ||
             runtime.respondingRequestIds.length > 0 ||
             !runtime.groupReady ||

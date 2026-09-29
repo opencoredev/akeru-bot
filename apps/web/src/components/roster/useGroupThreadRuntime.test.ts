@@ -7,6 +7,11 @@ import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 
 const mocks = vi.hoisted(() => ({
   primaryEnvironmentId: "env-a" as EnvironmentId,
+  groupAtom: Symbol("groups"),
+  startTurnAtom: Symbol("start-turn"),
+  serverGroups: [] as Array<{ id: string }>,
+  projects: [] as Array<Record<string, unknown>>,
+  startTurn: null as unknown as ReturnType<typeof vi.fn>,
   threadShells: [] as Array<Record<string, unknown>>,
   threadShell: null as Record<string, unknown> | null,
   bots: [] as Bot[],
@@ -29,11 +34,13 @@ vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
   return { c: reactHookHarness.useMemoCache };
 });
-vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: (atom: unknown) => (atom === mocks.groupAtom ? mocks.serverGroups : []),
+}));
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
 vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
 vi.mock("../../state/entities", () => ({
-  useProjects: () => [],
+  useProjects: () => mocks.projects,
   useThreadShells: () => mocks.threadShells,
   useAllEnvironmentShellsBootstrapped: () => true,
   useThreadShell: () => mocks.threadShell,
@@ -41,15 +48,22 @@ vi.mock("../../state/entities", () => ({
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
-vi.mock("../../state/bots", () => ({ environmentGroupsAtom: () => null }));
+vi.mock("../../state/bots", () => ({ environmentGroupsAtom: () => mocks.groupAtom }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
 }));
 vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: null }));
-vi.mock("../../state/threads", () => ({ threadEnvironment: {} }));
-vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+vi.mock("../../state/threads", () => ({
+  threadEnvironment: { startTurn: mocks.startTurnAtom },
+}));
+vi.mock("../../state/use-atom-command", () => ({
+  useAtomCommand: (atom: unknown) =>
+    atom === mocks.startTurnAtom ? mocks.startTurn : vi.fn().mockResolvedValue({ _tag: "Success" }),
+}));
 vi.mock("../../session-logic", () => ({ derivePendingUserInputs: () => [] }));
-vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
+vi.mock("../Sidebar.logic", () => ({
+  sortScopedProjectsForSidebar: (projects: unknown) => projects,
+}));
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (state: { bots: Bot[]; groups: Group[] }) => unknown) =>
     selector({ bots: mocks.bots, groups: mocks.groups }),
@@ -59,6 +73,9 @@ beforeEach(() => {
   hooks.reset();
   mocks.threadShells = [];
   mocks.threadShell = null;
+  mocks.serverGroups = [];
+  mocks.projects = [];
+  mocks.startTurn = vi.fn();
   mocks.bots = [];
   mocks.groups = [];
 });
@@ -111,6 +128,62 @@ describe("group runtime errors", () => {
     const runtime = useGroupThreadRuntime("group-1");
 
     expect(runtime.providerAvailable).toBe(true);
+  });
+
+  it("queues a group follow-up while the first send is still being accepted", async () => {
+    let acceptFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstAccepted = new Promise<void>((resolve) => (acceptFirst = resolve));
+    const firstStartedPromise = new Promise<void>((resolve) => (firstStarted = resolve));
+    mocks.startTurn = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        firstStarted();
+        await firstAccepted;
+        return { _tag: "Success" };
+      })
+      .mockResolvedValue({ _tag: "Success" });
+    mocks.serverGroups = [{ id: "group-1" }];
+    mocks.projects = [
+      {
+        id: "project-1",
+        environmentId: mocks.primaryEnvironmentId,
+        defaultModelSelection: null,
+      },
+    ];
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      {
+        id: "bot-1",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+        runtimeMode: "full-access",
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+    const first = runtime.send("Compare A and B", []);
+    const followUp = runtime.send("Also include C", []);
+    await firstStartedPromise;
+    expect(mocks.startTurn).toHaveBeenCalledTimes(1);
+
+    acceptFirst();
+    expect(await Promise.all([first, followUp])).toEqual([true, true]);
+    expect(mocks.startTurn).toHaveBeenCalledTimes(2);
+    const firstInput = mocks.startTurn.mock.calls[0]?.[0].input;
+    const secondInput = mocks.startTurn.mock.calls[1]?.[0].input;
+    expect(firstInput.bootstrap?.createThread.groupId).toBe("group-1");
+    expect(secondInput.bootstrap).toBeUndefined();
+    expect(secondInput.threadId).toBe(firstInput.threadId);
   });
 
   it("surfaces the persisted provider error for a failed turn", () => {
