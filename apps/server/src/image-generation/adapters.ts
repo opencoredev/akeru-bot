@@ -26,6 +26,7 @@ import {
 } from "@t3tools/contracts";
 
 import type { SubscriptionAuthService } from "../subscription-auth/service.ts";
+import { ImageResponseTooLargeError, readBoundedText } from "./boundedResponse.ts";
 
 export const CHATGPT_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
 export const XAI_DEFAULT_BASE_URL = "https://api.x.ai/v1";
@@ -180,6 +181,9 @@ export function failureForStatus(label: string, status: number): ImageAdapterFai
 
 function rethrowFetchFailure(label: string, cause: unknown): never {
   if (cause instanceof ImageAdapterFailure) throw cause;
+  if (cause instanceof ImageResponseTooLargeError) {
+    throw new ImageAdapterFailure("provider-failed", cause.message);
+  }
   if (cause instanceof Error && cause.name === "AbortError") {
     throw new ImageAdapterFailure("cancelled", `${label} image request was cancelled.`);
   }
@@ -346,7 +350,7 @@ export function makeChatGptImageAdapter(deps: {
             }),
           });
           if (!response.ok) throw failureForStatus(label, response.status);
-          body = await response.text();
+          body = await readBoundedText(response, label);
         } catch (cause) {
           rethrowFetchFailure(label, cause);
         }
@@ -415,7 +419,7 @@ export function makeGrokImageAdapter(deps: {
           body: JSON.stringify(body),
         });
         if (!response.ok) throw failureForStatus(label, response.status);
-        payload = await response.json();
+        payload = JSON.parse(await readBoundedText(response, label));
       } catch (cause) {
         rethrowFetchFailure(label, cause);
       }

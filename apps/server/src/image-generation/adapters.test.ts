@@ -291,6 +291,26 @@ describe("Grok image adapter", () => {
   });
 });
 
+describe("oversized provider responses", () => {
+  const oversized = () =>
+    new Response("{}", { headers: { "content-length": String(65 * 1024 * 1024) } });
+
+  it("fail before the body is read", async () => {
+    const adapters = [
+      makeChatGptImageAdapter({
+        subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
+        fetchFn: async () => oversized(),
+      }),
+      makeGrokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: async () => oversized() }),
+    ];
+    for (const adapter of adapters) {
+      const failure = await failureOf(adapter.run(request(), new AbortController().signal));
+      expect(failure.kind).toBe("provider-failed");
+      expect(failure.message).toContain("larger than the image size limit");
+    }
+  });
+});
+
 describe("unsupportedReason", () => {
   it("rejects combinations a provider cannot serve", () => {
     const twoImages = [
