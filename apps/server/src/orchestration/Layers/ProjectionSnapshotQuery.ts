@@ -133,7 +133,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
     // Projected channel_delivery column, with the channel_deliveries.status
-    // left join COALESCED in for rows written before migration 071.
+    // left join COALESCED in for rows written before migration 072.
     channelDelivery: Schema.optional(Schema.NullOr(ChannelDeliveryState)),
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
