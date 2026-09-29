@@ -89,6 +89,10 @@ const ECHO_WINDOW_MS = 250;
 // CSI, OSC, and two-byte escape sequences change terminal state without painting glyphs.
 // eslint-disable-next-line no-control-regex
 const ESCAPE_SEQUENCE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])/g;
+// An escape sequence cut off by the end of a write continues in the next write.
+// eslint-disable-next-line no-control-regex
+const UNFINISHED_ESCAPE = /\x1b(?:\[[0-?]*[ -/]*|\][^\x07\x1b]*\x1b?)?$/;
+const MAX_ESCAPE_CARRY = 1024;
 
 /** Correlates printable key echoes while bounding all diagnostic state. */
 export class TerminalLatencyRecorder implements TerminalLatencyProbe {
@@ -101,6 +105,7 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
     [];
   private readonly samplesBuffer: TerminalLatencySample[] = [];
   private previousPaintedRows: readonly (readonly string[])[] | undefined;
+  private escapeCarry = "";
   get samples(): readonly TerminalLatencySample[] {
     return this.samplesBuffer;
   }
@@ -114,7 +119,11 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
     if (this.pendingKeys.length >= MAX_PENDING_KEYS) this.pendingKeys.shift();
     this.pendingKeys.push({ keypressAt: time, expected });
   }
-  onByteArrival(time: number, output: string): void {
+  onByteArrival(time: number, chunk: string): void {
+    let output = this.escapeCarry + chunk;
+    const unfinished = UNFINISHED_ESCAPE.exec(output);
+    this.escapeCarry = unfinished && unfinished[0].length <= MAX_ESCAPE_CARRY ? unfinished[0] : "";
+    if (unfinished) output = output.slice(0, unfinished.index);
     const printable = [...output.replace(ESCAPE_SEQUENCE, "")].filter(
       (char) => char >= " " && char <= "~",
     );
@@ -192,6 +201,7 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
     this.pendingPaints.length = 0;
     this.samplesBuffer.length = 0;
     this.previousPaintedRows = undefined;
+    this.escapeCarry = "";
   }
   report(label = "terminal"): string {
     const result = formatLatencyReport(label, this.samplesBuffer);

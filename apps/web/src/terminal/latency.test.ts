@@ -97,6 +97,25 @@ describe("terminal latency harness", () => {
     r.onGlyphPaint(110, paint("x"));
     expect(r.samples).toEqual([]);
   });
+  it("does not time a later paint against an escape split across writes", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint(""));
+    r.onByteArrival(10, "\u001b");
+    r.onByteArrival(11, "[3");
+    r.onByteArrival(12, "1m\u001b]0;ti");
+    r.onByteArrival(13, "tle\u0007");
+    r.onGlyphPaint(14, paint(""));
+    r.onGlyphPaint(110, paint("x"));
+    expect(r.samples).toEqual([]);
+  });
+  it("samples glyphs that follow a split escape in the same write", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint(""));
+    r.onByteArrival(10, "\u001b[");
+    r.onByteArrival(11, "31mx");
+    r.onGlyphPaint(15, paint("x"));
+    expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 4 }]);
+  });
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     r.onGlyphPaint(0, paint(""));
