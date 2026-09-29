@@ -67,16 +67,28 @@ export function createBotMemoryToolHandler(
       if (!allowedTargets.has(decoded.target)) {
         throw new Error(`Memory target '${decoded.target}' is outside this bot's access grant.`);
       }
-      let shared: AkeruMemoryShareOutcome | undefined;
       if (decoded.share) {
         if (!shareFact) throw new Error("Shared memory is not available in this chat.");
         assertSafeContent(decoded.share.fact);
-        shared = await shareFact({
-          fact: decoded.share.fact,
-          scope: decoded.share.scope,
-          sensitive: decoded.share.sensitive ?? false,
-        });
       }
+      // Document writes go first so a failed write never leaves a shared fact
+      // or pending approval behind; a retry of the write is idempotent.
+      const result =
+        decoded.operations.length === 0
+          ? null
+          : await store.mutate({
+              ...access,
+              target: decoded.target,
+              operations: decoded.operations,
+            });
+      const shared =
+        decoded.share && shareFact
+          ? await shareFact({
+              fact: decoded.share.fact,
+              scope: decoded.share.scope,
+              sensitive: decoded.share.sensitive ?? false,
+            })
+          : undefined;
       const shareResult = shared
         ? {
             share: {
@@ -89,15 +101,15 @@ export function createBotMemoryToolHandler(
             },
           }
         : {};
-      if (shared && decoded.operations.length === 0) {
-        return {
-          success: true,
-          done: true,
-          ...shareResult,
-          note: "Do not repeat this share request.",
-        };
-      }
-      if (decoded.operations.length === 0) {
+      if (result === null) {
+        if (shared) {
+          return {
+            success: true,
+            done: true,
+            ...shareResult,
+            note: "Do not repeat this share request.",
+          };
+        }
         const document = await store.readDocument(access, decoded.target);
         return {
           success: true,
@@ -108,11 +120,6 @@ export function createBotMemoryToolHandler(
           changed: false,
         };
       }
-      const result = await store.mutate({
-        ...access,
-        target: decoded.target,
-        operations: decoded.operations,
-      });
       return {
         success: true,
         done: true,

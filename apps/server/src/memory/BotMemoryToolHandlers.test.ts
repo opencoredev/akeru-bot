@@ -87,4 +87,24 @@ describe("memory tool shared facts", () => {
     ).rejects.toThrow("Memory content was rejected");
     expect(shareFact).not.toHaveBeenCalled();
   });
+
+  it("does not share when the document write fails", async () => {
+    const shareFact = vi.fn<AkeruMemoryShareFact>(async () => ({ status: "pending" }));
+    const failingStore = {
+      readDocument: vi.fn(() => Promise.reject(new Error("unexpected read"))),
+      mutate: vi.fn(() => Promise.reject(new Error("write failed"))),
+    } as unknown as BotMemoryStore;
+    await expect(
+      call(
+        shareFact,
+        {
+          target: "memory",
+          operations: [{ action: "add", content: "Deploys happen on Fridays." }],
+          share: { fact: "Deploys happen on Fridays.", scope: "project" },
+        },
+        failingStore,
+      ),
+    ).rejects.toThrow("write failed");
+    expect(shareFact).not.toHaveBeenCalled();
+  });
 });
