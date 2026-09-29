@@ -245,7 +245,7 @@ export function HomeHeader(props: {
       >
         <View className="w-full max-w-[720px] self-center">
           <View className="flex-row items-center gap-3">
-<ControlPillMenu
+            <ControlPillMenu
               actions={menuActions}
               onPressAction={handleMenuAction}
               title={selectedEnvironmentLabel ?? t("All environments")}
