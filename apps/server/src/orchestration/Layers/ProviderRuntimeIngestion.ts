@@ -1011,6 +1011,9 @@ const make = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig;
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
   const silenceWatchdogs = new Map<string, SilenceWatchdogHandle>();
+  // Open requests per watched turn, so a duplicate or unmatched resolution cannot
+  // resume a watchdog while another request still waits on the user.
+  const silenceWaitingRequests = new Map<string, Set<string>>();
   const silenceIncidentKey = (threadId: ThreadId, turnId: TurnId) =>
     `silence:${threadId}:${turnId}`;
   const stopSilenceWatchdog = (threadId: ThreadId, turnId: TurnId) => {
@@ -1018,13 +1021,17 @@ const make = Effect.gen(function* () {
     const handle = silenceWatchdogs.get(key);
     if (!handle) return Effect.void;
     silenceWatchdogs.delete(key);
+    silenceWaitingRequests.delete(key);
     return handle.stop;
   };
   const stopAllSilenceWatchdogs = (threadId: ThreadId) =>
     Effect.forEach(
       [...silenceWatchdogs.entries()].filter(([key]) => key.startsWith(`${threadId}:`)),
       ([key, handle]) =>
-        Effect.sync(() => silenceWatchdogs.delete(key)).pipe(Effect.andThen(handle.stop)),
+        Effect.sync(() => {
+          silenceWatchdogs.delete(key);
+          silenceWaitingRequests.delete(key);
+        }).pipe(Effect.andThen(handle.stop)),
       { concurrency: 1, discard: true },
     );
   // Silent-run reports and their resolutions run in order on one worker, so a report
@@ -1866,9 +1873,13 @@ const make = Effect.gen(function* () {
       const thread = yield* resolveThreadRuntimeContextForEvent(event);
       if (!thread) return;
       const eventTurnId = toTurnId(event.turnId);
-      if (event.type === "turn.started" && eventTurnId) {
-        yield* startTurnSilenceWatchdog(thread, eventTurnId, event.provider);
-      } else if (eventTurnId && event.type !== "turn.completed" && event.type !== "turn.aborted") {
+      // turn.started starts its watchdog only once the lifecycle accepts it, below.
+      if (
+        eventTurnId &&
+        event.type !== "turn.started" &&
+        event.type !== "turn.completed" &&
+        event.type !== "turn.aborted"
+      ) {
         // A turn ending disposes its watchdog below; it is not output resuming.
         const handle = silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId));
         if (handle) yield* handle.touch;
@@ -1879,30 +1890,49 @@ const make = Effect.gen(function* () {
       }
 
       const now = event.createdAt;
-      if (event.type === "session.exited") {
+      if (
+        event.type === "session.exited" ||
+        (event.type === "session.state.changed" &&
+          (event.payload.state === "stopped" || event.payload.state === "error"))
+      ) {
+        // A session that stopped runs no turn, so it cannot go silent.
         yield* stopAllSilenceWatchdogs(thread.id);
         yield* resolveSilenceIncidents(thread.id);
       } else if (
         (event.type === "turn.completed" || event.type === "turn.aborted") &&
         eventTurnId
       ) {
-        // Any ending, including an interrupt, closes the silent run and its inbox item.
+        // The ending turn's own watchdog always stops. Its inbox item closes below,
+        // once the lifecycle accepts the ending, so a stale ending cannot hide
+        // another turn's silent run.
         yield* stopSilenceWatchdog(thread.id, eventTurnId);
-        yield* resolveSilenceIncidents(thread.id);
       }
-      const activeWatchdog = eventTurnId
-        ? silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId))
-        : undefined;
+      const watchedTurnKey = eventTurnId ? providerTurnKey(thread.id, eventTurnId) : undefined;
+      const activeWatchdog = watchedTurnKey ? silenceWatchdogs.get(watchedTurnKey) : undefined;
       if (
+        watchedTurnKey &&
         activeWatchdog &&
         (event.type === "request.opened" || event.type === "user-input.requested")
       ) {
-        yield* activeWatchdog.suspend;
+        const waiting = silenceWaitingRequests.get(watchedTurnKey) ?? new Set<string>();
+        silenceWaitingRequests.set(watchedTurnKey, waiting);
+        const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+        if (requestId === undefined || !waiting.has(requestId)) {
+          if (requestId !== undefined) waiting.add(requestId);
+          yield* activeWatchdog.suspend;
+        }
       } else if (
+        watchedTurnKey &&
         activeWatchdog &&
         (event.type === "request.resolved" || event.type === "user-input.resolved")
       ) {
-        yield* activeWatchdog.resume;
+        const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+        if (
+          requestId === undefined ||
+          silenceWaitingRequests.get(watchedTurnKey)?.delete(requestId) === true
+        ) {
+          yield* activeWatchdog.resume;
+        }
       }
       const respondingBotId = resolveControllerBotId(thread);
       const activeTurnId = thread.session?.activeTurnId ?? null;
@@ -2045,6 +2075,17 @@ const make = Effect.gen(function* () {
             return true;
         }
       })();
+      // Stale turn events must not start watchdogs or close another turn's silent run.
+      if (event.type === "turn.started" && eventTurnId && shouldApplyThreadLifecycle) {
+        yield* startTurnSilenceWatchdog(thread, eventTurnId, event.provider);
+      } else if (
+        (event.type === "turn.completed" || event.type === "turn.aborted") &&
+        eventTurnId &&
+        shouldApplyThreadLifecycle &&
+        !conflictsWithActiveTurn
+      ) {
+        yield* resolveSilenceIncidents(thread.id);
+      }
       const acceptedTurnStartedSourcePlan =
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)

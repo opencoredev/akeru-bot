@@ -591,6 +591,69 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     },
   );
 
+  it("keeps waiting while another request is open after a duplicate resolution", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-duplicate-resolution");
+    harness.emitTurnStarted(turnId);
+    await harness.drain();
+    const request = (type: "request.opened" | "request.resolved", id: string, n: number) =>
+      harness.emit({
+        type,
+        eventId: asEventId(`evt-${type}-${id}-${n}`),
+        provider: harness.provider,
+        threadId: asThreadId("thread-1"),
+        turnId,
+        requestId: RuntimeRequestId.make(id),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        payload:
+          type === "request.opened"
+            ? { requestType: "command_execution_approval", detail: "pwd" }
+            : { requestType: "command_execution_approval", decision: "accept" },
+      } as ProviderRuntimeEvent);
+    request("request.opened", "req-a", 0);
+    request("request.opened", "req-b", 0);
+    request("request.resolved", "req-a", 0);
+    request("request.resolved", "req-a", 1);
+    await harness.drain();
+
+    await harness.adjustClock(SILENT_MS * 3);
+    await harness.drain();
+    expect(await harness.watchdogActivities()).toHaveLength(0);
+  });
+
+  it("does not let a stale turn start replace the active turn's watchdog", async () => {
+    const harness = await createHarness({ botOwned: true });
+    harness.emitTurnStarted("turn-active");
+    await harness.drain();
+    harness.emitTurnStarted("turn-stale");
+    await harness.drain();
+
+    await harness.adjustClock(SILENT_MS);
+    await harness.drain();
+    const ids = (await harness.watchdogActivities()).map((activity) => activity.id);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toContain("turn-active");
+  });
+
+  it("stops the watchdog when the session stops without a turn ending", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-session-stopped");
+    harness.emitTurnStarted(turnId);
+    await harness.drain();
+    harness.emit({
+      type: "session.state.changed",
+      eventId: asEventId("evt-session-stopped"),
+      provider: harness.provider,
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      payload: { state: "stopped" },
+    });
+    await harness.drain();
+    await harness.adjustClock(SILENT_MS * 3);
+    await harness.drain();
+    expect(await harness.watchdogActivities()).toHaveLength(0);
+  });
+
   it("stops the watchdog on session.exited", async () => {
     const harness = await createHarness({ botOwned: true });
     const turnId = asTurnId("turn-exited-stop");
