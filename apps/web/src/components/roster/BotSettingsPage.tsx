@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { BotId, type EnvironmentId } from "@t3tools/contracts";
 import { Brain02Icon, Edit02Icon, Link02Icon, WrenchIcon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isElectron } from "../../env";
 import { requestConfirmDialog } from "../../confirmDialog";
@@ -147,9 +147,10 @@ function BotSettingsForm({
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const deletedRef = useRef(false);
 
   const shouldBlockNavigation = useCallback(async () => {
-    if (!draft.dirty) return false;
+    if (deletedRef.current || !draft.dirty) return false;
     const confirmation = requestConfirmDialog("Discard unsaved bot settings?", {
       variant: "destructive",
     });
@@ -201,6 +202,7 @@ function BotSettingsForm({
         });
         return;
       }
+      deletedRef.current = true;
       onDeleted();
     });
   }, [bot, environmentId, deleteBot, onDeleted]);
