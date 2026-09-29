@@ -939,8 +939,11 @@ const make = (options?: AgentControllerLiveOptions) =>
     const refreshEntityMemoryAccess = async (
       access: AkeruMemoryThreadAccess | undefined,
     ): Promise<AkeruMemoryThreadAccess | undefined> => {
-      if (!access || access.groupId === null || Option.isNone(projectionSnapshotQuery)) {
-        return access;
+      if (!access || access.groupId === null) return access;
+      // Without a projection the membership cannot be rechecked, so a bot removed from the
+      // group must not keep reading its shared facts.
+      if (Option.isNone(projectionSnapshotQuery)) {
+        return { ...access, groupId: null, groupMemberBotIds: [] };
       }
       const snapshot = await runPromise(projectionSnapshotQuery.value.getSnapshot());
       const group = snapshot.groups.find((candidate) => candidate.id === access.groupId);

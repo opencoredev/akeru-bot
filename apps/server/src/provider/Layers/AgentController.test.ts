@@ -1984,6 +1984,64 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("keeps group facts out of memory when group membership cannot be rechecked", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const botId = BotId.make("bot-entity-memory-stale-group");
+    const access = {
+      tenantId: AkeruMemoryTenantId.make("local"),
+      userId: AkeruMemoryUserId.make("owner"),
+      threadId: claudeThreadId,
+      projectId: ProjectId.make("project-entity-memory-stale-group"),
+      workspaceRoot: "/workspace/entity-memory-stale-group",
+      botId,
+      groupId: GroupId.make("group-entity-memory-stale"),
+      respondingBotId: botId,
+      groupMemberBotIds: [botId],
+    } as const;
+    const listCurrent = vi.fn(
+      (_input: { access: { groupId: GroupId | null; groupMemberBotIds: ReadonlyArray<BotId> } }) =>
+        Effect.succeed([]),
+    );
+    const recordDerivedCopies = vi.fn(() => Effect.void);
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+          memoryAccess: access,
+        });
+        // The last read builds the memory packet; earlier ones are the legacy migration.
+        expect(recordDerivedCopies).toHaveBeenCalledTimes(1);
+        expect(listCurrent.mock.lastCall?.[0].access).toMatchObject({
+          groupId: null,
+          groupMemberBotIds: [],
+        });
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      {
+        ...makeMemoryOnlyCredentialOptions(),
+        entityMemoryRepository: { listCurrent, recordDerivedCopies } as never,
+      },
+    );
+  });
+
   it.effect("reads entity memory from the current project after reusing a legacy session", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
