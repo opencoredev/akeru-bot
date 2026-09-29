@@ -164,7 +164,6 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
   }
 
   let lastFailure: { kind: ImageGenerationFailureKind; message: string } | undefined;
-  let providerCalled = false;
   for (const provider of plan.candidates) {
     const label = IMAGE_PROVIDER_LABELS[provider];
     if (!providerEnabled(settings, provider)) continue;
@@ -180,11 +179,12 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     const unsupported = unsupportedReason(label, adapter.capabilities, adapterRequest);
     if (unsupported) {
       attempts.push({ provider, outcome: "unsupported" });
-      // The first usable provider defines the request's capability; a
-      // fallback that cannot serve it is skipped instead of rewriting it.
-      if (!providerCalled) {
+      // The intended provider defines the request's capability. An unsupported
+      // fallback cannot erase an earlier availability or provider failure.
+      if (provider === plan.intended) {
         return { status: "failed", kind: "unsupported", message: unsupported, attempts };
       }
+      lastFailure ??= { kind: "unsupported", message: unsupported };
       continue;
     }
 
@@ -204,7 +204,6 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
       };
     }
 
-    providerCalled = true;
     const outcome = yield* runAdapter(
       adapter,
       adapterRequest,

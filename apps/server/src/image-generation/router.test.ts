@@ -184,6 +184,30 @@ describe("routeImageRequest", () => {
     }),
   );
 
+  it.effect("preserves an unavailable intended provider when the fallback cannot edit", () =>
+    Effect.gen(function* () {
+      const input = routeInput({
+        inputImages: [...editImage, ...editImage],
+        request: { operation: "edit", inputImages: ["a", "b"] },
+        availability: (provider) =>
+          provider === "chatgpt"
+            ? { state: "unavailable", kind: "revoked", message: "Reconnect ChatGPT." }
+            : { state: "available" },
+      });
+      const result = yield* routeImageRequest(input);
+      expect(result).toMatchObject({
+        status: "failed",
+        kind: "revoked",
+        message: "Reconnect ChatGPT.",
+        attempts: [
+          { provider: "chatgpt", outcome: "revoked" },
+          { provider: "grok", outcome: "unsupported" },
+        ],
+      });
+      expect(input.adapters.grok.calls).toHaveLength(0);
+    }),
+  );
+
   it.effect("falls back after a provider failure", () =>
     Effect.gen(function* () {
       const outcomes: Array<[ImageProviderId, boolean]> = [];
