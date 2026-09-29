@@ -177,4 +177,64 @@ describe("migrateLegacyConnectionDatabase", () => {
       indexedDB.deleteDatabase("t3code:connection-runtime");
     }),
   );
+
+  it.effect("does not restore records removed after an earlier migration", () =>
+    Effect.gen(function* () {
+      const fakeIndexedDB = yield* Effect.promise(() =>
+        import("fake-indexeddb").then((module) => new module.IDBFactory()),
+      );
+      vi.stubGlobal("indexedDB", fakeIndexedDB);
+      const stores = ["catalog", "shell", "thread", "server-config", "vcs-refs"];
+      const open = (name: string) =>
+        Effect.promise(
+          () =>
+            new Promise<IDBDatabase>((resolve, reject) => {
+              const request = indexedDB.open(name, 4);
+              request.addEventListener("upgradeneeded", () => {
+                for (const store of stores) request.result.createObjectStore(store);
+              });
+              request.addEventListener("success", () => resolve(request.result));
+              request.addEventListener("error", () => reject(request.error));
+            }),
+        );
+      const change = (database: IDBDatabase, apply: (store: IDBObjectStore) => void) =>
+        Effect.promise(
+          () =>
+            new Promise<void>((resolve, reject) => {
+              const tx = database.transaction("shell", "readwrite");
+              tx.addEventListener("complete", () => resolve());
+              tx.addEventListener("error", () => reject(tx.error));
+              apply(tx.objectStore("shell"));
+            }),
+        );
+      const seedLegacy = Effect.gen(function* () {
+        const legacy = yield* open("t3code:connection-runtime");
+        yield* change(legacy, (store) => store.put("legacy-shell", "env-1"));
+        legacy.close();
+      });
+
+      yield* seedLegacy;
+      const migrated = yield* open("akeru:connection-runtime");
+      yield* migrateLegacyConnectionDatabase(migrated);
+      yield* change(migrated, (store) => store.delete("env-1"));
+
+      // A blocked deletion leaves the legacy database behind for the next start.
+      yield* seedLegacy;
+      yield* migrateLegacyConnectionDatabase(migrated);
+
+      const restored = yield* Effect.promise(
+        () =>
+          new Promise<unknown>((resolve, reject) => {
+            const request = migrated
+              .transaction("shell", "readonly")
+              .objectStore("shell")
+              .get("env-1");
+            request.addEventListener("success", () => resolve(request.result));
+            request.addEventListener("error", () => reject(request.error));
+          }),
+      );
+      expect(restored).toBeUndefined();
+      migrated.close();
+    }),
+  );
 });

@@ -43,6 +43,9 @@ const SHELL_STORE_NAME = "shell";
 const THREAD_STORE_NAME = "thread";
 const SERVER_CONFIG_STORE_NAME = "server-config";
 const VCS_REFS_STORE_NAME = "vcs-refs";
+// Written with the copied records so a legacy database that survives a blocked
+// deletion is never copied again over later removals.
+const LEGACY_MIGRATED_KEY = "legacy-migrated";
 const CATALOG_KEY = "document";
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
 
@@ -158,7 +161,7 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
   return yield* openDatabaseAt(DATABASE_NAME);
 });
 
-/** Fill missing target records from `source` inside one transaction. */
+/** Fill missing target records from `source` and record the migration inside one transaction. */
 const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseContents")(function* (
   source: IDBDatabase,
   target: IDBDatabase,
@@ -167,13 +170,15 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
     (storeName) =>
       source.objectStoreNames.contains(storeName) && target.objectStoreNames.contains(storeName),
   );
-  if (storeNames.length === 0) return;
-
   const entries = yield* Effect.callback<
     ReadonlyArray<readonly [string, IDBValidKey, unknown]>,
     ConnectionTransientError
   >((resume) => {
     const collected: Array<readonly [string, IDBValidKey, unknown]> = [];
+    if (storeNames.length === 0) {
+      resume(Effect.succeed(collected));
+      return;
+    }
     const transaction = source.transaction(storeNames, "readonly");
     transaction.addEventListener("error", () => {
       resume(
@@ -200,7 +205,7 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
   });
 
   yield* Effect.callback<void, ConnectionTransientError>((resume) => {
-    const transaction = target.transaction(storeNames, "readwrite");
+    const transaction = target.transaction([...storeNames, CATALOG_STORE_NAME], "readwrite");
     transaction.addEventListener("error", () => {
       resume(
         Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error")),
@@ -216,6 +221,7 @@ const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseConten
         if (existing.result === undefined) store.put(value, key);
       });
     }
+    transaction.objectStore(CATALOG_STORE_NAME).put(true, LEGACY_MIGRATED_KEY);
   });
 });
 
@@ -234,6 +240,8 @@ export const migrateLegacyConnectionDatabase = Effect.fn(
   "web.connectionStorage.migrateLegacyConnectionDatabase",
 )(function* (database: IDBDatabase) {
   if (typeof indexedDB === "undefined") return;
+  if ((yield* readDatabaseValue(database, CATALOG_STORE_NAME, LEGACY_MIGRATED_KEY)) === true)
+    return;
   const legacyResult = yield* Effect.result(openDatabaseAt(LEGACY_DATABASE_NAME));
   if (legacyResult._tag === "Failure") {
     yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
