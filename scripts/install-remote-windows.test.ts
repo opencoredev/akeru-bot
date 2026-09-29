@@ -35,6 +35,10 @@ describe("Windows remote installer", () => {
     expect(script).toContain("-LogonType S4U");
   });
 
+  it("reports the launcher's exit code so Task Scheduler restarts a failed service", () => {
+    expect(script).toContain('($TaskEnvironment + $ServiceCommand + "exit `$LASTEXITCODE")');
+  });
+
   it("rebuilds the pinned runtime from the verified archive on every install", () => {
     expect(script).not.toContain("if (-not (Test-Path $Pinned))");
     expect(script).toContain("$Verified = if (Test-Path $Source) { $Source } else { $Target }");

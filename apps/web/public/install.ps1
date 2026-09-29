@@ -141,7 +141,7 @@ try {
   )
   $ServiceScript = Join-Path $Runtime "start-remote.ps1"
   $ServiceCommand = "& $(Quote-PowerShellLiteral (Join-Path $Target 'node\node.exe')) $(Quote-PowerShellLiteral (Join-Path $Runtime 'service-launcher.mjs')) *>> $(Quote-PowerShellLiteral (Join-Path $RuntimeHome 'userdata\logs\boot-service.log'))"
-  Set-Content -LiteralPath $ServiceScript -Value ($TaskEnvironment + $ServiceCommand) -Encoding UTF8
+  Set-Content -LiteralPath $ServiceScript -Value ($TaskEnvironment + $ServiceCommand + "exit `$LASTEXITCODE") -Encoding UTF8
   $PowerShell = Join-Path $PSHOME "powershell.exe"
   $Principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType S4U -RunLevel Limited
   $ServiceAction = New-ScheduledTaskAction -Execute $PowerShell -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ServiceScript`""

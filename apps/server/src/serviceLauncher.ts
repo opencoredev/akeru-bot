@@ -53,6 +53,16 @@ const runtimePaths = (baseDir: string, version: string) => {
   };
 };
 
+/**
+ * The Node binary that runs one runtime version. Windows archives bundle their own Node, so an
+ * update runs on the Node it was built for; other installs keep the launcher's Node.
+ */
+export async function runtimeNodePath(versionDir: string): Promise<string> {
+  const bundled = NodePath.join(versionDir, "node", "node.exe");
+  const stat = await NodeFSP.stat(bundled).catch(() => undefined);
+  return stat?.isFile() ? bundled : process.execPath;
+}
+
 /** SQLite persists across the main file plus its WAL and shared-memory sidecars. */
 const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
 const RESTORE_MARKER = ".restore-pending";
@@ -417,7 +427,9 @@ export class Launcher {
       childVersion: version,
       ...(update === undefined ? {} : { update }),
     };
-    const child = NodeChildProcess.spawn(process.execPath, [paths.entryPath, "serve"], {
+    const nodePath = await runtimeNodePath(paths.versionDir);
+    if (this.#stopping) return;
+    const child = NodeChildProcess.spawn(nodePath, [paths.entryPath, "serve"], {
       env: { ...process.env, [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     });

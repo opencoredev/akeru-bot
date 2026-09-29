@@ -4,7 +4,13 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { Launcher, readServiceState, syncDirectory, writeServiceState } from "./serviceLauncher.ts";
+import {
+  Launcher,
+  readServiceState,
+  runtimeNodePath,
+  syncDirectory,
+  writeServiceState,
+} from "./serviceLauncher.ts";
 import {
   compareExactServiceVersions,
   decodeServiceState,
@@ -91,6 +97,22 @@ it("rejects contradictory service state", () => {
 });
 
 it.layer(NodeServices.layer)("service state persistence", (it) => {
+  it.effect("runs a version on its bundled Node when the runtime ships one", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const versionDir = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-runtime-node-" });
+      assert.strictEqual(
+        yield* Effect.promise(() => runtimeNodePath(versionDir)),
+        process.execPath,
+      );
+      const bundled = path.join(versionDir, "node", "node.exe");
+      yield* fs.makeDirectory(path.dirname(bundled), { recursive: true });
+      yield* fs.writeFileString(bundled, "");
+      assert.strictEqual(yield* Effect.promise(() => runtimeNodePath(versionDir)), bundled);
+    }),
+  );
+
   it.effect("durably replaces and strictly reads one state document", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
