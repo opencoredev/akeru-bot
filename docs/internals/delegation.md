@@ -37,7 +37,7 @@ at the same spot keep creation order.
 Routines carry `delegateToBotId`, the bot a scheduled run hands its work to.
 It defaults to `null`, meaning the routine's own bot does the work, and is
 stored in the `delegate_to_bot_id` column of `projection_routines` (migration
-70).
+71).
 
 ## Lifecycle
 
