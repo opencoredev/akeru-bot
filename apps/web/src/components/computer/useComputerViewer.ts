@@ -20,6 +20,8 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
 const isComputerError = Schema.is(ComputerError);
+/** How often an open viewer asks again for a computer that has not started yet. */
+const UNAVAILABLE_RECHECK_MS = 5_000;
 
 /** Adapts an RPC command result into the controller's outcome, keeping the server's error code. */
 export function computerViewerOutcome<A, E>(
@@ -117,6 +119,20 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   useEffect(() => {
     controller.dispatch({ type: "connection", connected });
   }, [connected, controller]);
+
+  // A computer can start after the viewer opens, and events only exist for a
+  // registered computer, so an open viewer rechecks until one appears.
+  const unavailable = visible && connected && state.server?.status === "unavailable";
+  useEffect(() => {
+    if (!unavailable) return;
+    const timer = setInterval(() => {
+      void getState({ environmentId, input: { threadId } }).then((outcome) => {
+        const next = computerViewerOutcome(outcome);
+        if (next.ok) controller.dispatch({ type: "server-state", state: next.value });
+      });
+    }, UNAVAILABLE_RECHECK_MS);
+    return () => clearInterval(timer);
+  }, [controller, environmentId, getState, threadId, unavailable]);
 
   // Follow the event stream only while someone is watching. The stream ends
   // when the computer stops; resuming bumps the epoch to subscribe again.

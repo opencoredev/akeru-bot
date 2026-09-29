@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
@@ -18,19 +19,29 @@ export function ComputerDesktopNotice(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly botId: BotId | null;
+  /** Changes when the chat's latest turn starts or settles, which is when a computer starts or stops. */
+  readonly turnActivity: string;
 }) {
   const { t } = useMobileI18n();
   const iconColor = useThemeColor("--color-icon-subtle");
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
   const bot = props.botId === null ? null : bots.find((entry) => entry.id === props.botId);
-  const state = useEnvironmentQuery(
+  const query = useEnvironmentQuery(
     bot
       ? computerEnvironment.state({
           environmentId: props.environmentId,
           input: { threadId: props.threadId },
         })
       : null,
-  ).data;
+  );
+  const state = query.data;
+  const { refresh } = query;
+  const seenActivity = useRef(props.turnActivity);
+  useEffect(() => {
+    if (seenActivity.current === props.turnActivity) return;
+    seenActivity.current = props.turnActivity;
+    refresh();
+  }, [props.turnActivity, refresh]);
   if (!bot || (state?.status !== "ready" && state?.status !== "human")) return null;
 
   return (

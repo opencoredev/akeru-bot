@@ -831,6 +831,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               environmentId={props.environmentId}
               threadId={props.selectedThread.id}
               botId={props.selectedThread.botId ?? null}
+              turnActivity={`${props.selectedThread.latestTurn?.turnId ?? ""}:${props.selectedThread.latestTurn?.state ?? ""}`}
             />
 
             {/* Hidden (not unmounted) while a user-input request owns the
