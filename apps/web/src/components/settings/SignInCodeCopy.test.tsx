@@ -31,9 +31,9 @@ vi.mock("../../hooks/useCopyToClipboard", () => ({
 
 import { SignInCodeCopy } from "./SignInCodeCopy";
 
-function render(): ReactElement<Record<string, unknown>> {
+function render(code = "ABCD-1234"): ReactElement<Record<string, unknown>> {
   hooks.beginRender();
-  return SignInCodeCopy({ code: "ABCD-1234" }) as ReactElement<Record<string, unknown>>;
+  return SignInCodeCopy({ code }) as ReactElement<Record<string, unknown>>;
 }
 
 function text(node: unknown): string {
@@ -67,6 +67,14 @@ describe("SignInCodeCopy", () => {
     const after = render();
     expect(text(after)).toContain("Code copied");
     expect(visitElements(after, (element) => element.props.role === "alert")).toBeNull();
+  });
+
+  it("resets the confirmation when a new code replaces the copied one", async () => {
+    clipboard.writeTextToClipboard.mockResolvedValue(true);
+    await pressCopy(render());
+
+    expect(text(render())).toContain("Code copied");
+    expect(text(render("WXYZ-5678"))).not.toContain("Code copied");
   });
 
   it("asks for a manual copy when the clipboard refuses", async () => {

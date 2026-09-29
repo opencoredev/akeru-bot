@@ -19,10 +19,15 @@ export function SignInCodeCopy({
   readonly className?: string;
 }) {
   const { t } = useI18n();
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  // The result belongs to the code it copied, so a replaced code starts idle.
+  const [copyResult, setCopyResult] = useState<{
+    readonly code: string;
+    readonly state: "copied" | "failed";
+  } | null>(null);
+  const copyState = copyResult?.code === code ? copyResult.state : "idle";
   const copy = async () => {
     const copied = await writeTextToClipboard(code, "sign-in code").catch(() => false);
-    setCopyState(copied ? "copied" : "failed");
+    setCopyResult({ code, state: copied ? "copied" : "failed" });
   };
   return (
     <div className="space-y-1.5">
