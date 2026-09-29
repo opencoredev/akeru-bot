@@ -71,7 +71,7 @@ export interface RoutineRepositoryShape {
   ) => Effect.Effect<void, PersistenceSqlError>;
   readonly markSettled: (
     runId: RoutineRunId,
-    status: "completed" | "failed",
+    status: "completed" | "failed" | "canceled",
     completedAt: string,
   ) => Effect.Effect<void, PersistenceSqlError>;
   readonly listRecoverable: Effect.Effect<ReadonlyArray<RoutineClaim>, PersistenceSqlError>;

@@ -99,7 +99,7 @@ const make = Effect.gen(function* () {
     }
     if ("canceled" in dispatched) {
       const completedAt = DateTime.formatIso(yield* DateTime.now);
-      yield* repository.markSettled(run.id, "failed", completedAt);
+      yield* repository.markSettled(run.id, "canceled", completedAt);
       return { ...run, status: "canceled" as const, completedAt };
     }
     yield* repository.markDispatched(run.id, dispatched.threadRef);

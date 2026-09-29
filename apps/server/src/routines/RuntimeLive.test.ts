@@ -75,6 +75,7 @@ const harness = (
   const dispatchedRuns: RoutineRun[] = [];
   const log: string[] = [];
   const summaries: string[] = [];
+  const settledStatuses: string[] = [];
   const events = {
     push: (event: string) => {
       log.push(event);
@@ -141,7 +142,11 @@ const harness = (
         events.push("dispatched");
       }),
     markBlocked: () => Effect.sync(() => events.push("claim-blocked")),
-    markSettled: () => Effect.sync(() => events.push("claim-settled")),
+    markSettled: (_runId, status) =>
+      Effect.sync(() => {
+        settledStatuses.push(status);
+        events.push("claim-settled");
+      }),
     listRecoverable: Effect.succeed(recoverable),
   } satisfies RoutineRepositoryShape);
   const adapter = RoutineRuntimeAdapter.of({
@@ -184,7 +189,7 @@ const harness = (
       ),
     ),
   );
-  return { events: log, summaries, layer };
+  return { events: log, summaries, settledStatuses, layer };
 };
 
 it.effect("resolves a routine incident when the routine is deleted", () => {
@@ -679,5 +684,6 @@ it.effect("settles the claim of a run canceled while its bot work started", () =
       "turn",
       "claim-settled",
     ]);
+    assert.deepEqual(test.settledStatuses, ["canceled"]);
   }).pipe(Effect.provide(test.layer));
 });
