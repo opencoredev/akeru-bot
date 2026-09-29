@@ -39,19 +39,28 @@ export function sentMessageMentionSkills(
  * For the plain markdown fallback, which has no inline chips: shows each mention
  * as its bold label. The copy button still copies the raw token.
  */
+const MARKDOWN_CODE_SPANS = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)/;
+
 export function labelSentMessageMentions(
   text: string,
   displays: ReadonlyArray<ComposerMentionDisplay>,
 ): string {
-  let labelled = text;
-  for (const display of displays) {
-    const label = `**${display.label.replace(MARKDOWN_SPECIAL_CHARACTERS, "\\$&")}**`;
-    labelled = labelled
-      .split(/(\s+)/)
-      .map((part) => (part === display.source ? label : part))
-      .join("");
-  }
-  return labelled;
+  // Code keeps its literal text; odd split indexes are the captured code spans.
+  return text
+    .split(MARKDOWN_CODE_SPANS)
+    .map((segment, index) => {
+      if (index % 2 === 1) return segment;
+      let labelled = segment;
+      for (const display of displays) {
+        const label = `**${display.label.replace(MARKDOWN_SPECIAL_CHARACTERS, "\\$&")}**`;
+        labelled = labelled
+          .split(/(\s+)/)
+          .map((part) => (part === display.source ? label : part))
+          .join("");
+      }
+      return labelled;
+    })
+    .join("");
 }
 
 /** Mention chips for a sent message, with chat titles and bot names looked up from the connected environments. */

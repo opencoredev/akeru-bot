@@ -73,6 +73,17 @@ describe("buildBotPromptMentionItems", () => {
     ).toEqual(["Mika"]);
   });
 
+  it("gives a bot named browser its id token instead of the browser mention", () => {
+    const [item] = buildBotPromptMentionItems({
+      query: "brow",
+      browserAvailable: false,
+      bots: [{ id: "bot-browser", name: "browser" }],
+      threads: [],
+    });
+    expect(item).toMatchObject({ kind: "bot" });
+    expect(item && "source" in item ? item.source : null).not.toBe("@browser");
+  });
+
   it("lists every bot that shares a name, told apart by title or short id", () => {
     const namesakes = [
       { id: "bot-claude-1", name: "Mika", title: "Designer" },

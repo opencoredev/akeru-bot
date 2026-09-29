@@ -89,5 +89,8 @@ describe("sent message mentions", () => {
       "check **Release plan** and **Unknown chat** with **Browser** and $review",
     );
     expect(labelSentMessageMentions("no mentions", [])).toBe("no mentions");
+    expect(
+      labelSentMessageMentions("use @browser\n```\nrun @browser\n```\nand `@browser`", displays),
+    ).toBe("use **Browser**\n```\nrun @browser\n```\nand `@browser`");
   });
 });

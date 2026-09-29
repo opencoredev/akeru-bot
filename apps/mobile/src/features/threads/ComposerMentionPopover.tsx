@@ -10,6 +10,7 @@ import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerComm
 import {
   buildComposerMentionItems,
   groupMentionBots,
+  isThreadMentionQuery,
   threadMentionQuery,
 } from "./composerMentionItems";
 
@@ -57,7 +58,8 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
       currentProjectId: props.projectId,
       matchedIds,
     });
-    return [...mentions, ...props.fileItems];
+    // `@chat:` skips file search, so file results from an earlier query are stale.
+    return isThreadMentionQuery(props.query) ? mentions : [...mentions, ...props.fileItems];
   }, [
     bots,
     props.browserAvailable,

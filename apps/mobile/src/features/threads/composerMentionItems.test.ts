@@ -44,6 +44,27 @@ describe("buildComposerMentionItems", () => {
     expect(isThreadMentionQuery("Chat:x")).toBe(true);
     expect(isThreadMentionQuery("src/")).toBe(false);
   });
+
+  it("keeps content-only chat matches out of a path-like query", () => {
+    const items = buildComposerMentionItems({
+      query: "src/comp",
+      browserAvailable: false,
+      threads,
+      currentThreadId: "thread-1",
+      currentProjectId: "project-1",
+      matchedIds: new Set(["thread-2"]),
+    });
+    expect(items).toEqual([]);
+    const byContent = buildComposerMentionItems({
+      query: "comp",
+      browserAvailable: false,
+      threads,
+      currentThreadId: "thread-1",
+      currentProjectId: "project-1",
+      matchedIds: new Set(["thread-2"]),
+    });
+    expect(byContent.map((item) => item.label)).toEqual(["Release plan"]);
+  });
 });
 
 describe("bot mentions", () => {

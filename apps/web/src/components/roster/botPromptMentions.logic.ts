@@ -87,7 +87,9 @@ export function botPromptMention(
   bots: ReadonlyArray<BotPromptMentionBot>,
 ): { readonly source: string; readonly detail: string | null } {
   const detail = composerBotMentionDetail(bot, bots);
-  if (detail === null) return { source: `@${bot.name}`, detail };
+  // A bot named `browser` would read as the browser mention, so it keeps its id token.
+  if (detail === null && `@${bot.name}` !== COMPOSER_BROWSER_MENTION)
+    return { source: `@${bot.name}`, detail };
   return { source: serializeComposerBotMention(bot.id) ?? `@${bot.name}`, detail };
 }
 

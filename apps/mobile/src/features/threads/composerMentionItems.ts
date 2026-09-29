@@ -92,7 +92,10 @@ export function buildComposerMentionItems(input: {
     currentProjectId: input.currentProjectId,
     matchedIds: input.matchedIds,
   });
+  // A path-like query is most likely a file, so only chats whose title matches precede files.
+  const pathLike = !isThreadMentionQuery(query) && /[/\\.]/.test(query);
   for (const thread of threads) {
+    if (pathLike && !thread.title.toLowerCase().includes(query)) continue;
     items.push({
       id: `mention:thread:${thread.id}`,
       type: "thread-mention",
