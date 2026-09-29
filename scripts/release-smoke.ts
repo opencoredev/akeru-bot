@@ -132,8 +132,8 @@ for (const [needle, label] of [
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["changesets/action@", "Changesets GitHub Action"],
-  ["version: pnpm release:version", "Changesets version command"],
+  ["pnpm release:version", "Changesets version command"],
+  ['select(.head.ref == \\"$RELEASE_BRANCH\\"', "version pull request lookup by head.ref"],
   [
     'gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha"',
     "version branch CI dispatch",
