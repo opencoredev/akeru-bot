@@ -169,7 +169,7 @@ async function prepareImport(input: {
       (document) => document.target === "memory" && document.classification !== "unchanged",
     )
   ) {
-    throw new BotMemoryError(
+    throw makeBotMemoryError(
       "invalid-operation",
       "Private bot memory is turned off. Turn it on to restore MEMORY.md from this archive.",
     );
