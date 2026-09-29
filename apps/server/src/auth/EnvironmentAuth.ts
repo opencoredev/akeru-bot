@@ -25,6 +25,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -457,6 +458,9 @@ export const make = Effect.gen(function* () {
   const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
   const sessions = yield* SessionStore.SessionStore;
   const descriptor = yield* policy.getDescriptor();
+  // Pairing redemptions run one at a time, so a first admin revokes other admin
+  // links before a concurrent redemption can consume one.
+  const redeemLock = yield* Semaphore.make(1);
 
   const authenticateToken = (
     token: string,
@@ -577,6 +581,7 @@ export const make = Effect.gen(function* () {
             sessionToken: session.token,
           }) satisfies BootstrapExchangeResult,
       ),
+      redeemLock.withPermits(1),
       Effect.withSpan("EnvironmentAuth.createBrowserSession"),
     );
 
@@ -628,6 +633,7 @@ export const make = Effect.gen(function* () {
             ),
           ),
         ),
+        redeemLock.withPermits(1),
         Effect.withSpan("EnvironmentAuth.exchangeBootstrapCredentialForAccessToken"),
       );
 
