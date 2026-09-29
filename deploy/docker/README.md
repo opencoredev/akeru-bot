@@ -7,7 +7,7 @@ The recommended compose file runs Akeru and Tailscale in one network namespace. 
 3. Run `docker compose exec akeru akeru pair --tailscale`.
 
 The image health check requests `/.well-known/t3/environment` from the server every 30 seconds.
-`docker compose ps` shows the result, and `docker compose wait akeru` blocks on it.
+`docker compose ps` shows the result, and `docker compose up -d --wait` blocks until it passes.
 
 Data is durable in `akeru-data`. Mount only the workspace paths bots need. Pin image tags for repeatable updates, take a volume snapshot, pull/build the new image, and keep the previous image until its health check succeeds.
 
@@ -25,8 +25,7 @@ with `AKERU_IMAGE`, and wait for the image-level health check:
 ```sh
 git checkout vVERSION
 AKERU_IMAGE=akeru-remote:VERSION docker compose build akeru
-AKERU_IMAGE=akeru-remote:VERSION docker compose up -d
-docker compose wait akeru
+AKERU_IMAGE=akeru-remote:VERSION docker compose up -d --wait
 ```
 
 If health fails, select the previous image. If the failed image reached database migration, stop the
