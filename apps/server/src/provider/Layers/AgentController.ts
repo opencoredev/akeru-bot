@@ -4340,9 +4340,16 @@ const make = (options?: AgentControllerLiveOptions) =>
       const restore = yield* runMastra("rebuildConversation", () =>
         bundle.rebuildConversation!(key, transcript),
       );
+      // A failed restart restores the original transcript and reopens its session, so the chat
+      // keeps a live provider session even though the revert fails.
       yield* startSession(input.threadId, startInput).pipe(
         Effect.catch((error) =>
-          runMastra("restoreConversation", restore).pipe(Effect.andThen(Effect.fail(error))),
+          runMastra("restoreConversation", restore).pipe(
+            Effect.andThen(
+              startSession(input.threadId, startInput).pipe(Effect.ignoreCause({ log: true })),
+            ),
+            Effect.andThen(Effect.fail(error)),
+          ),
         ),
       );
     });

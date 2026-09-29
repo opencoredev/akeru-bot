@@ -1341,11 +1341,8 @@ describe("AgentControllerLive", () => {
           .rollbackConversation({ threadId, numTurns: 1 })
           .pipe(Effect.exit);
         expect(Exit.isFailure(failedRestart)).toBe(true);
-        yield* controller.startSession(threadId, {
-          threadId,
-          modelSelection: selection,
-          runtimeMode: "approval-required",
-        });
+        // The original session reopens without another start request.
+        expect(sessions).toHaveLength(3);
         expect(
           (yield* Effect.promise(() => sessions[2]!.thread.listActiveMessages())).map(
             (message) => message.id,
