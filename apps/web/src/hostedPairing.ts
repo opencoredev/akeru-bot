@@ -24,7 +24,13 @@ function namesPageOrigin(url: URL): boolean {
   const host = url.searchParams.get("host")?.trim() ?? "";
   if (!host) return false;
   try {
-    const { httpBaseUrl } = resolveRemotePairingTarget({ host, pairingCode: "origin-check" });
+    // A scheme-free host would default to HTTPS; on an HTTP LAN origin it
+    // still names this page, so resolve it against the page's protocol.
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(host) ? host : `${url.protocol}//${host}`;
+    const { httpBaseUrl } = resolveRemotePairingTarget({
+      host: withScheme,
+      pairingCode: "origin-check",
+    });
     return new URL(httpBaseUrl).origin === url.origin;
   } catch {
     return false;

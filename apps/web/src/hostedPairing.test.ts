@@ -26,6 +26,12 @@ describe("isHostedPairingLink", () => {
       isHostedPairingLink("http://localhost:6563/pair?host=ws%3A%2F%2Flocalhost%3A6563%2F"),
     ).toBe(false);
     expect(isHostedPairingLink("https://box.local/pair?host=box.local#token=abc")).toBe(false);
+    expect(isHostedPairingLink("http://box.local:3773/pair?host=box.local:3773#token=abc")).toBe(
+      false,
+    );
+    expect(
+      isHostedPairingLink("http://box.local:3773/pair?host=https%3A%2F%2Fbox.local%3A3773"),
+    ).toBe(true);
     expect(
       isHostedPairingLink(
         "http://localhost:6563/pair?host=http%3A%2F%2Flocalhost%3A3773#token=abc",
