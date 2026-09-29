@@ -267,11 +267,41 @@ const make = Effect.gen(function* () {
         : input.state === "unavailable"
           ? current.reservedTokens
           : 0;
-    if (
-      current.state === "reported" &&
-      (input.state !== "reported" || nextReported <= priorReported)
-    ) {
-      return yield* decodeEntry(current);
+    if (current.state === "reported") {
+      if (input.state !== "reported" || nextReported < priorReported) {
+        return yield* decodeEntry(current);
+      }
+      if (nextReported === priorReported) {
+        if (
+          input.inputTokens === current.inputTokens &&
+          input.outputTokens === current.outputTokens
+        ) {
+          const cachedInputTokens = Math.max(
+            current.cachedInputTokens,
+            input.cachedInputTokens ?? 0,
+          );
+          const cacheCreationTokens = Math.max(
+            current.cacheCreationTokens,
+            input.cacheCreationTokens ?? 0,
+          );
+          if (
+            cachedInputTokens + cacheCreationTokens <= input.inputTokens &&
+            (cachedInputTokens !== current.cachedInputTokens ||
+              cacheCreationTokens !== current.cacheCreationTokens)
+          ) {
+            yield* sql`
+              UPDATE akeru_bot_usage_entries
+              SET cached_input_tokens = ${cachedInputTokens},
+                  cache_creation_tokens = ${cacheCreationTokens},
+                  settled_at = ${input.settledAt}
+              WHERE reservation_id = ${current.reservationId}
+            `;
+            const updated = yield* selectEntryByReservation(sql, current.reservationId);
+            return yield* decodeEntry(updated[0]!);
+          }
+        }
+        return yield* decodeEntry(current);
+      }
     }
 
     const priorHeld = current.heldTokens;
