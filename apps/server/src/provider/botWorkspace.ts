@@ -400,9 +400,11 @@ export function daytona(
   const computer = new WorkspaceComputer(
     sandbox.id,
     new DaytonaComputer(sandbox),
+    // Chromium survives reconnects and some wakes; reuse it instead of starting
+    // a second browser on the same profile and debugging port.
     async () => {
       const result = await sandbox.process.executeCommand(
-        "sh -c 'command -v chromium >/dev/null || command -v chromium-browser >/dev/null || exit 1; mkdir -p /tmp/akeru-chromium; nohup ${CHROMIUM_BIN:-$(command -v chromium || command -v chromium-browser)} --no-sandbox --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --user-data-dir=/tmp/akeru-chromium about:blank >/dev/null 2>&1 </dev/null &'",
+        "sh -c 'command -v chromium >/dev/null || command -v chromium-browser >/dev/null || exit 1; profile=/tmp/akeru-chromium; command -v pgrep >/dev/null && pgrep -f \"[-]-user-data-dir=$profile\" >/dev/null && exit 0; mkdir -p $profile; nohup ${CHROMIUM_BIN:-$(command -v chromium || command -v chromium-browser)} --no-sandbox --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --user-data-dir=$profile about:blank >/dev/null 2>&1 </dev/null &'",
         undefined,
         { DISPLAY: ":1" },
       );
