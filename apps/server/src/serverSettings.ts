@@ -346,8 +346,18 @@ function restoreUsedProviders(
   };
 }
 
+// Drivers kept in settings for compatibility that no longer have a runtime.
+const RETIRED_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["cursor"]);
+
+function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
+  const driver = settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver;
+  return RETIRED_PROVIDER_DRIVERS.has(driver ?? instanceId);
+}
+
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  return isModelSelectionProviderEnabled(settings, settings.textGenerationModelSelection)
+  const selection = settings.textGenerationModelSelection;
+  return !isRetiredProviderInstance(settings, selection.instanceId) &&
+    isModelSelectionProviderEnabled(settings, selection)
     ? settings
     : fallbackTextGenerationProvider(settings);
 }
@@ -357,6 +367,7 @@ function fallbackTextGenerationProvider(settings: ServerSettings): ServerSetting
   // instance wins over the legacy providers map, which decodes to defaults
   // (codex enabled) when the Providers UI has only written providerInstances.
   const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
+    if (RETIRED_PROVIDER_DRIVERS.has(driver)) return false;
     const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
     return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
   });
