@@ -21,7 +21,6 @@ import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import { resolveGroupResponderBotId } from "./groupResponder.ts";
@@ -61,7 +60,6 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
     const startup = yield* Effect.serviceOption(ServerRuntimeStartup.ServerRuntimeStartup);
-    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
 
     return handlers
       .handle(

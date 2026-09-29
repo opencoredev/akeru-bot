@@ -2083,11 +2083,7 @@ const makeWsRpcLayer = (
                     bootstrapThread?.modelSelection);
                 const providerId = selection?.instanceId ?? thread?.session?.providerName;
                 const model = selection?.model ?? "";
-                if (
-                  providerId &&
-                  model &&
-                  (!groupId || normalizedCommand.respondingBotId !== undefined)
-                ) {
+                if (providerId && model) {
                   const providerInstanceConfig = (yield* serverSettings.getSettings)
                     .providerInstances[ProviderInstanceId.make(providerId)];
                   const verdict = preflightProvider({
@@ -2110,7 +2106,7 @@ const makeWsRpcLayer = (
                     });
                   }
                 }
-                if (botId && (!groupId || normalizedCommand.respondingBotId !== undefined)) {
+                if (botId) {
                   if (bot?.usageCap) {
                     const usage = yield* botUsageLedger.summarize(botId);
                     if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
