@@ -5896,9 +5896,8 @@ describe("AgentControllerLive", () => {
       yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
-      expect(mastra.createSession).toHaveBeenCalledTimes(2);
+      expect(mastra.createSession).toHaveBeenCalledOnce();
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
-      expect(mastra.createSession.mock.calls[1]?.[0]).toMatchObject({ workspace: remote });
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
