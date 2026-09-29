@@ -1,6 +1,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, MessageId, ThreadId, type OrchestrationMessage } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  MessageId,
+  RoutineId,
+  ThreadId,
+  type OrchestrationMessage,
+  type OrchestrationShellSnapshot,
+} from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Bot, Group } from "./types";
 
@@ -13,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   clearContextIf: vi.fn(),
   observe: vi.fn(),
   landing: vi.fn(),
+  refreshHistory: vi.fn(),
+  snapshot: null as OrchestrationShellSnapshot | null,
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -31,7 +40,8 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) => (atom === "people" ? { current: null, host: null } : null),
+  useAtomValue: (atom: unknown) =>
+    atom === "people" ? { current: null, host: null } : atom === "snapshot" ? mocks.snapshot : null,
 }));
 vi.mock("../../state/bots", () => ({ environmentPeopleAtom: () => "people" }));
 vi.mock("../../state/environments", () => ({
@@ -39,12 +49,14 @@ vi.mock("../../state/environments", () => ({
   useEnvironmentConnectionState: () => ({ data: null }),
 }));
 vi.mock("../../state/entities", () => ({ useThreadActivities: () => [] }));
-vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
+vi.mock("../../state/query", () => ({
+  useEnvironmentQuery: () => ({ data: { inbox: [] }, refresh: mocks.refreshHistory }),
+}));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,
   serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
-vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => null }));
+vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { setMessageReaction: null } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
@@ -217,6 +229,7 @@ beforeEach(() => {
   mocks.bots = [];
   mocks.messages = [];
   mocks.mediaBlocked = false;
+  mocks.snapshot = null;
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
   vi.stubGlobal("window", {
@@ -239,6 +252,42 @@ async function render() {
 }
 
 describe("thread landing reply playback hook order", () => {
+  it("refreshes routine history when an open chat receives a new run", async () => {
+    mocks.bots = [bot];
+    const source = {
+      id: RoutineId.make("routine-1"),
+      targetThreadId: ThreadId.make("thread-bot"),
+      job: "Daily report",
+      createdAt: "2026-09-29T09:00:00.000Z",
+    };
+    mocks.snapshot = {
+      routineReceiptSources: [source],
+      routineRuns: [],
+      delegations: [],
+    } as unknown as OrchestrationShellSnapshot;
+    const renderBot = async () => {
+      await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
+    };
+    await renderBot();
+    expect(mocks.refreshHistory).not.toHaveBeenCalled();
+
+    mocks.snapshot = {
+      routineReceiptSources: [source],
+      delegations: [],
+      routineRuns: [
+        {
+          id: "run-1",
+          routineId: source.id,
+          status: "queued",
+          startedAt: null,
+          updatedAt: "2026-09-29T09:01:00.000Z",
+        },
+      ],
+    } as unknown as OrchestrationShellSnapshot;
+    await renderBot();
+    expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["missing", "archived"] as const)(
     "renders an initially %s bot then its available bot without a hook ordering error",
     async (state) => {

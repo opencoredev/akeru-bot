@@ -1,7 +1,18 @@
-import { RoutineId, ThreadId, type Routine, type RoutineRun } from "@t3tools/contracts";
+import {
+  RoutineId,
+  ThreadId,
+  type OrchestrationMessage,
+  type Routine,
+  type RoutineRun,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveRoutineReceipts, mergeRoutineRunHistory } from "./routineReceipts";
+import { buildBotConversationEntries } from "./botConversationPresentation";
+import {
+  deriveRoutineReceipts,
+  mergeBotConversationTimeline,
+  mergeRoutineRunHistory,
+} from "./routineReceipts";
 
 const routine = {
   id: RoutineId.make("routine-1"),
@@ -47,6 +58,26 @@ const run = {
 } as unknown as RoutineRun;
 
 describe("deriveRoutineReceipts", () => {
+  it("restarts a speaker group after an intervening routine note", () => {
+    const messages = [
+      { id: "message-1", role: "assistant", createdAt: "2026-09-19T09:00:00.000Z" },
+      { id: "message-2", role: "assistant", createdAt: "2026-09-19T09:02:00.000Z" },
+    ] as OrchestrationMessage[];
+    const entries = buildBotConversationEntries(messages, new Date("2026-09-19T09:02:00.000Z"));
+    expect(entries[1]?.startsGroup).toBe(false);
+
+    const timeline = mergeBotConversationTimeline(entries, [
+      {
+        id: "receipt-1",
+        createdAt: "2026-09-19T09:01:00.000Z",
+        text: "Routine finished",
+        tone: "success",
+      },
+    ]);
+    expect(timeline.map((item) => item.kind)).toEqual(["message", "receipt", "message"]);
+    expect(timeline[2]?.kind === "message" && timeline[2].entry.startsGroup).toBe(true);
+  });
+
   it("retains older persisted runs while applying current shell updates", () => {
     const history = Array.from({ length: 6 }, (_, index) => ({
       ...run,

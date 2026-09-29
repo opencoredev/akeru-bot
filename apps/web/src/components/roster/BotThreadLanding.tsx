@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, type EnvironmentId, type TurnId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -64,6 +64,7 @@ import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../sess
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import {
   deriveRoutineReceipts,
+  mergeBotConversationTimeline,
   mergeRoutineRunHistory,
   type RoutineReceipt,
 } from "./routineReceipts";
@@ -224,6 +225,37 @@ export function BotThreadLanding({
         })
       : null,
   );
+  const routineRunRevision = useMemo(() => {
+    const threadId = runtime.linkedThreadRef?.threadId;
+    if (!threadId) return null;
+    const routineIds = [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])]
+      .filter((routine) => routine.targetThreadId === threadId)
+      .map((routine) => routine.id)
+      .toSorted();
+    const relevantIds = new Set(routineIds);
+    const runs = (snapshot?.routineRuns ?? [])
+      .filter((run) => relevantIds.has(run.routineId))
+      .map((run) => [run.id, run.updatedAt] as const)
+      .toSorted(([left], [right]) => left.localeCompare(right));
+    return JSON.stringify([routineIds, runs]);
+  }, [
+    runtime.linkedThreadRef?.threadId,
+    snapshot?.routines,
+    snapshot?.routineReceiptSources,
+    snapshot?.routineRuns,
+  ]);
+  const observedRoutineRevision = useRef<{
+    threadId: string | null;
+    revision: string | null;
+  }>({ threadId: null, revision: null });
+  useEffect(() => {
+    const threadId = runtime.linkedThreadRef?.threadId ?? null;
+    const previous = observedRoutineRevision.current;
+    observedRoutineRevision.current = { threadId, revision: routineRunRevision };
+    if (threadId === previous.threadId && routineRunRevision !== previous.revision) {
+      routineRunHistory.refresh();
+    }
+  }, [runtime.linkedThreadRef?.threadId, routineRunRevision, routineRunHistory.refresh]);
   const routineReceipts = useMemo(
     () =>
       runtime.linkedThreadRef
@@ -244,20 +276,7 @@ export function BotThreadLanding({
   // Each message carries the index it had in `messages`, because the merge below
   // reorders it away from that position and a row must not go looking for itself.
   const timelineItems = useMemo(
-    () =>
-      [
-        ...entries.map((entry, index) => ({
-          kind: "message" as const,
-          createdAt: entry.message.createdAt,
-          entry,
-          index,
-        })),
-        ...routineReceipts.map((receipt) => ({
-          kind: "receipt" as const,
-          createdAt: receipt.createdAt,
-          receipt,
-        })),
-      ].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    () => mergeBotConversationTimeline(entries, routineReceipts),
     [entries, routineReceipts],
   );
   const available = bot?.archivedAt === null;

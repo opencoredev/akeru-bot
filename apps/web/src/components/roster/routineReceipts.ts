@@ -1,10 +1,36 @@
 import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@t3tools/contracts";
+import type { BotConversationEntry } from "./botConversationPresentation";
 
 export interface RoutineReceipt {
   readonly id: string;
   readonly createdAt: string;
   readonly text: string;
   readonly tone: "info" | "success" | "error";
+}
+
+export function mergeBotConversationTimeline(
+  entries: ReadonlyArray<BotConversationEntry>,
+  receipts: ReadonlyArray<RoutineReceipt>,
+) {
+  const sorted = [
+    ...entries.map((entry, index) => ({
+      kind: "message" as const,
+      createdAt: entry.message.createdAt,
+      entry,
+      index,
+    })),
+    ...receipts.map((receipt) => ({
+      kind: "receipt" as const,
+      createdAt: receipt.createdAt,
+      receipt,
+    })),
+  ].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+
+  return sorted.map((item, index) =>
+    item.kind === "message" && sorted[index - 1]?.kind === "receipt"
+      ? { ...item, entry: { ...item.entry, startsGroup: true } }
+      : item,
+  );
 }
 
 export function mergeRoutineRunHistory(
