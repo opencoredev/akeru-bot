@@ -1136,6 +1136,11 @@ export async function createAkeruMastraHarness(
   const removeQueuedObservation = observationQueueDb.prepare(
     `DELETE FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
   );
+  // A running observation renews its lease, so a slow observe is never reclaimed
+  // and run a second time by another drain.
+  const renewQueuedObservationClaim = observationQueueDb.prepare(
+    `UPDATE akeru_observation_queue SET claimed_at = ? WHERE id = ? AND claimed_at = ?`,
+  );
   const isQueuedObservationClaimed = observationQueueDb.prepare(
     `SELECT 1 AS claimed FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
   );
@@ -1254,6 +1259,10 @@ export async function createAkeruMastraHarness(
     );
   };
 
+  const stopLeaseRenewal = async (fiber: Fiber.Fiber<void> | undefined) => {
+    if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
+  };
+
   const drainObservationQueue = async (): Promise<void> => {
     if (closing) return;
     if (observationDrain) return observationDrain;
@@ -1278,13 +1287,29 @@ export async function createAkeruMastraHarness(
           scheduleObservationRetry();
           return;
         }
+        let claim = now;
+        let leaseRenewal: Fiber.Fiber<void> | undefined;
         try {
           if (closing) {
             // Shutdown raced a claim: release the row so a later harness can
             // pick it up rather than holding it until the lease expires.
-            releaseQueuedObservation.run(item.attempts, now, item.id, now);
+            releaseQueuedObservation.run(item.attempts, now, item.id, claim);
             return;
           }
+          leaseRenewal = Effect.runFork(
+            Effect.forever(
+              Effect.sleep(Duration.millis(OBSERVATION_CLAIM_LEASE_MS / 3)).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    const renewed = DateTime.formatIso(DateTime.nowUnsafe());
+                    if (renewQueuedObservationClaim.run(renewed, item.id, claim).changes === 1) {
+                      claim = renewed;
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
           const requestContext = new RequestContext();
           requestContext.setRaw("controller", {
             resourceId: item.resourceId,
@@ -1292,7 +1317,7 @@ export async function createAkeruMastraHarness(
           });
           await queueObservation(item.threadId, item.resourceId, async () => {
             // A clear or restore queued ahead of this row discarded it.
-            if (!isQueuedObservationClaimed.get(item.id, now)) return;
+            if (!isQueuedObservationClaimed.get(item.id, claim)) return;
             await observationalMemory.engine.observe({
               threadId: item.threadId,
               resourceId: item.resourceId,
@@ -1301,11 +1326,13 @@ export async function createAkeruMastraHarness(
               hooks: observeHooks,
             });
           });
-          removeQueuedObservation.run(item.id, now);
+          await stopLeaseRenewal(leaseRenewal);
+          removeQueuedObservation.run(item.id, claim);
         } catch (cause) {
+          await stopLeaseRenewal(leaseRenewal);
           const attempts = item.attempts + 1;
           if (attempts >= 3) {
-            if (removeQueuedObservation.run(item.id, now).changes === 0) continue;
+            if (removeQueuedObservation.run(item.id, claim).changes === 0) continue;
             await Effect.runPromise(
               Effect.logWarning("Akeru observational memory dropped a failed observation.", {
                 threadId: item.threadId,
@@ -1341,7 +1368,7 @@ export async function createAkeruMastraHarness(
               DateTime.addDuration(DateTime.nowUnsafe(), `${OBSERVATION_RETRY_BACKOFF_MS} millis`),
             ),
             item.id,
-            now,
+            claim,
           );
         }
       }

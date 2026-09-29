@@ -645,6 +645,45 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("renews a running observation's lease so another drain cannot reclaim it", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-lease-"));
+    const started = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<void>();
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async () => {
+        started.resolve();
+        await finish.promise;
+        return { observed: false, reflected: false, record: {} } as never;
+      });
+    const harness = await makeObservationHarness(directory);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const drained = harness.observeAfterTurn!({
+        threadId: "thread-a",
+        modelId: "openai/gpt-5.6-sol",
+      });
+      await started.promise;
+      const firstClaim = queuedObservations(directory)[0]!.claimedAt!;
+
+      // Run past the five-minute lease while the observation is still working.
+      await vi.advanceTimersByTimeAsync(6 * 60_000);
+      const renewedClaim = queuedObservations(directory)[0]!.claimedAt!;
+      assert.isAbove(Date.parse(renewedClaim), Date.parse(firstClaim) + 4 * 60_000);
+
+      finish.resolve();
+      await drained;
+      assert.deepEqual(queuedObservations(directory), []);
+      expect(observe).toHaveBeenCalledOnce();
+    } finally {
+      finish.resolve();
+      vi.useRealTimers();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("discards a backed-off observation when the chat's memory is cleared", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-clear-"));
     const calls: string[] = [];
