@@ -12,6 +12,24 @@ export function recordingMimeType(): string {
   return mimeType;
 }
 
+function createCaptureResources(microphone: MediaStream) {
+  let context: AudioContext | null = null;
+  let source: MediaStreamAudioSourceNode | null = null;
+  try {
+    const recorder = new MediaRecorder(microphone, { mimeType: recordingMimeType() });
+    context = new AudioContext();
+    source = context.createMediaStreamSource(microphone);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    return { recorder, context, source, analyser };
+  } catch (error) {
+    source?.disconnect();
+    if (context) void context.close().catch(() => undefined);
+    throw error;
+  }
+}
+
 export function captureVoiceUtterance(
   microphone: MediaStream,
   signal: AbortSignal,
@@ -21,12 +39,7 @@ export function captureVoiceUtterance(
     return Promise.reject(new Error("Voice recording is unavailable on this client."));
   }
   return new Promise((resolve, reject) => {
-    const recorder = new MediaRecorder(microphone, { mimeType: recordingMimeType() });
-    const context = new AudioContext();
-    const source = context.createMediaStreamSource(microphone);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 2048;
-    source.connect(analyser);
+    const { recorder, context, source, analyser } = createCaptureResources(microphone);
     const samples = new Float32Array(analyser.fftSize);
     let chunks: Blob[] = [];
     let size = 0;
@@ -131,7 +144,10 @@ export function playVoiceAudio(
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   const url = URL.createObjectURL(new Blob([bytes], { type: audio.mimeType }));
   return new Promise((resolve, reject) => {
+    let settled = false;
     const finish = (error?: unknown) => {
+      if (settled) return;
+      settled = true;
       speaker.removeEventListener("ended", ended);
       speaker.removeEventListener("error", failed);
       signal.removeEventListener("abort", aborted);
