@@ -16,7 +16,20 @@ describe("Windows remote installer", () => {
   it("installs Tailscale unattended and starts Akeru through Task Scheduler", () => {
     expect(script).toContain("TS_UNATTENDEDMODE=always");
     expect(script).toContain("up --unattended=true");
-    expect(script).toContain("service install");
+    expect(script).not.toContain("service install");
+    expect(script).toContain("Register-ScheduledTask -TaskName $TaskName");
+    expect(script).toContain("Start-ScheduledTask -TaskName $TaskName");
+    expect(script).toContain("New-ScheduledTaskTrigger -AtStartup");
+    expect(script).toContain("-ExecutionTimeLimit ([TimeSpan]::Zero)");
+    expect(script).toContain("service-launcher.mjs");
+    expect(script).toContain('"versions\\$Version"');
+    expect(script).toContain('".install-complete"');
+    expect(script).toContain("protocol = 2; activeVersion = $Version");
+    expect(script).toContain("`$env:AKERU_HOME = $(Quote-PowerShellLiteral $RuntimeHome)");
+    expect(script).toContain("`$env:AKERU_INSTALL_ROOT = $(Quote-PowerShellLiteral $InstallRoot)");
+    expect(script).toContain(
+      '$TaskEnvironment + "& $(Quote-PowerShellLiteral $Launcher) remote update"',
+    );
     expect(script).toContain('Register-ScheduledTask -TaskName "Akeru Remote Update"');
     expect(script).not.toContain("Heartbeat");
     expect(script).toContain("-LogonType S4U");

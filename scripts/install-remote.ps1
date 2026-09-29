@@ -104,8 +104,43 @@ try {
     $env:AKERU_TAILSCALE_PATH = $Tailscale
     $env:T3CODE_TAILSCALE_SERVE = "true"
   }
-  & (Join-Path $BinDir "akeru.cmd") service install
-  if ($LASTEXITCODE -ne 0) { throw "Could not install the Akeru background task." }
+  $Runtime = Join-Path $RuntimeHome "runtime"
+  $Pinned = Join-Path $Runtime "versions\$Version"
+  $StatePath = Join-Path $Runtime "service-state.json"
+  if (Test-Path $StatePath) {
+    $State = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+    if ($State.update.status -eq "pending") { throw "A service update is pending. Finish it before reinstalling." }
+  }
+  $TaskName = "Akeru Remote"
+  if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+    Stop-ScheduledTask -TaskName $TaskName
+  }
+  New-Item -ItemType Directory -Force -Path $Runtime, (Join-Path $Runtime "versions"), (Join-Path $RuntimeHome "userdata\logs") | Out-Null
+  if (-not (Test-Path $Pinned)) { Copy-Item -LiteralPath $Target -Destination $Pinned -Recurse }
+  Set-Content -LiteralPath (Join-Path $Pinned ".install-complete") -Value $Version -Encoding Ascii
+  Copy-Item -LiteralPath (Join-Path $Target "node_modules\akeru-bot\dist\service-launcher.mjs") -Destination $Runtime -Force
+  $ServiceState = @{ protocol = 2; activeVersion = $Version } | ConvertTo-Json -Compress
+  [IO.File]::WriteAllText($StatePath, "$ServiceState`n", [Text.UTF8Encoding]::new($false))
+  function Quote-PowerShellLiteral([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
+  $TaskEnvironment = @(
+    "`$env:AKERU_HOME = $(Quote-PowerShellLiteral $RuntimeHome)",
+    "`$env:T3CODE_HOME = $(Quote-PowerShellLiteral $RuntimeHome)",
+    "`$env:AKERU_SERVICE_RUNTIME_ROOT = $(Quote-PowerShellLiteral $Target)",
+    "`$env:AKERU_INSTALL_ROOT = $(Quote-PowerShellLiteral $InstallRoot)",
+    "`$env:PATH = $(Quote-PowerShellLiteral $env:PATH)",
+    "`$env:AKERU_TAILSCALE_PATH = $(Quote-PowerShellLiteral $Tailscale)",
+    "`$env:T3CODE_TAILSCALE_SERVE = $(Quote-PowerShellLiteral $(if ($NoTailscale) { 'false' } else { 'true' }))"
+  )
+  $ServiceScript = Join-Path $Runtime "start-remote.ps1"
+  $ServiceCommand = "& $(Quote-PowerShellLiteral (Join-Path $Target 'node\node.exe')) $(Quote-PowerShellLiteral (Join-Path $Runtime 'service-launcher.mjs')) *>> $(Quote-PowerShellLiteral (Join-Path $RuntimeHome 'userdata\logs\boot-service.log'))"
+  Set-Content -LiteralPath $ServiceScript -Value ($TaskEnvironment + $ServiceCommand) -Encoding UTF8
+  $PowerShell = Join-Path $PSHOME "powershell.exe"
+  $Principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType S4U -RunLevel Limited
+  $ServiceAction = New-ScheduledTaskAction -Execute $PowerShell -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ServiceScript`""
+  $ServiceTrigger = New-ScheduledTaskTrigger -AtStartup
+  $ServiceSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+  Register-ScheduledTask -TaskName $TaskName -Action $ServiceAction -Trigger $ServiceTrigger -Settings $ServiceSettings -Principal $Principal -Force | Out-Null
+  Start-ScheduledTask -TaskName $TaskName
 
   $RemoteEndpoint = $null
   if (-not $NoTailscale) {
@@ -129,9 +164,10 @@ try {
     [IO.File]::WriteAllText((Join-Path $RuntimeHome "userdata\remote-serve.json"), "$ServeRecord`n", [Text.UTF8Encoding]::new($false))
   }
   if (-not $NoAutoUpdate) {
-    $Principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType S4U -RunLevel Limited
     $Launcher = Join-Path $BinDir "akeru.cmd"
-    $UpdateAction = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/d /c `"`"$Launcher`" remote update`""
+    $UpdateScript = Join-Path $Runtime "update-remote.ps1"
+    Set-Content -LiteralPath $UpdateScript -Value ($TaskEnvironment + "& $(Quote-PowerShellLiteral $Launcher) remote update" + 'exit $LASTEXITCODE') -Encoding UTF8
+    $UpdateAction = New-ScheduledTaskAction -Execute $PowerShell -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$UpdateScript`""
     $UpdateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(15) -RepetitionInterval (New-TimeSpan -Hours 1)
     Register-ScheduledTask -TaskName "Akeru Remote Update" -Action $UpdateAction -Trigger $UpdateTrigger -Principal $Principal -Force | Out-Null
   }
