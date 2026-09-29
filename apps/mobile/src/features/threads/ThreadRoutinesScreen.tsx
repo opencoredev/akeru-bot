@@ -108,6 +108,12 @@ function RoutineCard(props: {
         </Text>
       </View>
       {stateNote ? <Text className="text-sm text-foreground-muted">{t(stateNote)}</Text> : null}
+      {!routine.procedureApproved && routine.prompt.trim() ? (
+        <View className="gap-1">
+          <Text className="text-xs font-t3-medium text-foreground-muted">{t("What it does")}</Text>
+          <Text className="text-sm text-foreground">{routine.prompt}</Text>
+        </View>
+      ) : null}
       <View className="gap-1">
         <Text className="text-xs text-foreground-muted">
           {t("Next run")}: {routineDateLabel(routine.nextRunAt, i18n)}

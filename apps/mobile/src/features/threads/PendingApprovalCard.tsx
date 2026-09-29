@@ -63,10 +63,7 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
             </Text>
           ) : null}
           {routine.instructions ? (
-            <Text
-              className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400"
-              numberOfLines={6}
-            >
+            <Text className="font-sans text-sm leading-normal text-neutral-600 dark:text-neutral-400">
               {routine.instructions}
             </Text>
           ) : null}
