@@ -535,6 +535,7 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly requestId: string;
     readonly createdAt: string;
+    readonly providerFailed?: boolean;
   }) {
     const thread = yield* resolveThreadDetail(input.threadId);
     if (!thread) return;
@@ -543,8 +544,9 @@ const make = Effect.gen(function* () {
     );
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
-    const text =
-      "I could not continue that request because the bot session restarted. Send it again.";
+    const text = input.providerFailed
+      ? "I could not continue that request because the provider failed. Check the provider, then send it again."
+      : "I could not continue that request because the bot session restarted. Send it again.";
 
     const deltaCommandId = yield* serverCommandId("user-input-failure-reply-delta");
     yield* orchestrationEngine.dispatch({
@@ -2199,12 +2201,14 @@ const make = Effect.gen(function* () {
         .pipe(
           Effect.catchCause((cause) => {
             const retryable = isRetryableUserInputResponseError(cause);
-            const staleDetail = stalePendingRequestDetail("user-input", event.payload.requestId);
+            const providerFailed = !retryable && !isUnknownPendingUserInputRequestError(cause);
+            const failureDetail = formatFailureDetail(cause);
+            // The stale marker closes the question; a provider failure keeps its real cause.
             const detail = retryable
-              ? formatFailureDetail(cause)
-              : isUnknownPendingUserInputRequestError(cause)
-                ? staleDetail
-                : `${staleDetail} ${formatFailureDetail(cause)}`;
+              ? failureDetail
+              : providerFailed
+                ? `Stale pending user-input request: ${event.payload.requestId}. ${failureDetail}`
+                : stalePendingRequestDetail("user-input", event.payload.requestId);
             return Effect.gen(function* () {
               yield* Effect.logWarning("provider user input response failed", {
                 threadId: event.payload.threadId,
@@ -2225,6 +2229,7 @@ const make = Effect.gen(function* () {
                 threadId: event.payload.threadId,
                 requestId: event.payload.requestId,
                 createdAt: event.payload.createdAt,
+                providerFailed,
               });
               if (thread.session) {
                 yield* setThreadSession({
@@ -2233,7 +2238,7 @@ const make = Effect.gen(function* () {
                     ...withoutUnavailability(thread.session),
                     status: "error",
                     activeTurnId: null,
-                    lastError: detail,
+                    lastError: providerFailed ? failureDetail : detail,
                     updatedAt: event.payload.createdAt,
                   },
                   createdAt: event.payload.createdAt,

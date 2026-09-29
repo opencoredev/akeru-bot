@@ -5929,8 +5929,18 @@ describe("ProviderCommandReactor", () => {
     expect(failureActivity?.payload).toMatchObject({
       detail: expect.stringContaining("Stale pending user-input request"),
     });
-    expect(thread?.messages.some((message) => message.role === "assistant")).toBe(true);
+    expect(failureActivity?.payload).not.toMatchObject({
+      detail: expect.stringContaining("app restarts"),
+    });
+    expect(thread?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "assistant",
+        text: "I could not continue that request because the provider failed. Check the provider, then send it again.",
+      }),
+    );
     expect(thread?.session).toMatchObject({ status: "error" });
+    expect(thread?.session?.lastError).toContain("connection lost");
+    expect(thread?.session?.lastError).not.toContain("Stale pending");
   });
 
   it("reacts to thread.session.stop by stopping provider session and clearing thread session state", async () => {
