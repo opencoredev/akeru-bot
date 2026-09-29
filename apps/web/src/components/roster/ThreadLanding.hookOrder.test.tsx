@@ -75,8 +75,11 @@ vi.mock("../voice/VoiceCall", () => ({
   voiceEnvironmentConnectionLost: () => false,
 }));
 vi.mock("../chat/ReplyPlaybackProvider", () => {
+  const synthesis = { provider: "test-provider", voice: "test-voice" };
   const session = {
-    synthesis: { provider: "test-provider", voice: "test-voice" },
+    synthesis,
+    subscribeSynthesis: () => () => {},
+    getSynthesisSnapshot: () => synthesis,
     setContext: mocks.setContext,
     clearContextIf: mocks.clearContextIf,
     observe: mocks.observe,
