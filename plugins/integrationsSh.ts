@@ -1,5 +1,6 @@
 // Entries shown in Akeru's directory must have a verified MCP listing on integrations.sh.
 // Keep the URLs explicit so a registry discovery prompt cannot look like a usable connection.
+// A listed entry still shows while its lifecycle is pending; the card carries the blocker.
 const MCP_LISTINGS = {
   context: "https://integrations.sh/context.dev/",
   exa: "https://integrations.sh/exa.ai/",
@@ -16,7 +17,7 @@ export function isListedIntegration(plugin: {
   readonly connection: { readonly type: string };
 }): boolean {
   return (
-    plugin.catalogStatus === "available" &&
+    plugin.catalogStatus !== "deprecated" &&
     plugin.connection.type !== "brokered" &&
     integrationsShListing(plugin.id) !== null
   );
