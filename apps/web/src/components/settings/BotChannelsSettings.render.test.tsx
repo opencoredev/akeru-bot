@@ -11,7 +11,7 @@ const fixtures = vi.hoisted(() => ({
     archivedAt: null;
     channelBindings: Array<{
       botId: string;
-      connectionId: string;
+      connectionId?: string;
       provider: "imessage" | "whatsapp";
       projectId: string;
       status: ChannelBinding["status"];
@@ -335,6 +335,55 @@ describe("channel project selection", () => {
     expect(fixtures.toast).toHaveBeenCalledWith({
       type: "error",
       title: "Unassign the channel already connected to this bot first",
+    });
+  });
+
+  it("assigns a connection to a bot whose own channel was detached", async () => {
+    const { connectionId: _detached, ...detachedBinding } =
+      boundBot("disconnected").channelBindings[0]!;
+    fixtures.bots = [
+      { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
+      { ...boundBot("disconnected"), channelBindings: [detachedBinding] },
+    ];
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-uuid");
+    await fixtures.command.mock.results[0]!.value;
+    expect(fixtures.toast).not.toHaveBeenCalled();
+    expect(fixtures.command).toHaveBeenCalledWith({
+      environmentId: "environment-1",
+      input: {
+        botId: "bot-uuid",
+        connectionId: "profile-1",
+        provider: "imessage",
+        projectId: "project-uuid",
+      },
+    });
+  });
+
+  it("restores a failed move into a live project when the old one was removed", async () => {
+    const stale = boundBot("blocked");
+    fixtures.bots = [
+      {
+        ...stale,
+        channelBindings: [{ ...stale.channelBindings[0]!, projectId: "project-gone" }],
+      },
+      { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
+    ];
+    fixtures.command
+      .mockResolvedValueOnce({ _tag: "Success" })
+      .mockResolvedValueOnce({ _tag: "Failure", cause: Cause.fail(new Error("rejected")) })
+      .mockResolvedValue({ _tag: "Success" });
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-other");
+    await vi.waitFor(() => expect(fixtures.command).toHaveBeenCalledTimes(4));
+    expect(fixtures.command).toHaveBeenNthCalledWith(4, {
+      environmentId: "environment-1",
+      input: {
+        botId: "bot-uuid",
+        connectionId: "profile-1",
+        projectId: "project-uuid",
+        provider: "imessage",
+      },
     });
   });
 

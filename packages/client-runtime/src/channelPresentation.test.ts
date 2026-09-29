@@ -199,6 +199,9 @@ describe("channel presentation", () => {
     expect(
       canChangeChannelProject({ status: "blocked", projectId: first }, first, liveProjects),
     ).toBe(true);
+    expect(
+      canChangeChannelProject({ status: "disconnected", projectId: first }, second, liveProjects),
+    ).toBe(false);
   });
 
   it("labels every advertised provider", () => {

@@ -205,10 +205,11 @@ export function SettingsRow({
               {resetAction}
             </span>
           </div>
+          {/* A div, not a p: some descriptions carry paragraphs and disclosures. */}
           {description ? (
-            <p className="max-w-xl text-[13px] leading-[1.45] text-muted-foreground/80">
+            <div className="max-w-xl text-[13px] leading-[1.45] text-muted-foreground/80">
               {description}
-            </p>
+            </div>
           ) : null}
           {status ? <div className="pt-0.5 text-xs text-muted-foreground">{status}</div> : null}
         </div>

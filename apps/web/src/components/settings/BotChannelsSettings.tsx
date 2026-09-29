@@ -281,7 +281,14 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
     const destinationBinding = bots
       .find((bot) => bot.id === nextBotId)
       ?.channelBindings.find((binding) => binding.provider === connection.provider);
-    if (destinationBinding && destinationBinding.connectionId !== connection.id) {
+    // A detached binding keeps its provider row without a connection, so only a bound or
+    // still-live legacy binding occupies the bot.
+    const destinationOccupied =
+      destinationBinding !== undefined &&
+      (destinationBinding.connectionId
+        ? destinationBinding.connectionId !== connection.id
+        : destinationBinding.status !== "disconnected");
+    if (destinationOccupied) {
       toastManager.add({
         type: "error",
         title: t("Unassign the channel already connected to this bot first"),
@@ -315,6 +322,13 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       if (result._tag === "Failure") {
         // A failed attach keeps the new bot on the connection, so it has to let go before the
         // previous bot can have the connection back.
+        // The previous project may be gone; restore into the chosen live project instead.
+        const previousProjectId = assignedBinding?.projectId ?? null;
+        const restoreProjectId =
+          previousProjectId !== null &&
+          liveProjects.some((project) => project.id === previousProjectId)
+            ? previousProjectId
+            : projectId;
         const released = assignedBot
           ? await detach({
               environmentId,
@@ -327,7 +341,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
-                projectId: assignedBinding?.projectId ?? projectId,
+                projectId: restoreProjectId,
                 provider: connection.provider,
               },
             })
