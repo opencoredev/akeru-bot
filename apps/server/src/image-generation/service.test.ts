@@ -363,7 +363,7 @@ describe("image provider health test", () => {
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
-    expect(chatgpt?.health).toBe("failed-first-request");
+    expect(chatgpt?.health).toBe("revoked");
     expect(chatgpt?.healthTest?.status).toBe("failed");
     expect(chatgpt?.lastFailure?.message).toContain("401");
   });
