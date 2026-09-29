@@ -3415,6 +3415,46 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect("reports a local PR checkout that kept local commits as off the PR head", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/pr-local-kept"]);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "kept.txt"), "pushed\n");
+      yield* runGit(repoDir, ["add", "kept.txt"]);
+      yield* runGit(repoDir, ["commit", "-m", "PR head"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/pr-local-kept"]);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "kept.txt"), "local only\n");
+      yield* runGit(repoDir, ["commit", "-am", "Local work"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+
+      const { manager } = yield* makeManager({
+        ghScenario: {
+          pullRequest: {
+            number: 66,
+            title: "Kept local work",
+            url: "https://github.com/pingdotgg/codething-mvp/pull/66",
+            baseRefName: "main",
+            headRefName: "feature/pr-local-kept",
+            state: "open",
+          },
+        },
+      });
+
+      const result = yield* preparePullRequestThread(manager, {
+        cwd: repoDir,
+        reference: "66",
+        mode: "local",
+      });
+
+      expect(result.branch).toBe("feature/pr-local-kept");
+      expect(result.isOnPullRequestHead).toBe(false);
+    }),
+  );
+
   it.effect(
     "restores same-repository upstream tracking after local PR checkout without a remote ref",
     () =>

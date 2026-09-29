@@ -1920,11 +1920,20 @@ export const make = Effect.gen(function* () {
           },
           details.branch ?? pullRequest.headBranch,
         );
+        // A forced checkout can keep local commits instead of discarding them, so report
+        // whether the branch actually reached the head it now tracks.
+        const isOnPullRequestHead = yield* Effect.all([
+          gitCore.resolveCommit({ cwd: input.cwd, revision: "HEAD" }),
+          gitCore.resolveCommit({ cwd: input.cwd, revision: "@{upstream}" }),
+        ]).pipe(
+          Effect.map(([head, upstream]) => head.commitSha === upstream.commitSha),
+          Effect.orElseSucceed(() => true),
+        );
         return {
           pullRequest,
           branch: details.branch ?? pullRequest.headBranch,
           worktreePath: null,
-          isOnPullRequestHead: true,
+          isOnPullRequestHead,
         };
       }
 
