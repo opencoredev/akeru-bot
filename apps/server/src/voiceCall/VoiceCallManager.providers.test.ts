@@ -436,6 +436,31 @@ it.effect("keeps a rejected key's verdict across a server restart", () => {
   });
 });
 
+it.effect("forgets a rejection once its key is replaced", () =>
+  Effect.gen(function* () {
+    const manager = yield* VoiceCallManager;
+    const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
+      providers.find((status) => status.provider === "elevenlabs"),
+    );
+    yield* manager.connect("elevenlabs", "rejected-key");
+    yield* Effect.result(manager.test("elevenlabs"));
+    // Saving the same key again keeps its verdict.
+    yield* manager.connect("elevenlabs", "rejected-key");
+    assert.isTrue((yield* elevenlabs)?.keyRejected);
+    yield* manager.connect("elevenlabs", "replacement-key");
+    yield* manager.connect("elevenlabs", "rejected-key");
+    assert.isFalse((yield* elevenlabs)?.keyRejected);
+  }).pipe(
+    Effect.provide(
+      makeTest({
+        test: async () => {
+          throw voiceFailure("provider-auth");
+        },
+      }),
+    ),
+  ),
+);
+
 it.effect("ignores a Test verdict for a key that was replaced mid-Test", () => {
   const pending = Promise.withResolvers<void>();
   const began = Promise.withResolvers<void>();

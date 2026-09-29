@@ -318,9 +318,16 @@ const make = (options?: VoiceCallManagerOptions) =>
           const store = yield* assertMutable(provider);
           if (!apiKey.trim() || apiKey.length > 4096 || /[\r\n]/.test(apiKey))
             return yield* voiceFailure("invalid-input");
-          yield* store
-            .set(secretName(provider), new TextEncoder().encode(apiKey.trim()))
-            .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+          const key = new TextEncoder().encode(apiKey.trim());
+          yield* Effect.gen(function* () {
+            const saved = yield* store.get(secretName(provider));
+            yield* store.set(secretName(provider), key);
+            // A replaced key drops the old rejection, so restoring that key later
+            // waits for a new Test instead of reviving the stale verdict.
+            if (Option.isNone(saved) || keyDigest(saved.value) !== keyDigest(key)) {
+              yield* store.remove(rejectedSecretName(provider));
+            }
+          }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
           return { provider, connected: true };
         }),
       );
