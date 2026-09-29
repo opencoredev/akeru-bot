@@ -182,3 +182,6 @@ export function slackPasteTarget(pasted: string): "botToken" | "appToken" | null
   if (value.startsWith("xapp-")) return "appToken";
   return null;
 }
+
+/** The settings target that opens the channels panel on one provider. */
+export const channelSettingsTarget = (provider: ChannelProvider) => `channel-${provider}`;

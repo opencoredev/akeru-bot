@@ -37,6 +37,7 @@ const fixtures = vi.hoisted(() => ({
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
   command: vi.fn(),
   toast: vi.fn(),
+  hash: "",
 }));
 
 vi.mock("@effect/atom-react", () => ({
@@ -70,6 +71,10 @@ vi.mock("../ui/select", async (importOriginal) => {
   };
 });
 
+vi.mock("@tanstack/react-router", () => ({
+  useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
+    select({ hash: fixtures.hash }),
+}));
 vi.mock("./settingsLayout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./settingsLayout")>()),
   SettingsPageContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -116,6 +121,14 @@ describe("channel project selection", () => {
     fixtures.selects = [];
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.command.mockReset().mockResolvedValue({ _tag: "Success" });
+  });
+
+  it("opens on the provider a repair link names", () => {
+    fixtures.hash = "#channel-telegram";
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    fixtures.hash = "";
+    expect(html).toMatch(/<button[^>]*id="channel-telegram"[^>]*aria-selected="true"/);
+    expect(html).toMatch(/<button[^>]*id="channel-imessage"[^>]*aria-selected="false"/);
   });
 
   it("preselects a live project for an unassigned connection and allows assignment", () => {

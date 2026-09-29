@@ -57,7 +57,9 @@ describe("channel presentation", () => {
     expect(at("connected", "credentials")).toBe("update-credentials");
     expect(at("connected", "network")).toBe("reconnect");
     expect(at("disconnected")).toBe("connect");
+    expect(at("disconnected", "credentials")).toBe("update-credentials");
     expect(at("needs-reconnect", "network")).toBe("reconnect");
+    expect(at("needs-reconnect", "credentials")).toBe("update-credentials");
     expect(at("failed", "credentials")).toBe("update-credentials");
     expect(at("failed", "delivery-unknown")).toBe("check-delivery");
     expect(at("failed", "network")).toBe("reconnect");

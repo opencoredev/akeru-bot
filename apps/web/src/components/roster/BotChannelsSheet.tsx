@@ -28,6 +28,7 @@ import { useEnvironmentSessionState } from "../../state/session";
 import { openSettings } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ChannelProjectSelect } from "../settings/ChannelProjectSelect";
+import { channelSettingsTarget } from "../settings/channelProviderMeta";
 import {
   ChannelRepairButton,
   ChannelStatusBadge,
@@ -189,9 +190,9 @@ export function BotChannelsSheet({
     }
   };
 
-  const openChannelSettings = () => {
+  const openChannelSettings = (provider?: ChannelProvider) => {
     onOpenChange(false);
-    openSettings("channels", null, environmentId);
+    openSettings("channels", provider ? channelSettingsTarget(provider) : null, environmentId);
   };
 
   return (
@@ -218,7 +219,7 @@ export function BotChannelsSheet({
               <p className="text-sm text-muted-foreground">
                 {t("Set up a channel connection first.")}
               </p>
-              <Button onClick={openChannelSettings}>{t("Set up channels")}</Button>
+              <Button onClick={() => openChannelSettings()}>{t("Set up channels")}</Button>
             </div>
           ) : (
             <>
@@ -330,7 +331,8 @@ export function BotChannelsSheet({
                           onRepair={(action) => {
                             if (action === "choose-project") return moveToProject(connection);
                             // Replacing credentials needs the full setup form in Settings.
-                            if (action === "update-credentials") return openChannelSettings();
+                            if (action === "update-credentials")
+                              return openChannelSettings(connection.provider);
                             if (!environmentId) return;
                             void run(connection, () =>
                               reconnect({ environmentId, input: channelInput(connection) }),
@@ -342,7 +344,7 @@ export function BotChannelsSheet({
                   </div>
                 );
               })}
-              <Button variant="outline" onClick={openChannelSettings}>
+              <Button variant="outline" onClick={() => openChannelSettings()}>
                 {t("Manage connections")}
               </Button>
             </>

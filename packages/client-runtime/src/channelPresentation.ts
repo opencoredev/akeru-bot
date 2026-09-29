@@ -82,10 +82,11 @@ export function channelRepairAction(
         default:
           return "none";
       }
+    // Rejected credentials would fail again, so every idle state asks for new ones first.
     case "disconnected":
-      return "connect";
+      return binding.failureCategory === "credentials" ? "update-credentials" : "connect";
     case "needs-reconnect":
-      return "reconnect";
+      return binding.failureCategory === "credentials" ? "update-credentials" : "reconnect";
     case "failed":
       return binding.failureCategory === "credentials" ? "update-credentials" : "reconnect";
   }

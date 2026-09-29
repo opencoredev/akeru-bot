@@ -16,6 +16,7 @@ import {
   channelRestoreProjectId,
 } from "@t3tools/client-runtime/channel-presentation";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+import { useLocation } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,7 +40,11 @@ import {
   ChannelStatusNotice,
   channelWebhookUrl,
 } from "./ChannelStatus";
-import { CHANNEL_PROVIDER_META, channelProviderMeta } from "./channelProviderMeta";
+import {
+  CHANNEL_PROVIDER_META,
+  channelProviderMeta,
+  channelSettingsTarget,
+} from "./channelProviderMeta";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
@@ -99,6 +104,14 @@ export function parsePhotonHostedCredentials(input: string): {
   return projectId && projectSecret ? { projectId, projectSecret } : null;
 }
 
+function channelProviderFromHash(hash: string): ChannelProvider | null {
+  const target = hash.replace(/^#/, "");
+  return (
+    CHANNEL_PROVIDER_META.find((channel) => channelSettingsTarget(channel.provider) === target)
+      ?.provider ?? null
+  );
+}
+
 export function BotChannelsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
@@ -127,7 +140,14 @@ export function BotChannelsSettingsPanel() {
     reportFailure: false,
   });
   const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
-  const [provider, setProvider] = useState<ChannelProvider>("imessage");
+  // Repair links elsewhere open this panel on one provider through the `channel-<provider>` hash.
+  const hashProvider = channelProviderFromHash(
+    useLocation({ select: (location) => location.hash }),
+  );
+  const [provider, setProvider] = useState<ChannelProvider>(hashProvider ?? "imessage");
+  useEffect(() => {
+    if (hashProvider) setProvider(hashProvider);
+  }, [hashProvider]);
   const [setupOpen, setSetupOpen] = useState(false);
   const [replacing, setReplacing] = useState<ChannelReplacement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -314,6 +334,7 @@ export function BotChannelsSettingsPanel() {
           {CHANNEL_PROVIDER_META.map((channel) => (
             <button
               key={channel.provider}
+              id={channelSettingsTarget(channel.provider)}
               type="button"
               role="tab"
               aria-selected={provider === channel.provider}

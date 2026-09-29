@@ -195,7 +195,7 @@ describe("BotChannelsSheet health and repair", () => {
     expect(html).toContain("Fixed server copy.");
     expect(fixtures.buttons.has("Disconnect")).toBe(true);
     fixtures.buttons.get("Update credentials")?.onClick?.();
-    expect(fixtures.openSettings).toHaveBeenCalledWith("channels", null, "environment-1");
+    expect(fixtures.openSettings).toHaveBeenCalledWith("channels", "channel-telegram", "environment-1");
     expect(fixtures.commands.reconnect).not.toHaveBeenCalled();
   });
 
