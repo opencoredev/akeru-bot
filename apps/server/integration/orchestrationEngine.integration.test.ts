@@ -1704,7 +1704,12 @@ for (const provider of MASTRA_PROVIDERS) {
           assert.equal(starts, 2);
           const recovered = yield* harness.waitForThread(
             THREAD_ID,
-            (entry) => entry.session?.providerName === label && entry.latestTurn !== null,
+            (entry) =>
+              entry.session?.providerName === label &&
+              entry.messages.some(
+                (message) =>
+                  message.role === "assistant" && message.text.includes(`${label}-after response`),
+              ),
           );
           assert.equal(recovered.session?.providerName, label);
         }),
