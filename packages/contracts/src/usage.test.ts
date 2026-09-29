@@ -58,5 +58,6 @@ describe("UsageSummary", () => {
     expect(summary.buckets.map((entry) => entry.provider)).toEqual(["claude"]);
     expect(summary.sources.map((entry) => entry.fingerprint.provider)).toEqual(["claude"]);
     expect(summary.planLimits?.map((entry) => entry.provider)).toEqual(["anthropic"]);
+    expect(summary.connectedProviders).toEqual(["anthropic"]);
   });
 });

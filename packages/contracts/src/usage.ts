@@ -217,7 +217,7 @@ export const UsageSummary = Schema.Struct({
   /** Live plan windows for connected provider subscriptions. */
   planLimits: Schema.optional(ForwardCompatibleArray(UsageProviderPlanLimits)),
   /** Settings -> Providers connections that may contribute usage. Absent on older servers. */
-  connectedProviders: Schema.optional(Schema.Array(SubscriptionProviderId)),
+  connectedProviders: Schema.optional(ForwardCompatibleArray(SubscriptionProviderId)),
 });
 export type UsageSummary = typeof UsageSummary.Type;
 
