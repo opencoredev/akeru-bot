@@ -2552,17 +2552,28 @@ const handlePhoneScopedWhatsAppWebhook = (
     return Effect.succeed(new Response("Not Found", { status: 404 }));
   if (request.method !== "POST") return handleWhatsAppWebhook(ctx, botId, request);
   return Effect.promise(() => readBoundedWebhookBody(request)).pipe(
-    Effect.flatMap((body) =>
-      body === WEBHOOK_TOO_LARGE
-        ? Effect.succeed(new Response("Payload Too Large", { status: 413 }))
-        : hasMismatchedWhatsAppPhone(parseWebhookJson(body), secret.phoneNumberId)
-          ? Effect.succeed(new Response("Not Found", { status: 404 }))
-          : handleWhatsAppWebhook(
-              ctx,
-              botId,
-              new Request(request.url, { method: request.method, headers: request.headers, body }),
-            ),
-    ),
+    Effect.flatMap((body) => {
+      if (body === WEBHOOK_TOO_LARGE) {
+        return Effect.succeed(new Response("Payload Too Large", { status: 413 }));
+      }
+      const scoped = scopeWhatsAppWebhookToPhone(
+        body,
+        request.headers,
+        secret.appSecret,
+        secret.phoneNumberId,
+      );
+      return scoped === null
+        ? Effect.succeed(new Response("Not Found", { status: 404 }))
+        : handleWhatsAppWebhook(
+            ctx,
+            botId,
+            new Request(request.url, {
+              method: request.method,
+              headers: scoped.headers,
+              body: scoped.body,
+            }),
+          );
+    }),
   );
 };
 
@@ -2588,24 +2599,58 @@ const record = (value: unknown): Readonly<Record<string, unknown>> | null =>
     ? (value as Readonly<Record<string, unknown>>)
     : null;
 
-const hasMismatchedWhatsAppPhone = (payload: unknown, phoneNumberId: string): boolean => {
-  const entries = record(payload)?.entry;
-  if (!Array.isArray(entries)) return false;
-  return entries.some((entry: unknown) => {
+const whatsAppChangePhone = (change: unknown): unknown =>
+  record(record(record(change)?.value)?.metadata)?.phone_number_id;
+
+const whatsAppSignature = (body: Buffer, appSecret: string) =>
+  `sha256=${NodeCrypto.createHmac("sha256", appSecret).update(body).digest("hex")}`;
+
+/**
+ * Keeps a webhook batch to the saved phone number. Meta can batch changes for
+ * several numbers on one app, so changes for other numbers are dropped and the
+ * trimmed body is signed again for the transport. Returns null when nothing in
+ * a signed batch belongs to this number. An unsigned or badly signed body is
+ * passed through untouched so the transport rejects it.
+ */
+const scopeWhatsAppWebhookToPhone = (
+  body: Buffer,
+  headers: Headers,
+  appSecret: string,
+  phoneNumberId: string,
+): { readonly body: Buffer; readonly headers: Headers } | null => {
+  const payload = record(parseWebhookJson(body));
+  const entries = payload?.entry;
+  if (!payload || !Array.isArray(entries)) return { body, headers };
+  const otherPhone = (change: unknown) => {
+    const phone = whatsAppChangePhone(change);
+    return phone !== undefined && phone !== phoneNumberId;
+  };
+  const hasOtherPhone = entries.some((entry: unknown) => {
     const changes = record(entry)?.changes;
-    return (
-      Array.isArray(changes) &&
-      changes.some((change: unknown) => {
-        const value = record(record(change)?.value);
-        const messages = value?.messages;
-        return (
-          Array.isArray(messages) &&
-          messages.length > 0 &&
-          record(value?.metadata)?.phone_number_id !== phoneNumberId
-        );
-      })
-    );
+    return Array.isArray(changes) && changes.some(otherPhone);
   });
+  if (!hasOtherPhone) return { body, headers };
+  const presented = headers.get("x-hub-signature-256") ?? "";
+  const expected = whatsAppSignature(body, appSecret);
+  if (
+    presented.length !== expected.length ||
+    !NodeCrypto.timingSafeEqual(Buffer.from(presented), Buffer.from(expected))
+  ) {
+    return { body, headers };
+  }
+  const scopedEntries = entries.flatMap((entry: unknown) => {
+    const current = record(entry);
+    const changes = current?.changes;
+    if (!current || !Array.isArray(changes)) return [entry];
+    const kept = changes.filter((change: unknown) => !otherPhone(change));
+    return kept.length > 0 ? [{ ...current, changes: kept }] : [];
+  });
+  if (scopedEntries.length === 0) return null;
+  const scopedBody = Buffer.from(JSON.stringify({ ...payload, entry: scopedEntries }), "utf8");
+  const scopedHeaders = new Headers(headers);
+  scopedHeaders.set("x-hub-signature-256", whatsAppSignature(scopedBody, appSecret));
+  scopedHeaders.delete("content-length");
+  return { body: scopedBody, headers: scopedHeaders };
 };
 
 const restoreConnectedChannels = (

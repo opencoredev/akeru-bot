@@ -107,7 +107,6 @@ import { ProjectionThreadMessageRepository } from "../../persistence/Services/Pr
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { makeTestSubscriptionAuthService } from "../../subscription-auth/testUtils/subscriptionAuthService.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   RoutineDraftDispatcher,
   RoutineDraftError,
@@ -4217,13 +4216,13 @@ describe("AgentControllerLive", () => {
       usage.service,
     ).pipe(
       Effect.provideService(
-        ProjectionSnapshotQuery,
-        ProjectionSnapshotQuery.of({
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
           getThreadRuntimeContext: () => Effect.succeed(Option.some({ botId })),
           getBotById: () => Effect.succeed(Option.none()),
           getGroupById: () => Effect.succeed(Option.none()),
           listThreadDelegations: () => Effect.succeed([]),
-        } as unknown as ProjectionSnapshotQuery["Service"]),
+        } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
       ),
     );
   });
