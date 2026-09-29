@@ -79,27 +79,24 @@ export class ComputerCdp {
     const client = new ComputerCdp(socket);
     await new Promise<void>((resolve, reject) => {
       const signal = AbortSignal.timeout(30_000);
-      const abort = () => {
+      const settle = (error: Error | null) => {
+        signal.removeEventListener("abort", onAbort);
+        socket.removeEventListener("open", onOpen);
+        socket.removeEventListener("error", onError);
+        socket.removeEventListener("close", onClose);
+        if (error === null) return resolve();
         client.close();
-        reject(new Error("Graphical browser connection timed out."));
+        reject(error);
       };
-      signal.addEventListener("abort", abort, { once: true });
-      socket.addEventListener(
-        "open",
-        () => {
-          signal.removeEventListener("abort", abort);
-          resolve();
-        },
-        { once: true },
-      );
-      socket.addEventListener(
-        "error",
-        () => {
-          signal.removeEventListener("abort", abort);
-          reject(new Error("Graphical browser connection failed."));
-        },
-        { once: true },
-      );
+      const onAbort = () => settle(new Error("Graphical browser connection timed out."));
+      const onOpen = () => settle(null);
+      const onError = () => settle(new Error("Graphical browser connection failed."));
+      // A handshake can close without an error event; fail fast so callers retry.
+      const onClose = () => settle(new Error("Graphical browser connection closed."));
+      signal.addEventListener("abort", onAbort, { once: true });
+      socket.addEventListener("open", onOpen, { once: true });
+      socket.addEventListener("error", onError, { once: true });
+      socket.addEventListener("close", onClose, { once: true });
     });
     return client;
   }
