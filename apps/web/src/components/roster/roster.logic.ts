@@ -316,30 +316,27 @@ function collectPreviewText(node: MarkdownNode, parts: string[]): void {
  * and line-breaking elements leave a space so their words do not glue.
  */
 function visibleHtmlText(html: string): string {
-  return html
+  const text = html
     .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
     .replace(/<\/?(?:br|p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|pre|hr)\b[^>]*>/gi, " ")
     .replace(/<[^>]*>/g, "")
-    .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, decodeHtmlEntity);
+    .replace(/\s+/g, " ");
+  return text.includes("&") ? decodeHtmlEntities(text) : text;
 }
 
-const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
-
-/** Decodes the entities chat text commonly carries; unknown names stay as written. */
-function decodeHtmlEntity(entity: string, name: string): string {
-  if (name.startsWith("#")) {
-    const hex = name[1] === "x" || name[1] === "X";
-    const code = Number.parseInt(name.slice(hex ? 2 : 1), hex ? 16 : 10);
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
-  }
-  return NAMED_HTML_ENTITIES[name.toLowerCase()] ?? entity;
+/**
+ * Decodes character references the way the rendered chat does. Markdown parsing
+ * knows every named HTML entity, so the text is parsed with all other ASCII
+ * punctuation escaped and its words read back; unknown names stay as written.
+ */
+function decodeHtmlEntities(text: string): string {
+  const escaped = text.trim().replace(/[!-"$-%'-/:<-@[-`{-~]/g, "\\$&");
+  const parts: string[] = [];
+  collectPreviewText(fromMarkdown(escaped), parts);
+  // Keep the edge spaces that separate this HTML from neighbouring text.
+  const lead = text.startsWith(" ") ? " " : "";
+  const trail = text.endsWith(" ") ? " " : "";
+  return `${lead}${parts.join("").trim()}${trail}`;
 }
 
 function isPhrasingNode(node: MarkdownNode): boolean {

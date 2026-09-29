@@ -481,6 +481,9 @@ describe("flattenMarkdownPreview with raw HTML", () => {
     expect(flattenMarkdownPreview("<div>Tom &amp; Jerry &#8217;s &#x1F680; &bogus;</div>")).toBe(
       "Tom & Jerry \u2019s \u{1F680} &bogus;",
     );
+    expect(
+      flattenMarkdownPreview("<div>Copyright &copy; 2026 *not* 1. [x] \\ &hellip;</div>"),
+    ).toBe("Copyright \u00a9 2026 *not* 1. [x] \\ \u2026");
     expect(flattenMarkdownPreview("<div>\nBlock\n</div>\n\nAfter <!-- note -->")).toBe(
       "Block After",
     );
