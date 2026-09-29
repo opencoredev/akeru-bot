@@ -144,6 +144,25 @@ describe("botChatTimeline", () => {
     expect(keys(entries).at(-1)).toBe("delegation:d-lost");
   });
 
+  it("keeps scheduled work without an anchor where it started", () => {
+    const entries = botChatTimeline({
+      messages,
+      delegations: [
+        { ...delegation("d-scheduled", 11, "scheduled-1", null), trigger: "scheduled" },
+      ],
+    });
+
+    expect(keys(entries)).toEqual([
+      "message:user-1",
+      "message:bot-1",
+      "message:user-2",
+      "delegation:d-scheduled",
+      "message:bot-2",
+      "message:user-3",
+      "message:bot-3",
+    ]);
+  });
+
   it("renders cards in an empty chat", () => {
     const entries = botChatTimeline({
       messages: [],

@@ -426,6 +426,8 @@ describe("AkeruDelegationRuntime", () => {
       depth: 1,
       access: { memoryScopes: [], runtimeMode: "approval-required" },
     });
+    // The card keeps its own turn, so the running chat turn cannot move it.
+    expect(test.state.delegations.at(-1)?.parentTurnId).not.toBe(PARENT_TURN_ID);
 
     await runtime.parentFinished({
       threadId: PARENT_THREAD_ID,

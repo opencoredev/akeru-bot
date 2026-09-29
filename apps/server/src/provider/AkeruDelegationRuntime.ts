@@ -895,7 +895,9 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     return send(
       {
         threadId: parentThread.id,
-        turnId: parentThread.latestTurn?.turnId ?? TurnId.make(`scheduled-${id()}`),
+        // Scheduled work belongs to no chat turn, so the chat's current turn neither
+        // moves its card nor cancels it when that turn ends.
+        turnId: TurnId.make(`scheduled-${id()}`),
         botId: owner.id,
         parentDelegationId: null,
         ancestorBotIds: [],

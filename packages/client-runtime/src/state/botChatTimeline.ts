@@ -48,7 +48,8 @@ export interface BotChatTimelineInput<
  * Orders a bot chat for web and mobile. Messages and receipts merge by time.
  * Each work card sits after the turn that started it: after its anchor message
  * and any later reply in that turn. Records without a known anchor fall back to
- * the turn's messages, then to the end of the chat.
+ * the turn's messages, then to the end of the chat. Scheduled work has no turn
+ * of its own in the chat, so without an anchor it sits where it started in time.
  */
 export function botChatTimeline<
   TMessage extends BotChatTimelineMessage,
@@ -67,9 +68,10 @@ export function botChatTimeline<
       entry: { _tag: "Receipt", key: `receipt:${receipt.id}`, receipt } as const,
     })),
   ];
-  const rows = base
-    .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
-    .map(({ entry }) => entry);
+  const sorted = base.toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const rows = sorted.map(({ entry }) => entry);
+  const lastPositionAt = (createdAt: string) =>
+    sorted.findLastIndex((row) => row.createdAt.localeCompare(createdAt) <= 0);
 
   const positionByMessageId = new Map<string, number>();
   const lastPositionByTurnId = new Map<string, number>();
@@ -93,7 +95,12 @@ export function botChatTimeline<
         : positionByMessageId.get(delegation.anchorMessageId);
     const turnEnd = lastPositionByTurnId.get(delegation.parentTurnId);
     const position =
-      anchor !== undefined ? Math.max(anchor, turnEnd ?? anchor) : (turnEnd ?? rows.length - 1);
+      anchor !== undefined
+        ? Math.max(anchor, turnEnd ?? anchor)
+        : (turnEnd ??
+          (delegation.trigger === "scheduled"
+            ? lastPositionAt(delegation.createdAt)
+            : rows.length - 1));
     const card: Entry = {
       _tag: "Delegation",
       key: `delegation:${delegation.delegationId}`,
