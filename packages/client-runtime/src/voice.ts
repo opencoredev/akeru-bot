@@ -221,6 +221,8 @@ function stringField(value: unknown, field: string): string | null {
   return typeof candidate === "string" ? candidate : null;
 }
 
+const VOICE_EVENT_ID_MEMORY = 4_096;
+
 export function handleVoiceChannelMessage(
   raw: string,
   handlers: VoiceCallChatHandlers,
@@ -237,6 +239,10 @@ export function handleVoiceChannelMessage(
   if (eventId !== null) {
     if (state.eventIds.has(eventId)) return;
     state.eventIds.add(eventId);
+    // Replays arrive close to the original, so only recent ids need remembering.
+    if (state.eventIds.size > VOICE_EVENT_ID_MEMORY) {
+      state.eventIds.delete(state.eventIds.values().next().value!);
+    }
   }
   const type = stringField(event, "type");
   const transcript = stringField(event, "transcript")?.trim() ?? "";

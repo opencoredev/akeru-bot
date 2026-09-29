@@ -9,6 +9,7 @@ import {
   correlatedVoiceReply,
   createRealtimeVoiceSession,
   createVoiceCallScope,
+  handleVoiceChannelMessage,
   runComposedVoiceCall,
   runVoiceOperation,
   splitVoiceSynthesisText,
@@ -97,6 +98,22 @@ describe("normalized realtime voice session", () => {
     await Promise.resolve();
     expect(handlers.appendTranscript).toHaveBeenCalledOnce();
     expect(handlers.sendGoalMessage).toHaveBeenCalledOnce();
+  });
+
+  it("remembers only recent event IDs during a long call", () => {
+    const handlers = makeHandlers();
+    const state = { eventIds: new Set<string>(), functionCallIds: new Set<string>() };
+    for (let index = 0; index < 10_000; index++) {
+      handleVoiceChannelMessage(
+        JSON.stringify({ type: "session.updated", event_id: `event-${index}` }),
+        handlers,
+        () => {},
+        state,
+      );
+    }
+    expect(state.eventIds.size).toBe(4_096);
+    expect(state.eventIds.has("event-9999")).toBe(true);
+    expect(state.eventIds.has("event-0")).toBe(false);
   });
 
   it.each(["response.output_audio_transcript.done", "response.audio_transcript.done"])(
