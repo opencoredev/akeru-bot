@@ -246,6 +246,35 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("restores a damaged credential file when its replacement write is interrupted", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { authPath } = yield* authFile;
+      yield* fs.writeFileString(authPath, encodeJson({ xai: currentFormat.xai }));
+      const writing = yield* Deferred.make<void>();
+      const stalledFs = {
+        ...fs,
+        writeFileString: (...args: Parameters<typeof fs.writeFileString>) =>
+          args[0].endsWith(".tmp")
+            ? Deferred.succeed(writing, undefined).pipe(Effect.andThen(Effect.never))
+            : fs.writeFileString(...args),
+      };
+      const store = yield* subscriptionCredentialStore(authPath).pipe(
+        Effect.provideService(FileSystem.FileSystem, stalledFs),
+      );
+      yield* fs.writeFileString(authPath, "{damaged credential file");
+
+      const update = yield* Effect.forkChild(
+        store.update((data) => ({ ...data, anthropic: currentFormat.anthropic })),
+      );
+      yield* Deferred.await(writing);
+      yield* Fiber.interrupt(update);
+
+      assert.strictEqual(yield* fs.readFileString(authPath), "{damaged credential file");
+      assert.isFalse(yield* fs.exists(`${authPath}.corrupt`));
+    }),
+  );
+
   it.effect("writes atomically with owner-only permissions and no temp files left", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

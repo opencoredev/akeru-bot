@@ -317,9 +317,16 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
             return next;
           }
           fingerprint = yield* writeAtomically(next).pipe(
-            Effect.tapError(() =>
+            // Also runs on interruption. Put the damaged file back only while nothing
+            // replaced it, so an interrupted but finished write keeps its new file.
+            Effect.onError(() =>
               loaded.loadError?.reason === "corrupt"
-                ? fs.rename(backupPath, filePath).pipe(Effect.ignore)
+                ? fs.exists(filePath).pipe(
+                    Effect.flatMap((replaced) =>
+                      replaced ? Effect.void : fs.rename(backupPath, filePath),
+                    ),
+                    Effect.ignore,
+                  )
                 : Effect.void,
             ),
           );
