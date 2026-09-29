@@ -520,7 +520,8 @@ export function BotThreadLanding({
                   ) : (
                     (() => {
                       const { message, separator, startsGroup } = item.message.entry;
-                      const startsAfterReceipt = timelineItems[timelineIndex - 1]?._tag === "Receipt";
+                      const startsAfterReceipt =
+                        timelineItems[timelineIndex - 1]?._tag === "Receipt";
                       const messageIndex = item.index;
                       return (
                         <>
