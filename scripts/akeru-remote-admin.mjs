@@ -19,8 +19,11 @@ const userdata = NodePath.join(baseDir, "userdata");
 // T3 Code home can never redirect remote administration.
 const childEnv = { ...process.env, AKERU_HOME: baseDir, T3CODE_HOME: baseDir };
 const version = NodeFS.readFileSync(NodePath.join(artifactRoot, "VERSION"), "utf8").trim();
-const command = process.argv[2] || "help";
-const args = process.argv.slice(3);
+// The Windows launcher forwards its original arguments, including the leading `remote`.
+const argv =
+  process.argv[2]?.toLowerCase() === "remote" ? process.argv.slice(3) : process.argv.slice(2);
+const command = argv[0] || "help";
+const args = argv.slice(1);
 const run = (executable, parameters, options = {}) => {
   const result = NodeChildProcess.spawnSync(executable, parameters, {
     stdio: "inherit",

@@ -79,6 +79,36 @@ describe("Akeru Remote administration", () => {
     expect(run({ T3CODE_HOME: "/legacy/.t3", AKERU_HOME: "/srv/akeru" })).toBe("/srv/akeru");
   });
 
+  it("keeps doctor arguments intact when the Windows launcher forwards `remote`", () => {
+    const root = tempRoot();
+    NodeFS.copyFileSync(
+      new URL("./akeru-remote-admin.mjs", import.meta.url),
+      NodePath.join(root, "remote-admin.mjs"),
+    );
+    NodeFS.writeFileSync(NodePath.join(root, "VERSION"), "1.2.3\n");
+    const probe = NodePath.join(root, "probe.mjs");
+    NodeFS.writeFileSync(probe, "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n");
+    const result = NodeChildProcess.spawnSync(
+      process.execPath,
+      [
+        NodePath.join(root, "remote-admin.mjs"),
+        "remote",
+        "doctor",
+        "--support-bundle",
+        "C:\\My Files\\bundle.json",
+      ],
+      {
+        env: { PATH: process.env.PATH ?? "", HOME: root, AKERU_SERVER_ENTRYPOINT: probe },
+        encoding: "utf8",
+      },
+    );
+    expect(JSON.parse(result.stdout)).toEqual([
+      "__remote-doctor",
+      "--support-bundle",
+      "C:\\My Files\\bundle.json",
+    ]);
+  });
+
   it("pins the release manifest key the Windows updater verifies", () => {
     const pinned = NodeFS.readFileSync(
       new URL("./akeru-release-manifest.pub", import.meta.url),

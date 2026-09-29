@@ -77,15 +77,9 @@ const WINDOWS_LAUNCHER = [
   '"%~dp0node\\node.exe" "%~dp0node_modules\\akeru-bot\\dist\\bin.mjs" %*',
   "exit /b %ERRORLEVEL%",
   ":remote",
-  'set "AKERU_REMOTE_ARGS="',
-  "shift",
-  ":collect",
-  'if "%~1"=="" goto run_remote',
-  "set AKERU_REMOTE_ARGS=%AKERU_REMOTE_ARGS% %1",
-  "shift",
-  "goto collect",
-  ":run_remote",
-  '"%~dp0node\\node.exe" "%~dp0remote-admin.mjs" %AKERU_REMOTE_ARGS%',
+  // `shift` does not change %*, and rebuilding the list with %1 loses quoting, so the helper
+  // receives the original arguments and drops the leading `remote` itself.
+  '"%~dp0node\\node.exe" "%~dp0remote-admin.mjs" %*',
   "exit /b %ERRORLEVEL%",
   "",
 ].join("\r\n");
