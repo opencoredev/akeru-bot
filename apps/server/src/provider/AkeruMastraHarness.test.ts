@@ -1574,6 +1574,8 @@ describe("AkeruMastraHarness", () => {
         release.resolve();
         await closing;
         await observed;
+        // The persisted turn left its observation for the next start.
+        assert.lengthOf(queuedObservations(directory), 1);
         // A turn arriving after close is refused and leaves no callback behind.
         assert.instanceOf(
           await harness.observeExternalTurn!(turn).catch((cause: unknown) => cause),

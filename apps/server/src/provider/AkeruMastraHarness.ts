@@ -1594,15 +1594,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     return drain;
   };
 
-  const enqueueObservationSafely = (
-    id: string,
-    input: AkeruBackgroundObservationInput,
-    resourceId: string,
-    now: string,
-  ) => {
-    // Same admission gate as queued work: once close begins, nothing new is
-    // written to the queue.
-    if (closed) return false;
+  // Writes the durable queue row. Admitted work may call this during close;
+  // everything else goes through the closed gate in observeAfterTurn.
+  const writeObservationRow = (input: AkeruBackgroundObservationInput) => {
+    registerResource(input.threadId);
+    const resourceId = input.resourceId ?? input.threadId;
+    const id = `${input.threadId}:${resourceId}:${input.modelId}:${NodeCrypto.randomUUID()}`;
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
     try {
       enqueueObservation.run(
         id,
@@ -1630,13 +1628,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
-    registerResource(input.threadId);
-    const resourceId = input.resourceId ?? input.threadId;
-    const id = `${input.threadId}:${resourceId}:${input.modelId}:${NodeCrypto.randomUUID()}`;
-    const now = DateTime.formatIso(DateTime.nowUnsafe());
-    if (!enqueueObservationSafely(id, input, resourceId, now)) {
-      return Promise.resolve();
-    }
+    // Same admission gate as queued work: once close begins, nothing new is
+    // written to the queue.
+    if (closed || !writeObservationRow(input)) return Promise.resolve();
     return drainObservationQueue();
   };
 
@@ -1644,15 +1638,19 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     input,
   ) => {
     registerResource(input.threadId);
-    // Persisting the turn is admitted like observation work, so close waits for it
-    // (or interrupts it) before the memory store closes.
-    await queueObservation(input.threadId, input.threadId, () => persistExternalTurn(input));
-    await observeAfterTurn({
-      threadId: input.threadId,
-      resourceId: input.threadId,
-      modelId: input.modelId,
-      turnId: input.turnId,
+    // Persisting the turn and queueing its observation are admitted together,
+    // so close waits for (or interrupts) both before the stores close. A turn
+    // that persisted always leaves a row for the next start to observe.
+    const queued = await queueObservation(input.threadId, input.threadId, async () => {
+      await persistExternalTurn(input);
+      return writeObservationRow({
+        threadId: input.threadId,
+        resourceId: input.threadId,
+        modelId: input.modelId,
+        turnId: input.turnId,
+      });
     });
+    if (queued) await drainObservationQueue();
   };
 
   const persistExternalTurn = async (
