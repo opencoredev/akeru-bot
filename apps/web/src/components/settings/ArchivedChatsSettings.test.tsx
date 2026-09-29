@@ -105,6 +105,34 @@ describe("ArchivedChatsSettingsPanel", () => {
     expect(render()).toContain("Could not load archived chats");
   });
 
+  it("keeps cached chats but reports a failed refresh", () => {
+    mocks.archive = {
+      snapshots: [
+        {
+          environmentId,
+          snapshot: {
+            bots: [],
+            groups: [],
+            threads: [
+              {
+                id: "thread-1",
+                title: "Trip plans",
+                createdAt: "2026-09-01T00:00:00.000Z",
+                updatedAt: "2026-09-20T00:00:00.000Z",
+                archivedAt: "2026-09-20T00:00:00.000Z",
+              },
+            ],
+          } as unknown as OrchestrationShellSnapshot,
+        },
+      ],
+      error: "Failed to load archived chats.",
+      isLoading: false,
+    };
+    const markup = render();
+    expect(markup).toContain("Trip plans");
+    expect(markup).toContain("Could not load archived chats");
+  });
+
   it("lists archived chats under their bot and restores or deletes them", async () => {
     mocks.bots = [{ id: "bot-mori", name: "Mori" } as OrchestrationBot];
     mocks.archive.snapshots = [

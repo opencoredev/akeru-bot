@@ -24,10 +24,16 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
 
-/** Key that sorts before every arranged pinned chat, so a fresh pin leads the run. */
-function topOfPinnedRunOrderKey(): string | undefined {
+/**
+ * Key that sorts before every arranged pinned chat in one environment, so a
+ * fresh pin leads the run. Each server orders only its own pins.
+ */
+function topOfPinnedRunOrderKey(
+  environmentId: ScopedThreadRef["environmentId"],
+): string | undefined {
   let firstKey: string | null = null;
   for (const shell of readThreadShells()) {
+    if (shell.environmentId !== environmentId) continue;
     if (shell.pinnedAt == null || shell.pinOrderKey == null) continue;
     if (firstKey === null || shell.pinOrderKey < firstKey) firstKey = shell.pinOrderKey;
   }
@@ -116,7 +122,7 @@ export function useChatActions() {
         ),
       pin: (threadRef: ScopedThreadRef) => {
         const orderKey = readEnvironmentSupportsPinReorder(threadRef.environmentId)
-          ? topOfPinnedRunOrderKey()
+          ? topOfPinnedRunOrderKey(threadRef.environmentId)
           : undefined;
         return report(t("Could not pin chat"), () =>
           pin({
@@ -184,7 +190,11 @@ export function useChatActions() {
         }
         const shell = readThreadShell(threadRef);
         if (shell?.session && shell.session.status !== "stopped") {
-          await stopSession(input(threadRef));
+          // A session that did not stop would keep running without its chat.
+          const stopped = await report(t("Could not delete chat"), () =>
+            stopSession(input(threadRef)),
+          );
+          if (!stopped) return false;
         }
         const forgetChatPath = chatPathForgetter(threadRef);
         const deleted = await report(t("Could not delete chat"), () => remove(input(threadRef)));

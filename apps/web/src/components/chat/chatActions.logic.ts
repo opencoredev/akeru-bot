@@ -46,7 +46,8 @@ export function resolveChatMenuState(input: {
     snoozedUntil: isSnoozed ? (shell.snoozedUntil ?? null) : null,
     canSettle: canSettle(shell, { now }),
     canSnooze: canSnooze(shell, { now }),
-    canArchive: !(shell.session?.status === "running" && shell.session.activeTurnId != null),
+    // Like settling, archiving waits while a session starts or runs a reply.
+    canArchive: shell.session?.status !== "starting" && shell.session?.status !== "running",
     canMarkUnread:
       shell.latestTurn?.completedAt != null &&
       !hasUnseenCompletion(shell.latestTurn.completedAt, input.lastVisitedAt),

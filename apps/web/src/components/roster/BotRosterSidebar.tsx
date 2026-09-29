@@ -433,6 +433,7 @@ const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
   isActive,
+  chatOpen,
   onSelect,
   onOpenSettings,
   pinned,
@@ -446,6 +447,8 @@ const BotRosterRow = memo(function BotRosterRow({
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
   onOpenSettings: (bot: Bot) => void;
   pinned: boolean;
@@ -466,7 +469,7 @@ const BotRosterRow = memo(function BotRosterRow({
     taskTitle,
     threadRef: chatRef,
   } = useLatestBotMessage(bot.id, lastMessage);
-  const unread = useChatUnread(chatRef) && !isActive;
+  const unread = useChatUnread(chatRef) && !chatOpen;
   return (
     <li
       role="listitem"
@@ -602,13 +605,19 @@ const BotRosterRow = memo(function BotRosterRow({
 function RailBotButton({
   bot,
   isActive,
+  chatOpen,
   onSelect,
 }: {
   bot: Bot;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
 }) {
   const presence = useBotPresence(bot.id);
+  // The collapsed rail marks unread replies like the expanded row does.
+  const { ref: chatRef } = useBotChatTarget(bot.id, useBotThreadCandidate(bot.id));
+  const unread = useChatUnread(chatRef) && !chatOpen;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -619,7 +628,7 @@ function RailBotButton({
             aria-current={isActive || undefined}
             onClick={() => onSelect(bot)}
             className={cn(
-              "flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
             )}
           >
@@ -629,6 +638,11 @@ function RailBotButton({
               className="size-7"
               dotClassName="size-1.5"
             />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
           </button>
         }
       />
@@ -1439,6 +1453,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                     <RailBotButton
                       bot={bot}
                       isActive={!groupRouteActive && selectedBotId === bot.id}
+                      chatOpen={pathname === `/bots/${bot.id}`}
                       onSelect={handleSelect}
                     />
                   </li>
@@ -1501,6 +1516,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                                         bot={bot}
                                         lastMessage={lastMessageByBotId[bot.id] ?? null}
                                         isActive={!groupRouteActive && selectedBotId === bot.id}
+                                        chatOpen={pathname === `/bots/${bot.id}`}
                                         onSelect={handleSelect}
                                         onOpenSettings={handleOpenBotSettings}
                                         pinned={pinned}

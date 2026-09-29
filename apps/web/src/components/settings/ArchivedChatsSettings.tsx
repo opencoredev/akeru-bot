@@ -91,7 +91,15 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
     );
   }
 
-  return sections.map((section, index) => (
+  // A failed refresh keeps the last archive on screen, so say it may be stale.
+  const refreshError = error ? (
+    <div role="alert" className="space-y-0.5 px-1 text-xs text-destructive-foreground">
+      <p className="font-medium">{t("Could not load archived chats")}</p>
+      <p>{t("Check the connection to this environment, then reopen this page.")}</p>
+    </div>
+  ) : null;
+
+  const archiveSections = sections.map((section, index) => (
     <SettingsSection
       key={section.key}
       id={index === 0 ? "archived-chats" : undefined}
@@ -145,4 +153,11 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
       })}
     </SettingsSection>
   ));
+
+  return (
+    <>
+      {refreshError}
+      {archiveSections}
+    </>
+  );
 }

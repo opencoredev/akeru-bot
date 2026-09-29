@@ -340,6 +340,14 @@ export function ChatActionsMenu({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+      // Shortcut recording and open dialogs keep their keystrokes; chat actions
+      // only answer keys pressed in the chat itself.
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-keybinding-capture], [role='dialog'], [role='alertdialog']")
+      ) {
+        return;
+      }
       const command = resolveShortcutCommand(event, keybindings, {
         context: { modelPickerOpen: isModelPickerOpen() },
       });

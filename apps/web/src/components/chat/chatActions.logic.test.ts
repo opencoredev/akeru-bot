@@ -124,6 +124,27 @@ describe("resolveChatMenuState", () => {
     expect(state.canSettle).toBe(false);
   });
 
+  it("blocks archive while a session starts", () => {
+    const state = resolveChatMenuState({
+      shell: shell({
+        session: {
+          threadId: "thread-1",
+          status: "starting",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: NOW,
+        } as OrchestrationThreadShell["session"],
+      }),
+      supports: ALL_SUPPORTED,
+      lastVisitedAt: undefined,
+      now: NOW,
+    });
+
+    expect(state.canArchive).toBe(false);
+  });
+
   it("does not claim settled or snoozed on a server that cannot do either", () => {
     const state = resolveChatMenuState({
       shell: shell({
