@@ -327,9 +327,69 @@ describe("image provider health test", () => {
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
-    expect(chatgpt?.health).toBe("failed-first-request");
+    expect(chatgpt?.health).toBe("revoked");
     expect(chatgpt?.healthTest?.status).toBe("failed");
     expect(chatgpt?.lastFailure?.message).toContain("401");
+  });
+
+  it("keeps image request health separate from an account probe failure", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "xai");
+    const service = new SubscriptionAuthService(authPath);
+    await runImageProviderHealthTest({
+      provider: "grok",
+      subscriptionAuth: service,
+      fetchFn: async () => new Response("unavailable", { status: 503 }),
+    });
+
+    const grok = rows(service, { ...baseSettings, grokEnabled: true }).find(
+      (row) => row.provider === "grok",
+    );
+    expect(grok?.health).toBe("detected");
+    expect(grok?.healthTest?.status).toBe("failed");
+    expect(grok?.lastFailure?.message).toContain("503");
+  });
+
+  it("shows the latest successful account probe after a failed probe", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "xai");
+    const service = new SubscriptionAuthService(authPath);
+    await runImageProviderHealthTest({
+      provider: "grok",
+      subscriptionAuth: service,
+      fetchFn: async () => new Response("unavailable", { status: 503 }),
+    });
+    await runImageProviderHealthTest({
+      provider: "grok",
+      subscriptionAuth: service,
+      fetchFn: async () => new Response("{}", { status: 200 }),
+    });
+
+    const reloaded = new SubscriptionAuthService(authPath);
+    const grok = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
+      (row) => row.provider === "grok",
+    );
+    expect(grok?.health).toBe("detected");
+    expect(grok?.healthTest?.status).toBe("passed");
+    expect(grok?.lastFailure).toBeUndefined();
+  });
+
+  it("does not let an older image request failure override a successful account probe", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "xai");
+    const service = new SubscriptionAuthService(authPath);
+    service.recordImageRequestFailure("grok", "image request failed", "2020-01-01T00:00:00.000Z");
+    await runImageProviderHealthTest({
+      provider: "grok",
+      subscriptionAuth: service,
+      fetchFn: async () => new Response("{}", { status: 200 }),
+    });
+
+    const grok = rows(service, { ...baseSettings, grokEnabled: true }).find(
+      (row) => row.provider === "grok",
+    );
+    expect(grok?.health).toBe("failed-first-request");
+    expect(grok?.healthTest?.status).toBe("passed");
   });
 
   it("records the real refresh failure (not 'not connected') when refresh rejects", async () => {
@@ -356,7 +416,7 @@ describe("image provider health test", () => {
       (row) => row.provider === "grok",
     );
     expect(grok?.connected).toBe(true);
-    expect(grok?.health).toBe("failed-first-request");
+    expect(grok?.health).toBe("revoked");
     expect(grok?.healthTest?.status).toBe("failed");
     expect(grok?.lastFailure?.message).toContain("reconnected");
     expect(grok?.lastFailure?.message).not.toContain("No Grok subscription is connected");
@@ -380,7 +440,7 @@ describe("image provider health test", () => {
     const grok = rows(service, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
-    expect(grok?.health).toBe("failed-first-request");
+    expect(grok?.health).toBe("revoked");
     expect(grok?.healthTest?.status).toBe("failed");
     expect(grok?.lastFailure?.message).toContain("revoked");
 
@@ -389,7 +449,7 @@ describe("image provider health test", () => {
     const reloadedRow = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
-    expect(reloadedRow?.health).toBe("failed-first-request");
+    expect(reloadedRow?.health).toBe("revoked");
   });
 
   it("redacts the access token when fetch throws an error containing it", async () => {
@@ -405,7 +465,7 @@ describe("image provider health test", () => {
     const grok = rows(reloaded, { ...baseSettings, grokEnabled: true }).find(
       (row) => row.provider === "grok",
     );
-    expect(grok?.health).toBe("failed-first-request");
+    expect(grok?.health).toBe("detected");
     expect(grok?.lastFailure?.message).toContain("[redacted]");
     expect(grok?.lastFailure?.message).not.toContain("super-secret-xai-token");
     expect(NodeFS.readFileSync(`${authPath}.health`, "utf-8")).not.toContain(

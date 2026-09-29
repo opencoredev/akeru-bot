@@ -71,6 +71,7 @@ function rowHealth(input: {
 }): ImageProviderStatus["health"] {
   if (!input.connected) return "missing";
   if (!input.enabled) return "disabled";
+  if (input.requestHealth?.lastCredentialProbeFailure?.failureKind === "revoked") return "revoked";
   return input.requestHealth?.health ?? "detected";
 }
 
@@ -92,11 +93,15 @@ export function imageProviderStatuses(input: {
       provider === "chatgpt" ? input.settings.chatgptEnabled : input.settings.grokEnabled;
     const requestHealth = input.requestHealth(provider);
     const health = rowHealth({ connected, enabled, requestHealth });
+    const healthTest = requestHealth?.healthTest;
+    const probeFailure = requestHealth?.lastCredentialProbeFailure;
     const repairAction = !connected
       ? `Connect ${meta.label} subscription`
       : health === "revoked" || health === "expired"
         ? `Reconnect ${meta.label} subscription`
-        : health === "failed" || health === "failed-first-request"
+        : health === "failed" ||
+            health === "failed-first-request" ||
+            healthTest?.status === "failed"
           ? "Run health test"
           : undefined;
     return {
@@ -106,10 +111,15 @@ export function imageProviderStatuses(input: {
       enabled,
       health,
       operations: ["generate"],
-      ...(requestHealth?.lastFailedRequest ? { lastFailure: requestHealth.lastFailedRequest } : {}),
+      ...(probeFailure && healthTest?.status === "failed"
+        ? { lastFailure: { at: probeFailure.at, message: probeFailure.message } }
+        : requestHealth?.lastFailedRequest
+          ? { lastFailure: requestHealth.lastFailedRequest }
+          : {}),
       ...(repairAction ? { repairAction } : {}),
       healthTest:
-        requestHealth?.lastFailedRequest &&
+        healthTest ??
+        (requestHealth?.lastFailedRequest &&
         (!requestHealth.lastSuccessfulRequestAt ||
           requestHealth.lastFailedRequest.at >= requestHealth.lastSuccessfulRequestAt)
           ? { status: "failed" as const, checkedAt: requestHealth.lastFailedRequest.at }
@@ -117,7 +127,7 @@ export function imageProviderStatuses(input: {
             ? { status: "passed" as const, checkedAt: requestHealth.lastCredentialProbeAt }
             : requestHealth?.lastSuccessfulRequestAt
               ? { status: "passed" as const, checkedAt: requestHealth.lastSuccessfulRequestAt }
-              : { status: "not-run" as const },
+              : { status: "not-run" as const }),
     };
   });
 }
@@ -206,7 +216,7 @@ export async function runImageProviderHealthTest(input: {
     token = await subscriptionAuth.getAccessToken(meta.subscription);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    subscriptionAuth.recordImageRequestFailure(
+    subscriptionAuth.recordImageCredentialProbeFailure(
       provider,
       `The ${meta.label} subscription could not be used: ${message}`,
       undefined,
@@ -223,7 +233,7 @@ export async function runImageProviderHealthTest(input: {
       .find((status) => status.provider === meta.subscription);
     if (connected && subscriptionStatus?.lastFailedRequest) {
       const revoked = subscriptionStatus.health === "revoked";
-      subscriptionAuth.recordImageRequestFailure(
+      subscriptionAuth.recordImageCredentialProbeFailure(
         provider,
         revoked
           ? `The ${meta.label} subscription needs to be reconnected: ${subscriptionStatus.lastFailedRequest.message}`
@@ -233,7 +243,7 @@ export async function runImageProviderHealthTest(input: {
       );
       return;
     }
-    subscriptionAuth.recordImageRequestFailure(
+    subscriptionAuth.recordImageCredentialProbeFailure(
       provider,
       `No ${meta.label} subscription is connected.`,
       undefined,
@@ -249,7 +259,7 @@ export async function runImageProviderHealthTest(input: {
   if (provider === "chatgpt") {
     const access = await subscriptionAuth.getOpenAICodexAccess().catch(() => undefined);
     if (!access) {
-      subscriptionAuth.recordImageRequestFailure(
+      subscriptionAuth.recordImageCredentialProbeFailure(
         provider,
         "ChatGPT images need a ChatGPT account sign-in; an OpenAI API key is not used.",
       );
@@ -266,7 +276,7 @@ export async function runImageProviderHealthTest(input: {
       headers,
     });
     if (!response.ok) {
-      subscriptionAuth.recordImageRequestFailure(
+      subscriptionAuth.recordImageCredentialProbeFailure(
         provider,
         `${meta.label} image health check was rejected (${response.status}).`,
         undefined,
@@ -276,7 +286,7 @@ export async function runImageProviderHealthTest(input: {
     }
     subscriptionAuth.recordImageCredentialProbeSuccess(provider);
   } catch (cause) {
-    subscriptionAuth.recordImageRequestFailure(
+    subscriptionAuth.recordImageCredentialProbeFailure(
       provider,
       cause instanceof Error
         ? `The ${meta.label} image health check failed: ${cause.message}`

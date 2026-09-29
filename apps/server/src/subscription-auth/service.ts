@@ -135,6 +135,11 @@ export interface ProviderStatus {
 interface ProviderHealthRecord {
   lastSuccessfulRequestAt?: string;
   lastCredentialProbeAt?: string;
+  lastCredentialProbeFailure?: {
+    at: string;
+    message: string;
+    failureKind: "request" | "revoked";
+  };
   lastFailedRequest?: { at: string; message: string };
   nextRetryAt?: string;
   healthTest?: { status: "passed" | "failed"; checkedAt: string };
@@ -152,6 +157,8 @@ export interface RequestHealthStatus {
 type ImageRequestHealthStatus = Omit<RequestHealthStatus, "health"> & {
   readonly health: RequestHealthStatus["health"] | "detected";
   readonly lastCredentialProbeAt?: string;
+  readonly lastCredentialProbeFailure?: ProviderHealthRecord["lastCredentialProbeFailure"];
+  readonly healthTest?: ProviderHealthRecord["healthTest"];
 };
 
 type ProviderHealthData = Record<string, ProviderHealthRecord | undefined>;
@@ -338,7 +345,11 @@ export class SubscriptionAuthService {
   private recordHealthSuccess(key: string, at: string): void {
     this.reloadHealth();
     const previous = this.health[key];
-    const { nextRetryAt: _nextRetryAt, ...rest } = previous ?? {};
+    const {
+      nextRetryAt: _nextRetryAt,
+      lastCredentialProbeFailure: _probeFailure,
+      ...rest
+    } = previous ?? {};
     this.health[key] = {
       ...rest,
       lastSuccessfulRequestAt: at,
@@ -382,7 +393,32 @@ export class SubscriptionAuthService {
   ): void {
     this.reloadHealth();
     const key = `image:${provider}`;
-    this.health[key] = { ...this.health[key], lastCredentialProbeAt: at };
+    const { lastCredentialProbeFailure: _failure, ...previous } = this.health[key] ?? {};
+    this.health[key] = {
+      ...previous,
+      lastCredentialProbeAt: at,
+      healthTest: { status: "passed", checkedAt: at },
+    };
+    this.saveHealth();
+  }
+
+  recordImageCredentialProbeFailure(
+    provider: "chatgpt" | "grok",
+    message: string,
+    at = new Date().toISOString(),
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    message = this.redactHealthMessage(message);
+    const key = `image:${provider}`;
+    this.health[key] = {
+      ...this.health[key],
+      lastCredentialProbeFailure: {
+        at,
+        message,
+        failureKind,
+      },
+      healthTest: { status: "failed", checkedAt: at },
+    };
     this.saveHealth();
   }
 
@@ -399,20 +435,22 @@ export class SubscriptionAuthService {
   imageRequestHealth(provider: "chatgpt" | "grok"): ImageRequestHealthStatus | undefined {
     const key = `image:${provider}`;
     const requestHealth = this.requestHealth(key);
-    const lastCredentialProbeAt = this.health[key]?.lastCredentialProbeAt;
-    if (requestHealth)
-      return { ...requestHealth, ...(lastCredentialProbeAt ? { lastCredentialProbeAt } : {}) };
-    return lastCredentialProbeAt ? { health: "detected", lastCredentialProbeAt } : undefined;
+    const record = this.health[key];
+    if (!record) return requestHealth;
+    return {
+      ...(requestHealth ?? { health: "detected" }),
+      ...(record.lastCredentialProbeAt
+        ? { lastCredentialProbeAt: record.lastCredentialProbeAt }
+        : {}),
+      ...(record.lastCredentialProbeFailure
+        ? { lastCredentialProbeFailure: record.lastCredentialProbeFailure }
+        : {}),
+      ...(record.healthTest ? { healthTest: record.healthTest } : {}),
+    };
   }
 
-  private recordHealthFailure(
-    key: string,
-    message: string,
-    at: string,
-    failureKind: "request" | "revoked",
-  ): void {
+  private redactHealthMessage(message: string): string {
     this.reload();
-    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
     for (const credential of Object.values(this.data)) {
       for (const secret of [
         credential.access,
@@ -421,6 +459,17 @@ export class SubscriptionAuthService {
         if (secret) message = message.replaceAll(secret, "[redacted]");
       }
     }
+    return message;
+  }
+
+  private recordHealthFailure(
+    key: string,
+    message: string,
+    at: string,
+    failureKind: "request" | "revoked",
+  ): void {
+    message = this.redactHealthMessage(message);
+    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
     this.health[key] = {
       ...previous,
       lastFailedRequest: { at, message },
