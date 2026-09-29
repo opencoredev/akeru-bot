@@ -1329,6 +1329,11 @@ export async function createAkeruMastraHarness(
             releaseQueuedObservation.run(item.attempts, now, item.id, claim);
             return;
           }
+          // A row past the drop threshold is waiting only on its drop notice,
+          // so retry the notice instead of observing again.
+          if (item.attempts >= OBSERVATION_DROP_ATTEMPTS) {
+            throw new Error("The observation failed repeatedly and was dropped.");
+          }
           leaseRenewal = Effect.runFork(
             Effect.forever(
               Effect.sleep(Duration.millis(OBSERVATION_CLAIM_LEASE_MS / 3)).pipe(

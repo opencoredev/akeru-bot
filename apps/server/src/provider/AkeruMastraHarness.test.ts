@@ -974,6 +974,96 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("retries only the drop notice once an observation has been dropped", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-notice-only-"));
+    let observeFails = true;
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async () => {
+        if (observeFails) throw new Error("observer down");
+        return { observed: false, reflected: false, record: {} } as never;
+      });
+    const warn = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const notices: number[] = [];
+    let noticeFails = true;
+    const harness = await makeObservationHarness(directory, {
+      onObservationDropped: (input) => {
+        notices.push(input.attempts);
+        if (noticeFails) throw new Error("orchestration unavailable");
+      },
+    });
+    const queuePath = NodePath.join(directory, "observational-memory.sqlite.queue.sqlite");
+    const makeEligible = () => {
+      const db = new NodeSqlite.DatabaseSync(queuePath);
+      db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+        "2000-01-01T00:00:00.000Z",
+      );
+      db.close();
+    };
+    try {
+      const input = { threadId: "thread-notice-only", modelId: "openai/gpt-5.6-sol" };
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await (attempt === 0 ? harness.observeAfterTurn!(input) : harness.drainObservationQueue!());
+        makeEligible();
+      }
+      assert.deepEqual(notices, [3]);
+      expect(observe).toHaveBeenCalledTimes(3);
+
+      // The observer recovers, but the dropped row must deliver its notice
+      // rather than observe again and disappear silently.
+      observeFails = false;
+      noticeFails = false;
+      await harness.drainObservationQueue!();
+      expect(observe).toHaveBeenCalledTimes(3);
+      assert.deepEqual(notices, [3, 4]);
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      warn.mockRestore();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("drains an abandoned claim when its lease expires without another turn", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-lease-"));
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockResolvedValue({ observed: false, reflected: false, record: {} } as never);
+    // Create the queue store, then leave a row claimed by a process that died
+    // one minute into its five-minute lease.
+    await (await makeObservationHarness(directory)).destroy();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const db = new NodeSqlite.DatabaseSync(
+      NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+    );
+    db.prepare(
+      `INSERT INTO akeru_observation_queue
+         (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at, next_attempt_at, created_at)
+       VALUES ('abandoned', 'thread-lease', 'resource-lease', 'openai/gpt-5.6-sol', NULL, 0, ?, ?, ?)`,
+    ).run(
+      DateTime.formatIso(DateTime.subtractDuration(DateTime.nowUnsafe(), "1 minute")),
+      "2000-01-01T00:00:00.000Z",
+      "2000-01-01T00:00:00.000Z",
+    );
+    db.close();
+    const harness = await makeObservationHarness(directory);
+    try {
+      await harness.drainObservationQueue!();
+      expect(observe).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+      await vi.waitFor(() => expect(observe).toHaveBeenCalledTimes(1));
+      await harness.drainObservationQueue!();
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      vi.useRealTimers();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("lets a later row drain ahead of a backed-off failure", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-hol-"));
     const calls: string[] = [];
