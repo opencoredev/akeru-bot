@@ -77,28 +77,6 @@ export function nextVoiceKeyRejected(previous: boolean, failure: unknown): boole
   return voiceKeyWasRejected(failure) || previous;
 }
 
-// Test verdicts per environment and provider, kept for the page lifetime so
-// reopening Voice settings or switching environments shows the right one.
-const voiceKeyVerdicts = new Map<string, boolean>();
-const voiceKeyVerdictKey = (environmentId: string, provider: string) =>
-  `${environmentId}\u0000${provider}`;
-
-export function rememberedVoiceKeyRejected(environmentId: string, provider: string): boolean {
-  return voiceKeyVerdicts.get(voiceKeyVerdictKey(environmentId, provider)) ?? false;
-}
-
-/** Records the outcome of a key operation and returns the new rejected verdict. */
-export function recordVoiceKeyOutcome(
-  environmentId: string,
-  provider: string,
-  failure: unknown,
-): boolean {
-  const key = voiceKeyVerdictKey(environmentId, provider);
-  const next = nextVoiceKeyRejected(voiceKeyVerdicts.get(key) ?? false, failure);
-  voiceKeyVerdicts.set(key, next);
-  return next;
-}
-
 /** Explains why a call cannot start with these settings, or null when it can. */
 export function voiceSetupProblem(
   settings: VoiceSettings,

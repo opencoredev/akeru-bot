@@ -5,8 +5,6 @@ import {
   VOICE_SYNTHESIS_PROVIDERS,
   VOICE_TRANSCRIPTION_PROVIDERS,
   nextVoiceKeyRejected,
-  recordVoiceKeyOutcome,
-  rememberedVoiceKeyRejected,
   selectedSynthesisVoice,
   voiceCapabilityLabel,
   voiceSetupProblem,
@@ -69,15 +67,5 @@ describe("voice settings logic", () => {
     expect(nextVoiceKeyRejected(false, network)).toBe(false);
     // Saving a replacement key, a passing test, or disconnecting all succeed.
     expect(nextVoiceKeyRejected(rejected, null)).toBe(false);
-  });
-
-  it("remembers a rejected key per environment until a later success", () => {
-    const auth = new VoiceCallError({ reason: "provider-auth", message: "rejected" });
-    expect(recordVoiceKeyOutcome("env-a", "openai", auth)).toBe(true);
-    // Reopening Settings reads the same verdict; another environment has its own.
-    expect(rememberedVoiceKeyRejected("env-a", "openai")).toBe(true);
-    expect(rememberedVoiceKeyRejected("env-b", "openai")).toBe(false);
-    expect(recordVoiceKeyOutcome("env-a", "openai", null)).toBe(false);
-    expect(rememberedVoiceKeyRejected("env-a", "openai")).toBe(false);
   });
 });

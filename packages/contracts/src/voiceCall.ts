@@ -129,6 +129,8 @@ export const VoiceConnectInput = Schema.Struct({
 export const VoiceProviderStatus = Schema.Struct({
   provider: VoiceApiProvider,
   connected: Schema.Boolean,
+  /** The provider refused the saved key on its last Test. Cleared when the key changes. */
+  keyRejected: Schema.optionalKey(Schema.Boolean),
 });
 export const VoiceProvidersResult = Schema.Struct({ providers: Schema.Array(VoiceProviderStatus) });
 export const VoiceListVoicesInput = Schema.Struct({

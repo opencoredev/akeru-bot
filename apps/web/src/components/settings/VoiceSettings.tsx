@@ -42,8 +42,7 @@ import {
   VOICE_MODE_LABELS,
   VOICE_SYNTHESIS_PROVIDERS,
   VOICE_TRANSCRIPTION_PROVIDERS,
-  recordVoiceKeyOutcome,
-  rememberedVoiceKeyRejected,
+  nextVoiceKeyRejected,
   voiceKeyWasRejected,
   selectedSynthesisVoice,
   voiceCapabilityLabel,
@@ -91,6 +90,18 @@ export function VoiceSettingsPanel() {
         : null,
     [providersQuery.data],
   );
+  // The server keeps each saved key's last Test verdict, so every client agrees.
+  const serverRejected = useMemo(
+    () =>
+      providersQuery.data
+        ? Object.fromEntries(
+            providersQuery.data.providers.flatMap((status) =>
+              status.keyRejected === undefined ? [] : [[status.provider, status.keyRejected]],
+            ),
+          )
+        : {},
+    [providersQuery.data],
+  );
 
   return (
     <SettingsPageContainer>
@@ -132,6 +143,7 @@ export function VoiceSettingsPanel() {
           key={environmentId}
           environmentId={environmentId}
           connected={connected}
+          serverRejected={serverRejected}
           loadError={providersQuery.error}
           onChanged={providersQuery.refresh}
           onKeySaved={() => setKeyRevision((revision) => revision + 1)}
@@ -453,12 +465,14 @@ type ProviderMessage = { readonly tone: "error" | "ok"; readonly text: string };
 function VoiceApiConnectionsSection({
   environmentId,
   connected,
+  serverRejected,
   loadError,
   onChanged,
   onKeySaved,
 }: {
   readonly environmentId: EnvironmentId;
   readonly connected: ReadonlyArray<VoiceApiProvider> | null;
+  readonly serverRejected: Partial<Record<VoiceApiProvider, boolean>>;
   readonly loadError: string | null;
   readonly onChanged: () => void;
   readonly onKeySaved: () => void;
@@ -471,15 +485,17 @@ function VoiceApiConnectionsSection({
   const test = useAtomCommand(serverEnvironment.testVoiceProvider, { reportFailure: false });
   const [busy, setBusy] = useState<{ provider: VoiceApiProvider; action: string } | null>(null);
   const [messages, setMessages] = useState<Partial<Record<VoiceApiProvider, ProviderMessage>>>({});
-  // The last Test verdict per saved key. Saving or removing a key clears it.
-  const [rejected, setRejected] = useState<Partial<Record<VoiceApiProvider, boolean>>>(() =>
-    Object.fromEntries(
-      VOICE_API_PROVIDERS.map((provider) => [
-        provider,
-        rememberedVoiceKeyRejected(environmentId, provider),
-      ]),
-    ),
-  );
+  // This client's latest verdicts, shown until the next provider status arrives.
+  // Servers that do not report a verdict keep using them.
+  const [local, setLocal] = useState<{
+    readonly basis: Partial<Record<VoiceApiProvider, boolean>>;
+    readonly rejected: Partial<Record<VoiceApiProvider, boolean>>;
+  }>({ basis: serverRejected, rejected: {} });
+  const rejectedFor = (provider: VoiceApiProvider) =>
+    (local.basis === serverRejected ? local.rejected[provider] : undefined) ??
+    serverRejected[provider] ??
+    local.rejected[provider] ??
+    false;
 
   const run = async (
     provider: VoiceApiProvider,
@@ -494,8 +510,11 @@ function VoiceApiConnectionsSection({
     const ok = result._tag === "Success";
     const failure = result._tag === "Failure" ? squashAtomCommandFailure(result) : null;
     const keyRejected = failure !== null && voiceKeyWasRejected(failure);
-    const nextRejected = recordVoiceKeyOutcome(environmentId, provider, failure);
-    setRejected((current) => ({ ...current, [provider]: nextRejected }));
+    const nextRejected = nextVoiceKeyRejected(rejectedFor(provider), failure);
+    setLocal((current) => ({
+      basis: serverRejected,
+      rejected: { ...current.rejected, [provider]: nextRejected },
+    }));
     setMessages((current) => ({
       ...current,
       [provider]: ok
@@ -528,7 +547,7 @@ function VoiceApiConnectionsSection({
           key={provider}
           provider={provider}
           connected={connected === null ? undefined : connected.includes(provider)}
-          keyRejected={rejected[provider] ?? false}
+          keyRejected={rejectedFor(provider)}
           busyAction={busy?.provider === provider ? busy.action : null}
           disabled={busy !== null}
           message={messages[provider] ?? null}

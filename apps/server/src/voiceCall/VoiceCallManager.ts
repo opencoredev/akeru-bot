@@ -217,7 +217,13 @@ export class VoiceCallManager extends Context.Service<
   {
     readonly get: Effect.Effect<VoiceCallSnapshot>;
     readonly providers: Effect.Effect<
-      { providers: ReadonlyArray<{ provider: VoiceApiProvider; connected: boolean }> },
+      {
+        providers: ReadonlyArray<{
+          provider: VoiceApiProvider;
+          connected: boolean;
+          keyRejected: boolean;
+        }>;
+      },
       VoiceCallError
     >;
     readonly connect: (
@@ -331,17 +337,24 @@ const make = (options?: VoiceCallManagerOptions) =>
           return { provider, connected: false };
         }),
       );
+    // Digest of the saved key each provider rejected on its last Test, so every
+    // client sees the same verdict and a replaced key starts without one.
+    const rejectedKeys = new Map<VoiceApiProvider, string>();
+    const keyDigest = (key: Uint8Array | string) =>
+      NodeCrypto.createHash("sha256").update(key).digest("hex");
     const providers = Effect.gen(function* () {
       const result = [];
       for (const provider of VOICE_API_PROVIDERS) {
-        const connected =
-          Option.isSome(secrets) &&
-          Option.isSome(
-            yield* secrets.value
+        const key = Option.isSome(secrets)
+          ? yield* secrets.value
               .get(secretName(provider))
-              .pipe(Effect.mapError(() => voiceFailure("provider-unavailable"))),
-          );
-        result.push({ provider, connected });
+              .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")))
+          : Option.none();
+        result.push({
+          provider,
+          connected: Option.isSome(key),
+          keyRejected: Option.isSome(key) && rejectedKeys.get(provider) === keyDigest(key.value),
+        });
       }
       return { providers: result };
     });
@@ -350,8 +363,15 @@ const make = (options?: VoiceCallManagerOptions) =>
       yield* Effect.tryPromise({
         try: (signal) => adapters.test(provider, key, signal),
         catch: (cause) => classifyVoiceFailure(cause),
-      });
-      return { provider, connected: true };
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            if (error.reason === "provider-auth") rejectedKeys.set(provider, keyDigest(key));
+          }),
+        ),
+      );
+      rejectedKeys.delete(provider);
+      return { provider, connected: true, keyRejected: false };
     });
     const listVoices = Effect.fn("VoiceCallManager.listVoices")(function* (
       provider: VoiceApiProvider,

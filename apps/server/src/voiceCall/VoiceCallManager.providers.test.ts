@@ -125,17 +125,17 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
     assert.deepEqual(used, ["openai:original:alloy"]);
     assert.deepEqual(yield* manager.providers, {
       providers: [
-        { provider: "openai", connected: true },
-        { provider: "elevenlabs", connected: false },
-        { provider: "cartesia", connected: false },
-        { provider: "fish", connected: true },
+        { provider: "openai", connected: true, keyRejected: false },
+        { provider: "elevenlabs", connected: false, keyRejected: false },
+        { provider: "cartesia", connected: false, keyRejected: false },
+        { provider: "fish", connected: true, keyRejected: false },
       ],
     });
     yield* manager.hangup(started.call.callId, "owner");
     yield* manager.disconnect("openai");
     assert.deepEqual(
       (yield* manager.providers).providers.find((p) => p.provider === "openai"),
-      { provider: "openai", connected: false },
+      { provider: "openai", connected: false, keyRejected: false },
     );
   }).pipe(
     Effect.provide(
@@ -348,6 +348,11 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
     const test = yield* Effect.result(manager.test("elevenlabs"));
     assert.equal(test._tag, "Failure");
     if (test._tag === "Failure") assert.equal(test.failure.reason, "provider-auth");
+    const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
+      providers.find((status) => status.provider === "elevenlabs"),
+    );
+    // Every client reads the rejection from the server until the key changes.
+    assert.isTrue((yield* elevenlabs)?.keyRejected);
     const listed = yield* Effect.result(manager.listVoices("elevenlabs"));
     assert.equal(listed._tag, "Failure");
     if (listed._tag === "Failure") assert.equal(listed.failure.reason, "provider-quota");
@@ -369,6 +374,9 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
       "validate:elevenlabs:rejected-key",
       "validate:elevenlabs:rejected-key",
     ]);
+    // A replacement saved from any client clears the old key's rejection.
+    yield* manager.connect("elevenlabs", "replacement-key");
+    assert.isFalse((yield* elevenlabs)?.keyRejected);
   }).pipe(
     Effect.provide(
       makeTest(
