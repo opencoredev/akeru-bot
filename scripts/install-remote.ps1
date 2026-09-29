@@ -29,6 +29,7 @@ if (-not $PrepareOnly -and -not $IsAdministrator) {
   if ($NoTailscale) { $Forward += "-NoTailscale" }
   if ($NoAutoUpdate) { $Forward += "-NoAutoUpdate" }
   if ($MigrateEnvironmentId) { $Forward += "-MigrateEnvironmentId" }
+  if ($ExpectedSha256) { $Forward += @("-ExpectedSha256", $ExpectedSha256) }
   $process = Start-Process powershell.exe -Verb RunAs -ArgumentList $Forward -Wait -PassThru
   exit $process.ExitCode
 }

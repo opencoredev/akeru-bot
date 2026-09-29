@@ -35,6 +35,13 @@ describe("Windows remote installer", () => {
     expect(script).toContain("-LogonType S4U");
   });
 
+  it("keeps the signed checksum when it relaunches for administrator access", () => {
+    expect(script).toContain('$Forward += @("-ExpectedSha256", $ExpectedSha256)');
+    expect(script.indexOf('$Forward += @("-ExpectedSha256"')).toBeLessThan(
+      script.indexOf("Start-Process powershell.exe -Verb RunAs"),
+    );
+  });
+
   it("reports the launcher's exit code so Task Scheduler restarts a failed service", () => {
     expect(script).toContain('($TaskEnvironment + $ServiceCommand + "exit `$LASTEXITCODE")');
   });
