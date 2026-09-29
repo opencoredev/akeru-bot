@@ -570,6 +570,12 @@ describe("shouldTitlePlaceholderChat", () => {
     expect(shouldTitlePlaceholderChat("new", undefined, "new")).toBe(true);
     expect(shouldTitlePlaceholderChat("other", undefined, "new")).toBe(false);
   });
+
+  it("keeps the first title when a second send runs before the shell updates", () => {
+    expect(shouldTitlePlaceholderChat("new", "New chat", null, "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", undefined, "new", "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", "New chat", null, "older")).toBe(true);
+  });
 });
 
 describe("opening an older bot chat", () => {

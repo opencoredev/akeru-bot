@@ -204,6 +204,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const pendingNewChatRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   // The chat New chat created with a placeholder title, until a send titles it.
   const placeholderChatIdRef = useRef<string | null>(null);
+  // The chat whose first send already requested its title, so a quick second send keeps it.
+  const titledChatIdRef = useRef<string | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
@@ -485,15 +487,23 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               currentThreadRef.threadId,
               shellTitle,
               placeholderChatIdRef.current,
+              titledChatIdRef.current,
             )
           ) {
-            if (placeholderChatIdRef.current === currentThreadRef.threadId) {
+            const titledChatId = currentThreadRef.threadId;
+            if (placeholderChatIdRef.current === titledChatId) {
               placeholderChatIdRef.current = null;
             }
-            // Best effort: the turn already started, so a failed rename only keeps the placeholder.
+            titledChatIdRef.current = titledChatId;
+            // Best effort: the turn already started, so a failed rename only keeps the
+            // placeholder, and the next send may try again.
             void updateMetadata({
               environmentId: currentThreadRef.environmentId,
-              input: { threadId: currentThreadRef.threadId, title },
+              input: { threadId: titledChatId, title },
+            }).then((result) => {
+              if (result._tag === "Failure" && titledChatIdRef.current === titledChatId) {
+                titledChatIdRef.current = null;
+              }
             });
           }
 

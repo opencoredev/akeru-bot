@@ -385,12 +385,17 @@ export function preferRetainedChatTarget(
   return target;
 }
 
-/** Whether a send into this chat should replace its New chat placeholder title. */
+/**
+ * Whether a send into this chat should replace its New chat placeholder title.
+ * `titledChatId` is the chat whose title a previous send already requested.
+ */
 export function shouldTitlePlaceholderChat(
   threadId: string,
   shellTitle: string | undefined,
   createdPlaceholderId: string | null,
+  titledChatId: string | null = null,
 ): boolean {
+  if (titledChatId === threadId) return false;
   return shellTitle === undefined
     ? createdPlaceholderId === threadId
     : shellTitle === PLACEHOLDER_THREAD_TITLE;
