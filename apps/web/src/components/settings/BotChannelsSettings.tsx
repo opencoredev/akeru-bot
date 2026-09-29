@@ -167,6 +167,9 @@ export function channelState(
   if (states.some((state) => state.tone === "attention")) {
     return { tone: "attention", label: t("Needs attention") };
   }
+  if (states.some((state) => state.tone === "pending")) {
+    return { tone: "pending", label: t("Connecting…") };
+  }
   return {
     tone: states.some((state) => state.tone === "positive") ? "positive" : "neutral",
     label: plural(own.length, { one: "{count} connection", other: "{count} connections" }),

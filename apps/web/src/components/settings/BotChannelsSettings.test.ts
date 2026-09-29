@@ -12,6 +12,7 @@ import {
 import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
 import {
   assignedBotForConnection,
+  channelState,
   channelTestInstructions,
   parsePhotonHostedCredentials,
   providerLabel,
@@ -120,6 +121,36 @@ describe("bot channel settings", () => {
   it("keeps pending access neutral until the session loads", () => {
     expect(resolveChannelSettingsAccess({ isPending: true, session: null })).toBe("pending");
     expect(resolveChannelSettingsAccess({ isPending: false, session: null })).toBe("denied");
+  });
+
+  it("shows a connecting channel in the overview", () => {
+    const connectionId = ChannelConnectionId.make("telegram-pending");
+    const connection = {
+      id: connectionId,
+      provider: "telegram",
+    } as Parameters<typeof channelState>[1][number];
+    const bot = {
+      id: botId,
+      name: "Scout",
+      archivedAt: null,
+      channelBindings: [
+        {
+          botId,
+          connectionId,
+          provider: "telegram",
+          projectId,
+          status: "connecting",
+          externalIdentity: null,
+          connectedAt: null,
+          sentMessageIds: [],
+        },
+      ],
+    } as Parameters<typeof channelState>[2][number];
+
+    expect(channelState("telegram", [connection], [bot], [{ id: projectId }])).toEqual({
+      tone: "pending",
+      label: "Connecting…",
+    });
   });
 
   it("finds saved connections assigned to archived bots", () => {
