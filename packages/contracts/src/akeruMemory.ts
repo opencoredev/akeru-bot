@@ -17,6 +17,8 @@ export const AKERU_MEMORY_PACKET_MAX_FACTS = 24;
 export const AKERU_MEMORY_PACKET_MAX_CHARS = 12_000;
 export const AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS = 3_000;
 export const AKERU_MEMORY_FACT_MAX_CHARS = 2_048;
+// New facts are capped. Stored revisions and candidates keep the uncapped
+// shape so rows written before the cap still decode.
 const AkeruMemoryFactText = TrimmedNonEmptyString.check(
   Schema.isMaxLength(AKERU_MEMORY_FACT_MAX_CHARS),
 );
@@ -222,7 +224,7 @@ export const AkeruMemoryRevision = Schema.Struct({
   entityId: AkeruMemoryEntityId,
   kind: AkeruMemoryKind,
   value: Schema.Record(Schema.String, Schema.Unknown),
-  fact: AkeruMemoryFactText,
+  fact: TrimmedNonEmptyString,
   sourceThreadId: Schema.NullOr(ThreadId),
   sourceMessageId: Schema.NullOr(MessageId),
   authorBotId: Schema.NullOr(BotId),
@@ -249,7 +251,7 @@ export const AkeruMemoryCandidate = Schema.Struct({
   sourceThreadId: ThreadId,
   sourceMessageId: Schema.NullOr(MessageId),
   authorBotId: Schema.NullOr(BotId),
-  fact: AkeruMemoryFactText,
+  fact: TrimmedNonEmptyString,
   scope: AkeruMemoryTargetScope,
   sensitive: Schema.Boolean,
   confidence: AkeruMemoryConfidence,
