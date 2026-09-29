@@ -55,6 +55,7 @@ export function useReplyPlaybackThread(options: {
         .join("|"),
     [options.messages],
   );
+  // Clearing the context stops playback, so only a chat change or unmount clears it.
   useEffect(() => {
     if (!session) return;
     if (!options.environmentId || !options.threadId) {
@@ -62,6 +63,15 @@ export function useReplyPlaybackThread(options: {
       setContextKey(null);
       return;
     }
+    const environmentId = options.environmentId;
+    const threadId = options.threadId;
+    return () => {
+      session.clearContextIf(environmentId, threadId);
+    };
+  }, [session, options.environmentId, options.threadId]);
+  // Setting changes update the context in place; playback stops only if its voice is no longer allowed.
+  useEffect(() => {
+    if (!session || !options.environmentId || !options.threadId) return;
     const environmentId = options.environmentId;
     const threadId = options.threadId;
     session.setContext({
@@ -76,9 +86,6 @@ export function useReplyPlaybackThread(options: {
     // visible messages look the same, so establish the baseline here.
     session.observe(messagesRef.current);
     setContextKey(`${environmentId}/${threadId}/${synthesis.provider}/${synthesis.voice}`);
-    return () => {
-      session.clearContextIf(environmentId, threadId);
-    };
   }, [
     session,
     synthesis,
