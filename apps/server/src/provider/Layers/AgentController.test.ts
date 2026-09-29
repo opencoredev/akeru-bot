@@ -1904,7 +1904,11 @@ describe("AgentControllerLive", () => {
       groupMemberBotIds: [],
     } as const;
     const credentials = makeMemoryOnlyCredentialOptions();
-    const callMemoryTool = (input: { target: string; operations: Array<unknown> }) =>
+    const callMemoryTool = (input: {
+      target: string;
+      operations: Array<unknown>;
+      share?: { fact: string; scope: string };
+    }) =>
       Effect.tryPromise({
         try: () => {
           const handler = McpMemoryToolSession.readMcpMemoryToolSession(claudeThreadId);
@@ -1967,6 +1971,17 @@ describe("AgentControllerLive", () => {
         assert.equal(denied._tag, "Failure");
         expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain(
           "Private bot memory is disabled.",
+        );
+        // A share-only call names the memory target but never touches MEMORY.md,
+        // so it passes the Private bot memory gate and reaches the share path
+        // (this fixture has no approvals service).
+        const shareOnly = yield* callMemoryTool({
+          target: "memory",
+          operations: [],
+          share: { fact: "The project uses pnpm.", scope: "project" },
+        }).pipe(Effect.result);
+        expect(shareOnly._tag === "Failure" ? shareOnly.failure.cause.message : "").toBe(
+          "Shared memory is not available in this chat.",
         );
         const userStillAllowed = yield* callMemoryTool({ target: "user", operations: [] });
         expect(userStillAllowed).toMatchObject({ success: true });

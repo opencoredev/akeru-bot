@@ -985,8 +985,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           throw new Error("Bot memory is disabled.");
         }
         if (!settings.privateBotMemory) {
-          const { target } = input.input as { readonly target?: AkeruMemoryDocumentTarget };
-          if (target === "memory") {
+          const { target, operations, share } = input.input as {
+            readonly target?: AkeruMemoryDocumentTarget;
+            readonly operations?: ReadonlyArray<unknown>;
+            readonly share?: unknown;
+          };
+          // A share-only call never reads or changes the target document.
+          const shareOnly = share !== undefined && operations?.length === 0;
+          if (target === "memory" && !shareOnly) {
             throw new Error("Private bot memory is disabled.");
           }
         }
