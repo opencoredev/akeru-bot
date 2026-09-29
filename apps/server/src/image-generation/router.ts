@@ -178,16 +178,24 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     };
   }
 
+  // A consented edit retry goes to the approved provider first instead of repeating the
+  // provider that already failed; the rest of the plan still backs it up.
+  const consented =
+    input.inputImages.length > 0 && request.allowProvider
+      ? plan.candidates.filter((provider) => provider === request.allowProvider)
+      : [];
+  const candidates = [...consented, ...plan.candidates.filter((p) => !consented.includes(p))];
   let lastFailure: { kind: ImageGenerationFailureKind; message: string } | undefined;
   let remainingCount = adapterRequest.count;
-  for (const provider of plan.candidates) {
+  for (const provider of candidates) {
     const label = IMAGE_PROVIDER_LABELS[provider];
     if (!providerEnabled(settings, provider)) continue;
 
     const availability = input.availability(provider);
     if (availability.state === "unavailable") {
       attempts.push({ provider, outcome: availability.kind });
-      lastFailure = { kind: availability.kind, message: availability.message };
+      // An unavailable fallback cannot hide the failure of a provider that ran the request.
+      lastFailure ??= { kind: availability.kind, message: availability.message };
       continue;
     }
 

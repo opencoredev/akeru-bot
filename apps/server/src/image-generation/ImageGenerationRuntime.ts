@@ -215,14 +215,17 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         }
         selected = requested.map((id) => byId.get(id)!);
       } else {
-        const latestUser = threadMessages.findLast(
-          (message) =>
-            message.role === "user" &&
-            (message.attachments ?? []).some((attachment) => attachment.type === "image"),
-        );
+        // Only the latest user message counts, so a text-only follow-up never edits an older image.
+        const latestUser = threadMessages.findLast((message) => message.role === "user");
         selected = (latestUser?.attachments ?? []).filter(
           (attachment): attachment is ChatImageAttachment => attachment.type === "image",
         );
+        if (selected.length === 0) {
+          return {
+            ok: false as const,
+            message: "The latest message has no image to edit. Name the images in inputImages.",
+          };
+        }
       }
       const loaded: ImageAdapterInputImage[] = [];
       for (const attachment of selected) {
@@ -378,11 +381,15 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         const { parts: _parts, ...result } = routed;
         return result;
       }
-      if (attachments.length === 0) {
+      const requested = request.count ?? 1;
+      if (attachments.length < requested) {
         return {
           status: "failed",
           kind: "provider-failed",
-          message: "The provider returned no usable image.",
+          message:
+            attachments.length === 0
+              ? "The provider returned no usable image."
+              : `Only ${attachments.length} of ${requested} images were usable. They are posted in the chat.`,
           attempts: routed.attempts,
         } satisfies ImageGenerationResult;
       }

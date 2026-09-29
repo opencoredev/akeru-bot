@@ -227,6 +227,24 @@ describe("routeImageRequest", () => {
     }),
   );
 
+  it.effect("reports the provider failure when the fallback is unavailable", () =>
+    Effect.gen(function* () {
+      const result = yield* routeImageRequest(
+        routeInput({
+          adapters: {
+            chatgpt: fakeAdapter("chatgpt", new ImageAdapterFailure("provider-failed", "boom")),
+            grok: fakeAdapter("grok"),
+          },
+          availability: (provider) =>
+            provider === "grok"
+              ? { state: "unavailable", kind: "unavailable", message: "Grok is not connected." }
+              : { state: "available" },
+        }),
+      );
+      expect(result).toMatchObject({ status: "failed", kind: "provider-failed", message: "boom" });
+    }),
+  );
+
   it.effect("keeps a successful image when a later ChatGPT request fails", () =>
     Effect.gen(function* () {
       const chatgpt = fakeAdapter("chatgpt");
@@ -366,6 +384,9 @@ describe("routeImageRequest", () => {
       const retried = yield* routeImageRequest(withConsent);
       expect(retried.status === "completed" && retried.provider).toBe("grok");
       expect(failing.grok.calls[0]!.inputImages).toHaveLength(1);
+      // The consented retry does not wait on the provider that already failed.
+      expect(failing.chatgpt.calls).toHaveLength(1);
+      expect(retried.attempts).toEqual([{ provider: "grok", outcome: "completed" }]);
     }),
   );
 

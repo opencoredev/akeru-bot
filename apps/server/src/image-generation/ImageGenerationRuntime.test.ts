@@ -573,6 +573,65 @@ describe("ImageGenerationRuntime", () => {
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 
+  it.effect("does not edit an older image after a text-only message", () => {
+    const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+    return Effect.gen(function* () {
+      const runtime = yield* ImageGenerationRuntime;
+      const botId = BotId.make("bot-stale-edit");
+      const threadId = ThreadId.make("thread-stale-edit");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+      const upload = yield* saveUserImage(threadId);
+      yield* sendUserMessage(threadId, "stale-image", [upload.attachment]);
+      yield* sendUserMessage(threadId, "text-only");
+
+      const result = yield* runtime.generate(threadId, { operation: "edit", prompt: PROMPT });
+
+      assert.equal(result.status === "failed" && result.kind, "invalid-request");
+      assert.equal(adapters.chatgpt.calls.length, 0);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
+  it.effect("reports a partial result when some returned images are unusable", () => {
+    const chatgpt = fakeAdapter("chatgpt");
+    let call = 0;
+    const adapters = {
+      chatgpt: {
+        ...chatgpt,
+        run: (request: ImageAdapterRequest, signal: AbortSignal) => {
+          call += 1;
+          return call === 1
+            ? chatgpt.run(request, signal)
+            : Promise.resolve({
+                images: [new Uint8Array([1, 2, 3])],
+                model: "chatgpt-image-model",
+              });
+        },
+      },
+      grok: fakeAdapter("grok"),
+    };
+    return Effect.gen(function* () {
+      const runtime = yield* ImageGenerationRuntime;
+      const botId = BotId.make("bot-partial");
+      const threadId = ThreadId.make("thread-partial");
+      yield* createProject;
+      yield* createBot(botId, "claudeAgent", null);
+      yield* createBotThread(threadId, botId);
+      yield* sendUserMessage(threadId, "partial");
+
+      const result = yield* runtime.generate(threadId, {
+        operation: "generate",
+        prompt: PROMPT,
+        count: 2,
+      });
+
+      assert.equal(result.status === "failed" && result.kind, "provider-failed");
+      const [message] = yield* generatedMessages(threadId);
+      assert.equal(message?.attachments?.length, 1);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
   it.effect("rejects input images that are not from the chat", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
     return Effect.gen(function* () {
