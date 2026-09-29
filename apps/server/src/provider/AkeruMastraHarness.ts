@@ -1227,6 +1227,10 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   // Rows this harness has claimed and not yet finished, with their attempts and
   // current claim token, so close can hand interrupted claims back to the queue.
   const claimedRows = new Map<string, { readonly attempts: number; claim: string }>();
+  // Claimed rows whose Mastra observe call has started and not settled. Mastra
+  // cannot abort observe, so close keeps these claimed until the lease expires
+  // instead of letting another harness observe the same turn concurrently.
+  const observingRows = new Set<string>();
 
   const enqueueObservation = observationQueueDb.prepare(
     `INSERT OR IGNORE INTO akeru_observation_queue
@@ -1357,7 +1361,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   // Registered after the stores, so it runs before they close. Admission stops
   // synchronously; nothing can join the fiber set after `closed` flips.
   // Admitted work gets a grace period, then anything still running or waiting
-  // for a permit is interrupted and its claimed rows go back to the queue.
+  // for a permit is interrupted. Rows that never started observing go back to
+  // the queue; rows still inside Mastra observe keep their claim until the lease
+  // expires, because that call cannot be cancelled.
   yield* Effect.addFinalizer(() =>
     Effect.gen(function* () {
       closed = true;
@@ -1371,7 +1377,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       yield* Effect.sync(() => {
         const now = DateTime.formatIso(DateTime.nowUnsafe());
         for (const [id, { attempts, claim }] of claimedRows) {
-          releaseQueuedObservation.run(attempts, now, id, claim);
+          if (!observingRows.has(id)) releaseQueuedObservation.run(attempts, now, id, claim);
         }
         claimedRows.clear();
       }).pipe(Effect.ignoreCause({ log: true }));
@@ -1498,13 +1504,18 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           await queueObservation(item.threadId, item.resourceId, async () => {
             // A clear or restore queued ahead of this row discarded it.
             if (!isQueuedObservationClaimed.get(item.id, held.claim)) return;
-            await observationalMemory.engine.observe({
-              threadId: item.threadId,
-              resourceId: item.resourceId,
-              requestContext,
-              trigger: "manual",
-              hooks: observeHooks,
-            });
+            observingRows.add(item.id);
+            try {
+              await observationalMemory.engine.observe({
+                threadId: item.threadId,
+                resourceId: item.resourceId,
+                requestContext,
+                trigger: "manual",
+                hooks: observeHooks,
+              });
+            } finally {
+              observingRows.delete(item.id);
+            }
           });
           await stopLeaseRenewal();
           claimedRows.delete(item.id);

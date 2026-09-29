@@ -699,7 +699,7 @@ describe("AkeruMastraHarness", () => {
     }),
   );
 
-  it.effect("interrupts hung memory work after the close grace and releases its row", () =>
+  it.effect("interrupts hung memory work after the close grace and keeps its row leased", () =>
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-hung-"));
       const observeStarted = Promise.withResolvers<void>();
@@ -726,12 +726,54 @@ describe("AkeruMastraHarness", () => {
         await turn;
         assert.instanceOf(await waiting, AkeruObservationQueueClosedError);
         expect(clear).not.toHaveBeenCalled();
+        // Mastra cannot abort observe, so the uncancelled call keeps its claim
+        // and a restarted harness waits for the lease instead of racing it.
         const rows = queuedObservations(directory);
         assert.lengthOf(rows, 1);
-        assert.deepInclude(rows[0], { threadId: "thread-hung", attempts: 0, claimedAt: null });
+        assert.deepInclude(rows[0], { threadId: "thread-hung", attempts: 0 });
+        assert.isNotNull(rows[0]!.claimedAt);
       } finally {
         observe.mockRestore();
         clear.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("releases a claimed row that never started observing when close interrupts it", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-waiting-"));
+      const clearStarted = Promise.withResolvers<void>();
+      const clear = vi.spyOn(ObservationalMemory.prototype, "clear").mockImplementation(() => {
+        clearStarted.resolve();
+        return new Promise<never>(() => {});
+      });
+      const observe = vi.spyOn(ObservationalMemory.prototype, "observe");
+      const harness = await makeObservationHarness(open, directory, {
+        observationCloseGrace: 0,
+      });
+      try {
+        // The hung clear holds the thread's permit, so the claimed row waits.
+        const clearing = harness.clearObservationalMemory!("thread-waiting").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        await clearStarted.promise;
+        const turn = harness.observeAfterTurn!({
+          threadId: "thread-waiting",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        await harness.close();
+        await turn;
+        await clearing;
+        expect(observe).not.toHaveBeenCalled();
+        const rows = queuedObservations(directory);
+        assert.lengthOf(rows, 1);
+        assert.deepInclude(rows[0], { threadId: "thread-waiting", attempts: 0, claimedAt: null });
+      } finally {
+        clear.mockRestore();
+        observe.mockRestore();
         await harness.close();
         NodeFS.rmSync(directory, { recursive: true, force: true });
       }
