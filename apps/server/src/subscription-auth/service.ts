@@ -634,7 +634,6 @@ export class SubscriptionAuthService {
   }
 
   hasOpenAICodexAccount(): boolean {
-    this.reload();
     const credential = this.data["openai-codex"];
     return (
       credential?.type === "oauth" &&
