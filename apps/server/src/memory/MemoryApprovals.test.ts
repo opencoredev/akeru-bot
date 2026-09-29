@@ -17,6 +17,7 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
@@ -545,6 +546,28 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         rootId: decided.memoryRootId,
       });
       assert.equal(saved.authorBotId, botId);
+    }),
+  );
+
+  it.effect("refuses to hold a request for a scope the chat does not have", () =>
+    Effect.gen(function* () {
+      const approvals = yield* MemoryApprovals;
+      const sql = yield* SqlClient.SqlClient;
+      const error = yield* approvals
+        .propose({
+          access,
+          fact: "The group ships on Mondays.",
+          scope: "group",
+          sensitive: false,
+          mode: "ask",
+        })
+        .pipe(Effect.flip);
+      assert.equal(error._tag, "MemoryApprovalError");
+      const rows = yield* sql`
+        SELECT candidate_id FROM akeru_memory_candidates
+        WHERE fact_text = 'The group ships on Mondays.'
+      `;
+      assert.equal(rows.length, 0);
     }),
   );
 

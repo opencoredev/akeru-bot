@@ -34,6 +34,7 @@ import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { assertSafeContent } from "./BotMemory.ts";
+import { resolveAuthorizedMemoryPartitions } from "./EntityMemoryAccess.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
 
 export class MemoryApprovalError extends Schema.TaggedErrorClass<MemoryApprovalError>()(
@@ -231,6 +232,15 @@ const make = Effect.gen(function* () {
         return { status: "saved", memoryId: revision.rootId } as const;
       }
 
+      // Check the scope before storing, so no card appears that can never be approved.
+      const partitions = yield* resolveAuthorizedMemoryPartitions(input.access).pipe(
+        Effect.mapError(failWith("Could not store the memory candidate")),
+      );
+      if (!partitions.some((partition) => partition.scope === input.scope)) {
+        return yield* new MemoryApprovalError({
+          message: `The ${input.scope} memory scope is not available to this chat.`,
+        });
+      }
       const candidateId = AkeruMemoryCandidateId.make(NodeCrypto.randomUUID());
       const authorBotId = input.access.respondingBotId ?? input.access.botId;
       const request: AkeruMemoryApprovalRequest = {
