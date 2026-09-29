@@ -1409,15 +1409,9 @@ describe("channel runtime", () => {
         ).toHaveLength(1);
         expect(harness.readModel().threads[0]?.projectId).toBe(PROJECT_ID);
 
-        yield* shutdownAllChannels();
         shutdownFails = false;
         yield* shutdownAllChannels();
-        expect(events).toEqual([
-          `start:${PROJECT_ID}`,
-          `stop:${PROJECT_ID}`,
-          `stop:${PROJECT_ID}`,
-          `stop:${PROJECT_ID}`,
-        ]);
+        expect(events).toEqual([`start:${PROJECT_ID}`, `stop:${PROJECT_ID}`, `stop:${PROJECT_ID}`]);
         yield* Effect.promise(async () =>
           callbacks[0]?.({ ...message, externalMessageId: "after-shutdown" }),
         );
@@ -1425,7 +1419,7 @@ describe("channel runtime", () => {
           harness.commands.filter((command) => command.type === "thread.turn.start"),
         ).toHaveLength(1);
         yield* shutdownAllChannels();
-        expect(events).toHaveLength(4);
+        expect(events).toHaveLength(3);
       }),
     );
 

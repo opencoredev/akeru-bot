@@ -1066,7 +1066,15 @@ const stopRuntime = (ctx: ChannelRuntimeContext, botId: BotId, provider: Channel
     const key = runtimeKey(botId, provider);
     const runtime = ctx.runtimes.get(key);
     if (!runtime) return Effect.void;
-    return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
+    ctx.runtimes.delete(key);
+    // A failed shutdown may leave the listener running, so keep owning it.
+    return runtime.shutdown.pipe(
+      Effect.onError(() =>
+        Effect.sync(() => {
+          if (!ctx.runtimes.has(key)) ctx.runtimes.set(key, runtime);
+        }),
+      ),
+    );
   });
 
 /** Runs `operation` for each running transport under its channel lock, ignoring failures. */
@@ -1115,7 +1123,8 @@ const shutdownAllChannels = (ctx: ChannelRuntimeContext) =>
   forEachRuntime(ctx, (key, runtime) =>
     Effect.suspend(() => {
       if (ctx.runtimes.get(key) !== runtime) return Effect.void;
-      return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
+      ctx.runtimes.delete(key);
+      return runtime.shutdown;
     }),
   );
 
@@ -2223,7 +2232,8 @@ const detachChannelConnection = (
  * Moves a bot's channel to another live project. The old runtime stops before the new one
  * starts because most transports cannot poll with the same credentials twice. If the new
  * runtime cannot start, the binding keeps its previous project and records the failure, and
- * a previously connected channel is restarted on its old project when possible.
+ * a previously connected channel is restarted on its old project when possible. If the old
+ * runtime fails to stop, the move fails and that runtime stays registered.
  */
 const changeChannelProject = (
   ctx: ChannelRuntimeContext,
@@ -2262,6 +2272,7 @@ const changeChannelProject = (
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
+      // A transport that fails to stop stays registered, and no competing one starts.
       yield* stopRuntime(ctx, botId, provider);
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
