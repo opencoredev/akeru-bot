@@ -10,6 +10,7 @@ import type {
 } from "@t3tools/contracts";
 import { useDeferredValue, useEffect, useState } from "react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
+import { useI18n } from "../../i18n";
 import { ensureLocalApi } from "../../localApi";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -33,8 +34,11 @@ const CONNECTION_STATUS_LABELS: Record<ComposioConnectionStatus, string> = {
   REVOKED: "Revoked",
 };
 
-export function composioConnectionLabel(status: ComposioConnectionStatus): string {
-  return CONNECTION_STATUS_LABELS[status];
+type Translate = ReturnType<typeof useI18n>["t"];
+
+export function composioConnectionLabel(status: ComposioConnectionStatus, t?: Translate): string {
+  const label = CONNECTION_STATUS_LABELS[status];
+  return t ? t(label) : label;
 }
 
 /**
@@ -77,15 +81,16 @@ export function ComposioAccounts({
   readonly pendingId: string | null;
   readonly onDisconnect: (connection: ComposioConnection) => void;
 }) {
+  const { t } = useI18n();
   if (connections.length === 0) {
     return (
       <p className="text-[13px] text-muted-foreground">
-        No accounts connected yet. Search above to find an app, then connect it.
+        {t("No accounts connected yet. Search above to find an app, then connect it.")}
       </p>
     );
   }
   return (
-    <ul aria-label="Composio accounts" className="flex flex-col gap-1">
+    <ul aria-label={t("Composio accounts")} className="flex flex-col gap-1">
       {connections.map((connection) => (
         <li
           className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2"
@@ -97,17 +102,19 @@ export function ComposioAccounts({
               {connection.alias ?? connection.toolkitSlug}
             </p>
             <p className="text-xs text-muted-foreground">
-              {composioConnectionLabel(connection.status)}
+              {composioConnectionLabel(connection.status, t)}
             </p>
           </div>
           <Button
-            aria-label={`Disconnect ${connection.alias ?? connection.toolkitSlug}`}
+            aria-label={t("Disconnect {name}", {
+              name: connection.alias ?? connection.toolkitSlug,
+            })}
             disabled={pendingId !== null}
             size="sm"
             variant="ghost"
             onClick={() => onDisconnect(connection)}
           >
-            Disconnect
+            {t("Disconnect")}
           </Button>
         </li>
       ))}
@@ -132,6 +139,7 @@ export function ComposioSection({
   /** The Installed filter only lists apps that already have a connected account. */
   readonly installedOnly?: boolean;
 }) {
+  const { t } = useI18n();
   const status = useEnvironmentQuery(
     serverEnvironment.composioStatus({ environmentId, input: {} }),
   );
@@ -174,7 +182,7 @@ export function ComposioSection({
     toastManager.add({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : "The command failed.",
+      description: error instanceof Error ? error.message : t("The command failed."),
     });
     return true;
   };
@@ -185,21 +193,23 @@ export function ComposioSection({
     setPendingId("key");
     const result = await configure({ environmentId, input: { apiKey: trimmed } });
     setPendingId(null);
-    if (reportFailure("Could not save the Composio key", result)) return;
+    if (reportFailure(t("Could not save the Composio key"), result)) return;
     setApiKey("");
     status.refresh();
   };
 
   const removeKey = async () => {
     const confirmed = await ensureLocalApi().dialogs.confirm(
-      "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.",
+      t(
+        "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.",
+      ),
       { variant: "destructive" },
     );
     if (!confirmed) return;
     setPendingId("key");
     const result = await remove({ environmentId, input: {} });
     setPendingId(null);
-    if (!reportFailure("Could not remove the Composio key", result)) status.refresh();
+    if (!reportFailure(t("Could not remove the Composio key"), result)) status.refresh();
   };
 
   const connectToolkit = async (toolkit: ComposioToolkit) => {
@@ -207,15 +217,15 @@ export function ComposioSection({
     const result = await authorize({ environmentId, input: { toolkitSlug: toolkit.slug } });
     setPendingId(null);
     if (result._tag === "Failure") {
-      reportFailure(`Could not connect ${toolkit.name}`, result);
+      reportFailure(t("Could not connect {name}", { name: toolkit.name }), result);
       return;
     }
     const url = new URL(result.value.redirectUrl);
     if (url.protocol !== "https:") {
       toastManager.add({
         type: "error",
-        title: `Could not connect ${toolkit.name}`,
-        description: "Composio returned a sign-in link that does not use HTTPS.",
+        title: t("Could not connect {name}", { name: toolkit.name }),
+        description: t("Composio returned a sign-in link that does not use HTTPS."),
       });
       return;
     }
@@ -223,27 +233,30 @@ export function ComposioSection({
     void ensureLocalApi()
       .shell.openExternal(url.toString())
       .catch(() =>
-        toastManager.add({ type: "error", title: `Could not open ${toolkit.name} sign-in` }),
+        toastManager.add({
+          type: "error",
+          title: t("Could not open {name} sign-in", { name: toolkit.name }),
+        }),
       );
   };
 
   const disconnectAccount = async (connection: ComposioConnection) => {
     const name = connection.alias ?? connection.toolkitSlug;
     const confirmed = await ensureLocalApi().dialogs.confirm(
-      `Disconnect ${name}? Bots stop using this account.`,
+      t("Disconnect {name}? Bots stop using this account.", { name }),
       { variant: "destructive" },
     );
     if (!confirmed) return;
     setPendingId(connection.id);
     const result = await disconnect({ environmentId, input: { connectionId: connection.id } });
     setPendingId(null);
-    if (!reportFailure(`Could not disconnect ${name}`, result)) status.refresh();
+    if (!reportFailure(t("Could not disconnect {name}", { name }), result)) status.refresh();
   };
 
   const openKeysPage = () => {
     void ensureLocalApi()
       .shell.openExternal(COMPOSIO_API_KEYS_URL)
-      .catch(() => toastManager.add({ type: "error", title: "Could not open Composio" }));
+      .catch(() => toastManager.add({ type: "error", title: t("Could not open Composio") }));
   };
 
   const connectedToolkitIds = activeComposioToolkitIds(connections);
@@ -265,23 +278,27 @@ export function ComposioSection({
               <h2 className="text-base font-semibold">Composio</h2>
               {status.data ? (
                 <Badge variant={configured ? "success" : "secondary"}>
-                  {configured ? "Key saved" : "No key"}
+                  {configured ? t("Key saved") : t("No key")}
                 </Badge>
               ) : null}
             </div>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               {configured
-                ? "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts."
-                : "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in."}
+                ? t(
+                    "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts.",
+                  )
+                : t(
+                    "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in.",
+                  )}
             </p>
           </div>
           <Button size="sm" variant="link" onClick={openKeysPage}>
-            Get a Composio API key
+            {t("Get a Composio API key")}
           </Button>
         </div>
         {status.error ? (
           <p className="text-[13px] text-destructive-foreground">
-            Could not reach Composio: {status.error}
+            {t("Could not reach Composio: {error}", { error: String(status.error) })}
           </p>
         ) : null}
         <form
@@ -292,16 +309,16 @@ export function ComposioSection({
           }}
         >
           <Input
-            aria-label="Composio API key"
+            aria-label={t("Composio API key")}
             autoComplete="off"
             className="min-w-0 flex-1 sm:max-w-sm"
-            placeholder={configured ? "Paste a new key to replace it" : "Composio API key"}
+            placeholder={configured ? t("Paste a new key to replace it") : t("Composio API key")}
             type="password"
             value={apiKey}
             onChange={(event) => setApiKey(event.currentTarget.value)}
           />
           <Button disabled={!apiKey.trim() || pendingId !== null} size="sm" type="submit">
-            {configured ? "Replace key" : "Save key"}
+            {configured ? t("Replace key") : t("Save key")}
           </Button>
           {configured ? (
             <Button
@@ -311,12 +328,12 @@ export function ComposioSection({
               variant="ghost"
               onClick={() => void removeKey()}
             >
-              Remove key
+              {t("Remove key")}
             </Button>
           ) : null}
         </form>
         <p className="text-xs text-muted-foreground">
-          The key is stored only on this Akeru Bot server.
+          {t("The key is stored only on this Akeru Bot server.")}
         </p>
         {configured ? (
           <ComposioAccounts
@@ -328,7 +345,7 @@ export function ComposioSection({
       </section>
       {searching && toolkits.error ? (
         <p className="px-1 text-[13px] text-destructive-foreground">
-          Could not search Composio: {toolkits.error}
+          {t("Could not search Composio: {error}", { error: String(toolkits.error) })}
         </p>
       ) : null}
       {searching ? (

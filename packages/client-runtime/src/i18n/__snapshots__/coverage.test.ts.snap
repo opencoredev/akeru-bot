@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1820,
+  "directMessageCount": 1841,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -56,6 +56,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     ],
     "apps/web/src/components/onboarding/DesktopOnboarding.tsx": [
       "definition.subscription)}",
+    ],
+    "apps/web/src/components/plugins/ComposioSection.tsx": [
+      "label) : label;",
     ],
     "apps/web/src/components/roster/BotDurableMemory.tsx": [
       "failure.message)}",
@@ -403,6 +406,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/onboarding/OnboardingPreview.tsx",
     "apps/web/src/components/onboarding/desktopOnboarding.logic.ts",
     "apps/web/src/components/onboarding/goalPlan.logic.ts",
+    "apps/web/src/components/plugins/ComposioSection.tsx",
     "apps/web/src/components/plugins/PluginsCatalog.tsx",
     "apps/web/src/components/plugins/PluginsDialog.tsx",
     "apps/web/src/components/roster/AvatarColorPicker.tsx",

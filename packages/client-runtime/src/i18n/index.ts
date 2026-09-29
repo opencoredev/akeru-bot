@@ -2486,6 +2486,37 @@ export const englishCatalog = {
   "Try another name or clear the filter.": "Try another name or clear the filter.",
   "From Composio": "From Composio",
   "via Composio": "via Composio",
+  "Waiting for sign-in": "Waiting for sign-in",
+  "Sign-in failed": "Sign-in failed",
+  Inactive: "Inactive",
+  "No accounts connected yet. Search above to find an app, then connect it.":
+    "No accounts connected yet. Search above to find an app, then connect it.",
+  "Composio accounts": "Composio accounts",
+  "Could not save the Composio key": "Could not save the Composio key",
+  "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.":
+    "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.",
+  "Could not remove the Composio key": "Could not remove the Composio key",
+  "Composio returned a sign-in link that does not use HTTPS.":
+    "Composio returned a sign-in link that does not use HTTPS.",
+  "Could not open {name} sign-in": "Could not open {name} sign-in",
+  "Disconnect {name}? Bots stop using this account.":
+    "Disconnect {name}? Bots stop using this account.",
+  "Could not disconnect {name}": "Could not disconnect {name}",
+  "Could not open Composio": "Could not open Composio",
+  "No key": "No key",
+  "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts.":
+    "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts.",
+  "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in.":
+    "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in.",
+  "Get a Composio API key": "Get a Composio API key",
+  "Could not reach Composio: {error}": "Could not reach Composio: {error}",
+  "Composio API key": "Composio API key",
+  "Paste a new key to replace it": "Paste a new key to replace it",
+  "Save key": "Save key",
+  "Remove key": "Remove key",
+  "The key is stored only on this Akeru Bot server.":
+    "The key is stored only on this Akeru Bot server.",
+  "Could not search Composio: {error}": "Could not search Composio: {error}",
   "Removed plugins": "Removed plugins",
   "No longer in the directory · {status}": "No longer in the directory · {status}",
   "Custom MCP servers": "Custom MCP servers",
