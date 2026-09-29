@@ -446,6 +446,35 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
       }).pipe(Effect.flip);
       expect(String(ownershipError)).toContain("immutable");
+
+      const running = makeDelegation({
+        phase: {
+          _tag: "Running",
+          childThreadId: CHILD_THREAD_ID,
+          childTurnId: CHILD_TURN_ID,
+          startedAt: NOW,
+          progress: null,
+        },
+      });
+      const mismatchError = yield* decideOrchestrationCommand({
+        readModel: makeReadModel([running]),
+        command: {
+          type: "delegation.state.set",
+          commandId: CommandId.make("command-result-mismatch"),
+          delegation: {
+            ...completed,
+            phase: {
+              ...completed.phase,
+              result: {
+                summary: "Done.",
+                childThreadId: PARENT_THREAD_ID,
+                childTurnId: CHILD_TURN_ID,
+              },
+            } as typeof completed.phase,
+          },
+        },
+      }).pipe(Effect.flip);
+      expect(String(mismatchError)).toContain("result must come from its child");
     }),
   );
 });

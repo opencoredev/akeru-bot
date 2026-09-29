@@ -1349,6 +1349,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Delegation '${next.delegationId}' child ownership is immutable once assigned.`,
         });
       }
+      if (
+        next.phase._tag === "Completed" &&
+        (next.phase.result.childThreadId !== next.phase.childThreadId ||
+          next.phase.result.childTurnId !== next.phase.childTurnId)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${next.delegationId}' result must come from its child thread and turn.`,
+        });
+      }
       if (nextChildThreadId !== null) {
         yield* requireThread({ readModel, command, threadId: nextChildThreadId });
       }
