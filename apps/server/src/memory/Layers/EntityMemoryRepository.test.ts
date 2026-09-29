@@ -729,6 +729,61 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("rejects gaps and broken links after a redacted project history prefix", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const partitions = yield* resolveMemoryArchivePartitions(botAccess, "project");
+      const rootId = AkeruMemoryRootId.make("redacted-invalid-chain-root");
+      const first = makeRevision("redacted-invalid-chain-3", "project", {
+        rootId,
+        revision: 3,
+        partition: {
+          tenantId: botAccess.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(botAccess.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(botAccess.projectId),
+        visibility: "shared",
+        supersedesId: AkeruMemoryId.make("redacted-private-2"),
+        supersededById: AkeruMemoryId.make("redacted-invalid-chain-4"),
+      });
+      const second = {
+        ...first,
+        id: AkeruMemoryId.make("redacted-invalid-chain-4"),
+        revision: 4,
+        supersedesId: first.id,
+        supersededById: null,
+      };
+      const invalidHistories = [
+        [first, { ...second, revision: 5 }],
+        [first, { ...second, supersedesId: AkeruMemoryId.make("missing-project-revision") }],
+        [first],
+      ];
+      for (const revisions of invalidHistories) {
+        const preview = yield* repository.previewImport({
+          access: botAccess,
+          partitions,
+          revisions,
+        });
+        assert.equal(preview.items[0]?.classification, "conflicting");
+        assert.equal(preview.items[0]?.reason, "The archive revision chain is invalid.");
+        const exit = yield* repository
+          .applyImport({
+            access: botAccess,
+            partitions,
+            revisions,
+            previewHash: preview.previewHash,
+            resolutions: [{ rootId, decision: "use-archive" }],
+          })
+          .pipe(Effect.exit);
+        assert.equal(exit._tag, "Failure");
+      }
+      const missing = yield* repository.getCurrent({ access: botAccess, rootId }).pipe(Effect.flip);
+      assert.equal(missing._tag, "EntityMemoryNotFoundError");
+    }),
+  );
+
   it.effect("derives import ownership instead of trusting archive partition fields", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
@@ -1089,7 +1144,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
-  it.effect("keeps a moved fact's private revisions out of another bot's project export", () =>
+  it.effect("roundtrips another bot's project export without a moved fact's private prefix", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
       const projectId = ProjectId.make("project-private-history");
@@ -1143,6 +1198,18 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         updatedAt: "2026-08-30T22:31:00.000Z",
         sharedProjectApproval: "approved",
       });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 3,
+          fact: "Deploys use the shared release checklist and require approval.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-4"),
+        updatedAt: "2026-08-30T22:32:00.000Z",
+        sharedProjectApproval: "approved",
+      });
       const exportAs = (access: typeof alice) =>
         exportAkeruMemory({
           repository,
@@ -1163,7 +1230,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       );
       assert.deepEqual(
         bobArchive.revisions.map(({ revision }) => revision.revision),
-        [3],
+        [3, 4],
       );
       assert.isFalse(bobArchive.files.some((file) => file.content.includes("hunter2")));
 
@@ -1171,7 +1238,136 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       if (aliceArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
       assert.deepEqual(
         aliceArchive.revisions.map(({ revision }) => revision.revision),
-        [1, 2, 3],
+        [1, 2, 3, 4],
+      );
+      const existingPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        existingPreview.items.map((item) => item.classification),
+        ["conflicting"],
+      );
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: existingPreview.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      });
+      assert.deepEqual(
+        (yield* repository.listHistory({ access: alice, rootId })).map(
+          (revision) => revision.revision,
+        ),
+        [2, 1],
+      );
+      yield* repository.deleteRoot({ access: alice, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        preview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: preview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const assertRestored = Effect.gen(function* () {
+        const restored = yield* repository.getCurrent({ access: bob, rootId });
+        assert.equal(restored.id, "private-history-4");
+        assert.equal(restored.revision, 2);
+        assert.equal(restored.partition.scope, "project");
+        assert.equal(restored.partition.partitionId, AkeruMemoryPartitionId.make(projectId));
+        assert.equal(restored.entityKind, "project");
+        assert.equal(restored.entityId, AkeruMemoryEntityId.make(projectId));
+        assert.equal(restored.visibility, "shared");
+        assert.equal(restored.authorBotId, alice.botId);
+        assert.equal(restored.sourceThreadId, alice.threadId);
+        assert.deepEqual(restored.affectedBotIds, [alice.botId]);
+        assert.equal(
+          restored.fact,
+          "Deploys use the shared release checklist and require approval.",
+        );
+        const history = (yield* repository.listHistory({ access: bob, rootId })).toReversed();
+        assert.deepEqual(
+          history.map(({ id, revision, supersedesId, supersededById, partition }) => ({
+            id: String(id),
+            revision,
+            supersedesId: supersedesId === null ? null : String(supersedesId),
+            supersededById: supersededById === null ? null : String(supersededById),
+            scope: partition.scope,
+          })),
+          [
+            {
+              id: "private-history-3",
+              revision: 1,
+              supersedesId: null,
+              supersededById: "private-history-4",
+              scope: "project",
+            },
+            {
+              id: "private-history-4",
+              revision: 2,
+              supersedesId: "private-history-3",
+              supersededById: null,
+              scope: "project",
+            },
+          ],
+        );
+      });
+      yield* assertRestored;
+      yield* repository.applyMutation({
+        access: bob,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 2,
+          fact: "A divergent local edit.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-local"),
+        updatedAt: "2026-08-30T23:01:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const conflicting = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        conflicting.items.map((item) => item.classification),
+        ["conflicting"],
+      );
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: conflicting.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      });
+      yield* assertRestored;
+      const restoredArchive = yield* exportAs(bob);
+      const restoredPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: restoredArchive,
+      });
+      assert.deepEqual(
+        restoredPreview.items.map((item) => item.classification),
+        ["skipped"],
       );
     }),
   );

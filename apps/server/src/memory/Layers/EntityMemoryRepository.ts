@@ -729,17 +729,19 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               ...(authorBotId === null ? [] : [authorBotId]),
             ])
           : new Set(authorBotId === null ? [] : [authorBotId]);
+      const isProjectOwner = owner.scope === "project" && owner.visibility === "shared";
       if (
         !sourcePartition ||
         String(revision.entityId) !== String(expectedEntityId) ||
         revision.entityKind !==
           expectedEntity(input.access, { ...revision, partition: owner })?.kind ||
-        revision.initiatingUserId !== input.access.userId ||
-        (revision.authorBotId !== null &&
-          authorBotId !== null &&
-          revision.authorBotId !== authorBotId) ||
-        revision.affectedBotIds.some((botId) => !expectedAffected.has(botId)) ||
-        revision.affectedBotIds.length !== expectedAffected.size
+        (!isProjectOwner &&
+          (revision.initiatingUserId !== input.access.userId ||
+            (revision.authorBotId !== null &&
+              authorBotId !== null &&
+              revision.authorBotId !== authorBotId) ||
+            revision.affectedBotIds.some((botId) => !expectedAffected.has(botId)) ||
+            revision.affectedBotIds.length !== expectedAffected.size))
       ) {
         return yield* new AkeruMemoryAccessDenied({
           reason: "The archive record belongs to a different memory owner.",
@@ -747,7 +749,11 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       }
       // A revision written before a scope move keeps the validated scope it was written in.
       if (owner !== selected) {
-        normalized.push({ ...revision, authorBotId, initiatingUserId: input.access.userId });
+        normalized.push(
+          isProjectOwner
+            ? revision
+            : { ...revision, authorBotId, initiatingUserId: input.access.userId },
+        );
         continue;
       }
       const sharedBotIds = [
@@ -804,13 +810,39 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         // Chat facts belong to the importing chat; wider facts keep the chat they came from.
         sourceThreadId:
           selected.scope === "thread" ? input.access.threadId : revision.sourceThreadId,
-        authorBotId,
-        initiatingUserId: input.access.userId,
+        authorBotId: isProjectOwner ? revision.authorBotId : authorBotId,
+        initiatingUserId: isProjectOwner ? revision.initiatingUserId : input.access.userId,
         visibility: selected.visibility,
-        affectedBotIds,
+        affectedBotIds: isProjectOwner ? revision.affectedBotIds : affectedBotIds,
       });
     }
-    return normalized;
+    const roots = new Map<string, AkeruMemoryRevision[]>();
+    for (const revision of normalized) {
+      const history = roots.get(revision.rootId) ?? [];
+      history.push(revision);
+      roots.set(revision.rootId, history);
+    }
+    return [...roots.values()].flatMap((history) => {
+      const ordered = history.sort((left, right) => left.revision - right.revision);
+      const first = ordered[0]!;
+      if (
+        input.partitions.length !== 1 ||
+        input.partitions[0]?.scope !== "project" ||
+        first.revision === 1 ||
+        first.supersedesId === null ||
+        ordered.some(
+          (revision) =>
+            revision.partition.scope !== "project" || revision.id === first.supersedesId,
+        )
+      ) {
+        return ordered;
+      }
+      return ordered.map((revision, index) => ({
+        ...revision,
+        revision: revision.revision - first.revision + 1,
+        supersedesId: index === 0 ? null : revision.supersedesId,
+      }));
+    });
   });
 
   const invalidArchiveChainReason = "The archive revision chain is invalid.";
