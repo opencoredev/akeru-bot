@@ -93,6 +93,45 @@ describe("BotWorkspacePool", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
+  effectIt.effect("waits for a destroyed workspace before opening its replacement", () =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      const pool = new BotWorkspacePool({ clock });
+      const events: Array<string> = [];
+      const finishDestroy = Promise.withResolvers<void>();
+      const destroyStarted = Promise.withResolvers<void>();
+      const remote = (id: string): AkeruBotWorkspace => ({
+        id,
+        provider: "e2b",
+        workspace: localWorkspace(),
+        inspect: async () => "running",
+        wake: async () => {},
+        sleep: async () => {},
+        destroy: async () => {
+          events.push(`destroy ${id} started`);
+          destroyStarted.resolve();
+          await finishDestroy.promise;
+          events.push(`destroy ${id} finished`);
+        },
+      });
+      const first = yield* Effect.promise(() => pool.acquire("remote", async () => remote("old")));
+      const releasing = first.release({ destroy: true });
+      const replacement = pool.acquire("remote", async () => {
+        events.push("create new");
+        return remote("new");
+      });
+      // Let the replacement acquire run as far as it can while the destroy is still pending.
+      yield* Effect.promise(() => destroyStarted.promise);
+      yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)));
+      finishDestroy.resolve();
+      yield* Effect.promise(() => releasing);
+      const second = yield* Effect.promise(() => replacement);
+      expect(second.workspace.id).toBe("new");
+      expect(events).toEqual(["destroy old started", "destroy old finished", "create new"]);
+      yield* Effect.promise(() => second.release());
+    }),
+  );
+
   effectIt.effect("reuses and eventually destroys the same evicted remote wrapper", () =>
     Effect.gen(function* () {
       const clock = yield* Clock.Clock;

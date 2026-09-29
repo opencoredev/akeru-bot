@@ -208,9 +208,21 @@ export class BotWorkspacePool {
         const remaining = (this.references.get(key) ?? 1) - 1;
         if (remaining > 0) this.references.set(key, remaining);
         else this.references.delete(key);
-        // Invalidating first makes the final lease close the entry now instead of idling.
-        if (remaining === 0 && this.destroyRequested.has(key))
-          await this.run(RcMap.invalidate(map, key));
+        if (remaining === 0 && this.destroyRequested.has(key)) {
+          // Invalidating first makes the final lease close the entry now instead of idling.
+          // Mark the key closing before invalidating so a concurrent acquire waits for the
+          // old workspace to be destroyed instead of opening the same identity alongside it.
+          const finish = Promise.withResolvers<void>();
+          this.closing.set(key, finish.promise);
+          try {
+            await this.run(RcMap.invalidate(map, key));
+            await this.run(Scope.close(leaseScope, Exit.void));
+          } finally {
+            if (this.closing.get(key) === finish.promise) this.closing.delete(key);
+            finish.resolve();
+          }
+          return;
+        }
         await this.run(Scope.close(leaseScope, Exit.void));
       },
     };
