@@ -140,6 +140,9 @@ export class ComputerGate {
     this.checkExpiry();
     if (!this.owner || this.owner.clientId !== clientId || this.owner.sessionId !== sessionId)
       this.fail("revoked");
+    // Queued and running input report revocation now; the physical queue still drains below.
+    this.revokeInput?.();
+    this.revokeInput = undefined;
     this.owner = undefined;
     this.cancelExpiry?.();
     this.cancelExpiry = undefined;

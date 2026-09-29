@@ -37,6 +37,28 @@ describe("ComputerGate", () => {
     expect(gate.status).toBe("human");
   });
 
+  it("revokes queued human input as soon as control is released", async () => {
+    const gate = new ComputerGate();
+    const session = await gate.acquire("client");
+    const entered = latch();
+    const finish = latch();
+    const active = gate.input("client", session.sessionId, 1, async () => {
+      entered.resolve();
+      await finish.promise;
+    });
+    active.catch(() => undefined);
+    await entered.promise;
+    const queued = gate.input("client", session.sessionId, 2, async () => {
+      throw new Error("must not execute");
+    });
+    const release = gate.release("client", session.sessionId);
+    // The queued click is refused before the running one finishes.
+    await expect(queued).rejects.toMatchObject({ code: "revoked" });
+    finish.resolve();
+    await release;
+    expect(gate.status).toBe("ready");
+  });
+
   it("binds random leases to clients and rejects stale or skipped sequences", async () => {
     const gate = new ComputerGate();
     const session = await gate.acquire("one");
