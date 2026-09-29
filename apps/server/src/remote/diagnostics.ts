@@ -87,13 +87,27 @@ export async function runRemoteDoctor(input: {
   const checks: Array<RemoteDiagnosticCheck> = [];
   const repairsApplied: Array<string> = [];
   const container = process.env.AKERU_REMOTE_CONTAINER === "1";
+  // Background setup only installs systemd and launchd services. Other hosts, such as Windows,
+  // run the server directly, so the doctor asks that server over HTTP instead.
+  const serviceManaged =
+    !container && (input.platform === undefined || ["linux", "darwin"].includes(input.platform));
+  const readRuntimePort = () => {
+    try {
+      const { port } = JSON.parse(
+        NodeFS.readFileSync(NodePath.join(stateDir, "server-runtime.json"), "utf8"),
+      ) as { port?: unknown };
+      return typeof port === "number" ? String(port) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
 
-  const serviceHealthy = container
+  const serviceHealthy = !serviceManaged
     ? await commandOk("curl", [
         "-fsS",
         "--max-time",
         "5",
-        `http://127.0.0.1:${process.env.T3CODE_PORT?.trim() || "3773"}/.well-known/t3/environment`,
+        `http://127.0.0.1:${process.env.T3CODE_PORT?.trim() || readRuntimePort() || "3773"}/.well-known/t3/environment`,
       ])
     : input.platform === "darwin"
       ? await commandOk("launchctl", [
@@ -109,9 +123,13 @@ export async function runRemoteDoctor(input: {
         ? serviceHealthy
           ? "Container HTTP health check passed."
           : "Container HTTP health check failed."
-        : serviceHealthy
-          ? "Background service is active."
-          : "Background service is not active.",
+        : !serviceManaged
+          ? serviceHealthy
+            ? "Akeru server answers its HTTP health check."
+            : "Akeru server does not answer its HTTP health check."
+          : serviceHealthy
+            ? "Background service is active."
+            : "Background service is not active.",
     ),
   );
   if (!container && (await commandOk("sh", ["-c", "command -v loginctl"]))) {

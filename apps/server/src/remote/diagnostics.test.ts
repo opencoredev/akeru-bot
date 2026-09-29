@@ -52,6 +52,45 @@ describe("Akeru Remote diagnostics", () => {
     }
   });
 
+  it("probes a Windows server over HTTP instead of systemd", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-win32-doctor-"));
+    const binDir = NodePath.join(baseDir, "bin");
+    NodeFS.mkdirSync(NodePath.join(baseDir, "userdata"), { recursive: true });
+    NodeFS.mkdirSync(binDir);
+    NodeFS.writeFileSync(
+      NodePath.join(baseDir, "userdata", "server-runtime.json"),
+      JSON.stringify({ port: 4555 }),
+    );
+    const probed = NodePath.join(baseDir, "probed");
+    NodeFS.writeFileSync(NodePath.join(binDir, "curl"), `#!/bin/sh\necho "$@" > "${probed}"\n`, {
+      mode: 0o755,
+    });
+    NodeFS.writeFileSync(NodePath.join(binDir, "systemctl"), "#!/bin/sh\nexit 1\n", {
+      mode: 0o755,
+    });
+    const priorContainer = process.env.AKERU_REMOTE_CONTAINER;
+    const priorPath = process.env.PATH;
+    const priorPort = process.env.T3CODE_PORT;
+    delete process.env.AKERU_REMOTE_CONTAINER;
+    delete process.env.T3CODE_PORT;
+    process.env.PATH = `${binDir}:${priorPath ?? ""}`;
+    try {
+      const report = await runRemoteDoctor({ baseDir, repair: false, platform: "win32" });
+      expect(report.checks.find((check) => check.id === "service")).toMatchObject({
+        status: "pass",
+        message: "Akeru server answers its HTTP health check.",
+      });
+      expect(NodeFS.readFileSync(probed, "utf8")).toContain(
+        "http://127.0.0.1:4555/.well-known/t3/environment",
+      );
+    } finally {
+      if (priorContainer !== undefined) process.env.AKERU_REMOTE_CONTAINER = priorContainer;
+      if (priorPort !== undefined) process.env.T3CODE_PORT = priorPort;
+      process.env.PATH = priorPath;
+      NodeFS.rmSync(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it("reports storage health and repairs private binding permissions", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-doctor-"));
     const stateDir = NodePath.join(baseDir, "userdata");
