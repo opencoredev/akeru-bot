@@ -699,6 +699,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
       if (
         !sourcePartition ||
         String(revision.entityId) !== String(expectedEntityId) ||
+        revision.entityKind !==
+          expectedEntity(input.access, { ...revision, partition: selected })?.kind ||
         revision.initiatingUserId !== input.access.userId ||
         (revision.authorBotId !== null &&
           authorBotId !== null &&
@@ -771,6 +773,8 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     return normalized;
   });
 
+  const invalidArchiveChainReason = "The archive revision chain is invalid.";
+
   const buildImportPreview = Effect.fn("EntityMemoryRepository.buildImportPreview")(
     function* (input: {
       readonly access: Parameters<typeof resolveAuthorizedMemoryPartitions>[0];
@@ -820,7 +824,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             return {
               rootId: brandedRootId,
               classification: "conflicting" as const,
-              reason: "The archive revision chain is invalid.",
+              reason: invalidArchiveChainReason,
             };
           }
           if (current.length === 0) {
@@ -931,6 +935,11 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 .sort((left, right) => left.revision - right.revision);
               const decision = resolutions.get(String(item.rootId));
               if (item.classification === "conflicting" && decision === "keep-local") continue;
+              if (item.reason === invalidArchiveChainReason) {
+                return yield* new EntityMemoryImportError({
+                  detail: `The archive history for ${item.rootId} is invalid and cannot replace local memory.`,
+                });
+              }
               const additions =
                 item.classification === "conflicting" ? incoming : incoming.slice(local.length);
               if (additions.length > 0) {
@@ -1068,6 +1077,12 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
             actualRevision: current.revision,
           });
         }
+        // A forgotten fact only accepts permanent deletion.
+        if (current.deletionState !== "active" && input.mutation.operation !== "fact.delete") {
+          return yield* new AkeruMemoryAccessDenied({
+            reason: "A forgotten fact can only be deleted.",
+          });
+        }
         const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
         const nextFor = (revision: AkeruMemoryRevision): AkeruMemoryRevision => ({
           ...revision,
@@ -1129,10 +1144,13 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
               sourceThreadId:
                 current.sourceThreadId ??
                 (partition.scope === "thread" ? input.access.threadId : null),
+              // Private scopes have no review queue, so a user move settles a pending fact.
               approvalState:
                 partition.visibility === "shared"
                   ? input.sharedProjectApproval
-                  : current.approvalState,
+                  : current.approvalState === "pending"
+                    ? "approved"
+                    : current.approvalState,
             });
             break;
           }
