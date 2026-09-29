@@ -1783,7 +1783,7 @@ export class GhosttyTerminalSurface {
         ? { selectionBackground: this.theme.selectionBackground }
         : {}),
     });
-    this.latencyCallbacks.onGlyphPaint();
+    this.latencyCallbacks.onGlyphPaint(this.snapshot, this.forceFullRender);
     this.positionInput();
     this.renderedCursorY =
       this.cursorOn && this.snapshot.cursorVisible && this.snapshot.cursorY >= 0

@@ -57,9 +57,10 @@ before rewriting oversized files. File handles close before that rewrite.
 
 `apps/web/src/terminal/latency.ts` contains the repeatable percentile harness. A
 live desktop pass supplies `TerminalLatencyProbe` hooks on the Ghostty surface:
-keypress, PTY byte arrival, and glyph-frame scheduling are timestamped with
+keypress, PTY byte arrival, and visible cell changes after canvas paint are timestamped with
 `performance.now()`. The harness reports keypress-to-glyph and byte-arrival-to-
-glyph p50, p95, and p99 values. Headless tests cover the percentile math, but
+glyph p50, p95, and p99 values. Echoes that cannot be matched to a newly painted glyph are skipped.
+Headless tests cover the matching and percentile math, but
 cannot synthesize an operating-system keypress or a real PTY round trip; those
 numbers must be collected on local desktop and at least one remote or tunnel
 connection.

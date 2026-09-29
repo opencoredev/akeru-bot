@@ -48,12 +48,22 @@ export function formatLatencyReport(
 export interface TerminalLatencyProbe {
   readonly onKeypress?: (time: number, encodedInput: string) => void;
   readonly onByteArrival?: (time: number, output: string) => void;
-  readonly onGlyphPaint?: (time: number) => void;
+  readonly onGlyphPaint?: (
+    time: number,
+    snapshot: TerminalPaintSnapshot,
+    forceFull: boolean,
+  ) => void;
+}
+export interface TerminalPaintSnapshot {
+  readonly rowData: readonly {
+    readonly cells: readonly { readonly text: string; readonly invisible?: boolean }[];
+  }[];
+  readonly dirtyRows?: ReadonlySet<number>;
 }
 export interface TerminalLatencyCallbacks {
   readonly onKeypress: (encodedInput: string) => void;
   readonly onByteArrival: (output: string) => void;
-  readonly onGlyphPaint: () => void;
+  readonly onGlyphPaint: (snapshot: TerminalPaintSnapshot, forceFull?: boolean) => void;
 }
 const disabledCallbacks: TerminalLatencyCallbacks = {
   onKeypress: () => {},
@@ -67,7 +77,8 @@ export function terminalLatencyCallbacks(
   return {
     onKeypress: (encodedInput) => probe.onKeypress?.(performance.now(), encodedInput),
     onByteArrival: (output) => probe.onByteArrival?.(performance.now(), output),
-    onGlyphPaint: () => probe.onGlyphPaint?.(performance.now()),
+    onGlyphPaint: (snapshot, forceFull = false) =>
+      probe.onGlyphPaint?.(performance.now(), snapshot, forceFull),
   };
 }
 
@@ -86,6 +97,7 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
   private readonly pendingPaints: Array<{ readonly keypressAt?: number; readonly byteAt: number }> =
     [];
   private readonly samplesBuffer: TerminalLatencySample[] = [];
+  private previousPaintedRows: readonly (readonly string[])[] | undefined;
   get samples(): readonly TerminalLatencySample[] {
     return this.samplesBuffer;
   }
@@ -120,27 +132,56 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
       this.pendingPaints.push({ byteAt: time });
     }
   }
-  onGlyphPaint(time: number): void {
-    const key = this.pendingKeys.find((candidate) => candidate.byteAt !== undefined);
-    if (key?.byteAt !== undefined) {
-      if (this.pendingPaints.length >= MAX_PENDING_PAINTS) this.pendingPaints.shift();
-      this.pendingPaints.push({ keypressAt: key.keypressAt, byteAt: key.byteAt });
-      this.pendingKeys.splice(this.pendingKeys.indexOf(key), 1);
+  onGlyphPaint(time: number, snapshot: TerminalPaintSnapshot, forceFull = false): void {
+    const rows = snapshot.rowData.map((row) => row.cells.map((cell) => cell.text));
+    const previous = this.previousPaintedRows;
+    this.previousPaintedRows = rows;
+    if (!previous) return;
+
+    const changedGlyphs = new Map<string, number>();
+    for (let row = 0; row < rows.length; row++) {
+      if (!forceFull && snapshot.dirtyRows && !snapshot.dirtyRows.has(row)) continue;
+      for (let column = 0; column < rows[row]!.length; column++) {
+        const glyph = rows[row]![column]!;
+        if (
+          glyph === previous[row]?.[column] ||
+          glyph.trim() === "" ||
+          snapshot.rowData[row]?.cells[column]?.invisible
+        )
+          continue;
+        changedGlyphs.set(glyph, (changedGlyphs.get(glyph) ?? 0) + 1);
+      }
     }
-    const pending = this.pendingPaints.shift();
-    if (!pending) return;
-    if (this.samplesBuffer.length >= MAX_SAMPLES) this.samplesBuffer.shift();
-    this.samplesBuffer.push({
-      byteArrivalToGlyphMs: Math.max(0, time - pending.byteAt),
-      ...(pending.keypressAt === undefined
-        ? {}
-        : { keypressToGlyphMs: Math.max(0, time - pending.keypressAt) }),
-    });
+    const addSample = (pending: { readonly keypressAt?: number; readonly byteAt: number }) => {
+      if (this.samplesBuffer.length >= MAX_SAMPLES) this.samplesBuffer.shift();
+      this.samplesBuffer.push({
+        byteArrivalToGlyphMs: Math.max(0, time - pending.byteAt),
+        ...(pending.keypressAt === undefined
+          ? {}
+          : { keypressToGlyphMs: Math.max(0, time - pending.keypressAt) }),
+      });
+    };
+    for (const key of this.pendingKeys) {
+      if (key.byteAt === undefined) continue;
+      const count = changedGlyphs.get(key.expected) ?? 0;
+      if (count > 0) {
+        changedGlyphs.set(key.expected, count - 1);
+        addSample({ keypressAt: key.keypressAt, byteAt: key.byteAt });
+      }
+    }
+    for (let index = this.pendingKeys.length - 1; index >= 0; index--) {
+      if (this.pendingKeys[index]?.byteAt !== undefined) this.pendingKeys.splice(index, 1);
+    }
+    const unmatchedGlyphs = [...changedGlyphs.values()].reduce((sum, count) => sum + count, 0);
+    for (let index = 0; index < unmatchedGlyphs && this.pendingPaints.length > 0; index++) {
+      addSample(this.pendingPaints.shift()!);
+    }
   }
   reset(): void {
     this.pendingKeys.length = 0;
     this.pendingPaints.length = 0;
     this.samplesBuffer.length = 0;
+    this.previousPaintedRows = undefined;
   }
   report(label = "terminal"): string {
     const result = formatLatencyReport(label, this.samplesBuffer);

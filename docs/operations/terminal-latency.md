@@ -14,6 +14,8 @@ builds.
    `window.__akeruTerminalLatencyReport()` in DevTools. Save the console output.
 4. Record the `keypress-to-glyph` and `byte-arrival-to-glyph` p50 and p95 values.
    D8 requires local desktop p50 <16 ms and p95 <33 ms for keypress-to-glyph.
+   These samples stop when the matching visible cell is painted on the canvas;
+   ambiguous echoes and frames without a new matching glyph are excluded.
 5. Repeat with a remote environment over the supported relay connection, and
    once through the team tunnel. Record both reports and the connection mode.
 6. If the local PTY round trip dominates, investigate local echo only for plain
