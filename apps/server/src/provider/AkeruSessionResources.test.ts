@@ -221,6 +221,42 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("does not pass a discarded browser failure to a replacement browser's bot", async () => {
+    const browserFailure = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    const makeBotBrowser = vi.fn((input: { onFailure?: (error: unknown) => void }) => {
+      onFailure = input.onFailure!;
+      return browser();
+    });
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser,
+      onBrowserFailure: browserFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "discarded-browser",
+      botId: BotId.make("bot-a"),
+    };
+    const second = {
+      ...first,
+      threadId: "replacement-browser",
+      botId: BotId.make("bot-b"),
+    };
+
+    await resources.acquire(first);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.release(first.threadId, { destroy: true });
+    await resources.acquire(second);
+
+    expect(makeBotBrowser).toHaveBeenCalledTimes(2);
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.shutdown();
+  });
+
   it("retains attribution while another chat for the same bot is active", async () => {
     const browserFailure = vi.fn();
     let onFailure!: (error: unknown) => void;

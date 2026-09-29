@@ -200,6 +200,7 @@ export class AkeruSessionResources {
       }
 
       const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
+      if (!existingBrowser) this.browserFailures.delete(input.workspaceResourceKey);
       if (input.botId) {
         const attributions =
           this.browserAttributions.get(input.workspaceResourceKey) ??

@@ -410,6 +410,7 @@ describe("sandbox bot browser", () => {
         await secondMonitorStarted;
         expect(onFailure).not.toHaveBeenCalled();
         await expect(browser.attachment()).resolves.toEqual(attachment);
+        expect(onReady).toHaveBeenCalledOnce();
         const readyBeforeSuccessfulTool = onReady.mock.calls.length;
         await expect(executeTool(browser.tools.browser_snapshot, {})).resolves.toEqual({
           snapshot: "ok",

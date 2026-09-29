@@ -335,7 +335,6 @@ class LightpandaRpc implements BotBrowserRpc {
   async attachment(): Promise<BotBrowserAttachment | undefined> {
     try {
       await this.ensureStarted();
-      this.input.onReady?.();
       return this.attachmentValue;
     } catch (error) {
       this.input.onFailure?.(error);
