@@ -657,6 +657,33 @@ describe("failed channel attempts", () => {
     });
   });
 
+  it("keeps a disconnected channel disconnected after a failed move", async () => {
+    fixtures.bots = [
+      boundBot("disconnected"),
+      { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
+    ];
+    fixtures.command
+      .mockReset()
+      .mockImplementation(async (value: { input: object }) =>
+        "connectionId" in value.input && "botId" in value.input && value.input.botId === "bot-other"
+          ? { _tag: "Failure", cause: Cause.fail({ message: "Rejected." }) }
+          : { _tag: "Success" },
+      );
+    const toasted = new Promise<void>((resolve) => {
+      fixtures.toast.mockImplementationOnce(() => resolve());
+    });
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-other");
+    await toasted;
+    expect(fixtures.command.mock.calls.map(([value]) => value.input)).toEqual([
+      { botId: "bot-uuid", provider: "imessage" },
+      expect.objectContaining({ botId: "bot-other", connectionId: "profile-1" }),
+      { botId: "bot-other", provider: "imessage" },
+      expect.objectContaining({ botId: "bot-uuid", connectionId: "profile-1" }),
+      { botId: "bot-uuid", provider: "imessage" },
+    ]);
+  });
+
   it("asks before deleting a connection", async () => {
     // The page awaits the answer before the test does, so it has acted once the test resumes.
     const declined = Promise.resolve(false);

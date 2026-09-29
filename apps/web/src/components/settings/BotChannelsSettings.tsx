@@ -346,10 +346,21 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
               },
             })
           : null;
+        // Attaching starts the channel, so a binding the user had disconnected goes back to
+        // disconnected rather than coming back online after a failed move.
+        const stopped =
+          assignedBot && restored?._tag === "Success" && assignedBinding?.status === "disconnected"
+            ? await disconnect({
+                environmentId,
+                input: { botId: assignedBot.id, provider: connection.provider },
+              })
+            : null;
         toastManager.add({
           type: "error",
           title:
-            released?._tag === "Failure" || restored?._tag === "Failure"
+            released?._tag === "Failure" ||
+            restored?._tag === "Failure" ||
+            stopped?._tag === "Failure"
               ? t("Could not assign or restore channel")
               : t("Could not assign channel"),
           ...failureDescription(result, connection.provider),
