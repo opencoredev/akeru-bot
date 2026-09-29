@@ -289,7 +289,6 @@ export interface AkeruBackgroundObservationInput {
   /** Routes the observer to this instance's own credentials. */
   readonly providerInstanceId?: string;
   readonly turnId?: string;
-  readonly hooks?: ObserveHooks;
 }
 
 type AkeruMastraToolOptions = Pick<
@@ -1474,7 +1473,6 @@ export async function createAkeruMastraHarness(
       resourceId: input.threadId,
       modelId: input.modelId,
       turnId: input.turnId,
-      hooks: observeHooks,
     });
   };
 
