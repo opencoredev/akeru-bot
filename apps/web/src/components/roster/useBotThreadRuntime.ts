@@ -168,6 +168,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   });
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
+  const startingNewChatRef = useRef(false);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
@@ -295,14 +296,22 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     linkedThreadRef !== null &&
     (messages?.length ?? 0) > 0;
   const startNewChat = useCallback(async (): Promise<boolean> => {
-    if (!canStartNewChat) return false;
+    if (!canStartNewChat || startingNewChatRef.current) return false;
+    // A created chat waits here until its shell arrives; another click would leave it empty.
+    const retained = retainedThreadRef.current;
+    if (retained.threadRef !== null && !retained.linked) return false;
+    startingNewChatRef.current = true;
     setError(null);
-    const threadRef = await createBotChat(PLACEHOLDER_THREAD_TITLE);
-    if (!threadRef) {
-      setError(localFailure("Could not start a new chat."));
-      return false;
+    try {
+      const threadRef = await createBotChat(PLACEHOLDER_THREAD_TITLE);
+      if (!threadRef) {
+        setError(localFailure("Could not start a new chat."));
+        return false;
+      }
+      return true;
+    } finally {
+      startingNewChatRef.current = false;
     }
-    return true;
   }, [canStartNewChat, createBotChat]);
 
   const send = useCallback(

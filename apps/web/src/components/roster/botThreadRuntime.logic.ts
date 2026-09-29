@@ -261,7 +261,7 @@ export interface RetainedChat {
 }
 
 /**
- * Keeps a just-created chat until its shell arrives. A chat the shell list has
+ * Keeps a just-created chat until its own shell arrives. A chat the shell list has
  * shown and then dropped was archived or deleted, so once the shells have
  * loaded it is released and the next send starts a new chat instead.
  */
@@ -271,9 +271,18 @@ export function nextRetainedChat(
   bootstrapped: boolean,
 ): RetainedChat {
   if (linkedThreadRef) {
-    return current.linked && current.threadRef === linkedThreadRef
-      ? current
-      : { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
+    if (current.linked && current.threadRef === linkedThreadRef) return current;
+    // A just-created chat stays the target while the list still shows the
+    // previous chat, so a send in between cannot land in the old one.
+    if (
+      !current.linked &&
+      current.threadRef !== null &&
+      (current.threadRef.environmentId !== linkedThreadRef.environmentId ||
+        current.threadRef.threadId !== linkedThreadRef.threadId)
+    ) {
+      return current;
+    }
+    return { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
   }
   if (current.linked && bootstrapped) {
     return { ownerId: current.ownerId, threadRef: null, linked: false };

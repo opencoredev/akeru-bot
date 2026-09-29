@@ -420,6 +420,16 @@ describe("nextRetainedChat", () => {
     expect(nextRetainedChat(created, null, true)).toBe(created);
   });
 
+  it("keeps a just-created chat while the list still shows the previous chat", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, chat("old"), true)).toBe(created);
+    expect(nextRetainedChat(created, chat("new"), true)).toEqual({
+      ownerId: "bot-1",
+      threadRef: chat("new"),
+      linked: true,
+    });
+  });
+
   it("follows the linked chat once the shell list shows it", () => {
     const linked = chat("new");
     const next = nextRetainedChat(

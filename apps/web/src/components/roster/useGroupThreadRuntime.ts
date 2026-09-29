@@ -385,8 +385,9 @@ export function useGroupThreadRuntime(groupId: string) {
             setError(commandFailure(result));
             return false;
           }
-          // Only rebind while the retained chat still belongs to this group.
-          if (retainedThreadRef.current.ownerId === groupId) {
+          // Only a new chat restarts retention; a chat the shell list already showed stays
+          // linked so archiving it releases it. Skip it if the user moved to another group.
+          if (currentThreadRef === null && retainedThreadRef.current.ownerId === groupId) {
             retainedThreadRef.current = {
               ownerId: groupId,
               threadRef: scopeThreadRef(environmentId, threadId),
