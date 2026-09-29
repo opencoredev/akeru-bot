@@ -73,6 +73,7 @@ import {
   clearDesktopOnboardingHandoff,
   markDesktopOnboardingCompleted,
   markDesktopOnboardingHandoffStarted,
+  readDesktopOnboardingHandoff,
   readDesktopOnboardingHandoffForEnvironment,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
@@ -764,8 +765,16 @@ function OnboardingSurface({
       if (stage.phase === "sending") continue;
       handoffTimers.current.push(
         window.setTimeout(() => {
+          if (stage.phase !== "opening" || !draft.botId) {
+            setHandoff(stage.phase);
+            return;
+          }
+          const pending = readDesktopOnboardingHandoff(window.localStorage);
+          if (pending?.environmentId !== environmentId || pending.botId !== draft.botId) {
+            onFinished();
+            return;
+          }
           setHandoff(stage.phase);
-          if (stage.phase !== "opening" || !draft.botId) return;
           useRosterStore.getState().selectBot(draft.botId);
           const opened = () => {
             clearDesktopOnboardingHandoff(window.localStorage);

@@ -359,6 +359,19 @@ describe("onboarding handoff", () => {
     );
   });
 
+  it("does not open a bot archived during the active handoff", async () => {
+    await mount();
+    await send();
+    mocks.serverBots = [{ id: BOT_ID, archivedAt: "2026-09-29T00:00:00.000Z" }];
+    await act(async () => root.render(<DesktopOnboarding />));
+
+    expect(storage.has(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(false);
+    await advance(desktopOnboardingHandoffDurationMs(false));
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.selectBot).not.toHaveBeenCalled();
+    expect(mocks.previewMounted).toBe(false);
+  });
+
   it("keeps the handoff when navigation fails so reload can retry", async () => {
     storage.set(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY, "1");
     storage.set(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, HANDOFF);
