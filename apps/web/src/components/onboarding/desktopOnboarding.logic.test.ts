@@ -8,6 +8,7 @@ import {
   DESKTOP_ONBOARDING_DESTINATION_TIMEOUT_MS,
   DESKTOP_ONBOARDING_HANDOFF_PHASES,
   DESKTOP_ONBOARDING_HANDOFF_STAGES,
+  DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY,
   DESKTOP_ONBOARDING_REVEAL_DURATION_MS,
   canStartDesktopOnboardingReveal,
   desktopOnboardingCelebrationPieces,
@@ -23,6 +24,7 @@ import {
   markDesktopOnboardingHandoffStarted,
   clearDesktopOnboardingHandoff,
   readDesktopOnboardingHandoff,
+  readDesktopOnboardingHandoffForEnvironment,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -188,6 +190,45 @@ describe("desktop onboarding", () => {
     });
     clearDesktopOnboardingHandoff(storage);
     expect(readDesktopOnboardingHandoff(storage)).toBeNull();
+  });
+
+  it("migrates a v1 handoff only after the active environment confirms its bot", () => {
+    const values = new Map<string, string>([
+      [DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY, "bot-ada"],
+    ]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+
+    expect(readDesktopOnboardingHandoffForEnvironment(storage, "other-environment", [])).toBeNull();
+    expect(values.get(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY)).toBe("bot-ada");
+    expect(
+      readDesktopOnboardingHandoffForEnvironment(storage, "environment-1", ["bot-ada"]),
+    ).toEqual({ environmentId: "environment-1", botId: "bot-ada" });
+    expect(values.has(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY)).toBe(false);
+    expect(readDesktopOnboardingHandoff(storage)).toEqual({
+      environmentId: "environment-1",
+      botId: "bot-ada",
+    });
+    clearDesktopOnboardingHandoff(storage);
+    expect(readDesktopOnboardingHandoff(storage)).toBeNull();
+  });
+
+  it("drops an empty legacy handoff instead of migrating it", () => {
+    const values = new Map<string, string>([
+      [DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY, "   "],
+    ]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    expect(
+      readDesktopOnboardingHandoffForEnvironment(storage, "environment-1", ["bot-ada"]),
+    ).toBeNull();
+    expect(values.has(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY)).toBe(false);
   });
 
   it("does not restart after the completed user deletes every bot", () => {

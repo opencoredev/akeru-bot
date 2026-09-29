@@ -5,7 +5,10 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProviderApiKeyForm } from "../settings/ProvidersPanel";
-import { DEFAULT_DESKTOP_ONBOARDING_DRAFT } from "./desktopOnboarding.logic";
+import {
+  DEFAULT_DESKTOP_ONBOARDING_DRAFT,
+  DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY,
+} from "./desktopOnboarding.logic";
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
@@ -21,14 +24,17 @@ const mocks = vi.hoisted(() => ({
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   captureModes: [] as boolean[],
   connected: false,
+  rosterLoaded: true,
+  bots: [] as Array<{ id: string }>,
+  toast: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };
-    if (atom === "rosterLoaded") return true;
-    if (atom === "bots") return [];
+    if (atom === "rosterLoaded") return mocks.rosterLoaded;
+    if (atom === "bots") return mocks.bots;
     return [];
   },
 }));
@@ -87,6 +93,7 @@ vi.mock("../ui/input", () => ({
     return null;
   },
 }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 
 import { DesktopOnboarding, SubscriptionStep } from "./DesktopOnboarding";
 
@@ -171,6 +178,8 @@ beforeEach(() => {
   mocks.input = null;
   mocks.captureModes = [];
   mocks.connected = false;
+  mocks.rosterLoaded = true;
+  mocks.bots = [];
   mocks.start.mockResolvedValue(success({ loginId: "key-login" }));
   mocks.complete.mockResolvedValue(success({ status: "connected" }));
   mocks.cancel.mockResolvedValue(success({}));
@@ -183,6 +192,7 @@ beforeEach(() => {
     location: { search: "" },
     localStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => storage.delete(key),
       setItem: (key: string, value: string) => storage.set(key, value),
     },
     open: mocks.open,
@@ -194,6 +204,27 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   vi.unstubAllGlobals();
+});
+
+it("clears a missing bot handoff only after the roster has loaded", async () => {
+  const handoff = JSON.stringify({ environmentId: "onboarding-environment", botId: "bot-deleted" });
+  window.localStorage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, handoff);
+  window.localStorage.setItem("akeru:desktop-onboarding-completed:v1", "1");
+  mocks.rosterLoaded = false;
+  const Surface = () => null;
+
+  await act(async () => root.render(<DesktopOnboarding Surface={Surface} />));
+  expect(window.localStorage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(handoff);
+  expect(mocks.toast).not.toHaveBeenCalled();
+
+  mocks.rosterLoaded = true;
+  await act(async () => root.render(<DesktopOnboarding Surface={Surface} />));
+  expect(window.localStorage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBeNull();
+  expect(mocks.toast).toHaveBeenCalledWith({
+    type: "error",
+    title: "Your new bot is no longer available.",
+  });
+  expect(mocks.navigate).not.toHaveBeenCalled();
 });
 
 describe("onboarding API-key connections", () => {

@@ -73,7 +73,7 @@ import {
   clearDesktopOnboardingHandoff,
   markDesktopOnboardingCompleted,
   markDesktopOnboardingHandoffStarted,
-  readDesktopOnboardingHandoff,
+  readDesktopOnboardingHandoffForEnvironment,
   parseDesktopOnboardingDraft,
   recoverDisappearedDesktopOnboardingBot,
   recoverMissingDesktopOnboardingBot,
@@ -1041,14 +1041,22 @@ export function DesktopOnboarding({
   // here with setup already complete. Finish the trip to that chat once.
   useEffect(() => {
     if (!environmentId || !rosterLoaded) return;
-    const handoff = readDesktopOnboardingHandoff(window.localStorage);
+    const handoff = readDesktopOnboardingHandoffForEnvironment(
+      window.localStorage,
+      environmentId,
+      serverBots.map((bot) => bot.id),
+    );
     if (
       !handoff ||
       handoff.environmentId !== environmentId ||
-      attemptedHandoffRef.current === handoff.botId ||
-      !serverBots.some((bot) => bot.id === handoff.botId)
+      attemptedHandoffRef.current === handoff.botId
     )
       return;
+    if (!serverBots.some((bot) => bot.id === handoff.botId)) {
+      clearDesktopOnboardingHandoff(window.localStorage);
+      toastManager.add({ type: "error", title: "Your new bot is no longer available." });
+      return;
+    }
     const botId = handoff.botId;
     attemptedHandoffRef.current = botId;
     useRosterStore.getState().selectBot(botId);

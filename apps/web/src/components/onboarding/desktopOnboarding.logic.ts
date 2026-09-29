@@ -25,18 +25,21 @@ export function markDesktopOnboardingCompleted(
  * reopens setup (and resends) nor loses the chat the user was being taken to.
  */
 export const DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v2";
+export const DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v1";
 export function markDesktopOnboardingHandoffStarted(
   storage: Pick<Storage, "removeItem" | "setItem">,
   environmentId: string,
   botId: string,
 ): void {
   markDesktopOnboardingCompleted(storage);
+  storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
   storage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, JSON.stringify({ environmentId, botId }));
 }
 
 /** Clears the pending handoff once its chat route has opened. */
 export function clearDesktopOnboardingHandoff(storage: Pick<Storage, "removeItem">): void {
   storage.removeItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
+  storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
 }
 
 /** Reads a pending handoff; the caller clears it after the chat opens. */
@@ -63,6 +66,26 @@ export function readDesktopOnboardingHandoff(
     return null;
   }
   return null;
+}
+
+/** Migrates a v1 bot ID only after this environment's loaded roster confirms ownership. */
+export function readDesktopOnboardingHandoffForEnvironment(
+  storage: Pick<Storage, "getItem" | "removeItem" | "setItem">,
+  environmentId: string,
+  botIds: ReadonlyArray<string>,
+): { readonly environmentId: string; readonly botId: string } | null {
+  const current = readDesktopOnboardingHandoff(storage);
+  if (current) return current;
+  const legacyBotId = storage.getItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY)?.trim();
+  if (!legacyBotId) {
+    storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
+    return null;
+  }
+  if (!botIds.includes(legacyBotId)) return null;
+  const handoff = { environmentId, botId: legacyBotId };
+  storage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, JSON.stringify(handoff));
+  storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
+  return handoff;
 }
 
 export type DesktopOnboardingStep = "subscription" | "goal" | "identity" | "message";
