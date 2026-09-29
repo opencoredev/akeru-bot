@@ -8,7 +8,13 @@ vi.mock("~/state/environments", () => ({ useEnvironmentConnectionState: () => ({
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("~/state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
 
-import { computerViewerOutcome } from "./useComputerViewer";
+import {
+  initialComputerViewerState,
+  type ComputerViewerState,
+} from "@t3tools/client-runtime/state/computer-viewer";
+import type { ComputerState } from "@t3tools/contracts";
+
+import { applyUnavailableRecheck, computerViewerOutcome } from "./useComputerViewer";
 
 describe("computerViewerOutcome", () => {
   it("passes values through and keeps the server's error code", () => {
@@ -27,5 +33,26 @@ describe("computerViewerOutcome", () => {
       ok: false,
       code: "adapter",
     });
+  });
+});
+
+describe("applyUnavailableRecheck", () => {
+  const unavailable = { status: "unavailable" } as ComputerState;
+  const ready = { status: "ready" } as ComputerState;
+  const controllerAt = (server: ComputerState) => {
+    const state: ComputerViewerState = { ...initialComputerViewerState, server };
+    return { getState: () => state, dispatch: vi.fn() };
+  };
+
+  it("applies a recheck while the computer is still unavailable", () => {
+    const controller = controllerAt(unavailable);
+    applyUnavailableRecheck(controller, ready);
+    expect(controller.dispatch).toHaveBeenCalledWith({ type: "server-state", state: ready });
+  });
+
+  it("ignores a late recheck once the computer has appeared", () => {
+    const controller = controllerAt(ready);
+    applyUnavailableRecheck(controller, unavailable);
+    expect(controller.dispatch).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,12 @@ import {
   type ComputerViewerOutcome,
 } from "@t3tools/client-runtime/state/computer-viewer-controller";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { COMPUTER_SESSION_TTL_MS, ComputerError, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  COMPUTER_SESSION_TTL_MS,
+  ComputerError,
+  type ComputerState,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -30,6 +35,18 @@ export function computerViewerOutcome<A, E>(
   if (result._tag === "Success") return { ok: true, value: result.value };
   const error = Cause.squash(result.cause);
   return { ok: false, code: isComputerError(error) ? error.code : "adapter" };
+}
+
+/**
+ * Applies a recheck made while the computer looked unavailable. A recheck that
+ * returns after the computer appeared is stale and must not hide it.
+ */
+export function applyUnavailableRecheck(
+  controller: Pick<ComputerViewerController, "dispatch" | "getState">,
+  state: ComputerState,
+): void {
+  if (controller.getState().server?.status !== "unavailable") return;
+  controller.dispatch({ type: "server-state", state });
 }
 
 function usePageVisible(): boolean {
@@ -125,13 +142,17 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   const unavailable = visible && connected && state.server?.status === "unavailable";
   useEffect(() => {
     if (!unavailable) return;
+    let active = true;
     const timer = setInterval(() => {
       void getState({ environmentId, input: { threadId } }).then((outcome) => {
         const next = computerViewerOutcome(outcome);
-        if (next.ok) controller.dispatch({ type: "server-state", state: next.value });
+        if (active && next.ok) applyUnavailableRecheck(controller, next.value);
       });
     }, UNAVAILABLE_RECHECK_MS);
-    return () => clearInterval(timer);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [controller, environmentId, getState, threadId, unavailable]);
 
   // Follow the event stream only while someone is watching. The stream ends
