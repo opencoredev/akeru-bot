@@ -339,6 +339,31 @@ it.effect("keeps workers of a newer turn when an earlier turn ends", () =>
   ),
 );
 
+it.effect("forgets settled workers of earlier turns when a new turn starts one", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turns } = yield* makeHarness;
+      const earlier = yield* runtime.spawn(parent, { task: "Earlier", background: true });
+      const earlierTurn = yield* Queue.take(turns);
+      yield* runtime.parentTurnEnded(parent.threadId, parent.turnId);
+
+      yield* runtime.spawn(
+        { ...parent, turnId: TurnId.make("next-turn") },
+        { task: "Next turn work", background: true },
+      );
+      yield* Queue.take(turns);
+      const error = yield* Effect.flip(runtime.check(parent, { workerId: earlier.workerId }));
+      assert.strictEqual(error.reason, "not_found");
+      // The earlier child thread still counts as a worker with the worker grant.
+      assert.strictEqual(
+        runtime.accessForThread(earlierTurn.childThreadId)?.approvalCeiling,
+        "none",
+      );
+      assert.strictEqual(runtime.depthForThread(earlierTurn.childThreadId), 1);
+    }),
+  ),
+);
+
 it.effect("lets a queued follow-up answer after an earlier turn fails", () =>
   Effect.scoped(
     Effect.gen(function* () {

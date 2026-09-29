@@ -180,6 +180,8 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   const locked = lock.withPermits(1);
   const workers = new Map<AkeruWorkerId, WorkerEntry>();
   const byChildThread = new Map<ThreadId, WorkerEntry>();
+  /** Worker grants by child thread. They outlive pruned workers, so a resumed child keeps them. */
+  const childAccess = new Map<ThreadId, AkeruDelegationAccessGrant>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
   const statusOf = (entry: WorkerEntry) =>
@@ -302,6 +304,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
             if (phase._tag !== "Running") return false;
             yield* Ref.set(entry.phase, { ...phase, childThreadId });
             byChildThread.set(childThreadId, entry);
+            childAccess.set(childThreadId, entry.access);
             return true;
           }),
         );
@@ -312,9 +315,10 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
       if (!attached) return;
       yield* port.messageChild(childThreadId, workerInstructions(input)).pipe(
         Effect.tapError(() =>
-          Effect.sync(() => byChildThread.delete(childThreadId)).pipe(
-            Effect.andThen(port.discardChild(childThreadId)),
-          ),
+          Effect.sync(() => {
+            byChildThread.delete(childThreadId);
+            childAccess.delete(childThreadId);
+          }).pipe(Effect.andThen(port.discardChild(childThreadId))),
         ),
         Effect.andThen(awaitOutcomes(entry)),
         Effect.onInterrupt(() => port.interruptChild(childThreadId)),
@@ -356,6 +360,24 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
       return count;
     });
 
+  /**
+   * Forgets settled workers from the parent's earlier turns, so a long chat keeps only the
+   * current turn's workers. Their child threads keep the worker grant.
+   */
+  const pruneEarlierTurns = (parent: AkeruWorkerParent) =>
+    Effect.gen(function* () {
+      for (const [workerId, entry] of workers) {
+        if (entry.parentThreadId !== parent.threadId || entry.parentTurnId === parent.turnId) {
+          continue;
+        }
+        const phase = yield* Ref.get(entry.phase);
+        if (phase._tag === "Running") continue;
+        workers.delete(workerId);
+        const childThreadId = childThreadOf(phase);
+        if (childThreadId !== null) byChildThread.delete(childThreadId);
+      }
+    });
+
   const spawn = Effect.fn("AkeruWorkerRuntime.spawn")(function* (
     parent: AkeruWorkerParent,
     input: (typeof AkeruToolInputSchemas.Task)["Type"],
@@ -368,6 +390,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     }
     const entry = yield* locked(
       Effect.gen(function* () {
+        yield* pruneEarlierTurns(parent);
         if ((yield* runningCount(parent.threadId)) >= maxConcurrency) {
           return yield* new AkeruWorkerError({
             reason: "concurrency_limit",
@@ -473,7 +496,10 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     Effect.gen(function* () {
       yield* parentTurnEnded(parentThreadId);
       for (const [workerId, entry] of workers) {
-        if (entry.parentThreadId === parentThreadId) workers.delete(workerId);
+        if (entry.parentThreadId !== parentThreadId) continue;
+        workers.delete(workerId);
+        const childThreadId = childThreadOf(yield* Ref.get(entry.phase));
+        if (childThreadId !== null) byChildThread.delete(childThreadId);
       }
     });
 
@@ -487,10 +513,10 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     releaseThread,
     /** The worker grant when the thread belongs to a worker. */
     accessForThread: (threadId: ThreadId): AkeruDelegationAccessGrant | undefined =>
-      byChildThread.get(threadId)?.access,
+      childAccess.get(threadId),
     /** 1 for worker threads, including ones a restart orphaned, 0 for bot turns. */
     depthForThread: (threadId: ThreadId): number =>
-      byChildThread.has(threadId) || isWorkerThreadId(threadId) ? 1 : 0,
+      childAccess.has(threadId) || isWorkerThreadId(threadId) ? 1 : 0,
   };
 });
 
