@@ -4,7 +4,7 @@
 // location count, so a sentence such as "Could not look at the file" or
 // "Try again at 10:30:00" is left alone.
 const STACK_FRAME =
-  /\s+at\s+(?:(?:async\s+)?[^()\s]*[\\/.][^()\s]*:\d+:\d+(?=\s|$)|(?:\S+\s+)*?(?:\(?(?:file|node|https?):\/*\S|\([^()\s]+:\d+:\d+\)))/;
+  /\s+at\s+(?:(?:async\s+)?[^()\s]*[\\/.][^()\s]*:\d+:\d+(?=\s+at\s|$)|(?:\S+\s+)*?(?:\(?(?:file|node|https?):\/*\S|\([^()\s]+:\d+:\d+\)))/;
 const STACK_FRAME_LINE = new RegExp(`^${STACK_FRAME.source}`);
 const ANY_FRAME_LINE = /^\s+at\s/;
 const ERROR_CLASS_PREFIX = /^(?:[A-Z][A-Za-z0-9]*)?Error:\s+/;

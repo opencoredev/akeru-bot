@@ -30,6 +30,9 @@ describe("withoutErrorStack", () => {
     expect(withoutErrorStack("Error: Boom\n    at C:\\srv\\app.js:12:3")).toBe("Boom");
     expect(withoutErrorStack("Error: Boom\n    at async /srv/app.js:12:3")).toBe("Boom");
     expect(withoutErrorStack("Boom at /srv/app.js:12:3")).toBe("Boom");
+    expect(withoutErrorStack("Failed at /srv/app.js:12:3 because permission was denied")).toBe(
+      "Failed at /srv/app.js:12:3 because permission was denied",
+    );
     expect(
       withoutErrorStack("Error: Bad input\n- Missing key\n    at /srv/app.js:1:2\nMore detail"),
     ).toBe("Bad input\n- Missing key\nMore detail");
