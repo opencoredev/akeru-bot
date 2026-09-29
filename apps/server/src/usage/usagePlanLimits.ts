@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Live plan windows from Settings → Providers logins.
  *
@@ -6,6 +7,8 @@
  *
  * @module usagePlanLimits
  */
+import * as NodeCrypto from "node:crypto";
+
 import type {
   SubscriptionProviderId,
   UsagePlanWindow,
@@ -499,8 +502,13 @@ type CachedPlanLimits = {
   readonly fresh: boolean;
 };
 
+// Identifies the connected account without keeping its raw credential.
+const credentialFingerprint = (token: string) =>
+  NodeCrypto.createHash("sha256").update(token).digest("hex");
+
 function makePlanLimitCache(getAccessToken: GetAccessToken) {
   const lastGoodPlanLimits = new Map<string, UsageProviderPlanLimits>();
+  const credentialFingerprints = new Map<string, string>();
   const cache = Cache.makeWith<LiveSubscriptionProviderId, CachedPlanLimits | null>(
     (key) =>
       Effect.promise(async () => {
@@ -527,19 +535,34 @@ function makePlanLimitCache(getAccessToken: GetAccessToken) {
         exit._tag === "Success" && exit.value?.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
     },
   );
-  // A disconnected provider drops its cached and last-good meters instead of serving them for
-  // the rest of the TTL.
-  return Effect.map(cache, (entries) => ({
-    entries,
-    forgetDisconnected: (provider: LiveSubscriptionProviderId) =>
-      Effect.promise(() => getAccessToken(provider).catch(() => "")).pipe(
-        Effect.flatMap((token) => {
-          if (token !== undefined) return Effect.succeed(true);
-          lastGoodPlanLimits.delete(provider);
-          return Effect.as(Cache.invalidate(entries, provider), false);
-        }),
-      ),
-  }));
+  // A disconnected provider, or one reconnected with different credentials, drops its cached and
+  // last-good meters instead of serving the old account's windows for the rest of the TTL.
+  return Effect.map(cache, (entries) => {
+    const forget = (provider: LiveSubscriptionProviderId) => {
+      lastGoodPlanLimits.delete(provider);
+      return Cache.invalidate(entries, provider);
+    };
+    return {
+      entries,
+      forgetDisconnected: (provider: LiveSubscriptionProviderId) =>
+        Effect.promise(() => getAccessToken(provider).catch(() => "")).pipe(
+          Effect.flatMap((token) => {
+            if (token === undefined) {
+              credentialFingerprints.delete(provider);
+              return Effect.as(forget(provider), false);
+            }
+            // An empty token means the lookup failed; keep what is cached.
+            if (token === "") return Effect.succeed(true);
+            const fingerprint = credentialFingerprint(token);
+            const previous = credentialFingerprints.get(provider);
+            credentialFingerprints.set(provider, fingerprint);
+            return previous === undefined || previous === fingerprint
+              ? Effect.succeed(true)
+              : Effect.as(forget(provider), true);
+          }),
+        ),
+    };
+  });
 }
 
 function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProviderPlanLimits {
