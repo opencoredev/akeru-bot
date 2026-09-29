@@ -74,7 +74,7 @@ interface PoolState {
 /**
  * Keeps one workspace alive while matching thread sessions use it. After the
  * final release the workspace stays awake for `idleTimeToLive` (zero by default), then sleeps.
- * The next acquire recreates and wakes it, and reports `wokeFromSleep` so
+ * The next acquire wakes the same workspace, and reports `wokeFromSleep` so
  * callers can reconnect resources, such as a browser, that outlived the sleep.
  */
 export class BotWorkspacePool {
@@ -83,7 +83,7 @@ export class BotWorkspacePool {
   private readonly references = new Map<string, number>();
   private readonly creators = new Map<string, () => Promise<AkeruBotWorkspace | Workspace>>();
   private readonly destroyRequested = new Set<string>();
-  private readonly slept = new Set<string>();
+  private readonly sleepers = new Map<string, AkeruBotWorkspace>();
   private readonly waking = new Set<string>();
   private readonly failed = new Set<string>();
   private readonly closing = new Map<string, Promise<void>>();
@@ -113,10 +113,15 @@ export class BotWorkspacePool {
   }
 
   private open(key: string): Effect.Effect<PooledWorkspace, BotWorkspacePoolError> {
-    const wokeFromSleep = this.slept.delete(key);
+    const sleeping = this.sleepers.get(key);
+    this.sleepers.delete(key);
+    const wokeFromSleep = sleeping !== undefined;
     this.waking.add(key);
     this.failed.delete(key);
-    return Effect.tryPromise({ try: () => this.creators.get(key)!(), catch: toPoolError }).pipe(
+    return Effect.tryPromise({
+      try: async () => sleeping ?? (await this.creators.get(key)!()),
+      catch: toPoolError,
+    }).pipe(
       Effect.map((created) =>
         created instanceof Workspace ? wrapMastraWorkspace(created) : created,
       ),
@@ -129,7 +134,6 @@ export class BotWorkspacePool {
       Effect.tapCause(() =>
         Effect.sync(() => {
           this.failed.add(key);
-          if (wokeFromSleep) this.slept.add(key);
         }),
       ),
       Effect.ensuring(Effect.sync(() => this.waking.delete(key))),
@@ -153,7 +157,7 @@ export class BotWorkspacePool {
 
   private closeWorkspace(key: string, workspace: AkeruBotWorkspace): Effect.Effect<void> {
     if (this.destroyingAll || this.destroyRequested.delete(key)) {
-      this.slept.delete(key);
+      this.sleepers.delete(key);
       return Effect.tryPromise(() => workspace.destroy()).pipe(
         Effect.tapError((cause) =>
           Effect.sync(() => {
@@ -164,7 +168,7 @@ export class BotWorkspacePool {
       );
     }
     return Effect.tryPromise(() => workspace.sleep()).pipe(
-      Effect.tap(() => Effect.sync(() => this.slept.add(key))),
+      Effect.tap(() => Effect.sync(() => this.sleepers.set(key, workspace))),
       // A workspace that cannot sleep is unusable. Destroy it so the next acquire starts fresh,
       // then fail the release so callers drop resources, such as a browser, bound to it.
       Effect.tapError(() => Effect.promise(() => workspace.destroy().catch(() => undefined))),
@@ -217,6 +221,12 @@ export class BotWorkspacePool {
     const { scope } = await this.state;
     this.destroyingAll = true;
     await this.run(Scope.close(scope, Exit.void));
+    const sleepers = [...this.sleepers.values()];
+    this.sleepers.clear();
+    const results = await Promise.allSettled(sleepers.map((workspace) => workspace.destroy()));
+    for (const result of results) {
+      if (result.status === "rejected") this.destroyAllFailures.push(result.reason);
+    }
     if (this.destroyAllFailures.length > 0) throw this.destroyAllFailures[0];
   }
 }

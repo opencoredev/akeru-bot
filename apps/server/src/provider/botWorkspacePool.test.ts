@@ -5,6 +5,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, vi } from "vite-plus/test";
+import type { AkeruBotWorkspace } from "./botWorkspace.ts";
 
 import {
   botRuntimeResourceScope,
@@ -89,6 +90,33 @@ describe("BotWorkspacePool", () => {
       expect(init).toHaveBeenCalledTimes(2);
       yield* Effect.promise(() => coLease.release());
       yield* Effect.promise(() => third.release({ destroy: true }));
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  effectIt.effect("reuses and eventually destroys the same evicted remote wrapper", () =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      const pool = new BotWorkspacePool({ clock });
+      const workspace = localWorkspace();
+      const remote: AkeruBotWorkspace = {
+        id: "remote-1",
+        provider: "e2b",
+        workspace,
+        inspect: async () => "running",
+        wake: vi.fn(async () => {}),
+        sleep: vi.fn(async () => {}),
+        destroy: vi.fn(async () => {}),
+      };
+      const create = vi.fn(async () => remote);
+      const first = yield* Effect.promise(() => pool.acquire("remote", create));
+      yield* Effect.promise(() => first.release());
+      const second = yield* Effect.promise(() => pool.acquire("remote", create));
+      expect(second.workspace).toBe(first.workspace);
+      expect(second.wokeFromSleep).toBe(true);
+      expect(create).toHaveBeenCalledOnce();
+      yield* Effect.promise(() => second.release());
+      yield* Effect.promise(() => pool.destroyAll());
+      expect(remote.destroy).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
