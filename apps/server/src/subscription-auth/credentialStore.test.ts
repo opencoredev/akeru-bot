@@ -153,6 +153,26 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     }),
   );
 
+  it.effect("does not expose malformed credential contents in load errors", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { authPath } = yield* authFile;
+      const fakeToken = "secret-token-must-stay-private";
+      yield* fs.writeFileString(
+        authPath,
+        encodeJson({ anthropic: { type: "oauth", access: fakeToken, refresh: fakeToken } }),
+      );
+
+      const store = yield* subscriptionCredentialStore(authPath);
+      const initial = store.current();
+      assert.strictEqual(initial.loadError?.reason, "corrupt");
+      assert.notInclude(initial.loadError?.detail ?? "", fakeToken);
+
+      const reloaded = yield* store.reload;
+      assert.notInclude(reloaded.loadError?.detail ?? "", fakeToken);
+    }),
+  );
+
   it.effect("clears a load error when the file is repaired and reloaded", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

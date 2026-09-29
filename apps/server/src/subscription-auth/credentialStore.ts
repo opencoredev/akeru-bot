@@ -179,7 +179,9 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
       if (!(yield* fs.exists(filePath))) return {};
       const text = yield* fs.readFileString(filePath);
       return yield* decodeAuthData(text).pipe(
-        Effect.mapError((cause) => storeError("corrupt", cause)),
+        Effect.mapError(() =>
+          storeError("corrupt", { message: "Invalid credential file format." }),
+        ),
       );
     },
   ).pipe(Effect.catchTag("PlatformError", (cause) => Effect.fail(storeError("unreadable", cause))));
@@ -193,7 +195,9 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
     } catch (cause) {
       return Result.fail(storeError("unreadable", { message: String(cause) }));
     }
-    return Result.mapError(decodeAuthDataResult(text), (cause) => storeError("corrupt", cause));
+    return Result.mapError(decodeAuthDataResult(text), () =>
+      storeError("corrupt", { message: "Invalid credential file format." }),
+    );
   };
 
   /** A failed read keeps the last good state, if this process has one. */
