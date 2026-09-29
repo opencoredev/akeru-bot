@@ -924,6 +924,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         schema: ProviderStopSessionInput,
         payload: rawInput,
       });
+      // A stopped chat must not receive an image that finishes later.
+      yield* cancelActiveImageGenerations(input.threadId);
       let metricProvider = "unknown";
       return yield* Effect.gen(function* () {
         const routed = yield* resolveRoutableSession({

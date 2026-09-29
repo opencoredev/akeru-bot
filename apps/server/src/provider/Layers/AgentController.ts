@@ -790,14 +790,20 @@ const make = (options?: AgentControllerLiveOptions) =>
       memoryHandler?: AkeruMemoryToolHandler,
     ) =>
       Effect.gen(function* () {
-        const previewEnabled = Option.isSome(serverSettings)
+        // Matches ProviderService's capabilities: an unreadable settings file withholds both.
+        const { previewEnabled, imageEnabled } = Option.isSome(serverSettings)
           ? yield* serverSettings.value.getSettings.pipe(
-              Effect.map((settings) => settings.enableAgentBrowserAccess),
-              Effect.orElseSucceed(() => false),
+              Effect.map((settings) => ({
+                previewEnabled: settings.enableAgentBrowserAccess,
+                imageEnabled:
+                  settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled,
+              })),
+              Effect.orElseSucceed(() => ({ previewEnabled: false, imageEnabled: false })),
             )
-          : true;
+          : { previewEnabled: true, imageEnabled: false };
         const capabilities = new Set<McpInvocationContext.McpCapability>([
           ...(previewEnabled ? (["preview"] as const) : []),
+          ...(imageEnabled ? (["image"] as const) : []),
           ...(memoryHandler ? (["memory"] as const) : []),
         ]);
         if (capabilities.size === 0) {
@@ -3799,6 +3805,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       input: Parameters<AgentControllerShape["stopSession"]>[0],
       destroyResources: boolean,
     ) {
+      // A stopped chat must not receive an image that finishes later.
+      yield* cancelActiveImageGenerations(input.threadId);
       const key = String(input.threadId);
       const active = sessions.get(key);
       if (!active) {

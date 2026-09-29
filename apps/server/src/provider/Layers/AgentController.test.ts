@@ -2858,6 +2858,41 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("grants legacy sessions the image tool when an image provider is enabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const credentials = makeMemoryOnlyCredentialOptions();
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* settings.updateSettings({ imageGeneration: { chatgptEnabled: true } });
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+        expect(credentials.requests.at(-1)?.capabilities?.has("image")).toBe(true);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      credentials,
+    );
+  });
+
   it.effect(
     "denies the legacy MCP memory tool while Memory is off and restores it on re-enable",
     () => {
