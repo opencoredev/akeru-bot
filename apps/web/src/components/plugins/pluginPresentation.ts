@@ -112,6 +112,8 @@ export function pluginPrimaryAction(
     ["expired", "revoked", "failed", "failed-first-request"].includes(accessStatus.health);
   if (server?.enabled && !needsReconnect) return { label: "Disable", enable: false };
   const blocker = pluginBlocker(plugin);
+  // A blocked entry cannot reconnect, but an enabled server must stay switchable off.
+  if (blocker && server?.enabled) return { label: "Disable", enable: false };
   if (blocker) return { label: "Connect", enable: null, blocker };
   if (server) return { label: "Reconnect", enable: true };
   if (plugin.authentication === "api-key") return { label: "Add key", enable: true };

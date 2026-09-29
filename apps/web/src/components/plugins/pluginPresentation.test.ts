@@ -229,8 +229,9 @@ describe("plugin presentation", () => {
       enable: true,
     });
     expect(pluginPrimaryAction(firecrawl, server(true)).label).toBe("Disable");
-    // A pending entry keeps Disable for installed servers but never reconnects
-    // into a connection recipe that has not passed the lifecycle.
+    // A pending entry keeps Disable for installed servers, even when their
+    // access needs reconnecting, but never reconnects into a connection
+    // recipe that has not passed the lifecycle.
     expect(
       pluginPrimaryAction(firecrawl, server(true), {
         id: "mcp-builtin-firecrawl",
@@ -243,14 +244,7 @@ describe("plugin presentation", () => {
         dependentBots: [],
         dependentRoutines: [],
       }),
-    ).toEqual({
-      label: "Connect",
-      enable: null,
-      blocker:
-        firecrawl.connection.type === "verification-pending"
-          ? firecrawl.connection.blocker
-          : undefined,
-    });
+    ).toEqual({ label: "Disable", enable: false });
     expect(pluginPrimaryAction(firecrawl, server(false))).toEqual({
       label: "Connect",
       enable: null,
