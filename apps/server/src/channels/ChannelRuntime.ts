@@ -1757,9 +1757,9 @@ const commitStartedChannel = (
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
       return yield* failWith("Channels are shutting down.");
     }
-    const liveBot = (yield* deps.readModel).bots.some(
-      (bot) => bot.id === started.binding.botId && bot.archivedAt === null,
-    );
+    const liveBot = (yield* deps.readModel.pipe(
+      Effect.onError(() => started.runtime.shutdown.pipe(Effect.ignoreCause)),
+    )).bots.some((bot) => bot.id === started.binding.botId && bot.archivedAt === null);
     if (!liveBot) {
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
       return yield* failWith("Channel bot is unavailable.");

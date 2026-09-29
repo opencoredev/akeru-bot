@@ -2672,6 +2672,41 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("stops a started transport when the live-bot projection read fails", () =>
+    Effect.gen(function* () {
+      let failNextRead = false;
+      let stops = 0;
+      const harness = makeHarness({
+        startTransport: async () => {
+          failNextRead = true;
+          return {
+            externalIdentity: "@akeru",
+            runtime: {
+              post: async () => undefined,
+              shutdown: async () => void (stops += 1),
+            },
+          };
+        },
+      });
+      const readModel = harness.dependencies.readModel;
+      const dependencies = {
+        ...harness.dependencies,
+        readModel: Effect.suspend(() => {
+          if (!failNextRead) return readModel;
+          failNextRead = false;
+          return Effect.die(new Error("projection read failed"));
+        }),
+      };
+
+      yield* expectFailureMessage(
+        connectChannel(dependencies, telegramConnect(BOT_ID)),
+        "projection read failed",
+      );
+      expect(stops).toBe(1);
+      expect(harness.readModel().bots[0]?.channelBindings?.[0]?.status).not.toBe("connected");
+    }),
+  );
+
   it.effect("keeps a connected runtime when removing its secret fails", () =>
     Effect.gen(function* () {
       const { store, values } = makeMemorySecretStore();
