@@ -42,7 +42,7 @@ vi.mock("../../state/entities", () => ({ useThreadActivities: () => [] }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,
-  serverEnvironment: { subscriptionAuth: () => null },
+  serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => null }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { setMessageReaction: null } }));
@@ -219,7 +219,12 @@ beforeEach(() => {
   mocks.mediaBlocked = false;
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
-  vi.stubGlobal("window", { document, HTMLIFrameElement: TestNode });
+  vi.stubGlobal("window", {
+    document,
+    HTMLIFrameElement: TestNode,
+    addEventListener() {},
+    removeEventListener() {},
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   root = createRoot(document.createElement("div") as unknown as Element);
 });

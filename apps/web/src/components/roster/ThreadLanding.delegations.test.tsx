@@ -85,7 +85,7 @@ vi.mock("../../state/entities", () => ({
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
-  serverEnvironment: { subscriptionAuth: () => null },
+  serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
