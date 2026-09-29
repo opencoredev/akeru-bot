@@ -6,6 +6,7 @@ export interface RoutineReceipt {
   readonly createdAt: string;
   readonly text: string;
   readonly tone: "info" | "success" | "error";
+  readonly archived?: true;
 }
 
 export function mergeBotConversationTimeline(
@@ -55,23 +56,27 @@ export function deriveRoutineReceipts(
   const receipts: RoutineReceipt[] = [];
 
   for (const routine of threadRoutines) {
+    const archived = !("deletedAt" in routine) || routine.deletedAt !== null;
     receipts.push({
       id: `routine-created:${routine.id}`,
       createdAt: routine.createdAt,
       text: `Routine "${routine.job}" was created`,
       tone: "info",
+      ...(archived ? { archived: true } : {}),
     });
   }
 
   for (const run of runs) {
     const routine = byRoutineId.get(run.routineId);
     if (!routine) continue;
+    const archived = !("deletedAt" in routine) || routine.deletedAt !== null;
     if (run.startedAt !== null) {
       receipts.push({
         id: `routine-run-started:${run.id}`,
         createdAt: run.startedAt,
         text: `"${routine.job}" started a run`,
         tone: "info",
+        ...(archived ? { archived: true } : {}),
       });
     }
     switch (run.status) {
@@ -87,6 +92,7 @@ export function deriveRoutineReceipts(
           createdAt: run.completedAt ?? run.updatedAt,
           text: `"${routine.job}" was canceled`,
           tone: "info",
+          ...(archived ? { archived: true } : {}),
         });
         break;
       case "failed":
@@ -96,6 +102,7 @@ export function deriveRoutineReceipts(
           createdAt: run.completedAt ?? run.updatedAt,
           text: withDetail(`"${routine.job}" failed`, run.failure?.message),
           tone: "error",
+          ...(archived ? { archived: true } : {}),
         });
         break;
       case "completed":
@@ -104,6 +111,7 @@ export function deriveRoutineReceipts(
           createdAt: run.completedAt ?? run.updatedAt,
           text: withDetail(`"${routine.job}" finished`, run.result?.summary),
           tone: "success",
+          ...(archived ? { archived: true } : {}),
         });
         break;
     }

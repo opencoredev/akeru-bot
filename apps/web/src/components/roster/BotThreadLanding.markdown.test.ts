@@ -135,8 +135,8 @@ describe("BotThreadLanding message formatting", () => {
     const end = source.indexOf("const NO_ENVIRONMENT", start);
     const receiptRow = source.slice(start, end);
 
-    expect(receiptRow).toContain("<button");
-    expect(receiptRow).toContain("onClick={onOpenRoutines}");
+    expect(receiptRow).toContain('const Row = opensRoutines ? "button" : "div"');
+    expect(receiptRow).toContain("onClick={opensRoutines ? onOpenRoutines : undefined}");
     expect(source).toContain("{...(onOpenRoutines ? { onOpenRoutines } : {})}");
     expect(receiptRow).toContain("text-destructive");
     expect(receiptRow).toContain("whitespace-normal break-words");

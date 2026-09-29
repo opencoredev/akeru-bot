@@ -38,6 +38,8 @@ another one.
 
 In a group chat, you can still message a member with a configured provider even when the boss
 cannot reply. Mention that member in your message to direct the turn to them.
+You can send a follow-up while an earlier group message is still being accepted. Both messages stay
+in the same chat.
 
 Shaped avatars are a flat colored body with a face. The eyes are cut out of the body, so they take
 the color of whatever sits behind the avatar. Very light and very dark custom colors draw their eyes
@@ -83,6 +85,7 @@ again. A draft routine shows **Draft** until you approve its procedure.
 
 The bot's chat notes when a routine is created, starts a run, and finishes, fails, or is canceled.
 Deleting a routine removes it from the Routines panel while keeping those earlier notes in the chat.
+The older notes remain readable without opening the Routines panel.
 The chat loads recent routine notes first. Select **Load older routine notes** above the conversation
 to bring earlier runs into view.
 

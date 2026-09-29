@@ -97,9 +97,10 @@ describe("deriveRoutineReceipts", () => {
       job: routine.job,
       createdAt: routine.createdAt,
     };
-    expect(deriveRoutineReceipts(routine.targetThreadId, [receiptSource], [run])).toEqual(
-      deriveRoutineReceipts(routine.targetThreadId, [routine], [run]),
-    );
+    const archived = deriveRoutineReceipts(routine.targetThreadId, [receiptSource], [run]);
+    const active = deriveRoutineReceipts(routine.targetThreadId, [routine], [run]);
+    expect(archived.map(({ archived: _archived, ...receipt }) => receipt)).toEqual(active);
+    expect(archived.every((receipt) => receipt.archived)).toBe(true);
   });
 
   it("derives durable creation, enablement, start, and completion rows", () => {
