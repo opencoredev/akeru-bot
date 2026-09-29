@@ -61,7 +61,7 @@ import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryReposi
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { createAkeruMastraHarness } from "../AkeruMastraHarness.ts";
-import { AgentControllerRuntimeError, ProviderValidationError } from "../Errors.ts";
+import { ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
@@ -6418,27 +6418,19 @@ describe("AgentControllerLive", () => {
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+        const opened = yield* controller.streamEvents.pipe(
+          Stream.filter(
+            (event) => event.type === "request.opened" && event.threadId === kimiThreadId,
+          ),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
         yield* Effect.yieldNow;
 
         yield* controller.sendTurn({ threadId: kimiThreadId, input: "Run pwd." });
         // The model request is the deterministic fake transport — the turn is
         // now parked on the interactive tool-approval gate the harness raised.
-        yield* Effect.tryPromise({
-          try: () =>
-            vi.waitFor(
-              () => {
-                const opened = events.find((event) => event.type === "request.opened");
-                expect(opened).toBeDefined();
-              },
-              { timeout: 10_000 },
-            ),
-          catch: (cause) =>
-            new AgentControllerRuntimeError({
-              operation: "test.waitForApproval",
-              detail: "The Kimi turn never parked on the tool approval gate.",
-              cause: cause instanceof Error ? cause : new Error(String(cause)),
-            }),
-        }).pipe(Effect.orDie);
+        assert.equal((yield* Fiber.join(opened))._tag, "Some");
         assert.equal(kimiRequests.length, 1);
         expect(kimiRequests[0]!.url).toContain("api.kimi.com/coding/v1/messages");
         expect(kimiRequests[0]!.headers["authorization"]).toBe("Bearer kimi-e2e-token");
