@@ -3,7 +3,6 @@ import { memo, useState } from "react";
 
 import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
 
 import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";
 import { Button } from "../ui/button";
@@ -11,8 +10,7 @@ import { ProviderRepairAction } from "./ProviderUnavailableNotice";
 
 export function threadErrorFeedbackDraft(error: string): string {
   const presentation = presentThreadError(error);
-  const details = redactSensitiveText(presentation.technicalDetails).value;
-  return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}\n\nError details:\n${details}`;
+  return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}`;
 }
 
 export function getThreadErrorBannerKey(threadKey: string, error: string | null): string | null {

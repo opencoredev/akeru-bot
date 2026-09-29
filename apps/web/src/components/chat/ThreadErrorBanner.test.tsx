@@ -87,19 +87,19 @@ describe("ThreadErrorBanner", () => {
     expect(markup).not.toContain("continues on a second line");
   });
 
-  it("offers a feedback draft without local paths or stack details", () => {
+  it("offers a feedback draft without raw provider details", () => {
     const markup = renderToStaticMarkup(
       <ThreadErrorBanner error="Provider crashed" threadKey="env:thread-feedback" />,
     );
 
     expect(markup).toContain("Send feedback");
     const draft = threadErrorFeedbackDraft(
-      "Provider crashed on request req-123 at file:///home/leo/private.ts:1 with token: secret-value",
+      "Provider crashed on request req-123 at file:///home/leo/private.ts:1 with account passphrase winter-heron",
     );
     expect(draft).toContain("The bot couldn’t finish that request");
-    expect(draft).toContain("req-123");
+    expect(draft).not.toContain("req-123");
     expect(draft).not.toContain("/home/leo");
-    expect(draft).not.toContain("secret-value");
+    expect(draft).not.toContain("winter-heron");
   });
 
   it("does not ask for feedback about a rate limit or a dropped connection", () => {
