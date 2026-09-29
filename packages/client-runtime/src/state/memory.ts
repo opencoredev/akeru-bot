@@ -14,7 +14,7 @@ import {
   createEnvironmentRpcQueryAtomFamily,
 } from "./runtime.ts";
 
-/** Targets a durable fact view can list. A mutation refreshes all of them for its chat. */
+/** Targets a durable fact view can list. A mutation refreshes all of them. */
 const LISTED_FACT_TARGETS = ["thread", "bot", "project"] as const satisfies ReadonlyArray<
   AkeruMemoryFactsListInput["target"]
 >;
@@ -54,12 +54,20 @@ export function createMemoryEnvironmentAtoms<R, E>(
       ),
     );
 
-  const listFacts = createEnvironmentRpcQueryAtomFamily(runtime, {
+  const listFactsFamily = createEnvironmentRpcQueryAtomFamily(runtime, {
     label: "environment-data:memory:facts:list",
     tag: WS_METHODS.memoryFactsList,
     staleTimeMs: 5_000,
   });
-  // A scope move changes which list a fact belongs to, so every list for the chat goes stale.
+  // Bot and project facts are shared by every chat with that bot or project, so a
+  // change refreshes the lists of each chat this client has listed in the environment.
+  const listedThreadIds = new Map<EnvironmentId, Set<ThreadId>>();
+  const listFacts: typeof listFactsFamily = (target) => {
+    const threadIds = listedThreadIds.get(target.environmentId) ?? new Set<ThreadId>();
+    threadIds.add(target.input.threadId);
+    listedThreadIds.set(target.environmentId, threadIds);
+    return listFactsFamily(target);
+  };
   const refreshFacts = (
     target: {
       readonly environmentId: EnvironmentId;
@@ -68,13 +76,25 @@ export function createMemoryEnvironmentAtoms<R, E>(
     registry: AtomRegistry.AtomRegistry,
   ) =>
     Effect.sync(() => {
+      const nodes = registry.getNodes();
+      const otherThreadIds = [...(listedThreadIds.get(target.environmentId) ?? [])].filter(
+        (threadId) => threadId !== target.input.threadId,
+      );
       for (const listTarget of LISTED_FACT_TARGETS) {
+        // A scope move changes which list a fact belongs to, so every list for the chat goes stale.
         registry.refresh(
-          listFacts({
+          listFactsFamily({
             environmentId: target.environmentId,
             input: { threadId: target.input.threadId, target: listTarget },
           }),
         );
+        for (const threadId of otherThreadIds) {
+          const atom = listFactsFamily({
+            environmentId: target.environmentId,
+            input: { threadId, target: listTarget },
+          });
+          if (nodes.has(atom)) registry.refresh(atom);
+        }
       }
     });
 

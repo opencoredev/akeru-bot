@@ -34,6 +34,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryFactMutate)).pipe(
             Effect.as({ kind: "deleted", memoryId: "root-1" } as never),
           ),
+        [WS_METHODS.memoryFactsList]: () => Effect.succeed({ facts: [] } as never),
         [WS_METHODS.memoryObservationsClear]: () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryObservationsClear)).pipe(
             Effect.as(undefined as never),
@@ -85,6 +86,20 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
       const refresh = vi.spyOn(registry, "refresh");
       const threadId = ThreadId.make("thread-memory");
 
+      // Another chat's mounted list shares bot and project facts with this chat.
+      const otherThreadId = ThreadId.make("thread-memory-other");
+      const otherProjectList = atoms.listFacts({
+        environmentId,
+        input: { threadId: otherThreadId, target: "project" },
+      });
+      const unmount = registry.mount(otherProjectList);
+      yield* Effect.addFinalizer(() => Effect.sync(unmount));
+      const unmountedOtherThreadId = ThreadId.make("thread-memory-unmounted");
+      atoms.listFacts({
+        environmentId,
+        input: { threadId: unmountedOtherThreadId, target: "project" },
+      });
+
       const exported = yield* Effect.promise(() =>
         atoms.exportArchive.run(registry, {
           environmentId,
@@ -126,6 +141,13 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           atoms.listFacts({ environmentId, input: { threadId, target } }),
         );
       }
+      expect(refresh).toHaveBeenCalledWith(otherProjectList);
+      expect(refresh).not.toHaveBeenCalledWith(
+        atoms.listFacts({
+          environmentId,
+          input: { threadId: unmountedOtherThreadId, target: "project" },
+        }),
+      );
       expect(refresh).toHaveBeenCalledWith(
         atoms.inspectDocuments({
           environmentId,
