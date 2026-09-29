@@ -364,6 +364,28 @@ describe("AkeruDelegationRuntime", () => {
     await expect(
       test.runtime.dispatchDelegation({ _tag: "Retry", delegationId: handle.delegationId }),
     ).rejects.toThrow("Only failed or canceled bot work can be retried.");
+    await expect(
+      test.runtime.dispatchDelegation({ _tag: "Retry", delegationId: original.delegationId }),
+    ).rejects.toThrow("already retried");
+  });
+
+  it("fails new bot work whose child turn cannot start, so it stays retryable", async () => {
+    const base = harness();
+    const test = harness(snapshot(), undefined, {
+      dispatch: async (command) => {
+        if (command.type === "thread.turn.start") throw new Error("provider unavailable");
+        await base.dispatch(command);
+      },
+      readSnapshot: async () => base.state as never,
+    });
+
+    await expect(test.runtime.send(parent(), request() as never)).rejects.toThrow(
+      "provider unavailable",
+    );
+    expect(base.state.delegations.at(-1)?.phase).toMatchObject({
+      _tag: "Failed",
+      failure: { failureCode: "internal", message: "provider unavailable" },
+    });
   });
 
   it("starts scheduled work from the owner chat that its turn end leaves running", async () => {
