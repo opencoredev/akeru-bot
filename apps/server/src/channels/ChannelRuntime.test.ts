@@ -2300,9 +2300,8 @@ describe("channel runtime", () => {
         const callbacks: Array<
           Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
         > = [];
-        let shutdownFails = true;
         const shutdown = vi.fn(async () => {
-          if (shutdownFails) throw new Error("shutdown failed");
+          throw new Error("shutdown failed");
         });
         const harness = makeHarness({
           startTransport: async (_input, onInbound) => {
@@ -2318,7 +2317,7 @@ describe("channel runtime", () => {
 
         yield* expectFailureMessage(
           operation(harness.dependencies, BOT_ID, "telegram"),
-          "shutdown failed",
+          "Channel provider request failed.",
         );
         expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("disconnected");
         const commandsBefore = harness.commands.length;
@@ -2334,11 +2333,9 @@ describe("channel runtime", () => {
           harness.commands.filter((command) => command.type === "thread.turn.start"),
         ).toHaveLength(0);
 
-        shutdownFails = false;
+        // The failed transport is no longer registered, so a later stop leaves it alone.
         yield* stopChannelsForBot(BOT_ID);
-        expect(shutdown).toHaveBeenCalledTimes(2);
-        yield* stopChannelsForBot(BOT_ID);
-        expect(shutdown).toHaveBeenCalledTimes(2);
+        expect(shutdown).toHaveBeenCalledTimes(1);
       }),
     );
   }
