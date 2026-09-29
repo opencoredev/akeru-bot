@@ -355,6 +355,28 @@ describe("legacy key cleanup", () => {
     expect(storage.getItem("akeru:theme-halves:v1")).toBeNull();
   });
 
+  it("does not revive a legacy mix after choosing a whole theme or clearing the last half", async () => {
+    const storage = legacyThrowingStorage({
+      "t3code:theme-halves:v1": JSON.stringify({ dark: "grove" }),
+    });
+    mockReactStore();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+
+    const { readThemeHalves, useTheme } = await import("./useTheme");
+
+    expect(useTheme().setTheme("ocean")).toBe(true);
+    expect(storage.getItem("akeru:theme")).toBe("ocean");
+    expect(readThemeHalves()).toBeNull();
+
+    expect(useTheme().setThemeHalf("light", "ember")).toBe(true);
+    expect(useTheme().setThemeHalf("light", null)).toBe(true);
+    expect(readThemeHalves()).toBeNull();
+  });
+
   it("keeps cleared theme halves when legacy cleanup throws", async () => {
     const storage = legacyThrowingStorage({
       "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),

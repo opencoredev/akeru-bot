@@ -67,6 +67,17 @@ function readStoredThemeHalves(): ThemeHalves | null {
   }
 }
 
+/** Removes the stored mix. An empty mix under the current key shadows a legacy mix that
+ * could not be removed, so the legacy fallback in readStoredThemeHalves cannot revive it. */
+function clearStoredThemeHalves(): void {
+  removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
+  if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
+    window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+  } else {
+    window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, "{}");
+  }
+}
+
 function themeHalvesSignature(halves: ThemeHalves | null): string {
   return `${halves?.light ?? ""}|${halves?.dark ?? ""}`;
 }
@@ -507,8 +518,7 @@ export function useTheme() {
       const previousHalvesRaw =
         window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY);
-      window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-      removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
+      clearStoredThemeHalves();
       try {
         writeThemePreference(next);
       } catch (cause) {
@@ -590,7 +600,7 @@ export function useTheme() {
         if (themeId === null) delete next[appearance];
         else next[appearance] = themeId;
         if (next.light === undefined && next.dark === undefined) {
-          window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+          clearStoredThemeHalves();
         } else {
           window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, JSON.stringify(next));
         }
@@ -617,14 +627,8 @@ export function useTheme() {
 
   const clearThemeHalves = useCallback((): boolean => {
     if (typeof window === "undefined") return false;
-    removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
     try {
-      // An empty mix under the current key shadows a legacy mix that could not be removed.
-      if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
-        window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-      } else {
-        window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, "{}");
-      }
+      clearStoredThemeHalves();
     } catch (cause) {
       const error = new ThemeStorageError({
         operation: "write",
