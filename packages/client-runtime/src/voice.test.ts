@@ -297,6 +297,19 @@ describe("accepted bot turn correlation", () => {
     ).toBeNull();
   });
 
+  it("settles a completed turn that has no assistant message with nothing to speak", () => {
+    expect(correlatedVoiceReply("request-1", { ...latestTurn, assistantMessageId: null }, [])).toBe(
+      "",
+    );
+    expect(
+      correlatedVoiceReply(
+        "request-1",
+        { ...latestTurn, state: "running", assistantMessageId: null },
+        [],
+      ),
+    ).toBeNull();
+  });
+
   it("waits on state notifications and removes subscriptions on completion or abort", async () => {
     let value: string | null = null;
     let notify = () => {};

@@ -78,7 +78,9 @@ export function correlatedVoiceReply(
     if (latestTurn.state === "error" || latestTurn.state === "interrupted") {
       throw new Error("The bot turn did not complete. Continue in chat.");
     }
-    if (latestTurn.state !== "completed" || latestTurn.assistantMessageId === null) return null;
+    if (latestTurn.state !== "completed") return null;
+    // A completed turn without an assistant message has nothing to speak.
+    if (latestTurn.assistantMessageId === null) return "";
     const message = messages.find((item) => item.id === latestTurn.assistantMessageId);
     return message?.role === "assistant" && !message.streaming ? message.text : null;
   }
