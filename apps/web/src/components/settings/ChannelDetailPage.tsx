@@ -1,5 +1,6 @@
 import {
   canChangeChannelProject,
+  channelReconnectProject,
   channelBindingNeedsProject,
   channelPickerProjectId,
   channelRepairAction,
@@ -288,7 +289,10 @@ export function ChannelConnectionRow({
                   projectId: binding.projectId,
                 });
               } else {
-                void settings.reconnectConnection(connection, bot.id);
+                // A disconnected channel starts in the project the picker shows.
+                const target = channelReconnectProject(binding, projectId, liveProjects);
+                if (target) void settings.moveToProject(connection, bot.id, target);
+                else void settings.reconnectConnection(connection, bot.id);
               }
             }}
           />

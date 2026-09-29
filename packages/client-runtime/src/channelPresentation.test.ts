@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { BotId, MessageId, ProjectId, type ChannelBinding } from "@t3tools/contracts";
 import {
   canChangeChannelProject,
+  channelReconnectProject,
   channelBindingNeedsProject,
   channelFailureReason,
   channelBindingPresentation,
@@ -264,5 +265,25 @@ describe("channelFailureReason", () => {
     expect(channelFailureReason("network", "slack", zh)).toBe(
       "无法连接到 Slack。请检查网络后重试。",
     );
+  });
+});
+
+describe("channelReconnectProject", () => {
+  it("reconnects a disconnected channel into a different picked live project", () => {
+    const first = ProjectId.make("first");
+    const second = ProjectId.make("second");
+    const liveProjects = [{ id: first }, { id: second }];
+    const disconnected = { status: "disconnected" as const, projectId: first };
+    expect(channelReconnectProject(disconnected, second, liveProjects)).toBe(second);
+    expect(channelReconnectProject(disconnected, first, liveProjects)).toBeNull();
+    expect(channelReconnectProject(disconnected, null, liveProjects)).toBeNull();
+    expect(channelReconnectProject(disconnected, ProjectId.make("gone"), liveProjects)).toBeNull();
+    expect(
+      channelReconnectProject(
+        { status: "needs-reconnect", projectId: first },
+        second,
+        liveProjects,
+      ),
+    ).toBeNull();
   });
 });
