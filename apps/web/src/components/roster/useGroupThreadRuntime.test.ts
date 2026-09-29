@@ -1,13 +1,16 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
+import type { Bot, Group } from "./types";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
 
 const mocks = vi.hoisted(() => ({
   primaryEnvironmentId: "env-a" as EnvironmentId,
   threadShells: [] as Array<Record<string, unknown>>,
   threadShell: null as Record<string, unknown> | null,
+  bots: [] as Bot[],
+  groups: [] as Group[],
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -48,17 +51,43 @@ vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }
 vi.mock("../../session-logic", () => ({ derivePendingUserInputs: () => [] }));
 vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (selector: (state: { bots: []; groups: [] }) => unknown) =>
-    selector({ bots: [], groups: [] }),
+  useRosterStore: (selector: (state: { bots: Bot[]; groups: Group[] }) => unknown) =>
+    selector({ bots: mocks.bots, groups: mocks.groups }),
 }));
 
 beforeEach(() => {
   hooks.reset();
   mocks.threadShells = [];
   mocks.threadShell = null;
+  mocks.bots = [];
+  mocks.groups = [];
 });
 
 describe("group runtime errors", () => {
+  it("allows a configured group bot when the app default has no provider", () => {
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      {
+        id: "bot-1",
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+      } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(true);
+  });
+
   it("surfaces the persisted provider error for a failed turn", () => {
     mocks.threadShells = [
       {

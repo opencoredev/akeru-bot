@@ -3,6 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
+  type BotEngine,
   type ApprovalRequestId,
   EnvironmentId,
   GroupId,
@@ -76,6 +77,20 @@ function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
     );
     reader.readAsDataURL(file);
   });
+}
+
+function groupModelSelection(
+  engine: BotEngine | null | undefined,
+  projectDefault: ModelSelection | null | undefined,
+  appDefault: ModelSelection | null,
+): ModelSelection | null {
+  return engine
+    ? {
+        instanceId: ProviderInstanceId.make(engine.provider),
+        model: engine.model,
+        ...(engine.options ? { options: engine.options } : {}),
+      }
+    : (projectDefault ?? appDefault);
 }
 
 export function useGroupThreadRuntime(groupId: string) {
@@ -237,13 +252,6 @@ export function useGroupThreadRuntime(groupId: string) {
         setError("The group is still connecting.");
         return false;
       }
-      if (
-        !appDefaultModelSelection ||
-        appDefaultModelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId
-      ) {
-        setError("Connect at least one provider before messaging a group.");
-        return false;
-      }
       if (!activeProject) {
         setError("Add a project before you message a group.");
         return false;
@@ -269,13 +277,15 @@ export function useGroupThreadRuntime(groupId: string) {
         setError("Choose a current group member.");
         return false;
       }
-      const modelSelection: ModelSelection = respondingBot.engine
-        ? {
-            instanceId: ProviderInstanceId.make(respondingBot.engine.provider),
-            model: respondingBot.engine.model,
-            ...(respondingBot.engine.options ? { options: respondingBot.engine.options } : {}),
-          }
-        : (activeProject.defaultModelSelection ?? appDefaultModelSelection);
+      const modelSelection = groupModelSelection(
+        respondingBot.engine,
+        activeProject.defaultModelSelection,
+        appDefaultModelSelection,
+      );
+      if (!modelSelection || modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId) {
+        setError("Connect at least one provider before messaging a group.");
+        return false;
+      }
 
       sendInFlightRef.current = true;
       setSending(true);
@@ -438,6 +448,17 @@ export function useGroupThreadRuntime(groupId: string) {
     submitPendingUserInput,
   ]);
 
+  const activeRespondingBotId = rememberedThread?.respondingBotId ?? group?.bossBotId;
+  const activeRespondingBot = bots.find(
+    (bot) =>
+      bot.id === activeRespondingBotId && group !== undefined && groupContainsBot(group, bot.id),
+  );
+  const availableModelSelection = groupModelSelection(
+    activeRespondingBot?.engine,
+    activeProject?.defaultModelSelection,
+    appDefaultModelSelection,
+  );
+
   return {
     bootstrapped,
     canResume,
@@ -449,8 +470,8 @@ export function useGroupThreadRuntime(groupId: string) {
       null,
     groupReady,
     providerAvailable:
-      appDefaultModelSelection !== null &&
-      appDefaultModelSelection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId,
+      availableModelSelection !== null &&
+      availableModelSelection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,
