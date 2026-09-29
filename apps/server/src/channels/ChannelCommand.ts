@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import {
   channelFailureMessage,
   channelFailurePresentation,
-  isChannelPostRejected,
+  isChannelTransportError,
   type ChannelFailurePresentation,
   type ChannelOperationError,
   type ChannelRuntimeShape,
@@ -57,12 +57,12 @@ export const channelCommandFailure = (
       ? { message: "Channel command was interrupted. Try again." }
       : channelFailurePresentation(error);
   // A provider error after a reply post began is ambiguous: the message may have been delivered.
-  // A definite rejection is not, so it keeps its own category and repair.
+  // A definite rejection, or a check that failed before posting, keeps its own category.
+  const deliveryUnknown = channelFailureMessage("delivery-unknown");
   const failure: ChannelFailurePresentation =
     command.type === "channel.send" &&
-    !isChannelPostRejected(error) &&
-    (presented.category === "network" || presented.category === "credentials")
-      ? { message: channelFailureMessage("delivery-unknown"), category: "delivery-unknown" }
+    (isChannelTransportError(error) || presented.message === deliveryUnknown)
+      ? { message: deliveryUnknown, category: "delivery-unknown" }
       : presented;
   return Effect.logWarning("channel command failed", {
     commandType: command.type,

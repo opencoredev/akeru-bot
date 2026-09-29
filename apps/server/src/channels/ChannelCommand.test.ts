@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import { channelCommandFailure, type ChannelCommand } from "./ChannelCommand.ts";
 import {
   ChannelPostRejectedError,
+  ChannelRuntimeError,
   ChannelTransportError,
   channelFailureMessage,
 } from "./ChannelRuntime.ts";
@@ -24,7 +25,10 @@ it.effect("keeps a definite reply rejection's category instead of delivery-unkno
       send,
       Cause.fail(new ChannelPostRejectedError({ message: "Rejected." })),
     );
-    assert.deepStrictEqual(rejected, { message: "Rejected.", category: "credentials" });
+    assert.deepStrictEqual(rejected, {
+      message: "The channel rejected this reply. Correct the channel problem, then retry.",
+      category: "credentials",
+    });
 
     const categorized = yield* channelCommandFailure(
       send,
@@ -46,5 +50,23 @@ it.effect("reports an ambiguous reply transport failure as delivery-unknown", ()
       message: channelFailureMessage("delivery-unknown"),
       category: "delivery-unknown",
     });
+  }),
+);
+
+it.effect("keeps a reply failure that happened before posting out of delivery-unknown", () =>
+  Effect.gen(function* () {
+    const message = "Reconnect this channel before sending a reply.";
+    const failure = yield* channelCommandFailure(
+      send,
+      Cause.fail(new ChannelRuntimeError({ message })),
+    );
+    assert.strictEqual(failure.message, message);
+    assert.notStrictEqual(failure.category, "delivery-unknown");
+
+    const unknown = yield* channelCommandFailure(
+      send,
+      Cause.fail(new ChannelRuntimeError({ message: channelFailureMessage("delivery-unknown") })),
+    );
+    assert.strictEqual(unknown.category, "delivery-unknown");
   }),
 );

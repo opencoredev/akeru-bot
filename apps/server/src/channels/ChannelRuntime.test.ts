@@ -1057,6 +1057,25 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("clears the connecting binding when a start is interrupted", () =>
+    Effect.gen(function* () {
+      const starting = Promise.withResolvers<void>();
+      const harness = makeHarness({
+        startTransport: () => {
+          starting.resolve();
+          return new Promise(() => {});
+        },
+      });
+      const attempt = yield* Effect.forkChild(
+        connectChannel(harness.dependencies, telegramConnect(BOT_ID)),
+      );
+      yield* Effect.promise(() => starting.promise);
+      expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("connecting");
+      yield* Fiber.interrupt(attempt);
+      expect(harness.readModel().bots[0]?.channelBindings).toEqual([]);
+    }),
+  );
+
   it.effect("attaches to the project the client names", () =>
     Effect.gen(function* () {
       const connectionId = ChannelConnectionId.make("channel-default-project");

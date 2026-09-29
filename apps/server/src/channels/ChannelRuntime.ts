@@ -130,7 +130,7 @@ const isNetworkFailure = (cause: unknown, depth = 0): boolean => {
 const isChannelRuntimeError = Schema.is(ChannelRuntimeError);
 /** True for a definite provider rejection: no part of the reply reached the channel. */
 export const isChannelPostRejected = Schema.is(ChannelPostRejectedError);
-const isChannelTransportError = Schema.is(ChannelTransportError);
+export const isChannelTransportError = Schema.is(ChannelTransportError);
 
 /** Classifies a failed channel operation. Unknown provider rejections count as credentials. */
 export const channelFailureCategory = (error: unknown): ChannelFailureCategory => {
@@ -175,7 +175,7 @@ export const channelFailurePresentation = (error: unknown): ChannelFailurePresen
     return { message: channelFailureMessage(category), category };
   }
   if (isChannelPostRejected(error))
-    return { message: error.message, category: channelFailureCategory(error) };
+    return { message: channelDeliveryRejectedError, category: channelFailureCategory(error) };
   return { message: channelCommandFailedMessage };
 };
 
@@ -1975,9 +1975,16 @@ const startAndCommitChannel = (
       return sequence;
     }).pipe(
       Effect.onError((cause) =>
-        options.recordFailure === false || Cause.hasInterruptsOnly(cause)
+        options.recordFailure === false
           ? Effect.void
-          : recordStartFailure(ctx, previous, input, Cause.squash(cause)),
+          : Cause.hasInterruptsOnly(cause)
+            ? // An interrupted attempt must not leave its `connecting` binding behind.
+              ctx.closed
+              ? Effect.void
+              : revertConnectingBinding(ctx, input.botId, input.provider, previous).pipe(
+                  Effect.ignoreCause,
+                )
+            : recordStartFailure(ctx, previous, input, Cause.squash(cause)),
       ),
       Effect.ensuring(Effect.sync(() => ctx.connecting.delete(key))),
     );
