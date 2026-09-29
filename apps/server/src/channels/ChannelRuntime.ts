@@ -1494,6 +1494,10 @@ const startChannel = (
           const current = runtime;
           if (!current || ctx.runtimes.get(runtimeKey(bot.id, input.provider)) !== current) return;
           const currentModel = yield* deps.readModel;
+          const binding = currentModel.bots
+            .find((candidate) => candidate.id === bot.id)
+            ?.channelBindings.find((candidate) => candidate.provider === input.provider);
+          if (binding?.status !== "connected") return;
           let duplicate = false;
           if (message.externalMessageId) {
             for (const summary of currentModel.threads) {

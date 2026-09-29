@@ -2192,6 +2192,55 @@ describe("channel runtime", () => {
     }),
   );
 
+  for (const operation of [disconnectChannel, detachChannelConnection]) {
+    it.effect(`ignores inbound messages when ${operation.name} shutdown fails`, () =>
+      Effect.gen(function* () {
+        const callbacks: Array<
+          Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
+        > = [];
+        let shutdownFails = true;
+        const shutdown = vi.fn(async () => {
+          if (shutdownFails) throw new Error("shutdown failed");
+        });
+        const harness = makeHarness({
+          startTransport: async (_input, onInbound) => {
+            callbacks.push(onInbound);
+            return {
+              externalIdentity: "@akeru",
+              runtime: { post: async () => undefined, shutdown },
+            };
+          },
+        });
+        yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+        expect(callbacks).toHaveLength(1);
+
+        yield* expectFailureMessage(
+          operation(harness.dependencies, BOT_ID, "telegram"),
+          "shutdown failed",
+        );
+        expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("disconnected");
+        const commandsBefore = harness.commands.length;
+        yield* Effect.promise(async () =>
+          callbacks[0]!({
+            externalThreadId: "telegram:failed-shutdown",
+            externalMessageId: "still-active",
+            text: "Do not start a turn",
+          }),
+        );
+        expect(harness.commands).toHaveLength(commandsBefore);
+        expect(
+          harness.commands.filter((command) => command.type === "thread.turn.start"),
+        ).toHaveLength(0);
+
+        shutdownFails = false;
+        yield* stopChannelsForBot(BOT_ID);
+        expect(shutdown).toHaveBeenCalledTimes(2);
+        yield* stopChannelsForBot(BOT_ID);
+        expect(shutdown).toHaveBeenCalledTimes(2);
+      }),
+    );
+  }
+
   it.effect("saves, attaches, reconnects, detaches, and deletes a reusable connection", () =>
     Effect.gen(function* () {
       const connectionId = ChannelConnectionId.make("telegram-main");
