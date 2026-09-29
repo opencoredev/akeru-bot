@@ -69,6 +69,8 @@ export function createComputerViewerController(options: {
   const listeners = new Set<(state: ComputerViewerState) => void>();
   let queue: ComputerAction[] = [];
   let draining = false;
+  let closing: Promise<void> | null = null;
+  let visibilityGeneration = 0;
 
   const dispatch = (event: ComputerViewerEvent) => {
     const next = reduceComputerViewer(state, event);
@@ -80,8 +82,11 @@ export function createComputerViewerController(options: {
   };
 
   const refreshState = async () => {
+    const generation = visibilityGeneration;
     const outcome = await port.getState();
-    if (outcome.ok && state.visible) dispatch({ type: "server-state", state: outcome.value });
+    if (outcome.ok && state.visible && generation === visibilityGeneration) {
+      dispatch({ type: "server-state", state: outcome.value });
+    }
   };
 
   // A failed command usually means the computer changed under us; re-read it.
@@ -159,21 +164,34 @@ export function createComputerViewerController(options: {
       else if (event._tag === "frame") dispatch({ type: "frame", frame: event.frame });
     },
     show: async () => {
+      if (closing) await closing;
       if (state.visible) return;
+      visibilityGeneration += 1;
       dispatch({ type: "visibility", visible: true });
       await refreshState();
     },
     hide: async () => {
+      if (closing) return closing;
       if (!state.visible) return;
       queue = [];
+      visibilityGeneration += 1;
       dispatch({ type: "visibility", visible: false });
       // Closing releases any lease this connection holds, so the bot resumes.
-      await port.close();
+      const pending = port.close().then(() => undefined);
+      closing = pending;
+      try {
+        await pending;
+      } finally {
+        if (closing === pending) closing = null;
+      }
     },
     takeControl: async () => {
+      if (closing) await closing;
+      if (!state.visible) return;
+      const generation = visibilityGeneration;
       dispatch({ type: "pending", pending: "acquire" });
       const outcome = await port.acquire();
-      if (!state.visible) {
+      if (!state.visible || generation !== visibilityGeneration) {
         // The viewer closed while acquiring; hand control straight back.
         if (outcome.ok) await port.release(outcome.value.sessionId);
         return;

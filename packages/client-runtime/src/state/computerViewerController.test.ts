@@ -210,6 +210,63 @@ describe("computer viewer controller", () => {
     expect(deriveComputerViewer(controller.getState()).phase).toBe("hidden");
   });
 
+  it("finishes closing before a reopened viewer acquires control", async () => {
+    const fake = fakePort();
+    const close = deferred<void>();
+    const controller = createComputerViewerController({
+      port: {
+        ...fake.port,
+        close: async () => {
+          fake.calls.push("close");
+          await close.promise;
+          return ok(serverState());
+        },
+      },
+    });
+    await controller.show();
+    const hiding = controller.hide();
+    const reopening = controller.show();
+    const taking = controller.takeControl();
+    expect(fake.calls).toEqual(["getState", "close"]);
+
+    close.resolve();
+    await Promise.all([hiding, reopening, taking]);
+    expect(fake.calls).toEqual(["getState", "close", "getState", "acquire"]);
+    expect(deriveComputerViewer(controller.getState()).owner).toBe("you");
+  });
+
+  it("releases an old acquisition that completes after reopening", async () => {
+    const fake = fakePort();
+    const oldAcquire = deferred<ComputerViewerOutcome<ComputerSession>>();
+    let acquireCount = 0;
+    const controller = createComputerViewerController({
+      port: {
+        ...fake.port,
+        acquire: () => {
+          acquireCount += 1;
+          return acquireCount === 1 ? oldAcquire.promise : fake.port.acquire();
+        },
+      },
+    });
+    await controller.show();
+    const taking = controller.takeControl();
+    await controller.hide();
+    await controller.show();
+    oldAcquire.resolve(
+      ok({
+        sessionId: "old-lease",
+        expiresAt: 60_000,
+        state: serverState({ status: "human" }),
+      }),
+    );
+    await taking;
+    expect(fake.calls).toContain("release");
+    expect(deriveComputerViewer(controller.getState()).owner).toBe("bot");
+
+    await controller.takeControl();
+    expect(deriveComputerViewer(controller.getState()).owner).toBe("you");
+  });
+
   it("ignores stream events while hidden", () => {
     const controller = createComputerViewerController({ port: fakePort().port });
     controller.receive({ _tag: "state", state: serverState({ status: "human" }) });
