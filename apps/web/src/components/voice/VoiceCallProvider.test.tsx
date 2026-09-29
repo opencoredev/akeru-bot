@@ -264,4 +264,29 @@ describe("voice call provider", () => {
     );
     expect(track.enabled).toBe(true);
   });
+
+  it("sends a repeated realtime function call to chat once", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => microphone) },
+    });
+    const controls = renderControls();
+    controls.startOrReturn(mocks.bot as never);
+    await flushVoiceStart();
+    const event = new MessageEvent("message", {
+      data: JSON.stringify({
+        type: "response.function_call_arguments.done",
+        event_id: "event-1",
+        call_id: "function-1",
+        name: "send_to_chat",
+        arguments: JSON.stringify({ message: "Run tests" }),
+      }),
+    });
+    latestPeer?.events.onmessage?.(event);
+    latestPeer?.events.onmessage?.(event);
+    await Promise.resolve();
+    expect(mocks.send).toHaveBeenCalledOnce();
+    controls.hangup();
+    latestPeer?.events.onmessage?.(event);
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
 });

@@ -1,6 +1,11 @@
 import { CallEndIcon, CallIcon } from "@hugeicons/core-free-icons";
 import { useAtomValue } from "@effect/atom-react";
 import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
+import {
+  createRealtimeVoiceSession,
+  createVoiceCallScope,
+  type VoiceCallScope,
+} from "@t3tools/client-runtime/voice";
 import { BotId, type VoiceCallSnapshot } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
@@ -40,6 +45,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 interface ActiveBrowserCall {
   readonly call: Exclude<VoiceCallSnapshot, { status: "idle" }>;
   readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
+  readonly scope: VoiceCallScope;
   readonly peer: RTCPeerConnection;
   readonly microphone: MediaStream;
   readonly speaker: HTMLAudioElement;
@@ -54,6 +60,7 @@ interface PendingBrowserCall {
   readonly abortController: AbortController;
   readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
   failure: Error | null;
+  scope: VoiceCallScope | null;
   microphone: MediaStream | null;
   peer: RTCPeerConnection | null;
   speaker: HTMLAudioElement | null;
@@ -272,6 +279,7 @@ export function scheduleVoiceDisconnectTimeout(
 }
 
 function stopBrowserCall(active: ActiveBrowserCall): void {
+  active.scope.cancel();
   if (active.disconnectTimer !== null) clearTimeout(active.disconnectTimer);
   if (active.environmentDisconnectTimer !== null) {
     clearTimeout(active.environmentDisconnectTimer);
@@ -288,6 +296,7 @@ function stopBrowserCall(active: ActiveBrowserCall): void {
 
 function cleanPendingBrowserCall(pending: PendingBrowserCall): void {
   pending.abortController.abort();
+  pending.scope?.cancel();
   pending.stopListeningForDeviceLoss();
   if (pending.events) {
     pending.events.onmessage = null;
@@ -456,6 +465,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           abortController: new AbortController(),
           environmentId,
           failure: null,
+          scope: null,
           microphone: null,
           peer: null,
           speaker: null,
@@ -481,6 +491,8 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             microphone.getTracks().forEach((track) => track.stop());
             return;
           }
+          const scope = createVoiceCallScope({ botId: bot.id, environmentId });
+          pending.scope = scope;
           pending.stopListeningForDeviceLoss = listenForMicrophoneLoss(microphone, () => {
             pending.failure ??= new Error("The microphone disconnected.");
             pending.peer?.close();
@@ -531,10 +543,10 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               pending.peer?.close();
             },
           };
-          events.onmessage = (channelMessage) =>
-            handleVoiceChannelMessage(String(channelMessage.data), chatHandlers, (payload) => {
-              if (events.readyState === "open") events.send(payload);
-            });
+          const session = createRealtimeVoiceSession(scope, chatHandlers, (payload) => {
+            if (events.readyState === "open") events.send(payload);
+          });
+          events.onmessage = (channelMessage) => session.receive(String(channelMessage.data));
           const offer = await peer.createOffer();
           if (pending.failure) throw pending.failure;
           await peer.setLocalDescription(offer);
@@ -576,6 +588,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           const browserCall: ActiveBrowserCall = {
             call: result.value.call,
             environmentId,
+            scope,
             peer,
             microphone,
             speaker,
