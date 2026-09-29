@@ -109,6 +109,47 @@ describe("Akeru Remote administration", () => {
     ]);
   });
 
+  it("removes the Windows service task on uninstall without the CLI boot-service manager", () => {
+    const root = tempRoot();
+    NodeFS.copyFileSync(
+      new URL("./akeru-remote-admin.mjs", import.meta.url),
+      NodePath.join(root, "remote-admin.mjs"),
+    );
+    NodeFS.writeFileSync(NodePath.join(root, "VERSION"), "1.2.3\n");
+    const calls = NodePath.join(root, "calls.log");
+    const bin = NodePath.join(root, "bin");
+    NodeFS.mkdirSync(bin);
+    NodeFS.writeFileSync(
+      NodePath.join(bin, "schtasks.exe"),
+      `#!/bin/sh\necho "schtasks $*" >> "${calls}"\n`,
+      { mode: 0o755 },
+    );
+    const probe = NodePath.join(root, "probe.mjs");
+    NodeFS.writeFileSync(
+      probe,
+      `import * as fs from "node:fs";\nfs.appendFileSync(${JSON.stringify(calls)}, "server\\n");\n`,
+    );
+    const result = NodeChildProcess.spawnSync(
+      process.execPath,
+      [NodePath.join(root, "remote-admin.mjs"), "remote", "uninstall"],
+      {
+        env: {
+          PATH: `${bin}${NodePath.delimiter}${process.env.PATH ?? ""}`,
+          HOME: root,
+          AKERU_SERVER_ENTRYPOINT: probe,
+        },
+        encoding: "utf8",
+      },
+    );
+    expect(result.status).toBe(0);
+    expect(NodeFS.readFileSync(calls, "utf8").trim().split("\n")).toEqual([
+      "schtasks /End /TN Akeru Remote",
+      "schtasks /Delete /F /TN Akeru Remote",
+      "schtasks /Delete /F /TN Akeru Remote Update",
+      "schtasks /Delete /F /TN Akeru Remote Heartbeat",
+    ]);
+  });
+
   it("pins the release manifest key the Windows updater verifies", () => {
     const pinned = NodeFS.readFileSync(
       new URL("./akeru-release-manifest.pub", import.meta.url),

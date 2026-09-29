@@ -35,6 +35,15 @@ describe("Windows remote installer", () => {
     expect(script).toContain("-LogonType S4U");
   });
 
+  it("rebuilds the pinned runtime from the verified archive on every install", () => {
+    expect(script).not.toContain("if (-not (Test-Path $Pinned))");
+    expect(script).toContain("$Verified = if (Test-Path $Source) { $Source } else { $Target }");
+    expect(script).toContain("Move-Item -LiteralPath $Staging -Destination $Pinned");
+    expect(script.indexOf('(Join-Path $Staging ".install-complete")')).toBeLessThan(
+      script.indexOf("Move-Item -LiteralPath $Staging -Destination $Pinned"),
+    );
+  });
+
   it("derives the server home from AKERU_HOME, never an ambient T3CODE_HOME", () => {
     expect(script).toContain(
       '$RuntimeHome = if ($env:AKERU_HOME) { $env:AKERU_HOME } else { Join-Path $HOME ".akeru" }',

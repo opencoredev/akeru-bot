@@ -119,9 +119,14 @@ try {
     Stop-ScheduledTask -TaskName $TaskName
   }
   New-Item -ItemType Directory -Force -Path $Runtime, (Join-Path $Runtime "versions"), (Join-Path $RuntimeHome "userdata\logs") | Out-Null
-  if (-not (Test-Path $Pinned)) { Copy-Item -LiteralPath $Target -Destination $Pinned -Recurse }
-  Set-Content -LiteralPath (Join-Path $Pinned ".install-complete") -Value $Version -Encoding Ascii
-  Copy-Item -LiteralPath (Join-Path $Target "node_modules\akeru-bot\dist\service-launcher.mjs") -Destination $Runtime -Force
+  # Rebuild the pinned runtime from this run's verified archive, so a partial or older copy is never kept.
+  $Verified = if (Test-Path $Source) { $Source } else { $Target }
+  $Staging = Join-Path $Runtime ("versions\.staging-" + [Guid]::NewGuid())
+  Copy-Item -LiteralPath $Verified -Destination $Staging -Recurse
+  Set-Content -LiteralPath (Join-Path $Staging ".install-complete") -Value $Version -Encoding Ascii
+  if (Test-Path $Pinned) { Remove-Item -LiteralPath $Pinned -Recurse -Force }
+  Move-Item -LiteralPath $Staging -Destination $Pinned
+  Copy-Item -LiteralPath (Join-Path $Verified "node_modules\akeru-bot\dist\service-launcher.mjs") -Destination $Runtime -Force
   $ServiceState = @{ protocol = 2; activeVersion = $Version } | ConvertTo-Json -Compress
   [IO.File]::WriteAllText($StatePath, "$ServiceState`n", [Text.UTF8Encoding]::new($false))
   function Quote-PowerShellLiteral([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }

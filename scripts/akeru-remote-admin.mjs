@@ -34,6 +34,10 @@ const run = (executable, parameters, options = {}) => {
       `${NodePath.basename(executable)} failed with exit code ${result.status ?? "unknown"}.`,
     );
 };
+// Task Scheduler owns the Windows service; the CLI boot-service manager supports only systemd
+// and launchd.
+const SERVICE_TASK = "Akeru Remote";
+const schtasks = (...parameters) => NodeChildProcess.spawnSync("schtasks.exe", parameters);
 const akeru = (...parameters) =>
   run(node, [serverEntry, ...parameters], {
     env: { ...childEnv, AKERU_SERVICE_RUNTIME_ROOT: artifactRoot },
@@ -214,12 +218,13 @@ switch (command) {
     );
   case "rollback":
     run(node, [launcherEntry, "--manual-rollback"], { env: childEnv });
-    akeru("service", "update");
+    schtasks("/End", "/TN", SERVICE_TASK);
+    run("schtasks.exe", ["/Run", "/TN", SERVICE_TASK]);
     break;
   case "uninstall":
-    akeru("service", "uninstall");
-    for (const task of ["Akeru Remote Update", "Akeru Remote Heartbeat"])
-      NodeChildProcess.spawnSync("schtasks.exe", ["/Delete", "/F", "/TN", task]);
+    schtasks("/End", "/TN", SERVICE_TASK);
+    for (const task of [SERVICE_TASK, "Akeru Remote Update", "Akeru Remote Heartbeat"])
+      schtasks("/Delete", "/F", "/TN", task);
     console.log("Removed Akeru Remote. Its data remains in ~/.akeru.");
     break;
   case "update":
