@@ -645,6 +645,72 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("routes a queued observation through its provider instance, including rows queued before instances", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-instance-"));
+    const legacyQueue = new NodeSqlite.DatabaseSync(
+      NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+    );
+    legacyQueue.exec(`
+      CREATE TABLE akeru_observation_queue (
+        id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, resource_id TEXT NOT NULL,
+        model_id TEXT NOT NULL, turn_id TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+        claimed_at TEXT, next_attempt_at TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      INSERT INTO akeru_observation_queue
+        (id, thread_id, resource_id, model_id, turn_id, next_attempt_at, created_at)
+        VALUES ('legacy', 'thread-legacy', 'thread-legacy', 'openai/gpt-5.6-sol', NULL,
+                '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      PRAGMA user_version = 1;
+    `);
+    legacyQueue.close();
+    const controllers: Array<{ threadId: string; controller: unknown }> = [];
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(
+        async (input: {
+          threadId: string;
+          requestContext?: { getRaw: (key: string) => unknown };
+        }) => {
+          controllers.push({
+            threadId: input.threadId,
+            controller: input.requestContext?.getRaw("controller"),
+          });
+          return { observed: false, reflected: false, record: {} } as never;
+        },
+      );
+    const harness = await makeObservationHarness(directory);
+    try {
+      await harness.drainObservationQueue!();
+      await harness.observeAfterTurn!({
+        threadId: "thread-a",
+        modelId: "openai/gpt-5.6-sol",
+        providerInstanceId: "codex-work",
+      });
+      expect(controllers).toEqual([
+        {
+          threadId: "thread-legacy",
+          controller: {
+            resourceId: "thread-legacy",
+            session: { modelId: "openai/gpt-5.6-sol" },
+          },
+        },
+        {
+          threadId: "thread-a",
+          controller: {
+            resourceId: "thread-a",
+            session: { modelId: "openai/gpt-5.6-sol" },
+            state: { providerInstanceId: "codex-work" },
+          },
+        },
+      ]);
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("renews a running observation's lease so another drain cannot reclaim it", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-lease-"));
     const started = Promise.withResolvers<void>();

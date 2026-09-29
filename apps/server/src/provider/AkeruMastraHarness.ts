@@ -286,6 +286,8 @@ export interface AkeruBackgroundObservationInput {
   readonly threadId: string;
   readonly resourceId?: string;
   readonly modelId: string;
+  /** Routes the observer to this instance's own credentials. */
+  readonly providerInstanceId?: string;
   readonly turnId?: string;
   readonly hooks?: ObserveHooks;
 }
@@ -1072,7 +1074,7 @@ export async function createAkeruMastraHarness(
   // opens it directly; the environment state.sqlite schema is provisioned by
   // the Effect migration runner, which this path never sees. The queue store
   // versions itself with PRAGMA user_version instead.
-  const OBSERVATION_QUEUE_SCHEMA_VERSION = 1;
+  const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
   const OBSERVATION_CLAIM_LEASE_MS = 5 * 60_000;
   const OBSERVATION_RETRY_BACKOFF_MS = 30_000;
   const observationQueueDb = new NodeSqlite.DatabaseSync(`${options.memoryDbPath}.queue.sqlite`);
@@ -1097,18 +1099,26 @@ export async function createAkeruMastraHarness(
         attempts INTEGER NOT NULL DEFAULT 0,
         claimed_at TEXT,
         next_attempt_at TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        provider_instance_id TEXT
       )
     `);
     observationQueueDb.exec(
       "CREATE INDEX IF NOT EXISTS akeru_observation_queue_created_at ON akeru_observation_queue (created_at, id)",
     );
     observationQueueDb.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
+  } else if (observationQueueVersion === 1) {
+    // Rows queued before version 2 have no instance and keep using the default connection.
+    observationQueueDb.exec(
+      "ALTER TABLE akeru_observation_queue ADD COLUMN provider_instance_id TEXT",
+    );
+    observationQueueDb.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
   }
   const enqueueObservation = observationQueueDb.prepare(
     `INSERT OR IGNORE INTO akeru_observation_queue
-      (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at, next_attempt_at, created_at)
-      VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)`,
+      (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at, next_attempt_at, created_at,
+       provider_instance_id)
+      VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
   );
   // One statement picks and claims the oldest eligible row, so concurrent
   // drains (in-process or across processes sharing the store) cannot both
@@ -1124,7 +1134,8 @@ export async function createAkeruMastraHarness(
          LIMIT 1
       )
       RETURNING id, thread_id AS threadId, resource_id AS resourceId,
-                model_id AS modelId, turn_id AS turnId, attempts`,
+                model_id AS modelId, turn_id AS turnId, attempts,
+                provider_instance_id AS providerInstanceId`,
   );
   // Release and remove only act on a row this drain still holds. If its lease
   // expired and another drain reclaimed the row, that drain owns the outcome.
@@ -1281,6 +1292,7 @@ export async function createAkeruMastraHarness(
               modelId: string;
               turnId: string | null;
               attempts: number;
+              providerInstanceId: string | null;
             }
           | undefined;
         if (!item) {
@@ -1314,6 +1326,9 @@ export async function createAkeruMastraHarness(
           requestContext.setRaw("controller", {
             resourceId: item.resourceId,
             session: { modelId: item.modelId },
+            ...(item.providerInstanceId === null
+              ? {}
+              : { state: { providerInstanceId: item.providerInstanceId } }),
           });
           await queueObservation(item.threadId, item.resourceId, async () => {
             // A clear or restore queued ahead of this row discarded it.
@@ -1395,6 +1410,7 @@ export async function createAkeruMastraHarness(
         input.turnId ?? null,
         now,
         now,
+        input.providerInstanceId ?? null,
       );
       return true;
     } catch (cause) {

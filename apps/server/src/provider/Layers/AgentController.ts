@@ -1361,6 +1361,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           threadId: String(threadId),
           resourceId: String(threadId),
           modelId: resolved.mastraModelId,
+          providerInstanceId: active.providerInstanceId,
           turnId: String(turn.turnId),
         })
         .catch((cause) => {
