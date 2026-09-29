@@ -63,13 +63,17 @@ export function channelRepairAction(
   ) {
     return "choose-project";
   }
+  if (
+    binding.failureCategory === "delivery-unknown" &&
+    (binding.status === "connected" || binding.status === "failed")
+  ) {
+    return "check-delivery";
+  }
   switch (binding.status) {
     case "connected":
       // A connected binding with a failure means a later attempt or reply failed while the
       // running transport stayed up. Offer the repair for that failure.
       switch (binding.failureCategory) {
-        case "delivery-unknown":
-          return "check-delivery";
         case "credentials":
           return "update-credentials";
         case "network":

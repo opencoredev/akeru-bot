@@ -59,6 +59,7 @@ describe("channel presentation", () => {
     expect(at("disconnected")).toBe("connect");
     expect(at("needs-reconnect", "network")).toBe("reconnect");
     expect(at("failed", "credentials")).toBe("update-credentials");
+    expect(at("failed", "delivery-unknown")).toBe("check-delivery");
     expect(at("failed", "network")).toBe("reconnect");
     expect(at("failed", "restore")).toBe("reconnect");
     expect(at("failed", "project")).toBe("choose-project");
@@ -68,10 +69,14 @@ describe("channel presentation", () => {
       channelRepairAction({ status: "failed", projectId, failureCategory: "credentials" }, []),
     ).toBe("choose-project");
     expect(
+      channelRepairAction({ status: "failed", projectId, failureCategory: "delivery-unknown" }, []),
+    ).toBe("choose-project");
+    expect(
       channelRepairAction({ status: "failed", projectId, failureCategory: "credentials" }),
     ).toBe("update-credentials");
     expect(channelRepairLabel("none")).toBeNull();
     expect(channelRepairLabel("update-credentials")).toBe("Update credentials");
+    expect(channelRepairLabel(at("failed", "delivery-unknown"))).toBe("Check the channel");
   });
 
   it("reports only confirmed deliveries and does not choose a default project", () => {
