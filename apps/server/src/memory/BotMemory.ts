@@ -32,6 +32,7 @@ import {
   AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS,
   AKERU_MEMORY_REVIEW_PROMPT_INTERVAL,
 } from "./BotMemoryReview.ts";
+import { scanMemoryContent } from "./memoryContentSafety.ts";
 
 export {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
@@ -45,22 +46,6 @@ export const BOT_MEMORY_ENTRY_DELIMITER = "\n\n§\n\n";
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 const LOCK_STALE_AFTER_MS = 30_000;
 const LOCK_WAIT_LIMIT_MS = 5_000;
-
-const invisibleCharacters = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/u;
-const threatPatterns: ReadonlyArray<readonly [RegExp, string]> = [
-  [
-    /\bignore\s+(?:all\s+)?(?:(?:previous|prior)\s+)?(?:system\s+|developer\s+)?instructions?\b/iu,
-    "instruction override",
-  ],
-  [
-    /\b(?:reveal|print|show|repeat|exfiltrate)\b.{0,48}\b(?:system prompt|developer message|hidden instructions?)\b/iu,
-    "prompt exfiltration",
-  ],
-  [/<\/?(?:system|developer|assistant)(?:\s|>)/iu, "forged prompt role"],
-  [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u, "private key"],
-  [/\b(?:sk-(?:proj-)?|gh[pousr]_|xox[baprs]-)[A-Za-z0-9_-]{16,}\b/u, "credential"],
-  [/\bAKIA[0-9A-Z]{16}\b/u, "credential"],
-];
 
 const BotMemoryErrorReason = Schema.Union([
   Schema.TaggedStruct("access-denied", {}),
@@ -300,17 +285,8 @@ function renderEntries(entries: ReadonlyArray<string>): string {
   return entries.join(BOT_MEMORY_ENTRY_DELIMITER);
 }
 
-function scanContent(content: string): ReadonlyArray<string> {
-  const findings: string[] = [];
-  if (invisibleCharacters.test(content)) findings.push("invisible Unicode control characters");
-  for (const [pattern, label] of threatPatterns) {
-    if (pattern.test(content)) findings.push(label);
-  }
-  return findings;
-}
-
 export function assertSafeContent(content: string): void {
-  const findings = scanContent(content);
+  const findings = scanMemoryContent(content);
   if (findings.length > 0) {
     throw makeBotMemoryError(
       "unsafe-content",
@@ -1108,7 +1084,7 @@ export class BotMemoryStore {
       };
       if (document.content.length > document.charLimit) return blockedForSize();
       const entries = parseEntries(document.content).map((entry) => {
-        const findings = scanContent(entry);
+        const findings = scanMemoryContent(entry);
         return findings.length === 0
           ? entry
           : `[BLOCKED: ${document.target.toUpperCase()} memory contained ${findings.join(", ")}. Edit the memory file to remove it.]`;

@@ -9,6 +9,8 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
+import { scanMemoryContent } from "./memoryContentSafety.ts";
+
 /**
  * Build the provider input from the durable current revisions.
  *
@@ -39,6 +41,7 @@ export function buildProviderMemoryPacket(
   let estimatedTokens = 0;
   for (const revision of candidates) {
     if (facts.length >= AKERU_MEMORY_PACKET_MAX_FACTS) break;
+    if (scanMemoryContent(revision.fact).length > 0) continue;
     const fact = {
       memoryId: revision.rootId,
       expectedRevision: revision.revision,
