@@ -514,6 +514,20 @@ describe("resolveLatestRosterMessage", () => {
     ).toEqual(fallback);
   });
 
+  it("ignores a newer fallback sent to another chat", () => {
+    const answer = messages([
+      { role: "assistant", text: "Yesterday", at: "2026-08-20T10:00:00.000Z" },
+    ]);
+    const fallback = { text: "Today", at: "2026-08-20T12:00:00.000Z", threadId: "chat-b" };
+    expect(resolveLatestRosterMessage(fallback, answer, "chat-a")).toEqual({
+      text: "Yesterday",
+      at: "2026-08-20T10:00:00.000Z",
+    });
+    expect(resolveLatestRosterMessage(fallback, answer, "chat-b")).toMatchObject({
+      text: "Today",
+    });
+  });
+
   it("flattens markdown and skips messages that flatten to nothing", () => {
     expect(
       resolveLatestRosterMessage(

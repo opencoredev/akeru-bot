@@ -33,7 +33,11 @@ export function useBotThreadCandidate(
     [environmentId, openThreadId],
   );
   const openShell = useThreadShell(openRef);
-  const activeOpenRef = openShell && isBotOwnChatShell(botId, openShell) ? openRef : null;
+  // An archived chat no longer holds the bot's view, matching resolveBotThreadTarget.
+  const activeOpenRef =
+    openShell && openShell.archivedAt === null && isBotOwnChatShell(botId, openShell)
+      ? openRef
+      : null;
   const remembered =
     parsed !== null &&
     (options?.rememberedInPrimaryOnly !== true || parsed.environmentId === environmentId)

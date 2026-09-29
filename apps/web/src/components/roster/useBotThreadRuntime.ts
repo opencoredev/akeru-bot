@@ -39,6 +39,7 @@ import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import {
   buildBotTurnStartInput,
   createBotTurnSubmissionQueue,
+  findLatestBotThreadTarget,
   findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
   nextRetainedChat,
@@ -103,6 +104,17 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         : [],
     [primaryEnvironmentId, threadShells],
   );
+  // An opened chat that has become the newest, after a send say, no longer
+  // needs pinning; keeping the pin would hide a later chat from the default view.
+  const latestThreadId = primaryEnvironmentId
+    ? (findLatestBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells)?.threadId ??
+      null)
+    : null;
+  useEffect(() => {
+    if (openThreadId !== null && openThreadId === latestThreadId) {
+      useRosterStore.getState().openBotChat(botId, null);
+    }
+  }, [botId, latestThreadId, openThreadId]);
   // Holds a just-created chat until its shell arrives. A chat that was linked
   // and then left the shell list was archived or deleted, so it is dropped
   // rather than sent into.
@@ -500,6 +512,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
           useRosterStore.getState().recordLastMessage(botId, {
             text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
             at: createdAt,
+            threadId: currentThreadRef.threadId,
           });
           return true;
         } catch (cause) {

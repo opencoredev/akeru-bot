@@ -229,6 +229,8 @@ export function resolveRosterBotId(
 export interface RosterLastMessage {
   text: string;
   at: string;
+  /** The chat the message went to, when known. */
+  threadId?: string;
 }
 
 type MarkdownNode = ReturnType<typeof fromMarkdown> | MarkdownNodeChild;
@@ -332,6 +334,7 @@ export function resolveLatestRosterMessage(
     createdAt: string;
     parentThreadId?: string | null | undefined;
   }>,
+  threadId?: string | null,
 ): RosterLastMessage | null {
   let latest: RosterLastMessage | null = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -345,8 +348,14 @@ export function resolveLatestRosterMessage(
   }
   // A fallback that flattens to nothing (an image-only attachment, say) must
   // not beat an older visible answer on timestamp alone.
-  const flatFallback = fallback
-    ? { ...fallback, text: flattenMarkdownPreview(fallback.text) }
+  // The fallback is kept per bot, so one sent to another chat does not
+  // describe the chat that is open.
+  const sameChatFallback =
+    fallback && (fallback.threadId === undefined || !threadId || fallback.threadId === threadId)
+      ? fallback
+      : null;
+  const flatFallback = sameChatFallback
+    ? { ...sameChatFallback, text: flattenMarkdownPreview(sameChatFallback.text) }
     : null;
   const usableFallback = flatFallback && flatFallback.text.length > 0 ? flatFallback : null;
   if (!latest) return usableFallback;

@@ -300,8 +300,8 @@ function useLatestBotMessage(
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
   const message = useMemo(
-    () => resolveLatestRosterMessage(fallback, visibleMessages),
-    [fallback, visibleMessages],
+    () => resolveLatestRosterMessage(fallback, visibleMessages, threadRef?.threadId),
+    [fallback, visibleMessages, threadRef?.threadId],
   );
   // The chat title reads as the bot's current task; the placeholder title of
   // a brand-new chat says nothing, so the chip stays hidden until a real
