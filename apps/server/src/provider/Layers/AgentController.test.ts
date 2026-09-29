@@ -1447,6 +1447,14 @@ describe("AgentControllerLive", () => {
             }) as unknown as OrchestrationReadModel,
           dispatch: async (command) => {
             dispatched.push(command);
+            // Grace saves another disabled server while docs is being removed;
+            // the sweep must keep that newer choice.
+            if (command.type === "mcp-server.delete" && command.mcpServerId === "docs") {
+              snapshotBots[1]!.disabledMcpServerIds = [
+                ...snapshotBots[1]!.disabledMcpServerIds,
+                McpServerId.make("newer"),
+              ];
+            }
             return { sequence: dispatched.length };
           },
         });
@@ -1620,7 +1628,7 @@ describe("AgentControllerLive", () => {
             type: "bot.update",
             commandId: anyCommandId,
             botId: "grace",
-            disabledMcpServerIds: ["other"],
+            disabledMcpServerIds: ["other", "newer"],
           },
         ]);
 

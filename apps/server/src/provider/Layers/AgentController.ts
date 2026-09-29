@@ -393,7 +393,11 @@ async function deleteCatalogMcpServer(
   const sweptBots = snapshot.bots.filter((bot) =>
     bot.disabledMcpServerIds.some((id) => String(id) === serverId),
   );
-  for (const bot of sweptBots) {
+  for (const swept of sweptBots) {
+    // Each bot's list is re-read so a setting saved since the first snapshot
+    // survives the sweep.
+    const bot = (await runtime.readSnapshot()).bots.find((entry) => entry.id === swept.id);
+    if (!bot?.disabledMcpServerIds.some((id) => String(id) === serverId)) continue;
     await runtime.dispatch({
       type: "bot.update",
       commandId: CommandId.make(`catalog:mcp-sweep:${NodeCrypto.randomUUID()}`),
