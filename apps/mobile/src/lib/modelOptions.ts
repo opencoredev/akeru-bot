@@ -57,12 +57,17 @@ function providerDisplayLabel(provider: {
 export function resolveModelSendBlock(
   config: T3ServerConfig | null | undefined,
   selection: ModelSelection,
+  subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ProviderAvailabilityPresentation | null {
   if (!config) return null;
   const provider = config.providers.find(
     (candidate) => candidate.instanceId === selection.instanceId,
   );
-  const reason = providerAvailabilityReason(provider, selection.model);
+  const connected = filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses);
+  const reason =
+    provider && !connected.includes(provider)
+      ? "missing-login"
+      : providerAvailabilityReason(provider, selection.model);
   if (reason === null || reason === "temporary-failure") return null;
   const modelName =
     provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??

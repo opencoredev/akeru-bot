@@ -332,4 +332,21 @@ describe("resolveModelSendBlock", () => {
     expect(resolveModelSendBlock(null, selection)).toBe(null);
     expect(resolveModelSendBlock(claude({}), selection)).toBe(null);
   });
+
+  it("blocks a disconnected built-in subscription but keeps a custom instance usable", () => {
+    const disconnected = [
+      {
+        provider: "anthropic" as const,
+        connected: false,
+        dependentBots: [],
+        dependentRoutines: [],
+      },
+    ];
+    expect(resolveModelSendBlock(claude({}), selection, disconnected)?.title).toBe(
+      "Claude is not connected",
+    );
+    const customSelection = { ...selection, instanceId: ProviderInstanceId.make("claude_work") };
+    const custom = claude({ instanceId: customSelection.instanceId });
+    expect(resolveModelSendBlock(custom, customSelection, disconnected)).toBeNull();
+  });
 });

@@ -325,8 +325,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // The chat keeps its saved model even when it cannot run; Send stays off
   // and the reason shows above the composer until the provider is repaired.
   const sendBlock = useMemo(
-    () => resolveModelSendBlock(props.serverConfig, props.selectedThread.modelSelection),
-    [props.serverConfig, props.selectedThread.modelSelection],
+    () =>
+      resolveModelSendBlock(
+        props.serverConfig,
+        props.selectedThread.modelSelection,
+        subscriptionStatuses,
+      ),
+    [props.serverConfig, props.selectedThread.modelSelection, subscriptionStatuses],
   );
   const canSend = hasContent && sendBlock === null;
   const sendBlockHint = sendBlock ? `${sendBlock.title}. ${sendBlock.description}` : undefined;
