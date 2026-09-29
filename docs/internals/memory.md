@@ -140,9 +140,10 @@ or model configuration; durable memory is not a model feature.
 
 `enabled === false` rejects every `memory.facts.mutate` write and
 `memory.document.replace` write at the WS boundary, and the agent controller
-withholds the bot's whole memory prompt snapshot and memory tool. Listing,
-export, forget, and delete remain available so the user can still inspect and
-clean up stored facts.
+withholds the bot's whole memory prompt snapshot and memory tool. That
+includes `fact.forget` and `fact.delete`, and the web fact list hides every
+action while Memory is off. Listing and export remain available so the user
+can still inspect stored facts; cleanup needs Memory turned back on.
 
 `privateBotMemory === false` narrows that gate to the bot-private scope. The
 memory tool loses its `memory` (bot-private `MEMORY.md`) target, the
