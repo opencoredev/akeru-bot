@@ -371,9 +371,15 @@ const make = Effect.gen(function* () {
           }
 
           // Save under the bot that asked, even if a different group bot is
-          // responding by the time the user decides.
-          if (candidate.authorBotId !== null) {
-            access = { ...access, respondingBotId: BotId.make(candidate.authorBotId) };
+          // responding by the time the user decides. A bot that has since left
+          // the group falls back to the current responder so the decision lands.
+          const authorBotId = candidate.authorBotId;
+          if (
+            authorBotId !== null &&
+            (access.groupId === null ||
+              access.groupMemberBotIds.some((memberBotId) => memberBotId === authorBotId))
+          ) {
+            access = { ...access, respondingBotId: BotId.make(authorBotId) };
           }
           const createdAt = yield* nowIso;
           let fact =

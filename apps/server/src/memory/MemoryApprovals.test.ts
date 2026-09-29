@@ -549,6 +549,39 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     }),
   );
 
+  it.effect("lets the chat decide after the asking bot leaves the group", () =>
+    Effect.gen(function* () {
+      const approvals = yield* MemoryApprovals;
+      const otherBotId = BotId.make("bot-bob");
+      const groupAccess = {
+        ...access,
+        groupId: GroupId.make("group-release"),
+        respondingBotId: botId,
+        groupMemberBotIds: [botId, otherBotId],
+      };
+      const departedAccess = {
+        ...groupAccess,
+        respondingBotId: otherBotId,
+        groupMemberBotIds: [otherBotId],
+      };
+      for (const decision of ["approve", "reject"] as const) {
+        const proposed = yield* approvals.propose({
+          access: groupAccess,
+          fact: `Ada owns the ${decision} checklist.`,
+          scope: "group",
+          sensitive: false,
+          mode: "ask",
+        });
+        if (proposed.status !== "pending") return assert.fail("expected a pending request");
+        const decided = yield* approvals.decide({
+          access: departedAccess,
+          decision: { candidateId: proposed.candidateId, decision },
+        });
+        assert.equal(decided.status, decision === "approve" ? "approved" : "rejected");
+      }
+    }),
+  );
+
   it.effect("refuses to hold a request for a scope the chat does not have", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
