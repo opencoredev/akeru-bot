@@ -1044,6 +1044,16 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         archive.revisions.map(({ revision }) => revision.revision),
         [1, 2],
       );
+      const unchanged = yield* previewAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+      });
+      assert.deepEqual(
+        unchanged.items.map((item) => item.classification),
+        ["skipped"],
+      );
 
       yield* repository.deleteRoot({ access: moveAccess, rootId });
       const preview = yield* previewAkeruMemoryImport({
@@ -1068,7 +1078,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       assert.equal(restored.id, moved!.id);
       assert.equal(restored.partition.scope, "project");
       assert.equal(restored.approvalState, "pending");
-      assert.lengthOf(yield* repository.listHistory({ access: moveAccess, rootId }), 2);
+      const history = yield* repository.listHistory({ access: moveAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => [revision.partition.scope, revision.sourceThreadId]),
+        [
+          ["project", moveAccess.threadId],
+          ["bot", moveAccess.threadId],
+        ],
+      );
     }),
   );
 

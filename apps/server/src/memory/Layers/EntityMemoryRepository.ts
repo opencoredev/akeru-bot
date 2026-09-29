@@ -738,6 +738,11 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           reason: "The archive record belongs to a different memory owner.",
         });
       }
+      // A revision written before a scope move keeps the validated scope it was written in.
+      if (owner !== selected) {
+        normalized.push({ ...revision, authorBotId, initiatingUserId: input.access.userId });
+        continue;
+      }
       const sharedBotIds = [
         ...new Set([
           ...input.access.groupMemberBotIds,
@@ -789,7 +794,9 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
           partitionId: selected.partitionId,
         },
         ...entity,
-        sourceThreadId: selected.scope === "thread" ? input.access.threadId : null,
+        // Chat facts belong to the importing chat; wider facts keep the chat they came from.
+        sourceThreadId:
+          selected.scope === "thread" ? input.access.threadId : revision.sourceThreadId,
         authorBotId,
         initiatingUserId: input.access.userId,
         visibility: selected.visibility,
