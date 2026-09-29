@@ -105,7 +105,10 @@ export function latestBotThreadFailure(input: {
   readonly lastUserMessageAt: string | null;
 }): BotThreadFailure | null {
   const { activities, latestTurn, session, lastUserMessageAt } = input;
-  if (latestTurn?.state === "error") {
+  if (
+    latestTurn?.state === "error" &&
+    (lastUserMessageAt === null || latestTurn.requestedAt >= lastUserMessageAt)
+  ) {
     const message =
       latestThreadRuntimeError(activities, latestTurn) ??
       latestTurn.errorMessage ??

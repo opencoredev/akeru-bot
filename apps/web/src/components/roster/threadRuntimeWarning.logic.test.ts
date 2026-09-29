@@ -192,6 +192,23 @@ describe("latestBotThreadFailure", () => {
     });
   });
 
+  it("uses a newer start failure instead of an earlier failed turn", () => {
+    const failedTurn = {
+      ...runningTurn,
+      state: "error" as const,
+      completedAt: timestamp,
+      unavailability: "limit-reached" as const,
+    };
+    expect(
+      latestBotThreadFailure({
+        activities: [startFailed],
+        latestTurn: failedTurn,
+        session: { status: "error", lastError: "Claude is not signed in." },
+        lastUserMessageAt: laterTimestamp,
+      }),
+    ).toEqual({ message: "Claude is not signed in.", unavailability: "missing-login" });
+  });
+
   it("stays quiet once the request has a reply", () => {
     const completedTurn = { ...runningTurn, state: "completed" as const, completedAt: timestamp };
     expect(
