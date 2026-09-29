@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
       _tag: "Success" | "Failure";
     }>
   >(),
+  disconnect: vi.fn<
+    (value: { input: { botId: string; provider: string } }) => Promise<{
+      _tag: "Success" | "Failure";
+    }>
+  >(),
   deleteConnection:
     vi.fn<
       (value: { input: { connectionId: string } }) => Promise<{ _tag: "Success" | "Failure" }>
@@ -58,12 +63,14 @@ vi.mock("../../state/bots", () => ({
       saveConnection: "save",
       attach: "attach",
       detach: "detach",
+      disconnect: "disconnect",
       deleteConnection: "deleteConnection",
     },
   },
 }));
 vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: (command: "save" | "attach" | "detach" | "deleteConnection") => mocks[command],
+  useAtomCommand: (command: "save" | "attach" | "detach" | "disconnect" | "deleteConnection") =>
+    mocks[command],
 }));
 vi.mock("./BotChannelsSettings", () => ({ parsePhotonHostedCredentials: vi.fn() }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
@@ -219,6 +226,7 @@ beforeEach(async () => {
   mocks.save.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.attach.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.detach.mockReset().mockResolvedValue({ _tag: "Success" });
+  mocks.disconnect.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.deleteConnection.mockReset().mockResolvedValue({ _tag: "Success" });
   mocks.toast.mockReset();
   mocks.buttons.clear();
@@ -464,6 +472,28 @@ describe("ChannelSetupDialog credential update", () => {
     );
     expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalled();
+    expect(mocks.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("keeps a restored channel disconnected when it was disconnected before", async () => {
+    await act(() =>
+      root.render(
+        <ChannelSetupDialog
+          key="replace-disconnected"
+          {...props}
+          replacing={{ ...replacing, disconnected: true }}
+        />,
+      ),
+    );
+    mocks.attach.mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    expect(mocks.attach.mock.calls.map(([value]) => value.input.connectionId)).toContain(
+      oldConnection,
+    );
+    expect(mocks.disconnect).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { botId: "test-bot", provider: "telegram" } }),
+    );
   });
 
   it("says so when the old connection cannot be restored either", async () => {

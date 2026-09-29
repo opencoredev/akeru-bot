@@ -287,6 +287,7 @@ export function ChannelConnectionRow({
                   name: connection.name,
                   botId: bot.id,
                   projectId: binding.projectId,
+                  disconnected: binding.status === "disconnected",
                 });
               } else {
                 // A disconnected channel starts in the project the picker shows.
