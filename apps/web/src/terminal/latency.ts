@@ -173,9 +173,9 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
       if (this.pendingKeys[index]?.byteAt !== undefined) this.pendingKeys.splice(index, 1);
     }
     const unmatchedGlyphs = [...changedGlyphs.values()].reduce((sum, count) => sum + count, 0);
-    for (let index = 0; index < unmatchedGlyphs && this.pendingPaints.length > 0; index++) {
-      addSample(this.pendingPaints.shift()!);
-    }
+    const latestPaint = this.pendingPaints.pop();
+    this.pendingPaints.length = 0;
+    if (unmatchedGlyphs > 0 && latestPaint) addSample(latestPaint);
   }
   reset(): void {
     this.pendingKeys.length = 0;

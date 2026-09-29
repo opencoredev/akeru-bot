@@ -62,6 +62,14 @@ describe("terminal latency harness", () => {
     r.onGlyphPaint(3, paint("a"));
     expect(r.samples).toEqual([]);
   });
+  it("does not credit overwritten output arrivals to a later repaint", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint("", ""));
+    r.onByteArrival(10, "old output");
+    r.onByteArrival(20, "new output");
+    r.onGlyphPaint(30, paint("n", "e"));
+    expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 10 }]);
+  });
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     r.onGlyphPaint(0, paint(""));
