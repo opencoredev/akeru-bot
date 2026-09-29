@@ -33,6 +33,7 @@ import { BotInboxService } from "../bot-inbox/service.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { assertSafeContent } from "./BotMemory.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
 
 export class MemoryApprovalError extends Schema.TaggedErrorClass<MemoryApprovalError>()(
@@ -256,6 +257,8 @@ const make = Effect.gen(function* () {
           ${affectedBotIdsJson}, 'pending', ${createdAt}
         )
       `.pipe(Effect.mapError(failWith("Could not store the memory candidate")));
+      // Without its chat card the candidate cannot be decided, so drop it
+      // when the request cannot be published.
       yield* appendActivity({
         threadId: input.access.threadId,
         candidateId,
@@ -263,7 +266,14 @@ const make = Effect.gen(function* () {
         summary: `Save to ${SCOPE_LABELS[input.scope]} memory?`,
         payload: request,
         createdAt,
-      });
+      }).pipe(
+        Effect.tapError(() =>
+          sql`
+            DELETE FROM akeru_memory_candidates
+            WHERE tenant_id = ${input.access.tenantId} AND candidate_id = ${candidateId}
+          `.pipe(Effect.ignore),
+        ),
+      );
       yield* openInboxItem(request);
       return { status: "pending", candidateId } as const;
     },
@@ -355,6 +365,16 @@ const make = Effect.gen(function* () {
           if (fact.length > AKERU_MEMORY_FACT_MAX_CHARS) {
             return yield* new MemoryApprovalError({ message: "Memory text is too long." });
           }
+          if (decision.decision === "approve" && decision.fact !== undefined) {
+            // An edited fact goes through the same guard as a tool-proposed one.
+            yield* Effect.try({
+              try: () => assertSafeContent(fact),
+              catch: (cause) =>
+                new MemoryApprovalError({
+                  message: cause instanceof Error ? cause.message : "Memory content was rejected.",
+                }),
+            });
+          }
           if (
             decision.decision === "approve" &&
             decision.scope !== undefined &&
@@ -421,7 +441,8 @@ const make = Effect.gen(function* () {
                 rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
               })
               .pipe(Effect.catchTag("EntityMemoryNotFoundError", () => Effect.succeed(null)));
-            if (orphan !== null) {
+            // A retry after a crash may find the orphan already retracted.
+            if (orphan !== null && orphan.deletionState === "active") {
               yield* repository
                 .applyMutation({
                   access,

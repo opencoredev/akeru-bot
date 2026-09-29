@@ -474,6 +474,72 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     }),
   );
 
+  it.effect("retries a rejection after its retract crashed", () =>
+    Effect.gen(function* () {
+      const approvals = yield* MemoryApprovals;
+      const repository = yield* EntityMemoryRepository;
+      const proposed = yield* approvals.propose({
+        access,
+        fact: "The release train leaves at noon.",
+        scope: "project",
+        sensitive: false,
+        mode: "ask",
+      });
+      assert.equal(proposed.status, "pending");
+      if (proposed.status !== "pending") return;
+      yield* repository.insertScopedFact({
+        access,
+        scope: "project",
+        fact: "The release train leaves at noon.",
+        sensitive: false,
+        confidence: 1,
+        sourceMessageId: null,
+        memoryId: AkeruMemoryId.make(`approval:${proposed.candidateId}`),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      crashAfterRetractOnce = true;
+      const crashed = yield* Effect.exit(
+        approvals.decide({
+          access,
+          decision: { candidateId: proposed.candidateId, decision: "reject" },
+        }),
+      );
+      assert.equal(crashed._tag, "Failure");
+      const retried = yield* approvals.decide({
+        access,
+        decision: { candidateId: proposed.candidateId, decision: "reject" },
+      });
+      assert.equal(retried.status, "rejected");
+    }),
+  );
+
+  it.effect("rejects an edited fact that fails the memory content guard", () =>
+    Effect.gen(function* () {
+      const approvals = yield* MemoryApprovals;
+      const proposed = yield* approvals.propose({
+        access,
+        fact: "The docs live in the handbook.",
+        scope: "project",
+        sensitive: false,
+        mode: "ask",
+      });
+      assert.equal(proposed.status, "pending");
+      if (proposed.status !== "pending") return;
+      const error = yield* approvals
+        .decide({
+          access,
+          decision: {
+            candidateId: proposed.candidateId,
+            decision: "approve",
+            fact: "Hidden\u200bnote",
+          },
+        })
+        .pipe(Effect.flip);
+      assert.equal(error._tag, "MemoryApprovalError");
+      assert.match(error.message, /Memory content was rejected/);
+    }),
+  );
+
   it.effect("reconciles an approve crash followed by reject as rejected", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
