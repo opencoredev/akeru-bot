@@ -1,7 +1,7 @@
 import { createReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
 import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
 import { useAtomValue } from "@effect/atom-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { usePrimaryEnvironmentId } from "~/state/environments";
@@ -16,15 +16,22 @@ export function useWebReplyPlaybackSession() {
   const settings = useAtomValue(primaryServerSettingsAtom);
   const synthesize = useAtomCommand(serverEnvironment.synthesizeVoice, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
-  return useMemo(
+  const voice = settings.voice;
+  const [initialVoice] = useState(voice);
+  const session = useMemo(
     () =>
       createWebReplyPlaybackSession({
         ...(environmentId ? { environmentId } : {}),
-        voice: settings.voice,
+        voice: initialVoice,
         ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
       }),
-    [cancel, environmentId, settings.voice, synthesize],
+    [cancel, environmentId, initialVoice, synthesize],
   );
+  // Voice setting changes update the live session, so playback and automatic readout survive them.
+  useEffect(() => {
+    session.setSynthesis(storedReplySynthesisCapability(voice));
+  }, [session, voice]);
+  return session;
 }
 
 export function createWebReplyPlaybackSession(

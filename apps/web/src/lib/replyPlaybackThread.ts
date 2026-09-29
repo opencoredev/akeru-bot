@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
-import type {
-  ReplyPlaybackMessage,
-  ReplyPlaybackSession,
+import {
+  storedReplySynthesisCapability,
+  type ReplyPlaybackMessage,
+  type ReplyPlaybackSession,
 } from "@t3tools/client-runtime/reply-playback";
 
 import { useEnvironmentConnectionState } from "~/state/environments";
 import { voiceEnvironmentConnectionLost } from "../components/voice/VoiceCall";
 import { useOptionalReplyPlayback } from "../components/chat/ReplyPlaybackProvider";
+
+const unavailableSynthesis = storedReplySynthesisCapability(undefined);
+const subscribeNothing = () => () => {};
+const getUnavailableSynthesis = () => unavailableSynthesis;
 
 export function replyPlaybackControlProps(
   session: ReplyPlaybackSession | null,
@@ -36,6 +41,10 @@ export function useReplyPlaybackThread(options: {
 }) {
   const session = useOptionalReplyPlayback();
   const connection = useEnvironmentConnectionState(options.environmentId ?? null);
+  const synthesis = useSyncExternalStore(
+    session?.subscribeSynthesis ?? subscribeNothing,
+    session?.getSynthesisSnapshot ?? getUnavailableSynthesis,
+  );
   const [contextKey, setContextKey] = useState<string | null>(null);
   const messagesRef = useRef(options.messages);
   messagesRef.current = options.messages;
@@ -58,21 +67,26 @@ export function useReplyPlaybackThread(options: {
     session.setContext({
       environmentId,
       threadId,
-      provider: session.synthesis.provider,
-      voice: session.synthesis.voice,
+      provider: synthesis.provider,
+      voice: synthesis.voice,
       connected: !voiceEnvironmentConnectionLost(connection.data),
       mediaBlocked: options.mediaBlocked,
     });
     // A fresh context has no baseline, and the signature effect below may not re-run when the
     // visible messages look the same, so establish the baseline here.
     session.observe(messagesRef.current);
-    setContextKey(
-      `${environmentId}/${threadId}/${session.synthesis.provider}/${session.synthesis.voice}`,
-    );
+    setContextKey(`${environmentId}/${threadId}/${synthesis.provider}/${synthesis.voice}`);
     return () => {
       session.clearContextIf(environmentId, threadId);
     };
-  }, [session, options.environmentId, options.threadId, options.mediaBlocked, connection.data]);
+  }, [
+    session,
+    synthesis,
+    options.environmentId,
+    options.threadId,
+    options.mediaBlocked,
+    connection.data,
+  ]);
   // Keyed on the message signature, not array identity, so unrelated re-renders skip the scan.
   useEffect(() => {
     session?.observe(messagesRef.current);
