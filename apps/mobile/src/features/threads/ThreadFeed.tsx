@@ -1625,7 +1625,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     playbackMessagesRef.current = next;
     return next;
   }, [props.feed]);
-  useReplyPlaybackThread({
+  const replySynthesis = useReplyPlaybackThread({
     environmentId: props.environmentId,
     threadId: props.threadId,
     messages: playbackMessages,
@@ -2187,6 +2187,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       userBubbleMaxWidth,
       skills: props.skills,
       replyPlayback,
+      replySynthesis,
     }),
     [
       copiedRowId,
@@ -2209,6 +2210,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       props.skills,
       renderMarkdownImage,
       replyPlayback,
+      replySynthesis,
     ],
   );
   const renderItem = useCallback(

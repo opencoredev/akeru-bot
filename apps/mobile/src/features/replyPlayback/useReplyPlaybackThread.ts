@@ -68,4 +68,5 @@ export function useReplyPlaybackThread(options: {
   useEffect(() => {
     session?.observe(options.messages);
   }, [session, options.messages, signature]);
+  return synthesis;
 }
