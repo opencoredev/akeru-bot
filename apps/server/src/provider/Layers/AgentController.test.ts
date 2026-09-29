@@ -5632,6 +5632,68 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("does not strand the turn on a failed answer to an unknown question", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+        for (const toolCallId of ["question-b"]) {
+          mastra.emit({
+            type: "tool_suspended",
+            toolCallId,
+            toolName: "ask_user",
+            args: {},
+            suspendPayload: {},
+          } as AgentControllerEvent);
+        }
+        mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        const latestState = () =>
+          events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+
+        vi.mocked(mastra.session.respondToToolSuspension).mockRejectedValueOnce(
+          new Error("connection lost"),
+        );
+        const failedExit = yield* controller
+          .respondToUserInput({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("question-stale"),
+            answers: { "question-stale": "First" },
+          })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(failedExit));
+
+        yield* controller.respondToUserInput({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("question-b"),
+          answers: { "question-b": "Second" },
+        });
+        yield* Effect.yieldNow;
+        expect(latestState()).toBe("running");
+        yield* Fiber.interrupt(collector);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("fails a cancelled Mastra suspension and accepts the next turn", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();

@@ -3762,6 +3762,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const activeTurn = active.activeTurn;
+      // Only a question this turn was waiting on goes back into its set on failure.
+      let ownedByTurn = false;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
         if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
@@ -3778,7 +3780,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             if (!activeTurn || active.activeTurn !== activeTurn) {
               return { _tag: "Stale" as const };
             }
-            activeTurn.suspendedToolCalls.delete(toolCallId);
+            ownedByTurn = activeTurn.suspendedToolCalls.delete(toolCallId);
             activeTurn.waiting = turnStillWaiting(key, active);
             return {
               _tag: "Dispatched" as const,
@@ -3796,7 +3798,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           // A rejected resume leaves the question open while its turn is still live.
           Effect.onError(() =>
             Effect.sync(() => {
-              if (!activeTurn || active.activeTurn !== activeTurn || resumeFailure !== undefined)
+              if (
+                !ownedByTurn ||
+                !activeTurn ||
+                active.activeTurn !== activeTurn ||
+                resumeFailure !== undefined
+              )
                 return;
               activeTurn.suspendedToolCalls.add(toolCallId);
               activeTurn.waiting = turnStillWaiting(key, active);
