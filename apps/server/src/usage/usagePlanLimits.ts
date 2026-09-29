@@ -28,7 +28,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 const SESSION_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-type LiveSubscriptionProviderId = Exclude<SubscriptionProviderId, "cursor">;
+type LiveSubscriptionProviderId = SubscriptionProviderId;
 
 const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "openai-codex",
@@ -590,12 +590,9 @@ export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
     makePlanLimitCache(getPlanAccess),
     (cache) => (provider?: SubscriptionProviderId) =>
       Effect.all(
-        (provider === undefined
-          ? PLAN_PROVIDER_ORDER
-          : provider === "cursor"
-            ? []
-            : [provider]
-        ).map((selected) => cache.read(selected)),
+        (provider === undefined ? PLAN_PROVIDER_ORDER : [provider]).map((selected) =>
+          cache.read(selected),
+        ),
 
         { concurrency: "unbounded" },
       ).pipe(
