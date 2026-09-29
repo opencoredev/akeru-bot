@@ -65,7 +65,6 @@ export function DictationControls({
     if (status === "failed") cancelCallback.current();
     else cancel();
   }, [blocked, status]);
-  useEffect(() => () => cancel(), []);
   const start = () => {
     operation.current = true;
     onStart();

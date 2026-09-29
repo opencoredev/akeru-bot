@@ -18,7 +18,7 @@ type DictationInput = {
   readonly applyDraft: (draft: DictationDraft) => void;
 };
 
-const hooks = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0 }));
+const hooks = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0, runEffects: false }));
 const fake = vi.hoisted(() => ({
   session: null as Session | null,
   input: null as DictationInput | null,
@@ -38,7 +38,9 @@ vi.mock("react", async (importOriginal) => {
     useRef: <T,>(current: T) => slot(() => ({ current })).value,
     useMemo: <T,>(factory: () => T) => factory(),
     useCallback: <T,>(callback: T) => callback,
-    useEffect: () => {},
+    useEffect: (effect: () => void) => {
+      if (hooks.runEffects) effect();
+    },
     useState: <T,>(initial: T | (() => T)) => {
       const state = slot(() => (typeof initial === "function" ? (initial as () => T)() : initial));
       const set = (next: T | ((previous: T) => T)) => {
@@ -205,7 +207,7 @@ const host = {
   onRemoveDraftImage: vi.fn(),
 };
 
-function render() {
+function render(sessionStatus: "idle" | "running" = "idle") {
   hooks.cursor = 0;
   const props = {
     ...host,
@@ -216,7 +218,7 @@ function render() {
     selectedThread: {
       id: ThreadId.make("thread"),
       botId: null,
-      session: null,
+      session: sessionStatus === "idle" ? null : { status: sessionStatus },
       runtimeMode: "full-access",
       modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
     } as unknown as OrchestrationThreadShell,
@@ -250,6 +252,7 @@ const tap = (element: Element | null) => (element!.props.onAccessibilityTap as (
 beforeEach(() => {
   hooks.slots = [];
   hooks.cursor = 0;
+  hooks.runEffects = false;
   host.draftMessage = "";
   host.draftAttachments = [];
   host.onChangeDraftMessage.mockClear();
@@ -312,5 +315,34 @@ describe("ThreadComposer dictation failure", () => {
     expect(host.draftAttachments[0]).toBe(attachment);
     expect(host.onChangeDraftMessage).toHaveBeenCalledTimes(1);
     expect(host.onRemoveDraftImage).not.toHaveBeenCalled();
+  });
+});
+
+describe("ThreadComposer dictation slot", () => {
+  const start = () =>
+    fake.session!.start({
+      identity: {
+        environmentId: "environment",
+        threadId: "thread",
+        draftId: "thread",
+        generation: 0,
+      },
+      ...fake.input!.getDraft(),
+    });
+
+  it("keeps recording while the collapsed mic stays on screen", async () => {
+    render();
+    await start();
+    hooks.runEffects = true;
+    expect(render().find("Stop dictation")).not.toBeNull();
+    expect(fake.session!.status).toBe("recording");
+  });
+
+  it("cancels recording when a running turn swaps the mic for Stop", async () => {
+    render();
+    await start();
+    hooks.runEffects = true;
+    render("running");
+    expect(fake.session!.status).toBe("cancelled");
   });
 });

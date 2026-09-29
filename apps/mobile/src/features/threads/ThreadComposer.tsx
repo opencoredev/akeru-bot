@@ -428,6 +428,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   useEffect(() => {
     setDictationGeneration((generation) => generation + 1);
   }, [props.environmentId, props.selectedThread.id]);
+  // The composer owns dictation, so focusing it and swapping the collapsed
+  // control for the expanded one keeps recording. Only the collapsed Stop
+  // action takes the slot away; dictation it hides is cancelled.
+  const dictationBusy =
+    dictation.status === "requesting" ||
+    dictation.status === "recording" ||
+    dictation.status === "transcribing";
+  const dictationHidden = !isExpanded && showStopAction;
+  const cancelDictation = dictation.onCancel;
+  useEffect(() => {
+    if (dictationHidden && dictationBusy) cancelDictation();
+  }, [cancelDictation, dictationBusy, dictationHidden]);
 
   const handleSelectionChange = useCallback((selection: ComposerEditorSelection) => {
     setComposerSelection(selection);
