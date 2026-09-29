@@ -48,7 +48,8 @@ Groups hold bots only. You cannot add people to a group yet.
 A bot can hand part of a request to another bot. The bot does not wait for that work. It replies
 first, and a work card in the chat shows the other bot, the task, and its state: queued, running,
 blocked, completed, failed, or canceled. On mobile the same card appears inline in the chat and
-folds away with that turn's work; it is read-only for now.
+folds away with that turn's work. Its **Let it finish**, **Cancel**, and **Try again** buttons work
+the same as on web and desktop.
 
 On web and desktop, each card sits right after the exchange that started the work, and it stays
 there when you reload or come back later. Work started in three different replies shows up as
