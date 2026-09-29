@@ -501,7 +501,7 @@ type CachedPlanLimits = {
 
 function makePlanLimitCache(getAccessToken: GetAccessToken) {
   const lastGoodPlanLimits = new Map<string, UsageProviderPlanLimits>();
-  return Cache.makeWith<LiveSubscriptionProviderId, CachedPlanLimits | null>(
+  const cache = Cache.makeWith<LiveSubscriptionProviderId, CachedPlanLimits | null>(
     (key) =>
       Effect.promise(async () => {
         const provider = key;
@@ -527,6 +527,19 @@ function makePlanLimitCache(getAccessToken: GetAccessToken) {
         exit._tag === "Success" && exit.value?.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
     },
   );
+  // A disconnected provider drops its cached and last-good meters instead of serving them for
+  // the rest of the TTL.
+  return Effect.map(cache, (entries) => ({
+    entries,
+    forgetDisconnected: (provider: LiveSubscriptionProviderId) =>
+      Effect.promise(() => getAccessToken(provider).catch(() => "")).pipe(
+        Effect.flatMap((token) => {
+          if (token !== undefined) return Effect.succeed(true);
+          lastGoodPlanLimits.delete(provider);
+          return Effect.as(Cache.invalidate(entries, provider), false);
+        }),
+      ),
+  }));
 }
 
 function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProviderPlanLimits {
@@ -539,11 +552,21 @@ function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProvid
   };
 }
 
+type PlanLimitCache = Effect.Success<ReturnType<typeof makePlanLimitCache>>;
+
 function readProviderPlanLimits(
   provider: LiveSubscriptionProviderId,
-  cache: Cache.Cache<LiveSubscriptionProviderId, CachedPlanLimits | null>,
+  cache: PlanLimitCache,
 ): Effect.Effect<UsageProviderPlanLimits | null> {
-  return Cache.get(cache, provider).pipe(Effect.map((result) => result?.limits ?? null));
+  return cache
+    .forgetDisconnected(provider)
+    .pipe(
+      Effect.flatMap((connected) =>
+        connected
+          ? Cache.get(cache.entries, provider).pipe(Effect.map((result) => result?.limits ?? null))
+          : Effect.succeed(null),
+      ),
+    );
 }
 
 export function makePlanLimitsReader(getAccessToken: GetAccessToken) {

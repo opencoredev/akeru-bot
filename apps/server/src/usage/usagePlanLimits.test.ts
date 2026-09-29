@@ -109,8 +109,7 @@ describe("readPlanLimits cache", () => {
       const read = yield* makePlanLimitsReader(getAccessToken);
       const limits = yield* read("opencode-go");
       expect(limits.map((limit) => limit.provider)).toEqual(["opencode-go"]);
-      expect(getAccessToken).toHaveBeenCalledOnce();
-      expect(getAccessToken).toHaveBeenCalledWith("opencode-go");
+      expect(getAccessToken.mock.calls).toEqual([["opencode-go"], ["opencode-go"]]);
       expect(fetchMock).not.toHaveBeenCalled();
       vi.unstubAllGlobals();
     }),
@@ -226,5 +225,28 @@ describe("readPlanLimits cache", () => {
         ]);
         expect(fetchMock).not.toHaveBeenCalled();
       }).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("stops serving cached windows once a provider disconnects", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify(claudeBody), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+        ),
+      );
+      let connected = true;
+      const read = yield* makePlanLimitsReader(async (provider) =>
+        provider === "anthropic" && connected ? "disconnect-token" : undefined,
+      );
+      expect((yield* read("anthropic")).map((limit) => limit.provider)).toEqual(["anthropic"]);
+      connected = false;
+      expect(yield* read("anthropic")).toEqual([]);
+      vi.unstubAllGlobals();
+    }),
   );
 });
