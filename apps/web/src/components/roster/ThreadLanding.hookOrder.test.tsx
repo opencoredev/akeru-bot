@@ -358,6 +358,14 @@ describe("thread landing reply playback hook order", () => {
       expect(mocks.observe).toHaveBeenLastCalledWith([]);
     },
   );
+  it("offers the roster failure page for a missing group when the first load failed", async () => {
+    mocks.rosterLoadState = { kind: "failed", message: "Snapshot failed" };
+    await render();
+    expect(mocks.landing).toHaveBeenCalledWith(
+      expect.objectContaining({ "aria-label": "Could not load bots" }),
+    );
+  });
+
   it("renders an initially missing group then its hydrated group without a hook ordering error", async () => {
     mocks.messages = [message];
     await render();
