@@ -105,7 +105,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["needs: [preflight, desktop]", "build gates"],
+  ["needs: [preflight, desktop, remote]", "build gates"],
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
