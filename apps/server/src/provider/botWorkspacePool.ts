@@ -185,6 +185,9 @@ export class BotWorkspacePool {
     const { map } = await this.state;
     // A replacement must not start while the previous workspace for this key is still sleeping or being destroyed.
     await this.closing.get(key);
+    if (this.destroyingAll) {
+      throw new BotWorkspacePoolError({ message: "Bot workspaces are shutting down." });
+    }
     this.creators.set(key, create);
     const joinsWake = joinedWake || this.waking.has(key) || !(await this.run(RcMap.has(map, key)));
     const leaseScope = await this.run(Scope.make());

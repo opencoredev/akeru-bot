@@ -266,6 +266,26 @@ describe("BotWorkspacePool", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
+  effectIt.effect("rejects new leases after destroyAll without creating a workspace", () =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      const pool = new BotWorkspacePool({ idleTimeToLive: "1 hour", clock });
+      yield* Effect.promise(() => pool.destroyAll());
+      const create = vi.fn(async () => localWorkspace());
+      const error = yield* Effect.promise(() =>
+        pool.acquire("late", create).then(
+          () => undefined,
+          (cause: unknown) => cause,
+        ),
+      );
+      expect(error).toMatchObject({
+        _tag: "BotWorkspacePoolError",
+        message: "Bot workspaces are shutting down.",
+      });
+      expect(create).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
   effectIt.effect("destroyAll reports a failed destroy", () =>
     Effect.gen(function* () {
       const clock = yield* Clock.Clock;
