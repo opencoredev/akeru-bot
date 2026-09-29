@@ -267,7 +267,10 @@ const make = (options?: VoiceCallManagerOptions) =>
     let active: ActiveVoiceCall | null = null;
     const secrets = yield* Effect.serviceOption(ServerSecretStore);
     const adapters = options?.adapters ?? makeVoiceAdapters();
-    const operations = new Map<string, { ownerId: string; controller: AbortController }>();
+    const operations = new Map<
+      string,
+      { ownerId: string; controller: AbortController; provider?: VoiceApiProvider }
+    >();
     const operationKey = (ownerId: string, id: string) => JSON.stringify([ownerId, id]);
     const secretName = (provider: VoiceApiProvider) => `voice-${provider}`;
     const getKey = Effect.fn("VoiceCallManager.getKey")(function* (provider: VoiceApiProvider) {
@@ -320,6 +323,10 @@ const make = (options?: VoiceCallManagerOptions) =>
           yield* store
             .remove(secretName(provider))
             .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+          // Work that already read the removed key must not finish after the disconnect.
+          for (const operation of operations.values()) {
+            if (operation.provider === provider) operation.controller.abort();
+          }
           return { provider, connected: false };
         }),
       );
@@ -404,6 +411,7 @@ const make = (options?: VoiceCallManagerOptions) =>
                 : (settings.synthesisProvider ?? "openai");
             const key = call ? call.credentials[provider] : yield* getKey(provider);
             if (!key) return yield* voiceFailure("provider-unavailable");
+            if (!call) operations.set(id, { ownerId, controller, provider });
             if (controller.signal.aborted) return yield* voiceFailure("cancelled");
             return { settings, key, callSignal: call?.abortController.signal };
           }),

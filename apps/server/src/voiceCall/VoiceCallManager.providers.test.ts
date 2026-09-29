@@ -277,7 +277,13 @@ it.effect("releases a pending realtime call and key lock on request interruption
   );
 });
 
-for (const cancellation of ["hangup", "cancel", "disconnect", "interrupt"] as const) {
+for (const cancellation of [
+  "hangup",
+  "cancel",
+  "disconnect",
+  "provider-disconnect",
+  "interrupt",
+] as const) {
   it.effect(`aborts in-flight audio on ${cancellation}`, () => {
     const began = Promise.withResolvers<void>();
     let aborted = false;
@@ -302,6 +308,7 @@ for (const cancellation of ["hangup", "cancel", "disconnect", "interrupt"] as co
       else if (cancellation === "cancel")
         assert.deepEqual(yield* manager.cancel("audio", "owner"), { cancelled: true });
       else if (cancellation === "disconnect") yield* manager.hangupOwner("owner");
+      else if (cancellation === "provider-disconnect") yield* manager.disconnect("openai");
       else yield* Fiber.interrupt(fiber);
       if (cancellation !== "interrupt") {
         const result = yield* Fiber.join(fiber);
