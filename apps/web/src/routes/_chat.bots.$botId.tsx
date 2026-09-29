@@ -21,6 +21,7 @@ import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
 import { routineDelegateOptions } from "../components/roster/botEngineSelection";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
+import { useThreadShell } from "../state/entities";
 import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
@@ -64,6 +65,8 @@ function BotThreadRouteView() {
   const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
   const bot = routedBot.status === "available" ? routedBot.bot : null;
   const threadRef = useBotThreadRef(botId);
+  // A remembered chat that no longer loads cannot take a routine.
+  const routineThreadRef = useThreadShell(threadRef) ? threadRef : null;
   // A routine can hand its work to any other active bot in this environment.
   // Bots whose provider cannot take handed-off work stay listed but disabled.
   const delegateOptions = useMemo(
@@ -185,8 +188,8 @@ function BotThreadRouteView() {
             busyRoutineId,
             // A new routine reports back into the bot's own chat, so it can only be
             // created once that thread exists.
-            createNeedsChat: threadRef === null,
-            ...(threadRef
+            createNeedsChat: routineThreadRef === null,
+            ...(routineThreadRef
               ? {
                   onCreate: async (draft: RoutineAdapterDraft) => {
                     if (!environmentId) throw new Error("The routine environment is unavailable.");
@@ -196,7 +199,7 @@ function BotThreadRouteView() {
                         environmentId,
                         input: {
                           routineId,
-                          targetThreadId: threadRef.threadId,
+                          targetThreadId: routineThreadRef.threadId,
                           ...(await routineDefinition(draft)),
                           createdAt: new Date().toISOString(),
                         },
