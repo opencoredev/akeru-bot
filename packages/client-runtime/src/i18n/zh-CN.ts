@@ -336,6 +336,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "Language applies only to this device.": "语言设置仅应用于此设备。",
   "English and Simplified Chinese are available.": "目前提供英语和简体中文。",
   "User messages and bot responses are not translated.": "用户消息和机器人回复不会被翻译。",
+  "The selected language could not load, so English is shown.": "所选语言未能加载，因此显示英语。",
   Save: "保存",
   Cancel: "取消",
   Close: "关闭",

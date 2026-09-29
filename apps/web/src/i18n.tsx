@@ -51,6 +51,9 @@ const LanguageContext = createContext({
   setPreference: async (_value: string): Promise<void> => {
     throw new Error("Language changes require LanguageProvider.");
   },
+  /** The selected language's catalog failed to load, so English is showing. */
+  catalogFailed: false,
+  retryCatalog: () => {},
 });
 
 /** Catalog injection is supplied by tests, not by the language selector. */
@@ -77,10 +80,15 @@ export function LanguageProvider({
     loader.getSnapshot,
     loader.getSnapshot,
   );
-  useEffect(() => {
+  const retryCatalog = useCallback(() => {
     if (testCatalog) return;
     void loader.selectLocale(preference, [deviceLocale]);
   }, [deviceLocale, loader, preference, testCatalog]);
+  useEffect(() => retryCatalog(), [retryCatalog]);
+  const catalogFailed =
+    !testCatalog &&
+    catalogSnapshot.status === "error" &&
+    catalogIdForLocale(catalogSnapshot.selectedLocale) === catalogIdForLocale(locale);
   const translator = useMemo(() => {
     if (testCatalog) return createTranslator(testCatalog.locale, testCatalog.catalog);
     if (catalogIdForLocale(locale) === "en") return createTranslator(locale);
@@ -106,8 +114,10 @@ export function LanguageProvider({
       t: translator.translate,
       preference,
       setPreference,
+      catalogFailed,
+      retryCatalog,
     }),
-    [translator, preference, setPreference],
+    [translator, preference, setPreference, catalogFailed, retryCatalog],
   );
   useEffect(() => {
     document.documentElement.lang = translator.locale;

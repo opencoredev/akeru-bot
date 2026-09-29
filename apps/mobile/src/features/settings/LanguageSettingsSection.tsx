@@ -8,7 +8,7 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { SettingsSection } from "./components/SettingsSection";
 
 export function LanguageSettingsSection() {
-  const { t, preference } = useMobileI18n();
+  const { t, preference, catalogFailed, retryCatalog } = useMobileI18n();
   const preferences = useAtomValue(mobilePreferencesAtom);
   const save = useAtomSet(updateMobilePreferencesAtom);
   const result = useAtomValue(updateMobilePreferencesAtom);
@@ -51,6 +51,20 @@ export function LanguageSettingsSection() {
           "Saved on this device only. System default follows this device when English or Simplified Chinese is available.",
         )}
       </Text>
+      {catalogFailed ? (
+        <View accessibilityRole="alert" className="flex-row flex-wrap items-center gap-3 px-2">
+          <Text className="text-sm text-foreground">
+            {t("The selected language could not load, so English is shown.")}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={retryCatalog}
+            className="py-1 active:opacity-60"
+          >
+            <Text className="text-sm font-t3-medium text-foreground">{t("Try again")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {AsyncResult.isFailure(result) ? (
         <Text accessibilityRole="alert" className="px-2 text-sm text-foreground">
           {t("Could not save preferences. Try again.")}

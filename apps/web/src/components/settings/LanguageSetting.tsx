@@ -1,9 +1,10 @@
 import { availableLanguages, useI18n } from "../../i18n";
+import { Button } from "../ui/button";
 import { SettingsRow, SettingResetButton } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
 export function LanguageSetting() {
-  const { t, preference, setPreference } = useI18n();
+  const { t, preference, setPreference, catalogFailed, retryCatalog } = useI18n();
   return (
     <SettingsRow
       {...searchableSetting("language")}
@@ -14,6 +15,16 @@ export function LanguageSetting() {
           {t("English and Simplified Chinese are available.")}{" "}
           {t("User messages and bot responses are not translated.")}
         </span>
+      }
+      status={
+        catalogFailed ? (
+          <span role="alert" className="inline-flex flex-wrap items-center gap-2">
+            {t("The selected language could not load, so English is shown.")}
+            <Button size="xs" variant="outline" onClick={retryCatalog}>
+              {t("Try again")}
+            </Button>
+          </span>
+        ) : undefined
       }
       resetAction={
         <SettingResetButton

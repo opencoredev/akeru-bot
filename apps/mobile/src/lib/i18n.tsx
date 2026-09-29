@@ -8,6 +8,7 @@ import {
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -34,6 +35,9 @@ const LanguageContext = createContext({
   preference: "system",
   locale: "en",
   translator: fallbackTranslator,
+  /** The selected language's catalog failed to load, so English is showing. */
+  catalogFailed: false,
+  retryCatalog: () => {},
 });
 
 // iOS keeps the ordered language list in user defaults; Android exposes only the resolved locale.
@@ -51,9 +55,13 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
   const loader = useMemo(() => createCatalogLoader(), []);
   const snapshot = useSyncExternalStore(loader.subscribe, loader.getSnapshot, loader.getSnapshot);
 
-  useEffect(() => {
+  const retryCatalog = useCallback(() => {
     void loader.selectLocale(resolved.preference, deviceLocales);
   }, [deviceLocales, loader, resolved.preference]);
+  useEffect(() => retryCatalog(), [retryCatalog]);
+  const catalogFailed =
+    snapshot.status === "error" &&
+    catalogIdForLocale(snapshot.selectedLocale) === catalogIdForLocale(resolved.locale);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -86,8 +94,10 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
       preference: resolved.preference,
       locale: translator.locale,
       translator,
+      catalogFailed,
+      retryCatalog,
     }),
-    [resolved.preference, translator],
+    [resolved.preference, translator, catalogFailed, retryCatalog],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
@@ -99,6 +109,8 @@ export function useMobileI18n() {
     () => ({
       preference: language.preference,
       locale: language.locale,
+      catalogFailed: language.catalogFailed,
+      retryCatalog: language.retryCatalog,
       plural: (
         count: number,
         forms: PluralForms,

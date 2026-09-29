@@ -352,6 +352,8 @@ export const englishCatalog = {
   "English and Simplified Chinese are available.": "English and Simplified Chinese are available.",
   "User messages and bot responses are not translated.":
     "User messages and bot responses are not translated.",
+  "The selected language could not load, so English is shown.":
+    "The selected language could not load, so English is shown.",
   Save: "Save",
   Cancel: "Cancel",
   Close: "Close",

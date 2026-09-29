@@ -16687,7 +16687,7 @@ snapshots:
       postcss: 8.5.26
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
+      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -21421,8 +21421,8 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
-      expo-widgets: 56.0.19(32843e0c0883df8bccfa0b8323659df5)
+      expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
+      expo-widgets: 56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -23373,22 +23373,6 @@ snapshots:
     dependencies:
       expo: 56.0.12(8895228379997a2a064f9644cda56ed0)
       react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
-
-  expo-widgets@56.0.19(32843e0c0883df8bccfa0b8323659df5):
-    dependencies:
-      '@expo/plist': 0.7.0
-      '@expo/ui': 56.0.18(32843e0c0883df8bccfa0b8323659df5)
-      expo: 56.0.12(deb8cbf3e0f411b34ba85a995c9982ba)
-      react: 19.2.6
-      react-native: 0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@types/react'
-      - '@types/react-dom'
-      - react-dom
-      - react-native-reanimated
-      - react-native-worklets
-    optional: true
 
   expo-widgets@56.0.19(3cdc0dde9f93166d952f1e1bd0cb25c0):
     dependencies:
