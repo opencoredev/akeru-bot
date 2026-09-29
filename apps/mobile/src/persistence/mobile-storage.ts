@@ -158,12 +158,20 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     return parseJson<A>(key, raw);
   });
 
+  const setItem = Effect.fn("MobileStorage.setItem")(function* (key: string, value: string) {
+    yield* secureStorage.setItem(key, value);
+    const legacyKey = LEGACY_KEYS.find(([current]) => current === key)?.[1];
+    if (legacyKey !== undefined) {
+      yield* secureStorage.removeItem(legacyKey).pipe(Effect.ignore);
+    }
+  });
+
   const writeJson = Effect.fn("MobileStorage.writeJson")(function* (key: string, value: unknown) {
     const encoded = yield* Effect.try({
       try: () => JSON.stringify(value),
       catch: (cause) => new MobileStorageEncodeError({ key, cause }),
     });
-    yield* secureStorage.setItem(key, encoded);
+    yield* setItem(key, encoded);
   });
 
   const loadSavedConnections = readJson<{
@@ -210,7 +218,7 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
       try: () => import("../lib/uuid").then(({ uuidv4 }) => uuidv4()),
       catch: (cause) => new MobileDeviceIdGenerationError({ cause }),
     });
-    yield* secureStorage.setItem(AGENT_AWARENESS_DEVICE_ID_KEY, deviceId);
+    yield* setItem(AGENT_AWARENESS_DEVICE_ID_KEY, deviceId);
     return deviceId;
   });
 
@@ -269,10 +277,7 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     loadAgentAwarenessRegistrationRecord,
     saveAgentAwarenessRegistrationRecord: (record) =>
       writeJson(AGENT_AWARENESS_REGISTRATION_KEY, record),
-    clearAgentAwarenessRegistrationRecord: secureStorage.setItem(
-      AGENT_AWARENESS_REGISTRATION_KEY,
-      "",
-    ),
+    clearAgentAwarenessRegistrationRecord: setItem(AGENT_AWARENESS_REGISTRATION_KEY, ""),
     loadRecentThreadShortcuts,
     saveRecentThreadShortcuts: (threads) => writeJson(RECENT_THREAD_SHORTCUTS_KEY, { threads }),
   });

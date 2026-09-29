@@ -69,7 +69,7 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
       const decoded = yield* Effect.result(decodeCatalog(rebrandedRaw));
       if (decoded._tag === "Success") {
         yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
-        yield* deleteItem(LEGACY_CATALOG_KEY);
+        yield* deleteItem(LEGACY_CATALOG_KEY).pipe(Effect.ignore);
         return decoded.success;
       }
       yield* Effect.logWarning("Discarding corrupt legacy mobile connection catalog");
@@ -90,7 +90,7 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
     if (legacyRaw !== null && legacyRaw.trim() !== "") {
       const encoded = yield* encodeCatalog(catalog);
       yield* setItem(CONNECTION_CATALOG_KEY, encoded);
-      yield* deleteItem(LEGACY_CONNECTIONS_KEY);
+      yield* deleteItem(LEGACY_CONNECTIONS_KEY).pipe(Effect.ignore);
     }
     return catalog;
   });

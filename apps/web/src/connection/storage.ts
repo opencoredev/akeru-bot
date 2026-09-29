@@ -234,11 +234,7 @@ export const migrateLegacyConnectionDatabase = Effect.fn(
   "web.connectionStorage.migrateLegacyConnectionDatabase",
 )(function* (database: IDBDatabase) {
   if (typeof indexedDB === "undefined") return;
-  const legacyResult = yield* Effect.result(
-    Effect.acquireRelease(openDatabaseAt(LEGACY_DATABASE_NAME), (legacy) =>
-      Effect.sync(() => legacy.close()),
-    ),
-  );
+  const legacyResult = yield* Effect.result(openDatabaseAt(LEGACY_DATABASE_NAME));
   if (legacyResult._tag === "Failure") {
     yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
       Effect.annotateLogs({ error: legacyResult.failure }),

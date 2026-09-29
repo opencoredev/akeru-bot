@@ -27,6 +27,16 @@ describe("createMigratingStorage", () => {
     await expect(storage.getItem(NEW_KEY)).resolves.toBe("old");
   });
 
+  it("reads the legacy key from asynchronous storage", async () => {
+    const { backing } = makeStorage({ [LEGACY_KEY]: "old" });
+    const asyncBacking: StateStorage = {
+      ...backing,
+      getItem: async (name) => backing.getItem(name),
+    };
+    const storage = createMigratingStorage(asyncBacking, NEW_KEY, LEGACY_KEY);
+    await expect(storage.getItem(NEW_KEY)).resolves.toBe("old");
+  });
+
   it("removes the legacy key only after the new write succeeds", async () => {
     const { store, backing } = makeStorage({ [LEGACY_KEY]: "old" });
     const storage = createMigratingStorage(backing, NEW_KEY, LEGACY_KEY);

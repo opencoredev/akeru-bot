@@ -1,4 +1,3 @@
-import { EnvironmentId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => {
@@ -95,9 +94,9 @@ vi.mock("react-native", () => ({
 }));
 
 import {
+  clearAgentAwarenessRegistrationRecord,
   loadPreferences,
   loadSavedConnections,
-  saveConnection,
   savePreferencesPatch,
 } from "../persistence/imperative";
 
@@ -118,6 +117,15 @@ describe("mobile connection storage", () => {
       cause,
       message: "Mobile secure storage operation read failed for key akeru.connections.",
     });
+  });
+
+  it("retires legacy registration data after a direct clear", async () => {
+    await mocks.setItemAsync("t3code.agent-awareness.registration", "stale");
+
+    await clearAgentAwarenessRegistrationRecord();
+
+    expect(mocks.getStoredValue("akeru.agent-awareness.registration")).toBe("");
+    expect(mocks.getStoredValue("t3code.agent-awareness.registration")).toBeNull();
   });
 
   it("logs structured decode failures before using the empty fallback", async () => {

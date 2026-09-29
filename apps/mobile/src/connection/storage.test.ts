@@ -13,7 +13,10 @@ vi.mock("expo-secure-store", () => ({
 }));
 
 import { CONNECTION_CATALOG_KEY, LEGACY_CONNECTIONS_KEY, make } from "./catalog-store";
-import { MobileSecureStorage } from "../persistence/mobile-secure-storage";
+import {
+  MobileSecureStorage,
+  MobileSecureStorageError,
+} from "../persistence/mobile-secure-storage";
 
 function makeStorage(initial: Readonly<Record<string, string>>) {
   const values = new Map(Object.entries(initial));
@@ -60,6 +63,22 @@ describe("mobile connection catalog storage", () => {
       expect((yield* catalog.read).targets).toEqual([]);
       expect(memory.deleted).toEqual([LEGACY_CONNECTIONS_KEY]);
       expect(memory.values.has(CONNECTION_CATALOG_KEY)).toBe(true);
+    }),
+  );
+
+  it.effect("keeps a migrated catalog readable when legacy deletion fails", () =>
+    Effect.gen(function* () {
+      const raw = JSON.stringify({ schemaVersion: 1, targets: [], profiles: [], credentials: [] });
+      const memory = makeStorage({ "t3code.connection-catalog.v1": raw });
+      const storage = MobileSecureStorage.of({
+        ...memory.storage,
+        removeItem: (key) =>
+          Effect.fail(new MobileSecureStorageError({ operation: "delete", key, cause: "locked" })),
+      });
+      const catalog = yield* make().pipe(Effect.provideService(MobileSecureStorage, storage));
+
+      expect((yield* catalog.read).targets).toEqual([]);
+      expect(memory.values.get(CONNECTION_CATALOG_KEY)).toBe(raw);
     }),
   );
 

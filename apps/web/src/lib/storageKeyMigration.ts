@@ -12,10 +12,10 @@ export function createMigratingStorage(
   legacyKey: string,
 ): StateStorage {
   return {
-    getItem: (name) => {
-      const value = storage.getItem(name);
-      if (value !== null) return Promise.resolve(value);
-      return Promise.resolve(name === key ? storage.getItem(legacyKey) : null);
+    getItem: async (name) => {
+      const value = await storage.getItem(name);
+      if (value !== null) return value;
+      return name === key ? storage.getItem(legacyKey) : null;
     },
     setItem: (name, value) =>
       // Retire the legacy entry only after the new write lands; a rejected
