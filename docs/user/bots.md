@@ -36,6 +36,9 @@ next message. Select it to change the bot's model without leaving the chat. If t
 offering the bot's model, the button keeps showing it and marks it unavailable until you choose
 another one.
 
+In a group chat, you can still message a member with a configured provider even when the boss
+cannot reply. Mention that member in your message to direct the turn to them.
+
 Shaped avatars are a flat colored body with a face. The eyes are cut out of the body, so they take
 the color of whatever sits behind the avatar. Very light and very dark custom colors draw their eyes
 on instead. Bots saved with an older preset color show the matching color from the current palette.

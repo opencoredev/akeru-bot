@@ -448,16 +448,17 @@ export function useGroupThreadRuntime(groupId: string) {
     submitPendingUserInput,
   ]);
 
-  const activeRespondingBotId = rememberedThread?.respondingBotId ?? group?.bossBotId;
-  const activeRespondingBot = bots.find(
-    (bot) =>
-      bot.id === activeRespondingBotId && group !== undefined && groupContainsBot(group, bot.id),
-  );
-  const availableModelSelection = groupModelSelection(
-    activeRespondingBot?.engine,
-    activeProject?.defaultModelSelection,
-    appDefaultModelSelection,
-  );
+  const providerAvailable =
+    group !== undefined &&
+    bots.some((bot) => {
+      if (!groupContainsBot(group, bot.id)) return false;
+      const selection = groupModelSelection(
+        bot.engine,
+        activeProject?.defaultModelSelection,
+        appDefaultModelSelection,
+      );
+      return selection !== null && selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId;
+    });
 
   return {
     bootstrapped,
@@ -469,9 +470,7 @@ export function useGroupThreadRuntime(groupId: string) {
       rememberedThread?.session?.lastError ??
       null,
     groupReady,
-    providerAvailable:
-      availableModelSelection !== null &&
-      availableModelSelection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId,
+    providerAvailable,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

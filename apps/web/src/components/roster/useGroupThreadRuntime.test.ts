@@ -88,6 +88,31 @@ describe("group runtime errors", () => {
     expect(runtime.providerAvailable).toBe(true);
   });
 
+  it("allows mentioning a configured member when the boss has no provider", () => {
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [
+          { kind: "bot", botId: BotId.make("bot-1"), role: "boss" },
+          { kind: "bot", botId: BotId.make("bot-2"), role: "specialist" },
+        ],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      { id: "bot-1", engine: null } as Bot,
+      { id: "bot-2", engine: { provider: "codex", model: "gpt-5.6-sol" } } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(true);
+  });
+
   it("surfaces the persisted provider error for a failed turn", () => {
     mocks.threadShells = [
       {
