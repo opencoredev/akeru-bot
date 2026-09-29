@@ -3310,7 +3310,15 @@ const makeWsRpcLayer = (
               ? Effect.fail(
                   memoryOperationError("archive.applyImport", "Durable memory is unavailable."),
                 )
-              : resolveMemoryAccess("archive.applyImport", input.threadId).pipe(
+              : serverSettings.getSettings.pipe(
+                  Effect.mapError((cause) => memoryOperationError("archive.applyImport", cause)),
+                  Effect.flatMap((settings) =>
+                    settings.memory.enabled === false
+                      ? Effect.fail(
+                          memoryOperationError("archive.applyImport", "Memory is turned off."),
+                        )
+                      : resolveMemoryAccess("archive.applyImport", input.threadId),
+                  ),
                   Effect.flatMap((access) =>
                     applyAkeruMemoryImport({
                       repository: entityMemoryRepository,
