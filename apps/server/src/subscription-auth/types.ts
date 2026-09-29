@@ -24,6 +24,7 @@ export interface ApiKeyCredential {
   readonly type: "api-key";
   readonly access: string;
   readonly baseUrl?: string;
+  readonly connectionId?: string;
 }
 
 export type SubscriptionCredential = OAuthCredential | ApiKeyCredential;

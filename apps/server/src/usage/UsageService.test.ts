@@ -25,7 +25,7 @@ vi.mock("../subscription-auth/service.ts", () => ({
     forSecretsDir: () => ({
       reload: () => {},
       statuses: () => [],
-      getPlanAccessToken: async () => undefined,
+      getPlanAccess: async () => undefined,
     }),
   },
 }));

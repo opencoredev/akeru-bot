@@ -18,6 +18,106 @@ function fixture() {
 }
 
 describe("subscription auth storage", () => {
+  it("keeps a persisted plan account identity across OAuth refresh and service restarts", async () => {
+    const { directory, authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        anthropic: {
+          type: "oauth",
+          access: "first-token",
+          refresh: "refresh",
+          expires: Date.now() + 60_000,
+        },
+      }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    const first = await service.getPlanAccess("anthropic");
+    expect(first?.accountId).toBeTruthy();
+    const data = JSON.parse(NodeFS.readFileSync(authPath, "utf8"));
+    data.anthropic.expires = 0;
+    NodeFS.writeFileSync(authPath, JSON.stringify(data));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              access_token: "refreshed-token",
+              refresh_token: "refreshed-refresh",
+              expires_in: 3600,
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+    try {
+      expect(await service.getPlanAccess("anthropic")).toEqual({
+        accessToken: "refreshed-token",
+        accountId: first?.accountId,
+      });
+      expect(await new SubscriptionAuthService(authPath).getPlanAccess("anthropic")).toEqual({
+        accessToken: "refreshed-token",
+        accountId: first?.accountId,
+      });
+      service.logout("anthropic");
+      expect(await service.getPlanAccess("anthropic")).toBeUndefined();
+      NodeFS.writeFileSync(
+        authPath,
+        JSON.stringify({
+          anthropic: {
+            type: "oauth",
+            access: "new-account-token",
+            refresh: "new-refresh",
+            expires: Date.now() + 60_000,
+          },
+        }),
+      );
+      expect((await service.getPlanAccess("anthropic"))?.accountId).not.toBe(first?.accountId);
+    } finally {
+      vi.unstubAllGlobals();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the provider account ID and distinguishes a failed refresh from disconnect", async () => {
+    const { directory, authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: "token",
+          refresh: "refresh",
+          expires: Date.now() + 60_000,
+          accountId: "account-123",
+        },
+      }),
+    );
+    const service = new SubscriptionAuthService(authPath);
+    expect(await service.getPlanAccess("openai-codex")).toEqual({
+      accessToken: "token",
+      accountId: "account-123",
+    });
+    const data = JSON.parse(NodeFS.readFileSync(authPath, "utf8"));
+    data["openai-codex"].expires = 0;
+    NodeFS.writeFileSync(authPath, JSON.stringify(data));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("unavailable", { status: 503 })),
+    );
+    try {
+      await expect(service.getPlanAccess("openai-codex")).rejects.toThrow(
+        "temporarily unavailable",
+      );
+      expect(
+        service.statuses().find((status) => status.provider === "openai-codex")?.connected,
+      ).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("clears only the matching image health when a credential changes", async () => {
     const { authPath } = fixture();
     const service = new SubscriptionAuthService(authPath);

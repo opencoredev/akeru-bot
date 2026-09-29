@@ -7,8 +7,6 @@
  *
  * @module usagePlanLimits
  */
-import * as NodeCrypto from "node:crypto";
-
 import type {
   SubscriptionProviderId,
   UsagePlanWindow,
@@ -40,7 +38,12 @@ const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "opencode-go",
 ];
 
-export type GetAccessToken = (provider: SubscriptionProviderId) => Promise<string | undefined>;
+export interface PlanAccess {
+  readonly accessToken: string;
+  readonly accountId: string;
+}
+
+export type GetPlanAccess = (provider: SubscriptionProviderId) => Promise<PlanAccess | undefined>;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -502,23 +505,23 @@ type CachedPlanLimits = {
   readonly fresh: boolean;
 };
 
-// Identifies the connected account without keeping its raw credential.
-const credentialFingerprint = (token: string) =>
-  NodeCrypto.createHash("sha256").update(token).digest("hex");
-
-function makePlanLimitCache(getAccessToken: GetAccessToken) {
+function makePlanLimitCache(getPlanAccess: GetPlanAccess) {
   const lastGoodPlanLimits = new Map<string, UsageProviderPlanLimits>();
-  const credentialFingerprints = new Map<string, string>();
-  const cache = Cache.makeWith<LiveSubscriptionProviderId, CachedPlanLimits | null>(
+  const providerKeys = new Map<LiveSubscriptionProviderId, string>();
+  const connections = new Map<
+    string,
+    PlanAccess & { readonly provider: LiveSubscriptionProviderId }
+  >();
+  const cache = Cache.makeWith<string, CachedPlanLimits>(
     (key) =>
       Effect.promise(async () => {
-        const provider = key;
+        const connection = connections.get(key);
+        if (connection === undefined) throw new Error("Plan account is disconnected.");
+        const { provider, accessToken } = connection;
         try {
-          const resolvedToken = await getAccessToken(provider);
-          if (resolvedToken === undefined) return null;
-          const fresh = await fetchProvider(provider, resolvedToken);
+          const fresh = await fetchProvider(provider, accessToken);
           if (fresh !== null) {
-            lastGoodPlanLimits.set(key, fresh);
+            if (providerKeys.get(provider) === key) lastGoodPlanLimits.set(key, fresh);
             return { limits: fresh, fresh: true };
           }
         } catch {
@@ -532,34 +535,40 @@ function makePlanLimitCache(getAccessToken: GetAccessToken) {
     {
       capacity: PLAN_PROVIDER_ORDER.length * 2,
       timeToLive: (exit) =>
-        exit._tag === "Success" && exit.value?.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
+        exit._tag === "Success" && exit.value.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
     },
   );
-  // A disconnected provider, or one reconnected with different credentials, drops its cached and
+  // A disconnected provider, or one reconnected with a different account, drops its cached and
   // last-good meters instead of serving the old account's windows for the rest of the TTL.
   return Effect.map(cache, (entries) => {
-    const forget = (provider: LiveSubscriptionProviderId) => {
-      lastGoodPlanLimits.delete(provider);
-      return Cache.invalidate(entries, provider);
+    const forget = (key: string) => {
+      lastGoodPlanLimits.delete(key);
+      connections.delete(key);
+      return Cache.invalidate(entries, key);
     };
     return {
-      entries,
-      forgetDisconnected: (provider: LiveSubscriptionProviderId) =>
-        Effect.promise(() => getAccessToken(provider).catch(() => "")).pipe(
-          Effect.flatMap((token) => {
-            if (token === undefined) {
-              credentialFingerprints.delete(provider);
-              return Effect.as(forget(provider), false);
-            }
-            // An empty token means the lookup failed; keep what is cached.
-            if (token === "") return Effect.succeed(true);
-            const fingerprint = credentialFingerprint(token);
-            const previous = credentialFingerprints.get(provider);
-            credentialFingerprints.set(provider, fingerprint);
-            return previous === undefined || previous === fingerprint
-              ? Effect.succeed(true)
-              : Effect.as(forget(provider), true);
-          }),
+      read: (provider: LiveSubscriptionProviderId) =>
+        Effect.promise(() => getPlanAccess(provider).catch(() => null)).pipe(
+          Effect.flatMap((access) =>
+            Effect.gen(function* () {
+              const previous = providerKeys.get(provider);
+              if (access === undefined) {
+                providerKeys.delete(provider);
+                if (previous !== undefined) yield* forget(previous);
+                return null;
+              }
+              // A failed credential lookup keeps the last good account's meters.
+              if (access === null)
+                return previous === undefined
+                  ? emptyConnectedLimits(provider)
+                  : (lastGoodPlanLimits.get(previous) ?? emptyConnectedLimits(provider));
+              const key = `${provider}:${access.accountId}`;
+              if (previous !== undefined && previous !== key) yield* forget(previous);
+              providerKeys.set(provider, key);
+              connections.set(key, { ...access, provider });
+              return (yield* Cache.get(entries, key)).limits;
+            }),
+          ),
         ),
     };
   });
@@ -575,26 +584,9 @@ function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProvid
   };
 }
 
-type PlanLimitCache = Effect.Success<ReturnType<typeof makePlanLimitCache>>;
-
-function readProviderPlanLimits(
-  provider: LiveSubscriptionProviderId,
-  cache: PlanLimitCache,
-): Effect.Effect<UsageProviderPlanLimits | null> {
-  return cache
-    .forgetDisconnected(provider)
-    .pipe(
-      Effect.flatMap((connected) =>
-        connected
-          ? Cache.get(cache.entries, provider).pipe(Effect.map((result) => result?.limits ?? null))
-          : Effect.succeed(null),
-      ),
-    );
-}
-
-export function makePlanLimitsReader(getAccessToken: GetAccessToken) {
+export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
   return Effect.map(
-    makePlanLimitCache(getAccessToken),
+    makePlanLimitCache(getPlanAccess),
     (cache) => (provider?: SubscriptionProviderId) =>
       Effect.all(
         (provider === undefined
@@ -602,7 +594,7 @@ export function makePlanLimitsReader(getAccessToken: GetAccessToken) {
           : provider === "cursor"
             ? []
             : [provider]
-        ).map((selected) => readProviderPlanLimits(selected, cache)),
+        ).map((selected) => cache.read(selected)),
 
         { concurrency: "unbounded" },
       ).pipe(
@@ -613,10 +605,10 @@ export function makePlanLimitsReader(getAccessToken: GetAccessToken) {
   );
 }
 
-export function readPlanLimitsEffect(getAccessToken: GetAccessToken) {
-  return Effect.flatMap(makePlanLimitsReader(getAccessToken), (read) => read());
+export function readPlanLimitsEffect(getPlanAccess: GetPlanAccess) {
+  return Effect.flatMap(makePlanLimitsReader(getPlanAccess), (read) => read());
 }
 
-export async function readPlanLimits(getAccessToken: GetAccessToken) {
-  return Effect.runPromise(readPlanLimitsEffect(getAccessToken));
+export async function readPlanLimits(getPlanAccess: GetPlanAccess) {
+  return Effect.runPromise(readPlanLimitsEffect(getPlanAccess));
 }

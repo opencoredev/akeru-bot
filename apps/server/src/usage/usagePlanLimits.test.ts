@@ -103,13 +103,16 @@ describe("readPlanLimits cache", () => {
   };
   it.effect("reads only the requested provider for a bot usage view", () =>
     Effect.gen(function* () {
-      const getAccessToken = vi.fn(async () => "go-key");
+      const getAccessToken = vi.fn(async () => ({
+        accessToken: "go-key",
+        accountId: "go-account",
+      }));
       const fetchMock = vi.fn();
       vi.stubGlobal("fetch", fetchMock);
       const read = yield* makePlanLimitsReader(getAccessToken);
       const limits = yield* read("opencode-go");
       expect(limits.map((limit) => limit.provider)).toEqual(["opencode-go"]);
-      expect(getAccessToken.mock.calls).toEqual([["opencode-go"], ["opencode-go"]]);
+      expect(getAccessToken.mock.calls).toEqual([["opencode-go"]]);
       expect(fetchMock).not.toHaveBeenCalled();
       vi.unstubAllGlobals();
     }),
@@ -134,7 +137,9 @@ describe("readPlanLimits cache", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const getAccessToken = async (provider: "anthropic" | string) =>
-        provider === "anthropic" ? "token" : undefined;
+        provider === "anthropic"
+          ? { accessToken: "token", accountId: "claude-account" }
+          : undefined;
 
       const read = yield* makePlanLimitsReader(getAccessToken);
       const first = yield* read();
@@ -189,7 +194,9 @@ describe("readPlanLimits cache", () => {
       );
 
       const limits = yield* readPlanLimitsEffect(async (provider) =>
-        provider === "anthropic" ? "token" : undefined,
+        provider === "anthropic"
+          ? { accessToken: "token", accountId: "claude-account" }
+          : undefined,
       );
       expect(limits).toEqual([
         {
@@ -211,7 +218,9 @@ describe("readPlanLimits cache", () => {
         vi.stubGlobal("fetch", fetchMock);
 
         const limits = yield* readPlanLimitsEffect(async (provider) =>
-          provider === "opencode-go" ? "go-key" : undefined,
+          provider === "opencode-go"
+            ? { accessToken: "go-key", accountId: "go-account" }
+            : undefined,
         );
 
         expect(limits).toEqual([
@@ -241,7 +250,9 @@ describe("readPlanLimits cache", () => {
       );
       let connected = true;
       const read = yield* makePlanLimitsReader(async (provider) =>
-        provider === "anthropic" && connected ? "disconnect-token" : undefined,
+        provider === "anthropic" && connected
+          ? { accessToken: "disconnect-token", accountId: "claude-account" }
+          : undefined,
       );
       expect((yield* read("anthropic")).map((limit) => limit.provider)).toEqual(["anthropic"]);
       connected = false;

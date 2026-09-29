@@ -201,7 +201,7 @@ export const make = Effect.gen(function* () {
   const providerUsageHistory = yield* ProviderUsageHistory;
   const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
   const readPlanLimits = yield* makePlanLimitsReader((provider) =>
-    subscriptionAuth.getPlanAccessToken(provider),
+    subscriptionAuth.getPlanAccess(provider),
   );
 
   const scope = yield* Scope.Scope;

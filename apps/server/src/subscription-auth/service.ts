@@ -834,6 +834,7 @@ export class SubscriptionAuthService {
       this.data[login.provider] = {
         type: "api-key",
         access: apiKey,
+        connectionId: NodeCrypto.randomUUID(),
         ...(baseUrl ? { baseUrl } : {}),
       };
       delete this.health[login.provider];
@@ -857,7 +858,7 @@ export class SubscriptionAuthService {
         return { status: "failed", error: "Login cancelled. Start again." };
       this.pendingLogins.delete(loginId);
       this.savePending();
-      this.setCredential("anthropic", credentials);
+      this.setCredential("anthropic", credentials, true);
       return { status: "connected" };
     } catch (error) {
       // Keep the pending login: a mangled paste should not force a restart.
@@ -904,7 +905,20 @@ export class SubscriptionAuthService {
       this.clearImageHealth(provider);
       this.saveHealth();
     }
-    this.data[provider] = { type: "oauth", ...credentials };
+    const previous = this.data[provider];
+    this.data[provider] = {
+      type: "oauth",
+      ...credentials,
+      connectionId: replacement
+        ? NodeCrypto.randomUUID()
+        : (previous?.connectionId ?? NodeCrypto.randomUUID()),
+      ...(!replacement &&
+      previous?.type === "oauth" &&
+      credentials.accountId === undefined &&
+      previous.accountId !== undefined
+        ? { accountId: previous.accountId }
+        : {}),
+    };
     this.save();
   }
 
@@ -937,6 +951,34 @@ export class SubscriptionAuthService {
     const apiKey = this.getApiKeyCredential(provider);
     if (apiKey && (provider !== "opencode-go" || apiKey.baseUrl)) return undefined;
     return this.getAccessToken(provider);
+  }
+
+  async getPlanAccess(
+    provider: SubscriptionProviderId,
+  ): Promise<{ readonly accessToken: string; readonly accountId: string } | undefined> {
+    this.reload();
+    const credential = this.data[provider];
+    if (
+      !credential ||
+      (credential.type === "api-key" && (provider !== "opencode-go" || credential.baseUrl))
+    )
+      return undefined;
+    if (typeof credential.connectionId !== "string" || !credential.connectionId) {
+      this.data[provider] = { ...credential, connectionId: NodeCrypto.randomUUID() };
+      this.save();
+    }
+    const accessToken = await this.getPlanAccessToken(provider);
+    this.reload();
+    const current = this.data[provider];
+    if (!current) return undefined;
+    if (!accessToken) throw new Error("Plan access is temporarily unavailable.");
+    const accountId =
+      current.type === "oauth" && typeof current.accountId === "string" && current.accountId
+        ? current.accountId
+        : current.connectionId;
+    if (typeof accountId !== "string" || !accountId)
+      throw new Error("Plan account identity is unavailable.");
+    return { accessToken: current.access, accountId };
   }
 
   getApiKeyCredential(provider: SubscriptionProviderId): ApiKeyCredential | undefined {
