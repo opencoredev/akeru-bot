@@ -86,6 +86,9 @@ const MAX_PENDING_KEYS = 128;
 const MAX_PENDING_PAINTS = 128;
 const MAX_SAMPLES = 512;
 const ECHO_WINDOW_MS = 250;
+// CSI, OSC, and two-byte escape sequences change terminal state without painting glyphs.
+// eslint-disable-next-line no-control-regex
+const ESCAPE_SEQUENCE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])/g;
 
 /** Correlates printable key echoes while bounding all diagnostic state. */
 export class TerminalLatencyRecorder implements TerminalLatencyProbe {
@@ -112,7 +115,9 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
     this.pendingKeys.push({ keypressAt: time, expected });
   }
   onByteArrival(time: number, output: string): void {
-    const printable = [...output].filter((char) => char >= " " && char <= "~");
+    const printable = [...output.replace(ESCAPE_SEQUENCE, "")].filter(
+      (char) => char >= " " && char <= "~",
+    );
     const eligible = this.pendingKeys.filter(
       (key) => key.byteAt === undefined && time - key.keypressAt <= ECHO_WINDOW_MS,
     );
@@ -130,6 +135,8 @@ export class TerminalLatencyRecorder implements TerminalLatencyProbe {
       // Output beyond the matched echoes still needs its own byte-arrival sample.
       if (printable.length === candidates.length) return;
     }
+    // Output with no visible glyphs would otherwise time a later, unrelated paint.
+    if (printable.every((char) => char === " ")) return;
     if (this.pendingPaints.length >= MAX_PENDING_PAINTS) this.pendingPaints.shift();
     this.pendingPaints.push({ byteAt: time });
   }

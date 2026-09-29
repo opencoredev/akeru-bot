@@ -89,6 +89,14 @@ describe("terminal latency harness", () => {
     r.onGlyphPaint(15, paint("x"));
     expect(r.samples).toEqual([{ byteArrivalToGlyphMs: 5 }]);
   });
+  it("does not time a later paint against escape-only output", () => {
+    const r = new TerminalLatencyRecorder();
+    r.onGlyphPaint(0, paint(""));
+    r.onByteArrival(10, "\u001b[31m\u001b]0;title\u0007");
+    r.onGlyphPaint(12, paint(""));
+    r.onGlyphPaint(110, paint("x"));
+    expect(r.samples).toEqual([]);
+  });
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     r.onGlyphPaint(0, paint(""));
