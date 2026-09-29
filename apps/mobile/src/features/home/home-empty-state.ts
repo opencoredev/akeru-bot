@@ -52,9 +52,18 @@ export function deriveHomeEmptyState(props: {
     };
   }
 
+  // The error is the first across all environments, so another environment
+  // still connecting or synchronizing keeps the page loading.
+  const stillLoading =
+    catalogState.hasPendingShellSnapshot || catalogState.hasConnectingEnvironment;
+
   // The environment is connected but its first snapshot failed. The stream
   // keeps retrying on its own; the page says so and offers a reconnect.
-  if (!catalogState.hasLoadedShellSnapshot && catalogState.shellSnapshotError !== null) {
+  if (
+    !catalogState.hasLoadedShellSnapshot &&
+    catalogState.shellSnapshotError !== null &&
+    !stillLoading
+  ) {
     return {
       title: "Could not load chats",
       detail: `${catalogState.shellSnapshotError} Akeru keeps trying. Try again to reconnect now.`,
@@ -65,7 +74,10 @@ export function deriveHomeEmptyState(props: {
 
   // A connection can report connected a moment before its first snapshot
   // lands; saying "No chats yet" then would be a lie.
-  if (!catalogState.hasLoadedShellSnapshot && catalogState.connectionError === null) {
+  if (
+    !catalogState.hasLoadedShellSnapshot &&
+    (catalogState.connectionError === null || stillLoading)
+  ) {
     return {
       title: "Connecting to environment",
       detail: "Loading projects and bots from the saved environment.",

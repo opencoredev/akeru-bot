@@ -74,6 +74,22 @@ describe("deriveHomeEmptyState", () => {
   });
 });
 
+describe("deriveHomeEmptyState with several environments", () => {
+  it("keeps loading while another environment synchronizes past a failed one", () => {
+    expect(
+      deriveHomeEmptyState({
+        catalogState: workspaceState({
+          hasLoadedShellSnapshot: false,
+          hasPendingShellSnapshot: true,
+          connectionError: "Environment A is offline.",
+          shellSnapshotError: "Snapshot failed",
+        }),
+        projectCount: 0,
+      }),
+    ).toMatchObject({ title: "Connecting to environment", loading: true, retry: false });
+  });
+});
+
 describe("environmentsToRetry", () => {
   const environment = (
     id: string,
