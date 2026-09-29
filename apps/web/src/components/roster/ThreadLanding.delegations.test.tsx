@@ -417,7 +417,7 @@ describe("thread landing delegations", () => {
       GroupThreadLanding({ groupId: group.id }),
       (element) => element.type === DelegationCard,
     ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
-    hooks.beginRender();
+    hooks.reset();
     const botCard = visitElements(
       BotThreadLanding({ botId: parentBot.id }),
       (element) => element.type === DelegationCard,
