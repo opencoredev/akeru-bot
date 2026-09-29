@@ -2479,9 +2479,12 @@ const make = (options?: AgentControllerLiveOptions) =>
             );
             return;
           }
+          // The session's own grant covers a worker chat a restart orphaned, which the
+          // runtimes no longer track.
           const grant =
             wired().delegationRuntime?.accessForThread(threadId) ??
-            workerRuntime.accessForThread(threadId);
+            workerRuntime.accessForThread(threadId) ??
+            active.toolSession.delegation?.access;
           if (grant?.approvalCeiling === "none") {
             // Nobody can answer a prompt here, so the call fails now instead of waiting.
             active.session.respondToToolApproval({

@@ -5350,6 +5350,72 @@ describe("AgentControllerLive", () => {
       );
     });
 
+    it.effect("keeps worker limits and declines approvals in a worker chat after a restart", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const mcpManager = {
+        init: vi.fn(async () => undefined),
+        disconnect: vi.fn(async () => undefined),
+        getTools: vi.fn(() => ({ linear_update: { mcp: { annotations: {} } } })),
+        getServerStatuses: vi.fn(() => []),
+      };
+      // The worker runtime has no record of this chat, as after a server restart.
+      const orphanThreadId = ThreadId.make("worker-thread-orphaned");
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          yield* controller.configureDelegation!({
+            readSnapshot: async () => groupParentSnapshot,
+            dispatch: async () => ({ sequence: 1 }),
+          });
+          yield* controller.resolveEngine({
+            threadId: orphanThreadId,
+            engine: null,
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(orphanThreadId, {
+            threadId: orphanThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            cwd: process.cwd(),
+            modelSelection: codexSelection,
+            runtimeMode: "approval-required",
+            botId: bossBotId,
+            botName: "Boss",
+            mcpServers: [linearServer],
+          });
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          const tools = runtime.toolsForThread(String(orphanThreadId)).map((tool) => tool.id);
+          for (const toolId of ["Task", "request_box_help", "ReactToMessage", "ExternalShell"]) {
+            expect(tools).not.toContain(toolId);
+          }
+
+          yield* controller.sendTurn({ threadId: orphanThreadId, input: "Update the issue." });
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId: "orphan-linear",
+            toolName: "linear_update",
+            args: { issue: "LEO-1", state: "done" },
+          } as AgentControllerEvent);
+          yield* Effect.yieldNow;
+
+          expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+            toolCallId: "orphan-linear",
+            decision: "decline",
+            declineContext: expect.objectContaining({
+              message: expect.stringContaining("linear_update"),
+            }),
+          });
+        }),
+        bridge.service,
+        mastra.factory,
+        () => mcpManager as never,
+      );
+    });
+
     it.effect("removes the hidden worker chat when its first turn is rejected", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
