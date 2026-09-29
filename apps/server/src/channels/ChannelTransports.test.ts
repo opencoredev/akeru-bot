@@ -1,3 +1,5 @@
+import * as NodeCrypto from "node:crypto";
+
 import {
   BotId,
   ChannelConnectionId,
@@ -729,6 +731,66 @@ describe("channel transports", () => {
           new Request(webhookUrl ?? ""),
         );
         expect(unknown.status).toBe(404);
+      }),
+    );
+
+    it.effect("rejects a signed message for another phone number on a connection URL", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ publicOrigin: "https://akeru.example" });
+        yield* harness.runtime.saveConnection(whatsappSave(connectionId));
+        yield* harness.runtime.attach(BOT_ID, connectionId, PROJECT_ID, "whatsapp");
+        const url = harness.settings().channelConnections[0]?.webhookUrl ?? "";
+        const signedRequest = (phoneNumberId: string) => {
+          const body = JSON.stringify({
+            object: "whatsapp_business_account",
+            entry: [
+              {
+                id: "business-id",
+                changes: [
+                  {
+                    field: "messages",
+                    value: {
+                      messaging_product: "whatsapp",
+                      metadata: { phone_number_id: phoneNumberId },
+                      contacts: [{ profile: { name: "Alice" }, wa_id: "15551234567" }],
+                      messages: [
+                        {
+                          from: "15551234567",
+                          id: "wamid.1",
+                          timestamp: "1788220000",
+                          text: { body: "Hello" },
+                          type: "text",
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+          return new Request(url, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-hub-signature-256": `sha256=${NodeCrypto.createHmac("sha256", "app-secret").update(body).digest("hex")}`,
+            },
+            body,
+          });
+        };
+
+        const wrong = yield* harness.runtime.handleWhatsAppConnectionWebhook(
+          connectionId,
+          signedRequest("another-phone-number"),
+        );
+        expect(wrong.status).toBe(404);
+        expect(yield* Queue.size(harness.turns)).toBe(0);
+
+        const right = yield* harness.runtime.handleWhatsAppConnectionWebhook(
+          connectionId,
+          signedRequest("phone-number-id"),
+        );
+        expect(right.status).toBe(200);
+        expect((yield* Queue.take(harness.turns)).type).toBe("thread.turn.start");
       }),
     );
 

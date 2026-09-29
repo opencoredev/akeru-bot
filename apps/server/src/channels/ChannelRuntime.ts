@@ -2504,6 +2504,31 @@ const handleWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request
     ),
   );
 
+const record = (value: unknown): Readonly<Record<string, unknown>> | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
+
+const hasMismatchedWhatsAppPhone = (payload: unknown, phoneNumberId: string): boolean => {
+  const entries = record(payload)?.entry;
+  if (!Array.isArray(entries)) return false;
+  return entries.some((entry: unknown) => {
+    const changes = record(entry)?.changes;
+    return (
+      Array.isArray(changes) &&
+      changes.some((change: unknown) => {
+        const value = record(record(change)?.value);
+        const messages = value?.messages;
+        return (
+          Array.isArray(messages) &&
+          messages.length > 0 &&
+          record(value?.metadata)?.phone_number_id !== phoneNumberId
+        );
+      })
+    );
+  });
+};
+
 const restoreConnectedChannels = (
   ctx: ChannelRuntimeContext,
 ): Effect.Effect<ReadonlyArray<ChannelRestoreFailure>, ChannelOperationError> =>
@@ -2892,7 +2917,27 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
           Effect.catchCause(() => Effect.succeed(undefined)),
           Effect.flatMap((botId) =>
             botId
-              ? handleWhatsAppWebhook(ctx, botId, request)
+              ? loadConnectionSecret(ctx, connectionId).pipe(
+                  Effect.flatMap((secret) => {
+                    if (!secret || secret.provider !== "whatsapp")
+                      return Effect.succeed(new Response("Not Found", { status: 404 }));
+                    if (request.method !== "POST")
+                      return handleWhatsAppWebhook(ctx, botId, request);
+                    return Effect.tryPromise({
+                      try: async (): Promise<unknown> => request.clone().json(),
+                      catch: () => null,
+                    }).pipe(
+                      Effect.flatMap((payload) =>
+                        hasMismatchedWhatsAppPhone(payload, secret.phoneNumberId)
+                          ? Effect.succeed(new Response("Not Found", { status: 404 }))
+                          : handleWhatsAppWebhook(ctx, botId, request),
+                      ),
+                    );
+                  }),
+                  Effect.catchCause(() =>
+                    Effect.succeed(new Response("Not Found", { status: 404 })),
+                  ),
+                )
               : Effect.succeed(new Response("Not Found", { status: 404 })),
           ),
         ),
