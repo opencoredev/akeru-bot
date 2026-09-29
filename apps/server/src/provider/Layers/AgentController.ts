@@ -1146,6 +1146,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       };
       return { memory: guarded };
     };
+    // Image providers for the GenerateImage tool, read on every session start or reuse. An
+    // unreadable settings file hides the tool rather than offering a call that can only fail
+    // (ProviderService denies the MCP capability the same way). Without the service, tests
+    // keep the tool visible.
+    const imageToolSettings = Option.isSome(serverSettings)
+      ? serverSettings.value.getSettings.pipe(
+          Effect.map((settings) => settings.imageGeneration),
+          Effect.orElseSucceed(() => ({ chatgptEnabled: false, grokEnabled: false })),
+          Effect.map(({ chatgptEnabled, grokEnabled }) => ({ chatgptEnabled, grokEnabled })),
+        )
+      : Effect.succeed({ chatgptEnabled: true, grokEnabled: true });
     const memorySettings = () =>
       Option.isSome(serverSettings)
         ? serverSettings.value.getSettings.pipe(
@@ -2764,6 +2775,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
         delete toolSession.imageGeneration;
+        const imageGeneration = yield* imageToolSettings;
         const settings = yield* memorySettings();
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
@@ -2788,6 +2800,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               }
             : {}),
           ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+          imageGeneration,
         };
         existing.configuredToolSession = configuredToolSession;
         existing.configuredMemoryAccess = delegatedAccess
@@ -2945,13 +2958,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           : undefined;
       const registeredMemoryHandlers = nextMemoryHandlers;
       const mcpManager = sessionResources.getMcpManager(key);
-      // An unreadable settings file hides the image tool rather than offering a
-      // call that can only fail (ProviderService denies the MCP capability the
-      // same way). Without the service, tests keep the tool visible.
-      const imageGenerationSettings = Option.isSome(serverSettings)
-        ? ((yield* serverSettings.value.getSettings.pipe(Effect.orElseSucceed(() => undefined)))
-            ?.imageGeneration ?? { chatgptEnabled: false, grokEnabled: false })
-        : { chatgptEnabled: true, grokEnabled: true };
+      const imageGenerationSettings = yield* imageToolSettings;
       const mcpDependencies =
         input.botId && input.botName
           ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
@@ -2965,7 +2972,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
-        ...(imageGenerationSettings ? { imageGeneration: imageGenerationSettings } : {}),
+        imageGeneration: imageGenerationSettings,
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,
           pluginRuntime,

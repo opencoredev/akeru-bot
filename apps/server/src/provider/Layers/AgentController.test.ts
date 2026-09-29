@@ -3446,6 +3446,46 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect(
+    "hides the image tool on a reused Mastra session after image providers turn off",
+    () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const settings = yield* ServerSettingsService;
+          yield* resolveCodex(controller);
+          const input = {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access" as const,
+          };
+          yield* controller.startSession(codexThreadId, input);
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          const toolIds = () =>
+            runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id);
+          expect(toolIds()).toContain("GenerateImage");
+
+          yield* settings.updateSettings({ imageGeneration: { grokEnabled: false } });
+          yield* controller.startSession(codexThreadId, input);
+          expect(mastra.createSession).toHaveBeenCalledOnce();
+          expect(toolIds()).not.toContain("GenerateImage");
+        }),
+        bridge.service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { imageGeneration: { grokEnabled: true } },
+      );
+    },
+  );
+
   it.effect("clears a stale bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
