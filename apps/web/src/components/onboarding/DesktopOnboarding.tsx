@@ -1053,8 +1053,6 @@ export function DesktopOnboarding({
     )
       return;
     if (!serverBots.some((bot) => bot.id === handoff.botId)) {
-      clearDesktopOnboardingHandoff(window.localStorage);
-      toastManager.add({ type: "error", title: "Your new bot is no longer available." });
       return;
     }
     const botId = handoff.botId;

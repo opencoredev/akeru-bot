@@ -323,8 +323,12 @@ describe("onboarding handoff", () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
 
-    mocks.serverBots = [{ id: BOT_ID }];
     mocks.rosterLoaded = true;
+    await act(async () => root.render(<DesktopOnboarding />));
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(storage.get(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY)).toBe(HANDOFF);
+
+    mocks.serverBots = [{ id: BOT_ID }];
     await act(async () => root.render(<DesktopOnboarding />));
     expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith({
       to: "/bots/$botId",
