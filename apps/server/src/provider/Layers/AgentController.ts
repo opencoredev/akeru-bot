@@ -833,6 +833,14 @@ const make = (options?: AgentControllerLiveOptions) =>
       unknown,
       Error
     >("The agent controller stopped before the routine review finished.");
+    // Accepted routine reviews whose routine is still being created, by tool call.
+    const creatingRoutineReviews = new Map<string, string>();
+    // A turn waits on the user while any tool approval or routine review it
+    // opened is unanswered, or an accepted routine is still being created.
+    const turnStillWaiting = (threadId: string, active: ActiveSession) =>
+      active.pendingApprovals.size > 0 ||
+      pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
+      [...creatingRoutineReviews.values()].includes(threadId);
 
     const runMastra = <A>(operation: string, run: () => Promise<A>) =>
       Effect.tryPromise({
@@ -1452,11 +1460,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                         // Close the review card so the chat no longer waits on the user.
                         const current = sessions.get(threadId);
                         if (!current?.activeTurn) return;
-                        current.activeTurn.waiting =
-                          current.pendingApprovals.size > 0 ||
-                          pendingRoutineRequests
-                            .entries()
-                            .some(([, request]) => request.threadId === threadId);
+                        current.activeTurn.waiting = turnStillWaiting(threadId, current);
                         publish({
                           ...baseEvent(ThreadIdBrand(threadId), current, current.activeTurn.turnId),
                           requestId: RuntimeRequestId.make(requestId),
@@ -3562,26 +3566,36 @@ const make = (options?: AgentControllerLiveOptions) =>
       // in time always decides the outcome even if creation outlasts the limit.
       const routineRequest = pendingRoutineRequests.claim(toolCallId);
       if (routineRequest) {
-        if (active.activeTurn) {
-          active.activeTurn.waiting =
-            active.pendingApprovals.size > 0 ||
-            pendingRoutineRequests.entries().some(([, request]) => request.threadId === key);
-        }
-        publish({
-          ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
-          requestId: RuntimeRequestId.make(toolCallId),
-          type: "request.resolved",
-          payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
-        });
-        publishSessionState(
-          input.threadId,
-          active,
-          active.activeTurn.waiting ? "waiting" : "running",
-        );
+        // The review stays open until its answer has taken effect, so an
+        // accepted review keeps the turn waiting while the routine is created.
+        const resolveReview = (outcome?: "failed") =>
+          Effect.sync(() => {
+            const current = sessions.get(key);
+            if (!current?.activeTurn) return;
+            current.activeTurn.waiting = turnStillWaiting(key, current);
+            publish({
+              ...baseEvent(input.threadId, current, current.activeTurn.turnId),
+              requestId: RuntimeRequestId.make(toolCallId),
+              type: "request.resolved",
+              payload: {
+                requestType: "dynamic_tool_call" as const,
+                decision: input.decision,
+                ...(outcome ? { outcome } : {}),
+              },
+            });
+            publishSessionState(
+              input.threadId,
+              current,
+              current.activeTurn.waiting ? "waiting" : "running",
+            );
+          });
         if (input.decision === "decline" || input.decision === "cancel") {
+          yield* resolveReview();
           pendingRoutineRequests.resolve(toolCallId, { status: "cancelled" });
           return;
         }
+        creatingRoutineReviews.set(toolCallId, key);
+        let created = false;
         yield* routineDispatcher!
           .createApprovedForThread(
             ThreadIdBrand(routineRequest.threadId),
@@ -3599,6 +3613,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             ),
             Effect.tap((result) =>
               Effect.sync(() => {
+                created = true;
                 pendingRoutineRequests.resolve(toolCallId, result);
               }),
             ),
@@ -3613,6 +3628,12 @@ const make = (options?: AgentControllerLiveOptions) =>
                   toolCallId,
                   new Error("The routine review was interrupted before the routine was created."),
                 );
+              }),
+            ),
+            Effect.ensuring(
+              Effect.suspend(() => {
+                creatingRoutineReviews.delete(toolCallId);
+                return resolveReview(created ? undefined : "failed");
               }),
             ),
           );
@@ -3661,7 +3682,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             ? active.session.permissions.setForTool({ toolName, policy: "allow" })
             : undefined;
           if (acceptForSession) active.connectorSessionApprovals.add(toolName);
-          if (active.activeTurn) active.activeTurn.waiting = false;
+          if (active.activeTurn) active.activeTurn.waiting = turnStillWaiting(key, active);
           active.session.respondToToolApproval({
             toolCallId,
             decision:
@@ -3695,7 +3716,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           outcome: decision === "accept" ? "approved" : "denied",
         },
       });
-      publishSessionState(input.threadId, active, "running");
+      publishSessionState(
+        input.threadId,
+        active,
+        active.activeTurn?.waiting ? "waiting" : "running",
+      );
     });
 
     const respondToUserInput: AgentControllerShape["respondToUserInput"] = Effect.fn(
@@ -3746,7 +3771,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             if (!activeTurn || active.activeTurn !== activeTurn) {
               return { _tag: "Stale" as const };
             }
-            if (active.activeTurn) active.activeTurn.waiting = false;
+            if (active.activeTurn) active.activeTurn.waiting = turnStillWaiting(key, active);
             return {
               _tag: "Dispatched" as const,
               resume: active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
@@ -3774,7 +3799,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         type: "user-input.resolved",
         payload: { answers: input.answers },
       });
-      publishSessionState(input.threadId, active, "running");
+      publishSessionState(
+        input.threadId,
+        active,
+        active.activeTurn?.waiting ? "waiting" : "running",
+      );
     });
 
     const stopSessionWithResources = Effect.fn("AgentController.stopSession")(function* (

@@ -92,6 +92,7 @@ import * as OrchestrationEngine from "../../orchestration/Services/Orchestration
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   RoutineDraftDispatcher,
+  RoutineDraftError,
   type RoutineDraftDispatcherShape,
 } from "../../routines/RoutineDraftDispatcher.ts";
 import {
@@ -4173,6 +4174,92 @@ describe("AgentControllerLive", () => {
               Effect.as(created),
             ),
         },
+      );
+    });
+
+    it.effect("keeps an accepted review waiting until its routine is created", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      const lastState = () =>
+        events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          const answer = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+          yield* Effect.yieldNow;
+          assert.isFalse(events.some((event) => event.type === "request.resolved"));
+          assert.strictEqual(lastState(), "waiting");
+
+          yield* TestClock.adjust("2 minutes");
+          assert.instanceOf(yield* Fiber.join(answer), AgentControllerRuntimeError);
+          assert.isTrue(Exit.isFailure(yield* Fiber.join(toolCall)));
+          assert.deepStrictEqual(
+            events.filter((event) => event.type === "request.resolved").map((e) => e.payload),
+            [{ requestType: "dynamic_tool_call", decision: "accept", outcome: "failed" }],
+          );
+          assert.strictEqual(lastState(), "running");
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sleep("2 minutes").pipe(
+              Effect.andThen(
+                Effect.fail(new RoutineDraftError({ message: "The routine could not be saved." })),
+              ),
+            ),
+        },
+      );
+    });
+
+    it.effect("keeps the turn waiting on a routine review after a tool approval answer", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId: "restart-tool-1",
+            toolName: "RestartMcpServers",
+            args: {},
+          } as AgentControllerEvent);
+          yield* Effect.yieldNow;
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("restart-tool-1"),
+            decision: "accept",
+          });
+          yield* Effect.yieldNow;
+          assert.isTrue(
+            events.some(
+              (event) =>
+                event.type === "request.resolved" && String(event.requestId) === "restart-tool-1",
+            ),
+          );
+          assert.strictEqual(
+            events.findLast((event) => event.type === "session.state.changed")?.payload.state,
+            "waiting",
+          );
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(requestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(toolCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {},
       );
     });
 
