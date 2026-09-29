@@ -150,6 +150,8 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   // Browserbase session; the next getContext() opens a fresh one.
   let lease: { readonly scope: Scope.Closeable; readonly context: Promise<BrowserContext> } | null =
     null;
+  // Bumped by close() so an open that raced it does not leave a tab behind.
+  let closeGeneration = 0;
 
   const getContext = (): Promise<BrowserContext> => {
     if (lease) return lease.context;
@@ -273,6 +275,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   };
 
   const handle = async (request: PreviewAutomationRequest): Promise<unknown> => {
+    const generation = closeGeneration;
     await Effect.runPromise(requireApiKey);
     if (request.operation === "status") {
       const tabId = request.tabId ?? activeByThread.get(request.threadId);
@@ -292,6 +295,10 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
         );
         tabId = snapshot.tabId;
         const page = await (await getContext()).newPage();
+        if (generation !== closeGeneration) {
+          await page.close().catch(() => undefined);
+          throw new Error("The browser was closed while this tab was opening.");
+        }
         tab = { threadId: request.threadId, page, loading: false };
         tabs.set(tabId, tab);
       }
@@ -462,6 +469,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   };
 
   const close = async () => {
+    closeGeneration += 1;
     const current = lease;
     lease = null;
     // Pages die with the browser session.

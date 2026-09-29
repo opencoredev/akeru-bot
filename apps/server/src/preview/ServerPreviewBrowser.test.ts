@@ -16,6 +16,7 @@ const playwright = vi.hoisted(() => {
     title: async () => "",
     viewportSize: () => ({ width: 1280, height: 800 }),
     screenshot: async () => Buffer.from("png"),
+    close: vi.fn(async () => undefined),
   });
   const connectOverCDP = vi.fn(async () => {
     const browser = {
@@ -79,6 +80,15 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
       yield* Effect.promise(() => browser.close());
       expect(playwright.browsers[1]!.close).toHaveBeenCalledOnce();
       expect(playwright.browsers[0]!.close).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect("does not keep a tab from an open that raced close", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      const opening = browser.handle(openRequest("thread-race", "open-race"));
+      yield* Effect.promise(() => browser.close());
+      yield* Effect.promise(() => expect(opening).rejects.toThrow("closed while this tab"));
     }),
   );
 });
