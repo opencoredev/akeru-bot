@@ -1080,7 +1080,9 @@ export const make = Effect.gen(function* () {
               )
           : null;
 
-        if (input.force === true || !localBranchExists) {
+        // An existing branch only gets its remote-tracking ref, even when forced: the refresh
+        // below moves it only when that loses no local commits or edits.
+        if (!localBranchExists) {
           yield* git.fetchRemoteBranch({
             cwd: input.cwd,
             remoteName,

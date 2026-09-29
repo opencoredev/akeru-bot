@@ -676,70 +676,75 @@ it.effect("checks out same-repository pull requests with the existing Bitbucket 
   }).pipe(Effect.provide(layer));
 });
 
-it.effect("refreshes an existing same-repository pull request branch", () => {
-  const { git, layer } = makeLayer({
-    response: () =>
-      Response.json({
-        ...bitbucketPullRequest,
-        source: {
-          branch: { name: "feature/source-control" },
-          repository: {
-            full_name: "pingdotgg/t3code",
-            workspace: { slug: "pingdotgg" },
+// A forced checkout still refreshes an existing branch safely: local commits and a checkout in
+// another worktree must survive, so only the remote-tracking ref is fetched.
+for (const force of [undefined, true]) {
+  it.effect(`refreshes an existing same-repository pull request branch (force: ${force})`, () => {
+    const { git, layer } = makeLayer({
+      response: () =>
+        Response.json({
+          ...bitbucketPullRequest,
+          source: {
+            branch: { name: "feature/source-control" },
+            repository: {
+              full_name: "pingdotgg/t3code",
+              workspace: { slug: "pingdotgg" },
+            },
           },
-        },
-      }),
-    git: { listLocalBranchNames: () => Effect.succeed(["feature/source-control"]) },
-  });
+        }),
+      git: { listLocalBranchNames: () => Effect.succeed(["feature/source-control"]) },
+    });
 
-  return Effect.gen(function* () {
-    const bitbucket = yield* BitbucketApi.BitbucketApi;
-    yield* bitbucket.checkoutPullRequest({
-      cwd: "/repo",
-      context: {
-        provider: {
-          kind: "bitbucket",
-          name: "Bitbucket",
-          baseUrl: "https://bitbucket.org",
+    return Effect.gen(function* () {
+      const bitbucket = yield* BitbucketApi.BitbucketApi;
+      yield* bitbucket.checkoutPullRequest({
+        cwd: "/repo",
+        context: {
+          provider: {
+            kind: "bitbucket",
+            name: "Bitbucket",
+            baseUrl: "https://bitbucket.org",
+          },
+          remoteName: "origin",
+          remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
         },
+        reference: "42",
+        ...(force === undefined ? {} : { force }),
+      });
+
+      assert.strictEqual(git.ensureRemote.mock.calls.length, 0);
+      assert.strictEqual(git.fetchRemoteBranch.mock.calls.length, 0);
+      assert.deepStrictEqual(git.fetchRemoteTrackingBranch.mock.calls[0]?.[0], {
+        cwd: "/repo",
         remoteName: "origin",
-        remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
-      },
-      reference: "42",
-    });
-
-    assert.strictEqual(git.ensureRemote.mock.calls.length, 0);
-    assert.strictEqual(git.fetchRemoteBranch.mock.calls.length, 0);
-    assert.deepStrictEqual(git.fetchRemoteTrackingBranch.mock.calls[0]?.[0], {
-      cwd: "/repo",
-      remoteName: "origin",
-      remoteBranch: "feature/source-control",
-    });
-    assert.deepStrictEqual(git.resolveCommit.mock.calls[0]?.[0], {
-      cwd: "/repo",
-      revision: "feature/source-control@{upstream}",
-    });
-    assert.deepStrictEqual(git.resolveCommit.mock.calls[1]?.[0], {
-      cwd: "/repo",
-      revision: "refs/remotes/origin/feature/source-control",
-    });
-    assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
-      cwd: "/repo",
-      branch: "feature/source-control",
-      remoteName: "origin",
-      remoteBranch: "feature/source-control",
-    });
-    assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
-      cwd: "/repo",
-      refName: "feature/source-control",
-    });
-    assert.deepStrictEqual(git.refreshCheckedOutBranch.mock.calls[0]?.[0], {
-      cwd: "/repo",
-      targetCommit: "after",
-      resetWhenHeadCommit: "before",
-    });
-  }).pipe(Effect.provide(layer));
-});
+        remoteBranch: "feature/source-control",
+      });
+      assert.deepStrictEqual(git.resolveCommit.mock.calls[0]?.[0], {
+        cwd: "/repo",
+        revision: "feature/source-control@{upstream}",
+      });
+      assert.deepStrictEqual(git.resolveCommit.mock.calls[1]?.[0], {
+        cwd: "/repo",
+        revision: "refs/remotes/origin/feature/source-control",
+      });
+      assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
+        cwd: "/repo",
+        branch: "feature/source-control",
+        remoteName: "origin",
+        remoteBranch: "feature/source-control",
+      });
+      assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
+        cwd: "/repo",
+        refName: "feature/source-control",
+      });
+      assert.deepStrictEqual(git.refreshCheckedOutBranch.mock.calls[0]?.[0], {
+        cwd: "/repo",
+        targetCommit: "after",
+        resetWhenHeadCommit: "before",
+      });
+    }).pipe(Effect.provide(layer));
+  });
+}
 
 it.effect("preserves Git checkout failures without deriving the domain message from them", () => {
   const gitCause = new GitCommandError({
