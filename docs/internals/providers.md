@@ -86,7 +86,7 @@ error before anything is dispatched. UninstallMcpServer and RemoveMcpAccount rea
 first, return `dependentBots` (active bots that had the server on, the same rule as MCP health
 dependencies), and follow `mcp-server.delete` with a `bot.update` for every bot, archived or not,
 whose `disabledMcpServerIds` still names the deleted server. Legacy bridge sessions don't
-receive the guidance, and portability exports don't carry it yet.
+receive the guidance. Environment exports carry it on each MCP server record.
 
 `CloudAgent` was dropped from the catalog specification after Cursor was removed as a supported
 provider. A Cursor account would have introduced a separate credential boundary and no longer fits
