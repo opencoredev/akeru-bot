@@ -8050,6 +8050,68 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("replays an accepted turn retry after its provider becomes unavailable", () =>
+    Effect.gen(function* () {
+      const commandId = CommandId.make("cmd-accepted-retry");
+      const threadId = ThreadId.make("thread-accepted-retry");
+      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
+        () => Effect.succeed({ sequence: 7 }),
+      );
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: {
+            getProviders: Effect.succeed([
+              {
+                ...readyDefaultProvider,
+                enabled: false,
+                status: "disabled" as const,
+                availability: "unavailable" as const,
+              },
+            ]),
+          },
+          commandReceipts: {
+            getByCommandId: () =>
+              Effect.succeed(
+                Option.some({
+                  commandId,
+                  aggregateKind: "thread" as const,
+                  aggregateId: threadId,
+                  acceptedAt: "2026-01-01T00:00:00.000Z",
+                  resultSequence: 7,
+                  status: "accepted" as const,
+                  error: null,
+                }),
+              ),
+          },
+          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId,
+            threadId,
+            message: {
+              messageId: MessageId.make("msg-accepted-retry"),
+              role: "user",
+              text: "Retry",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+        ),
+      );
+      assert.equal(result.sequence, 7);
+      assert.equal(dispatch.mock.calls.length, 1);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("retries a turn after a transient provider failure", () =>
     Effect.gen(function* () {
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(

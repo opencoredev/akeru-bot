@@ -129,6 +129,7 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 import { toRoutineReceiptSource } from "./orchestration/routineReceiptSources.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import { OrchestrationCommandReceiptRepository } from "./persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
 import { BotMemoryStore, type BotMemoryAccess } from "./memory/BotMemory.ts";
@@ -759,6 +760,7 @@ const makeWsRpcLayer = (
       const channelDeliveryStore = yield* Effect.serviceOption(
         ChannelDeliveryStore.ChannelDeliveryStore,
       );
+      const commandReceipts = yield* Effect.serviceOption(OrchestrationCommandReceiptRepository);
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -1879,7 +1881,23 @@ const makeWsRpcLayer = (
                 }
                 normalizedCommand = knownPersonCommand;
               }
-              if (normalizedCommand.type === "thread.turn.start") {
+              // A retried turn the engine already accepted replays its receipt, so
+              // provider and cap gates must not turn that success into a failure.
+              const alreadyAccepted =
+                normalizedCommand.type === "thread.turn.start" && Option.isSome(commandReceipts)
+                  ? yield* commandReceipts.value
+                      .getByCommandId({ commandId: normalizedCommand.commandId })
+                      .pipe(
+                        Effect.map(
+                          (receipt) =>
+                            Option.isSome(receipt) &&
+                            receipt.value.status === "accepted" &&
+                            receipt.value.aggregateId === normalizedCommand.threadId,
+                        ),
+                        Effect.orElseSucceed(() => false),
+                      )
+                  : false;
+              if (normalizedCommand.type === "thread.turn.start" && !alreadyAccepted) {
                 const thread = yield* projectionSnapshotQuery
                   .getThreadShellById(normalizedCommand.threadId)
                   .pipe(Effect.map(Option.getOrUndefined));
