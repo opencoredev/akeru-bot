@@ -1,5 +1,5 @@
 vi.mock("./botConversationMessageProjection", () => ({
-  useBotConversationMessageProjection: () => ({ messages: [], lastMessageRole: null }),
+  useBotConversationMessageProjection: () => mocks.messageProjection,
 }));
 import { BotId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
@@ -9,8 +9,15 @@ import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import type { Bot, Group } from "./types";
 import { useGroupThreadRuntime } from "./useGroupThreadRuntime";
+import type { BotConversationMessageProjection } from "./botConversationMessageProjection";
 
 const mocks = vi.hoisted(() => ({
+  messageProjection: {
+    messages: [],
+    lastMessageRole: null,
+    hasMessages: false,
+    lastUserMessageAt: null,
+  } as BotConversationMessageProjection,
   primaryEnvironmentId: "env-a" as EnvironmentId,
   groupAtom: Symbol("groups"),
   startTurnAtom: Symbol("start-turn"),
@@ -85,6 +92,12 @@ vi.mock("./rosterStore", () => ({
 
 beforeEach(() => {
   hooks.reset();
+  mocks.messageProjection = {
+    messages: [],
+    lastMessageRole: null,
+    hasMessages: false,
+    lastUserMessageAt: null,
+  };
   mocks.threadShells = [];
   mocks.threadShell = null;
   mocks.serverGroups = [];
@@ -96,6 +109,36 @@ beforeEach(() => {
 });
 
 describe("group runtime errors", () => {
+  it("reports a newer routine startup failure instead of the previous failed turn", () => {
+    mocks.threadShells = [
+      {
+        environmentId: mocks.primaryEnvironmentId,
+        id: ThreadId.make("thread-1"),
+        groupId: "group-1",
+        archivedAt: null,
+        updatedAt: "2026-09-18T01:00:00.000Z",
+      },
+    ];
+    mocks.threadShell = {
+      ...mocks.threadShells[0],
+      latestTurn: {
+        state: "error",
+        requestedAt: "2026-09-18T00:00:00.000Z",
+        errorMessage: "Previous turn failed.",
+      },
+      session: { status: "error", lastError: "Routine failed before starting." },
+    };
+    mocks.messageProjection = {
+      messages: [],
+      lastMessageRole: "user",
+      hasMessages: true,
+      lastUserMessageAt: "2026-09-18T01:00:00.000Z",
+    };
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+    expect(runtime.turnFailure?.message).toBe("Routine failed before starting.");
+  });
+
   it("allows a configured group bot when the app default has no provider", () => {
     mocks.groups = [
       {

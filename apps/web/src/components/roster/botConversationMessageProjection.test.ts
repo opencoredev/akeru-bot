@@ -24,6 +24,40 @@ const message = (
   }) as const;
 
 describe("bot conversation message projection atom", () => {
+  it("retains raw-history control metadata for hidden routine requests", () => {
+    const source = Atom.make<ReadonlyArray<OrchestrationMessage>>([]);
+    const projection = createBotConversationMessageProjectionAtom(source);
+    const registry = AtomRegistry.make();
+    const observed: BotConversationMessageProjection[] = [];
+    const unsubscribe = registry.subscribe(projection, (value) => observed.push(value), {
+      immediate: true,
+    });
+    const first = message("routine:first", "user", false);
+    const second = {
+      ...message("routine:second", "user", false),
+      createdAt: "2026-09-18T01:00:00.000Z",
+    };
+
+    try {
+      expect(observed[0]).toMatchObject({ hasMessages: false, lastUserMessageAt: null });
+      registry.set(source, [first]);
+      expect(observed[1]).toMatchObject({
+        messages: [],
+        hasMessages: true,
+        lastUserMessageAt: first.createdAt,
+      });
+      registry.set(source, [first, second]);
+      expect(observed).toHaveLength(3);
+      expect(observed[2]!.messages).toBe(observed[1]!.messages);
+      expect(observed[2]!.lastUserMessageAt).toBe(second.createdAt);
+      registry.set(source, []);
+      expect(observed[3]).toMatchObject({ hasMessages: false, lastUserMessageAt: null });
+    } finally {
+      unsubscribe();
+      registry.dispose();
+    }
+  });
+
   it("does not publish hidden streaming deltas but publishes completion and visible edits", () => {
     const user = message("user", "user", false);
     const streaming = message("reply", "assistant", true, "turn-1");

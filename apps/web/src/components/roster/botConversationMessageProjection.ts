@@ -12,11 +12,15 @@ const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
 export interface BotConversationMessageProjection {
   readonly messages: ReadonlyArray<OrchestrationMessage>;
   readonly lastMessageRole: OrchestrationMessage["role"] | null;
+  readonly hasMessages: boolean;
+  readonly lastUserMessageAt: string | null;
 }
 
 const EMPTY_PROJECTION: BotConversationMessageProjection = Object.freeze({
   messages: EMPTY_MESSAGES,
   lastMessageRole: null,
+  hasMessages: false,
+  lastUserMessageAt: null,
 });
 
 const EMPTY_PROJECTION_ATOM = Atom.make(EMPTY_PROJECTION).pipe(
@@ -43,11 +47,19 @@ export function createBotConversationMessageProjectionAtom(
       ? previous.messages
       : nextMessages;
     const lastMessageRole = rawMessages.at(-1)?.role ?? null;
+    const hasMessages = rawMessages.length > 0;
+    const lastUserMessageAt =
+      rawMessages.findLast((message) => message.role === "user")?.createdAt ?? null;
 
-    if (messages === previous.messages && lastMessageRole === previous.lastMessageRole) {
+    if (
+      messages === previous.messages &&
+      lastMessageRole === previous.lastMessageRole &&
+      hasMessages === previous.hasMessages &&
+      lastUserMessageAt === previous.lastUserMessageAt
+    ) {
       return previous;
     }
-    previous = { messages, lastMessageRole };
+    previous = { messages, lastMessageRole, hasMessages, lastUserMessageAt };
     return previous;
   }).pipe(Atom.setIdleTTL(THREAD_PROJECTION_IDLE_TTL_MS), Atom.withLabel(label));
 }

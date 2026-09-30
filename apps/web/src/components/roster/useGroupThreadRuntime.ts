@@ -156,7 +156,8 @@ export function useGroupThreadRuntime(groupId: string) {
     linkedThreadRef,
     bootstrapped,
   );
-  const { messages, lastMessageRole } = useBotConversationMessageProjection(linkedThreadRef);
+  const { messages, lastMessageRole, lastUserMessageAt } =
+    useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
@@ -534,7 +535,7 @@ export function useGroupThreadRuntime(groupId: string) {
     activities,
     latestTurn: rememberedThread?.latestTurn ?? null,
     session,
-    lastUserMessageAt: messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
+    lastUserMessageAt,
   });
   const failure: BotThreadFailure | null =
     error ??
