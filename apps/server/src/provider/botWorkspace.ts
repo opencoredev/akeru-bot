@@ -133,7 +133,7 @@ export async function createRemoteBotWorkspace(
       { cause },
     );
   }
-  if (!persisted) {
+  if (!persisted || persisted.providerId !== session.providerId) {
     try {
       await writeIdentity(identityFile, {
         provider: input.sandbox,
@@ -330,11 +330,18 @@ async function open(
   environment: Readonly<Record<string, string>> = {},
 ): Promise<AkeruRemoteSession> {
   if (provider === "ascii") {
-    const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
+    const { BoxApi, Configuration, ResponseError } = await import("@asciidev/box-sdk");
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
-    await client.get({ boxId: id });
+    try {
+      await client.get({ boxId: id });
+    } catch (cause) {
+      if (!(cause instanceof ResponseError) || cause.response.status !== 404) throw cause;
+      // A timed-out deletion can finish later; only confirmed absence permits replacement.
+      const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+      return ascii(client, box.id);
+    }
     return ascii(client, id);
   }
   if (provider === "e2b") {

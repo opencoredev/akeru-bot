@@ -371,6 +371,68 @@ describe("Ascii Box", () => {
     }
   });
 
+  it.each([404, 401, 403, 500])(
+    "reconciles saved VM identity only for a confirmed 404, not %s errors",
+    async (status) => {
+      const { BoxApi, ResponseError } = await import("@asciidev/box-sdk");
+      const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
+      const identityFile = NodePath.join(root, "identity.json");
+      const previous = { provider: "ascii", providerId: "deleted-id" };
+      const get = vi
+        .spyOn(BoxApi.prototype, "get")
+        .mockRejectedValue(new ResponseError(new Response(null, { status })));
+      const create = vi.spyOn(BoxApi.prototype, "create").mockResolvedValue({
+        ok: true,
+        type: "box.created",
+        status: "provisioning",
+        ttlSeconds: null,
+        box: {
+          id: "replacement-id",
+          name: "test",
+          state: "idle",
+          desktopAvailable: false,
+          snapshotAvailable: false,
+        },
+      });
+      try {
+        await NodeFS.promises.writeFile(identityFile, JSON.stringify(previous));
+        const input = {
+          threadId: "thread",
+          sandbox: "ascii" as const,
+          workspaceId: "workspace",
+          identityFile,
+          environment: { BOX_API_KEY: "configured-key" },
+        };
+        if (status === 404) {
+          create.mockRejectedValueOnce(new Error("creation unavailable"));
+          await expect(createRemoteBotWorkspace(input)).rejects.toThrow("missing or unavailable");
+          expect(JSON.parse(await NodeFS.promises.readFile(identityFile, "utf8"))).toEqual(
+            previous,
+          );
+          const workspace = await createRemoteBotWorkspace(input);
+          expect(workspace.providerId).toBe("replacement-id");
+          expect(JSON.parse(await NodeFS.promises.readFile(identityFile, "utf8"))).toEqual({
+            provider: "ascii",
+            providerId: "replacement-id",
+          });
+          expect(create).toHaveBeenLastCalledWith({
+            createBoxRequest: { ttlSeconds: null, noEnv: true },
+          });
+        } else {
+          await expect(createRemoteBotWorkspace(input)).rejects.toThrow("missing or unavailable");
+          expect(create).not.toHaveBeenCalled();
+          expect(JSON.parse(await NodeFS.promises.readFile(identityFile, "utf8"))).toEqual(
+            previous,
+          );
+        }
+      } finally {
+        get.mockRestore();
+        create.mockRestore();
+        await NodeFS.promises.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("rejects a missing credential before creating a VM", async () => {
     const { BoxApi } = await import("@asciidev/box-sdk");
     const create = vi.spyOn(BoxApi.prototype, "create");
