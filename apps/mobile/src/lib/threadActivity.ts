@@ -1,18 +1,18 @@
-import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
+import { isSilentRunActivity } from "@akeru/client-runtime/silent-run";
 import {
   delegationActions,
   threadDelegations,
   type DelegationAction,
-} from "@t3tools/client-runtime/delegation-presentation";
-import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
+} from "@akeru/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
   requestKindFromRequestType,
   type PendingApproval,
   type PendingUserInput,
-} from "@t3tools/client-runtime/pending-requests";
-import { isToolLifecycleItemType } from "@t3tools/contracts";
+} from "@akeru/client-runtime/pending-requests";
+import { isToolLifecycleItemType } from "@akeru/contracts";
 import type {
   AkeruDelegationRecord,
   BotId,
@@ -24,8 +24,8 @@ import type {
   ToolLifecycleItemType,
   TurnId,
   UserInputQuestion,
-} from "@t3tools/contracts";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+} from "@akeru/contracts";
+import { formatDuration } from "@akeru/shared/orchestrationTiming";
 
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";

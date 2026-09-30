@@ -24,7 +24,7 @@ vi.mock("./useComposerDictation", () => ({
   }),
 }));
 vi.mock("./i18n", async () => {
-  const { catalogRegistry, createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
   return { useMobileI18n: () => ({ t: translator.translate }) };
 });

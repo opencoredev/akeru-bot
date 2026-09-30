@@ -20,7 +20,7 @@ import {
   type UsageSummaryInput,
   type UsageTokenTotals,
   UsageReadError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";

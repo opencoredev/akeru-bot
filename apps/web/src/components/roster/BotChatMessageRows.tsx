@@ -8,8 +8,8 @@ import type {
   ScopedThreadRef,
   ServerProviderSkill,
   ThreadId,
-} from "@t3tools/contracts";
-import type { ReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/contracts";
+import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 import { SmilePlusIcon } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 
@@ -17,7 +17,7 @@ import { useI18n } from "~/i18n";
 import {
   channelDeliveryLabel,
   channelOriginLabel,
-} from "@t3tools/client-runtime/channel-origin-presentation";
+} from "@akeru/client-runtime/channel-origin-presentation";
 import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { cn } from "~/lib/utils";
 import { botEnvironment } from "../../state/bots";

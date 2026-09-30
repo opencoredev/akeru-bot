@@ -1,4 +1,4 @@
-import { BotId, RoutineId, ThreadId, type Routine, type RoutineRun } from "@t3tools/contracts";
+import { BotId, RoutineId, ThreadId, type Routine, type RoutineRun } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createTranslator } from "./i18n/index.ts";

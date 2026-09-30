@@ -15,7 +15,7 @@ import {
   type OrchestrationGroup,
   type OrchestrationReadModel,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";

@@ -6,11 +6,11 @@ import {
   type ServerProvider,
   type ServerProviderUnavailability,
   type UnifiedSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
-import { createTranslator } from "@t3tools/client-runtime/i18n";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
-import type { ProviderAvailabilityTranslate } from "@t3tools/client-runtime/provider-availability";
+import { createTranslator } from "@akeru/client-runtime/i18n";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
+import type { ProviderAvailabilityTranslate } from "@akeru/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
 import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";

@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { RemoteDoctorStatus } from "@t3tools/contracts";
+import { RemoteDoctorStatus } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

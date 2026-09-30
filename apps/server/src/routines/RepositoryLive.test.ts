@@ -1,6 +1,6 @@
 // @effect-diagnostics globalDate:off globalDateInEffect:off
 import { assert, it } from "@effect/vitest";
-import { RoutineRunId, ThreadId } from "@t3tools/contracts";
+import { RoutineRunId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";

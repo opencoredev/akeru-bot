@@ -6,7 +6,7 @@
  *
  * @module usageTranscripts
  */
-import type { UsageProviderKind, UsageTokenTotals } from "@t3tools/contracts";
+import type { UsageProviderKind, UsageTokenTotals } from "@akeru/contracts";
 
 export interface UsageRecord {
   readonly provider: UsageProviderKind;

@@ -14,8 +14,8 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import type { OrchestrationThread } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { OrchestrationThread } from "@akeru/contracts";
 
 import { pendingMemoryApprovals } from "../durableMemory.ts";
 import { applyThreadDetailEvent } from "./threadReducer.ts";

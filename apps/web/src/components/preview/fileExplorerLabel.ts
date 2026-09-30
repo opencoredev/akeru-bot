@@ -1,4 +1,4 @@
-import type { ExecutionEnvironmentPlatformOs, FileManagerRevealKind } from "@t3tools/contracts";
+import type { ExecutionEnvironmentPlatformOs, FileManagerRevealKind } from "@akeru/contracts";
 
 export function revealInFileExplorerLabel(platform: string): string {
   const normalized = platform.toLowerCase();

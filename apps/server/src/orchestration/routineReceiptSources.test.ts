@@ -1,4 +1,4 @@
-import type { Routine } from "@t3tools/contracts";
+import type { Routine } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deletedRoutineReceiptSources } from "./routineReceiptSources.ts";

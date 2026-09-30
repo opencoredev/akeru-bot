@@ -1,6 +1,6 @@
 import { it } from "@effect/vitest";
-import { type PreviewEvent, ThreadId } from "@t3tools/contracts";
-import { PreviewUrlNormalizationError } from "@t3tools/shared/preview";
+import { type PreviewEvent, ThreadId } from "@akeru/contracts";
+import { PreviewUrlNormalizationError } from "@akeru/shared/preview";
 import { Effect, Fiber, PubSub, Stream } from "effect";
 import { expect } from "vite-plus/test";
 

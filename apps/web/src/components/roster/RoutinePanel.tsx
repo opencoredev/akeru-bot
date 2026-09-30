@@ -23,8 +23,8 @@ import {
   type RoutineAdapterProject,
   type RoutineAdapterRun,
   type RoutineAdapterRunStatus,
-} from "@t3tools/client-runtime/routines";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+} from "@akeru/client-runtime/routines";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 
 import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";

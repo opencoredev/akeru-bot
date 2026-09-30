@@ -5,11 +5,11 @@
     { "repo": "opencoredev/akeru-bot", "disableThanks": true }
   ],
   "commit": false,
-  "fixed": [["akeru-bot", "@t3tools/contracts", "@t3tools/desktop", "@t3tools/web"]],
+  "fixed": [["akeru-bot", "@akeru/contracts", "@akeru/desktop", "@akeru/web"]],
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
-  "ignore": ["@t3tools/marketing", "@t3tools/mobile"],
+  "ignore": ["@akeru/marketing", "@akeru/mobile"],
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
   "privatePackages": { "version": true, "tag": false }

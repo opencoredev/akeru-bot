@@ -1,15 +1,15 @@
-import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
-import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
-import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
+import { threadDelegations } from "@akeru/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
+import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
-import { presentThreadError } from "@t3tools/client-runtime/errors";
+import { presentThreadError } from "@akeru/client-runtime/errors";
 import {
   BotId,
   type EnvironmentId,
   type RoutineRun,
   type RoutineRunId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
@@ -29,7 +29,7 @@ import { openSettings } from "../../settingsDialogStore";
 import { SidebarInset } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
+import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
@@ -46,7 +46,7 @@ import {
   UserMessageRow,
   useMessageReactionUpdater,
 } from "./BotChatMessageRows";
-import { channelOriginForAssistantMessage } from "@t3tools/client-runtime/channel-origin-presentation";
+import { channelOriginForAssistantMessage } from "@akeru/client-runtime/channel-origin-presentation";
 import {
   buildBotConversationEntries,
   isBotConversationWorking,

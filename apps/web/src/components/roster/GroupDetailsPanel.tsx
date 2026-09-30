@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createTranslator } from "@t3tools/client-runtime/i18n";
-import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
+import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@akeru/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useId, useReducer, useState, type ReactNode } from "react";

@@ -4,7 +4,7 @@ import {
   type AuthEnvironmentScope,
   type AuthSessionId,
   type OrchestrationCommand,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export interface AuthenticatedCommandActor {
   readonly personId: AuthSessionId;

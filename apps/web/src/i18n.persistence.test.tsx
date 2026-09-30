@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { DEFAULT_CLIENT_SETTINGS, type ClientSettings } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS, type ClientSettings } from "@akeru/contracts/settings";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { LanguageProvider, useI18n } from "./i18n";
 import {

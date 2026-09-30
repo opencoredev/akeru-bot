@@ -1,4 +1,4 @@
-import { type KeybindingCommand, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
+import { type KeybindingCommand, PLACEHOLDER_THREAD_TITLE } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ReactNode } from "react";

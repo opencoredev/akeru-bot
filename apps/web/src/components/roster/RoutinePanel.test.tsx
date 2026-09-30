@@ -1,4 +1,4 @@
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -11,7 +11,7 @@ import {
   toRoutineSchedule,
   type RoutineAdapterItem,
   type RoutineAdapterRun,
-} from "@t3tools/client-runtime/routines";
+} from "@akeru/client-runtime/routines";
 
 import {
   focusTargetAfterRoutineDelete,

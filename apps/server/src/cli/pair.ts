@@ -14,14 +14,14 @@ import {
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
   PortSchema,
-} from "@t3tools/contracts";
-import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
+} from "@akeru/contracts";
+import { resolveWorktreeT3Home } from "@akeru/shared/devHome";
 import {
   buildTailscaleHttpsBaseUrl,
   DEFAULT_TAILSCALE_SERVE_PORT,
   ensureTailscaleServe,
   readTailscaleStatus,
-} from "@t3tools/tailscale";
+} from "@akeru/tailscale";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Console from "effect/Console";

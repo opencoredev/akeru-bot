@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { BotId, MessageId, ProjectId, type ChannelBinding } from "@t3tools/contracts";
+import { BotId, MessageId, ProjectId, type ChannelBinding } from "@akeru/contracts";
 import {
   canChangeChannelProject,
   channelReconnectProject,

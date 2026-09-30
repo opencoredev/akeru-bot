@@ -3,7 +3,7 @@ import type {
   DesktopAppStageLabel,
   DesktopRuntimeArch,
   DesktopRuntimeInfo,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -82,7 +82,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
   }
->()("@t3tools/desktop/app/DesktopEnvironment") {}
+>()("@akeru/desktop/app/DesktopEnvironment") {}
 
 const APP_BASE_NAME = "Akeru Bot";
 

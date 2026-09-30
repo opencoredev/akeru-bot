@@ -10,7 +10,7 @@ import {
   type VoiceApiProvider,
   type VoiceListVoicesResult,
   type VoiceTranscribeInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 export const OPENAI_SYNTHESIS_VOICES = [

@@ -1,4 +1,4 @@
-import type { BotId } from "@t3tools/contracts";
+import type { BotId } from "@akeru/contracts";
 
 import type { BotInboxIncident, BotInboxItem, BotInboxService } from "./service.ts";
 

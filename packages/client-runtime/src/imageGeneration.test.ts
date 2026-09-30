@@ -2,7 +2,7 @@ import type {
   ImageGenerationSettings,
   ImageProviderHealth,
   ImageProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -12,7 +12,7 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
   isGroupBotMember,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 
 export interface AkeruChannelRuntimeOptions {

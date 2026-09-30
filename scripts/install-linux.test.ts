@@ -6,7 +6,7 @@ import * as NodeOS from "node:os";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as Context from "effect/Context";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-linux.sh");

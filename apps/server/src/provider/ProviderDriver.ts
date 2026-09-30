@@ -26,7 +26,7 @@ import type {
   ProviderInstanceEnvironment,
   ProviderInstanceId,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type * as Effect from "effect/Effect";
 import type * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";

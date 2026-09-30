@@ -1,4 +1,4 @@
-import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@t3tools/contracts/settings";
+import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@akeru/contracts/settings";
 
 export function needsMobilePolicyAcknowledgement(preferences: {
   readonly reviewedPrivacyPolicyVersion?: string;

@@ -22,7 +22,7 @@ import {
   type OrchestrationReadModel,
   type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";

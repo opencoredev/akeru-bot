@@ -2,7 +2,7 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ProviderApprovalDecision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { cn } from "~/lib/utils";
 
 import { useI18n } from "../../i18n";

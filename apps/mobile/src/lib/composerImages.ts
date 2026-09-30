@@ -3,7 +3,7 @@ import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type UploadChatImageAttachment,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { estimateBase64ByteSize } from "./base64";
 import { beginForegroundHandoff } from "./foreground-handoff";
 import { uuidv4 } from "./uuid";

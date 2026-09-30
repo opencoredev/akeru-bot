@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import type { DictationDraft } from "@t3tools/client-runtime/dictation";
+import type { DictationDraft } from "@akeru/client-runtime/dictation";
 import { browserDictationCaptureReason, createBrowserDictationSession } from "./browserDictation";
 import { startDictationCapture } from "./dictationCapture";
 

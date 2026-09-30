@@ -1,4 +1,4 @@
-import type { McpServer, McpServerId, ProviderAccessStatus } from "@t3tools/contracts";
+import type { McpServer, McpServerId, ProviderAccessStatus } from "@akeru/contracts";
 
 import {
   loadCatalog,

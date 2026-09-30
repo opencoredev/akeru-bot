@@ -1,5 +1,5 @@
 import { ComputerIcon } from "@hugeicons/core-free-icons";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ScopedThreadRef } from "@akeru/contracts";
 
 import { openComputerViewer } from "../../computerViewerStore";
 import { useI18n } from "../../i18n";

@@ -7,7 +7,7 @@ import {
   ThreadId,
   type OrchestrationMessage,
   type OrchestrationShellSnapshot,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Bot, Group } from "./types";
 

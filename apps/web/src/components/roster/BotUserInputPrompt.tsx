@@ -1,4 +1,4 @@
-import { type ApprovalRequestId, type ScopedThreadRef } from "@t3tools/contracts";
+import { type ApprovalRequestId, type ScopedThreadRef } from "@akeru/contracts";
 
 import { useI18n } from "../../i18n";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";

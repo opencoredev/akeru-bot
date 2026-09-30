@@ -1,5 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import type { ApprovalRequestId, UserInputQuestion } from "@t3tools/contracts";
+import type { ApprovalRequestId, UserInputQuestion } from "@akeru/contracts";
 import { useCallback, useRef } from "react";
 import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import Animated, {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import type { ResolvedKeybindingsConfig } from "@akeru/contracts";
 
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@akeru/shared/keybindings";
 
 import {
   buildKeybindingGroups,

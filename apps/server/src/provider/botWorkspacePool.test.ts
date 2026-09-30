@@ -1,6 +1,6 @@
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { it as effectIt } from "@effect/vitest";
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";

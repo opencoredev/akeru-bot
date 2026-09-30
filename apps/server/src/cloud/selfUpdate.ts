@@ -4,12 +4,12 @@ import {
   type ServerSelfUpdateInput,
   type ServerSelfUpdateProgressStage,
   type ServerSelfUpdateResult,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

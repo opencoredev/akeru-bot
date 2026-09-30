@@ -1,4 +1,4 @@
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
+import { fromLenientJson } from "@akeru/shared/schemaJson";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 

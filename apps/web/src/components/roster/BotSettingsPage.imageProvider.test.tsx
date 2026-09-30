@@ -6,7 +6,7 @@ import {
   ProviderInstanceId,
   type ImageGenerationSettings,
   type ServerProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { visitElements } from "../../test/reactElementTree";
@@ -89,7 +89,7 @@ vi.mock("./rosterStore", () => ({
 vi.mock("./useBotThreadRef", () => ({ useBotThreadRef: () => null }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
 vi.mock("../../i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });

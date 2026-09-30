@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
 
 import { sortScopedProjectsForSidebar } from "./Sidebar.logic";
 import {

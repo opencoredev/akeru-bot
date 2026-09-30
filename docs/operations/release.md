@@ -99,8 +99,8 @@ vp run check:public-dependencies
 vp test run scripts/check-public-dependencies.test.ts scripts/resolve-previous-release-tag.test.ts
 vp run release:smoke
 vp run build:desktop
-vp run --filter @t3tools/marketing typecheck
-vp run --filter @t3tools/marketing build
+vp run --filter @akeru/marketing typecheck
+vp run --filter @akeru/marketing build
 ```
 
 Run the CLI package dry-run after the server build has produced `apps/server/dist/client`:

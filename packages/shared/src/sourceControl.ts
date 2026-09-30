@@ -1,4 +1,4 @@
-import type { SourceControlProviderInfo } from "@t3tools/contracts";
+import type { SourceControlProviderInfo } from "@akeru/contracts";
 
 const SCP_SSH_REMOTE_PATTERN = /^[a-zA-Z0-9._-]+@([^:/]+):/;
 

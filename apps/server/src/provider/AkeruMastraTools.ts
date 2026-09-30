@@ -1,6 +1,6 @@
 import type { ToolsInput } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
-import { AkeruToolInputSchemas } from "@t3tools/contracts";
+import { AkeruToolInputSchemas } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
 

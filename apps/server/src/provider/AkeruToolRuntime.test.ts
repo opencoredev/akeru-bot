@@ -17,7 +17,7 @@ import {
   ThreadId,
   type AkeruToolReceipt,
   type AkeruWorkerStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { createAkeruToolRuntime, type AkeruToolSession } from "./AkeruToolRuntime.ts";
 import { AkeruWorkerError } from "./AkeruWorkerRuntime.ts";

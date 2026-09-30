@@ -1,11 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import {
   resolveSnoozePresets,
   type SnoozePresetId,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/thread-settled";
+import type { ScopedThreadRef } from "@akeru/contracts";
 import {
   AlarmClockIcon,
   ArchiveIcon,

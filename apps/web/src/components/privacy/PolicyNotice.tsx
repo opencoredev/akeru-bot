@@ -3,7 +3,7 @@ import {
   AKERU_PRIVACY_POLICY_VERSION,
   AKERU_TERMS_VERSION,
   type ClientSettings,
-} from "@t3tools/contracts/settings";
+} from "@akeru/contracts/settings";
 
 import { IS_PACKAGED_DESKTOP } from "~/branding";
 import { isElectron } from "~/env";

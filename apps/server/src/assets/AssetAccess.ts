@@ -1,4 +1,4 @@
-import type { AssetResource } from "@t3tools/contracts";
+import type { AssetResource } from "@akeru/contracts";
 import {
   AssetAttachmentNotFoundError,
   AssetPreviewTypeValidationError,
@@ -9,18 +9,18 @@ import {
   AssetWorkspacePathValidationError,
   AssetWorkspaceResolutionError,
   AssetWorkspaceRootNormalizationError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   isWorkspaceImagePreviewPath,
   isWorkspacePreviewEntryPath,
   WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
-} from "@t3tools/shared/filePreview";
+} from "@akeru/shared/filePreview";
 import {
   IMAGE_DIMENSIONS_HEADER_BYTES,
   readImageDimensions,
   type ImageDimensions,
-} from "@t3tools/shared/imageDimensions";
+} from "@akeru/shared/imageDimensions";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";

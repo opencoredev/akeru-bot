@@ -6,7 +6,7 @@ import * as NodeOS from "node:os";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessEnvironment, HostProcessPlatform } from "@akeru/shared/hostProcess";
 
 import {
   type AkeruDelegationRecord,
@@ -55,7 +55,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
   EditorId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import * as Config from "effect/Config";

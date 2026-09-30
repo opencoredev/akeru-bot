@@ -5,7 +5,7 @@ import {
   KimiSettings,
   OpenCodeGoSettings,
   ProviderDriverKind,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type * as Schema from "effect/Schema";
 import { ClaudeAI, GrokIcon, KimiIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
 

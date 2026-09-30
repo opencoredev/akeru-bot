@@ -1,4 +1,4 @@
-import type { OrchestrationBot, OrchestrationGroup } from "@t3tools/contracts";
+import type { OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveThreadIdentity, groupChatBots } from "./threadIdentity";

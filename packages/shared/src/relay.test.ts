@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { RelayRouteBinding } from "@t3tools/contracts";
+import type { RelayRouteBinding } from "@akeru/contracts";
 
 import {
   validateRelayAttachment,

@@ -1,4 +1,4 @@
-import { BotId, VoiceCallError } from "@t3tools/contracts";
+import { BotId, VoiceCallError } from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";

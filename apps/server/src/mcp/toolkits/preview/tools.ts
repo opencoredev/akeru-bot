@@ -17,7 +17,7 @@ import {
   PreviewAutomationTabTargetInput,
   PreviewAutomationTypeInput,
   PreviewAutomationWaitForInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 

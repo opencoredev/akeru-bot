@@ -7,22 +7,22 @@ import type {
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
   SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 
 import {
   apiKeyStartInput,
   apiKeyValidationError,
   providerUsesApiKey,
   providerSupportsBaseUrl,
-} from "@t3tools/client-runtime/provider-auth";
+} from "@akeru/client-runtime/provider-auth";
 
 import { useAtomValue } from "@effect/atom-react";
-import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
+import { providerAccessModelNames } from "@akeru/client-runtime/provider-access";
 
 import { useI18n } from "../../i18n";
 import { serverEnvironment } from "../../state/server";

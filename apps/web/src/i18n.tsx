@@ -14,7 +14,7 @@ import {
   createTranslator,
   resolveLocale,
   type TranslationCatalog,
-} from "@t3tools/client-runtime/i18n";
+} from "@akeru/client-runtime/i18n";
 import {
   ensureClientSettingsHydrated,
   useClientSettings,

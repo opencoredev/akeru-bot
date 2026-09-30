@@ -3,14 +3,14 @@ import {
   channelBindingNeedsProject,
   channelBindingPresentation,
   channelFailureReason,
-} from "@t3tools/client-runtime/channel-presentation";
+} from "@akeru/client-runtime/channel-presentation";
 import {
   AuthAccessWriteScope,
   type BotId,
   type ChannelBinding,
   type EnvironmentId,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";

@@ -1,4 +1,4 @@
-import { BotId, type AkeruBotUsageSnapshot } from "@t3tools/contracts";
+import { BotId, type AkeruBotUsageSnapshot } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

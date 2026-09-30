@@ -2,8 +2,8 @@ import {
   PreviewAutomationRecordingArtifact,
   PreviewAutomationSnapshot,
   type PreviewAutomationOperation,
-} from "@t3tools/contracts";
-import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
+} from "@akeru/contracts";
+import { redactSensitiveText } from "@akeru/shared/sensitiveDataRedaction";
 import * as Schema from "effect/Schema";
 import { PNG } from "pngjs";
 

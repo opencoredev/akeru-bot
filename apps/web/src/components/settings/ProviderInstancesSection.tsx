@@ -1,9 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import {
   defaultInstanceIdForDriver,
   type EnvironmentId,
@@ -13,8 +13,8 @@ import {
   type ProviderInstanceId,
   resolveProviderInstanceEnabled,
   type ServerProvider,
-} from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts/settings";
+} from "@akeru/contracts";
+import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@akeru/contracts/settings";
 import * as Arr from "effect/Array";
 import * as Equal from "effect/Equal";
 import * as Result from "effect/Result";

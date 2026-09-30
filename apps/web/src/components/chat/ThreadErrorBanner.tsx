@@ -1,8 +1,8 @@
 import { CircleAlertIcon, XIcon } from "lucide-react";
 import { memo, useState } from "react";
 
-import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { presentThreadError, type ThreadErrorContext } from "@akeru/client-runtime/errors";
+import type { EnvironmentId } from "@akeru/contracts";
 
 import { useI18n } from "../../i18n";
 import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";

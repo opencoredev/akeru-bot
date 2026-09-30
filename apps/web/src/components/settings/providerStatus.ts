@@ -2,7 +2,7 @@ import type {
   ServerProvider,
   ServerProviderVersionAdvisory,
   SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 /**
  * Visual treatment for each server-reported provider status. Centralized so

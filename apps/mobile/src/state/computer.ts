@@ -1,4 +1,4 @@
-import { createComputerEnvironmentAtoms } from "@t3tools/client-runtime/state/computer";
+import { createComputerEnvironmentAtoms } from "@akeru/client-runtime/state/computer";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 

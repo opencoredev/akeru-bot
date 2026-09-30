@@ -1,5 +1,5 @@
-import type { StartThreadTurnInput } from "@t3tools/client-runtime/state/threads";
-import { PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
+import type { StartThreadTurnInput } from "@akeru/client-runtime/state/threads";
+import { PLACEHOLDER_THREAD_TITLE } from "@akeru/contracts";
 import type {
   BotId,
   GroupId,
@@ -9,7 +9,7 @@ import type {
   RuntimeMode,
   ScopedThreadRef,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { parseChatPath } from "./roster.logic";
 

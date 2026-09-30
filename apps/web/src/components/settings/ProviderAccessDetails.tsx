@@ -1,8 +1,8 @@
-import type { SubscriptionProviderId } from "@t3tools/contracts";
+import type { SubscriptionProviderId } from "@akeru/contracts";
 import {
   providerAccessGuide,
   type ProviderAccessStatusInput,
-} from "@t3tools/client-runtime/provider-access";
+} from "@akeru/client-runtime/provider-access";
 
 import { useI18n } from "../../i18n";
 

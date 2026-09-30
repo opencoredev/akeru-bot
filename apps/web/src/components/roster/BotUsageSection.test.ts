@@ -1,4 +1,4 @@
-import { BotId, EnvironmentId } from "@t3tools/contracts";
+import { BotId, EnvironmentId } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";

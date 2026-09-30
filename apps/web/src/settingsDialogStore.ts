@@ -4,7 +4,7 @@
  * `/settings` deep links) lands on the same surface.
  */
 import { create } from "zustand";
-import type { ChannelProvider, EnvironmentId } from "@t3tools/contracts";
+import type { ChannelProvider, EnvironmentId } from "@akeru/contracts";
 
 import { usePrimaryEnvironmentId } from "./state/environments";
 

@@ -1,4 +1,4 @@
-import type { McpServer } from "@t3tools/contracts";
+import type { McpServer } from "@akeru/contracts";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 const runtimeHeaders = new WeakMap<McpServer, Readonly<Record<string, string>>>();

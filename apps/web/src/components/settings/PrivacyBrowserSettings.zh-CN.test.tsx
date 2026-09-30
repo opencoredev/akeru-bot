@@ -1,5 +1,5 @@
-import { catalogRegistry } from "@t3tools/client-runtime/i18n";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { catalogRegistry } from "@akeru/client-runtime/i18n";
+import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";

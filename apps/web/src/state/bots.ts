@@ -1,5 +1,5 @@
-import { createBotEnvironmentAtoms } from "@t3tools/client-runtime/state/bots";
-import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@t3tools/contracts";
+import { createBotEnvironmentAtoms } from "@akeru/client-runtime/state/bots";
+import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 

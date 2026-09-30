@@ -2,7 +2,7 @@ import {
   type AkeruDelegationRecord,
   RoutineRunId,
   type OrchestrationEvent,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

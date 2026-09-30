@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import type { SubscriptionProviderStatus } from "@t3tools/contracts";
+import type { SubscriptionProviderStatus } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { LanguageProvider } from "../../i18n";

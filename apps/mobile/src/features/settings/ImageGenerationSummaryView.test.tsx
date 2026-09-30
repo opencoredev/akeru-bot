@@ -1,4 +1,4 @@
-import type { ImageGenerationSettings, ImageProviderStatus } from "@t3tools/contracts";
+import type { ImageGenerationSettings, ImageProviderStatus } from "@akeru/contracts";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -16,7 +16,7 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
 vi.mock("../../lib/i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
