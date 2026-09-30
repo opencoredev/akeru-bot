@@ -270,7 +270,7 @@ export function useBotProfileDraft(
     !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
   const toolOverridesDirty =
     mcpServerIdsKey(disabledMcpServerIds) !== mcpServerIdsKey(bot.disabledMcpServerIds);
-  const sandboxDirty = sandbox !== botSandboxChoice(bot.sandbox);
+  const sandboxDirty = sandbox !== bot.sandbox;
   const dirty =
     name.trim() !== bot.name ||
     normalizedLabel !== bot.label ||
