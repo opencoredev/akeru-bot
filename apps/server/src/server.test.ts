@@ -192,6 +192,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { RoutineRepository, type RoutineRepositoryShape } from "./routines/Repository.ts";
 import { RoutineRuntime, type RoutineRuntimeShape } from "./routines/Runtime.ts";
 import * as Data from "effect/Data";
+import { finishMaintenance, tryBeginMaintenance } from "./remote/updateGate.ts";
 
 import { makeOrchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
 import {
@@ -10067,6 +10068,104 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           assert.equal(finalCommand.bootstrap, undefined);
         }
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("holds server updates from bootstrap setup through the final turn start", () =>
+    Effect.gen(function* () {
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      const finalDispatchAdmitted: Array<boolean> = [];
+      let maintenanceStartedDuringBootstrap: boolean | undefined;
+      const createWorktree = vi.fn(
+        (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+          Effect.sync(() => {
+            maintenanceStartedDuringBootstrap = tryBeginMaintenance();
+            if (maintenanceStartedDuringBootstrap) finishMaintenance();
+            return {
+              worktree: {
+                refName: "t3code/bootstrap-admitted",
+                path: "/tmp/bootstrap-admitted",
+              },
+            };
+          }),
+      );
+
+      yield* buildAppUnderTest({
+        layers: {
+          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+          gitVcsDriver: { createWorktree },
+          orchestrationEngine: {
+            dispatch: (command, options) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                if (command.type === "thread.turn.start") {
+                  finalDispatchAdmitted.push(options?.admission !== undefined);
+                }
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+        },
+      });
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const bootstrapTurnStart = (suffix: string) => ({
+        type: "thread.turn.start" as const,
+        commandId: CommandId.make(`cmd-bootstrap-admitted-${suffix}`),
+        threadId: ThreadId.make(`thread-bootstrap-admitted-${suffix}`),
+        message: {
+          messageId: MessageId.make(`msg-bootstrap-admitted-${suffix}`),
+          role: "user" as const,
+          text: "hello",
+          attachments: [],
+        },
+        modelSelection: defaultModelSelection,
+        runtimeMode: "full-access" as const,
+        interactionMode: "default" as const,
+        bootstrap: {
+          createThread: {
+            projectId: defaultProjectId,
+            title: "Bootstrap Thread",
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access" as const,
+            interactionMode: "default" as const,
+            branch: "main",
+            worktreePath: null,
+            createdAt,
+          },
+          prepareWorktree: {
+            projectCwd: "/tmp/project",
+            baseBranch: "main",
+            branch: "t3code/bootstrap-admitted",
+          },
+        },
+        createdAt,
+      });
+
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand](bootstrapTurnStart("admitted")),
+        ),
+      );
+      assert.equal(maintenanceStartedDuringBootstrap, false);
+      assert.deepEqual(finalDispatchAdmitted, [true]);
+      assert.equal(tryBeginMaintenance(), true);
+
+      // An update already in progress blocks the bootstrap before any setup runs.
+      try {
+        dispatchedCommands.length = 0;
+        const error = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand](bootstrapTurnStart("blocked")),
+          ),
+        ).pipe(Effect.flip);
+        assert.include(String(error.message), "installing an update");
+        assert.deepEqual(dispatchedCommands, []);
+        assert.equal(createWorktree.mock.calls.length, 1);
+      } finally {
+        finishMaintenance();
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect(

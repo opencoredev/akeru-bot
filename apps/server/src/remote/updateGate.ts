@@ -3,14 +3,35 @@ import * as Effect from "effect/Effect";
 let maintenance = false;
 let startingTurns = 0;
 
-export function tryBeginTurnStart(): boolean {
-  if (maintenance) return false;
-  startingTurns += 1;
-  return true;
+/**
+ * A held turn-start admission. Maintenance cannot begin while any admission is
+ * held. Whoever owns the turn start calls `release` once it commits or fails;
+ * `retain` hands a second admission to another owner without re-checking
+ * maintenance, because maintenance cannot start while this one is held.
+ */
+export interface TurnStartAdmission {
+  readonly release: () => void;
+  readonly retain: () => TurnStartAdmission;
 }
 
-export function finishTurnStart(): void {
-  startingTurns = Math.max(0, startingTurns - 1);
+function makeAdmission(): TurnStartAdmission {
+  startingTurns += 1;
+  let held = true;
+  return {
+    release: () => {
+      if (!held) return;
+      held = false;
+      startingTurns = Math.max(0, startingTurns - 1);
+    },
+    retain: () => {
+      if (!held) throw new Error("Cannot retain a released turn-start admission.");
+      return makeAdmission();
+    },
+  };
+}
+
+export function tryAdmitTurnStart(): TurnStartAdmission | null {
+  return maintenance ? null : makeAdmission();
 }
 
 export function tryBeginMaintenance(): boolean {
@@ -25,15 +46,4 @@ export function finishMaintenance(): void {
 
 export function withMaintenance<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
   return effect.pipe(Effect.ensuring(Effect.sync(finishMaintenance)));
-}
-
-export function gateTurnStart<A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  onBlocked: () => E,
-): Effect.Effect<A, E, R> {
-  return Effect.suspend(() =>
-    tryBeginTurnStart()
-      ? effect.pipe(Effect.ensuring(Effect.sync(finishTurnStart)))
-      : Effect.fail(onBlocked()),
-  );
 }

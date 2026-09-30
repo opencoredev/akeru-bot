@@ -207,6 +207,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import { preflightProvider } from "./provider/providerPreflight.ts";
+import { tryAdmitTurnStart, type TurnStartAdmission } from "./remote/updateGate.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const isMcpServerAuthenticationError = Schema.is(McpServerAuthenticationError);
 
@@ -1511,8 +1512,9 @@ const makeWsRpcLayer = (
           return output;
         });
 
-      const dispatchBootstrapTurnStart = (
+      const dispatchAdmittedBootstrapTurnStart = (
         command: Extract<OrchestrationCommand, { type: "thread.turn.start" }>,
+        admission: TurnStartAdmission,
       ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> =>
         Effect.gen(function* () {
           const bootstrap = command.bootstrap;
@@ -1719,7 +1721,11 @@ const makeWsRpcLayer = (
 
             yield* runSetupProgram();
 
-            return yield* dispatchFromClient(finalTurnStartCommand);
+            return yield* orchestrationEngine.dispatch(finalTurnStartCommand, {
+              actor: dispatchActor,
+              ...(hasClientOrigin ? { origin: clientOrigin } : {}),
+              admission,
+            });
           });
 
           return yield* bootstrapProgram.pipe(
@@ -1752,6 +1758,25 @@ const makeWsRpcLayer = (
             }),
           );
         });
+
+      // The turn start is admitted before bootstrap creates the thread or its
+      // worktree, and the same admission carries through the final dispatch,
+      // so a server update cannot begin midway and strand those side effects.
+      const dispatchBootstrapTurnStart = (
+        command: Extract<OrchestrationCommand, { type: "thread.turn.start" }>,
+      ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> =>
+        Effect.acquireUseRelease(
+          Effect.sync(tryAdmitTurnStart),
+          (admission) =>
+            admission === null
+              ? Effect.fail(
+                  new OrchestrationDispatchCommandError({
+                    message: "The server is installing an update. Try again in a moment.",
+                  }),
+                )
+              : dispatchAdmittedBootstrapTurnStart(command, admission),
+          (admission) => Effect.sync(() => admission?.release()),
+        );
 
       const dispatchNormalizedCommand = (
         normalizedCommand: OrchestrationCommand,

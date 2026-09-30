@@ -3,28 +3,32 @@ import * as Effect from "effect/Effect";
 
 import {
   finishMaintenance,
-  finishTurnStart,
-  gateTurnStart,
+  tryAdmitTurnStart,
   tryBeginMaintenance,
-  tryBeginTurnStart,
   withMaintenance,
 } from "./updateGate.ts";
 
-it.effect("closes the turn-start/update race in both directions", () =>
-  Effect.gen(function* () {
-    expect(tryBeginTurnStart()).toBe(true);
-    expect(tryBeginMaintenance()).toBe(false);
-    finishTurnStart();
-    expect(tryBeginMaintenance()).toBe(true);
-    expect(tryBeginTurnStart()).toBe(false);
-    const blocked = yield* Effect.exit(
-      gateTurnStart(Effect.succeed("started"), () => "maintenance"),
-    );
-    expect(blocked._tag).toBe("Failure");
-    finishMaintenance();
-    expect(yield* gateTurnStart(Effect.succeed("started"), () => "maintenance")).toBe("started");
-  }),
-);
+it("closes the turn-start/update race in both directions", () => {
+  const admission = tryAdmitTurnStart();
+  expect(admission).not.toBeNull();
+  expect(tryBeginMaintenance()).toBe(false);
+  admission?.release();
+  expect(tryBeginMaintenance()).toBe(true);
+  expect(tryAdmitTurnStart()).toBeNull();
+  finishMaintenance();
+  tryAdmitTurnStart()?.release();
+});
+
+it("holds maintenance until every retained admission is released once", () => {
+  const outer = tryAdmitTurnStart();
+  const inner = outer?.retain();
+  outer?.release();
+  outer?.release();
+  expect(tryBeginMaintenance()).toBe(false);
+  inner?.release();
+  expect(tryBeginMaintenance()).toBe(true);
+  finishMaintenance();
+});
 
 it.effect("releases maintenance after a defect", () =>
   Effect.gen(function* () {
