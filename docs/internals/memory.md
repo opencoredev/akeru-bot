@@ -158,7 +158,9 @@ can still inspect stored facts; cleanup needs Memory turned back on.
 `privateBotMemory === false` narrows that gate to the bot-private scope. The
 memory tool loses its `memory` (bot-private `MEMORY.md`) target, the
 `MEMORY.md` section is omitted from the prompt snapshot supplied on every
-turn (including legacy-adapter sessions), `memory.document.replace` rejects
+turn (including legacy-adapter sessions), the `<entity-memory>` packet drops
+current facts in the `bot` and `bot-user` partitions on both the Mastra and
+legacy paths, `memory.document.replace` rejects
 writes to the `memory` target, and `memory.facts.mutate` rejects
 `fact.scope` moves onto `private`/`bot` partitions. Reads are unaffected:
 `memory.facts.list`, archive export, and `memory.documents.inspect` still

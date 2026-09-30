@@ -11,6 +11,10 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   DEFAULT_SERVER_SETTINGS,
+  AkeruMemoryEntityId,
+  AkeruMemoryId,
+  AkeruMemoryPartitionId,
+  AkeruMemoryRootId,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   ApprovalRequestId,
@@ -26,6 +30,7 @@ import {
   ThreadId,
   TurnId,
   type AkeruDelegationAccessGrant,
+  type AkeruMemoryRevision,
   type ProviderRuntimeEvent,
   type ProviderSession,
   type ServerSettings,
@@ -363,6 +368,52 @@ function makeBridge() {
       releaseNextDispatchAdmission = undefined;
     },
   };
+}
+
+/** Current entity facts in each bot-private and shared scope, for packet policy tests. */
+function privatePolicyRevisions(botId: BotId, projectId: ProjectId): Array<AkeruMemoryRevision> {
+  const revision = (scope: AkeruMemoryRevision["partition"]["scope"], fact: string) =>
+    ({
+      id: AkeruMemoryId.make(`memory-${scope}`),
+      rootId: AkeruMemoryRootId.make(`memory-${scope}`),
+      revision: 1,
+      partition: {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        scope,
+        partitionId: AkeruMemoryPartitionId.make(`${scope}-partition`),
+      },
+      entityKind: scope === "project" ? "project" : "bot",
+      entityId: AkeruMemoryEntityId.make(scope === "project" ? String(projectId) : String(botId)),
+      kind: "fact",
+      value: {},
+      fact,
+      sourceThreadId: null,
+      sourceMessageId: null,
+      authorBotId: botId,
+      initiatingUserId: AkeruMemoryUserId.make("owner"),
+      createdAt: "2026-09-01T00:00:00.000Z",
+      confirmedAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      confidence: 0.5,
+      approvalState: "approved",
+      supersedesId: null,
+      supersededById: null,
+      visibility: scope === "project" ? "shared" : "private",
+      deletionState: "active",
+      pinned: false,
+      sensitive: false,
+      affectedBotIds: [botId],
+    }) as AkeruMemoryRevision;
+  return [
+    revision("bot", "Bot-private entity fact."),
+    revision("bot-user", "Bot-about-you entity fact."),
+    revision("project", "Shared project entity fact."),
+  ];
+}
+
+function entityMemorySection(context: unknown): string {
+  const match = /<entity-memory>[\s\S]*?<\/entity-memory>/u.exec(String(context ?? ""));
+  return match?.[0] ?? "";
 }
 
 function makeMemoryOnlyCredentialOptions() {
@@ -2210,6 +2261,173 @@ describe("AgentControllerLive", () => {
             McpMemoryToolSession.clearMcpMemoryToolSession(claudeThreadId);
             NodeFS.rmSync(memoryDir, { recursive: true, force: true });
           }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "withholds bot-private entity facts on the legacy path while Private bot memory is off",
+    () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const botId = BotId.make("bot-entity-private-legacy");
+      const projectId = ProjectId.make("project-entity-private-legacy");
+      const access = {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: claudeThreadId,
+        projectId,
+        workspaceRoot: "/workspace/entity-private-legacy",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      } as const;
+      const revisions = privatePolicyRevisions(botId, projectId);
+      const listCurrent = vi.fn(() => Effect.succeed(revisions));
+      const recordDerivedCopies = vi.fn(
+        (_input: { readonly revisions: ReadonlyArray<AkeruMemoryRevision> }) => Effect.void,
+      );
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const settings = yield* ServerSettingsService;
+          yield* settings.updateSettings({ memory: { privateBotMemory: false } });
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("opencode"),
+            providerInstanceId: openCodeInstanceId,
+            cwd: process.cwd(),
+            runtimeMode: "approval-required",
+            memoryAccess: access,
+          });
+          const startPacket = entityMemorySection(
+            bridge.startSession.mock.calls[0]?.[1].persistentMemoryContext,
+          );
+          expect(startPacket).toContain("Shared project entity fact.");
+          expect(startPacket).not.toContain("Bot-private entity fact.");
+          expect(startPacket).not.toContain("Bot-about-you entity fact.");
+
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private off." });
+          const offPacket = entityMemorySection(
+            bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext,
+          );
+          expect(offPacket).toContain("Shared project entity fact.");
+          expect(offPacket).not.toContain("Bot-private entity fact.");
+          expect(offPacket).not.toContain("Bot-about-you entity fact.");
+          // Derived copies track only what reached the provider.
+          for (const [input] of recordDerivedCopies.mock.calls) {
+            expect(input.revisions.map((revision) => revision.partition.scope)).toEqual([
+              "project",
+            ]);
+          }
+
+          yield* settings.updateSettings({ memory: { privateBotMemory: true } });
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private on." });
+          const onPacket = entityMemorySection(
+            bridge.sendTurn.mock.calls[1]?.[0].persistentMemoryContext,
+          );
+          expect(onPacket).toContain("Bot-private entity fact.");
+          expect(onPacket).toContain("Bot-about-you entity fact.");
+        }),
+        {
+          ...bridge.service,
+          listSessions: () => Effect.succeed([makeProviderSession(claudeThreadId, "opencode")]),
+        },
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        {
+          ...makeMemoryOnlyCredentialOptions(),
+          entityMemoryRepository: { listCurrent, recordDerivedCopies } as never,
+        },
+      );
+    },
+  );
+
+  it.effect(
+    "withholds bot-private entity facts on the Mastra path while Private bot memory is off",
+    () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-entity-private-"));
+      const botMemoryStore = new BotMemoryStore(memoryDir);
+      const botId = BotId.make("bot-entity-private-mastra");
+      const projectId = ProjectId.make("project-entity-private-mastra");
+      const access = {
+        tenantId: AkeruMemoryTenantId.make("local"),
+        userId: AkeruMemoryUserId.make("owner"),
+        threadId: codexThreadId,
+        projectId,
+        workspaceRoot: "/workspace/entity-private-mastra",
+        botId,
+        groupId: null,
+        respondingBotId: botId,
+        groupMemberBotIds: [],
+      } as const;
+      const revisions = privatePolicyRevisions(botId, projectId);
+      const listCurrent = vi.fn(() => Effect.succeed(revisions));
+      const recordDerivedCopies = vi.fn(() => Effect.void);
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const settings = yield* ServerSettingsService;
+          yield* resolveCodex(controller);
+          yield* controller.startSession(codexThreadId, {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+            memoryAccess: access,
+          });
+          const awaitNextCompletedTurn = () =>
+            controller.streamEvents.pipe(
+              Stream.filter((event) => event.type === "turn.completed"),
+              Stream.runHead,
+              Effect.forkChild({ startImmediately: true }),
+            );
+
+          yield* settings.updateSettings({ memory: { privateBotMemory: false } });
+          const offTurn = yield* awaitNextCompletedTurn();
+          yield* controller.sendTurn({ threadId: codexThreadId, input: "Private off." });
+          yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+          const offPacket = entityMemorySection(mastra.session.state.get().persistentMemoryContext);
+          expect(offPacket).toContain("Shared project entity fact.");
+          expect(offPacket).not.toContain("Bot-private entity fact.");
+          expect(offPacket).not.toContain("Bot-about-you entity fact.");
+          mastra.finishSend();
+          yield* Fiber.join(offTurn);
+
+          yield* settings.updateSettings({ memory: { privateBotMemory: true } });
+          yield* controller.sendTurn({ threadId: codexThreadId, input: "Private on." });
+          yield* Effect.promise(() => mastra.waitForSendMessageCount(2));
+          const onPacket = entityMemorySection(mastra.session.state.get().persistentMemoryContext);
+          expect(onPacket).toContain("Bot-private entity fact.");
+          expect(onPacket).toContain("Bot-about-you entity fact.");
+          mastra.finishSend();
+          yield* Effect.yieldNow;
+        }),
+        bridge.service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        { botMemoryStore, entityMemoryRepository: { listCurrent, recordDerivedCopies } as never },
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(memoryDir, { recursive: true, force: true })),
         ),
       );
     },

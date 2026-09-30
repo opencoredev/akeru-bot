@@ -962,9 +962,18 @@ const make = (options?: AgentControllerLiveOptions) =>
       const current = await refreshEntityMemoryAccess(access);
       if (!current || !options?.entityMemoryRepository) return "";
       if (current.groupId !== null && current.groupMemberBotIds.length === 0) return "";
-      const revisions = await runPromise(
+      const currentRevisions = await runPromise(
         options.entityMemoryRepository.listCurrent({ access: current }),
       );
+      // Memory inspection and export still list bot-private facts; only the
+      // provider packet honours the Private bot memory switch.
+      const { privateBotMemory } = await runPromise(memorySettings());
+      const revisions = privateBotMemory
+        ? currentRevisions
+        : currentRevisions.filter(
+            (revision) =>
+              revision.partition.scope !== "bot" && revision.partition.scope !== "bot-user",
+          );
       await runPromise(
         options.entityMemoryRepository.recordDerivedCopies?.({
           tenantId: current.tenantId,
