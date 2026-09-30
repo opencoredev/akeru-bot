@@ -132,6 +132,7 @@ import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionRe
 import { OrchestrationCommandReceiptRepository } from "./persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
+import { resolveGroupResponderBotId } from "./orchestration/groupResponder.ts";
 import { BotMemoryStore, type BotMemoryAccess } from "./memory/BotMemory.ts";
 import {
   applyBotMemoryImport,
@@ -1909,7 +1910,21 @@ const makeWsRpcLayer = (
                       .pipe(Effect.map(Option.getOrUndefined))
                   : undefined;
                 const botId = groupId
-                  ? (normalizedCommand.respondingBotId ?? group?.bossBotId)
+                  ? group
+                    ? yield* resolveGroupResponderBotId({
+                        group,
+                        respondingBotId: normalizedCommand.respondingBotId,
+                        text: normalizedCommand.message.text,
+                        isActive: (candidate) =>
+                          projectionBots
+                            .getById({ botId: candidate })
+                            .pipe(
+                              Effect.map(
+                                (found) => Option.isSome(found) && found.value.archivedAt === null,
+                              ),
+                            ),
+                      })
+                    : normalizedCommand.respondingBotId
                   : (thread?.botId ?? bootstrapThread?.botId ?? normalizedCommand.respondingBotId);
                 const bot = botId
                   ? yield* projectionBots.getById({ botId }).pipe(Effect.map(Option.getOrUndefined))

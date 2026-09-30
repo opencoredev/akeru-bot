@@ -43,7 +43,7 @@ import {
   WsRpcGroup,
   EditorId,
 } from "@t3tools/contracts";
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -516,6 +516,7 @@ const buildAppUnderTest = (options?: {
     routineRuntime?: Partial<RoutineRuntimeShape>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     projectionBots?: Partial<ProjectionBots.ProjectionBotRepositoryShape>;
+    projectionGroups?: Partial<ProjectionGroups.ProjectionGroupRepositoryShape>;
     botUsageLedger?: Partial<BotUsageLedgerShape>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
@@ -980,6 +981,7 @@ const buildAppUnderTest = (options?: {
             getById: () => Effect.succeed(Option.none()),
             listAll: () => Effect.succeed([]),
             deleteById: () => Effect.void,
+            ...options?.layers?.projectionGroups,
           } satisfies ProjectionGroups.ProjectionGroupRepositoryShape),
           Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
             getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
@@ -8139,6 +8141,124 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
+
+  describe("group turns addressed by an @bot token", () => {
+    const groupId = GroupId.make("group-mention-preflight");
+    const bossId = BotId.make("bot-group-boss");
+    const memberId = BotId.make("bot-group-member");
+    const unavailableEngine = { provider: "claudeAgent", model: "claude-sonnet" };
+    const makeGroupBot = (botId: BotId, engine: typeof unavailableEngine | null) =>
+      ({
+        ...makeChannelTestBot(),
+        botId,
+        engine,
+        imageProvider: null,
+        groupId,
+      }) satisfies ProjectionBots.ProjectionBot;
+    const buildGroupApp = (unavailable: BotId) =>
+      Effect.gen(function* () {
+        const dispatch = vi.fn<
+          OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]
+        >(() => Effect.succeed({ sequence: 1 }));
+        const bots = new Map(
+          [bossId, memberId].map((botId) => [
+            botId,
+            makeGroupBot(botId, botId === unavailable ? unavailableEngine : null),
+          ]),
+        );
+        yield* buildAppUnderTest({
+          layers: {
+            providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+            projectionSnapshotQuery: {
+              getThreadShellById: () =>
+                Effect.succeed(
+                  Option.some(makeDefaultOrchestrationThreadShell({ groupId, botId: null })),
+                ),
+            },
+            projectionBots: {
+              getById: ({ botId }) => Effect.succeed(Option.fromNullishOr(bots.get(botId))),
+            },
+            projectionGroups: {
+              getById: () =>
+                Effect.succeed(
+                  Option.some({
+                    groupId,
+                    name: "Team",
+                    bossBotId: bossId,
+                    members: [
+                      { kind: "bot" as const, botId: bossId, role: "boss" as const },
+                      { kind: "bot" as const, botId: memberId, role: "specialist" as const },
+                    ],
+                    createdAt: "2026-01-01T00:00:00.000Z",
+                    updatedAt: "2026-01-01T00:00:00.000Z",
+                  }),
+                ),
+            },
+            orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+          },
+        });
+        return dispatch;
+      });
+    const mentionTurn = (commandId: string) => ({
+      type: "thread.turn.start" as const,
+      commandId: CommandId.make(commandId),
+      threadId: defaultThreadId,
+      message: {
+        messageId: MessageId.make(`msg-${commandId}`),
+        role: "user" as const,
+        text: `@bot:${memberId} run the tests`,
+        attachments: [],
+      },
+      modelSelection: defaultModelSelection,
+      runtimeMode: "full-access" as const,
+      interactionMode: "default" as const,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    it.effect("dispatches to a healthy mentioned member when the boss is unavailable", () =>
+      Effect.gen(function* () {
+        const dispatch = yield* buildGroupApp(bossId);
+        const wsUrl = yield* getWsServerUrl("/ws");
+        yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand](mentionTurn("cmd-mention-healthy")),
+          ),
+        );
+        assert.equal(dispatch.mock.calls.length, 1);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+
+    it.effect("checks the mentioned member rather than a healthy boss", () =>
+      Effect.gen(function* () {
+        const dispatch = yield* buildGroupApp(memberId);
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const error = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand](
+              mentionTurn("cmd-mention-unavailable"),
+            ).pipe(Effect.flip),
+          ),
+        );
+        assert.equal(error._tag, "OrchestrationDispatchCommandError");
+        assert.equal(dispatch.mock.calls.length, 0);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+
+    it.effect("checks the mentioned member over HTTP", () =>
+      Effect.gen(function* () {
+        const dispatch = yield* buildGroupApp(memberId);
+        const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+          scope: "orchestration:operate",
+        });
+        const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+          headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+          body: yield* HttpBody.json(mentionTurn("cmd-http-mention-unavailable")),
+        });
+        assert.equal(response.status, 400);
+        assert.equal(dispatch.mock.calls.length, 0);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+  });
 
   it.effect("replays an accepted turn retry after its provider becomes unavailable", () =>
     Effect.gen(function* () {

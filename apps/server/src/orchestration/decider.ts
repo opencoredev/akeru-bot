@@ -16,13 +16,13 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
-import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
 
+import { resolveGroupResponderBotId } from "./groupResponder.ts";
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 import {
@@ -272,23 +272,6 @@ function activeGroupBotIds(
       .map((member) => member.botId)
       .filter((botId) => activeBotIds.has(botId)),
   );
-}
-
-// The active member named by the latest `@bot:<id>` token, for clients that send the
-// token without resolving it to respondingBotId first. Plain `@Name` stays client-resolved.
-function mentionedGroupBotId(
-  readModel: OrchestrationReadModel,
-  group: OrchestrationReadModel["groups"][number],
-  text: string,
-): BotId | null {
-  const activeBotIds = activeGroupBotIds(readModel, group);
-  let mentioned: BotId | null = null;
-  for (const token of collectComposerInlineTokens(`${text}\n`)) {
-    if (token.type !== "bot-mention") continue;
-    const botId = [...activeBotIds].find((id) => id === token.value);
-    if (botId !== undefined) mentioned = botId;
-  }
-  return mentioned;
 }
 
 // Checks that the bot a chat would answer with is still active: any bot for a
@@ -2669,10 +2652,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           command,
           groupId: targetThread.groupId,
         });
-        const selectedBotId =
-          command.respondingBotId ??
-          mentionedGroupBotId(readModel, group, command.message.text) ??
-          group.bossBotId;
+        const activeMemberIds = activeGroupBotIds(readModel, group);
+        const selectedBotId = yield* resolveGroupResponderBotId({
+          group,
+          respondingBotId: command.respondingBotId,
+          text: command.message.text,
+          isActive: (botId) => Effect.succeed(activeMemberIds.has(botId)),
+        });
         if (selectedBotId === null) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({

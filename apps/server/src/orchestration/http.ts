@@ -27,6 +27,7 @@ import { preflightProvider } from "../provider/providerPreflight.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { resolveGroupResponderBotId } from "./groupResponder.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
   applyAuthenticatedCommandActor,
@@ -260,7 +261,22 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 )
               : undefined;
             const botId = groupId
-              ? (normalizedCommand.respondingBotId ?? group?.bossBotId)
+              ? group
+                ? yield* resolveGroupResponderBotId({
+                    group,
+                    respondingBotId: normalizedCommand.respondingBotId,
+                    text: normalizedCommand.message.text,
+                    isActive: (candidate) =>
+                      projectionBots.getById({ botId: candidate }).pipe(
+                        Effect.map(
+                          (found) => Option.isSome(found) && found.value.archivedAt === null,
+                        ),
+                        Effect.catch((cause) =>
+                          failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                        ),
+                      ),
+                  })
+                : normalizedCommand.respondingBotId
               : (thread?.botId ?? bootstrapThread?.botId ?? normalizedCommand.respondingBotId);
             const bot = botId
               ? yield* projectionBots.getById({ botId }).pipe(
