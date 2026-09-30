@@ -91,6 +91,10 @@ describe("legacy settings deep links", () => {
     expect(settingsSectionFromPathname("/settings/bots")).toBe("channels");
   });
 
+  it("opens archived chat links on the Archived chats page", () => {
+    expect(settingsSectionFromPathname("/settings/archived")).toBe("archived");
+  });
+
   it("maps keybinding links onto the configurable shortcut panel", () => {
     expect(settingsSectionFromPathname("/settings/keybindings")).toBe("keybindings");
   });
@@ -98,7 +102,6 @@ describe("legacy settings deep links", () => {
   it("falls back to General for the bare path and for removed sections", () => {
     expect(settingsSectionFromPathname("/settings")).toBe("general");
     expect(settingsSectionFromPathname("/settings/")).toBe("general");
-    expect(settingsSectionFromPathname("/settings/archived")).toBe("general");
     expect(settingsSectionFromPathname("/settings/groups")).toBe("general");
   });
 });

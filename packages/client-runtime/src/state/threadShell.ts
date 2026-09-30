@@ -87,6 +87,28 @@ export function latestOwnerThreadIds(
 
 const OWNER_KEY_SEPARATOR = "\u0000";
 
+/** When one of a bot's own live chats last finished a turn. */
+export interface BotChatCompletion {
+  readonly threadId: ThreadId;
+  readonly completedAt: string;
+}
+
+const EMPTY_BOT_CHAT_COMPLETIONS: ReadonlyArray<BotChatCompletion> = [];
+
+function botChatCompletionsEqual(
+  left: ReadonlyArray<BotChatCompletion>,
+  right: ReadonlyArray<BotChatCompletion>,
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        entry.threadId === right[index]?.threadId &&
+        entry.completedAt === right[index]?.completedAt,
+    )
+  );
+}
+
 export function createEnvironmentThreadShellAtoms(input: {
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
   readonly snapshotAtom: (
@@ -193,6 +215,23 @@ export function createEnvironmentThreadShellAtoms(input: {
     }).pipe(Atom.withLabel(`environment-latest-owner-thread:${kind}:${environmentId}:${ownerId}`));
   });
 
+  const botChatCompletionsAtomFamily = Atom.family((key: string) => {
+    const [environmentId, botId] = key.split(OWNER_KEY_SEPARATOR) as [EnvironmentId, string];
+    let previous = EMPTY_BOT_CHAT_COMPLETIONS;
+    return Atom.make((get) => {
+      const next: BotChatCompletion[] = [];
+      for (const thread of get(environmentThreadsAtom(environmentId))) {
+        if (thread.botId !== botId || thread.archivedAt !== null || thread.parentThreadId != null) {
+          continue;
+        }
+        const completedAt = thread.latestTurn?.completedAt;
+        if (completedAt) next.push({ threadId: thread.id, completedAt });
+      }
+      if (!botChatCompletionsEqual(previous, next)) previous = next;
+      return previous;
+    }).pipe(Atom.withLabel(`environment-bot-chat-completions:${environmentId}:${botId}`));
+  });
+
   const threadShellAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
     let previousSource: OrchestrationThreadShell | null = null;
@@ -279,6 +318,12 @@ export function createEnvironmentThreadShellAtoms(input: {
     /** Latest live thread id for one bot. Changes only when that bot's latest thread changes. */
     latestBotThreadIdAtom: (environmentId: EnvironmentId, botId: string) =>
       latestOwnerThreadIdAtomFamily(["bot", environmentId, botId].join(OWNER_KEY_SEPARATOR)),
+    /**
+     * Last completion of each live chat one bot owns. Changes only when one of those completions
+     * changes, so unread dots can cover every chat without rendering on unrelated updates.
+     */
+    botChatCompletionsAtom: (environmentId: EnvironmentId, botId: string) =>
+      botChatCompletionsAtomFamily([environmentId, botId].join(OWNER_KEY_SEPARATOR)),
     /** Latest live thread id for one group. Changes only when that group's latest thread changes. */
     latestGroupThreadIdAtom: (environmentId: EnvironmentId, groupId: string) =>
       latestOwnerThreadIdAtomFamily(["group", environmentId, groupId].join(OWNER_KEY_SEPARATOR)),

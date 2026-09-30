@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1781,
+  "directMessageCount": 1814,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -232,6 +232,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Keyboard",
       "Connections",
       "Privacy & data",
+      "Archived chats",
       "Advanced",
       "Bots",
       "Providers",
@@ -285,6 +286,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Diagnostics",
       "Stream token by token (legacy)",
       "Keybindings",
+      "Archived chats",
       "Providers",
       "Sandbox",
       "Default sandbox",
@@ -366,6 +368,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/ConfirmDialogHost.tsx",
     "apps/web/src/components/auth/PairingPanel.tsx",
     "apps/web/src/components/auth/PairingRouteSurface.tsx",
+    "apps/web/src/components/chat/ChatActionsMenu.tsx",
     "apps/web/src/components/chat/ComposerBannerStack.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalActions.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalPanel.tsx",
@@ -447,6 +450,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/routineReceipts.ts",
     "apps/web/src/components/roster/useBotEngineAvailability.ts",
     "apps/web/src/components/roster/useBotProfileDraft.ts",
+    "apps/web/src/components/settings/ArchivedChatsSettings.tsx",
     "apps/web/src/components/settings/BotChannelsSettings.tsx",
     "apps/web/src/components/settings/BrowserSettings.tsx",
     "apps/web/src/components/settings/ChannelDetailPage.tsx",
@@ -480,6 +484,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
     "apps/web/src/components/ui/sidebar.tsx",
     "apps/web/src/components/ui/toast.tsx",
+    "apps/web/src/hooks/useChatActions.ts",
     "apps/web/src/routes/RootRouteErrorView.tsx",
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",

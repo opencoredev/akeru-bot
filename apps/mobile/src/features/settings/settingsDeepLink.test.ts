@@ -17,6 +17,7 @@ describe("mobile Settings chat links", () => {
   it.each([
     ["appearance", "SettingsAppearance"],
     ["connections", "SettingsEnvironments"],
+    ["archived-chats", "SettingsArchive"],
   ] as const)("opens %s on its mobile screen", (id, screen) => {
     expect(resolveMobileSettingsDestination(`grokbot://app/v1/settings?id=${id}`)).toEqual({
       kind: "screen",

@@ -5,6 +5,7 @@ import type {
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
 import {
+  type BotChatCompletion,
   type EnvironmentThreadStatus,
   mergeEnvironmentThread,
 } from "@t3tools/client-runtime/state/threads";
@@ -44,6 +45,9 @@ const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).p
 );
 const EMPTY_THREAD_ID_ATOM = Atom.make<ThreadId | null>(null).pipe(
   Atom.withLabel("web-thread-id:empty"),
+);
+const EMPTY_BOT_CHAT_COMPLETIONS_ATOM = Atom.make<ReadonlyArray<BotChatCompletion>>([]).pipe(
+  Atom.withLabel("web-bot-chat-completions:empty"),
 );
 const EMPTY_THREAD_DETAIL_ATOM = Atom.make<EnvironmentThread | null>(null).pipe(
   Atom.withLabel("web-thread-detail:empty"),
@@ -139,6 +143,15 @@ export function useThreadShell(ref: ScopedThreadRef | null): EnvironmentThreadSh
 }
 
 /** Latest live thread id for a bot. Re-renders only when that bot's latest thread changes. */
+/** Last completion of each live chat the bot owns in one environment. */
+export function useBotChatCompletions(environmentId: EnvironmentId | null, botId: string) {
+  return useAtomValue(
+    environmentId === null || botId === ""
+      ? EMPTY_BOT_CHAT_COMPLETIONS_ATOM
+      : environmentThreadShells.botChatCompletionsAtom(environmentId, botId),
+  );
+}
+
 export function useLatestBotThreadId(
   environmentId: EnvironmentId | null,
   botId: string,

@@ -70,7 +70,7 @@ describe("BotMemorySheet", () => {
     expect(route).toContain("threadRef={threadRef}");
   });
 
-  it("keeps memory and chat bound to the latest active bot conversation", () => {
+  it("keeps memory and chat bound to the chat the user picked", () => {
     expect(
       resolveBotThreadTarget(
         "bot-1",
@@ -95,7 +95,7 @@ describe("BotMemorySheet", () => {
         ],
         "/env-1/thread-selected",
       ),
-    ).toMatchObject({ threadId: ThreadId.make("thread-newer") });
+    ).toMatchObject({ threadId: ThreadId.make("thread-selected") });
 
     expect(EnvironmentId.make("env-1")).toBe("env-1");
     const runtime = NodeFS.readFileSync(

@@ -3,7 +3,9 @@ import {
   activeComposerModelPicker,
   registerComposerModelPicker,
 } from "../composerModelPickerRegistry";
+import { activeChatPaletteActions, registerChatPaletteActions } from "../chatActionsRegistry";
 import {
+  buildChatCommandPaletteItems,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
@@ -96,5 +98,72 @@ describe("roadmap palette commands", () => {
         icon: null,
       }).disabled,
     ).toBe(true);
+  });
+});
+
+describe("chat actions in the command palette", () => {
+  it("publishes the open chat's actions until that chat unmounts", () => {
+    const first = {};
+    const second = {};
+    const settle = { id: "settle", title: "Settle chat", searchTerms: ["settle"], run: vi.fn() };
+    const cleanupFirst = registerChatPaletteActions(first, [settle]);
+    expect(activeChatPaletteActions()).toEqual([settle]);
+
+    const cleanupSecond = registerChatPaletteActions(second, []);
+    cleanupFirst();
+    expect(activeChatPaletteActions()).toEqual([]);
+    registerChatPaletteActions(second, [settle]);
+    cleanupFirst();
+    expect(activeChatPaletteActions()).toEqual([settle]);
+    cleanupSecond();
+    expect(activeChatPaletteActions()).toEqual([]);
+  });
+
+  it("turns chat actions into searchable palette rows that run the action", async () => {
+    const run = vi.fn();
+    const [item] = buildChatCommandPaletteItems({
+      actions: [
+        {
+          id: "settle",
+          title: "Settle chat",
+          searchTerms: ["settle", "done"],
+          shortcutCommand: "thread.settle",
+          run,
+        },
+      ],
+      icon: null,
+    });
+
+    expect(item).toMatchObject({
+      value: "chat:settle",
+      title: "Settle chat",
+      shortcutCommand: "thread.settle",
+      searchTerms: ["Settle chat", "chat", "settle", "done"],
+    });
+    const filtered = filterCommandPaletteGroups({
+      groups: [{ value: "chat", label: "This chat", items: item ? [item] : [] }],
+      query: "done",
+    });
+    expect(filtered[0]?.items.map((entry) => entry.value)).toEqual(["chat:settle"]);
+    await item?.run();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an action's description, such as a snooze preset's wake time", () => {
+    const [snooze, pin] = buildChatCommandPaletteItems({
+      actions: [
+        {
+          id: "snooze:hour",
+          title: "Snooze chat: In 1 hour",
+          description: "1:00 PM",
+          searchTerms: ["snooze"],
+          run: () => undefined,
+        },
+        { id: "pin", title: "Pin chat", searchTerms: ["pin"], run: () => undefined },
+      ],
+      icon: null,
+    });
+    expect(snooze?.description).toBe("1:00 PM");
+    expect(pin).not.toHaveProperty("description");
   });
 });

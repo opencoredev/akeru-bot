@@ -130,8 +130,10 @@ describe("BotDetailsPanel", () => {
 
   it("stores the desktop preference under the bot id", () => {
     const source = NodeFS.readFileSync(new URL("./BotDetailsPanel.tsx", import.meta.url), "utf8");
-    expect(source).toContain("`akeru:bot-details-open:${bot.id}`");
-    expect(source).toContain("Schema.Boolean");
+    const storage = NodeFS.readFileSync(new URL("./detailsPanelOpen.ts", import.meta.url), "utf8");
+    expect(source).toContain("useBotDetailsOpen(bot.id)");
+    expect(storage).toContain("`akeru:bot-details-open:${botId}`");
+    expect(storage).toContain("Schema.Boolean");
     expect(source).toContain("setDesktopOpen((open) => !open)");
   });
 

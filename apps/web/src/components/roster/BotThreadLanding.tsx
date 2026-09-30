@@ -37,6 +37,7 @@ import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
+import { useBotDetailsOpen } from "./detailsPanelOpen";
 import { DelegationCard } from "./DelegationCard";
 import {
   AssistantMessageRow,
@@ -87,6 +88,7 @@ import {
 } from "./routineReceipts";
 import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
+import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 
 function RoutineReceiptRow({
   receipt,
@@ -165,6 +167,11 @@ export function BotThreadLanding({
     catalog: engineCatalog,
   } = useBotEngineAvailability(bot?.engine ?? null);
   const runtime = useBotThreadRuntime(botId, stickyEngine);
+  useMarkChatVisited(runtime.linkedThreadRef);
+  const newChat = useMemo(
+    () => ({ canStart: runtime.canStartNewChat, start: runtime.startNewChat }),
+    [runtime.canStartNewChat, runtime.startNewChat],
+  );
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
@@ -410,6 +417,7 @@ export function BotThreadLanding({
     messages.map((message) => message.id),
   );
   const available = bot?.archivedAt === null;
+  const [detailsPanelOpen] = useBotDetailsOpen(bot?.id ?? botId);
   const playbackKey = useReplyPlaybackThread({
     environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: available ? runtime.linkedThreadRef?.threadId : null,
@@ -491,7 +499,10 @@ export function BotThreadLanding({
     >
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <WorkspacePageHeader className="border-b border-border">
+          <WorkspacePageHeader
+            className="border-b border-border"
+            detailsPanelOpen={detailsPanelOpen}
+          >
             <div className="flex min-w-0 items-center gap-2">
               <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-6" />
               <span className="truncate text-sm font-medium">{bot.name}</span>
@@ -501,6 +512,9 @@ export function BotThreadLanding({
                 bot={bot}
                 disabled={runtime.sending || runtime.latestTurn?.state === "running"}
               />
+              {available ? (
+                <ChatActionsMenu threadRef={runtime.linkedThreadRef} newChat={newChat} />
+              ) : null}
             </div>
           </WorkspacePageHeader>
           <BotConversationScrollArea

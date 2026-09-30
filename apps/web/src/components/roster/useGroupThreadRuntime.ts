@@ -49,6 +49,8 @@ import {
   buildGroupTurnStartInput,
   createBotTurnSubmissionQueue,
   findLatestGroupThreadTarget,
+  nextRetainedChat,
+  type RetainedChat,
 } from "./botThreadRuntime.logic";
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
@@ -138,14 +140,22 @@ export function useGroupThreadRuntime(groupId: string) {
   );
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
-  const retainedThreadRef = useRef<{ groupId: string; threadRef: ScopedThreadRef | null }>({
-    groupId,
+  const retainedThreadRef = useRef<RetainedChat>({
+    ownerId: groupId,
     threadRef: null,
+    linked: false,
   });
-  if (retainedThreadRef.current.groupId !== groupId) {
-    retainedThreadRef.current = { groupId, threadRef: null };
+  // Chats created by queued sends, keyed by the retention state they were submitted from, so
+  // sends queued together share one chat even after the user leaves the group.
+  const createdChatsRef = useRef(new WeakMap<RetainedChat, ScopedThreadRef>());
+  if (retainedThreadRef.current.ownerId !== groupId) {
+    retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
-  if (linkedThreadRef) retainedThreadRef.current.threadRef = linkedThreadRef;
+  retainedThreadRef.current = nextRetainedChat(
+    retainedThreadRef.current,
+    linkedThreadRef,
+    bootstrapped,
+  );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
@@ -325,8 +335,10 @@ export function useGroupThreadRuntime(groupId: string) {
         // Leaving and returning to this group replaces the ref. A send queued before the
         // group had a chat joins the one an earlier send created there.
         const live = retainedThreadRef.current;
-        const retained = live.groupId === groupId ? live : queuedRetained;
-        const currentThreadRef = queuedThreadRef ?? queuedRetained.threadRef ?? retained.threadRef;
+        const currentThreadRef =
+          queuedThreadRef ??
+          createdChatsRef.current.get(queuedRetained) ??
+          (live.ownerId === groupId ? live.threadRef : null);
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
 
@@ -379,9 +391,18 @@ export function useGroupThreadRuntime(groupId: string) {
             setError(commandFailure(result));
             return false;
           }
-          retained.threadRef = scopeThreadRef(environmentId, threadId);
-          if (retainedThreadRef.current.groupId === groupId) {
-            retainedThreadRef.current.threadRef ??= retained.threadRef;
+          // Only a new chat restarts retention; a chat the shell list already showed stays
+          // linked so archiving it releases it. Skip it if the user moved to another group.
+          if (currentThreadRef === null) {
+            const createdThreadRef = scopeThreadRef(environmentId, threadId);
+            createdChatsRef.current.set(queuedRetained, createdThreadRef);
+            if (retainedThreadRef.current.ownerId === groupId) {
+              retainedThreadRef.current = {
+                ownerId: groupId,
+                threadRef: createdThreadRef,
+                linked: false,
+              };
+            }
           }
           return true;
         } catch (cause) {

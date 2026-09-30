@@ -23,6 +23,34 @@ export interface CommandPaletteGroup {
   readonly items: ReadonlyArray<CommandPaletteActionItem>;
 }
 
+/**
+ * The open chat's actions as palette rows, in the order its header menu lists
+ * them. Each row matches its translated title as well as its English terms.
+ */
+export function buildChatCommandPaletteItems(input: {
+  readonly actions: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly description?: string;
+    readonly searchTerms: ReadonlyArray<string>;
+    readonly shortcutCommand?: KeybindingCommand;
+    readonly run: () => Promise<void> | void;
+  }>;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem[] {
+  return input.actions.map((action) => ({
+    value: `chat:${action.id}`,
+    searchTerms: [action.title, "chat", ...action.searchTerms],
+    title: action.title,
+    ...(action.description ? { description: action.description } : {}),
+    icon: input.icon,
+    ...(action.shortcutCommand ? { shortcutCommand: action.shortcutCommand } : {}),
+    run: async () => {
+      await action.run();
+    },
+  }));
+}
+
 /** Opens Settings > General at the language row; matches English and translated labels. */
 export function buildLanguageCommandPaletteAction(input: {
   readonly translate: (message: string) => string;

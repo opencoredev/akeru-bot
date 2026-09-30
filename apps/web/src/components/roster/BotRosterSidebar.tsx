@@ -11,8 +11,9 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
+import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE, type ScopedThreadRef } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,
@@ -48,7 +49,7 @@ import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages } from "../../state/entities";
+import { useLatestGroupThreadId, useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -73,6 +74,7 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
+import { useBotRosterUnread, useChatUnread } from "../chat/useChatUnread";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
@@ -94,6 +96,7 @@ import {
   rosterMarkerId,
   rosterZoneHeading,
   orderRosterBotsForShortcuts,
+  resolveAdjacentRosterBot,
   resolveRosterShortcutBot,
   type RosterItemRef,
   type RosterLastMessage,
@@ -286,7 +289,11 @@ export function RosterPanelHeader({
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-): { message: RosterLastMessage | null; taskTitle: string | null } {
+): {
+  message: RosterLastMessage | null;
+  taskTitle: string | null;
+  threadRef: ScopedThreadRef | null;
+} {
   const candidate = useBotThreadCandidate(botId);
   const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
@@ -300,7 +307,7 @@ function useLatestBotMessage(
   // title lands.
   const shellTitle = shell?.title ?? null;
   const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
-  return useMemo(() => ({ message, taskTitle }), [message, taskTitle]);
+  return useMemo(() => ({ message, taskTitle, threadRef }), [message, taskTitle, threadRef]);
 }
 
 type SortableRosterRowBag = Pick<
@@ -400,10 +407,33 @@ function formatRosterFullTimestamp(isoDate: string): string {
   return Number.isNaN(parsed.getTime()) ? "" : rosterFullTimestampFormatter.format(parsed);
 }
 
+/** The group's current chat: its newest chat on the primary environment. */
+function useGroupChatRef(groupId: string): ScopedThreadRef | null {
+  const environmentId = usePrimaryEnvironmentId();
+  const threadId = useLatestGroupThreadId(environmentId, groupId);
+  return useMemo(
+    () => (environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null),
+    [environmentId, threadId],
+  );
+}
+
+function UnreadDot() {
+  const { t } = useI18n();
+  return (
+    <span
+      role="img"
+      aria-label={t("Unread")}
+      data-testid="roster-unread-dot"
+      className="size-2 shrink-0 rounded-full bg-sidebar-foreground"
+    />
+  );
+}
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
   isActive,
+  chatOpen,
   onSelect,
   onOpenSettings,
   pinned,
@@ -417,6 +447,8 @@ const BotRosterRow = memo(function BotRosterRow({
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
   onOpenSettings: (bot: Bot) => void;
   pinned: boolean;
@@ -432,7 +464,12 @@ const BotRosterRow = memo(function BotRosterRow({
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
-  const { message: latestMessage, taskTitle } = useLatestBotMessage(bot.id, lastMessage);
+  const {
+    message: latestMessage,
+    taskTitle,
+    threadRef: chatRef,
+  } = useLatestBotMessage(bot.id, lastMessage);
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <li
       role="listitem"
@@ -478,17 +515,16 @@ const BotRosterRow = memo(function BotRosterRow({
         >
           <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-12" : "size-10"} />
           {pinned ? (
-            <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
+            <span className="flex max-w-full items-center gap-1">
+              {unread ? <UnreadDot /> : null}
+              <span className="truncate text-xs font-medium">{bot.name}</span>
+            </span>
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 shrink truncate text-sm font-semibold">{bot.name}</span>
-                {taskTitle ? (
-                  <span className="min-w-0 shrink-[2] truncate rounded-md border border-sidebar-foreground/10 bg-sidebar-foreground/6 px-1.5 py-px text-[11px] text-sidebar-muted-foreground">
-                    {taskTitle}
-                  </span>
-                ) : null}
+                <span className="min-w-0 truncate text-sm font-semibold">{bot.name}</span>
                 <span className="min-w-2 flex-1" />
+                {unread ? <UnreadDot /> : null}
                 {latestMessage ? (
                   // The compact label collapses to a bare numeric date once a
                   // chat is over a week old ("1/15"), which reads like a count
@@ -512,9 +548,15 @@ const BotRosterRow = memo(function BotRosterRow({
                   </time>
                 ) : null}
               </span>
-              {latestMessage ? (
+              {taskTitle || latestMessage ? (
+                // The chat title leads the preview line, so the bot name on the
+                // first line keeps the full width.
                 <span className="truncate text-sm text-sidebar-muted-foreground">
-                  {latestMessage.text}
+                  {taskTitle ? (
+                    <span className="font-medium text-sidebar-foreground/80">{taskTitle}</span>
+                  ) : null}
+                  {taskTitle && latestMessage ? " · " : null}
+                  {latestMessage?.text}
                 </span>
               ) : null}
             </span>
@@ -563,13 +605,19 @@ const BotRosterRow = memo(function BotRosterRow({
 function RailBotButton({
   bot,
   isActive,
+  chatOpen,
   onSelect,
 }: {
   bot: Bot;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
 }) {
   const presence = useBotPresence(bot.id);
+  // The collapsed rail marks unread replies like the expanded row does.
+  const { ref: chatRef } = useBotChatTarget(bot.id, useBotThreadCandidate(bot.id));
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -580,7 +628,7 @@ function RailBotButton({
             aria-current={isActive || undefined}
             onClick={() => onSelect(bot)}
             className={cn(
-              "flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
             )}
           >
@@ -590,10 +638,55 @@ function RailBotButton({
               className="size-7"
               dotClassName="size-1.5"
             />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
           </button>
         }
       />
       <TooltipPopup side="right">{bot.name}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/** One group in the icon-collapsed rail, with a name tooltip and its unread dot. */
+function RailGroupButton({
+  group,
+  bots,
+  isActive,
+  onSelect,
+}: {
+  group: Group;
+  bots: readonly Bot[];
+  isActive: boolean;
+  onSelect: (group: Group) => void;
+}) {
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-current={isActive || undefined}
+            onClick={() => onSelect(group)}
+            className={cn(
+              "relative flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive ? "bg-sidebar-row-active" : "hover:bg-sidebar-row-hover",
+            )}
+          >
+            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
+          </button>
+        }
+      />
+      <TooltipPopup side="right">{group.name}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -628,6 +721,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
     (member) =>
       member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
   ).length;
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
   return (
     <li
       role="listitem"
@@ -673,6 +767,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
         >
           {group.name}
         </span>
+        {unread ? <UnreadDot /> : null}
       </button>
       <Menu>
         <MenuTrigger
@@ -856,6 +951,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
+  const botRouteActive = pathname.startsWith("/bots/");
   const searching = query.trim().length > 0;
   const pinnedKeys = useMemo(
     () => new Set(pinnedItems.map((item) => rosterItemKey(item))),
@@ -1105,7 +1201,13 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           modelPickerOpen: isModelPickerOpen(),
         },
       });
-      const bot = resolveRosterShortcutBot(command ?? "", shortcutBots);
+      const bot =
+        resolveRosterShortcutBot(command ?? "", shortcutBots) ??
+        resolveAdjacentRosterBot(
+          command ?? "",
+          shortcutBots,
+          botRouteActive ? useRosterStore.getState().selectedBotId : null,
+        );
       if (!bot) return;
 
       event.preventDefault();
@@ -1117,7 +1219,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, previewOpen, shortcutBots]);
+  }, [botRouteActive, keybindings, navigate, previewOpen, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
@@ -1359,31 +1461,17 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
               <ul data-testid="roster-rail" className="flex flex-col items-center gap-1">
                 {visibleGroups.map((group) => (
                   <li key={group.id} className="list-none">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-current={pathname === `/groups/${group.id}` || undefined}
-                            onClick={() =>
-                              void navigate({
-                                to: "/groups/$groupId",
-                                params: { groupId: group.id },
-                              })
-                            }
-                            className={cn(
-                              "flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              pathname === `/groups/${group.id}`
-                                ? "bg-sidebar-row-active"
-                                : "hover:bg-sidebar-row-hover",
-                            )}
-                          >
-                            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
-                          </button>
-                        }
-                      />
-                      <TooltipPopup side="right">{group.name}</TooltipPopup>
-                    </Tooltip>
+                    <RailGroupButton
+                      group={group}
+                      bots={bots}
+                      isActive={pathname === `/groups/${group.id}`}
+                      onSelect={(selected) =>
+                        void navigate({
+                          to: "/groups/$groupId",
+                          params: { groupId: selected.id },
+                        })
+                      }
+                    />
                   </li>
                 ))}
                 {visibleBots.map((bot) => (
@@ -1391,6 +1479,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                     <RailBotButton
                       bot={bot}
                       isActive={!groupRouteActive && selectedBotId === bot.id}
+                      chatOpen={pathname === `/bots/${bot.id}`}
                       onSelect={handleSelect}
                     />
                   </li>
@@ -1453,6 +1542,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                                         bot={bot}
                                         lastMessage={lastMessageByBotId[bot.id] ?? null}
                                         isActive={!groupRouteActive && selectedBotId === bot.id}
+                                        chatOpen={pathname === `/bots/${bot.id}`}
                                         onSelect={handleSelect}
                                         onOpenSettings={handleOpenBotSettings}
                                         pinned={pinned}

@@ -57,8 +57,20 @@ successful pick; its hover glow and badge preview the element and color family t
 `mod+9`. Pinned bots come first. Other bots follow their section and roster order. Groups do not
 take a shortcut number.
 
+These chat commands have no default shortcut. Add one from **Settings > Keyboard** to use them:
+
+- `chat.new` (**New chat**) starts a fresh chat with the open bot, once its current chat has a
+  message.
+- `thread.settle` (**Settle chat**) settles the open chat.
+- `thread.previous` and `thread.next` (**Previous bot** and **Next bot**) move through bots in the
+  same order as the numbered shortcuts, wrapping at either end.
+
+`chat.newLocal` is retired. Rules for it still load but do nothing, and **Settings > Keyboard** hides
+it.
+
 The command palette runs app actions: switch between light and dark mode, toggle the theme editor,
-and open plugins, usage, feedback, or settings. Type to filter the list.
+and open plugins, usage, feedback, archived chats, or settings. While a chat is open, it also lists
+that chat's actions under **This chat**. Type to filter the list.
 
 The full command list and the current defaults are shown in **Settings > Keyboard**, which
 always matches the build you are running. Use that rather than a copied list.

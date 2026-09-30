@@ -17,6 +17,7 @@ export const SETTINGS_DEEP_LINK_IDS = [
   "plugins",
   "sandbox",
   "privacy",
+  "archived-chats",
   "connections",
   "bot-inbox",
   "diagnostics",

@@ -3,11 +3,9 @@ import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
 import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
-import * as Schema from "effect/Schema";
 import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n";
-import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../../lib/utils";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { ensureLocalApi } from "../../localApi";
@@ -26,9 +24,7 @@ import { GroupMemberStack } from "./GroupMemberStack";
 import { groupBotMembers, groupContainsBot, groupPersonMembers } from "./roster.logic";
 import type { Bot, Group } from "./types";
 import { useDetailsPanelState } from "./useDetailsPanelState";
-
-/** One preference for every group: closed until opened, and it stays how you left it. */
-const GROUP_DETAILS_OPEN_KEY = "akeru:group-details-open";
+import { useGroupDetailsOpen } from "./detailsPanelOpen";
 
 type Translate = (message: string, params?: Record<string, string | number>) => string;
 
@@ -400,11 +396,7 @@ export function GroupDetailsPanel(props: {
 }) {
   const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const [desktopOpen, setDesktopOpen] = useLocalStorage(
-    GROUP_DETAILS_OPEN_KEY,
-    false,
-    Schema.Boolean,
-  );
+  const [desktopOpen, setDesktopOpen] = useGroupDetailsOpen();
   const [mobileOpen, setMobileOpen] = useState(false);
   const desktopPanel = useDetailsPanelState(desktopOpen);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");

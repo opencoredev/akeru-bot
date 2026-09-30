@@ -8,13 +8,11 @@ import {
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
-import * as Schema from "effect/Schema";
 
 import { openComputerViewer } from "../../computerViewerStore";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
-import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../../state/server";
 import { AppIcon } from "../ui/app-icon";
@@ -31,6 +29,7 @@ import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import type { Bot } from "./types";
 import { useDetailsPanelState } from "./useDetailsPanelState";
+import { useBotDetailsOpen } from "./detailsPanelOpen";
 
 export {
   parseBotUsageCapInput,
@@ -146,11 +145,7 @@ export function BotDetailsPanel({
 }) {
   const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const [desktopOpen, setDesktopOpen] = useLocalStorage(
-    `akeru:bot-details-open:${bot.id}`,
-    false,
-    Schema.Boolean,
-  );
+  const [desktopOpen, setDesktopOpen] = useBotDetailsOpen(bot.id);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [browserExpanded, setBrowserExpanded] = useState(false);
   const desktopPanel = useDetailsPanelState(desktopOpen);

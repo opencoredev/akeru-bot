@@ -11,6 +11,7 @@ export type SettingsPath =
   | "/settings/image-generation"
   | "/settings/connections"
   | "/settings/privacy"
+  | "/settings/archived"
   | "/settings/advanced";
 
 export interface SettingsSearchItem {
@@ -285,6 +286,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "keybindings",
     title: "Keybindings",
     to: "/settings/keybindings",
+  },
+  {
+    id: "archived-chats",
+    title: "Archived chats",
+    to: "/settings/archived",
+    keywords: ["archive", "unarchive", "restore", "delete"],
   },
   {
     id: "providers",

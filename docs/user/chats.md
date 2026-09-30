@@ -10,9 +10,33 @@ To reply to a specific message, use **Reply** on that message. The sent reply ke
 above your text. Select the referenced person's name to jump back to the original message when it
 can be identified.
 
-## Chat list actions
+## Chat actions
 
-Use a chat's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
+On web and desktop, each bot or group shows one chat: its newest one. Open the **⋯** menu at the
+top right of that chat to act on it:
+
+- **New chat** starts a fresh chat with the bot. It is available once the current chat has a
+  message. The earlier chat stays active and keeps its history; its bot opens the new chat from now
+  on. Groups keep a single chat and do not offer this action.
+- **Rename chat** and **Regenerate title** change the chat's title.
+- **Pin chat** and **Unpin chat**.
+- **Mark unread** puts a dot on the bot or group in the roster until you open the chat again. A dot
+  also appears when a bot finishes replying in a chat you have opened before but are not looking
+  at, including an open chat whose window or tab is in the background. Unread dots are kept on
+  this device only.
+- **Settle chat** and **Un-settle chat**.
+- **Snooze** until a preset time, such as **In 1 hour** or **Tomorrow**, and **Wake chat** to end
+  the snooze early.
+- **Archive chat** and **Delete chat**. Delete asks for confirmation first. A chat cannot be
+  archived while the bot is replying.
+
+The chat header shows a pin when the chat is pinned, and **Settled** or **Snoozed until** with the
+wake time while those apply. The same actions are in the command palette under **This chat** while
+the chat is open. The palette lists each snooze choice as its own entry, such as **Snooze chat:
+Tomorrow**, with its wake time.
+
+On mobile, the chat list keeps its own menu for each chat, and you can swipe left on a chat for
+archive and delete.
 Date labels in bot and group chats follow your device's local day and update when the day changes.
 
 ## Active and settled chats
@@ -25,10 +49,21 @@ active list without changing its timestamps.
 
 Use **Snooze** to hide a chat until its wake time. Use **Wake chat** to return it early.
 
+On web and desktop, settling or snoozing a bot's open chat keeps it open. Archiving or deleting it
+does not: the bot then opens its next newest chat, or an empty chat if it has none.
+
+## Archived chats
+
+**Settings > Archived chats** lists the chats you archived on this environment, grouped by bot or
+group, newest first. Select **Unarchive** to bring a chat back, or the delete button to remove it
+for good. An unarchived chat becomes the bot's open chat again when it is the bot's newest chat.
+Work one bot handed to another does not appear here, because it never shows as a chat of its own.
+The command palette's **Archived chats** action opens the same page.
+
 ## Pinned order
 
-Pinned chats appear above active bot work across projects and environments. On web and desktop, drag a
-pinned chat to reorder it. On mobile, open its menu and select **Move up** or **Move down**.
+On mobile, pinned chats appear above active bot work across projects and environments. Open a
+pinned chat's menu and select **Move up** or **Move down** to reorder it.
 
 The environment server stores the order. An older server can still pin a chat but keeps its default
 newest-first order until it is updated.

@@ -25,6 +25,7 @@ import {
   resolveLatestRosterMessage,
   resolveRosterBotId,
   resolveRosterIndicator,
+  resolveAdjacentRosterBot,
   resolveRosterShortcutBot,
   parseRosterBotDragId,
   parseRosterGroupDropId,
@@ -752,5 +753,31 @@ describe("roster drag drop planning", () => {
     expect(rosterItemsForZone("unassigned", layout)).toEqual([crew]);
     expect(rosterItemsForZone({ sectionId: "news" }, layout)).toEqual([mori]);
     expect(rosterItemsForZone({ sectionId: "missing" }, layout)).toEqual([]);
+  });
+});
+
+describe("resolveAdjacentRosterBot", () => {
+  const ordered = [
+    bot({ id: "a", name: "A" }),
+    bot({ id: "b", name: "B" }),
+    bot({ id: "c", name: "C" }),
+  ];
+
+  it("steps through bots in shortcut order and wraps at the ends", () => {
+    expect(resolveAdjacentRosterBot("thread.next", ordered, "a")?.id).toBe("b");
+    expect(resolveAdjacentRosterBot("thread.previous", ordered, "b")?.id).toBe("a");
+    expect(resolveAdjacentRosterBot("thread.next", ordered, "c")?.id).toBe("a");
+    expect(resolveAdjacentRosterBot("thread.previous", ordered, "a")?.id).toBe("c");
+  });
+
+  it("starts from the ends when no bot is open", () => {
+    expect(resolveAdjacentRosterBot("thread.next", ordered, null)?.id).toBe("a");
+    expect(resolveAdjacentRosterBot("thread.previous", ordered, null)?.id).toBe("c");
+  });
+
+  it("ignores other commands and a roster with only the open bot", () => {
+    expect(resolveAdjacentRosterBot("thread.jump.1", ordered, "a")).toBeNull();
+    expect(resolveAdjacentRosterBot("thread.next", [ordered[0]!], "a")).toBeNull();
+    expect(resolveAdjacentRosterBot("thread.next", [], null)).toBeNull();
   });
 });

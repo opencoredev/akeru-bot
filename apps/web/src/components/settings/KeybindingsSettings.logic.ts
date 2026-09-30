@@ -251,9 +251,8 @@ const COMMAND_META: ReadonlyArray<readonly [string, string, KeybindingGroupId]> 
   ["commandPalette.toggle", "Open command palette", "general"],
   ["themeEditor.toggle", "Toggle theme editor", "general"],
   ["chat.new", "New chat", "chats"],
-  ["chat.newLocal", "New local chat", "chats"],
-  ["thread.previous", "Previous chat", "chats"],
-  ["thread.next", "Next chat", "chats"],
+  ["thread.previous", "Previous bot", "chats"],
+  ["thread.next", "Next bot", "chats"],
   ["thread.jump", "Jump to chat", "chats"],
   ["thread.settle", "Settle chat", "chats"],
   ["composer.stash", "Stash draft", "composer"],
@@ -279,8 +278,9 @@ function seriesParts(command: KeybindingCommand): { id: string; index: number } 
 
 /**
  * Commands for surfaces Akeru no longer has: the terminal drawer, diff panel,
- * file browser, project scripts, and preview-panel shortcuts. They still decode
- * from older keybindings files, but nothing handles them, so settings hides them.
+ * file browser, project scripts, preview-panel shortcuts, and local-versus-
+ * worktree new chats. They still decode from older keybindings files, but
+ * nothing handles them, so settings hides them.
  */
 const RETIRED_COMMAND_PREFIXES = ["terminal.", "diff.", "preview.", "script."] as const;
 const RETIRED_COMMANDS = new Set([
@@ -288,6 +288,7 @@ const RETIRED_COMMANDS = new Set([
   "projectSearch.toggle",
   "editor.openFavorite",
   "rightPanel.toggleMaximized",
+  "chat.newLocal",
 ]);
 
 export function isRetiredCommand(command: KeybindingCommand): boolean {
@@ -585,14 +586,24 @@ export function buildWhenVariableOptions(): ReadonlyArray<WhenVariableOption> {
   });
 }
 
+/** Commands the app handles that ship without a default shortcut, so users can bind them. */
+const UNBOUND_COMMANDS: ReadonlyArray<KeybindingCommand> = [
+  "chat.new",
+  "thread.previous",
+  "thread.next",
+  "thread.settle",
+];
+
 export function buildKeybindingCommandOptions(
   keybindings: ResolvedKeybindingsConfig,
 ): ReadonlyArray<KeybindingCommandOption> {
-  // Offer commands that still ship a default, plus whatever the user already
-  // binds. Retired commands stay valid in the contract for old files only.
-  const commands = new Set<KeybindingCommand>(
-    DEFAULT_RESOLVED_KEYBINDINGS.map((binding) => binding.command),
-  );
+  // Offer commands that still ship a default or run without one, plus whatever
+  // the user already binds. Retired commands stay valid in the contract for
+  // old files only.
+  const commands = new Set<KeybindingCommand>([
+    ...DEFAULT_RESOLVED_KEYBINDINGS.map((binding) => binding.command),
+    ...UNBOUND_COMMANDS,
+  ]);
   for (const binding of keybindings) {
     if (!isRetiredCommand(binding.command)) commands.add(binding.command);
   }

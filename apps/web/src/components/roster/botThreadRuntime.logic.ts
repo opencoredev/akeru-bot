@@ -1,4 +1,5 @@
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/state/threads";
+import { PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import type {
   BotId,
   GroupId,
@@ -6,6 +7,7 @@ import type {
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
+  ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
 
@@ -157,10 +159,46 @@ export function findLatestBotThreadTarget(
 }
 
 /**
- * The bot's own chat: its newest direct thread, else the remembered chat path
- * while a just-created thread has not reached the shell list yet. The shell
- * list leaves out child work, so pair this with `isBotOwnChatShell` on the
- * target's shell before treating it as the bot's chat.
+ * The chat a bot shows. A remembered chat path is the user's pick: while it
+ * names a live chat of this bot it stays selected, even when another chat
+ * replied later. Otherwise the bot shows its newest direct thread, else the
+ * remembered path while a just-created thread has not reached the shell list.
+ * Every surface on the bot route resolves through this, so the conversation
+ * and the side panel target the same chat.
+ */
+export function pickBotChatTarget(
+  botId: string,
+  environmentId: string | null,
+  latest: { environmentId: string; threadId: string } | null,
+  remembered: { environmentId: string; threadId: string } | null,
+  rememberedShell:
+    | {
+        botId?: string | null | undefined;
+        parentThreadId?: string | null | undefined;
+        archivedAt: string | null;
+        deletedAt?: string | null | undefined;
+      }
+    | null
+    | undefined,
+): { environmentId: string; threadId: string } | null {
+  if (
+    remembered &&
+    remembered.environmentId === environmentId &&
+    rememberedShell &&
+    rememberedShell.botId === botId &&
+    rememberedShell.parentThreadId == null &&
+    rememberedShell.archivedAt === null &&
+    rememberedShell.deletedAt == null
+  ) {
+    return { environmentId: remembered.environmentId, threadId: remembered.threadId };
+  }
+  return latest ?? remembered;
+}
+
+/**
+ * The bot's chat from the primary environment's shell list, per
+ * `pickBotChatTarget`. The shell list leaves out child work, so pair this with
+ * `isBotOwnChatShell` on the target's shell before treating it as the bot's chat.
  */
 export function resolveBotThreadTarget(
   botId: string,
@@ -168,12 +206,21 @@ export function resolveBotThreadTarget(
   threads: Parameters<typeof findLatestBotThreadTarget>[2],
   rememberedPath: string | null | undefined,
 ) {
-  const latest = findLatestBotThreadTarget(botId, environmentId, threads);
-  if (latest) return latest;
-  const remembered = rememberedPath ? parseChatPath(rememberedPath) : null;
-  return remembered?.kind === "thread" && remembered.environmentId === environmentId
-    ? remembered
-    : null;
+  const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
+  const remembered =
+    parsed?.kind === "thread" && parsed.environmentId === environmentId ? parsed : null;
+  return pickBotChatTarget(
+    botId,
+    environmentId,
+    findLatestBotThreadTarget(botId, environmentId, threads),
+    remembered,
+    remembered
+      ? threads.find(
+          (thread) =>
+            thread.environmentId === remembered.environmentId && thread.id === remembered.threadId,
+        )
+      : null,
+  );
 }
 
 /**
@@ -249,4 +296,83 @@ export function findUnhandledMcpAuthorization(
     }
   }
   return null;
+}
+
+/** The chat a bot or group sends into while its linked chat is not in the shell list. */
+export interface RetainedChat {
+  readonly ownerId: string;
+  readonly threadRef: ScopedThreadRef | null;
+  /** Whether the shell list has shown this chat since it was retained. */
+  readonly linked: boolean;
+}
+
+/**
+ * The chat the bot shows. A just-created chat wins once its shell arrives, even
+ * when an older chat finished a reply after it, so the screen and sends agree.
+ */
+export function preferRetainedChatTarget(
+  retained: RetainedChat,
+  target: { environmentId: string; threadId: string } | null,
+  shells: readonly {
+    environmentId: string;
+    id: string;
+    archivedAt: string | null;
+    deletedAt?: string | null | undefined;
+  }[],
+): { environmentId: string; threadId: string } | null {
+  const pending = retained.linked ? null : retained.threadRef;
+  if (
+    pending &&
+    shells.some(
+      (shell) =>
+        shell.environmentId === pending.environmentId &&
+        shell.id === pending.threadId &&
+        shell.archivedAt === null &&
+        shell.deletedAt == null,
+    )
+  ) {
+    return { environmentId: pending.environmentId, threadId: pending.threadId };
+  }
+  return target;
+}
+
+/** Whether a send into this chat should replace its New chat placeholder title. */
+export function shouldTitlePlaceholderChat(
+  threadId: string,
+  shellTitle: string | undefined,
+  createdPlaceholderId: string | null,
+): boolean {
+  return shellTitle === undefined
+    ? createdPlaceholderId === threadId
+    : shellTitle === PLACEHOLDER_THREAD_TITLE;
+}
+
+/**
+ * Keeps a just-created chat until its own shell arrives. A chat the shell list has
+ * shown and then dropped was archived or deleted, so once the shells have
+ * loaded it is released and the next send starts a new chat instead.
+ */
+export function nextRetainedChat(
+  current: RetainedChat,
+  linkedThreadRef: ScopedThreadRef | null,
+  bootstrapped: boolean,
+): RetainedChat {
+  if (linkedThreadRef) {
+    if (current.linked && current.threadRef === linkedThreadRef) return current;
+    // A just-created chat stays the target while the list still shows the
+    // previous chat, so a send in between cannot land in the old one.
+    if (
+      !current.linked &&
+      current.threadRef !== null &&
+      (current.threadRef.environmentId !== linkedThreadRef.environmentId ||
+        current.threadRef.threadId !== linkedThreadRef.threadId)
+    ) {
+      return current;
+    }
+    return { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
+  }
+  if (current.linked && bootstrapped) {
+    return { ownerId: current.ownerId, threadRef: null, linked: false };
+  }
+  return current;
 }
