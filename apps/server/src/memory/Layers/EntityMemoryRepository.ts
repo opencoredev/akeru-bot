@@ -997,6 +997,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 });
               }
             }
+            const authorized = yield* resolveAuthorizedMemoryPartitions(input.access);
             for (const item of preview.items) {
               if (item.classification === "skipped") continue;
               const incoming = preview.revisions
@@ -1018,6 +1019,13 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
                 yield* invalidateDerivedCopies(input.access.tenantId, item.rootId);
               }
               if (item.classification === "conflicting" && decision === "use-archive") {
+                // Replacing a root deletes its whole local history, so every local revision
+                // must be authorized the same way permanent deletion requires.
+                if (!local.every(isRevisionAuthorized(authorized))) {
+                  return yield* new AkeruMemoryAccessDenied({
+                    reason: "Every historical revision must be authorized before it is replaced.",
+                  });
+                }
                 yield* sql`
                   DELETE FROM akeru_memory_revisions
                   WHERE tenant_id = ${input.access.tenantId} AND root_id = ${item.rootId}
@@ -1070,18 +1078,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
         )
         .pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.deleteRoot:history")));
       const revisions = yield* Effect.forEach(rows, decodeRow);
-      if (
-        revisions.some(
-          (revision) =>
-            !partitions.some(
-              (partition) =>
-                partition.tenantId === revision.partition.tenantId &&
-                partition.scope === revision.partition.scope &&
-                partition.partitionId === revision.partition.partitionId &&
-                partition.visibility === revision.visibility,
-            ),
-        )
-      ) {
+      if (!revisions.every(isRevisionAuthorized(partitions))) {
         return yield* new AkeruMemoryAccessDenied({
           reason: "Every historical revision must be authorized before permanent deletion.",
         });

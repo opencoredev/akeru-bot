@@ -963,6 +963,51 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("does not let another bot's archive replace a colliding private root", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const alice = privateAccess("bot-collision-alice");
+      const bob = privateAccess("bot-collision-bob");
+      const rootId = AkeruMemoryRootId.make("collision-root");
+      const privateRevision = (access: typeof alice, id: string, fact: string) =>
+        makeRevision(id, "bot", {
+          rootId,
+          fact,
+          partition: {
+            tenantId: access.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(access.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(access.botId),
+          sourceThreadId: access.threadId,
+          authorBotId: access.botId,
+          affectedBotIds: [access.botId],
+        });
+      yield* repository.insert({
+        access: alice,
+        revision: privateRevision(alice, "collision-alice", "Alice's private note."),
+      });
+      const partitions = yield* resolveMemoryArchivePartitions(bob, "bot");
+      const revisions = [privateRevision(bob, "collision-bob", "Bob's replacement.")];
+      const preview = yield* repository.previewImport!({ access: bob, partitions, revisions });
+      assert.equal(preview.items[0]?.classification, "conflicting");
+      const replaced = yield* repository.applyImport!({
+        access: bob,
+        partitions,
+        revisions,
+        previewHash: preview.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      }).pipe(Effect.exit);
+      assert.isTrue(replaced._tag === "Failure");
+      if (replaced._tag === "Failure") {
+        assert.include(Cause.pretty(replaced.cause), "AkeruMemoryAccessDenied");
+      }
+      const current = yield* repository.getCurrent({ access: alice, rootId });
+      assert.equal(current.fact, "Alice's private note.");
+    }),
+  );
+
   it.effect("roundtrips durable history without applying archived conversation OM", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
@@ -1362,19 +1407,20 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         existingPreview.items.map((item) => item.classification),
         ["conflicting"],
       );
-      yield* applyAkeruMemoryImport({
+      const replaceAlice = yield* applyAkeruMemoryImport({
         repository,
         access: bob,
         target: "project",
         archive: bobArchive,
         previewHash: existingPreview.previewHash,
         resolutions: [{ rootId, decision: "use-archive" }],
-      });
+      }).pipe(Effect.exit);
+      assert.isTrue(replaceAlice._tag === "Failure");
       assert.deepEqual(
         (yield* repository.listHistory({ access: alice, rootId })).map(
           (revision) => revision.revision,
         ),
-        [2, 1],
+        [4, 3, 2, 1],
       );
       yield* repository.deleteRoot({ access: alice, rootId });
       const preview = yield* previewAkeruMemoryImport({
