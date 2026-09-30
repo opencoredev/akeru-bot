@@ -2,6 +2,7 @@ import {
   CHATGPT_REALTIME_VOICES,
   DEFAULT_SERVER_SETTINGS,
   type ChatGptRealtimeVoice,
+  type VoiceProvider,
 } from "@t3tools/contracts";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
@@ -17,6 +18,8 @@ import {
   SettingsSection,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { ComposedVoiceRows, VoiceApiConnectionsSection } from "./VoiceApiSettings";
 
 const VOICE_LABELS: Readonly<Record<ChatGptRealtimeVoice, string>> = {
   alloy: "Alloy",
@@ -31,14 +34,36 @@ const VOICE_LABELS: Readonly<Record<ChatGptRealtimeVoice, string>> = {
   cedar: "Cedar",
 };
 
+const VOICE_PROVIDERS: ReadonlyArray<VoiceProvider> = ["chatgpt", "openai", "composed"];
+
+const VOICE_PROVIDER_LABELS: Readonly<Record<VoiceProvider, string>> = {
+  chatgpt: "ChatGPT subscription",
+  openai: "OpenAI API realtime",
+  composed: "Transcription + bot + speech",
+};
+
+const VOICE_PROVIDER_DESCRIPTIONS: Readonly<Record<VoiceProvider, string>> = {
+  chatgpt: "Use the ChatGPT subscription connected to this environment.",
+  openai: "Talk in realtime through an OpenAI API key, billed to that API account.",
+  composed:
+    "Record what you say, run the bot's normal chat turn, then speak its reply with the services below.",
+};
+
 export function VoiceSettingsPanel() {
   const voice = usePrimarySettings((settings) => settings.voice);
   const updateSettings = useUpdatePrimarySettings();
   const replyPlayback = useOptionalReplyPlayback();
+  const environmentId = usePrimaryEnvironmentId();
+  // ChatGPT and OpenAI API realtime keep separate voice choices.
+  const realtimeVoice = voice.provider === "openai" ? (voice.openaiVoice ?? "alloy") : voice.voice;
+  const defaultRealtimeVoice = DEFAULT_SERVER_SETTINGS.voice.voice;
 
   const selectVoice = (value: string | null) => {
     const selected = CHATGPT_REALTIME_VOICES.find((candidate) => candidate === value);
-    if (selected) updateSettings({ voice: { voice: selected } });
+    if (!selected) return;
+    updateSettings({
+      voice: voice.provider === "openai" ? { openaiVoice: selected } : { voice: selected },
+    });
   };
 
   return (
@@ -46,7 +71,7 @@ export function VoiceSettingsPanel() {
       <SettingsSection id="voice" title="Voice">
         <SettingsRow
           {...searchableSetting("voice-enabled")}
-          description="Allow bots with Voice calls enabled to start subscription voice calls."
+          description="Allow bots with Voice calls enabled to start voice calls."
           resetAction={
             voice.enabled !== DEFAULT_SERVER_SETTINGS.voice.enabled ? (
               <SettingResetButton
@@ -69,54 +94,75 @@ export function VoiceSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("voice-provider")}
-          description="Use the ChatGPT subscription connected to this environment."
+          description={VOICE_PROVIDER_DESCRIPTIONS[voice.provider]}
           control={
             <Select
               value={voice.provider}
-              onValueChange={(provider) => {
-                if (provider === "chatgpt") updateSettings({ voice: { provider } });
+              onValueChange={(value) => {
+                const provider = VOICE_PROVIDERS.find((candidate) => candidate === value);
+                if (provider) updateSettings({ voice: { provider } });
               }}
               disabled={!voice.enabled}
             >
               <SelectTrigger className="w-full sm:w-52" aria-label="Voice provider">
-                <SelectValue>ChatGPT subscription</SelectValue>
+                <SelectValue>{VOICE_PROVIDER_LABELS[voice.provider]}</SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem value="chatgpt">ChatGPT subscription</SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
-        {replyPlayback ? <AutomaticReadoutRow preference={replyPlayback.preference} /> : null}
-        <SettingsRow
-          {...searchableSetting("voice-selection")}
-          description="Choose the voice used for new calls."
-          resetAction={
-            voice.enabled && voice.voice !== DEFAULT_SERVER_SETTINGS.voice.voice ? (
-              <SettingResetButton
-                label="voice selection"
-                onClick={() =>
-                  updateSettings({ voice: { voice: DEFAULT_SERVER_SETTINGS.voice.voice } })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Select value={voice.voice} onValueChange={selectVoice} disabled={!voice.enabled}>
-              <SelectTrigger className="w-full sm:w-52" aria-label="Voice">
-                <SelectValue>{VOICE_LABELS[voice.voice]}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {CHATGPT_REALTIME_VOICES.map((candidate) => (
-                  <SelectItem key={candidate} value={candidate}>
-                    {VOICE_LABELS[candidate]}
+                {VOICE_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider} value={provider}>
+                    {VOICE_PROVIDER_LABELS[provider]}
                   </SelectItem>
                 ))}
               </SelectPopup>
             </Select>
           }
         />
+        {replyPlayback ? <AutomaticReadoutRow preference={replyPlayback.preference} /> : null}
+        {voice.provider === "composed" ? (
+          environmentId ? (
+            <ComposedVoiceRows
+              environmentId={environmentId}
+              voice={voice}
+              onChange={(patch) => updateSettings({ voice: patch })}
+            />
+          ) : null
+        ) : (
+          <SettingsRow
+            {...searchableSetting("voice-selection")}
+            description="Choose the voice used for new calls."
+            resetAction={
+              voice.enabled && realtimeVoice !== defaultRealtimeVoice ? (
+                <SettingResetButton
+                  label="voice selection"
+                  onClick={() =>
+                    updateSettings({
+                      voice:
+                        voice.provider === "openai"
+                          ? { openaiVoice: defaultRealtimeVoice }
+                          : { voice: defaultRealtimeVoice },
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Select value={realtimeVoice} onValueChange={selectVoice} disabled={!voice.enabled}>
+                <SelectTrigger className="w-full sm:w-52" aria-label="Voice">
+                  <SelectValue>{VOICE_LABELS[realtimeVoice]}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {CHATGPT_REALTIME_VOICES.map((candidate) => (
+                    <SelectItem key={candidate} value={candidate}>
+                      {VOICE_LABELS[candidate]}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+        )}
       </SettingsSection>
+      {environmentId ? <VoiceApiConnectionsSection environmentId={environmentId} /> : null}
     </SettingsPageContainer>
   );
 }

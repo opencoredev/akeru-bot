@@ -7765,6 +7765,96 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect(
+    "lets an HTTP turn use an instance's own credential when the shared login is revoked",
+    () =>
+      Effect.gen(function* () {
+        const dispatch = vi.fn<
+          OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]
+        >(() => Effect.succeed({ sequence: 1 }));
+        // The subscription service reads its files once at startup.
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-http-credential-",
+        });
+        const { secretsDir } = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
+        const authPath = path.join(secretsDir, "subscription-auth.json");
+        yield* fileSystem.makeDirectory(secretsDir, { recursive: true });
+        yield* fileSystem.writeFileString(
+          authPath,
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify({ "openai-codex": { type: "api-key", access: "sk-shared" } }),
+        );
+        yield* fileSystem.writeFileString(
+          `${authPath}.health`,
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify({
+            "openai-codex": {
+              lastFailedRequest: { at: "2026-01-01T00:00:00.000Z", message: "Unauthorized" },
+              failureKind: "revoked",
+            },
+          }),
+        );
+        yield* buildAppUnderTest({
+          config: { baseDir },
+          layers: {
+            providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+            serverSettings: {
+              getSettings: Effect.succeed({
+                ...DEFAULT_SERVER_SETTINGS,
+                providerInstances: {
+                  [defaultModelSelection.instanceId]: {
+                    driver: ProviderDriverKind.make("codex"),
+                    environment: [
+                      { name: "OPENAI_API_KEY", value: "sk-instance", sensitive: true },
+                    ],
+                  },
+                },
+              }),
+            },
+            orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
+          },
+        });
+
+        const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+          scope: "orchestration:operate",
+        });
+        const response = yield* HttpClient.post("/api/orchestration/dispatch", {
+          headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+          body: yield* HttpBody.json({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-http-instance-credential"),
+            threadId: ThreadId.make("thread-http-instance-credential"),
+            message: {
+              messageId: MessageId.make("msg-http-instance-credential"),
+              role: "user",
+              text: "Start chat",
+              attachments: [],
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                title: "New chat",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: "main",
+                worktreePath: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            },
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(dispatch.mock.calls.length, 1);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("dispatches an accepted HTTP turn retry after provider availability changes", () =>
     Effect.gen(function* () {
       const commandId = CommandId.make("cmd-http-accepted-retry");

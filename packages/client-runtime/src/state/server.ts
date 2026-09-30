@@ -804,6 +804,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.routinesListThreadRuns,
       staleTimeMs: 0,
     }),
+    voiceProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:voice-providers",
+      tag: WS_METHODS.voiceProviders,
+      staleTimeMs: 5_000,
+    }),
     imageProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:image-providers",
       tag: WS_METHODS.imageProviderList,
@@ -926,6 +931,26 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: voiceCallHangupConcurrencyKey,
       },
+    }),
+    transcribeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:transcribe",
+      tag: WS_METHODS.voiceTranscribe,
+    }),
+    connectVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:connect",
+      tag: WS_METHODS.voiceConnect,
+    }),
+    disconnectVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:disconnect",
+      tag: WS_METHODS.voiceDisconnect,
+    }),
+    testVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:test",
+      tag: WS_METHODS.voiceTest,
+    }),
+    listVoices: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:list-voices",
+      tag: WS_METHODS.voiceListVoices,
     }),
     synthesizeVoice: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:synthesize",

@@ -5,6 +5,7 @@ import {
   type ApprovalRequestId,
   EnvironmentId,
   ThreadId,
+  type MessageId,
   type ModelSelection,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -282,7 +283,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   );
 
   const send = useCallback(
-    async (prompt: string, files: readonly File[]): Promise<boolean> => {
+    async (
+      prompt: string,
+      files: readonly File[],
+      messageId: MessageId = newMessageId(),
+    ): Promise<boolean> => {
       const pendingUserInput = pendingUserInputs[0];
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
         if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
@@ -372,7 +377,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               projectId: activeProject.id,
               title,
               message: {
-                messageId: newMessageId(),
+                messageId,
                 role: "user",
                 text: prompt,
                 attachments,

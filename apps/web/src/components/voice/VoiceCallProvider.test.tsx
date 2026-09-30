@@ -31,13 +31,26 @@ const mocks = vi.hoisted(() => ({
   hangupAtom: {},
   startVoiceCall: vi.fn(),
   toast: vi.fn(),
+  voiceProvider: "chatgpt",
+  transcribeAtom: {},
+  synthesizeAtom: {},
+  cancelAtom: {},
+  transcribeVoice: vi.fn(),
+  synthesizeVoice: vi.fn(),
+  cancelVoice: vi.fn(async () => ({ _tag: "Success", value: { cancelled: true } })),
+  captureVoiceUtterance: vi.fn(),
+  playVoiceAudio: vi.fn(async () => undefined),
+  latestTurn: null as unknown,
+  messages: [] as unknown[],
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("../../hooks/useSettings", () => ({
-  usePrimarySettings: (selector?: (settings: { voice: { enabled: boolean } }) => unknown) => {
-    const settings = { voice: { enabled: true } };
+  usePrimarySettings: (
+    selector?: (settings: { voice: { enabled: boolean; provider: string } }) => unknown,
+  ) => {
+    const settings = { voice: { enabled: true, provider: mocks.voiceProvider } };
     return selector ? selector(settings) : settings;
   },
 }));
@@ -59,11 +72,26 @@ vi.mock("../../state/server", () => ({
   serverEnvironment: {
     startVoiceCall: mocks.startAtom,
     hangupVoiceCall: mocks.hangupAtom,
+    transcribeVoice: mocks.transcribeAtom,
+    synthesizeVoice: mocks.synthesizeAtom,
+    cancelVoice: mocks.cancelAtom,
   },
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: unknown) =>
-    atom === mocks.startAtom ? mocks.startVoiceCall : mocks.hangupVoiceCall,
+    atom === mocks.startAtom
+      ? mocks.startVoiceCall
+      : atom === mocks.transcribeAtom
+        ? mocks.transcribeVoice
+        : atom === mocks.synthesizeAtom
+          ? mocks.synthesizeVoice
+          : atom === mocks.cancelAtom
+            ? mocks.cancelVoice
+            : mocks.hangupVoiceCall,
+}));
+vi.mock("./browserVoiceAudio", () => ({
+  captureVoiceUtterance: mocks.captureVoiceUtterance,
+  playVoiceAudio: mocks.playVoiceAudio,
 }));
 vi.mock("../roster/botEngineSelection", () => ({
   resolveStickyBotEngine: () => ({ instanceId: "codex", model: "gpt-5.6" }),
@@ -75,8 +103,13 @@ vi.mock("../roster/useBotThreadRuntime", () => ({
     botReady: true,
     defaultProject: mocks.activeProject,
     error: null,
-    latestTurn: null,
-    messages: [],
+    get latestTurn() {
+      return mocks.latestTurn;
+    },
+    get messages() {
+      return mocks.messages;
+    },
+    pendingUserInputs: [],
     send: mocks.send,
     sending: false,
   }),
@@ -163,6 +196,9 @@ describe("voice call provider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     latestPeer = null;
+    mocks.voiceProvider = "chatgpt";
+    mocks.latestTurn = null;
+    mocks.messages = [];
     vi.stubGlobal("RTCPeerConnection", TestPeer);
     vi.stubGlobal(
       "Audio",
@@ -288,5 +324,81 @@ describe("voice call provider", () => {
     controls.hangup();
     latestPeer?.events.onmessage?.(event);
     expect(mocks.send).toHaveBeenCalledOnce();
+  });
+
+  it("runs a composed call through capture, the bot turn, and speech", async () => {
+    mocks.voiceProvider = "composed";
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => microphone) },
+    });
+    mocks.startVoiceCall.mockResolvedValue({
+      _tag: "Success",
+      value: {
+        call: {
+          callId: "call-composed",
+          status: "live",
+          botId: mocks.bot.id,
+          botName: mocks.bot.name,
+          startedAt: "2026-08-27T00:00:00.000Z",
+        },
+        transport: "composed",
+      },
+    });
+    const utterance = { audioBase64: "AAAA", mimeType: "audio/webm" };
+    mocks.captureVoiceUtterance
+      .mockResolvedValueOnce(utterance)
+      .mockImplementationOnce(
+        (_microphone: unknown, signal: AbortSignal) =>
+          new Promise((_resolve, reject) =>
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+          ),
+      );
+    mocks.transcribeVoice.mockResolvedValue({ _tag: "Success", value: { text: "Run the tests" } });
+    mocks.send.mockImplementationOnce(async (...args: unknown[]) => {
+      mocks.latestTurn = {
+        requestMessageId: args[2],
+        state: "completed",
+        assistantMessageId: "assistant-1",
+      };
+      mocks.messages = [{ id: "assistant-1", role: "assistant", text: "Done.", streaming: false }];
+      return true;
+    });
+    const speech = { audioBase64: "BBBB", mimeType: "audio/mpeg" };
+    mocks.synthesizeVoice.mockResolvedValue({ _tag: "Success", value: speech });
+    const controls = renderControls();
+
+    controls.startOrReturn(mocks.bot as never);
+    for (let index = 0; index < 6; index += 1) await flushVoiceStart();
+
+    expect(latestPeer).toBeNull();
+    expect(mocks.startVoiceCall).toHaveBeenCalledWith({
+      environmentId: "env-1",
+      input: { botId: mocks.bot.id },
+    });
+    expect(mocks.transcribeVoice).toHaveBeenCalledWith({
+      environmentId: "env-1",
+      input: expect.objectContaining({ callId: "call-composed", ...utterance }),
+    });
+    expect(mocks.send).toHaveBeenCalledWith("Run the tests", [], expect.any(String));
+    expect(mocks.synthesizeVoice).toHaveBeenCalledWith({
+      environmentId: "env-1",
+      input: expect.objectContaining({ callId: "call-composed", text: "Done." }),
+    });
+    expect(mocks.playVoiceAudio).toHaveBeenCalledWith(
+      expect.anything(),
+      speech,
+      expect.any(AbortSignal),
+    );
+    expect(mocks.captureVoiceUtterance).toHaveBeenCalledTimes(2);
+    expect(mocks.hangupVoiceCall).not.toHaveBeenCalled();
+    expect(mocks.toast).not.toHaveBeenCalled();
+
+    controls.hangup();
+    await flushVoiceStart();
+    expect(mocks.hangupVoiceCall).toHaveBeenCalledWith({
+      environmentId: "env-1",
+      input: { callId: "call-composed" },
+    });
+    expect(mocks.toast).not.toHaveBeenCalled();
   });
 });

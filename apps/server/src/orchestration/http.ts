@@ -281,10 +281,18 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             const providerId = selection?.instanceId ?? thread?.session?.providerName;
             const model = selection?.model ?? "";
             if (providerId && model) {
+              const providerInstanceConfig = Option.isSome(serverSettings)
+                ? (yield* serverSettings.value.getSettings.pipe(
+                    Effect.catch((cause) =>
+                      failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                    ),
+                  )).providerInstances[ProviderInstanceId.make(providerId)]
+                : undefined;
               const verdict = preflightProvider({
                 providers: yield* providerRegistry.value.getProviders,
                 providerId,
                 model,
+                ...(providerInstanceConfig ? { providerInstanceConfig } : {}),
                 subscriptionStatuses: subscriptionAuth.statuses(),
                 subscriptionHealth: (instanceId) =>
                   subscriptionAuth.providerInstanceRequestHealth(instanceId),
