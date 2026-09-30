@@ -1,3 +1,4 @@
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
@@ -20,7 +21,6 @@ import {
   useProjects,
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
-  useThreadMessages,
   useThreadShells,
 } from "../../state/entities";
 import { environmentBotsAtom } from "../../state/bots";
@@ -166,7 +166,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     bootstrapped,
     openThreadId,
   );
-  const messages = useThreadMessages(linkedThreadRef);
+  const { messages, lastMessageRole } = useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   useEffect(() => {
@@ -248,7 +248,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       rememberedThread?.session?.status === "stopped") &&
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
-      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+      (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);

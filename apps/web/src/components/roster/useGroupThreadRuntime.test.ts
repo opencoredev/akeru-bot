@@ -1,3 +1,6 @@
+vi.mock("./botConversationMessageProjection", () => ({
+  useBotConversationMessageProjection: () => ({ messages: [], lastMessageRole: null }),
+}));
 import { BotId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
