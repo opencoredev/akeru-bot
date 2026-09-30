@@ -1,8 +1,5 @@
 import { buildProjectGroups } from "@akeru/client-runtime/state/project-grouping";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@akeru/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import {
   getThreadSortTimestamp,
   toSortableTimestamp,

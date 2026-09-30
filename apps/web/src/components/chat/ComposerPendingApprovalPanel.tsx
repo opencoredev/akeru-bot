@@ -1,10 +1,7 @@
 import { ClockIcon } from "lucide-react";
 import { memo } from "react";
 import { createTranslator } from "@akeru/client-runtime/i18n";
-import {
-  AKERU_CREATE_ROUTINE_TOOL_NAME,
-  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-} from "@akeru/contracts";
+import { AKERU_CREATE_ROUTINE_TOOL_NAME, AKERU_PRODUCT_FEEDBACK_TOOL_NAME } from "@akeru/contracts";
 import { type PendingApproval } from "../../session-logic";
 import { describeCommandApproval } from "~/lib/commandApprovalDetails";
 import { useI18n } from "~/i18n";

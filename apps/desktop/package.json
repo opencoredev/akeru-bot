@@ -13,12 +13,12 @@
     "smoke-test:packaged-mac": "node scripts/smoke-packaged-macos.mjs"
   },
   "dependencies": {
-    "@effect/platform-node": "catalog:",
     "@akeru/client-runtime": "workspace:*",
     "@akeru/contracts": "workspace:*",
     "@akeru/shared": "workspace:*",
     "@akeru/ssh": "workspace:*",
     "@akeru/tailscale": "workspace:*",
+    "@effect/platform-node": "catalog:",
     "effect": "catalog:",
     "electron": "41.5.0",
     "electron-store": "^8.2.0",

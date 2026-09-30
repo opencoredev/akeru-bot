@@ -1,7 +1,4 @@
-import {
-  BearerConnectionTarget,
-  PrimaryConnectionTarget,
-} from "@akeru/client-runtime/connection";
+import { BearerConnectionTarget, PrimaryConnectionTarget } from "@akeru/client-runtime/connection";
 import { EnvironmentId, ProjectId, type PortabilityImportPreview } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 

@@ -1,7 +1,4 @@
-import {
-  ConnectionPersistenceError,
-  EnvironmentCacheStore,
-} from "@akeru/client-runtime/platform";
+import { ConnectionPersistenceError, EnvironmentCacheStore } from "@akeru/client-runtime/platform";
 import {
   type EnvironmentId,
   OrchestrationShellSnapshot,

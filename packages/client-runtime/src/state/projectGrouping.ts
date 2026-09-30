@@ -1,9 +1,5 @@
 import { scopedProjectKey, scopeProjectRef } from "../environment/scoped.ts";
-import type {
-  EnvironmentId,
-  ScopedProjectRef,
-  SidebarProjectGroupingMode,
-} from "@akeru/contracts";
+import type { EnvironmentId, ScopedProjectRef, SidebarProjectGroupingMode } from "@akeru/contracts";
 import type { ClientSettings } from "@akeru/contracts/settings";
 
 import type { EnvironmentProject } from "./models.ts";

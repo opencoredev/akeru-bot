@@ -1,7 +1,4 @@
-import {
-  mapAtomCommandResult,
-  type AtomCommandResult,
-} from "@akeru/client-runtime/state/runtime";
+import { mapAtomCommandResult, type AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@akeru/contracts";
 
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";

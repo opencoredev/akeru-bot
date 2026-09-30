@@ -10,9 +10,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vite-plus/test"
 
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
 
-type Session = ReturnType<
-  typeof import("@akeru/client-runtime/dictation").createDictationSession
->;
+type Session = ReturnType<typeof import("@akeru/client-runtime/dictation").createDictationSession>;
 type DictationInput = {
   readonly getDraft: () => Omit<DictationDraft, "identity">;
   readonly applyDraft: (draft: DictationDraft) => void;

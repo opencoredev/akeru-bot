@@ -1,8 +1,5 @@
 import type { DiscoveredLocalServer, ScopedThreadRef } from "@akeru/contracts";
-import {
-  mapAtomCommandResult,
-  type AtomCommandResult,
-} from "@akeru/client-runtime/state/runtime";
+import { mapAtomCommandResult, type AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";

@@ -14,8 +14,8 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@effect/platform-node": "catalog:",
     "@akeru/shared": "workspace:*",
+    "@effect/platform-node": "catalog:",
     "effect": "catalog:"
   },
   "devDependencies": {

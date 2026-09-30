@@ -1,7 +1,4 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@akeru/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { LegendList } from "@legendapp/list/react-native";
 import type { EnvironmentId } from "@akeru/contracts";
 import type { MenuAction } from "@react-native-menu/menu";

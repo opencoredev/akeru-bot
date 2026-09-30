@@ -1,8 +1,4 @@
-import {
-  DEFAULT_SERVER_SETTINGS,
-  ProviderDriverKind,
-  ProviderInstanceId,
-} from "@akeru/contracts";
+import { DEFAULT_SERVER_SETTINGS, ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@akeru/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 

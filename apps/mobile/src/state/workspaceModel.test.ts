@@ -1,8 +1,5 @@
 import type { EnvironmentShellSummary } from "@akeru/client-runtime/state/shell";
-import {
-  BearerConnectionProfile,
-  BearerConnectionTarget,
-} from "@akeru/client-runtime/connection";
+import { BearerConnectionProfile, BearerConnectionTarget } from "@akeru/client-runtime/connection";
 import { EnvironmentId } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";

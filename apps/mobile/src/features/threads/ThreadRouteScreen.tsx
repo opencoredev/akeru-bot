@@ -14,10 +14,7 @@ import {
   ThreadId,
   type BotAvatar,
 } from "@akeru/contracts";
-import {
-  requestOlderThreadTurns,
-  threadHasOlderTurns,
-} from "@akeru/client-runtime/state/threads";
+import { requestOlderThreadTurns, threadHasOlderTurns } from "@akeru/client-runtime/state/threads";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceState } from "../../state/workspace";

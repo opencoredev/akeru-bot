@@ -1,8 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@akeru/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import {
   CommandId,

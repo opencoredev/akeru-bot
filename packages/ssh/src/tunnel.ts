@@ -1,7 +1,4 @@
-import type {
-  DesktopSshEnvironmentBootstrap,
-  DesktopSshEnvironmentTarget,
-} from "@akeru/contracts";
+import type { DesktopSshEnvironmentBootstrap, DesktopSshEnvironmentTarget } from "@akeru/contracts";
 import {
   describeReadinessCause,
   waitForHttpReady as waitForHttpReadyShared,

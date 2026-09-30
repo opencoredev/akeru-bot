@@ -59,11 +59,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@effect/vitest": "catalog:",
     "@akeru/contracts": "workspace:*",
     "@akeru/shared": "workspace:*",
     "@akeru/tailscale": "workspace:*",
     "@akeru/web": "workspace:*",
+    "@effect/vitest": "catalog:",
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
     "@types/pngjs": "6.0.5",

@@ -1,9 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo } from "react";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@akeru/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import type {
   EnvironmentId,
   ScopedProjectRef,

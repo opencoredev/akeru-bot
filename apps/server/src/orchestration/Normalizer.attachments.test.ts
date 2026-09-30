@@ -4,12 +4,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import {
-  type ClientOrchestrationCommand,
-  CommandId,
-  MessageId,
-  ThreadId,
-} from "@akeru/contracts";
+import { type ClientOrchestrationCommand, CommandId, MessageId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 

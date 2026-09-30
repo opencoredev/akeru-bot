@@ -6,10 +6,7 @@ import type {
   PreviewSessionSnapshot,
   ScopedThreadRef,
 } from "@akeru/contracts";
-import {
-  type AtomCommandResult,
-  mapAtomCommandResult,
-} from "@akeru/client-runtime/state/runtime";
+import { type AtomCommandResult, mapAtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import { AsyncResult } from "effect/unstable/reactivity";

@@ -1,8 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@akeru/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,

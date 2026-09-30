@@ -86,10 +86,7 @@ export function reduceVoiceCallUiState(
   return action.type === "connected" ? action.call : null;
 }
 
-export {
-  handleVoiceChannelMessage,
-  type VoiceCallChatHandlers,
-} from "@akeru/client-runtime/voice";
+export { handleVoiceChannelMessage, type VoiceCallChatHandlers } from "@akeru/client-runtime/voice";
 
 /** Shown when the server pinned a different voice mode than the client prepared for. */
 export const VOICE_MODE_CHANGED_MESSAGE =

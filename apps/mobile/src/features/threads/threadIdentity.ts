@@ -1,8 +1,4 @@
-import {
-  isGroupBotMember,
-  type OrchestrationBot,
-  type OrchestrationGroup,
-} from "@akeru/contracts";
+import { isGroupBotMember, type OrchestrationBot, type OrchestrationGroup } from "@akeru/contracts";
 
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 
