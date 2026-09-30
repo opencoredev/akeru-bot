@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  DelegationId,
   EventId,
   GroupId,
   ProjectId,
@@ -9,9 +10,12 @@ import {
   SkillAssignmentId,
   SkillId,
   ThreadId,
+  TurnId,
+  type AkeruDelegationRecord,
   type OrchestrationBot,
   type OrchestrationGroup,
   type OrchestrationReadModel,
+  type OrchestrationSession,
   type OrchestrationThread,
   isGroupBotMember,
 } from "@akeru/contracts";
@@ -105,12 +109,62 @@ function makeReadModel(input: {
   readonly bots?: ReadonlyArray<OrchestrationBot>;
   readonly groups?: ReadonlyArray<OrchestrationGroup>;
   readonly threads?: ReadonlyArray<OrchestrationThread>;
+  readonly delegations?: ReadonlyArray<AkeruDelegationRecord>;
 }): OrchestrationReadModel {
   return {
     ...createEmptyReadModel(NOW),
     bots: input.bots ?? [],
     groups: input.groups ?? [],
     threads: input.threads ?? [],
+    delegations: input.delegations ?? [],
+  };
+}
+
+function makeSession(
+  threadId: OrchestrationThread["id"],
+  status: OrchestrationSession["status"],
+): OrchestrationSession {
+  return {
+    threadId,
+    status,
+    providerName: "codex",
+    runtimeMode: "full-access",
+    activeTurnId: status === "running" ? TurnId.make(`turn-${threadId}`) : null,
+    lastError: null,
+    updatedAt: NOW,
+  };
+}
+
+function makeDelegation(
+  input: Pick<AkeruDelegationRecord, "delegationId" | "parentBotId" | "childBotId" | "phase">,
+): AkeruDelegationRecord {
+  return {
+    ...input,
+    parentDelegationId: null,
+    parentThreadId: ThreadId.make(`thread-${input.parentBotId}`),
+    parentTurnId: TurnId.make(`turn-${input.parentBotId}`),
+    ancestorBotIds: [input.parentBotId],
+    depth: 1,
+    task: "Compare three flights.",
+    expectedResult: "A short comparison.",
+    deadline: null,
+    access: {
+      allowedToolIds: [],
+      memoryScopes: [],
+      sandbox: null,
+      runtimeMode: "full-access",
+      hasUserComputer: false,
+      enabledMcpServerIds: [],
+      disabledMcpServerIds: [],
+      approvalCeiling: "send",
+    },
+    billedBotId: input.childBotId,
+    keep: false,
+    anchorMessageId: null,
+    retryOfDelegationId: null,
+    trigger: "bot",
+    createdAt: NOW,
+    updatedAt: NOW,
   };
 }
 
@@ -154,6 +208,184 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
       }
       expect(next.bots).toHaveLength(0);
       expect(next.threads[0]?.botId).toBeNull();
+    }),
+  );
+
+  it.effect("stops the bot's sessions, child chats, and in-flight delegations", () =>
+    Effect.gen(function* () {
+      const botThread = {
+        ...makeBotThread(BOT_ID),
+        session: makeSession(ThreadId.make(`thread-${BOT_ID}`), "running"),
+      };
+      const idleThread = {
+        ...makeBotThread(BOT_ID),
+        id: ThreadId.make("thread-idle"),
+        session: makeSession(ThreadId.make("thread-idle"), "stopped"),
+      };
+      const childThread = {
+        ...makeBotThread(OTHER_BOT_ID),
+        id: ThreadId.make("thread-child"),
+        parentThreadId: botThread.id,
+        session: makeSession(ThreadId.make("thread-child"), "running"),
+      };
+      const unrelatedThread = {
+        ...makeBotThread(THIRD_BOT_ID),
+        session: makeSession(ThreadId.make(`thread-${THIRD_BOT_ID}`), "running"),
+      };
+      const sent = makeDelegation({
+        delegationId: DelegationId.make("delegation-sent"),
+        parentBotId: BOT_ID,
+        childBotId: OTHER_BOT_ID,
+        phase: {
+          _tag: "Running",
+          childThreadId: childThread.id,
+          childTurnId: TurnId.make("turn-child"),
+          startedAt: NOW,
+          progress: null,
+        },
+      });
+      const received = makeDelegation({
+        delegationId: DelegationId.make("delegation-received"),
+        parentBotId: OTHER_BOT_ID,
+        childBotId: BOT_ID,
+        phase: { _tag: "Queued" },
+      });
+      const finished = makeDelegation({
+        delegationId: DelegationId.make("delegation-finished"),
+        parentBotId: BOT_ID,
+        childBotId: OTHER_BOT_ID,
+        phase: {
+          _tag: "Canceled",
+          childThreadId: null,
+          childTurnId: null,
+          startedAt: null,
+          completedAt: NOW,
+          canceledBy: "user",
+        },
+      });
+      const unrelated = makeDelegation({
+        delegationId: DelegationId.make("delegation-unrelated"),
+        parentBotId: OTHER_BOT_ID,
+        childBotId: THIRD_BOT_ID,
+        phase: { _tag: "Queued" },
+      });
+      const readModel = makeReadModel({
+        bots: [
+          makeBot({ id: BOT_ID }),
+          makeBot({ id: OTHER_BOT_ID }),
+          makeBot({ id: THIRD_BOT_ID }),
+        ],
+        threads: [botThread, idleThread, childThread, unrelatedThread],
+        delegations: [sent, received, finished, unrelated],
+      });
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.delete",
+          commandId: CommandId.make("cmd-bot-delete-working"),
+          botId: BOT_ID,
+        },
+        readModel,
+      });
+      const events = Array.isArray(result) ? result : [result];
+
+      expect(events.map((event) => event.type)).toEqual([
+        "delegation.updated",
+        "delegation.updated",
+        "thread.session-stop-requested",
+        "thread.session-stop-requested",
+        "thread.ownership-updated",
+        "thread.ownership-updated",
+        "bot.deleted",
+      ]);
+      expect(
+        events.flatMap((event) =>
+          event.type === "thread.session-stop-requested" ? [event.payload.threadId] : [],
+        ),
+      ).toEqual([botThread.id, childThread.id]);
+
+      let next = readModel;
+      let sequence = readModel.snapshotSequence;
+      for (const event of events) {
+        sequence += 1;
+        next = yield* projectEvent(next, {
+          ...event,
+          sequence,
+          eventId: EventId.make(`evt-${sequence}`),
+        });
+      }
+      const phases = Object.fromEntries(
+        next.delegations.map((delegation) => [delegation.delegationId, delegation.phase]),
+      );
+      expect(phases[sent.delegationId]).toMatchObject({
+        _tag: "Canceled",
+        childThreadId: childThread.id,
+        childTurnId: TurnId.make("turn-child"),
+      });
+      expect(phases[received.delegationId]?._tag).toBe("Canceled");
+      expect(phases[finished.delegationId]).toEqual(finished.phase);
+      expect(phases[unrelated.delegationId]?._tag).toBe("Queued");
+    }),
+  );
+
+  it.effect("clears a deleted group responder without detaching the chat", () =>
+    Effect.gen(function* () {
+      const groupThread = {
+        ...makeBotThread(BOT_ID),
+        id: ThreadId.make("thread-group"),
+        botId: null,
+        groupId: GROUP_ID,
+        respondingBotId: BOT_ID,
+        session: makeSession(ThreadId.make("thread-group"), "ready"),
+      };
+      const readModel = makeReadModel({
+        bots: [
+          makeBot({ id: BOT_ID }),
+          makeBot({ id: OTHER_BOT_ID }),
+          makeBot({ id: THIRD_BOT_ID }),
+        ],
+        groups: [
+          makeGroup({
+            bossBotId: OTHER_BOT_ID,
+            members: [
+              { kind: "bot", botId: OTHER_BOT_ID, role: "boss" },
+              { kind: "bot", botId: THIRD_BOT_ID, role: "specialist" },
+              { kind: "bot", botId: BOT_ID, role: "specialist" },
+            ],
+          }),
+        ],
+        threads: [groupThread],
+      });
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.delete",
+          commandId: CommandId.make("cmd-delete-responder"),
+          botId: BOT_ID,
+        },
+        readModel,
+      });
+      const events = Array.isArray(result) ? result : [result];
+
+      expect(events.map((event) => event.type)).toEqual([
+        "thread.session-stop-requested",
+        "group.member-unassigned",
+        "thread.ownership-updated",
+        "bot.deleted",
+      ]);
+
+      let next = readModel;
+      let sequence = readModel.snapshotSequence;
+      for (const event of events) {
+        sequence += 1;
+        next = yield* projectEvent(next, {
+          ...event,
+          sequence,
+          eventId: EventId.make(`evt-${sequence}`),
+        });
+      }
+      const thread = next.threads.find((entry) => entry.id === groupThread.id);
+      expect(thread?.groupId).toBe(GROUP_ID);
+      expect(thread?.botId).toBeNull();
+      expect(thread?.respondingBotId).toBeNull();
     }),
   );
 

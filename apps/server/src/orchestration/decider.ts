@@ -849,6 +849,86 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       }
       const occurredAt = yield* nowIso;
       const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      // Canceling interrupts each child turn, so work the bot sent or received stops with it.
+      for (const delegation of readModel.delegations) {
+        if (
+          TERMINAL_DELEGATION_PHASES.has(delegation.phase._tag) ||
+          (delegation.parentBotId !== bot.id &&
+            delegation.childBotId !== bot.id &&
+            !delegation.ancestorBotIds.includes(bot.id))
+        ) {
+          continue;
+        }
+        const canceledAt =
+          Date.parse(occurredAt) >= Date.parse(delegation.updatedAt)
+            ? occurredAt
+            : delegation.updatedAt;
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "delegation",
+            aggregateId: delegation.delegationId,
+            occurredAt: canceledAt,
+            commandId: command.commandId,
+          })),
+          type: "delegation.updated",
+          payload: {
+            delegation: {
+              ...delegation,
+              phase: {
+                _tag: "Canceled",
+                childThreadId: delegationChildThreadId(delegation.phase),
+                childTurnId: delegationChildTurnId(delegation.phase),
+                startedAt: delegation.phase._tag === "Queued" ? null : delegation.phase.startedAt,
+                completedAt: canceledAt,
+                canceledBy: "user",
+              },
+              updatedAt: canceledAt,
+            },
+          },
+        });
+      }
+      // Chats the bot owns or is answering in a group, plus their child chats, lose their agent.
+      const liveThreads = readModel.threads.filter((thread) => thread.deletedAt === null);
+      const stoppedThreadIds = new Set(
+        liveThreads
+          .filter((thread) => thread.botId === bot.id || thread.respondingBotId === bot.id)
+          .map((thread) => thread.id),
+      );
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const thread of liveThreads) {
+          if (
+            !stoppedThreadIds.has(thread.id) &&
+            thread.parentThreadId != null &&
+            stoppedThreadIds.has(thread.parentThreadId)
+          ) {
+            stoppedThreadIds.add(thread.id);
+            grew = true;
+          }
+        }
+      }
+      for (const thread of liveThreads) {
+        if (
+          !stoppedThreadIds.has(thread.id) ||
+          !thread.session ||
+          thread.session.status === "stopped"
+        ) {
+          continue;
+        }
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: thread.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.session-stop-requested",
+          payload: {
+            threadId: thread.id,
+            createdAt: occurredAt,
+          },
+        });
+      }
       for (const group of readModel.groups) {
         if (!group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)) {
           continue;
@@ -868,10 +948,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      for (const thread of readModel.threads) {
-        if (thread.botId !== bot.id || thread.deletedAt !== null) {
+      for (const thread of liveThreads) {
+        const owned = thread.botId === bot.id;
+        if (!owned && thread.respondingBotId !== bot.id) {
           continue;
         }
+        // An owned chat is detached. A group chat keeps its owners and only drops the responder.
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "thread",
@@ -882,8 +964,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "thread.ownership-updated",
           payload: {
             threadId: thread.id,
-            botId: null,
-            groupId: null,
+            botId: owned ? null : (thread.botId ?? null),
+            groupId: owned ? null : (thread.groupId ?? null),
             updatedAt: occurredAt,
           },
         });
