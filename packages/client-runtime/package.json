@@ -88,6 +88,10 @@
       "types": "./src/channelPresentation.ts",
       "default": "./src/channelPresentation.ts"
     },
+    "./channel-origin-presentation": {
+      "types": "./src/channelOriginPresentation.ts",
+      "default": "./src/channelOriginPresentation.ts"
+    },
     "./image-generation": {
       "types": "./src/imageGeneration.ts",
       "default": "./src/imageGeneration.ts"

@@ -47,8 +47,18 @@ Groups hold bots only. You cannot add people to a group yet.
 
 A bot can hand part of a request to another bot. The bot does not wait for that work. It replies
 first, and a work card in the chat shows the other bot, the task, and its state: queued, running,
-blocked, completed, failed, or canceled. On web and desktop the card has a link to the full work
-history. Mobile lists the same work in the chat.
+blocked, completed, failed, or canceled. Mobile lists the same work in the chat.
+
+On web and desktop, each card sits right after the exchange that started the work, and it stays
+there when you reload or come back later. Work started in three different replies shows up as
+three cards at three points in the chat. The card also shows how long the work has taken and the
+tokens it used. A card labelled **Scheduled** came from a routine, and **Retried** means it
+replaces an earlier attempt. In a group chat the card names both bots, such as "Akeru asked
+Mori", because any bot in the group can hand off work.
+
+Open **Details** on a card to see the expected result and the access the other bot was given,
+including its tools and MCP servers. **View work** opens a read-only view of the other bot's chat
+for that work, with an **Open chat** button when you want to continue there.
 
 While work is still running, the chat shows **Waiting on delegated work**. When the work finishes,
 the card shows the result or what went wrong, and one of these lines:
@@ -89,6 +99,12 @@ On mobile, tables, checklists, file references, and links look the same as on de
 as a plain code block without the tinted lines or counts, and checklists do not show the progress
 summary. Settings chips open the matching mobile screen, or the main Settings screen when mobile
 has no matching screen.
+
+## When a bot goes quiet
+
+A provider that stops sending output does not stall the chat silently. See
+[When a bot goes quiet](silence-watchdog.md) for the notice, the inbox item,
+and what you can do.
 
 ## Link a pull request
 

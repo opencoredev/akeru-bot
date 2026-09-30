@@ -1,6 +1,6 @@
 # Image generation providers
 
-Akeru's Image generation settings manage two provider rows, ChatGPT and Grok. Each row reports detected access, health, supported operations, the last completed generation, last failure, a repair action, and an enabled flag. Bots create images through one image tool, backed by a single runtime, which routes to those providers independently of the bot's chat engine. On Mastra (Codex, Kimi) the tool is the `GenerateImage` catalog entry; on the legacy bridge (Claude, Grok, OpenCode) it is the `generate_image` MCP tool.
+Akeru's Image generation settings manage two provider rows, ChatGPT and Grok. Each row reports detected access, health, supported operations, the last completed generation, last failure, a repair action, and an enabled flag. Bots create images through one image tool, backed by a single runtime, which routes to those providers independently of the bot's chat engine. On the Mastra controller (Codex, Claude, Grok, Kimi For Coding, OpenCode Go) the tool is the `GenerateImage` catalog entry; on the legacy bridge (standard OpenCode) it is the `generate_image` MCP tool.
 
 ## Credentials
 
@@ -66,7 +66,7 @@ Usage goes through `BotUsageLedger.recordMeasurement` with category `tool` again
 
 The runtime's entry is shared. Claude, Grok, and OpenCode reach it through the `generate_image` MCP tool on the Akeru MCP server. `ProviderService` grants the `image` MCP capability to a session when ChatGPT or Grok images are enabled, and the tool refuses calls without it. The call shows as a running tool call in the chat while it works.
 
-Codex and Kimi run on the Mastra controller. Their `GenerateImage` catalog tool calls `runImageGenerationTool`, the same runtime entry, so in-chat attachments, edits, needs-consent routing, usage recording, the per-attempt 150 second timeout with fallback to the next candidate, and cancel-on-stop all apply. The catalog handler adds no outer deadline of its own. The catalog entry is only listed when ChatGPT or Grok images are enabled, and the shared MCP `generate_image` tool is filtered out of Mastra connector tools so every provider family exposes exactly one image tool. Mastra image calls go through the catalog's `production` approval; legacy-bridge calls follow the provider's own tool permission setting, with the runtime's `needs-consent` routing on both families for edits that would move to a different provider.
+Codex, Claude, Grok, Kimi For Coding, and OpenCode Go run on the Mastra controller. Their `GenerateImage` catalog tool calls `runImageGenerationTool`, the same runtime entry, so in-chat attachments, edits, needs-consent routing, usage recording, the per-attempt 150 second timeout with fallback to the next candidate, and cancel-on-stop all apply. The catalog handler adds no outer deadline of its own. The catalog entry is only listed when ChatGPT or Grok images are enabled, and the shared MCP `generate_image` tool is filtered out of Mastra connector tools so every provider family exposes exactly one image tool. Mastra image calls go through the catalog's `production` approval; legacy-bridge calls follow the provider's own tool permission setting, with the runtime's `needs-consent` routing on both families for edits that would move to a different provider.
 
 ## Privacy
 

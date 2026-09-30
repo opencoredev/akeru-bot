@@ -143,9 +143,16 @@ start enabled for every bot. A workspace-disabled tool stays unavailable to ever
 
 Changing the provider starts a fresh provider session with the same enabled tool set.
 
-Codex and Kimi For Coding bots can read a public web page when you give them its address. They
+Bots on Akeru's runtime can read a public web page when you give them its address. They
 refuse local and private network addresses and read at most 2 MB of a page, noting when a page was
 cut short. Web search isn't available yet, so the bot says so and asks for a link instead.
+
+A bot can hand part of a request to a temporary helper and use its answer. Up to three helpers can
+work at once for one request. Helpers can't start their own helpers, message you, or ask you for
+approval or help. A helper skips any step that needs your approval and reports it to the bot
+instead. A helper that has not finished in 10 minutes fails as a timeout. Helpers stop when the
+bot finishes or you stop the request. Their work doesn't appear as separate chats, even when the
+bot works in a group chat. Standard OpenCode bots don't use helpers.
 
 ## Organize the roster
 

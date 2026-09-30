@@ -1546,6 +1546,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.channel-delivery-set": {
+          const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
+            messageId: event.payload.messageId,
+          });
+          if (Option.isNone(existingMessage)) return;
+          yield* projectionThreadMessageRepository.upsert({
+            ...existingMessage.value,
+            channelDelivery: event.payload.delivery,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.message-reaction-set": {
           const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
             messageId: event.payload.messageId,
@@ -2277,6 +2290,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         eventTypes: projectorEventTypes([
           "thread.created",
           "thread.message-sent",
+          "thread.channel-delivery-set",
           "thread.message-reaction-set",
           "thread.reverted",
         ]),

@@ -51,13 +51,36 @@ All active provider paths receive bot-owned Markdown memory and participate in s
 review accounting. Mastra refreshes the files before turn admission; standard OpenCode carries
 them in its per-prompt system context. See [Memory architecture](memory.md).
 
+### Runtime seam
+
+AgentController is an Effect layer, but Mastra, the tool runtime, delegation, and memory work are
+Promise-based. [`AkeruRuntimeSeam`][seam] is the only place where those callers re-enter the
+controller's Effect runtime. The layer builds it once, and every fiber it starts joins a `FiberSet`
+owned by the layer scope, so stopping the layer interrupts in-flight work.
+
+- `runPromise` is for Promise callbacks that need an Effect result, such as Mastra tool handlers and
+  approval callbacks. It resolves in the same microtask order as `Effect.runPromiseWith`, which turn
+  admission relies on.
+- `fork` and `forkPromise` start background work: observational memory, turn dispatch and
+  admission, worker and delegation settlement after a turn, and auto-approval of allowed tools. A
+  failure is logged as a warning with the thread, turn, or tool context. `forkPromise` passes the
+  rejection to `onFailure` first so the controller can fail the turn or publish `runtime.error` as
+  before. Interruption is not logged.
+- Outbound calls from Effect into a Promise library go through `runMastra`, which types the failure
+  as `AgentControllerRuntimeError`.
+
+Some runtimes arrive after construction, because orchestration is built after the controller.
+The channel, plugin, bot-state, and delegation runtimes, plus the orchestration handle that workers
+use, live in one `Ref` that `configurePluginRuntime` and `configureDelegation` update. They are not
+mutable `let` bindings.
+
 ## Catalog tool parity
 
-The typed Akeru catalog is advertised only by the Mastra controller. Codex and Kimi receive the
-same catalog and approval semantics through that controller. Claude and Grok also use the Mastra
-controller when configured, while standard OpenCode remains on the legacy bridge and does not
-advertise catalog-only tools. Legacy providers must not claim WebSearch, WebFetch, image generation,
-or MCP account mutations unless they are routed through the shared Mastra runtime.
+The typed Akeru catalog is advertised only by the Mastra controller. Codex, Claude, Grok, Kimi
+For Coding, and OpenCode Go receive the same catalog and approval semantics through that controller,
+while standard OpenCode remains on the legacy bridge and does not advertise catalog-only tools. A
+legacy-path provider must not claim WebSearch, WebFetch, image generation, or MCP account mutations
+unless it is routed through the shared Mastra runtime.
 
 Mastra sessions wire four network and media catalog backends. `AkeruWebFetch.ts` owns WebFetch.
 Each hop is resolved once and rejected if any address is loopback, private, link-local, CGNAT,
@@ -173,6 +196,56 @@ cannot load, and Grok's named glyphs are open vocabulary, so both fall back to t
 glyph. The composer skill chip stores the resolved emoji on its Lexical node and still
 serializes to `$name`.
 
+## Temporary workers
+
+Task, CheckSubagent, MessageSubagent, and StopSubagent let a bot hand a bounded subtask to a
+short-lived worker during its own turn. They are separate from bot-to-bot delegation through
+SendToAgent: a worker has no bot identity of its own and belongs to the parent turn that started it.
+The contracts live in [`akeruWorkers.ts`][workers-contract] and the runtime in
+[`AkeruWorkerRuntime.ts`][workers-runtime].
+
+Task creates a child thread for the calling bot, with the parent's project, model, runtime mode, and
+workspace, and starts a turn with the task text. The child is always a direct thread with the
+responding bot, even when the parent is a group chat, so no group sender rules apply to it. If its
+first turn cannot start, the child thread is deleted and the worker fails with `internal`. It waits for the result unless `background` is set.
+CheckSubagent reports the current status, or waits for a terminal one. MessageSubagent starts a
+follow-up turn on a running worker; the worker completes after its last open turn finishes.
+StopSubagent interrupts the child turn. Every tool returns the same status with a tagged phase:
+`Running`, `Completed`, `Failed` (`timeout`, `worker_failed`, or `internal`), or `Canceled`
+(`stop` or `parent-turn-ended`). Terminal phases are final, so a late child result cannot revive a
+stopped worker.
+
+Limits are enforced by the runtime and returned as failed tool receipts with a readable message:
+
+- Depth is at most 1. Task is hidden from workers, and a spawn from a worker fails with
+  `depth_limit`.
+- A parent turn may own at most 3 running workers. The fourth spawn fails with `concurrency_limit`
+  until one finishes or stops.
+- A worker without a result after 10 minutes fails with `timeout` and its child turn is
+  interrupted.
+
+When the parent turn finishes, fails, or is interrupted, every worker it still owns lands
+`Canceled` with `parent-turn-ended` and its child turn is interrupted. Background workers do not
+outlive the turn. A worker id only resolves from the chat that started it.
+
+`workerAccess` in [`AkeruWorkerRuntime.ts`][workers-runtime] narrows the parent's delegation
+grant. Workers get no memory scopes, an approval ceiling of `none`, no access to the user's
+computer, and the parent's sandbox or the local workspace. `AKERU_WORKER_EXCLUDED_TOOL_IDS` removes
+the worker tools, the agent tools (CreateAgent, CheckAgent, MessageAgent, StopAgent, SendToAgent),
+channel creation and updates, SendToUser, request_box_help, ReactToMessage, and UpdateBotProfile.
+The `none` ceiling covers MCP and built-in tools: a call that would open an approval request is
+declined at once with an error the worker can read, so a worker never waits on a prompt nobody can
+see. The worker tools themselves need no approval because they only start work that runs under
+this narrower grant.
+
+Child threads carry a `parentThreadId`, so the clients hide them from bot chat lists the same way they
+hide delegated work.
+
+The tools exist only in Mastra tool sessions with worker orchestration configured, which covers
+Codex, Claude, Grok, Kimi For Coding, and OpenCode Go. Standard OpenCode stays on the legacy bridge
+(`usesMastraCode` in [`AgentController.ts`][controller]) and does not advertise them. This is deliberate: the legacy bridge has no Akeru tool session to route
+worker calls through, so advertising the tools there would promise behavior the provider cannot run.
+
 ## Raw protocol observation
 
 The [ACP protocol](../../packages/effect-acp/src/protocol.ts) and
@@ -240,7 +313,9 @@ built-in catalog, so an unlisted model there is not evidence the model is gone:
   list.
 - `thread.turn.start` preflights both the command selection and the responding bot's saved engine
   against the same settled snapshot; an unadvertised model returns a typed `unsupported-model`
-  dispatch error before `turn.started` is emitted.
+  dispatch error before `turn.started` is emitted. For group threads without an explicit
+  `respondingBotId` the bot-engine check is skipped there, because the decider may pick a different
+  responder than the thread's last one; `inspectEngine` still covers the real responder.
 - `AgentController.inspectEngine`/`resolveEngine` re-check the saved model against the instance's
   settled snapshot before dispatch, which also covers channels and delegations that never pass
   through the WebSocket layer. An absent, unsettled, or empty catalog is treated as unknown, not
@@ -316,8 +391,11 @@ when a request opens (approval) or user input is requested, via
 [registry]: ../../apps/server/src/provider/Services/ProviderAdapterRegistry.ts
 [service]: ../../apps/server/src/provider/Layers/ProviderService.ts
 [controller]: ../../apps/server/src/provider/Layers/AgentController.ts
+[seam]: ../../apps/server/src/provider/AkeruRuntimeSeam.ts
 [bridge]: ../../apps/server/src/provider/Layers/LegacyProviderBridge.ts
 [contracts]: ../../packages/contracts/src/orchestration.ts
+[workers-contract]: ../../packages/contracts/src/akeruWorkers.ts
+[workers-runtime]: ../../apps/server/src/provider/AkeruWorkerRuntime.ts
 [worker]: ../../packages/shared/src/DrainableWorker.ts
 [ingest]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts
 [cmd]: ../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts

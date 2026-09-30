@@ -4,7 +4,10 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
 import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
-import { channelOriginLabel } from "@t3tools/client-runtime/channel-presentation";
+import {
+  channelDeliveryLabel,
+  channelOriginLabel,
+} from "@t3tools/client-runtime/channel-origin-presentation";
 import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
 import { stabilizeStreamingMarkdown } from "@t3tools/client-runtime/markdown-streaming";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
@@ -1257,6 +1260,25 @@ function renderFeedEntry(
             />
           );
         })}
+        {message.channelDelivery
+          ? (() => {
+              const delivery = channelDeliveryLabel(message.channelDelivery, entry.channelProvider);
+              return delivery ? (
+                <NativeText
+                  className={cn(
+                    "mt-1 text-[11px]",
+                    delivery.tone === "error"
+                      ? "text-red-600 dark:text-red-400"
+                      : delivery.tone === "warning"
+                        ? "text-amber-700 dark:text-amber-400"
+                        : "text-neutral-600 dark:text-neutral-400",
+                  )}
+                >
+                  {delivery.message}
+                </NativeText>
+              ) : null;
+            })()
+          : null}
         {showAssistantMeta ? (
           <View className="mt-1 gap-1">
             <View className="flex-row flex-wrap items-center gap-1">

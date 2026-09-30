@@ -20,6 +20,7 @@ import {
   AkeruUsageReservationId,
   CommandId,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
   McpServerId,
@@ -58,6 +59,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Ref from "effect/Ref";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -124,6 +126,14 @@ import {
   type AkeruDelegationRuntime,
   type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
+import {
+  AkeruWorkerError,
+  isWorkerThreadId,
+  makeAkeruWorkerRuntime,
+  WORKER_THREAD_ID_PREFIX,
+  workerAccess,
+} from "../AkeruWorkerRuntime.ts";
+import { makeAkeruRuntimeSeam } from "../AkeruRuntimeSeam.ts";
 import {
   AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
   AKERU_ROUTINE_REVIEW_TIMEOUT,
@@ -324,6 +334,12 @@ interface LegacyResourceIdentity {
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
   privateBotMemory: boolean;
+}
+
+/** Orchestration access for temporary workers and delegation. */
+interface WorkerOrchestration {
+  readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
 }
 
 export interface AgentControllerLiveOptions {
@@ -561,7 +577,12 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
   return `Approve this ${target}? This approval applies only to the pending action. It cannot undo completed work.`;
 }
 
-function usesMastraCode(provider: ProviderDriverKind): boolean {
+/**
+ * Providers whose bots run through Akeru's Mastra controller and receive the
+ * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
+ * registers a tool session, so it gets no catalog tools, workers included.
+ */
+export function usesMastraCode(provider: ProviderDriverKind): boolean {
   return (
     provider === "codex" ||
     provider === "claudeAgent" ||
@@ -717,8 +738,9 @@ const make = (options?: AgentControllerLiveOptions) =>
     const botUsageLedger = yield* BotUsageLedger;
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
-    const runtimeContext = yield* Effect.context<never>();
-    const runPromise = Effect.runPromiseWith(runtimeContext);
+    // Promise-based callers re-enter Effect only through this seam; its fibers
+    // are interrupted when the layer scope closes.
+    const { runPromise, fork, forkPromise } = yield* makeAkeruRuntimeSeam;
     const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
     const memoryApprovals = yield* Effect.serviceOption(MemoryApprovals);
     const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
@@ -828,10 +850,20 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
       });
-    let channelRuntime: AkeruChannelRuntime | undefined;
-    let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
-    let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
-    let botStateRuntime: AkeruBotStateRuntime | undefined;
+    /**
+     * Orchestration-backed runtimes. The orchestration layer is built after this
+     * controller, so it hands them over through configurePluginRuntime and
+     * configureDelegation.
+     */
+    const lateWiring = yield* Ref.make<{
+      readonly channelRuntime?: AkeruChannelRuntime;
+      readonly pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>;
+      readonly pluginRuntimeOptions?: AkeruPluginRuntimeOptions;
+      readonly botStateRuntime?: AkeruBotStateRuntime;
+      readonly delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"];
+      readonly workerOrchestration?: WorkerOrchestration;
+    }>({ delegationRuntime: options?.delegationRuntime });
+    const wired = () => Ref.getUnsafe(lateWiring);
     const childWaiters = yield* makePendingWaiters<null, AkeruDelegationChildOutcome>(
       "The agent controller stopped.",
     );
@@ -857,7 +889,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
       [...creatingRoutineReviews.values()].includes(threadId);
 
-    const runMastra = <A>(operation: string, run: () => Promise<A>) =>
+    /** Calls out to a Promise-based library and types its failure. */
+    const runMastra = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
       Effect.tryPromise({
         try: run,
         catch: (cause) =>
@@ -1215,7 +1248,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       Effect.forEach(
         [...mastraMemoryTurns.entries()].filter(([key]) => key.startsWith(`${String(threadId)}:`)),
         ([key, memoryTurn]) =>
-          Effect.tryPromise(() => memoryTurn.abandon()).pipe(
+          runMastra("memory.abandon", () => memoryTurn.abandon()).pipe(
             Effect.ensuring(
               Effect.sync(() => {
                 if (mastraMemoryTurns.get(key) === memoryTurn) {
@@ -1253,14 +1286,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           restoreLegacyMemoryHandler(key, pending);
           removeLegacyPending(key, pending);
           if (pending.memoryTurn) {
-            yield* Effect.tryPromise(() =>
+            yield* runMastra("memory.finishForeground", () =>
               pending.memoryTurn!.finishForeground(false, "foreground"),
             ).pipe(Effect.ignoreCause({ log: true }));
           }
           return;
         }
         if (pending.memoryTurn) {
-          yield* Effect.tryPromise(() =>
+          yield* runMastra("memory.finishForeground", () =>
             pending.memoryTurn!.finishForeground(true, "foreground"),
           ).pipe(Effect.ignoreCause({ log: true }));
         }
@@ -1277,19 +1310,24 @@ const make = (options?: AgentControllerLiveOptions) =>
           const assistant = mergedPrompts
             .map((entry) => entry.assistant)
             .toSorted((left, right) => right.length - left.length)[0]!;
-          void bundle
-            .observeExternalTurn({
-              threadId: key,
-              turnId: pending.turnId ?? `legacy-${event.eventId}`,
-              modelId: pending.modelId,
-              userMessages: mergedPrompts.map((entry) => ({
-                id: entry.observationPromptId,
-                text: entry.user,
-              })),
-              assistant,
-              createdAt: event.createdAt,
-            })
-            .catch(() => undefined);
+          const observeExternalTurn = bundle.observeExternalTurn;
+          const turnId = pending.turnId ?? `legacy-${event.eventId}`;
+          forkPromise(
+            "Akeru background observational memory failed.",
+            () =>
+              observeExternalTurn({
+                threadId: key,
+                turnId,
+                modelId: pending.modelId,
+                userMessages: mergedPrompts.map((entry) => ({
+                  id: entry.observationPromptId,
+                  text: entry.user,
+                })),
+                assistant,
+                createdAt: event.createdAt,
+              }),
+            { annotations: { threadId: key, turnId } },
+          );
         }
         removeLegacyPending(key, pending);
         if (pending.memoryTurn?.reviewIncluded) {
@@ -1311,7 +1349,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         if (terminals.size === 0) legacyBufferedTerminals.delete(key);
       });
-    let delegationRuntime = options?.delegationRuntime;
     const delegationFor = (input: {
       readonly threadId: ThreadId;
       readonly botId: BotId;
@@ -1319,6 +1356,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       readonly access: AkeruDelegationAccessGrant;
       readonly activeChildDelegations: number;
     }): NonNullable<AkeruToolSession["delegation"]> => {
+      const delegationRuntime = wired().delegationRuntime;
       const parent = () => {
         const turnId = sessions.get(String(input.threadId))?.activeTurn?.turnId;
         if (!turnId || !delegationRuntime) {
@@ -1661,44 +1699,156 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (active) publish(delegatedUsageReceipt(usage, active));
         },
         onWatchError: (delegationId, cause) =>
-          Effect.runFork(
-            Effect.logWarning("Akeru delegated work could not record its outcome.", {
-              delegationId,
-              detail: failureDetail(cause),
-            }),
+          fork(
+            "Akeru delegated work could not record its outcome.",
+            Effect.fail(failureDetail(cause)),
+            { delegationId },
           ),
       });
-    delegationRuntime ??=
-      Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
-        ? makeDelegationRuntime({
-            readSnapshot: () =>
-              Effect.runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
-            dispatch: (command) => Effect.runPromise(orchestrationEngine.value.dispatch(command)),
-          })
-        : undefined;
+    if (Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)) {
+      const orchestration: WorkerOrchestration = {
+        readSnapshot: () => runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
+        dispatch: (command) => runPromise(orchestrationEngine.value.dispatch(command)),
+      };
+      yield* Ref.update(lateWiring, (current) => ({
+        ...current,
+        delegationRuntime: current.delegationRuntime ?? makeDelegationRuntime(orchestration),
+        workerOrchestration: orchestration,
+      }));
+    }
+
+    /** Runtime mode for each hidden worker thread's turns, keyed by child thread id. */
+    const workerTurnDefaults = new Map<string, RuntimeMode>();
+    const workerCall = <A>(run: (orchestration: WorkerOrchestration) => Promise<A>) =>
+      runMastra("worker.orchestration", () => {
+        const orchestration = wired().workerOrchestration;
+        if (!orchestration) throw new Error("Workers need the orchestration engine.");
+        return run(orchestration);
+      }).pipe(
+        Effect.mapError(
+          (error) => new AkeruWorkerError({ reason: "start_failed", detail: error.detail }),
+        ),
+      );
+    const workerRuntime = yield* makeAkeruWorkerRuntime({
+      createChild: (spec) =>
+        workerCall(async (orchestration) => {
+          const snapshot = await orchestration.readSnapshot();
+          const parentThread = snapshot.threads.find(
+            (candidate) => candidate.id === spec.parentThreadId,
+          );
+          if (!parentThread) throw new Error(`Chat '${spec.parentThreadId}' was not found.`);
+          const botId =
+            sessions.get(String(spec.parentThreadId))?.toolSession.botId ??
+            parentThread.respondingBotId ??
+            parentThread.botId ??
+            null;
+          const childThreadId = ThreadId.make(
+            `${WORKER_THREAD_ID_PREFIX}${NodeCrypto.randomUUID()}`,
+          );
+          workerTurnDefaults.set(String(childThreadId), parentThread.runtimeMode);
+          // A worker is a direct copy of the responding bot, never a group chat,
+          // even when the parent is one.
+          await orchestration.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`worker:thread:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            projectId: parentThread.projectId,
+            botId,
+            groupId: null,
+            parentThreadId: spec.parentThreadId,
+            parentDelegationId: null,
+            title: spec.title,
+            modelSelection: parentThread.modelSelection,
+            runtimeMode: parentThread.runtimeMode,
+            interactionMode: "default",
+            branch: parentThread.branch,
+            worktreePath: parentThread.worktreePath,
+            createdAt: nowIso(),
+          });
+          return childThreadId;
+        }),
+      messageChild: (childThreadId, text) =>
+        workerCall(async (orchestration) => {
+          const runtimeMode = workerTurnDefaults.get(String(childThreadId));
+          if (!runtimeMode) throw new Error(`Worker chat '${childThreadId}' is not known.`);
+          await orchestration.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`worker:turn:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            message: {
+              messageId: MessageId.make(`worker-message-${NodeCrypto.randomUUID()}`),
+              role: "user",
+              text,
+              attachments: [],
+            },
+            runtimeMode,
+            interactionMode: "default",
+            createdAt: nowIso(),
+          });
+        }),
+      interruptChild: (childThreadId) =>
+        workerCall((orchestration) =>
+          orchestration.dispatch({
+            type: "thread.turn.interrupt",
+            commandId: CommandId.make(`worker:interrupt:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            createdAt: nowIso(),
+          }),
+        ).pipe(Effect.ignoreCause({ log: true })),
+      discardChild: (childThreadId) =>
+        Effect.sync(() => workerTurnDefaults.delete(String(childThreadId))).pipe(
+          Effect.andThen(
+            workerCall((orchestration) =>
+              orchestration.dispatch({
+                type: "thread.delete",
+                commandId: CommandId.make(`worker:discard:${NodeCrypto.randomUUID()}`),
+                threadId: childThreadId,
+              }),
+            ),
+          ),
+          Effect.ignoreCause({ log: true }),
+        ),
+    });
+    const workersFor = (
+      threadId: ThreadId,
+      access: AkeruDelegationAccessGrant,
+    ): NonNullable<AkeruToolSession["workers"]> => {
+      const parent = () => {
+        const turnId = sessions.get(String(threadId))?.activeTurn?.turnId;
+        if (!turnId) throw new Error("Workers require an active turn.");
+        return { threadId, turnId, depth: workerRuntime.depthForThread(threadId), access };
+      };
+      return {
+        depth: workerRuntime.depthForThread(threadId),
+        spawn: (request) => runPromise(workerRuntime.spawn(parent(), request)),
+        check: (request) => runPromise(workerRuntime.check({ threadId }, request)),
+        message: (request) => runPromise(workerRuntime.message({ threadId }, request)),
+        stop: (request) => runPromise(workerRuntime.stop({ threadId }, request)),
+      };
+    };
 
     const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
       const resolved = resolvedByThread.get(String(threadId));
       if (turn.memoryQueued || !bundle.observeAfterTurn || !resolved) return;
       turn.memoryQueued = true;
-      void bundle
-        .observeAfterTurn({
-          threadId: String(threadId),
-          resourceId: String(threadId),
-          modelId: resolved.mastraModelId,
-          providerInstanceId: active.providerInstanceId,
-          turnId: String(turn.turnId),
-        })
-        .catch((cause) => {
-          turn.memoryQueued = false;
-          Effect.runFork(
-            Effect.logWarning("Akeru background observational memory failed.", {
-              threadId,
-              turnId: turn.turnId,
-              cause,
-            }),
-          );
-        });
+      const observeAfterTurn = bundle.observeAfterTurn;
+      forkPromise(
+        "Akeru background observational memory failed.",
+        () =>
+          observeAfterTurn({
+            threadId: String(threadId),
+            resourceId: String(threadId),
+            modelId: resolved.mastraModelId,
+            providerInstanceId: active.providerInstanceId,
+            turnId: String(turn.turnId),
+          }),
+        {
+          annotations: { threadId, turnId: turn.turnId },
+          onFailure: () => {
+            turn.memoryQueued = false;
+          },
+        },
+      );
     };
 
     const baseEvent = (
@@ -1996,14 +2146,20 @@ const make = (options?: AgentControllerLiveOptions) =>
           }
         }
       })();
-      void dispatch
-        .then(() => {
-          const turn = active.activeTurn;
-          if (turn?.turnId === turnId && !turn.waiting) {
-            finishTurn(threadId, active, "completed");
-          }
-        })
-        .catch((cause: unknown) => handlePendingTurnFailure(active, pending, cause));
+      forkPromise(
+        "Akeru turn dispatch failed.",
+        () =>
+          dispatch.then(() => {
+            const turn = active.activeTurn;
+            if (turn?.turnId === turnId && !turn.waiting) {
+              finishTurn(threadId, active, "completed");
+            }
+          }),
+        {
+          annotations: { threadId, turnId },
+          onFailure: (cause) => handlePendingTurnFailure(active, pending, cause),
+        },
+      );
     };
 
     const admitPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
@@ -2025,8 +2181,13 @@ const make = (options?: AgentControllerLiveOptions) =>
     };
 
     function startPendingTurn(active: ActiveSession, pending: PendingTurn) {
-      void runPromise(admitPendingTurn(active, pending)).catch((cause: unknown) =>
-        handlePendingTurnFailure(active, pending, cause),
+      forkPromise(
+        "Akeru turn admission failed.",
+        () => runPromise(admitPendingTurn(active, pending)),
+        {
+          annotations: { threadId: pending.threadId, turnId: pending.turnId },
+          onFailure: (cause) => handlePendingTurnFailure(active, pending, cause),
+        },
       );
     }
 
@@ -2058,16 +2219,45 @@ const make = (options?: AgentControllerLiveOptions) =>
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
-      if (state !== "completed") {
-        void delegationRuntime
-          ?.parentFinished({ threadId, turnId: turn.turnId, failed: state === "failed" })
-          .catch((cause) => {
-            publish({
-              ...baseEvent(threadId, active, turn.turnId),
-              type: "runtime.error",
-              payload: { message: failureDetail(cause), class: "provider_error" },
-            });
-          });
+      fork(
+        "Akeru worker could not record its turn outcome.",
+        workerRuntime.childTurnFinished(threadId, {
+          state: state === "completed" ? "completed" : "failed",
+          ...(state === "completed" && turn.assistantText.trim()
+            ? { summary: turn.assistantText.trim() }
+            : { error: errorMessage ?? `The worker turn ${state}.` }),
+        }),
+        { threadId, turnId: turn.turnId },
+      );
+      fork(
+        "Akeru workers could not settle after the parent turn.",
+        workerRuntime.parentTurnEnded(threadId, turn.turnId),
+        {
+          threadId,
+          turnId: turn.turnId,
+        },
+      );
+      const delegationRuntime = wired().delegationRuntime;
+      if (state !== "completed" && delegationRuntime) {
+        forkPromise(
+          "Akeru delegated work could not settle after the parent turn.",
+          () =>
+            delegationRuntime.parentFinished({
+              threadId,
+              turnId: turn.turnId,
+              failed: state === "failed",
+            }),
+          {
+            annotations: { threadId, turnId: turn.turnId },
+            onFailure: (cause) => {
+              publish({
+                ...baseEvent(threadId, active, turn.turnId),
+                type: "runtime.error",
+                payload: { message: failureDetail(cause), class: "provider_error" },
+              });
+            },
+          },
+        );
       }
       for (const [requestId, request] of pendingRoutineRequests.entries()) {
         if (request.threadId !== String(threadId)) continue;
@@ -2264,21 +2454,47 @@ const make = (options?: AgentControllerLiveOptions) =>
             !oneUseApproval &&
             permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
           ) {
-            void runPromise(
-              legacyProviderBridge.dispatchIfEnabled(
-                active.providerInstanceId,
-                "AgentController.handleControllerEvent",
-                () => {
+            forkPromise(
+              "Akeru could not approve an allowed tool call.",
+              () =>
+                runPromise(
+                  legacyProviderBridge.dispatchIfEnabled(
+                    active.providerInstanceId,
+                    "AgentController.handleControllerEvent",
+                    () => {
+                      if (active.activeTurn !== turn || turn.finished) return;
+                      active.session.respondToToolApproval({
+                        toolCallId: event.toolCallId,
+                        decision: "approve",
+                      });
+                    },
+                  ),
+                ),
+              {
+                annotations: { threadId, turnId: turn.turnId, toolCallId: event.toolCallId },
+                onFailure: (cause) => {
                   if (active.activeTurn !== turn || turn.finished) return;
-                  active.session.respondToToolApproval({
-                    toolCallId: event.toolCallId,
-                    decision: "approve",
-                  });
+                  return failActiveTurn(active, threadId, turn.turnId, cause);
                 },
-              ),
-            ).catch((cause: unknown) => {
-              if (active.activeTurn !== turn || turn.finished) return;
-              void failActiveTurn(active, threadId, turn.turnId, cause);
+              },
+            );
+            return;
+          }
+          // The session's own grant covers a worker chat a restart orphaned, which the
+          // runtimes no longer track.
+          const grant =
+            wired().delegationRuntime?.accessForThread(threadId) ??
+            workerRuntime.accessForThread(threadId) ??
+            active.toolSession.delegation?.access;
+          if (grant?.approvalCeiling === "none") {
+            // Nobody can answer a prompt here, so the call fails now instead of waiting.
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "decline",
+              declineContext: {
+                reason: "approval_unavailable",
+                message: `Tool '${event.toolName}' needs approval, and this chat cannot ask anyone for it. Finish without it or report the blocker.`,
+              },
             });
             return;
           }
@@ -2595,8 +2811,16 @@ const make = (options?: AgentControllerLiveOptions) =>
         const botId =
           thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
         const bot = botId ? Option.getOrUndefined(yield* getBotById(botId)) : undefined;
+        const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
         return {
           parentDelegation: delegations.find((candidate) => isChildOf(candidate, threadId)),
+          workerParent: workerParentThreadId
+            ? {
+                delegatedAccess: (yield* listThreadDelegations(workerParentThreadId)).find(
+                  (candidate) => isChildOf(candidate, workerParentThreadId),
+                )?.access,
+              }
+            : undefined,
           bot,
           botId,
           activeChildDelegations: delegations.filter(
@@ -2612,10 +2836,18 @@ const make = (options?: AgentControllerLiveOptions) =>
         : undefined;
       const botId =
         thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
+      const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
       return {
         parentDelegation: snapshot.delegations.find(
           (candidate) => isChildOf(candidate, threadId) && isOpenDelegation(candidate),
         ),
+        workerParent: workerParentThreadId
+          ? {
+              delegatedAccess: snapshot.delegations.find((candidate) =>
+                isChildOf(candidate, workerParentThreadId),
+              )?.access,
+            }
+          : undefined,
         bot: snapshot.bots.find((candidate) => candidate.id === botId),
         botId,
         activeChildDelegations: snapshot.delegations.filter(
@@ -2629,11 +2861,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const { parentDelegation, bot, botId, activeChildDelegations, threadTitle } =
+      const { parentDelegation, workerParent, bot, botId, activeChildDelegations, threadTitle } =
         yield* readSessionStartContext(threadId, input.botId ?? null);
-      const delegatedAccess =
-        delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
-      const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
+      const isWorkerThread = workerRuntime.depthForThread(threadId) > 0;
+      const botAccess: AkeruDelegationAccessGrant = {
         allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
         memoryScopes: ["private", "bot", "project", "group", "workspace"],
         sandbox: input.botSandbox ?? null,
@@ -2645,6 +2876,28 @@ const make = (options?: AgentControllerLiveOptions) =>
         disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
         approvalCeiling: "secrets",
       };
+      // A restart drops the worker runtime's grants, so a worker chat it orphaned rebuilds
+      // its grant from the parent chat: the parent's delegated grant, or the bot's own for a
+      // top-level parent. Without a parent link it keeps no tools rather than gaining any.
+      const orphanedWorkerAccess = () =>
+        workerAccess(
+          workerParent
+            ? (workerParent.delegatedAccess ?? {
+                ...botAccess,
+                sandbox: botAccess.sandbox ?? "local",
+              })
+            : { ...botAccess, allowedToolIds: [], enabledMcpServerIds: [] },
+        );
+      const delegatedAccess =
+        wired().delegationRuntime?.accessForThread(threadId) ??
+        parentDelegation?.access ??
+        workerRuntime.accessForThread(threadId) ??
+        (isWorkerThread ? orphanedWorkerAccess() : undefined);
+      const access = delegatedAccess ?? botAccess;
+      // A top-level bot's null sandbox is its local workspace, while a delegated
+      // null sandbox has none, so workers receive the local workspace explicitly.
+      const workerParentAccess: AkeruDelegationAccessGrant =
+        delegatedAccess || access.sandbox !== null ? access : { ...access, sandbox: "local" };
       const mcpServers = (input.mcpServers ?? []).filter(
         (server) =>
           access.enabledMcpServerIds.includes(server.id) &&
@@ -2731,20 +2984,13 @@ const make = (options?: AgentControllerLiveOptions) =>
                 }),
             ),
           );
-          yield* Effect.tryPromise({
-            try: () =>
-              migrateLegacyBotMemory({
-                store: botMemoryStore,
-                access: input.memoryAccess!,
-                revisions,
-              }),
-            catch: (cause) =>
-              new AgentControllerRuntimeError({
-                operation: "memory.migrate",
-                detail: failureDetail(cause),
-                cause,
-              }),
-          });
+          yield* runMastra("memory.migrate", () =>
+            migrateLegacyBotMemory({
+              store: botMemoryStore,
+              access: input.memoryAccess!,
+              revisions,
+            }),
+          );
         }
       }
       // A cwd change invalidates reuse for local workspaces: the user-computer
@@ -2777,6 +3023,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.botName;
         delete toolSession.billedBotId;
         delete toolSession.delegation;
+        delete toolSession.workers;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
         delete toolSession.imageGeneration;
@@ -2793,7 +3040,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(input.botName ? { botName: input.botName } : {}),
           ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
           ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-          ...(delegationRuntime && botId
+          ...(wired().delegationRuntime && botId
             ? {
                 delegation: delegationFor({
                   threadId,
@@ -2804,7 +3051,10 @@ const make = (options?: AgentControllerLiveOptions) =>
                 }),
               }
             : {}),
-          ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+          ...(wired().workerOrchestration && botId && !isWorkerThread
+            ? { workers: workersFor(threadId, workerParentAccess) }
+            : {}),
+          ...(input.botId && wired().botStateRuntime ? { botState: wired().botStateRuntime } : {}),
           imageGeneration,
         };
         existing.configuredToolSession = configuredToolSession;
@@ -2976,11 +3226,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(workspace ? { workspace } : {}),
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-        ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+        ...(input.botId && wired().botStateRuntime ? { botState: wired().botStateRuntime } : {}),
         imageGeneration: imageGenerationSettings,
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,
-          pluginRuntime,
+          wired().pluginRuntime,
           mcpManager
             ? {
                 getRequestHealth: (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
@@ -2989,7 +3239,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 recordFailure: (serverId, message, at) =>
                   subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
                 getDependencies: async (serverId) => {
-                  const snapshot = await pluginRuntimeOptions?.readSnapshot();
+                  const snapshot = await wired().pluginRuntimeOptions?.readSnapshot();
                   return snapshot
                     ? {
                         dependentBots: mcpServerDependentBots(snapshot, serverId),
@@ -3026,7 +3276,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               const generate = options?.generateImage ?? runImageGenerationTool;
               return runPromise(generate(threadId, request));
             },
-            ...(pluginRuntimeOptions
+            ...(wired().pluginRuntimeOptions
               ? {
                   addMcpServer: async (input: unknown) => {
                     const value = decodeAkeruToolInput("AddMcpServer", input);
@@ -3038,7 +3288,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                       enabled: true,
                       createdAt: nowIso(),
                     };
-                    await pluginRuntimeOptions!.dispatch(
+                    await wired().pluginRuntimeOptions!.dispatch(
                       value.transport === "stdio"
                         ? {
                             ...base,
@@ -3051,14 +3301,14 @@ const make = (options?: AgentControllerLiveOptions) =>
                     return { serverId: value.serverId, added: true };
                   },
                   uninstallMcpServer: (serverId: string) =>
-                    deleteCatalogMcpServer(pluginRuntimeOptions!, serverId, "mcp-delete"),
+                    deleteCatalogMcpServer(wired().pluginRuntimeOptions!, serverId, "mcp-delete"),
                   removeMcpAccount: (serverId: string) =>
-                    deleteCatalogMcpServer(pluginRuntimeOptions!, serverId, "mcp-remove"),
+                    deleteCatalogMcpServer(wired().pluginRuntimeOptions!, serverId, "mcp-remove"),
                   renameMcpAccount: async (input: unknown) => {
                     const value = decodeAkeruToolInput("RenameMcpAccount", input);
-                    const server = (await pluginRuntimeOptions!.readSnapshot()).mcpServers?.find(
-                      (candidate) => candidate.id === value.serverId,
-                    );
+                    const server = (
+                      await wired().pluginRuntimeOptions!.readSnapshot()
+                    ).mcpServers?.find((candidate) => candidate.id === value.serverId);
                     if (!server) throw new Error(`MCP server '${value.serverId}' was not found.`);
                     const base = {
                       type: "mcp-server.update" as const,
@@ -3066,7 +3316,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                       mcpServerId: server.id,
                       name: value.name,
                     };
-                    await pluginRuntimeOptions!.dispatch(
+                    await wired().pluginRuntimeOptions!.dispatch(
                       server.transport === "stdio"
                         ? {
                             ...base,
@@ -3082,7 +3332,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                     readonly serverId: string;
                     readonly instructions: string;
                   }) => {
-                    await pluginRuntimeOptions!.dispatch({
+                    await wired().pluginRuntimeOptions!.dispatch({
                       type: "mcp-server.instructions.set",
                       commandId: CommandId.make(
                         `catalog:mcp-instructions:${NodeCrypto.randomUUID()}`,
@@ -3101,13 +3351,13 @@ const make = (options?: AgentControllerLiveOptions) =>
           },
         ),
         ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-        ...(delegationRuntime && botId
+        ...(wired().delegationRuntime && botId
           ? {
               sendToUser: async (request) => {
                 const active = sessions.get(key);
                 const turnId = active?.activeTurn?.turnId;
                 if (!turnId) throw new Error("User messaging requires an active turn.");
-                return delegationRuntime!.sendToUser(
+                return wired().delegationRuntime!.sendToUser(
                   {
                     threadId,
                     turnId,
@@ -3129,13 +3379,16 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
             }
           : {}),
-        ...(input.botId && channelRuntime
+        ...(wired().workerOrchestration && botId && !isWorkerThread
+          ? { workers: workersFor(threadId, workerParentAccess) }
+          : {}),
+        ...(input.botId && wired().channelRuntime
           ? {
               reactToMessage: (request, toolCallId) =>
-                channelRuntime!.react(threadId, input.botId!, request, toolCallId),
+                wired().channelRuntime!.react(threadId, input.botId!, request, toolCallId),
               channels: {
-                create: (request) => channelRuntime!.create(input.botId!, request),
-                update: (request) => channelRuntime!.update(input.botId!, request),
+                create: (request) => wired().channelRuntime!.create(input.botId!, request),
+                update: (request) => wired().channelRuntime!.update(input.botId!, request),
               },
             }
           : {}),
@@ -3514,7 +3767,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 pendingTurns,
                 (pendingMemory) =>
                   pendingMemory.memoryTurn
-                    ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                    ? runMastra("memory.abandon", () => pendingMemory.memoryTurn!.abandon()).pipe(
                         Effect.ignoreCause({ log: true }),
                       )
                     : Effect.void,
@@ -3862,7 +4115,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             pendingTurns,
             (pendingMemory) =>
               pendingMemory.memoryTurn
-                ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                ? runMastra("memory.abandon", () => pendingMemory.memoryTurn!.abandon()).pipe(
                     Effect.ignoreCause({ log: true }),
                   )
                 : Effect.void,
@@ -3916,6 +4169,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             toolRuntime.unregisterSession(key);
             sessions.delete(key);
             memoryUsageByThread.delete(key);
+            yield* workerRuntime.releaseThread(input.threadId);
+            workerTurnDefaults.delete(key);
           }),
         ),
       );
@@ -3963,7 +4218,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         for (const pendingTurns of legacyTurnMemory.values()) {
           for (const pending of pendingTurns) {
             if (pending.memoryTurn) {
-              yield* Effect.tryPromise(() => pending.memoryTurn!.abandon()).pipe(
+              yield* runMastra("memory.abandon", () => pending.memoryTurn!.abandon()).pipe(
                 Effect.ignoreCause({ log: true }),
               );
             }
@@ -3981,58 +4236,54 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     return AgentController.of({
       configurePluginRuntime: (input: AkeruPluginRuntimeOptions) =>
-        Effect.sync(() => {
-          pluginRuntimeOptions = input;
-          pluginRuntime = createAkeruPluginRuntime(input);
-        }),
+        Ref.update(lateWiring, (current) => ({
+          ...current,
+          pluginRuntimeOptions: input,
+          pluginRuntime: createAkeruPluginRuntime(input),
+        })),
       configureDelegation: (input) =>
-        Effect.sync(() => {
-          botStateRuntime = createAkeruBotStateRuntime(input);
-          channelRuntime = createAkeruChannelRuntime(input);
-          delegationRuntime ??= makeDelegationRuntime(input);
-        }),
+        Ref.update(lateWiring, (current) => ({
+          ...current,
+          botStateRuntime: createAkeruBotStateRuntime(input),
+          channelRuntime: createAkeruChannelRuntime(input),
+          delegationRuntime: current.delegationRuntime ?? makeDelegationRuntime(input),
+          workerOrchestration: current.workerOrchestration ?? input,
+        })),
       failDelegation: ({ threadId, error }) =>
-        Effect.sync(() => resolveChildWaiter(threadId, { state: "failed", turnId: null, error })),
+        Effect.sync(() =>
+          resolveChildWaiter(threadId, { state: "failed", turnId: null, error }),
+        ).pipe(
+          Effect.andThen(workerRuntime.childTurnFinished(threadId, { state: "failed", error })),
+        ),
       authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
-        Effect.tryPromise({
-          try: async (signal) => {
-            const recoveryFailures: string[] = [];
-            const managerSessions = sessionResources.getMcpManagerSessionsForServer(
-              String(server.id),
-            );
-            const status = await authenticateMcpServer({
-              server,
-              managers: managerSessions.map(({ manager }) => manager),
-              managerThreadIds: managerSessions.map(({ threadId }) => threadId),
-              createManager: () =>
-                (options?.makeMcpManager ?? createMcpManager)(
-                  NodePath.join(config.stateDir, "bot-mcp-runtime"),
-                  ".akeru-runtime",
-                  toMcpServerConfigs([server]),
-                ),
-              onAuthorizationUrl,
-              signal,
-              recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
-              recordFailure: (serverId, message) =>
-                subscriptionAuth.recordMcpRequestFailure(serverId, message),
-              recordRecoveryFailure: (serverId, message) => {
-                recoveryFailures.push(message);
-                void runPromise(
-                  Effect.logWarning("MCP session recovery failed after authentication.", {
-                    serverId,
-                    error: message,
-                  }),
-                );
-              },
-            });
-            return { toolCount: status.toolCount, recoveryFailures };
-          },
-          catch: (cause) =>
-            new AgentControllerRuntimeError({
-              operation: "mcp.authenticate",
-              detail: failureDetail(cause),
-              cause,
-            }),
+        runMastra("mcp.authenticate", async (signal) => {
+          const recoveryFailures: string[] = [];
+          const managerSessions = sessionResources.getMcpManagerSessionsForServer(
+            String(server.id),
+          );
+          const status = await authenticateMcpServer({
+            server,
+            managers: managerSessions.map(({ manager }) => manager),
+            managerThreadIds: managerSessions.map(({ threadId }) => threadId),
+            createManager: () =>
+              (options?.makeMcpManager ?? createMcpManager)(
+                NodePath.join(config.stateDir, "bot-mcp-runtime"),
+                ".akeru-runtime",
+                toMcpServerConfigs([server]),
+              ),
+            onAuthorizationUrl,
+            signal,
+            recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
+            recordFailure: (serverId, message) =>
+              subscriptionAuth.recordMcpRequestFailure(serverId, message),
+            recordRecoveryFailure: (serverId, message) => {
+              recoveryFailures.push(message);
+              fork("MCP session recovery failed after authentication.", Effect.fail(message), {
+                serverId,
+              });
+            },
+          });
+          return { toolCount: status.toolCount, recoveryFailures };
         }),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory

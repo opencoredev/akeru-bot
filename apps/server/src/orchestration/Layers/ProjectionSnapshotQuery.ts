@@ -6,6 +6,7 @@ import {
   BotUsageCap,
   GroupId,
   ChannelBinding,
+  ChannelDeliveryState,
   ChannelMessageOrigin,
   ChatAttachment,
   CheckpointRef,
@@ -131,6 +132,9 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
+    // Projected channel_delivery column, with the channel_deliveries.status
+    // left join COALESCED in for rows written before migration 072.
+    channelDelivery: Schema.optional(Schema.NullOr(ChannelDeliveryState)),
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
     reactions: Schema.fromJsonString(Schema.Array(OrchestrationMessageReaction)),
@@ -174,6 +178,7 @@ const ProjectionThreadRuntimeContextDbRowSchema = Schema.Struct({
   botId: Schema.NullOr(BotId),
   groupId: Schema.NullOr(GroupId),
   respondingBotId: Schema.NullOr(BotId),
+  parentThreadId: Schema.NullOr(ThreadId),
   runtimeMode: ProjectionThread.fields.runtimeMode,
   session: Schema.NullOr(ProjectionThreadSessionDbRowSchema),
 });
@@ -515,6 +520,7 @@ function mapThreadMessageRow(
     ...(row.authorPersonId ? { authorPersonId: row.authorPersonId } : {}),
     ...(row.authorDisplayName ? { authorDisplayName: row.authorDisplayName } : {}),
     ...(row.channelOrigin ? { channelOrigin: row.channelOrigin } : {}),
+    ...(row.channelDelivery ? { channelDelivery: row.channelDelivery } : {}),
     reactions: row.reactions,
     streaming: row.isStreaming === 1,
     createdAt: row.createdAt,
@@ -868,22 +874,31 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: () =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        ORDER BY thread_id ASC, created_at ASC, message_id ASC
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        ORDER BY projection_thread_messages.thread_id ASC, created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -1396,23 +1411,32 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        WHERE thread_id = ${threadId}
-        ORDER BY created_at ASC, message_id ASC
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        WHERE projection_thread_messages.thread_id = ${threadId}
+        ORDER BY created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -1569,6 +1593,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           threads.bot_id AS "botId",
           threads.group_id AS "groupId",
           threads.responding_bot_id AS "respondingBotId",
+          threads.parent_thread_id AS "parentThreadId",
           threads.runtime_mode AS "runtimeMode",
           sessions.thread_id AS "threadId",
           sessions.status,
@@ -1595,6 +1620,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             botId: row.botId,
             groupId: row.groupId,
             respondingBotId: row.respondingBotId,
+            parentThreadId: row.parentThreadId,
             runtimeMode: row.runtimeMode,
             session:
               row.threadId === null
@@ -1755,7 +1781,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             'thread.activity-appended',
             'thread.turn-diff-completed',
             'thread.reverted',
-            'thread.session-set'
+            'thread.session-set',
+            'thread.channel-delivery-set'
           )
       `,
   });
@@ -1817,24 +1844,33 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId, minAnchorAt, minTurnKey, beforeAnchorAt, beforeTurnKey }) =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        WHERE thread_id = ${threadId}
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        WHERE projection_thread_messages.thread_id = ${threadId}
           AND (
-            turn_id IN (
+            projection_thread_messages.turn_id IN (
               SELECT turn_id FROM projection_turns
               WHERE thread_id = ${threadId}
                 AND turn_id IS NOT NULL
@@ -1854,12 +1890,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 )
             )
             OR (
-              turn_id IS NULL
+              projection_thread_messages.turn_id IS NULL
               AND created_at >= ${minAnchorAt}
               AND created_at < ${beforeAnchorAt}
             )
           )
-        ORDER BY created_at ASC, message_id ASC
+        ORDER BY created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -2291,6 +2327,7 @@ pending_approval_requests AS (
                   ...(row.authorPersonId ? { authorPersonId: row.authorPersonId } : {}),
                   ...(row.authorDisplayName ? { authorDisplayName: row.authorDisplayName } : {}),
                   ...(row.channelOrigin ? { channelOrigin: row.channelOrigin } : {}),
+                  ...(row.channelDelivery ? { channelDelivery: row.channelDelivery } : {}),
                   reactions: row.reactions,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
@@ -3428,6 +3465,7 @@ pending_approval_requests AS (
         botId: row.botId,
         groupId: row.groupId,
         respondingBotId: row.respondingBotId ?? null,
+        parentThreadId: row.parentThreadId,
         runtimeMode: row.runtimeMode,
         session: row.session === null ? null : mapSessionRow(row.session),
       }));

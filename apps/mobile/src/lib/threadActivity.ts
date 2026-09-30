@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/pending-requests";
 import { isToolLifecycleItemType } from "@t3tools/contracts";
 import type {
+  ChannelProvider,
   OrchestrationLatestTurn,
   OrchestrationThread,
   OrchestrationThreadActivity,
@@ -90,6 +91,9 @@ type RawThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly message: OrchestrationThread["messages"][number];
+      /** Provider of the channel conversation this message delivers to, when the
+          message is a channel-originated assistant reply. */
+      readonly channelProvider?: ChannelProvider;
       readonly botStepMeter?: BotStepMeterData;
     }
   | {
@@ -1394,6 +1398,20 @@ export function buildThreadFeed(
   const messages = options?.localMessages
     ? [...loadedMessages, ...options.localMessages]
     : loadedMessages;
+  // Assistant replies to a channel-originated user message deliver back to that
+  // provider; track the nearest preceding channel origin so the feed can label
+  // delivery state without rescanning messages at render time.
+  const channelProviderByMessageId = new Map<string, ChannelProvider>();
+  {
+    let lastChannelProvider: ChannelProvider | null = null;
+    for (const message of messages) {
+      if (message.role === "user") {
+        lastChannelProvider = message.channelOrigin?.provider ?? null;
+      } else if (message.role === "assistant" && lastChannelProvider !== null) {
+        channelProviderByMessageId.set(message.id, lastChannelProvider);
+      }
+    }
+  }
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
   const botStepMeters = buildBotStepMeters(thread.activities);
@@ -1403,6 +1421,7 @@ export function buildThreadFeed(
     const entry = messageFeedEntry(
       message,
       message.turnId === null ? undefined : botStepMeters.get(message.turnId),
+      channelProviderByMessageId.get(message.id),
     );
     timed.push({ at: Date.parse(entry.createdAt), entry });
   }
@@ -1447,9 +1466,14 @@ const messageFeedEntryCache = new WeakMap<
 function messageFeedEntry(
   message: OrchestrationThread["messages"][number],
   botStepMeter: BotStepMeterData | undefined,
+  channelProvider: ChannelProvider | undefined,
 ): MessageFeedEntry {
   const cached = messageFeedEntryCache.get(message);
-  if (cached !== undefined && botStepMetersEqual(cached.botStepMeter, botStepMeter)) {
+  if (
+    cached !== undefined &&
+    cached.channelProvider === channelProvider &&
+    botStepMetersEqual(cached.botStepMeter, botStepMeter)
+  ) {
     return cached;
   }
   const entry: MessageFeedEntry = {
@@ -1457,6 +1481,7 @@ function messageFeedEntry(
     id: message.id,
     createdAt: message.createdAt,
     message,
+    ...(channelProvider === undefined ? {} : { channelProvider }),
     ...(message.turnId === null ? {} : { botStepMeter }),
   };
   messageFeedEntryCache.set(message, entry);
@@ -1569,6 +1594,7 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
       return (
         next.type === "message" &&
         previous.message === next.message &&
+        previous.channelProvider === next.channelProvider &&
         botStepMetersEqual(previous.botStepMeter, next.botStepMeter)
       );
     case "working":

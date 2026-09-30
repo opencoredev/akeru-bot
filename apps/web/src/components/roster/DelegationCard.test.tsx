@@ -21,12 +21,26 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   navigate: vi.fn(),
   recordChatPath: vi.fn(),
+  setState: vi.fn(),
   thread: null as OrchestrationThreadShell | null,
+  // When set, external stores subscribe like a mounted component would.
+  clockCleanups: null as Array<() => void> | null,
 }));
 
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
-  return { ...actual, useMemo: <T,>(factory: () => T) => factory() };
+  return {
+    ...actual,
+    useMemo: <T,>(factory: () => T) => factory(),
+    useState: <T,>(initial: T) => [initial, mocks.setState],
+    useSyncExternalStore: <T,>(
+      subscribe: (listener: () => void) => () => void,
+      getSnapshot: () => T,
+    ) => {
+      mocks.clockCleanups?.push(subscribe(() => undefined));
+      return getSnapshot();
+    },
+  };
 });
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("../../i18n", async () => {
@@ -39,8 +53,10 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../state/entities", () => ({
   useThreadActivities: () => mocks.activities,
+  useThreadMessages: () => [],
   useThreadShell: () => mocks.thread,
 }));
+vi.mock("../ChatMarkdown", () => ({ default: ({ text }: { text: string }) => text }));
 vi.mock("../../state/orchestration", () => ({
   orchestrationEnvironment: { cancelDelegation: Symbol("cancelDelegation") },
 }));
@@ -50,6 +66,8 @@ vi.mock("./rosterStore", () => ({
 }));
 
 import { DelegationCard, delegationUsageTokens } from "./DelegationCard";
+import { DelegationDetail } from "./DelegationDetail";
+import { delegationClockState } from "./delegationClock";
 import { visitElements } from "../../test/reactElementTree";
 import type { Bot } from "./types";
 
@@ -160,7 +178,7 @@ function phaseFor(state: AkeruDelegationState) {
   }
 }
 
-function delegation(state: AkeruDelegationState) {
+function delegation(state: AkeruDelegationState, overrides: Record<string, unknown> = {}) {
   return decodeDelegationRecord({
     delegationId: `delegation-${state}`,
     parentDelegationId: null,
@@ -188,6 +206,7 @@ function delegation(state: AkeruDelegationState) {
     keep: false,
     createdAt: "2026-08-31T00:00:00.000Z",
     updatedAt: "2026-08-31T00:01:00.000Z",
+    ...overrides,
   });
 }
 
@@ -221,6 +240,32 @@ function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
   }) as ReactElement<Record<string, unknown>>;
 }
 
+/** Finds an element by aria-label, calling nested function components on the way. */
+function findByLabel(node: unknown, label: string): ReactElement<Record<string, unknown>> | null {
+  let found: ReactElement<Record<string, unknown>> | null = null;
+  visitElements(node, (element) => {
+    if (found) return true;
+    if (element.props["aria-label"] === label) {
+      found = element;
+      return true;
+    }
+    if (typeof element.type === "function" && element.type.name.startsWith("Delegation")) {
+      found = findByLabel((element.type as (props: unknown) => unknown)(element.props), label);
+    }
+    return found !== null;
+  });
+  return found;
+}
+
+function detailElement(bot: Bot | null = childBot, onOpenChange = vi.fn()) {
+  return DelegationDetail({
+    delegation: delegation("running"),
+    childBot: bot,
+    parentBot,
+    onOpenChange,
+  });
+}
+
 describe("DelegationCard", () => {
   beforeEach(() => {
     mocks.activities = [usage("other-turn", 99_999), usage("turn-child", 1_234)];
@@ -228,6 +273,8 @@ describe("DelegationCard", () => {
     mocks.cancel.mockReset().mockResolvedValue({ _tag: "Success", value: { sequence: 1 } });
     mocks.navigate.mockReset().mockResolvedValue(undefined);
     mocks.recordChatPath.mockReset();
+    mocks.setState.mockReset();
+    mocks.clockCleanups = null;
   });
 
   it.each(["queued", "running", "blocked", "failed", "canceled", "completed"] as const)(
@@ -316,10 +363,7 @@ describe("DelegationCard", () => {
   });
 
   it("cancels through the delegation command with keep disabled", async () => {
-    const cancel = visitElements(
-      cardElement("running"),
-      (element) => element.props["aria-label"] === "Cancel delegation to Mori",
-    );
+    const cancel = findByLabel(cardElement("running"), "Cancel delegation to Mori");
     (cancel?.props.onClick as (() => void) | undefined)?.();
     await Promise.resolve();
     expect(mocks.cancel).toHaveBeenCalledWith({
@@ -335,13 +379,19 @@ describe("DelegationCard", () => {
     },
   );
 
-  it("opens the child through roster thread navigation", () => {
-    const open = visitElements(
-      cardElement("running"),
-      (element) => element.props["aria-label"] === "Open Mori chat",
-    );
+  it("opens the read-only work view from the card", () => {
+    const view = findByLabel(cardElement("running"), "View Mori's work");
+    (view?.props.onClick as (() => void) | undefined)?.();
+    expect(mocks.setState).toHaveBeenCalledWith(true);
+    expect(renderCard("queued")).toMatch(/aria-label="View Mori&#x27;s work" disabled=""/);
+  });
+
+  it("opens the child chat through roster thread navigation from the work view", () => {
+    const onOpenChange = vi.fn();
+    const open = findByLabel(detailElement(childBot, onOpenChange), "Open Mori chat");
     (open?.props.onClick as (() => void) | undefined)?.();
     expect(mocks.recordChatPath).toHaveBeenCalledWith("bot-child", "/environment-1/thread-child");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(mocks.navigate).toHaveBeenCalledWith({
       to: "/bots/$botId",
       params: { botId: "bot-child" },
@@ -353,21 +403,117 @@ describe("DelegationCard", () => {
     const markup = renderCard("running", null);
     expect(markup).toContain("Unknown bot");
     expect(markup).toContain("Usage unavailable");
-    expect(markup).toContain('aria-label="Open Unknown bot chat" disabled=""');
+    expect(findByLabel(detailElement(null), "Open Unknown bot chat")?.props.disabled).toBe(true);
   });
 
   it("treats an archived child as unavailable", () => {
-    const markup = renderCard("running", {
-      ...childBot,
-      archivedAt: "2026-08-31T00:02:00.000Z",
-    });
-    expect(markup).toContain("Unknown bot");
-    expect(markup).toContain('aria-label="Open Unknown bot chat" disabled=""');
+    const archived = { ...childBot, archivedAt: "2026-08-31T00:02:00.000Z" };
+    expect(renderCard("running", archived)).toContain("Unknown bot");
+    expect(findByLabel(detailElement(archived), "Open Unknown bot chat")?.props.disabled).toBe(
+      true,
+    );
   });
 
   it("names both actions for assistive technology", () => {
     const markup = renderCard("running");
     expect(markup).toContain('aria-label="Cancel delegation to Mori"');
-    expect(markup).toContain('aria-label="Open Mori chat"');
+    expect(markup).toContain('aria-label="View Mori&#x27;s work"');
+  });
+
+  it("keeps tool ids and MCP counts off the card face", () => {
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={delegation("running", {
+          access: {
+            allowedToolIds: ["ExternalShell", "WebFetch"],
+            memoryScopes: ["project"],
+            sandbox: "local",
+            runtimeMode: "approval-required",
+            hasUserComputer: false,
+            enabledMcpServerIds: ["github", "linear"],
+            disabledMcpServerIds: [],
+            approvalCeiling: "none",
+          },
+        })}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    const [face, details] = markup.split("<details");
+    expect(face).not.toContain("ExternalShell");
+    expect(face).not.toContain("MCP servers");
+    expect(face).not.toContain("tools:");
+    expect(details).toContain("tools: ExternalShell, WebFetch");
+    expect(details).toContain("MCP servers: 2");
+  });
+
+  it("names the asking bot on group cards", () => {
+    const group = renderToStaticMarkup(
+      <DelegationCard
+        delegation={delegation("running")}
+        childBot={childBot}
+        parentBot={parentBot}
+        variant="group"
+      />,
+    );
+    expect(group).toContain("Mira asked Mori");
+    expect(renderCard("running")).not.toContain("asked");
+    expect(
+      renderToStaticMarkup(
+        <DelegationCard
+          delegation={delegation("running")}
+          childBot={childBot}
+          parentBot={null}
+          variant="group"
+        />,
+      ),
+    ).toContain("Unknown bot asked Mori");
+  });
+
+  it("labels scheduled and retried work", () => {
+    expect(renderCard("running")).not.toMatch(/>Scheduled<|>Retried</);
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={delegation("running", {
+          trigger: "scheduled",
+          retryOfDelegationId: "delegation-earlier",
+        })}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    expect(markup).toContain(">Scheduled</span>");
+    expect(markup).toContain(">Retried</span>");
+  });
+
+  it("lets the actions slot replace the default cancel control", () => {
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={delegation("running")}
+        childBot={childBot}
+        parentBot={parentBot}
+        actions={<button type="button">Let it finish</button>}
+      />,
+    );
+    expect(markup).toContain("Let it finish");
+    expect(markup).not.toContain("Cancel delegation to Mori");
+    expect(markup).toContain('aria-label="View Mori&#x27;s work"');
+  });
+
+  it("runs one shared timer for every live card and none for finished cards", () => {
+    const setInterval = vi.spyOn(globalThis, "setInterval");
+    const cleanups: Array<() => void> = [];
+    mocks.clockCleanups = cleanups;
+    try {
+      for (const state of ["running", "queued", "blocked", "completed", "failed"] as const) {
+        renderCard(state);
+      }
+      expect(delegationClockState()).toEqual({ subscribers: 3, ticking: true });
+      expect(setInterval).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const cleanup of cleanups) cleanup();
+      setInterval.mockRestore();
+    }
+    expect(delegationClockState()).toEqual({ subscribers: 0, ticking: false });
   });
 });

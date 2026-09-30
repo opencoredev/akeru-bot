@@ -1,17 +1,16 @@
-import {
-  akeruDelegationStateOf,
-  type AkeruDelegationAccessGrant,
-  type AkeruDelegationRecord,
-  type AkeruDelegationState,
-  type OrchestrationThreadActivity,
+import type {
+  AkeruDelegationRecord,
+  AkeruDelegationState,
+  OrchestrationThreadActivity,
 } from "@t3tools/contracts";
-import { presentDelegation } from "@t3tools/client-runtime/delegation-presentation";
+import {
+  delegationElapsedMs,
+  presentDelegation,
+} from "@t3tools/client-runtime/delegation-presentation";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { MessageKey, TranslationParams } from "@t3tools/client-runtime/i18n";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { formatTokens } from "@t3tools/shared/usageFormat";
-import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
@@ -22,10 +21,9 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { BotAvatarView } from "./BotAvatarView";
-import { useRosterStore } from "./rosterStore";
+import { DelegationDetail, delegationStateLabel, formatDelegationAccess } from "./DelegationDetail";
+import { useDelegationClock } from "./delegationClock";
 import type { Bot } from "./types";
-
-const TERMINAL_STATES = new Set<AkeruDelegationState>(["failed", "canceled", "completed"]);
 
 const STATE_DOT: Record<AkeruDelegationState, string> = {
   queued: "bg-muted-foreground/50",
@@ -35,53 +33,6 @@ const STATE_DOT: Record<AkeruDelegationState, string> = {
   canceled: "bg-muted-foreground/60",
   completed: "bg-success",
 };
-
-type Translate = (key: MessageKey, params?: TranslationParams) => string;
-
-function runtimeModeLabel(mode: AkeruDelegationAccessGrant["runtimeMode"], t: Translate): string {
-  switch (mode) {
-    case "approval-required":
-      return t("approval required");
-    case "auto-accept-edits":
-      return t("auto-accept edits");
-    case "auto":
-      return t("automatic approvals");
-    case "full-access":
-      return t("full access");
-  }
-}
-
-function delegationStateLabel(state: AkeruDelegationState, t: Translate): string {
-  switch (state) {
-    case "queued":
-      return t("queued");
-    case "running":
-      return t("running");
-    case "blocked":
-      return t("blocked");
-    case "failed":
-      return t("failed");
-    case "canceled":
-      return t("canceled");
-    case "completed":
-      return t("completed");
-  }
-}
-
-// Sandbox, tool, memory scope, and approval ceiling values are identifiers and stay raw.
-function formatDelegationAccess(access: AkeruDelegationAccessGrant, t: Translate): string {
-  return [
-    runtimeModeLabel(access.runtimeMode, t),
-    access.sandbox === null ? t("no sandbox") : t("{sandbox} sandbox", { sandbox: access.sandbox }),
-    t("tools: {tools}", { tools: access.allowedToolIds.join(", ") || t("none") }),
-    t("memory: {scopes}", { scopes: access.memoryScopes.join(", ") || t("none") }),
-    t("MCP servers: {count}", { count: access.enabledMcpServerIds.length }),
-    access.hasUserComputer ? t("user computer") : t("no user computer"),
-    access.approvalCeiling === "none"
-      ? t("no approvals")
-      : t("approval ceiling: {ceiling}", { ceiling: access.approvalCeiling }),
-  ].join(" · ");
-}
 
 export function delegationUsageTokens(
   delegation: AkeruDelegationRecord,
@@ -94,73 +45,93 @@ export function delegationUsageTokens(
   return usage?.totalProcessedTokens ?? usage?.usedTokens ?? null;
 }
 
-function delegationElapsed(delegation: AkeruDelegationRecord, now = Date.now()): string | null {
-  const startedAt = Date.parse(
-    delegation.phase._tag === "Queued" || delegation.phase.startedAt === null
-      ? delegation.createdAt
-      : delegation.phase.startedAt,
+function DelegationElapsed({
+  delegation,
+  live,
+}: {
+  readonly delegation: AkeruDelegationRecord;
+  readonly live: boolean;
+}) {
+  const now = useDelegationClock(live);
+  const elapsed = delegationElapsedMs(delegation, now);
+  return elapsed === null ? null : <span className="tabular-nums">{formatDuration(elapsed)}</span>;
+}
+
+function DelegationCancelAction({
+  delegation,
+  childName,
+}: {
+  readonly delegation: AkeruDelegationRecord;
+  readonly childName: string;
+}) {
+  const { t } = useI18n();
+  const environmentId = usePrimaryEnvironmentId();
+  const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
+    reportFailure: false,
+  });
+  if (environmentId === null) return null;
+  return (
+    <Button
+      size="sm"
+      variant="ghost-muted"
+      className="min-h-11"
+      aria-label={t("Cancel delegation to {name}", { name: childName })}
+      onClick={() => {
+        void cancelDelegation({
+          environmentId,
+          input: { delegationId: delegation.delegationId, keep: false },
+        }).then((result) => {
+          if (result._tag === "Failure") {
+            toastManager.add({ type: "error", title: t("Could not cancel delegation") });
+          }
+        });
+      }}
+    >
+      {t("Cancel")}
+    </Button>
   );
-  const endedAt =
-    delegation.phase._tag === "Failed" ||
-    delegation.phase._tag === "Canceled" ||
-    delegation.phase._tag === "Completed"
-      ? Date.parse(delegation.phase.completedAt)
-      : now;
-  if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return null;
-  return formatDuration(endedAt - startedAt);
 }
 
-function DelegationElapsed({ delegation }: { readonly delegation: AkeruDelegationRecord }) {
-  const textRef = useRef<HTMLSpanElement>(null);
-  const live = !TERMINAL_STATES.has(akeruDelegationStateOf(delegation.phase));
-
-  useEffect(() => {
-    if (!live) return;
-    const update = () => {
-      if (textRef.current) textRef.current.textContent = delegationElapsed(delegation) ?? "";
-    };
-    update();
-    const id = window.setInterval(update, 1_000);
-    return () => window.clearInterval(id);
-  }, [delegation, live]);
-
-  const elapsed = delegationElapsed(delegation);
-  return elapsed ? (
-    <span ref={textRef} className="tabular-nums">
-      {elapsed}
-    </span>
-  ) : null;
-}
-
+/**
+ * One piece of delegated work in the parent chat's timeline. The face shows who
+ * is working, the task, progress, and the outcome. The access grant sits behind
+ * Details, and View work opens the child's chat read-only.
+ *
+ * `actions` replaces the default Cancel control, so the reverse-state menu
+ * (retry, let it finish, cancel) can own that slot. `variant="group"` names the
+ * bot that asked, because a group room has several bots who can delegate.
+ */
 export function DelegationCard({
   delegation,
   childBot,
   parentBot,
+  variant = "bot",
+  actions,
 }: {
   readonly delegation: AkeruDelegationRecord;
   readonly childBot: Bot | null;
   readonly parentBot: Bot | null;
+  readonly variant?: "bot" | "group";
+  readonly actions?: ReactNode;
 }) {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
-  const childThreadId = delegation.phase._tag === "Queued" ? null : delegation.phase.childThreadId;
-  const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
-    reportFailure: false,
-  });
+  const [detailOpen, setDetailOpen] = useState(false);
+  const presentation = presentDelegation(delegation);
   const childThreadRef = useMemo(
-    () => (environmentId && childThreadId ? scopeThreadRef(environmentId, childThreadId) : null),
-    [childThreadId, environmentId],
+    () =>
+      environmentId && presentation.childThreadId
+        ? scopeThreadRef(environmentId, presentation.childThreadId)
+        : null,
+    [presentation.childThreadId, environmentId],
   );
   const childThread = useThreadShell(childThreadRef);
   const childActivities = useThreadActivities(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
-  const presentation = presentDelegation(delegation);
   const state = presentation.state;
   const childName = activeChildBot?.name ?? t("Unknown bot");
+  const parentName = parentBot?.name ?? t("Unknown bot");
   const usageTokens = childThread ? delegationUsageTokens(delegation, childActivities) : null;
-  const canCancel = !presentation.terminal && environmentId !== null;
-  const canOpen = activeChildBot !== null && childThread !== null && environmentId !== null;
   const outcome = presentation.outcome
     ? presentation.outcome.text ||
       (presentation.outcome.kind === "failure"
@@ -173,8 +144,9 @@ export function DelegationCard({
   return (
     <article
       aria-label={t("Delegation to {name}", { name: childName })}
-      className="ml-10 max-w-[min(42rem,calc(100%-2.5rem))] border-l-2 border-border py-1.5 pl-3"
+      className="mt-2 ml-10 max-w-[min(42rem,calc(100%-2.5rem))] border-l-2 border-border py-1.5 pl-3"
       data-testid="delegation-card"
+      data-delegation-id={delegation.delegationId}
     >
       <div className="flex min-w-0 items-center gap-2">
         <BotAvatarView
@@ -182,18 +154,25 @@ export function DelegationCard({
           name={childName}
           className="size-7 shrink-0"
         />
-        <span className="min-w-0 truncate text-sm font-medium">{childName}</span>
+        <span className="min-w-0 truncate text-sm font-medium">
+          {variant === "group"
+            ? t("{parent} asked {child}", { parent: parentName, child: childName })
+            : childName}
+        </span>
+        {presentation.trigger === "scheduled" ? (
+          <span className="shrink-0 text-xs text-muted-foreground">{t("Scheduled")}</span>
+        ) : null}
+        {presentation.retried ? (
+          <span className="shrink-0 text-xs text-muted-foreground">{t("Retried")}</span>
+        ) : null}
         <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span aria-hidden className={`size-1.5 rounded-full ${STATE_DOT[state]}`} />
           <span aria-live="polite">{delegationStateLabel(state, t)}</span>
         </span>
       </div>
       <p className="mt-1 line-clamp-2 text-sm leading-5">{delegation.task}</p>
-      <p className="mt-1 break-words text-xs text-muted-foreground">
-        {formatDelegationAccess(delegation.access, t)}
-      </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-        <DelegationElapsed delegation={delegation} />
+        <DelegationElapsed delegation={delegation} live={!presentation.terminal} />
         <span
           className="tabular-nums"
           aria-label={
@@ -221,49 +200,46 @@ export function DelegationCard({
         <p className="mt-1 text-xs text-muted-foreground" data-delivery={presentation.delivery}>
           {presentation.delivery === "pending"
             ? t("Result waiting for the next reply")
-            : t("Result delivered to {name}", {
-                name: parentBot?.name ?? t("Unknown bot"),
-              })}
+            : t("Result delivered to {name}", { name: parentName })}
         </p>
       ) : null}
-      <div className="mt-1.5 flex items-center gap-1">
-        {canCancel ? (
-          <Button
-            size="sm"
-            variant="ghost-muted"
-            className="min-h-11"
-            aria-label={t("Cancel delegation to {name}", { name: childName })}
-            onClick={() => {
-              void cancelDelegation({
-                environmentId,
-                input: { delegationId: delegation.delegationId, keep: false },
-              }).then((result) => {
-                if (result._tag === "Failure") {
-                  toastManager.add({ type: "error", title: t("Could not cancel delegation") });
-                }
-              });
-            }}
-          >
-            {t("Cancel")}
-          </Button>
-        ) : null}
+      <details className="mt-1 text-xs text-muted-foreground" data-delegation-details>
+        <summary className="min-h-11 w-fit content-center">{t("Details")}</summary>
+        <dl className="flex flex-col gap-1 pb-1">
+          <div>
+            <dt className="font-medium">{t("Expected result")}</dt>
+            <dd className="break-words">{delegation.expectedResult}</dd>
+          </div>
+          <div>
+            <dt className="font-medium">{t("Access")}</dt>
+            <dd className="break-words">{formatDelegationAccess(delegation.access, t)}</dd>
+          </div>
+        </dl>
+      </details>
+      <div className="flex items-center gap-1" data-delegation-actions>
+        {actions ??
+          (presentation.terminal ? null : (
+            <DelegationCancelAction delegation={delegation} childName={childName} />
+          ))}
         <Button
           size="sm"
           variant="ghost-muted"
           className="min-h-11"
-          aria-label={t("Open {name} chat", { name: childName })}
-          disabled={!canOpen}
-          onClick={() => {
-            if (!canOpen) return;
-            useRosterStore
-              .getState()
-              .recordChatPath(activeChildBot.id, `/${environmentId}/${childThread.id}`);
-            void navigate({ to: "/bots/$botId", params: { botId: activeChildBot.id } });
-          }}
+          aria-label={t("View {name}'s work", { name: childName })}
+          disabled={presentation.childThreadId === null || environmentId === null}
+          onClick={() => setDetailOpen(true)}
         >
-          {t("Open chat")}
+          {t("View work")}
         </Button>
       </div>
+      {detailOpen ? (
+        <DelegationDetail
+          delegation={delegation}
+          childBot={childBot}
+          parentBot={parentBot}
+          onOpenChange={setDetailOpen}
+        />
+      ) : null}
     </article>
   );
 }

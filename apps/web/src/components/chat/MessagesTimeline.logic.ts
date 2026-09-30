@@ -221,6 +221,8 @@ export type MessagesTimelineRow =
       id: string;
       createdAt: string;
       message: ChatMessage;
+      /** Channel origin of the nearest preceding user message (assistant rows only). */
+      assistantChannelOrigin?: ChatMessage["channelOrigin"];
       durationStart: string;
       showAssistantMeta: boolean;
       showAssistantCopyButton: boolean;
@@ -674,6 +676,18 @@ export function deriveMessagesTimelineRows(input: {
     input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
   );
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
+  // Channel origin for each assistant message: the nearest preceding user
+  // message's origin, matching channelOriginForAssistantMessage ordering.
+  const channelOriginByAssistantMessageId = new Map<MessageId, ChatMessage["channelOrigin"]>();
+  let lastUserChannelOrigin: ChatMessage["channelOrigin"] = undefined;
+  for (const entry of input.timelineEntries) {
+    if (entry.kind !== "message") continue;
+    if (entry.message.role === "user") {
+      lastUserChannelOrigin = entry.message.channelOrigin ?? undefined;
+    } else if (entry.message.role === "assistant") {
+      channelOriginByAssistantMessageId.set(entry.message.id, lastUserChannelOrigin);
+    }
+  }
   const unsettledTurnId = deriveUnsettledTurnId(
     input.latestTurn ?? null,
     input.runningTurnId ?? null,
@@ -1020,6 +1034,11 @@ export function deriveMessagesTimelineRows(input: {
       id: timelineEntry.id,
       createdAt: timelineEntry.createdAt,
       message: timelineEntry.message,
+      ...(timelineEntry.message.role === "assistant"
+        ? {
+            assistantChannelOrigin: channelOriginByAssistantMessageId.get(timelineEntry.message.id),
+          }
+        : {}),
       durationStart,
       showAssistantMeta,
       showAssistantCopyButton: showAssistantMeta,
@@ -1125,6 +1144,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       const bm = b as typeof a;
       return (
         a.message === bm.message &&
+        Equal.equals(a.assistantChannelOrigin, bm.assistantChannelOrigin) &&
         a.durationStart === bm.durationStart &&
         a.showAssistantMeta === bm.showAssistantMeta &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&

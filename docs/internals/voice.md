@@ -52,7 +52,7 @@ Composed speech submits through the normal bot turn path and correlates the resu
 
 Realtime conversation retains its transcript and `send_to_chat` handoff. Adapter events require call-scoped identities to suppress duplicate transcription events and tool invocations. Deduplication is by identity, not text, because repeating a sentence can be intentional.
 
-Codex and Kimi For Coding retain Mastra controller routing. Claude, Grok, and OpenCode retain the legacy adapter bridge. The existing OpenCode Go registration must also remain intact. Speech does not approve tool requests or answer pending structured questions implicitly. Hangup stops media and speech operations, not already accepted chat work.
+Codex, Claude, Grok, Kimi For Coding, and OpenCode Go retain Mastra controller routing. Standard OpenCode retains the legacy adapter bridge. Speech does not approve tool requests or answer pending structured questions implicitly. Hangup stops media and speech operations, not already accepted chat work.
 
 ## Privacy
 

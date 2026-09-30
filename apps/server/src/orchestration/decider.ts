@@ -3309,6 +3309,43 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.channel-delivery.set": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Messages hydrate into the command model empty after a restart, so a
+      // message missing here is not proof the id is wrong; the projector and
+      // pipeline already no-op on unknown ids. Only reject a message the model
+      // can actually see and that is not an assistant reply.
+      const message = thread.messages.find((entry) => entry.id === command.messageId);
+      if (message && message.role !== "assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Channel delivery can only mark an assistant message in thread '${command.threadId}'.`,
+        });
+      }
+      if (message?.channelDelivery === command.delivery) {
+        return [];
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.channel-delivery-set",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          delivery: command.delivery,
+          updatedAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.proposed-plan.upsert": {
       yield* requireThread({
         readModel,

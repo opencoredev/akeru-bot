@@ -95,7 +95,7 @@ resolves the request as a system cancellation (`actor: "system"`,
 fails with a message the bot relays. An answer that arrives after the timeout
 is rejected as stale and creates nothing. A turn that ends first rejects its
 open reviews, and layer shutdown fails any that remain. Routine reviews run only on the Mastra
-path (Codex, Kimi For Coding).
+path (Codex, Claude, Grok, Kimi For Coding, OpenCode Go).
 
 ## Waiting on children
 
@@ -139,13 +139,14 @@ Canceled delegations have no result to deliver.
 | Provider        | Path          | Where `delegationResults` goes                          |
 | --------------- | ------------- | ------------------------------------------------------- |
 | Codex           | Mastra        | Per-turn `persistentMemoryContext`                      |
+| Claude          | Mastra        | Per-turn `persistentMemoryContext`                      |
+| Grok            | Mastra        | Per-turn `persistentMemoryContext`                      |
 | Kimi For Coding | Mastra        | Per-turn `persistentMemoryContext`                      |
+| OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext`                      |
 | OpenCode        | Legacy bridge | Per-turn context, which OpenCode reads as system prompt |
-| Claude          | Legacy bridge | Prepended to the turn input                             |
-| Grok            | Legacy bridge | Prepended to the turn input                             |
 
-Claude and Grok only read session context when the session starts, so the
-results travel with the turn text instead.
+On the legacy bridge the results ride the turn's `persistentMemoryContext`,
+which OpenCode reads as its system prompt.
 
 ## Request limits
 
@@ -166,3 +167,11 @@ A second `SendToAgent` to a bot that already has work from the same parent is
 allowed. It creates a new delegation with its own child thread and returns its
 own handle. The earlier work is not replaced or merged. Both count toward the
 concurrency cap, and each result is delivered separately.
+
+## Temporary workers are not delegations
+
+`Task`, `CheckSubagent`, `MessageSubagent`, and `StopSubagent` start a
+temporary worker inside the parent's own turn. The worker is a copy of the
+bot under a narrower grant, not a delegation to another bot, so it is not
+covered by this document's acknowledgement and delivery rules. See
+[Temporary workers](providers.md#temporary-workers) in providers.md.

@@ -56,10 +56,10 @@ import {
 export { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 
 import { ServerSecretStore, type SecretStoreError } from "../auth/ServerSecretStore.ts";
+import * as ServerConfig from "../config.ts";
 import type { OrchestrationDispatchError } from "../orchestration/Errors.ts";
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { ServerConfig } from "../config.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -428,8 +428,13 @@ export interface ChannelRuntimeDependencies {
   readonly randomUuid: Effect.Effect<string, PlatformError.PlatformError>;
   /** HTTP client for built-in credential probes. Defaults to the fetch-backed client. */
   readonly httpClient?: HttpClient.HttpClient;
-  /** Public https origin that webhook providers can reach, from `--public-origin`. */
-  readonly publicOrigin?: string;
+  /**
+   * Public https origin the operator advertises for this environment
+   * (`--public-origin`/`T3CODE_PUBLIC_ORIGIN`). Drives provider webhook URLs and
+   * the "Open in Akeru" reply footer. Never derived from a bind address or a
+   * client-supplied origin; undefined means no public origin is configured.
+   */
+  readonly publicOrigin?: string | undefined;
   /** Replaces the built-in adapters. Tests use it to drive transports directly. */
   readonly startTransport?: (
     input: ChannelConnectInput,
@@ -518,6 +523,26 @@ export const makeKeyedLock = (): KeyedLock => {
         Effect.andThen(restore(effect).pipe(Effect.ensuring(Effect.sync(() => releaseKey(key))))),
       ),
     );
+};
+
+/**
+ * Appends the server-advertised "Open in Akeru" link to an external reply.
+ * Only the server-resolved public origin is used; the browser origin is never
+ * substituted, so remote clients see the link only when the server can be
+ * reached at it.
+ */
+export const channelReplyTextWithFooter = (
+  text: string,
+  botId: BotId,
+  provider: ChannelProvider,
+  publicOrigin: string | undefined,
+): string => {
+  if (publicOrigin === undefined) return text;
+  const url = `${publicOrigin.replace(/\/$/, "")}/bots/${botId}`;
+  // Posts go out as plain strings; only Discord renders Markdown link syntax.
+  return provider === "discord"
+    ? `${text}\n\n[Open in Akeru](${url})`
+    : `${text}\n\nOpen in Akeru: ${url}`;
 };
 
 export const CHANNEL_SENT_MESSAGE_RECOVERY_LIMIT = 128;
@@ -2674,6 +2699,32 @@ const restoreConnectedChannels = (
           )
         : [],
     );
+    // Deliveries still "requested" after a restart are ambiguous: the send
+    // that created them was interrupted, so the post may or may not have
+    // landed. Reconcile the projected "pending" state to "unknown" so clients
+    // stop showing "Sending…" forever and admins can retry the reply.
+    // A reply whose post landed but whose durable mark failed is recorded in the
+    // binding, so it is sent rather than ambiguous. Reconciliation is best effort
+    // and never keeps a channel from reconnecting.
+    yield* Effect.gen(function* () {
+      const staleClaims = yield* deps.deliveryStore.listRequestedClaims();
+      for (const claim of staleClaims) {
+        const thread = yield* deps.readThread(claim.threadId);
+        const delivery = thread?.messages.find(
+          (message) => message.id === claim.messageId,
+        )?.channelDelivery;
+        if (delivery !== "pending" && delivery !== undefined) continue;
+        const sent = model.bots
+          .find((bot) => bot.id === claim.botId)
+          ?.channelBindings?.find((binding) => binding.provider === claim.provider)
+          ?.sentMessageIds.includes(claim.messageId);
+        yield* setChannelDelivery(ctx, claim.threadId, claim.messageId, sent ? "sent" : "unknown");
+      }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Could not reconcile interrupted channel deliveries.", cause),
+      ),
+    );
     const results = yield* Effect.forEach(
       candidates,
       (candidate) =>
@@ -2713,6 +2764,31 @@ const restoreConnectedChannels = (
       Exit.isFailure(exit) ? [{ ...candidates[index]!, category: "restore" as const }] : [],
     );
   });
+
+/** Persists a projected delivery state on the assistant message via the internal command. */
+const setChannelDelivery = (
+  ctx: ChannelRuntimeContext,
+  threadId: ThreadId,
+  messageId: MessageId,
+  delivery: "pending" | "sent" | "failed" | "unknown",
+) =>
+  Effect.gen(function* () {
+    const thread = yield* ctx.deps.readThread(threadId);
+    if (
+      thread?.messages.find((message) => message.id === messageId)?.channelDelivery === delivery
+    ) {
+      return;
+    }
+    yield* ctx.deps.engine.dispatch({
+      type: "thread.channel-delivery.set",
+      commandId: CommandId.make(yield* randomId(ctx, "channel-delivery")),
+      threadId,
+      messageId,
+      delivery,
+      createdAt: yield* ctx.deps.nowIso,
+    });
+    // The label is best effort: a failed read or write never blocks the delivery itself.
+  }).pipe(Effect.catchCause(() => Effect.void));
 
 const sendChannelMessage = (
   ctx: ChannelRuntimeContext,
@@ -2767,23 +2843,34 @@ const sendChannelMessage = (
           requestedAt: yield* deps.nowIso,
         });
         const alreadySent = binding.sentMessageIds.includes(input.messageId);
+        // A retry of a reply that already landed keeps its sent label.
+        if (!alreadySent) {
+          yield* setChannelDelivery(ctx, input.threadId, input.messageId, "pending");
+        }
         if (claim === "requested" && !alreadySent) {
           yield* replaceBinding(ctx, {
             ...binding,
             lastAttemptAt: yield* deps.nowIso,
             lastError: channelDeliveryUnknownError,
           });
+          yield* setChannelDelivery(ctx, input.threadId, input.messageId, "unknown");
           return yield* failWith(channelDeliveryUnknownError);
         }
         if (claim === "claimed" && !alreadySent) {
           const runtime = ctx.runtimes.get(runtimeKey(input.botId, origin.provider));
           if (!runtime) {
             yield* deps.deliveryStore.releaseRequested(input.messageId);
+            yield* setChannelDelivery(ctx, input.threadId, input.messageId, "failed");
             return yield* failWith(
               `${channelProviderName(origin.provider)} needs reconnect before this reply can send.`,
             );
           }
-          const posted = yield* Effect.exit(runtime.post(origin.externalThreadId, text));
+          const posted = yield* Effect.exit(
+            runtime.post(
+              origin.externalThreadId,
+              channelReplyTextWithFooter(text, input.botId, origin.provider, deps.publicOrigin),
+            ),
+          );
           if (Exit.isFailure(posted)) {
             const failure = Cause.squash(posted.cause);
             const rejected = isChannelPostRejected(failure);
@@ -2800,6 +2887,12 @@ const sendChannelMessage = (
                   }
                 : { lastError: channelDeliveryUnknownError }),
             });
+            yield* setChannelDelivery(
+              ctx,
+              input.threadId,
+              input.messageId,
+              rejected ? "failed" : "unknown",
+            );
             return yield* Effect.failCause(posted.cause);
           }
           const marked = yield* Effect.exit(
@@ -2815,6 +2908,9 @@ const sendChannelMessage = (
               ...binding,
               sentMessageIds: boundedSentMessageIds([...binding.sentMessageIds, input.messageId]),
             });
+            // The post landed even though the durable mark failed, so the
+            // delivery is known sent rather than ambiguous.
+            yield* setChannelDelivery(ctx, input.threadId, input.messageId, "sent");
             return yield* Effect.failCause(marked.cause);
           }
         } else if (claim !== "sent") {
@@ -2823,6 +2919,7 @@ const sendChannelMessage = (
             sentAt: yield* deps.nowIso,
           });
         }
+        yield* setChannelDelivery(ctx, input.threadId, input.messageId, "sent");
         const { lastError, ...sentBinding } = binding;
         return alreadySent
           ? model.snapshotSequence
@@ -3089,7 +3186,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
       const settings = yield* ServerSettingsService;
       const crypto = yield* Crypto.Crypto;
-      const serverConfig = yield* Effect.serviceOption(ServerConfig);
+      const serverConfig = yield* Effect.serviceOption(ServerConfig.ServerConfig);
       const publicOrigin = Option.getOrUndefined(serverConfig)?.publicOrigin;
       return ChannelRuntime.layerWith({
         ...(publicOrigin ? { publicOrigin } : {}),

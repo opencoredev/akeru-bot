@@ -125,6 +125,37 @@ describe("Akeru tool contracts", () => {
     expect(filterAkeruTools({ ...context, delegationDepth: 1, activeDelegations: 3 })).toEqual([]);
   });
 
+  it("hides Task inside a worker and validates worker inputs", () => {
+    const context = {
+      capabilities: new Set(["bot-workspace"] as const),
+      workspaceType: "local" as const,
+      hasUserComputer: false,
+      localFullAccess: false,
+      implementedTools: new Set(["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"]),
+    };
+    expect(filterAkeruTools({ ...context, workerDepth: 0 }).map((tool) => tool.id)).toEqual([
+      "Task",
+      "CheckSubagent",
+      "MessageSubagent",
+      "StopSubagent",
+    ]);
+    expect(filterAkeruTools({ ...context, workerDepth: 1 }).map((tool) => tool.id)).toEqual([
+      "CheckSubagent",
+      "MessageSubagent",
+      "StopSubagent",
+    ]);
+    for (const toolId of ["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"] as const) {
+      expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === toolId)?.approval).toBe("none");
+    }
+    expect(decodeAkeruToolInput("Task", { task: "Summarize", background: true })).toEqual({
+      task: "Summarize",
+      background: true,
+    });
+    expect(() => decodeAkeruToolInput("Task", { task: "  " })).toThrow();
+    expect(() => decodeAkeruToolInput("CheckSubagent", {})).toThrow();
+    expect(() => decodeAkeruToolInput("MessageSubagent", { workerId: "worker-1" })).toThrow();
+  });
+
   it("decodes the approval limit and keeps escalation fields server-owned", () => {
     const input = {
       botId: "bot-research",

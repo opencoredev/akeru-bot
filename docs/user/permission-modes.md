@@ -23,7 +23,7 @@ questions and still stops at protected actions.
 Questions never need approval. A question with choices shows those choices inline. A free-text
 question uses the message composer for the answer.
 
-Akeru's Codex and Kimi runtime always asks before an action that sends data, pays, deletes, changes
+Akeru's runtime always asks before an action that sends data, pays, deletes, changes
 production, publishes, exposes secrets, signs, refunds, or changes an account. Unknown mutating
 actions also ask. Each approval applies only to the pending action.
 

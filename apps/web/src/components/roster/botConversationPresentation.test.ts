@@ -3,8 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildBotConversationEntries,
-  channelOriginLabel,
-  channelOriginForAssistantMessage,
   channelProviderLabel,
   conversationSeparatorLabel,
   isBotConversationWorking,
@@ -28,33 +26,10 @@ const message = (
   }) as const;
 
 describe("bot conversation presentation", () => {
-  it("shows the iMessage sender and maps every channel provider", () => {
-    expect(
-      channelOriginLabel({
-        provider: "imessage",
-        externalThreadId: "group-1",
-        externalSenderId: "+15551234567",
-      }),
-    ).toBe("iMessage · +15551234567");
+  it("maps every channel provider", () => {
     expect(channelProviderLabel("telegram")).toBe("Telegram");
     expect(channelProviderLabel("whatsapp")).toBe("WhatsApp");
-  });
-
-  it("pairs an assistant message with the nearest inbound channel message", () => {
-    const messages = [
-      message("web-user", "user", false),
-      {
-        ...message("telegram-user", "user", false),
-        channelOrigin: { provider: "telegram" as const, externalThreadId: "chat-1" },
-      },
-      message("answer", "assistant", false),
-    ];
-
-    expect(channelOriginForAssistantMessage(messages, 2)).toEqual({
-      provider: "telegram",
-      externalThreadId: "chat-1",
-    });
-    expect(channelOriginForAssistantMessage(messages, 0)).toBeNull();
+    expect(channelProviderLabel("imessage")).toBe("iMessage");
   });
 
   it("shows working as soon as a question response starts", () => {

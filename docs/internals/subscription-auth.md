@@ -83,7 +83,7 @@ Tests replace the client with `testUtils/scriptedHttpClient.ts` and drive timeou
 
 `SubscriptionAuthService.getAccessToken(provider)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests. `getApiKeyCredential(provider)` returns the current server-owned API key and its optional base URL for runtime use only. Both read through the store's stat check, so they see changes other writers made.
 
-Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Kimi and OpenCode Go resolve keys and custom endpoints for model requests. Claude, Grok, and OpenCode receive saved API credentials when their adapter starts a provider process. The login, completion, and logout RPC paths stop affected bridge sessions when the API key or endpoint changes. The next turn starts a new process with the current connection. Grok supports API keys at its default endpoint; its current bridge rejects custom base URLs.
+Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Claude, Grok, Kimi, and OpenCode Go resolve saved keys and custom endpoints through their Mastra model transports. Standard OpenCode receives saved API credentials when its adapter starts a provider process. The login, completion, and logout RPC paths stop affected sessions when the API key or endpoint changes. The next turn starts a new session with the current connection. Grok supports API keys at its default endpoint; its current transport rejects custom base URLs.
 
 ## Post-login health check
 

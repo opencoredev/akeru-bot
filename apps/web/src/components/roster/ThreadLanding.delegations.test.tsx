@@ -230,7 +230,11 @@ const group: Group = {
   updatedAt: "2026-08-31T00:00:00.000Z",
 };
 
-function delegation(id: string, parentThreadId: string) {
+function delegation(
+  id: string,
+  parentThreadId: string,
+  placement: { readonly parentTurnId?: string; readonly anchorMessageId?: string } = {},
+) {
   return decodeDelegation({
     delegationId: id,
     parentDelegationId: null,
@@ -238,7 +242,8 @@ function delegation(id: string, parentThreadId: string) {
     childBotId: BotId.make(childBot.id),
     parentThreadId,
     childThreadId: null,
-    parentTurnId: "turn-parent",
+    parentTurnId: placement.parentTurnId ?? "turn-parent",
+    anchorMessageId: placement.anchorMessageId ?? null,
     childTurnId: null,
     ancestorBotIds: [BotId.make(parentBot.id)],
     depth: 1,
@@ -265,6 +270,47 @@ function delegation(id: string, parentThreadId: string) {
     startedAt: null,
     completedAt: null,
   });
+}
+
+function message(id: string, role: "user" | "assistant", turn: string, minute: number) {
+  const timestamp = `2026-09-11T12:0${minute}:00.000Z`;
+  return {
+    id: MessageId.make(id),
+    role,
+    text: `${role} ${id}`,
+    turnId: TurnId.make(turn),
+    ...(role === "assistant" ? { respondingBotId: BotId.make(parentBot.id) } : {}),
+    streaming: false,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  } satisfies OrchestrationMessage;
+}
+
+// Three turns, each started by a user message and answered by the parent bot.
+const THREE_TURNS = [
+  message("user-1", "user", "turn-1", 1),
+  message("reply-1", "assistant", "turn-1", 2),
+  message("user-2", "user", "turn-2", 3),
+  message("reply-2", "assistant", "turn-2", 4),
+  message("user-3", "user", "turn-3", 5),
+  message("reply-3", "assistant", "turn-3", 6),
+];
+
+/** Message ids and delegation ids in the order the landing renders them. */
+function timelineOrder(rendered: unknown): string[] {
+  const order: string[] = [];
+  visitElements(rendered, (element) => {
+    if (element.type === DelegationCard) {
+      order.push(
+        `card:${(element.props as Parameters<typeof DelegationCard>[0]).delegation.delegationId}`,
+      );
+      return false;
+    }
+    const key = element.key?.replace(/^message:/, "");
+    if (key && THREE_TURNS.some((entry) => entry.id === key)) order.push(key);
+    return false;
+  });
+  return order;
 }
 
 describe("thread landing delegations", () => {
@@ -302,6 +348,83 @@ describe("thread landing delegations", () => {
 
     expect(card?.props.delegation.delegationId).toBe("matching");
     expect(card?.props.childBot).toBe(childBot);
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("places three delegations from three turns at three points in the %s chat", (kind, render) => {
+    if (kind === "bot") mocks.messages = THREE_TURNS;
+    else mocks.groupMessages = THREE_TURNS;
+    mocks.snapshot = {
+      ...mocks.snapshot!,
+      delegations: [
+        delegation("first", "thread-parent", { parentTurnId: "turn-1", anchorMessageId: "user-1" }),
+        delegation("second", "thread-parent", {
+          parentTurnId: "turn-2",
+          anchorMessageId: "user-2",
+        }),
+        delegation("third", "thread-parent", { parentTurnId: "turn-3", anchorMessageId: "user-3" }),
+      ],
+    };
+
+    hooks.beginRender();
+    expect(timelineOrder(render())).toEqual([
+      "user-1",
+      "reply-1",
+      "card:first",
+      "user-2",
+      "reply-2",
+      "card:second",
+      "user-3",
+      "reply-3",
+      "card:third",
+    ]);
+  });
+
+  it("follows the anchor, then the parent turn, then the end of the chat", () => {
+    mocks.messages = THREE_TURNS;
+    mocks.snapshot = {
+      ...mocks.snapshot!,
+      delegations: [
+        delegation("by-anchor", "thread-parent", {
+          parentTurnId: "turn-gone",
+          anchorMessageId: "reply-2",
+        }),
+        delegation("by-turn", "thread-parent", { parentTurnId: "turn-1" }),
+        delegation("unplaced", "thread-parent", { parentTurnId: "turn-gone" }),
+      ],
+    };
+
+    hooks.beginRender();
+    expect(timelineOrder(BotThreadLanding({ botId: parentBot.id }))).toEqual([
+      "user-1",
+      "reply-1",
+      "card:by-turn",
+      "user-2",
+      "reply-2",
+      "card:by-anchor",
+      "user-3",
+      "reply-3",
+      "card:unplaced",
+    ]);
+  });
+
+  it("names the asking bot on group cards", () => {
+    hooks.beginRender();
+    const groupCard = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.type === DelegationCard,
+    ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
+    hooks.beginRender();
+    const botCard = visitElements(
+      BotThreadLanding({ botId: parentBot.id }),
+      (element) => element.type === DelegationCard,
+    ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
+
+    expect(groupCard?.props.variant).toBe("group");
+    expect(groupCard?.props.parentBot).toBe(parentBot);
+    expect(botCard?.props.variant).toBeUndefined();
   });
 
   it("renders plugin recommendations inside the bot conversation", () => {

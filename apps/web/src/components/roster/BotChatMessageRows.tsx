@@ -14,6 +14,10 @@ import { SmilePlusIcon } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 
 import { useI18n } from "~/i18n";
+import {
+  channelDeliveryLabel,
+  channelOriginLabel,
+} from "@t3tools/client-runtime/channel-origin-presentation";
 import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { cn } from "~/lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -36,7 +40,7 @@ import { BotAvatarView } from "./BotAvatarView";
 import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
 import type { BotStepMeterData } from "./botStepMeter.logic";
-import { channelOriginLabel, channelProviderLabel } from "./botConversationPresentation";
+import { channelProviderLabel } from "./botConversationPresentation";
 import type { Bot } from "./types";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -62,8 +66,11 @@ export interface ChannelApprovalTarget {
   readonly environmentId: EnvironmentId;
   readonly botId: BotId;
   readonly threadId: ThreadId;
-  readonly origin: ChannelMessageOrigin;
+  /** Null when the inbound channel message is not loaded yet. */
+  readonly origin: ChannelMessageOrigin | null;
   readonly sent: boolean;
+  /** Only channel admins with a live binding may trigger a send. */
+  readonly canSend: boolean;
 }
 
 /** A stable reaction updater for memoized rows; it only changes with the linked thread. */
@@ -172,29 +179,53 @@ export function ChannelSendApproval({
   origin,
   threadId,
   messageId,
+  delivery,
   sent,
+  canSend,
 }: {
   readonly environmentId: EnvironmentId;
   readonly botId: BotId;
-  readonly origin: ChannelMessageOrigin;
+  readonly origin: ChannelMessageOrigin | null;
   readonly threadId: ThreadId;
   readonly messageId: MessageId;
+  readonly delivery: OrchestrationMessage["channelDelivery"];
   readonly sent: boolean;
+  readonly canSend: boolean;
 }) {
   const { t } = useI18n();
   const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const delivered = sent || submitted;
-  const label = channelProviderLabel(origin.provider);
+  const delivered = sent || submitted || delivery === "sent";
+  const label = origin ? channelProviderLabel(origin.provider) : null;
+  const deliveryLabel =
+    delivery && (!delivered || label === null)
+      ? channelDeliveryLabel(delivery, origin?.provider)
+      : null;
   return (
     <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-      <span className="min-w-0 flex-1 text-muted-foreground">
-        {delivered
+      <span
+        className={cn(
+          "min-w-0 flex-1",
+          deliveryLabel?.tone === "error"
+            ? "text-destructive"
+            : deliveryLabel?.tone === "warning"
+              ? "text-amber-700 dark:text-amber-400"
+              : "text-muted-foreground",
+        )}
+      >
+        {delivered && label !== null
           ? t("Sent to {channel}", { channel: label })
-          : t("Send this reply to {channel}?", { channel: label })}
+          : (deliveryLabel?.message ??
+            (canSend && label !== null
+              ? t("Send this reply to {channel}?", { channel: label })
+              : null))}
       </span>
-      {!delivered ? (
+      {canSend &&
+      label !== null &&
+      !delivered &&
+      delivery !== "pending" &&
+      delivery !== "unknown" ? (
         <Button
           size="xs"
           disabled={busy}
@@ -339,7 +370,9 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
             origin={channelApproval.origin}
             threadId={channelApproval.threadId}
             messageId={message.id}
+            delivery={message.channelDelivery}
             sent={channelApproval.sent}
+            canSend={channelApproval.canSend}
           />
         ) : null}
       </div>

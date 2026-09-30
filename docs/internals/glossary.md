@@ -10,6 +10,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Thread timeline](#thread-timeline)
 - [Roster organization](#roster-organization)
 - [Orchestration](#orchestration)
+- [Channels](#channels)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
 - [Image provider](#image-provider)
@@ -47,6 +48,10 @@ A single user-to-assistant work cycle inside a thread. It starts with user input
 #### Silent run
 
 A running turn whose provider has sent no output for `SILENCE_WATCHDOG_SILENT_MS` (90 seconds). Ingestion records it as a `turn.silent` activity and clears it with `turn.silent.cleared` or the end of the turn. It is a status, not a failure: nothing interrupts the turn. See [silence-watchdog.md](./silence-watchdog.md).
+
+#### Temporary worker
+
+A short-lived helper a bot starts with the Task tool during its own turn. It runs in a hidden child thread under a narrower grant, cannot start workers of its own, and is canceled when the parent turn ends. It is not a bot and is separate from bot-to-bot delegation. See [providers.md](./providers.md#temporary-workers).
 
 ### Roster organization
 
@@ -128,6 +133,26 @@ Work one bot sends to another with `SendToAgent`. It runs in a child thread and 
 
 A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
 
+### Channels
+
+External channels connect a messaging conversation (Telegram, Slack, Discord, iMessage, or WhatsApp) to normal Akeru orchestration. See [channels.md](./channels.md) and the [user guide](../user/channels.md).
+
+#### Channel connection profile
+
+A reusable record for one set of provider credentials, holding only safe display data such as the provider, a name, the external identity, and optional `managementUrl` and `webhookUrl`. Credentials live in the environment secret store, never on the profile. A profile can be saved unassigned and attached later.
+
+#### Channel binding
+
+The assignment of a channel connection profile to a bot and a project, carried on the bot record. It reports health through `status`, `lastError`, `failureCategory`, and `lastSucceededAt`. Statuses are `connecting`, `connected`, `needs-reconnect`, `failed`, `blocked` (project unavailable), `not-live` (WhatsApp without a public origin), and `disconnected`. See the health section of [channels.md](./channels.md).
+
+#### Channel origin
+
+The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives thread subscriptions restored on startup and the origin label clients render.
+
+#### Channel delivery
+
+The per-reply delivery state (`pending`, `sent`, `failed`, `unknown`) mirrored from the durable delivery store onto each channel-originated assistant message. `unknown` means provider acceptance could not be proven; Akeru never reposts it automatically.
+
 ### Dictation
 
 Hold-to-talk capture on the active client that transcribes into the current composer draft. The
@@ -173,6 +198,10 @@ The backend agent runtime that actually performs work. Six drivers ship built in
 
 The live provider-backed runtime attached to a thread. Session shape is in [the orchestration contracts][1], and lifecycle is managed in [ProviderService.ts][14].
 
+#### Runtime seam
+
+The single bridge where Promise-based code (Mastra callbacks, tool handlers, library promises) re-enters AgentController's Effect runtime. Its fibers belong to the controller's layer scope, so background failures are logged and shutdown interrupts in-flight work. See the runtime seam section of [providers.md][16].
+
 #### Runtime mode
 
 The safety/access mode for a thread or session. [The contracts][1] define four values: `approval-required`, `auto-accept-edits`, `auto`, and `full-access`. See [permission modes][18].
@@ -188,6 +217,24 @@ Controls how assistant text reaches the thread timeline. In [the contracts][1], 
 #### Snapshot
 
 A point-in-time view of state. The word is used in multiple layers, including orchestration, provider, and checkpointing. See [ProjectionSnapshotQuery.ts][10], [ProviderAdapter.ts][15], and [CheckpointStore.ts][19].
+
+#### Model routing
+
+The path a bot's saved model takes to its provider. On `thread.turn.start` the decider rewrites the
+command's `modelSelection` from the responding bot's engine, Mastra drivers map the slug to a wire
+id such as `openai/<model>` or `anthropic/<model>` and call `session.model.switch`, and standard
+OpenCode re-sends `modelSelection` per turn through the legacy bridge. Validation fails closed at
+`bot.create`/`bot.update`, at turn-start preflight in `ws.ts`, and at `AgentController.inspectEngine`,
+and all three only trust a provider snapshot that reports `status === "ready"`. See
+[providers.md](./providers.md#model-routing) and
+[provider-model-routing.md](../operations/provider-model-routing.md).
+
+#### Model reroute
+
+A runtime report that the provider served a different model than the one requested. Adapters emit
+the `model.rerouted` runtime event and ingestion projects a `model.rerouted` activity line so the
+change is visible. Today only the Codex adapter emits it. See
+[providers.md](./providers.md#model-routing).
 
 #### Model manifest
 
