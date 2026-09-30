@@ -19,6 +19,7 @@ import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
 import { PersistenceSqlError } from "../../persistence/Errors.ts";
@@ -401,22 +402,22 @@ describe("OrchestrationEngine", () => {
     await system.dispose();
   });
 
-  it("keeps a queued turn start admitted after its caller is interrupted", async () => {
-    const workerReachedBlocker = Effect.runSync(Deferred.make<void>());
-    const releaseBlocker = Effect.runSync(Deferred.make<void>());
-    const blockingProjectionPipeline: OrchestrationProjectionPipelineShape = {
-      bootstrap: Effect.void,
-      projectEvent: (event) =>
-        event.commandId === CommandId.make("cmd-blocker")
-          ? Deferred.succeed(workerReachedBlocker, undefined).pipe(
-              Effect.andThen(Deferred.await(releaseBlocker)),
-            )
-          : Effect.void,
-      projectEventDeferred: (event) =>
-        blockingProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
-    };
-    const runtime = ManagedRuntime.make(
-      OrchestrationEngineLive.pipe(
+  effectIt.effect("keeps a queued turn start admitted after its caller is interrupted", () =>
+    Effect.gen(function* () {
+      const workerReachedBlocker = yield* Deferred.make<void>();
+      const releaseBlocker = yield* Deferred.make<void>();
+      const blockingProjectionPipeline: OrchestrationProjectionPipelineShape = {
+        bootstrap: Effect.void,
+        projectEvent: (event) =>
+          event.commandId === CommandId.make("cmd-blocker")
+            ? Deferred.succeed(workerReachedBlocker, undefined).pipe(
+                Effect.andThen(Deferred.await(releaseBlocker)),
+              )
+            : Effect.void,
+        projectEventDeferred: (event) =>
+          blockingProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
+      };
+      const engineLayer = OrchestrationEngineLive.pipe(
         Layer.provide(OrchestrationProjectionSnapshotQueryLive),
         Layer.provide(ThreadBackgroundLiveness.layer),
         Layer.provide(ThreadPlanProgress.layer),
@@ -426,58 +427,53 @@ describe("OrchestrationEngine", () => {
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
         Layer.provide(NodeServices.layer),
-      ),
-    );
-    const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
-    const createdAt = now();
-    const threadId = ThreadId.make("thread-interrupted-start");
+      );
 
-    await runtime.runPromise(
-      engine.dispatch({
-        type: "project.create",
-        commandId: CommandId.make("cmd-project-interrupted-start"),
-        projectId: asProjectId("project-interrupted-start"),
-        title: "Project",
-        workspaceRoot: "/tmp/project-interrupted-start",
-        defaultModelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5-codex",
-        },
-        createdAt,
-      }),
-    );
-    await runtime.runPromise(
-      engine.dispatch({
-        type: "thread.create",
-        commandId: CommandId.make("cmd-thread-interrupted-start"),
-        threadId,
-        projectId: asProjectId("project-interrupted-start"),
-        title: "Thread",
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5-codex",
-        },
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        branch: null,
-        worktreePath: null,
-        createdAt,
-      }),
-    );
+      yield* Effect.gen(function* () {
+        const engine = yield* OrchestrationEngineService;
+        const createdAt = now();
+        const threadId = ThreadId.make("thread-interrupted-start");
 
-    // Occupy the worker so the turn start waits in the queue.
-    const blocker = runtime.runFork(
-      engine.dispatch({
-        type: "thread.meta.update",
-        commandId: CommandId.make("cmd-blocker"),
-        threadId,
-        title: "Blocked",
-      }),
-    );
-    await runtime.runPromise(Deferred.await(workerReachedBlocker));
+        yield* engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-project-interrupted-start"),
+          projectId: asProjectId("project-interrupted-start"),
+          title: "Project",
+          workspaceRoot: "/tmp/project-interrupted-start",
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          createdAt,
+        });
+        yield* engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cmd-thread-interrupted-start"),
+          threadId,
+          projectId: asProjectId("project-interrupted-start"),
+          title: "Thread",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt,
+        });
 
-    await runtime.runPromise(
-      Effect.gen(function* () {
+        // Occupy the worker so the turn start waits in the queue.
+        const blocker = yield* engine
+          .dispatch({
+            type: "thread.meta.update",
+            commandId: CommandId.make("cmd-blocker"),
+            threadId,
+            title: "Blocked",
+          })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Deferred.await(workerReachedBlocker);
+
         const caller = yield* engine
           .dispatch({
             type: "thread.turn.start",
@@ -495,36 +491,27 @@ describe("OrchestrationEngine", () => {
           })
           .pipe(Effect.forkChild({ startImmediately: true }));
         yield* Fiber.interrupt(caller);
-      }),
-    );
-    // The worker still owns the queued turn, so an update cannot begin.
-    expect(tryBeginMaintenance()).toBe(false);
+        // The worker still owns the queued turn, so an update cannot begin.
+        expect(tryBeginMaintenance()).toBe(false);
 
-    await runtime.runPromise(Deferred.succeed(releaseBlocker, undefined));
-    await runtime.runPromise(Fiber.join(blocker));
-    // The queue is FIFO: once this returns, the turn start has committed.
-    await runtime.runPromise(
-      engine.dispatch({
-        type: "thread.meta.update",
-        commandId: CommandId.make("cmd-after-interrupted-start"),
-        threadId,
-        title: "After",
-      }),
-    );
-    const turnEvents = await runtime.runPromise(
-      Stream.runCollect(engine.readEvents(0)).pipe(
-        Effect.map((events) =>
-          Array.from(events).filter(
-            (event) => event.commandId === CommandId.make("cmd-turn-start-interrupted"),
-          ),
-        ),
-      ),
-    );
-    expect(turnEvents.length).toBeGreaterThan(0);
-    expect(tryBeginMaintenance()).toBe(true);
-    finishMaintenance();
-    await runtime.dispose();
-  });
+        yield* Deferred.succeed(releaseBlocker, undefined);
+        yield* Fiber.join(blocker);
+        // The queue is FIFO: once this returns, the turn start has committed.
+        yield* engine.dispatch({
+          type: "thread.meta.update",
+          commandId: CommandId.make("cmd-after-interrupted-start"),
+          threadId,
+          title: "After",
+        });
+        const turnEvents = Array.from(yield* Stream.runCollect(engine.readEvents(0))).filter(
+          (event) => event.commandId === CommandId.make("cmd-turn-start-interrupted"),
+        );
+        expect(turnEvents.length).toBeGreaterThan(0);
+        expect(tryBeginMaintenance()).toBe(true);
+        finishMaintenance();
+      }).pipe(Effect.provide(engineLayer));
+    }),
+  );
 
   it("archives and unarchives threads through orchestration commands", async () => {
     const system = await createOrchestrationSystem();
