@@ -64,6 +64,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
   claudeSettings: ClaudeSettings,
   environment?: NodeJS.ProcessEnv,
   secretsDir?: string,
+  instanceId?: string,
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -152,7 +153,12 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
 
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
       const requestEnvironment = secretsDir
-        ? yield* subscriptionRuntimeEnvironment(secretsDir, "anthropic", claudeEnvironment)
+        ? yield* subscriptionRuntimeEnvironment(
+            secretsDir,
+            "anthropic",
+            claudeEnvironment,
+            instanceId,
+          )
         : claudeEnvironment;
       // Titles need only the supplied prompt, not configuration from the checkout.
       const workingDirectory =

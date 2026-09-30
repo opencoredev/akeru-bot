@@ -30,6 +30,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
   grokSettings: GrokSettings,
   environment: NodeJS.ProcessEnv = process.env,
   secretsDir?: string,
+  instanceId?: string,
 ) {
   const crypto = yield* Crypto.Crypto;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -53,7 +54,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       const runtime = yield* makeGrokAcpRuntime({
         grokSettings,
         environment: secretsDir
-          ? yield* subscriptionRuntimeEnvironment(secretsDir, "xai", environment)
+          ? yield* subscriptionRuntimeEnvironment(secretsDir, "xai", environment, instanceId)
           : environment,
         childProcessSpawner: commandSpawner,
         cwd,

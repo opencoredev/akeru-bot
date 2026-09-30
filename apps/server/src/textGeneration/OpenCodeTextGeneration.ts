@@ -184,6 +184,7 @@ interface SharedOpenCodeTextGenerationServerState {
 export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration")(function* (
   openCodeSettings: OpenCodeSettings,
   environment?: NodeJS.ProcessEnv,
+  instanceId?: string,
 ) {
   const serverConfig = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -295,6 +296,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                       serverConfig.secretsDir,
                       "opencode-go",
                       resolvedEnvironment,
+                      instanceId,
                     ).pipe(
                       Effect.provideService(FileSystem.FileSystem, fileSystem),
                       Effect.provideService(Path.Path, path),

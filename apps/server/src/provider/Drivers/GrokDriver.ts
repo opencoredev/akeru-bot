@@ -115,7 +115,12 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
       });
-      const textGeneration = yield* makeGrokTextGeneration(effectiveConfig, processEnv, secretsDir);
+      const textGeneration = yield* makeGrokTextGeneration(
+        effectiveConfig,
+        processEnv,
+        secretsDir,
+        instanceId,
+      );
 
       const checkProvider = checkGrokProviderStatus(effectiveConfig, processEnv).pipe(
         Effect.map(stampIdentity),
