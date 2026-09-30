@@ -331,6 +331,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     ? composerIdentity.title
     : (bot?.name ?? providerBotName(composerProviderDriver));
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+  const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
@@ -711,6 +712,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     },
     [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
   );
+  const deleteThreadBot = useCallback(async () => {
+    if (!bot) return false;
+    const result = await deleteBot({
+      environmentId: props.environmentId,
+      input: { botId: bot.id },
+    });
+    return result._tag === "Success";
+  }, [bot, deleteBot, props.environmentId]);
   const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
@@ -741,6 +750,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             botUsageCap: bot.usageCap,
             botUsageCapProviderDriver: currentModelOption?.providerDriver,
             onUpdateBotUsageCap: updateBotUsageCap,
+            onDeleteBot: deleteThreadBot,
           }
         : {}),
     }),
@@ -748,6 +758,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       currentModelSelection,
       currentRuntimeMode,
       bot,
+      deleteThreadBot,
       props.environmentId,
       props.onUpdateModelSelection,
       props.onUpdateRuntimeMode,
