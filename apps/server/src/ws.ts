@@ -4032,6 +4032,11 @@ export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const voiceCalls = yield* VoiceCallManager.VoiceCallManager;
+    const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+    // Deleting a bot frees the single call slot it may hold.
+    yield* Effect.forkScoped(
+      VoiceCallManager.hangupDeletedBotCalls(voiceCalls, orchestrationEngine.streamDomainEvents),
+    );
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const providerRefreshes: ProviderSubscribeRefreshes = {
       inFlight: new Set(),

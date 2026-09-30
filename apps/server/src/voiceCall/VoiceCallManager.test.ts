@@ -1,4 +1,10 @@
-import { BotId, VoiceCallError } from "@akeru/contracts";
+import {
+  BotId,
+  CommandId,
+  EventId,
+  VoiceCallError,
+  type OrchestrationEvent,
+} from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
@@ -6,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import { ServerConfig } from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
@@ -13,7 +20,13 @@ import {
   ProjectionBotRepository,
   type ProjectionBotRepositoryShape,
 } from "../persistence/Services/ProjectionBots.ts";
-import { defaultSession, parseCodexCliAuth, VoiceCallManager, layer } from "./VoiceCallManager.ts";
+import {
+  defaultSession,
+  hangupDeletedBotCalls,
+  parseCodexCliAuth,
+  VoiceCallManager,
+  layer,
+} from "./VoiceCallManager.ts";
 
 it("accepts a Codex CLI auth file without auth_mode", () => {
   assert.deepEqual(
@@ -215,6 +228,37 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         failingLayer,
       );
       return result;
+    }),
+  );
+
+  it.effect("ends the call when its bot is deleted", () =>
+    Effect.gen(function* () {
+      const manager = yield* VoiceCallManager;
+      const call = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
+      const botDeleted = (deletedBotId: BotId, sequence: number): OrchestrationEvent => ({
+        sequence,
+        eventId: EventId.make(`evt-bot-deleted-${sequence}`),
+        aggregateKind: "bot",
+        aggregateId: deletedBotId,
+        type: "bot.deleted",
+        occurredAt: now,
+        commandId: CommandId.make(`cmd-bot-delete-${sequence}`),
+        causationEventId: null,
+        correlationId: CommandId.make(`cmd-bot-delete-${sequence}`),
+        metadata: {},
+        payload: { botId: deletedBotId, deletedAt: now },
+      });
+
+      yield* hangupDeletedBotCalls(manager, Stream.make(botDeleted(BotId.make("other-bot"), 1)));
+      assert.equal((yield* manager.get).status, "live");
+
+      yield* hangupDeletedBotCalls(manager, Stream.make(botDeleted(botId, 2)));
+      assert.deepEqual(yield* manager.get, { status: "idle" });
+      const stale = yield* Effect.result(manager.hangup(call.call.callId, "client-1"));
+      assert.equal(stale._tag, "Failure");
+
+      const next = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-2");
+      yield* manager.hangup(next.call.callId, "client-2");
     }),
   );
 
