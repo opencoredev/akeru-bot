@@ -1298,7 +1298,6 @@ export const englishCatalog = {
   "Send a direct WhatsApp message to this number.":
     "Send a direct WhatsApp message to this number.",
   "Send a direct Telegram message to this bot.": "Send a direct Telegram message to this bot.",
-  "the bot": "the bot",
   "Send a direct message or mention {name} in a Slack channel thread.":
     "Send a direct message or mention {name} in a Slack channel thread.",
   "Send a direct message or mention {name} in a Discord server.":

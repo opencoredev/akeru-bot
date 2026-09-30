@@ -1244,7 +1244,6 @@ export const zhCNCatalog: TranslationCatalog = {
     "向此线路发送一条 iMessage 私信以测试回复。",
   "Send a direct WhatsApp message to this number.": "向此号码发送一条 WhatsApp 私信。",
   "Send a direct Telegram message to this bot.": "向此机器人发送一条 Telegram 私信。",
-  "the bot": "机器人",
   "Send a direct message or mention {name} in a Slack channel thread.":
     "发送私信，或在 Slack 频道的消息串中提及 {name}。",
   "Send a direct message or mention {name} in a Discord server.":
