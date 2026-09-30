@@ -56,22 +56,29 @@ export class WorkspaceComputer implements BotBrowserRpc {
 
   private initialize() {
     if (this.initialization) return this.initialization;
-    const generation = this.gate.generation;
+    // Only a stop invalidates startup. Taking or releasing control changes the gate
+    // generation too, but must not stop the computer or revoke the new owner.
+    let stopped = false;
+    const unsubscribe = this.gate.subscribe(() => {
+      stopped = true;
+    });
     this.initialization = (async () => {
       await this.checkRunning();
       await this.desktop.open();
       await this.launch();
-      if (generation !== this.gate.generation) {
+      if (stopped) {
         throw new ComputerError({
           code: "revoked",
           message: "Computer initialization was revoked.",
         });
       }
-    })().catch((cause: unknown) => {
-      this.initialization = undefined;
-      this.gate.stop();
-      throw cause;
-    });
+    })()
+      .catch((cause: unknown) => {
+        this.initialization = undefined;
+        this.gate.stop();
+        throw cause;
+      })
+      .finally(unsubscribe);
     return this.initialization;
   }
 

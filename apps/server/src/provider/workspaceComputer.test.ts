@@ -53,4 +53,48 @@ describe("WorkspaceComputer", () => {
     await expect(pending).rejects.toMatchObject({ code: "revoked" });
     expect(inputs).toEqual([]);
   });
+
+  const deferredLaunch = () => {
+    let started = () => {};
+    let finish = () => {};
+    const launchStarted = new Promise<void>((resolve) => (started = resolve));
+    const computer = new WorkspaceComputer(
+      "workspace",
+      {
+        open: async () => undefined,
+        input: async () => undefined,
+        capture: async () => ({ mimeType: "image/png", data: "Zg==", width: 1, height: 1 }),
+      },
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+          started();
+        }),
+      async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
+      async () => "running",
+    );
+    return { computer, launchStarted, finishLaunch: () => finish() };
+  };
+
+  it("keeps control taken while the desktop is still starting", async () => {
+    const { computer, launchStarted, finishLaunch } = deferredLaunch();
+    const capture = computer.capture();
+    await launchStarted;
+    const lease = await computer.gate.acquire("client");
+    finishLaunch();
+    await expect(capture).resolves.toMatchObject({ mimeType: "image/png" });
+    expect(computer.gate.status).toBe("human");
+    await computer.gate.release("client", lease.sessionId);
+    expect(computer.gate.status).toBe("ready");
+  });
+
+  it("fails startup that was stopped before it finished", async () => {
+    const { computer, launchStarted, finishLaunch } = deferredLaunch();
+    const capture = computer.capture();
+    await launchStarted;
+    computer.gate.stop();
+    finishLaunch();
+    await expect(capture).rejects.toMatchObject({ code: "revoked" });
+    expect(computer.gate.status).toBe("stopped");
+  });
 });
