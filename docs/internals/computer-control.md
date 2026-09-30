@@ -31,6 +31,7 @@ Provider credentials and raw CDP URLs stay server-side. Connection identity is p
 | E2B            | No                 | Generic sandboxes are not treated as desktops.                                                                  |
 | Vercel Sandbox | No                 | No private desktop API is wired.                                                                                |
 | Upstash Box    | No                 | The pinned SDK path does not provision the newer managed browser.                                               |
+| Tenki          | No                 | No authenticated browser-control or graphical desktop endpoint is wired.                                        |
 
 Codex, Claude, Grok, Kimi For Coding, and OpenCode Go register this computer through Mastra session resources. Standard OpenCode stays unavailable until it uses the same gated browser tools. Shell processes can still send desktop input outside the gate; that residual risk is documented rather than silently claimed exclusive. Unbrokered MCP browser credentials are withheld from the graphical computer.
 

@@ -11,7 +11,7 @@ import type {
   OrchestrationBot,
   OrchestrationThreadShell,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { memo, useCallback, useState } from "react";
@@ -21,7 +21,7 @@ import {
   type PluginDefinition,
 } from "../../../../../plugins";
 
-import { createTranslator, type PluralForms } from "@t3tools/client-runtime/i18n";
+import { createTranslator, type PluralForms } from "@akeru/client-runtime/i18n";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useI18n } from "../../i18n";

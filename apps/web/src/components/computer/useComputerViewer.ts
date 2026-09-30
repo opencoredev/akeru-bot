@@ -2,19 +2,19 @@ import { RegistryContext } from "@effect/atom-react";
 import {
   deriveComputerViewer,
   type ComputerViewerState,
-} from "@t3tools/client-runtime/state/computer-viewer";
+} from "@akeru/client-runtime/state/computer-viewer";
 import {
   createComputerViewerController,
   type ComputerViewerController,
   type ComputerViewerOutcome,
-} from "@t3tools/client-runtime/state/computer-viewer-controller";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/computer-viewer-controller";
+import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import {
   COMPUTER_SESSION_TTL_MS,
   ComputerError,
   type ComputerState,
   type ScopedThreadRef,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";

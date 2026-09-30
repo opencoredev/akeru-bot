@@ -4,7 +4,7 @@ import {
   THREAD_SILENT_RUN_ACTIVITY_KIND,
   THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
   ThreadSilentRunActivityPayload,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 export interface ThreadSilentRun {

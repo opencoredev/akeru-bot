@@ -10,19 +10,19 @@ import {
   removeCatalogValue,
   removeConnectionFromCatalog,
   replaceCatalogValue,
-} from "@t3tools/client-runtime/platform";
+} from "@akeru/client-runtime/platform";
 import {
   ConnectionTransientError,
   CredentialStore,
   ProfileStore,
-} from "@t3tools/client-runtime/connection";
+} from "@akeru/client-runtime/connection";
 import {
   EnvironmentId,
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
   ServerConfig,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

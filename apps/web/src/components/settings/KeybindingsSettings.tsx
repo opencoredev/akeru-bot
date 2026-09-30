@@ -26,13 +26,13 @@ import {
   type KeybindingWhenNode,
   type ServerRemoveKeybindingInput,
   type ServerUpsertKeybindingInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 
 import { isElectron } from "../../env";
 import { useOpenInPreferredEditor } from "../../editorPreferences";

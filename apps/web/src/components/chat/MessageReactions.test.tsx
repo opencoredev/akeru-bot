@@ -1,4 +1,4 @@
-import type { OrchestrationMessageReaction } from "@t3tools/contracts";
+import type { OrchestrationMessageReaction } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

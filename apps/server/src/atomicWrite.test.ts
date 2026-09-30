@@ -8,7 +8,7 @@ import { afterEach, assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 

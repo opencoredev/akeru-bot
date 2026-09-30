@@ -1,13 +1,13 @@
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
-} from "@t3tools/client-runtime/pending-requests";
+} from "@akeru/client-runtime/pending-requests";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export interface BotActivity {
   /** Short present-tense update for what the bot is doing, without trailing dots. */

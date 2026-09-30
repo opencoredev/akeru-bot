@@ -1,4 +1,4 @@
-import type { OrchestrationLatestTurn, OrchestrationMessage } from "@t3tools/contracts";
+import type { OrchestrationLatestTurn, OrchestrationMessage } from "@akeru/contracts";
 
 export interface VoiceAudio {
   readonly audioBase64: string;

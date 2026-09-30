@@ -5,7 +5,7 @@ import {
   TrimmedNonEmptyString,
   type AkeruMemoryShareScope as AkeruMemoryShareScopeValue,
   type AkeruMemoryDocumentTarget as AkeruMemoryDocumentTargetValue,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";

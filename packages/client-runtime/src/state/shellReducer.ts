@@ -6,7 +6,7 @@ import {
   type AkeruDelegationRecord,
   type OrchestrationShellSnapshot,
   type OrchestrationShellStreamEvent,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 /**
  * Reduce a single shell stream event into an existing snapshot, returning a new

@@ -5,12 +5,12 @@ const LATEST_ORIGIN = "https://latest.app.t3.codes";
 
 export const config: VercelConfig = {
   buildCommand:
-    "vp run --filter @t3tools/web build && node ../../scripts/apply-web-brand-assets.ts production",
+    "vp run --filter @akeru/web build && node ../../scripts/apply-web-brand-assets.ts production",
   git: {
     deploymentEnabled: false,
   },
   installCommand:
-    "npm install -g vite-plus && vp install --ignore-scripts --filter '@t3tools/scripts...' --filter '@t3tools/web...'",
+    "npm install -g vite-plus && vp install --ignore-scripts --filter '@akeru/scripts...' --filter '@akeru/web...'",
   routes: [
     {
       src: "/(.*)",

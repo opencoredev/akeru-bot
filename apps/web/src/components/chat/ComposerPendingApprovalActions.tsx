@@ -5,7 +5,7 @@ import {
   type ProviderApprovalDecision,
   type ProviderApprovalOption,
   type ProviderRequestKind,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { ShieldCheckIcon } from "lucide-react";
 import { memo } from "react";
 import { useI18n } from "~/i18n";

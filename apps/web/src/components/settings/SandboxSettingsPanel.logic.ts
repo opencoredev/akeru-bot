@@ -1,9 +1,9 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type {
   ProviderInstanceEnvironmentVariable,
   SandboxProvider,
   SandboxSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
 
@@ -56,6 +56,12 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     label: "Ascii Box",
     description: "Run bots in a persistent Linux VM. Public previews are enabled by default.",
     fields: [{ name: "BOX_API_KEY", label: "API key", secret: true }],
+  },
+  tenki: {
+    id: "tenki",
+    label: "Tenki",
+    description: "Cloud workspaces managed by Tenki. Requires an API key.",
+    fields: [{ name: "TENKI_API_KEY", label: "API key", secret: true }],
   },
 };
 

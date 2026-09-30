@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createBotEnvironmentAtoms } from "@t3tools/client-runtime/state/bots";
-import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@t3tools/contracts";
+import { createBotEnvironmentAtoms } from "@akeru/client-runtime/state/bots";
+import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 

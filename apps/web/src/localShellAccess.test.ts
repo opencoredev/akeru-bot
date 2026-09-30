@@ -1,8 +1,5 @@
-import {
-  BearerConnectionTarget,
-  PrimaryConnectionTarget,
-} from "@t3tools/client-runtime/connection";
-import { EnvironmentId } from "@t3tools/contracts";
+import { BearerConnectionTarget, PrimaryConnectionTarget } from "@akeru/client-runtime/connection";
+import { EnvironmentId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { isLocalShellTarget } from "./localShellAccess";

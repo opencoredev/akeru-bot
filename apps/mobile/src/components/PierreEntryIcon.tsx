@@ -1,8 +1,8 @@
 import { SymbolView } from "../components/AppSymbol";
 import { Image, type ImageStyle, type StyleProp } from "react-native";
 
-import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
-import { resolveMarkdownFileIcon } from "@t3tools/mobile-markdown-text/links";
+import { markdownFileIconSource } from "@akeru/mobile-markdown-text/file-icons";
+import { resolveMarkdownFileIcon } from "@akeru/mobile-markdown-text/links";
 import { useThemeColor } from "../lib/useThemeColor";
 
 export function PierreEntryIcon(props: {

@@ -2,8 +2,8 @@ import {
   DEFAULT_LOCAL_EXECUTION_MODE,
   type LocalExecutionMode,
   type RuntimeMode,
-} from "@t3tools/contracts";
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 
 import type { useI18n } from "../../i18n";
 import type { Bot } from "./types";
@@ -21,6 +21,7 @@ export const BOT_SANDBOX_OPTIONS = [
   { value: "vercel", label: "Vercel Sandbox" },
   { value: "upstash", label: "Upstash Box" },
   { value: "ascii", label: "Ascii Box" },
+  { value: "tenki", label: "Tenki" },
 ] as const;
 
 export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"];

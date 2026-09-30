@@ -1,11 +1,11 @@
-import { AkeruMemoryCandidateId, BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
-import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import { AkeruMemoryCandidateId, BotId, EnvironmentId, ThreadId } from "@akeru/contracts";
+import type { BotInboxItem } from "@akeru/client-runtime/bot-inbox";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });

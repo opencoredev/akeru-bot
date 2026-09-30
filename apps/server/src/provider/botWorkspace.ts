@@ -12,12 +12,19 @@ import {
   type ProviderStatus,
   Workspace,
 } from "@mastra/core/workspace";
-import type { BotSandbox } from "@t3tools/contracts";
+import type { BotSandbox } from "@akeru/contracts";
 import { BotWorkspaceFilesystem } from "./botWorkspaceFilesystem.ts";
 import { DaytonaComputer } from "./daytonaComputer.ts";
 import { WorkspaceComputer } from "./workspaceComputer.ts";
 
-export const REMOTE_BOT_SANDBOXES = ["e2b", "daytona", "vercel", "upstash", "ascii"] as const;
+export const REMOTE_BOT_SANDBOXES = [
+  "e2b",
+  "daytona",
+  "vercel",
+  "upstash",
+  "ascii",
+  "tenki",
+] as const;
 export type RemoteBotSandbox = (typeof REMOTE_BOT_SANDBOXES)[number];
 export type AkeruWorkspaceState = "running" | "sleeping" | "missing";
 
@@ -320,6 +327,12 @@ async function create(
       environment,
     );
   }
+  if (provider === "tenki") {
+    const { TenkiSandbox } = await import("@tenkicloud/sandbox");
+    const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+    // Persist the VM identity before wake waits for readiness, which can fail transiently.
+    return tenki(await client.create({ name: id, sticky: true, waitReady: false }));
+  }
   const { Box } = await import("@upstash/box");
   return upstash(await Box.create({ apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
@@ -366,6 +379,11 @@ async function open(
       }),
       environment,
     );
+  }
+  if (provider === "tenki") {
+    const { TenkiSandbox } = await import("@tenkicloud/sandbox");
+    const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+    return tenki(await client.get(id));
   }
   const { Box } = await import("@upstash/box");
   return upstash(await Box.get(id, { apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
@@ -458,6 +476,68 @@ export function ascii(
       return { url: result.url, requestHeaders: {} };
     },
   };
+}
+
+export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemoteSession {
+  return {
+    providerId: session.id,
+    inspect: async () => {
+      await session.refresh();
+      return tenkiWorkspaceState(session.state);
+    },
+    run: async (command, args, options) => {
+      const result = await session.exec([command, ...args], {
+        ...(options?.cwd ? { cwd: options.cwd } : {}),
+        ...(options?.env ? { env: options.env } : {}),
+        ...(options?.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
+      });
+      return {
+        stdout: new TextDecoder().decode(result.stdout),
+        stderr: new TextDecoder().decode(result.stderr),
+        exitCode: result.exitCode,
+      };
+    },
+    browserEndpoint: async () => {
+      // Public application previews must not expose the browser's unauthenticated MCP server.
+      throw new Error(
+        "Tenki sandbox browser requires an authenticated endpoint; public previews are not supported for browser control.",
+      );
+    },
+    wake: async () => {
+      await session.refresh();
+      if (session.state === "PAUSING") await session.waitPaused();
+      if (session.state === "PAUSED" || session.state === "USER_SHUTDOWN") {
+        await session.resume();
+        await session.waitResumed();
+      } else if (session.state === "RESUMING") {
+        await session.waitResumed();
+      } else {
+        await session.waitReady();
+      }
+    },
+    sleep: async () => {
+      await session.pause();
+      await session.waitPaused();
+    },
+    destroy: () => session.close(),
+  };
+}
+
+export function tenkiWorkspaceState(
+  state: import("@tenkicloud/sandbox").SessionState,
+): AkeruWorkspaceState {
+  switch (state) {
+    case "RUNNING":
+      return "running";
+    case "CREATING":
+    case "PAUSED":
+    case "USER_SHUTDOWN":
+    case "PAUSING":
+    case "RESUMING":
+      return "sleeping";
+    default:
+      return "missing";
+  }
 }
 
 export function e2b(initial: import("e2b").Sandbox, apiKey?: string): AkeruRemoteSession {

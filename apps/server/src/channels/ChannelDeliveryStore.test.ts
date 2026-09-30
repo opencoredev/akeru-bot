@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { BotId, MessageId, ThreadId } from "@t3tools/contracts";
+import { BotId, MessageId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";

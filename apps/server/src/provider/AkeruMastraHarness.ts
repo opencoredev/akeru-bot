@@ -47,7 +47,7 @@ import {
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

@@ -1,4 +1,4 @@
 export {
   isTransportConnectionErrorMessage,
   sanitizeThreadErrorMessage,
-} from "@t3tools/client-runtime/errors";
+} from "@akeru/client-runtime/errors";

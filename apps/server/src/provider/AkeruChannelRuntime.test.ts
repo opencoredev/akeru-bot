@@ -6,7 +6,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createAkeruChannelRuntime } from "./AkeruChannelRuntime.ts";

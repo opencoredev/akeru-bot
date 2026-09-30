@@ -8,7 +8,7 @@ import {
   TurnId,
   type OrchestrationEvent,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -17,8 +17,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
-import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
+import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
+import { isTemporaryWorktreeBranch } from "@akeru/shared/git";
 
 import { parseTurnDiffFilesFromNumstat } from "../../checkpointing/Diffs.ts";
 import {

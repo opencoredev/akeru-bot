@@ -1,4 +1,4 @@
-import type { McpServerId, McpServerConfiguration } from "@t3tools/contracts";
+import type { McpServerId, McpServerConfiguration } from "@akeru/contracts";
 
 import type { PluginTogglePlan } from "./pluginRegistry";
 

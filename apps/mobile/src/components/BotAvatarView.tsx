@@ -1,4 +1,4 @@
-import type { BotAvatar } from "@t3tools/contracts";
+import type { BotAvatar } from "@akeru/contracts";
 import { Image } from "expo-image";
 import { useState } from "react";
 import { View } from "react-native";

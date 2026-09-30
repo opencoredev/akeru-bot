@@ -1,6 +1,6 @@
-import { createTranslator } from "@t3tools/client-runtime/i18n";
-import type { ServerProvider } from "@t3tools/contracts";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import { createTranslator } from "@akeru/client-runtime/i18n";
+import type { ServerProvider } from "@akeru/contracts";
+import type { UnifiedSettings } from "@akeru/contracts/settings";
 
 import { resolveAppModelSelectionState } from "../../modelSelection";
 import {

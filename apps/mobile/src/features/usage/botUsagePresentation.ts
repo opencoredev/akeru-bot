@@ -11,7 +11,7 @@
  *
  * @module features/usage/botUsagePresentation
  */
-import type { AkeruBotUsageSnapshot } from "@t3tools/contracts";
+import type { AkeruBotUsageSnapshot } from "@akeru/contracts";
 
 export type UsageMeasurement = AkeruBotUsageSnapshot["measurements"]["input"];
 

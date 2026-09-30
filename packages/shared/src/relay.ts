@@ -1,4 +1,4 @@
-import type { RelayRouteBinding } from "@t3tools/contracts";
+import type { RelayRouteBinding } from "@akeru/contracts";
 
 export type RelayBindingRejectionReason =
   | "unsupported-protocol"

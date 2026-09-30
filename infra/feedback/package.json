@@ -8,7 +8,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
+    "@akeru/contracts": "workspace:*",
     "alchemy": "2.0.0-beta.65",
     "effect": "catalog:"
   },

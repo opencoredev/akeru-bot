@@ -6,13 +6,13 @@ import {
   botInboxRowAction,
   selectOpenBotInboxItems,
   type BotInboxItem,
-} from "@t3tools/client-runtime/bot-inbox";
+} from "@akeru/client-runtime/bot-inbox";
 import {
   describeDurableFactFailure,
   memoryApprovalMutation,
   type MemoryApprovalIntent,
-} from "@t3tools/client-runtime/durable-memory";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";

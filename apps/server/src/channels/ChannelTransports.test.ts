@@ -14,7 +14,7 @@ import {
   type OrchestrationMessage,
   type OrchestrationReadModel,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Message as ChatMessage, parseMarkdown, type Adapter, type ChatInstance } from "chat";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

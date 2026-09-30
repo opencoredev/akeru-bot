@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, type ChannelBinding } from "@t3tools/contracts";
+import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

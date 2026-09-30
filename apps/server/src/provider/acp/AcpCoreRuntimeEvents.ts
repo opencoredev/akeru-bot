@@ -10,7 +10,7 @@ import {
   type ThreadId,
   type ToolLifecycleItemType,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { AcpPermissionRequest, AcpPlanUpdate, AcpToolCallState } from "./AcpRuntimeModel.ts";
 

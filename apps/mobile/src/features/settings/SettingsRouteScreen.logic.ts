@@ -1,4 +1,4 @@
-import type { EnvironmentId, ServerSettingsPatch } from "@t3tools/contracts";
+import type { EnvironmentId, ServerSettingsPatch } from "@akeru/contracts";
 
 export type PrivacyControl = "analytics" | "product-feedback" | "voice" | "provider-update-checks";
 

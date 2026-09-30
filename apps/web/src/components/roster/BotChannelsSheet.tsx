@@ -7,15 +7,15 @@ import {
   type EnvironmentId,
   type OrchestrationBot,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   canChangeChannelProject,
   channelReconnectProject,
   channelBindingNeedsProject,
   channelPickerProjectId,
   channelRepairAction,
-} from "@t3tools/client-runtime/channel-presentation";
-import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+} from "@akeru/client-runtime/channel-presentation";
+import { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 import type * as Cause from "effect/Cause";
 import { LockIcon, MessagesSquareIcon, UnplugIcon } from "lucide-react";
 import { useState } from "react";

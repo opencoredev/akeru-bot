@@ -8,7 +8,7 @@ import {
   PRODUCT_HOME_DIRNAME,
   resolveGitWorktreePath,
   resolveWorktreeT3Home,
-} from "@t3tools/shared/devHome";
+} from "@akeru/shared/devHome";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";

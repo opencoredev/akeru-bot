@@ -1,4 +1,4 @@
-import { ThreadId, type ComputerFrame, type ComputerState } from "@t3tools/contracts";
+import { ThreadId, type ComputerFrame, type ComputerState } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -244,7 +244,7 @@ describe("computer capability", () => {
     expect(explainComputerCapability({ sandbox: null, provider: "codex", state: none })).toBe(
       "local",
     );
-    for (const sandbox of ["e2b", "vercel", "upstash"] as const) {
+    for (const sandbox of ["e2b", "vercel", "upstash", "tenki"] as const) {
       expect(explainComputerCapability({ sandbox, provider: "codex", state: none })).toBe(
         "sandbox",
       );

@@ -50,10 +50,10 @@ import {
   type OrchestrationReadModel,
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   decodeAkeruToolInput,
-} from "@t3tools/contracts";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+} from "@akeru/contracts";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
+import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -61,6 +61,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Schedule from "effect/Schedule";
 import * as Ref from "effect/Ref";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
@@ -4446,6 +4447,14 @@ const make = (options?: AgentControllerLiveOptions) =>
           Effect.ignoreCause({ log: true }),
         );
       }),
+    );
+
+    yield* runMastra("resources.retryFailedWorkspaceSleeps", () =>
+      sessionResources.retryFailedWorkspaceSleeps(),
+    ).pipe(
+      Effect.ignoreCause({ log: true }),
+      Effect.repeat(Schedule.spaced("30 seconds")),
+      Effect.forkScoped,
     );
 
     return AgentController.of({

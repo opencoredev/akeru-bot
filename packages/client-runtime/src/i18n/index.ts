@@ -2392,6 +2392,8 @@ export const englishCatalog = {
     "Cloud workspaces in your Vercel team and project.",
   "Cloud workspaces managed by Upstash Box. Requires an API key.":
     "Cloud workspaces managed by Upstash Box. Requires an API key.",
+  "Cloud workspaces managed by Tenki. Requires an API key.":
+    "Cloud workspaces managed by Tenki. Requires an API key.",
   Token: "Token",
   "Team ID": "Team ID",
   "Project ID": "Project ID",

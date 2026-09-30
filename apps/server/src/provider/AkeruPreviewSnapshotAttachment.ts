@@ -2,7 +2,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { PROVIDER_SEND_TURN_MAX_IMAGE_BYTES, type ChatImageAttachment } from "@t3tools/contracts";
+import { PROVIDER_SEND_TURN_MAX_IMAGE_BYTES, type ChatImageAttachment } from "@akeru/contracts";
 
 import { createAttachmentId } from "../attachmentStore.ts";
 import { takePreviewSnapshot } from "../mcp/PreviewSnapshotCaptureBuffer.ts";

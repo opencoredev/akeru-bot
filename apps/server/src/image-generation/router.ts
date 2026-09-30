@@ -17,7 +17,7 @@ import {
   type ImageGenerationRequest,
   type ImageGenerationSettings,
   type ImageProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

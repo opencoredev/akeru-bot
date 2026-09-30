@@ -4,7 +4,7 @@ import {
   ProviderApprovalOption,
   ProviderRequestKind,
   UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 

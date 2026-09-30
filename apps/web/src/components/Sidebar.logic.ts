@@ -1,4 +1,4 @@
-import type { SidebarProjectSortOrder } from "@t3tools/contracts/settings";
+import type { SidebarProjectSortOrder } from "@akeru/contracts/settings";
 import {
   getThreadSortTimestamp,
   toSortableTimestamp,

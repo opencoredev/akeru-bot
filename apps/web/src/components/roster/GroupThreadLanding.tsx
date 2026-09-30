@@ -1,9 +1,9 @@
-import { threadDelegations } from "@t3tools/client-runtime/delegation-presentation";
-import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
-import { pendingMemoryApprovals } from "@t3tools/client-runtime/durable-memory";
+import { threadDelegations } from "@akeru/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
+import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
-import { presentThreadError } from "@t3tools/client-runtime/errors";
-import { type EnvironmentId } from "@t3tools/contracts";
+import { presentThreadError } from "@akeru/client-runtime/errors";
+import { type EnvironmentId } from "@akeru/contracts";
 import { Fragment, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
@@ -28,7 +28,7 @@ import { useI18n } from "~/i18n";
 import { ProviderUnavailableLine } from "../chat/ProviderUnavailableNotice";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
-import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
+import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
 import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";

@@ -13,8 +13,8 @@ import {
   type UsageClientType,
   type UsageOperatingSystem,
   type UsageSandboxProvider,
-} from "@t3tools/contracts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+} from "@akeru/contracts";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -179,7 +179,16 @@ export function normalizeProvider(value: string): UsageAnalyticsProvider {
   return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
 }
 
-const sandboxValues = new Set(["none", "local", "e2b", "daytona", "vercel", "upstash", "ascii"]);
+const sandboxValues = new Set([
+  "none",
+  "local",
+  "e2b",
+  "daytona",
+  "vercel",
+  "upstash",
+  "ascii",
+  "tenki",
+]);
 function normalizeSandbox(value: string): UsageSandboxProvider {
   if (value === "other") return "other";
   return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";

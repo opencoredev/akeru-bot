@@ -3,7 +3,7 @@ import {
   type OrchestrationBot,
   type OrchestrationShellSnapshot,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";

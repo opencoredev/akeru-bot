@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 // Pinned so the direction cases below read as fixed versions instead of

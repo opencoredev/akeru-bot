@@ -1,7 +1,7 @@
 import {
   type ClientOrchestrationCommand,
   OrchestrationDispatchCommandError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 

@@ -4,12 +4,12 @@ import type {
   GroupMembership,
   ImageProviderId,
   McpServerId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
  * is building in parallel. Field-for-field identical so integration becomes a
- * type-import swap to `@t3tools/contracts`; do not diverge from that shape
+ * type-import swap to `@akeru/contracts`; do not diverge from that shape
  * here.
  */
 
@@ -37,7 +37,7 @@ export interface Bot {
   disabledMcpServerIds: readonly McpServerId[];
   avatar: BotAvatar;
   engine: BotEngine | null;
-  sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | "ascii" | null;
+  sandbox: "local" | "e2b" | "daytona" | "vercel" | "upstash" | "ascii" | "tenki" | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   usageCap: { unit: "tokens"; limit: number } | null;
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */

@@ -2,7 +2,7 @@ import {
   AkeruStepUsageSnapshot,
   type BotEngine,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 const isAkeruStepUsageSnapshot = Schema.is(AkeruStepUsageSnapshot);

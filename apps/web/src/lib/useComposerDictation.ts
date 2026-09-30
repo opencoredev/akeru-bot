@@ -8,7 +8,7 @@ import {
   type DictationDraft,
   type DictationIdentity,
   type DictationTranscriptionCapability,
-} from "@t3tools/client-runtime/dictation";
+} from "@akeru/client-runtime/dictation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createBrowserDictationSession } from "./browserDictation";

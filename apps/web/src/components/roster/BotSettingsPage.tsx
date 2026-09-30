@@ -4,12 +4,12 @@ import {
   IMAGE_PROVIDER_IDS,
   type EnvironmentId,
   type ImageProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   botImageProviderOptionLabel,
   globalDefaultOptionLabel,
-} from "@t3tools/client-runtime/image-generation";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
+} from "@akeru/client-runtime/image-generation";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import { Brain02Icon, Edit02Icon, Link02Icon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";

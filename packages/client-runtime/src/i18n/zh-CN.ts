@@ -2298,6 +2298,8 @@ export const zhCNCatalog: TranslationCatalog = {
     "在持久化 Linux 虚拟机中运行机器人。默认启用公开预览。",
   "Cloud workspaces managed by Upstash Box. Requires an API key.":
     "由 Upstash Box 管理的云端工作区。需要 API 密钥。",
+  "Cloud workspaces managed by Tenki. Requires an API key.":
+    "由 Tenki 管理的云端工作区。需要 API 密钥。",
   Token: "令牌",
   "Team ID": "团队 ID",
   "Project ID": "项目 ID",

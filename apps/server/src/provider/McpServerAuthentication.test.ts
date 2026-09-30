@@ -1,5 +1,5 @@
 import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { McpServerId, type McpServer } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { authenticateMcpServer } from "./McpServerAuthentication.ts";

@@ -29,9 +29,9 @@ import {
   type OrchestrationReadModel,
   TurnId,
   isGroupBotMember,
-} from "@t3tools/contracts";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
-import { withoutErrorStack } from "@t3tools/shared/errorText";
+} from "@akeru/contracts";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
+import { withoutErrorStack } from "@akeru/shared/errorText";
 import * as Schema from "effect/Schema";
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";

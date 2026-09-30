@@ -1,8 +1,8 @@
-import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
+import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { presentThreadError, type ThreadErrorContext } from "@t3tools/client-runtime/errors";
-import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
+import { type EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
+import { presentThreadError, type ThreadErrorContext } from "@akeru/client-runtime/errors";
+import type { EnvironmentThreadStatus } from "@akeru/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -19,8 +19,8 @@ import type {
   ThreadId,
   ServerProviderUnavailability,
   UserInputQuestion,
-} from "@t3tools/contracts";
-import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@akeru/contracts";
 import * as Haptics from "expo-haptics";
 import {
   memo,

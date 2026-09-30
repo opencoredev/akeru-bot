@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { presentThreadError } from "@t3tools/client-runtime/errors";
+import { presentThreadError } from "@akeru/client-runtime/errors";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

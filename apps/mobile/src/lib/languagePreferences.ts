@@ -1,4 +1,4 @@
-import { availableLanguages, resolveLocale } from "@t3tools/client-runtime/i18n";
+import { availableLanguages, resolveLocale } from "@akeru/client-runtime/i18n";
 
 export function normalizeLanguagePreference(value: unknown): string {
   return typeof value === "string" && availableLanguages.some((language) => language.id === value)

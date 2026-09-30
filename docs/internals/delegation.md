@@ -34,7 +34,7 @@ migration was needed.
 - `trigger` is `"bot"` for work a bot started with `SendToAgent` and
   `"scheduled"` for work a routine started. Defaults to `"bot"`.
 
-`botChatTimeline` in `@t3tools/client-runtime/state/bot-chat-timeline` merges a
+`botChatTimeline` in `@akeru/client-runtime/state/bot-chat-timeline` merges a
 chat's messages, receipts, and delegations into one ordered list for web and
 mobile. A card goes after its turn: after the anchor message and any later
 message in the same `parentTurnId`. Without a known anchor it goes after the
@@ -128,10 +128,10 @@ path (Codex, Claude, Grok, Kimi For Coding, OpenCode Go).
 
 ## Waiting on children
 
-`isThreadWaitingOnChildren` in `@t3tools/contracts` is true while any
+`isThreadWaitingOnChildren` in `@akeru/contracts` is true while any
 delegation for the thread is queued, running, or blocked. The flag is derived
 from the read model and never persisted. Web and mobile read it through
-`@t3tools/client-runtime/delegation-presentation`, which also derives each
+`@akeru/client-runtime/delegation-presentation`, which also derives each
 card's delivery state.
 
 ## Result delivery
@@ -174,7 +174,7 @@ Canceled delegations have no result to deliver.
 | OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext` |
 | OpenCode        | Legacy bridge | Cannot delegate                    |
 
-`driverSupportsDelegation` in `@t3tools/shared/delegationProviders` names the
+`driverSupportsDelegation` in `@akeru/shared/delegationProviders` names the
 drivers in the Mastra rows. `AgentController` uses the same predicate to route
 a turn to the controller, so a driver that gets the Akeru tool catalog is
 exactly a driver that can delegate. `delegationProviderMatrix.test.ts` runs
@@ -235,7 +235,7 @@ delivery error goes to `onWatchError`.
 When the parent turn started from an external channel message, the turn start
 message carries a `channelOrigin`. `ProviderCommandReactor` then formats
 pending results with `delegationResultsContext(..., { channel: true })`, which
-uses `delegationSummaryText` from `@t3tools/shared` to write plain-text lines
+uses `delegationSummaryText` from `@akeru/shared` to write plain-text lines
 without Markdown. Akeru never starts a follow-up turn when delegated work
 finishes, so the external sender sees the result in the reply to their next
 message.
@@ -298,7 +298,7 @@ Every way into a delegation state has a way back out.
   the parent chat with the reason.
 
 `delegationActions(record, delegations)` in
-`@t3tools/client-runtime/delegationPresentation` lists the actions a work card
+`@akeru/client-runtime/delegationPresentation` lists the actions a work card
 offers, given the chat's delegations. Live work offers `keep`, unless it is
 already kept, and `cancel` when `AKERU_DELEGATION_TRANSITIONS` allows it.
 Failed and canceled work offers `retry` unless `isDelegationSuperseded` finds a

@@ -8,7 +8,7 @@ import {
   type AkeruMarkdownMemoryImportPreview,
   type AkeruMemoryDocumentTarget,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import { makeBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";

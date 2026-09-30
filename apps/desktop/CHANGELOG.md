@@ -1,4 +1,4 @@
-## @t3tools/desktop@0.0.41
+## @akeru/desktop@0.0.41
 
 ## 0.1.1
 
@@ -7,11 +7,11 @@
 - [#285](https://github.com/opencoredev/akeru-bot/pull/285) [`d266c13`](https://github.com/opencoredev/akeru-bot/commit/d266c13c7178a7fcc8b3a84b61060a6fad31c372) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The macOS app icon now ships as a layered Icon Composer asset, so macOS 26 renders proper light, dark, and tinted variants instead of theming the legacy icon into an unreadable dark-on-dark tile.
 
 - Updated dependencies []:
-  - @t3tools/contracts@0.1.1
-  - @t3tools/client-runtime@0.0.2
-  - @t3tools/shared@0.0.2
-  - @t3tools/ssh@0.0.2
-  - @t3tools/tailscale@0.0.2
+  - @akeru/contracts@0.1.1
+  - @akeru/client-runtime@0.0.2
+  - @akeru/shared@0.0.2
+  - @akeru/ssh@0.0.2
+  - @akeru/tailscale@0.0.2
 
 ## 0.1.0
 
@@ -20,11 +20,11 @@
 - [#277](https://github.com/opencoredev/akeru-bot/pull/277) [`8240cf5`](https://github.com/opencoredev/akeru-bot/commit/8240cf5926b8de78c33c2a75f21452d29435a4d2) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Redesigned the macOS DMG installer background with an editorial black-and-paper look and a hand-drawn arrow guiding the drag to Applications.
 
 - Updated dependencies []:
-  - @t3tools/contracts@0.1.0
-  - @t3tools/client-runtime@0.0.1
-  - @t3tools/shared@0.0.1
-  - @t3tools/ssh@0.0.1
-  - @t3tools/tailscale@0.0.1
+  - @akeru/contracts@0.1.0
+  - @akeru/client-runtime@0.0.1
+  - @akeru/shared@0.0.1
+  - @akeru/ssh@0.0.1
+  - @akeru/tailscale@0.0.1
 
 ### Changes
 
@@ -95,7 +95,7 @@
 - [#253](https://github.com/opencoredev/akeru-bot/pull/253) feat(shared): map text generation models by provider identity
 - [#254](https://github.com/opencoredev/akeru-bot/pull/254) fix(claude): run composer-picked skills as slash commands
 
-## @t3tools/desktop@0.0.40
+## @akeru/desktop@0.0.40
 
 ### Changes
 
@@ -112,7 +112,7 @@
 - [#192](https://github.com/opencoredev/akeru-bot/pull/192) fix(plugins): renew stale Hoplite OAuth registrations
 - [#190](https://github.com/opencoredev/akeru-bot/pull/190) feat(channels): connect external conversations to bots
 
-## @t3tools/desktop@0.0.39
+## @akeru/desktop@0.0.39
 
 ### Changes
 
@@ -130,7 +130,7 @@
 - [#162](https://github.com/opencoredev/akeru-bot/pull/162) fix(plugins): complete OAuth connections
 - [#163](https://github.com/opencoredev/akeru-bot/pull/163) feat(marketing): add Grok search pages
 
-## @t3tools/desktop@0.0.38
+## @akeru/desktop@0.0.38
 
 ### Changes
 
@@ -154,13 +154,13 @@
 - [#123](https://github.com/opencoredev/akeru-bot/pull/123) fix(macos): install unsigned Mac builds from a checksummed GitHub DMG
 - [#133](https://github.com/opencoredev/akeru-bot/pull/133) feat(approvals): add auto review and bot prompts
 
-## @t3tools/desktop@0.0.37
+## @akeru/desktop@0.0.37
 
 ### Changes
 
 - [#124](https://github.com/opencoredev/akeru-bot/pull/124) fix(web): prevent duplicate bot panes
 
-## @t3tools/desktop@0.0.36
+## @akeru/desktop@0.0.36
 
 ### Changes
 
@@ -169,7 +169,7 @@
 - [#116](https://github.com/opencoredev/akeru-bot/pull/116) feat(marketing): explain unsigned macOS downloads
 - [#117](https://github.com/opencoredev/akeru-bot/pull/117) fix(release): launch packaged desktop apps before publishing
 
-## @t3tools/desktop@0.0.35
+## @akeru/desktop@0.0.35
 
 ### Changes
 

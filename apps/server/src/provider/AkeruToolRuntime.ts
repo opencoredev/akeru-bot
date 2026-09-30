@@ -19,7 +19,7 @@ import {
   filterAkeruTools,
   AkeruDelegationContextTooLongError,
   AkeruDelegationProviderUnsupportedError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 

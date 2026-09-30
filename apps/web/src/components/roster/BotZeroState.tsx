@@ -1,4 +1,4 @@
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import { BotIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 

@@ -1,4 +1,4 @@
-import { CHANNEL_PROVIDERS, type ChannelProvider } from "@t3tools/contracts";
+import { CHANNEL_PROVIDERS, type ChannelProvider } from "@akeru/contracts";
 
 import {
   DiscordIcon,

@@ -4,7 +4,7 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import type { SubscriptionCredentialStore } from "./credentialStore.ts";

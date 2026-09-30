@@ -10,7 +10,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   ApprovalRequestId,
   AkeruUsageReservationId,
@@ -27,7 +27,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
 import {
   ChannelDeliveryStore,

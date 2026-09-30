@@ -1,4 +1,4 @@
-import { McpServerId, type McpServer, type ProviderAccessStatus } from "@t3tools/contracts";
+import { McpServerId, type McpServer, type ProviderAccessStatus } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { loadDirectoryCatalog } from "../../../../../plugins";

@@ -6,7 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeStream from "node:stream";
 
 import { it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

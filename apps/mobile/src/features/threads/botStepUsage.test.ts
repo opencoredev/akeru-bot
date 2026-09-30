@@ -1,4 +1,4 @@
-import { BotId, EventId, TurnId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { BotId, EventId, TurnId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

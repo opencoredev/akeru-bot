@@ -9,9 +9,9 @@ import {
   runStatusTone,
   runSummaryLine,
   type RoutineAdapterItem,
-} from "@t3tools/client-runtime/routines";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { RoutineId, RoutineRunId, type EnvironmentId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/routines";
+import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
+import { RoutineId, RoutineRunId, type EnvironmentId } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { randomUUID } from "expo-crypto";

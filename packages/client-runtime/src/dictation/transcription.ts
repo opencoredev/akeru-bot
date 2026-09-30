@@ -4,7 +4,7 @@ import {
   VOICE_AUDIO_MAX_BYTES,
   type EnvironmentId,
   type VoiceTranscribeInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { DictationAudio, DictationDependencies, DictationLimits } from "./session.ts";
 

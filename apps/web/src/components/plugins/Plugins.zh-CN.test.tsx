@@ -1,5 +1,5 @@
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
+import { McpServerId, type McpServer } from "@akeru/contracts";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";

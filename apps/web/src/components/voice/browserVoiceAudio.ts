@@ -1,4 +1,4 @@
-import type { VoiceAudio } from "@t3tools/client-runtime/voice";
+import type { VoiceAudio } from "@akeru/client-runtime/voice";
 
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_UTTERANCE_MS = 20_000;

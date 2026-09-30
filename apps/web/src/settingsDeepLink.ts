@@ -1,9 +1,9 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type { SettingsSection } from "./settingsDialogStore";
 import {
   parseSettingsDeepLinkId,
   type SettingsDeepLinkId,
-} from "@t3tools/client-runtime/settings-deep-link";
+} from "@akeru/client-runtime/settings-deep-link";
 
 /** Plugins live in their own dialog rather than a Settings page. */
 export type SettingsDeepLinkSection = SettingsSection | "plugins";

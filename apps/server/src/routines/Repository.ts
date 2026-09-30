@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type { PersistenceSqlError } from "../persistence/Errors.ts";
-import type { RoutineSkillAssignment, ThreadId } from "@t3tools/contracts";
+import type { RoutineSkillAssignment, ThreadId } from "@akeru/contracts";
 import type { Routine, RoutineId, RoutineRun, RoutineRunId, RoutineRunTrigger } from "./types.ts";
 
 interface RoutineClaimBase {

@@ -1,4 +1,4 @@
-import { formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
+import { formatTokens, formatUsd } from "@akeru/shared/usageFormat";
 
 import { useI18n } from "../../i18n";
 import { formatBotStepEngine, type BotStepMeterData } from "./botStepMeter.logic";

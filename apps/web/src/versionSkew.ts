@@ -1,5 +1,5 @@
-import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@t3tools/contracts";
-import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
+import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@akeru/contracts";
+import { compareSemverVersions, parseSemver } from "@akeru/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";

@@ -2,13 +2,13 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import {
   McpServerId,
   type EnvironmentId,
   type McpServer,
   type ProviderAccessStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Cancel01Icon, PuzzleIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { useChangedSinceMount } from "../../hooks/useChangedSinceMount";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -20,7 +20,7 @@ import {
   type PluginDirectoryDefinition,
   type PluginSkill,
 } from "../../../../../plugins";
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
 import { ensureLocalApi } from "../../localApi";

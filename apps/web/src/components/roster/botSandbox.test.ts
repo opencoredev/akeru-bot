@@ -35,6 +35,7 @@ describe("botSandbox", () => {
       "vercel",
       "upstash",
       "ascii",
+      "tenki",
     ]);
     expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
   });

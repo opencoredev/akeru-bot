@@ -1,4 +1,4 @@
-import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
+import { ORCHESTRATION_WS_METHODS } from "@akeru/contracts";
 import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
 

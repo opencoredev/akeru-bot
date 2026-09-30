@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The band contract reads its source.
 import * as NodeFS from "node:fs";
 
-import { BALANCED_BOT_PERSONALITY_TONE } from "@t3tools/contracts";
+import { BALANCED_BOT_PERSONALITY_TONE } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/desktop",
+  "name": "@akeru/desktop",
   "version": "0.1.1",
   "private": true,
   "type": "module",
@@ -13,12 +13,12 @@
     "smoke-test:packaged-mac": "node scripts/smoke-packaged-macos.mjs"
   },
   "dependencies": {
+    "@akeru/client-runtime": "workspace:*",
+    "@akeru/contracts": "workspace:*",
+    "@akeru/shared": "workspace:*",
+    "@akeru/ssh": "workspace:*",
+    "@akeru/tailscale": "workspace:*",
     "@effect/platform-node": "catalog:",
-    "@t3tools/client-runtime": "workspace:*",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
-    "@t3tools/ssh": "workspace:*",
-    "@t3tools/tailscale": "workspace:*",
     "effect": "catalog:",
     "electron": "41.5.0",
     "electron-store": "^8.2.0",
