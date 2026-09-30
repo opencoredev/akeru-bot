@@ -9659,7 +9659,17 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         );
         yield* buildAppUnderTest({
           layers: {
-            providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
+            providerRegistry: {
+              getProviders: Effect.succeed([
+                readyDefaultProvider,
+                {
+                  ...readyDefaultProvider,
+                  instanceId: ProviderInstanceId.make("claudeAgent"),
+                  driver: ProviderDriverKind.make("claudeAgent"),
+                  enabled: false,
+                },
+              ]),
+            },
             projectionSnapshotQuery: {
               getThreadShellById: () =>
                 Effect.succeed(
