@@ -60,7 +60,9 @@ describe("Windows remote installer", () => {
       "Move-Item -LiteralPath $Pinned -Destination $Previous",
       "Move-Item -LiteralPath $Staging -Destination $Pinned",
       "if ($Previous) { Move-Item -LiteralPath $Previous -Destination $Pinned }",
-      "Remove-Item -LiteralPath $Previous -Recurse -Force",
+      "try { Remove-Item -LiteralPath $Previous -Recurse -Force -ErrorAction Stop }",
+      "catch { Write-Warning",
+      "Start-ScheduledTask -TaskName $TaskName",
     ].map((step) => script.indexOf(step));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].toSorted((a, b) => a - b)).toEqual(order);

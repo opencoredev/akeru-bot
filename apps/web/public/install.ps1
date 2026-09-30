@@ -134,7 +134,11 @@ try {
     if ($Previous) { Move-Item -LiteralPath $Previous -Destination $Pinned }
     throw
   }
-  if ($Previous) { Remove-Item -LiteralPath $Previous -Recurse -Force }
+  if ($Previous) {
+    # The new runtime is already in place, so a leftover old copy must not stop the service restart.
+    try { Remove-Item -LiteralPath $Previous -Recurse -Force -ErrorAction Stop }
+    catch { Write-Warning "Could not remove the previous runtime at ${Previous}: $($_.Exception.Message)" }
+  }
   Copy-Item -LiteralPath (Join-Path $Verified "node_modules\akeru-bot\dist\service-launcher.mjs") -Destination $Runtime -Force
   $ServiceState = @{ protocol = 2; activeVersion = $Version } | ConvertTo-Json -Compress
   [IO.File]::WriteAllText($StatePath, "$ServiceState`n", [Text.UTF8Encoding]::new($false))
