@@ -490,3 +490,37 @@ it.effect("ignores a Test verdict for a key that was replaced mid-Test", () => {
     ),
   );
 });
+
+it.effect("ignores a Test verdict from before the same key was reconnected", () => {
+  const pending = Promise.withResolvers<void>();
+  const began = Promise.withResolvers<void>();
+  let calls = 0;
+  return Effect.gen(function* () {
+    const manager = yield* VoiceCallManager;
+    const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
+      providers.find((status) => status.provider === "elevenlabs"),
+    );
+    yield* manager.connect("elevenlabs", "first-key");
+    const slow = yield* Effect.forkChild(Effect.result(manager.test("elevenlabs")));
+    yield* Effect.promise(() => began.promise);
+    yield* manager.connect("elevenlabs", "other-key");
+    yield* manager.connect("elevenlabs", "first-key");
+    yield* manager.test("elevenlabs");
+    assert.isFalse((yield* elevenlabs)?.keyRejected);
+    pending.resolve();
+    yield* Fiber.join(slow);
+    assert.isFalse((yield* elevenlabs)?.keyRejected);
+  }).pipe(
+    Effect.provide(
+      makeTest({
+        test: async () => {
+          calls += 1;
+          if (calls > 1) return;
+          began.resolve();
+          await pending.promise;
+          throw voiceFailure("provider-auth");
+        },
+      }),
+    ),
+  );
+});

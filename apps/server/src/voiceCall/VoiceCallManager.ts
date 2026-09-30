@@ -281,6 +281,12 @@ const make = (options?: VoiceCallManagerOptions) =>
     const operationKey = (ownerId: string, id: string) => JSON.stringify([ownerId, id]);
     const secretName = (provider: VoiceApiProvider) => `voice-${provider}`;
     const rejectedSecretName = (provider: VoiceApiProvider) => `voice-${provider}-rejected`;
+    // Bumped whenever a provider's key is replaced or removed, so a Test that read
+    // an earlier connection cannot record its verdict against a later one, even
+    // when that later connection restored the same key.
+    const generations = new Map<VoiceApiProvider, number>();
+    const bumpGeneration = (provider: VoiceApiProvider) =>
+      generations.set(provider, (generations.get(provider) ?? 0) + 1);
     const getKey = Effect.fn("VoiceCallManager.getKey")(function* (provider: VoiceApiProvider) {
       if (Option.isNone(secrets)) return yield* voiceFailure("provider-unavailable");
       const value = yield* secrets.value
@@ -325,6 +331,7 @@ const make = (options?: VoiceCallManagerOptions) =>
             // A replaced key drops the old rejection, so restoring that key later
             // waits for a new Test instead of reviving the stale verdict.
             if (Option.isNone(saved) || keyDigest(saved.value) !== keyDigest(key)) {
+              bumpGeneration(provider);
               yield* store.remove(rejectedSecretName(provider));
             }
           }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
@@ -335,6 +342,7 @@ const make = (options?: VoiceCallManagerOptions) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const store = yield* assertMutable(provider);
+          bumpGeneration(provider);
           for (const name of [secretName(provider), rejectedSecretName(provider)]) {
             yield* store
               .remove(name)
@@ -376,12 +384,18 @@ const make = (options?: VoiceCallManagerOptions) =>
       }
       return { providers: result };
     });
-    // Records a Test verdict only while the tested key is still the saved one, so
-    // a slow Test of a replaced key cannot overwrite the replacement's verdict.
-    const recordVerdict = (provider: VoiceApiProvider, key: string, rejected: boolean) =>
+    // Records a Test verdict only while the tested connection is still the saved
+    // one, so a slow Test of a replaced key cannot overwrite the replacement's verdict.
+    const recordVerdict = (
+      provider: VoiceApiProvider,
+      tested: { key: string; generation: number },
+      rejected: boolean,
+    ) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           if (Option.isNone(secrets)) return;
+          if ((generations.get(provider) ?? 0) !== tested.generation) return;
+          const { key } = tested;
           const store = secrets.value;
           const current = yield* store.get(secretName(provider));
           if (Option.isNone(current) || keyDigest(current.value) !== keyDigest(key)) return;
@@ -391,18 +405,23 @@ const make = (options?: VoiceCallManagerOptions) =>
         }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable"))),
       );
     const test = Effect.fn("VoiceCallManager.test")(function* (provider: VoiceApiProvider) {
-      const key = yield* getKey(provider);
+      const tested = yield* lock.withPermits(1)(
+        Effect.map(getKey(provider), (key) => ({
+          key,
+          generation: generations.get(provider) ?? 0,
+        })),
+      );
       yield* Effect.tryPromise({
-        try: (signal) => adapters.test(provider, key, signal),
+        try: (signal) => adapters.test(provider, tested.key, signal),
         catch: (cause) => classifyVoiceFailure(cause),
       }).pipe(
         Effect.tapError((error) =>
           error.reason === "provider-auth"
-            ? recordVerdict(provider, key, true).pipe(Effect.ignore)
+            ? recordVerdict(provider, tested, true).pipe(Effect.ignore)
             : Effect.void,
         ),
       );
-      yield* recordVerdict(provider, key, false);
+      yield* recordVerdict(provider, tested, false);
       return { provider, connected: true, keyRejected: false };
     });
     const listVoices = Effect.fn("VoiceCallManager.listVoices")(function* (
