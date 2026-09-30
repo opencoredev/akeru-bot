@@ -1,10 +1,10 @@
-import { type KeybindingCommand } from "@t3tools/contracts";
+import { type KeybindingCommand, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ReactNode } from "react";
 
 export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands...";
+export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands and chats...";
 
 export interface CommandPaletteActionItem {
   readonly value: string;
@@ -102,6 +102,139 @@ export function buildModelPickerCommandPaletteAction(input: {
       input.scheduleAfterClose(input.composerHandle.openModelPicker);
     },
   };
+}
+
+/** A chat the palette can find: its title, owner, and whether this client can open it. */
+export interface CommandPaletteChat {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly title: string;
+  readonly updatedAt: string;
+  /** Bot or group name shown under the title, when known. */
+  readonly ownerName: string | null;
+  /** Null when the chat lives in an environment this client's chat views do not show. */
+  readonly unavailableIn: string | null;
+}
+
+/** A server-side message match, already limited to one snippet per chat. */
+export interface CommandPaletteChatMatch {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly snippet: string;
+}
+
+export const COMMAND_PALETTE_CHAT_LIMIT = 8;
+
+/**
+ * Looks up a bot or group name in the roster of the environment a chat lives
+ * in. Ids are scoped per environment, so a primary-environment name is never
+ * used for another environment's chat.
+ */
+export function buildEnvironmentOwnerNames(
+  rosters: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly bots: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+    readonly groups: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  }>,
+): (
+  environmentId: string,
+  owner: {
+    readonly botId?: string | null | undefined;
+    readonly groupId?: string | null | undefined;
+  },
+) => string | null {
+  const names = new Map<string, string>();
+  const key = (environmentId: string, kind: "bot" | "group", id: string) =>
+    `${environmentId}\u0000${kind}\u0000${id}`;
+  for (const roster of rosters) {
+    for (const bot of roster.bots) names.set(key(roster.environmentId, "bot", bot.id), bot.name);
+    for (const group of roster.groups) {
+      names.set(key(roster.environmentId, "group", group.id), group.name);
+    }
+  }
+  return (environmentId, owner) =>
+    (owner.botId ? names.get(key(environmentId, "bot", owner.botId)) : undefined) ??
+    (owner.groupId ? names.get(key(environmentId, "group", owner.groupId)) : undefined) ??
+    null;
+}
+
+/**
+ * The palette's Chats results for a typed query: chats whose title contains the
+ * query first, tighter matches ahead, then chats the server matched by message,
+ * in its order, with the matching snippet as the description. Chats in another
+ * environment are listed but disabled, because this client cannot open them,
+ * and only after every chat it can open, so they never crowd one out.
+ * A leading ">" asks for actions only, so it yields no chats.
+ */
+export function buildChatSearchCommandPaletteItems(input: {
+  readonly query: string;
+  readonly chats: ReadonlyArray<CommandPaletteChat>;
+  readonly matches: ReadonlyArray<CommandPaletteChatMatch>;
+  readonly untitledLabel: string;
+  readonly unavailableLabel: (environmentLabel: string) => string;
+  readonly icon: ReactNode;
+  readonly openChat: (chat: CommandPaletteChat) => Promise<void>;
+  readonly limit?: number;
+}): CommandPaletteActionItem[] {
+  if (input.query.startsWith(">")) return [];
+  const normalizedQuery = normalizeSearchText(input.query);
+  if (normalizedQuery.length === 0) return [];
+  const limit = input.limit ?? COMMAND_PALETTE_CHAT_LIMIT;
+  const chatKey = (chat: { readonly environmentId: string; readonly threadId: string }) =>
+    `${chat.environmentId}:${chat.threadId}`;
+  const chatsByKey = new Map(input.chats.map((chat) => [chatKey(chat), chat] as const));
+
+  // A placeholder title says nothing about the chat, so only its messages can match.
+  const titleOf = (chat: CommandPaletteChat) =>
+    chat.title === PLACEHOLDER_THREAD_TITLE ? "" : chat.title.trim();
+  const titleMatches = input.chats
+    .map((chat, index) => ({
+      chat,
+      index,
+      rank: rankSearchFieldMatch(titleOf(chat), normalizedQuery),
+    }))
+    .filter((entry) => entry.rank !== Number.NEGATIVE_INFINITY)
+    .toSorted(
+      (left, right) =>
+        right.rank - left.rank ||
+        right.chat.updatedAt.localeCompare(left.chat.updatedAt) ||
+        left.index - right.index,
+    )
+    .map((entry) => ({ chat: entry.chat, snippet: null as string | null }));
+  const seen = new Set(titleMatches.map((entry) => chatKey(entry.chat)));
+  const messageMatches = input.matches.flatMap((match) => {
+    const chat = chatsByKey.get(chatKey(match));
+    if (!chat || seen.has(chatKey(chat))) return [];
+    seen.add(chatKey(chat));
+    return [{ chat, snippet: match.snippet.trim() || null }];
+  });
+
+  const ranked = [...titleMatches, ...messageMatches];
+  return [
+    ...ranked.filter((entry) => entry.chat.unavailableIn === null),
+    ...ranked.filter((entry) => entry.chat.unavailableIn !== null),
+  ]
+    .slice(0, limit)
+    .map(({ chat, snippet }) => {
+      const description = [
+        chat.ownerName,
+        chat.unavailableIn === null ? null : input.unavailableLabel(chat.unavailableIn),
+        snippet,
+      ]
+        .filter((part): part is string => part !== null && part.length > 0)
+        .join(" · ");
+      return {
+        value: `chat-search:${chatKey(chat)}`,
+        searchTerms: [titleOf(chat), snippet ?? ""],
+        title: titleOf(chat) || input.untitledLabel,
+        ...(description ? { description } : {}),
+        icon: input.icon,
+        ...(chat.unavailableIn === null ? {} : { disabled: true }),
+        run: async () => {
+          await input.openChat(chat);
+        },
+      };
+    });
 }
 
 export function normalizeSearchText(value: string): string {

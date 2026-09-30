@@ -6,9 +6,12 @@ import {
 import { activeChatPaletteActions, registerChatPaletteActions } from "../chatActionsRegistry";
 import {
   buildChatCommandPaletteItems,
+  buildChatSearchCommandPaletteItems,
+  buildEnvironmentOwnerNames,
   buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
   filterCommandPaletteGroups,
+  type CommandPaletteChat,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
@@ -165,5 +168,169 @@ describe("chat actions in the command palette", () => {
     });
     expect(snooze?.description).toBe("1:00 PM");
     expect(pin).not.toHaveProperty("description");
+  });
+});
+
+describe("buildEnvironmentOwnerNames", () => {
+  const ownerName = buildEnvironmentOwnerNames([
+    {
+      environmentId: "env-a",
+      bots: [{ id: "bot-1", name: "Akeru" }],
+      groups: [{ id: "group-1", name: "Launch" }],
+    },
+    {
+      environmentId: "env-b",
+      bots: [{ id: "bot-1", name: "Home Akeru" }],
+      groups: [{ id: "group-2", name: "Family" }],
+    },
+  ]);
+
+  it("names a chat's bot or group from the chat's own environment", () => {
+    expect(ownerName("env-b", { botId: "bot-1" })).toBe("Home Akeru");
+    expect(ownerName("env-b", { groupId: "group-2" })).toBe("Family");
+    expect(ownerName("env-a", { botId: "bot-1" })).toBe("Akeru");
+  });
+
+  it("returns null when that environment has no such owner", () => {
+    expect(ownerName("env-a", { groupId: "group-2" })).toBeNull();
+    expect(ownerName("env-c", { botId: "bot-1" })).toBeNull();
+    expect(ownerName("env-a", {})).toBeNull();
+  });
+});
+
+describe("buildChatSearchCommandPaletteItems", () => {
+  const chat = (
+    threadId: string,
+    title: string,
+    updatedAt: string,
+    extra: Partial<CommandPaletteChat> = {},
+  ): CommandPaletteChat => ({
+    environmentId: "env-a",
+    threadId,
+    title,
+    updatedAt,
+    ownerName: "Akeru",
+    unavailableIn: null,
+    ...extra,
+  });
+  const chats = [
+    chat("trip-old", "Old trip notes", "2026-08-01T00:00:00.000Z"),
+    chat("trip", "Trip plan", "2026-08-03T00:00:00.000Z"),
+    chat("budget", "Budget", "2026-08-02T00:00:00.000Z"),
+    chat("draft", "New chat", "2026-08-04T00:00:00.000Z"),
+    chat("remote", "Trip receipts", "2026-08-05T00:00:00.000Z", {
+      environmentId: "env-b",
+      ownerName: "Home Akeru",
+      unavailableIn: "Home server",
+    }),
+  ];
+  const build = (
+    query: string,
+    matches: Parameters<typeof buildChatSearchCommandPaletteItems>[0]["matches"] = [],
+    openChat = vi.fn(async () => undefined),
+  ) =>
+    buildChatSearchCommandPaletteItems({
+      query,
+      chats,
+      matches,
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => `In ${environment}`,
+      icon: null,
+      openChat,
+    });
+
+  it("returns nothing for an empty query or an actions-only query", () => {
+    expect(build("  ")).toEqual([]);
+    expect(build(">trip")).toEqual([]);
+  });
+
+  it("ranks prefix title matches ahead of looser ones, newest first among equals", () => {
+    expect(build("trip").map((item) => item.value)).toEqual([
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+      "chat-search:env-b:remote",
+    ]);
+  });
+
+  it("adds message matches after title matches, once per chat, with the snippet", () => {
+    const items = build("trip", [
+      { environmentId: "env-a", threadId: "trip", snippet: "trip again" },
+      { environmentId: "env-a", threadId: "budget", snippet: "the trip costs" },
+      { environmentId: "env-a", threadId: "budget", snippet: "second hit" },
+      { environmentId: "env-a", threadId: "unknown", snippet: "not a listed chat" },
+    ]);
+    expect(items.map((item) => item.value)).toEqual([
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+      "chat-search:env-a:budget",
+      "chat-search:env-b:remote",
+    ]);
+    expect(items[2]?.description).toBe("Akeru · the trip costs");
+  });
+
+  it("matches a placeholder-titled chat only by message and shows it as untitled", () => {
+    expect(build("new chat")).toEqual([]);
+    const [item] = build("hello", [
+      { environmentId: "env-a", threadId: "draft", snippet: "hello there" },
+    ]);
+    expect(item?.title).toBe("Untitled chat");
+  });
+
+  it("disables chats in another environment and names it", () => {
+    const remote = build("receipts")[0];
+    expect(remote?.disabled).toBe(true);
+    expect(remote?.description).toBe("Home Akeru · In Home server");
+  });
+
+  it("opens the chosen chat", async () => {
+    const openChat = vi.fn(async () => undefined);
+    const item = build("budget", [], openChat)[0];
+    await item?.run();
+    expect(openChat).toHaveBeenCalledWith(chats[2]);
+  });
+
+  it("keeps chats this client can open ahead of newer ones it cannot", () => {
+    const remote = Array.from({ length: 8 }, (_, index) =>
+      chat(`r${index}`, `Plan ${index}`, `2026-08-1${index}T00:00:00.000Z`, {
+        environmentId: "env-b",
+        unavailableIn: "Home server",
+      }),
+    );
+    const local = [
+      chat("local-title", "Plan local", "2026-08-01T00:00:00.000Z"),
+      chat("local-message", "Budget", "2026-08-01T00:00:00.000Z"),
+    ];
+    const items = buildChatSearchCommandPaletteItems({
+      query: "plan",
+      chats: [...remote, ...local],
+      matches: [{ environmentId: "env-a", threadId: "local-message", snippet: "the plan" }],
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => environment,
+      icon: null,
+      openChat: async () => undefined,
+    });
+    expect(items).toHaveLength(8);
+    expect(items.slice(0, 2).map((item) => [item.value, item.disabled])).toEqual([
+      ["chat-search:env-a:local-title", undefined],
+      ["chat-search:env-a:local-message", undefined],
+    ]);
+    expect(items.slice(2).every((item) => item.disabled)).toBe(true);
+  });
+
+  it("caps the results", () => {
+    const many = Array.from({ length: 12 }, (_, index) =>
+      chat(`c${index}`, `Chat ${index}`, "2026-08-01T00:00:00.000Z"),
+    );
+    expect(
+      buildChatSearchCommandPaletteItems({
+        query: "chat",
+        chats: many,
+        matches: [],
+        untitledLabel: "Untitled chat",
+        unavailableLabel: (environment) => environment,
+        icon: null,
+        openChat: async () => undefined,
+      }),
+    ).toHaveLength(8);
   });
 });

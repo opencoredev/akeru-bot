@@ -60,16 +60,15 @@ describe("BotDetailsPanel", () => {
     expect(markup).not.toContain("border-b border-border");
   });
 
-  it("keeps an unavailable model on the overview and says why", () => {
+  it("keeps an unavailable model on the overview without a second warning", () => {
     const markup = renderToStaticMarkup(
       <BotOverview
         bot={{ ...bot, engine: { provider: "claudeAgent", model: "claude-fable-5" } }}
-        modelUnavailable="Claude is not connected"
         routinePanelRef={createRef<HTMLDivElement>()}
       />,
     );
     expect(markup).toContain("claude-fable-5");
-    expect(markup).toContain("Unavailable: Claude is not connected");
+    expect(markup).not.toContain("Unavailable");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {

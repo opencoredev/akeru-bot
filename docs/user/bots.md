@@ -37,12 +37,13 @@ shows providers that cannot run right now, such as one that is signed out or tur
 models are dimmed and say why.
 
 A bot keeps its model when that model stops working. Akeru never switches it for you. Instead, the
-chat, the bot's settings, and its details panel mark the model unavailable, and **Send** stays off
-until you fix the cause or pick another model. A note above the composer names the provider, says
-what went wrong, and gives one next step:
+chat and the bot's settings mark the model unavailable, and **Send** stays off until you fix the
+cause or pick another model. A line below the composer names the provider, says what went wrong,
+and gives one next step. **Set up a provider** opens **Settings > Providers**.
 
 | Cause                                                | Next step                                           |
 | ---------------------------------------------------- | --------------------------------------------------- |
+| No provider is ready for the bot or group            | Set one up in **Settings > Providers**              |
 | Provider is not set up, turned off, or not installed | Open **Settings > Providers**                       |
 | Account is not connected, or its sign-in expired     | Connect or reconnect it in **Settings > Providers** |
 | Provider no longer offers the model                  | Pick another model for the bot                      |

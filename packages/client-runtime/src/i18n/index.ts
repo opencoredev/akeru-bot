@@ -363,6 +363,8 @@ export const englishCatalog = {
   Close: "Close",
   Search: "Search",
   "New chat": "New chat",
+  "Untitled chat": "Untitled chat",
+  "In {environment}": "In {environment}",
   "{count} chat": "{count} chat",
   "{count} chats": "{count} chats",
   "Opens filters, archived chats, and settings": "Opens filters, archived chats, and settings",
@@ -1053,7 +1055,9 @@ export const englishCatalog = {
   "Next image": "Next image",
   "Next: {action}": "Next: {action}",
   "No errors": "No errors",
-  "No provider is connected": "No provider is connected",
+  "No provider is ready for this bot": "No provider is ready for this bot",
+  "No provider is ready for this group": "No provider is ready for this group",
+  "Set up a provider": "Set up a provider",
   Open: "Open",
   "Open Plugins": "Open Plugins",
   "Open Providers": "Open Providers",
@@ -1212,7 +1216,6 @@ export const englishCatalog = {
   "Unsaved changes": "Unsaved changes",
   "Open bot settings": "Open bot settings",
   "App default": "App default",
-  "Unavailable: {reason}": "Unavailable: {reason}",
   "{name} bot sidebar": "{name} bot sidebar",
   "Collapse {name} bot sidebar": "Collapse {name} bot sidebar",
   "Open sidebar ({shortcut})": "Open sidebar ({shortcut})",
@@ -1610,6 +1613,7 @@ export const englishCatalog = {
   "Routines are recurring tasks {botName} runs on a schedule.":
     "Routines are recurring tasks {botName} runs on a schedule.",
   "Or ask {botName} in chat to set one up.": "Or ask {botName} in chat to set one up.",
+  "None yet. Ask {botName} to create one.": "None yet. Ask {botName} to create one.",
   "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.":
     "Routines report to your chat with {botName}. Send {botName} a message to start the chat, then add a routine here.",
   "Delete routine “{name}”?": "Delete routine “{name}”?",
@@ -2434,6 +2438,8 @@ export const englishCatalog = {
   "It is missing the server address or the token. Copy the whole link and open it again.":
     "It is missing the server address or the token. Copy the whole link and open it again.",
   Paired: "Paired",
+  "If the server accepted this one-time token, get a new pairing link before trying again.":
+    "If the server accepted this one-time token, get a new pairing link before trying again.",
   "This browser can now use {name}.": "This browser can now use {name}.",
   "This browser can now use the environment.": "This browser can now use the environment.",
   "Paste the pairing token from your link to connect.":
@@ -2480,6 +2486,37 @@ export const englishCatalog = {
   "Try another name or clear the filter.": "Try another name or clear the filter.",
   "From Composio": "From Composio",
   "via Composio": "via Composio",
+  "Waiting for sign-in": "Waiting for sign-in",
+  "Sign-in failed": "Sign-in failed",
+  Inactive: "Inactive",
+  "No accounts connected yet. Search above to find an app, then connect it.":
+    "No accounts connected yet. Search above to find an app, then connect it.",
+  "Composio accounts": "Composio accounts",
+  "Could not save the Composio key": "Could not save the Composio key",
+  "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.":
+    "Remove the Composio API key from this environment? Bots lose access to Composio apps until you add a key again.",
+  "Could not remove the Composio key": "Could not remove the Composio key",
+  "Composio returned a sign-in link that does not use HTTPS.":
+    "Composio returned a sign-in link that does not use HTTPS.",
+  "Could not open {name} sign-in": "Could not open {name} sign-in",
+  "Disconnect {name}? Bots stop using this account.":
+    "Disconnect {name}? Bots stop using this account.",
+  "Could not disconnect {name}": "Could not disconnect {name}",
+  "Could not open Composio": "Could not open Composio",
+  "No key": "No key",
+  "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts.":
+    "Search above to find Composio apps. Composio handles each app's sign-in, and your bots can use connected accounts.",
+  "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in.":
+    "Add your own Composio API key to connect apps such as Slack or Notion. Composio handles each app's sign-in.",
+  "Get a Composio API key": "Get a Composio API key",
+  "Could not reach Composio: {error}": "Could not reach Composio: {error}",
+  "Composio API key": "Composio API key",
+  "Paste a new key to replace it": "Paste a new key to replace it",
+  "Save key": "Save key",
+  "Remove key": "Remove key",
+  "The key is stored only on this Akeru Bot server.":
+    "The key is stored only on this Akeru Bot server.",
+  "Could not search Composio: {error}": "Could not search Composio: {error}",
   "Removed plugins": "Removed plugins",
   "No longer in the directory · {status}": "No longer in the directory · {status}",
   "Custom MCP servers": "Custom MCP servers",
@@ -2539,7 +2576,7 @@ export const englishCatalog = {
   "Unable to run command": "Unable to run command",
   "An unexpected error occurred.": "An unexpected error occurred.",
   Select: "Select",
-  "Search commands...": "Search commands...",
+  "Search commands and chats...": "Search commands and chats...",
   "Remote health": "Remote health",
   "Health checks for this environment": "Health checks for this environment",
   "Refresh remote health": "Refresh remote health",

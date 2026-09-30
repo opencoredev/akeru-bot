@@ -12,8 +12,8 @@ can be identified.
 
 ## Chat actions
 
-On web and desktop, each bot or group shows one chat: its newest one. Open the **⋯** menu at the
-top right of that chat to act on it:
+On web and desktop, the roster keeps one row per bot or group, and a bot opens its newest chat.
+Open the **⋯** menu at the top right of the open chat to act on it:
 
 - **New chat** starts a fresh chat with the bot. It is available once the current chat has a
   message. The earlier chat stays active and keeps its history; its bot opens the new chat from now
@@ -38,6 +38,31 @@ Tomorrow**, with its wake time.
 On mobile, the chat list keeps its own menu for each chat, and you can swipe left on a chat for
 archive and delete.
 Date labels in bot and group chats follow your device's local day and update when the day changes.
+
+## Older chats
+
+On web and desktop, the bot's side panel lists its eight most recent chats under **Chats**, newest
+first, with how long ago each one was active. The chat you are looking at is highlighted. Select a
+chat to open it in place of the newest one. Sending a message there makes it the newest chat again.
+Select the newest chat, or start a **New chat** from the same list, to go back to the bot's usual
+view. **New chat** appears once the open chat has a message. Archived chats stay in **Settings >
+Archived chats**.
+
+The open chat is remembered for this session only. Reloading the page, or archiving or deleting the
+open chat, returns the bot to its newest chat.
+
+On mobile, the chat list shows every chat, so older chats are already one tap away.
+
+## Find a chat
+
+On web and desktop, open the command palette and type. Below the matching actions, **Chats** lists
+up to eight chats whose title or messages contain what you typed, with the bot's name and, for a
+message match, the matching text. Selecting a bot's chat opens it in that bot's view, as selecting it
+from the bot's **Chats** list does. A group chat opens the group.
+
+Search covers every environment this client is connected to. Chats in another environment are
+listed after the ones you can open, with their bot or group and that environment's name, but cannot
+be opened from here; open them from a client connected to that environment. Start your query with `>` to search actions only.
 
 ## Active and settled chats
 

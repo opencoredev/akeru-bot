@@ -25,7 +25,7 @@ import { ConversationSeparator } from "../chat/ConversationSeparator";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { useReplyPlaybackThread } from "~/lib/replyPlaybackThread";
 import { useI18n } from "~/i18n";
-import { ProviderUnavailableNotice } from "../chat/ProviderUnavailableNotice";
+import { ProviderUnavailableLine } from "../chat/ProviderUnavailableNotice";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
@@ -355,18 +355,6 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
           resuming={runtime.resuming}
         />
-        {!runtime.providerAvailable ? (
-          <ProviderUnavailableNotice
-            id={noProviderNoticeId}
-            className="mx-auto mt-2 w-[min(46rem,calc(100%-2rem))]"
-            presentation={{
-              title: t("No provider is connected"),
-              description: t("Connect a provider in Settings > Providers so this group can reply."),
-              action: "providers",
-            }}
-            environmentId={environmentId}
-          />
-        ) : null}
         {boss === null ? (
           <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
             {t("Choose an active group boss in the group sidebar.")}
@@ -455,6 +443,17 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             return sent;
           }}
         />
+        {!runtime.providerAvailable ? (
+          <ProviderUnavailableLine
+            id={noProviderNoticeId}
+            presentation={{
+              title: t("No provider is ready for this group"),
+              description: t("Connect a provider in Settings > Providers so this group can reply."),
+              action: "providers",
+            }}
+            environmentId={environmentId}
+          />
+        ) : null}
       </div>
     </SidebarInset>
   );

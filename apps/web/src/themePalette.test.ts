@@ -1101,6 +1101,17 @@ describe("stored theme preferences", () => {
     }
   });
 
+  it("migrates a stored t3-chat preference to Akeru Chat", () => {
+    expect(getThemeDefinition("t3-chat")).toBe(T3_CHAT_THEME);
+    expect(T3_CHAT_THEME.id).toBe("akeru-chat");
+    expect(isKnownThemePreference("t3-chat")).toBe(true);
+    expect(canonicalThemePreference("t3-chat")).toBe("akeru-chat");
+    expect(parseThemeHalves(JSON.stringify({ light: "t3-chat", dark: "t3-chat" }))).toEqual({
+      light: "akeru-chat",
+      dark: "akeru-chat",
+    });
+  });
+
   it("resolves the legacy t3-chat-dark preference to dark T3 Chat", () => {
     expect(getThemeDefinition("t3-chat-dark")).toBe(T3_CHAT_THEME);
     expect(getThemePreferenceMode("t3-chat-dark")).toBe("dark");

@@ -17,7 +17,7 @@ import { SurfaceNavigationCoordinator } from "../components/SurfaceNavigationCoo
 import { ComputerViewerDialog } from "../components/computer/ComputerViewerDialog";
 import { ProductFeedbackDialog } from "../components/productFeedback/ProductFeedbackDialog";
 import { PolicyNotice } from "../components/privacy/PolicyNotice";
-import { TranslatedRootRouteErrorView } from "./RootRouteErrorView";
+import { TranslatedRootRouteErrorView } from "./-RootRouteErrorView";
 import { useI18n } from "../i18n";
 import {
   AnchoredToastProvider,
@@ -33,16 +33,17 @@ import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import { syncBrowserChromeTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
+import { isHostedPairingLink } from "../hostedPairing";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../state/use-atom-command";
-import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
+import { usePrimaryEnvironment } from "../state/environments";
 import {
   primaryServerConfigAtom,
   primaryServerConfigEventAtom,
   primaryServerWelcomeAtom,
 } from "../state/server";
-import { setActiveEnvironmentId, useActiveEnvironmentId } from "../state/entities";
+import { setActiveEnvironmentId } from "../state/entities";
 import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
@@ -50,6 +51,10 @@ import {
 
 export const Route = createRootRoute({
   beforeLoad: async () => {
+    // A hosted link pairs another server, so it must not wait on this origin's auth.
+    if (isHostedPairingLink(window.location.href)) {
+      return { authGateState: { status: "hosted-pairing" } as const };
+    }
     const authGateState = await resolveInitialServerAuthGateState();
     return {
       authGateState,
@@ -113,7 +118,6 @@ function RootRouteView() {
         <SshPasswordPromptDialog />
         <ConfirmDialogHost />
         <SlowRpcRequestToastCoordinator />
-        <HostedStaticEnvironmentBootstrap />
         <SurfaceNavigationCoordinator />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
@@ -196,34 +200,6 @@ function DocumentTitleSync() {
   useEffect(() => {
     document.title = title;
   }, [title]);
-
-  return null;
-}
-
-function HostedStaticEnvironmentBootstrap() {
-  const { environments } = useEnvironments();
-  const activeEnvironmentId = useActiveEnvironmentId();
-
-  useEffect(() => {
-    if (
-      environments.some(
-        (environment) => environment.entry.target._tag === "PrimaryConnectionTarget",
-      )
-    ) {
-      return;
-    }
-
-    if (activeEnvironmentId) {
-      return;
-    }
-
-    const firstSavedEnvironment = environments[0];
-    if (!firstSavedEnvironment) {
-      return;
-    }
-
-    setActiveEnvironmentId(firstSavedEnvironment.environmentId);
-  }, [activeEnvironmentId, environments]);
 
   return null;
 }

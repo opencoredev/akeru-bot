@@ -20,6 +20,7 @@ import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
 import { EmptyState } from "../../components/EmptyState";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
+import { deriveHomeEmptyState } from "./home-empty-state";
 import type { SavedRemoteConnection } from "../../lib/connection";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useThreadSearch } from "../../state/queries";
@@ -95,69 +96,6 @@ interface HomeScreenProps {
  * already consumes the top safe-area inset, so the list only needs breathing
  * room here.
  */
-
-function deriveEmptyState(props: {
-  readonly catalogState: WorkspaceState;
-  readonly projectCount: number;
-}): { readonly title: string; readonly detail: string; readonly loading: boolean } {
-  const { catalogState } = props;
-  if (catalogState.isLoadingConnections) {
-    return {
-      title: "Loading environments",
-      detail: "Checking saved environments on this device.",
-      loading: true,
-    };
-  }
-
-  if (!catalogState.hasConnections) {
-    return {
-      title: "No environments connected",
-      detail: "Add an environment to load projects and start coding sessions.",
-      loading: false,
-    };
-  }
-
-  if (
-    (catalogState.connectionState === "available" ||
-      catalogState.connectionState === "offline" ||
-      catalogState.connectionState === "error") &&
-    !catalogState.hasLoadedShellSnapshot
-  ) {
-    return {
-      title: "Environment unavailable",
-      detail:
-        catalogState.connectionError ??
-        "The saved environment is offline. Check the URL or start the environment, then retry.",
-      loading: false,
-    };
-  }
-
-  if (
-    catalogState.hasConnectingEnvironment &&
-    !catalogState.hasLoadedShellSnapshot &&
-    catalogState.connectionError === null
-  ) {
-    return {
-      title: "Connecting to environment",
-      detail: "Loading projects and bots from the saved environment.",
-      loading: true,
-    };
-  }
-
-  if (props.projectCount === 0 && catalogState.hasLoadedShellSnapshot) {
-    return {
-      title: "No projects found",
-      detail: "The connected environment did not report any projects.",
-      loading: false,
-    };
-  }
-
-  return {
-    title: "No chats yet",
-    detail: "Pick a bot to start a chat.",
-    loading: false,
-  };
-}
 
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
@@ -711,7 +649,7 @@ export function HomeScreen(props: HomeScreenProps) {
   // Connection state surfaces in the header title slot
   // (WorkspaceConnectionTitle) — nothing renders inside the list, so
   // reconnects never shift the rows.
-  const emptyState = deriveEmptyState({
+  const emptyState = deriveHomeEmptyState({
     catalogState: props.catalogState,
     projectCount: props.projects.length,
   });

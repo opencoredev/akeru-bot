@@ -39,6 +39,7 @@ import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import {
   buildBotTurnStartInput,
   createBotTurnSubmissionQueue,
+  findLatestBotThreadTarget,
   findUnhandledMcpAuthorization,
   joinOrStartThreadCreate,
   nextRetainedChat,
@@ -47,6 +48,7 @@ import {
   shouldTitlePlaceholderChat,
   type RetainedChat,
 } from "./botThreadRuntime.logic";
+import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useBotChatTarget } from "./useBotThreadRef";
 import { ensureLocalApi } from "../../localApi";
@@ -59,6 +61,20 @@ import {
 } from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
+
+/**
+ * The bot's chosen chat, compared across an await to spot an explicit switch.
+ * A pinned chat and the same chat recorded as the path compare equal, so the
+ * pin released when that chat becomes the newest does not count as a switch.
+ */
+function readChatSelection(botId: string): string {
+  const roster = useRosterStore.getState();
+  const opened = roster.openChatByBotId[botId];
+  if (opened !== undefined) return opened;
+  const path = roster.chatPathByBotId[botId] ?? "";
+  const parsed = parseChatPath(path);
+  return parsed?.kind === "thread" ? parsed.threadId : path;
+}
 
 function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
@@ -94,6 +110,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
+  const openThreadId = useRosterStore((state) => state.openChatByBotId[botId] ?? null);
   const bot = useRosterStore((state) => state.bots.find((candidate) => candidate.id === botId));
   const primaryThreadShells = useMemo(
     () =>
@@ -102,6 +119,19 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         : [],
     [primaryEnvironmentId, threadShells],
   );
+  // An opened chat that has become the newest, after a send say, no longer
+  // needs pinning; keeping the pin would hide a later chat from the default view.
+  const latestThreadId = primaryEnvironmentId
+    ? (findLatestBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells)?.threadId ??
+      null)
+    : null;
+  useEffect(() => {
+    if (openThreadId !== null && openThreadId === latestThreadId) {
+      useRosterStore
+        .getState()
+        .openBotChat(botId, null, `/${primaryEnvironmentId}/${latestThreadId}`);
+    }
+  }, [botId, latestThreadId, openThreadId, primaryEnvironmentId]);
   // Holds a just-created chat until its shell arrives. A chat that was linked
   // and then left the shell list was archived or deleted, so it is dropped
   // rather than sent into.
@@ -116,7 +146,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const target = preferRetainedChatTarget(
     retainedThreadRef.current,
     primaryEnvironmentId
-      ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
+      ? resolveBotThreadTarget(
+          botId,
+          primaryEnvironmentId,
+          primaryThreadShells,
+          rememberedPath,
+          openThreadId,
+        )
       : null,
     primaryThreadShells,
   );
@@ -128,6 +164,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     retainedThreadRef.current,
     linkedThreadRef,
     bootstrapped,
+    openThreadId,
   );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
@@ -181,9 +218,16 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const startingNewChatRef = useRef(false);
   // Sends made while New chat is still creating wait for it instead of reaching the old chat.
-  const pendingNewChatRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
+  // `selection` is the chosen chat when New chat was clicked; a send made after
+  // the user opened another chat follows that chat instead.
+  const pendingNewChatRef = useRef<{
+    promise: Promise<ScopedThreadRef | null>;
+    selection: string;
+  } | null>(null);
   // The chat New chat created with a placeholder title, until a send titles it.
   const placeholderChatIdRef = useRef<string | null>(null);
+  // The chat whose first send already requested its title, so a quick second send keeps it.
+  const titledChatIdRef = useRef<string | null>(null);
   const botReady = serverBots.some((candidate) => candidate.id === botId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
@@ -253,6 +297,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     async (title: string): Promise<ScopedThreadRef | null> => {
       if (!activeProject) return null;
       const threadId = newThreadId();
+      const selection = readChatSelection(botId);
       const result = await createThread({
         environmentId: activeProject.environmentId,
         input: {
@@ -273,10 +318,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       });
       if (result._tag === "Failure") return null;
       const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
+      // The user opened another chat while this one was being created; stay there.
+      if (readChatSelection(botId) !== selection) return threadRef;
       retainedThreadRef.current = { ownerId: botId, threadRef, linked: false };
-      useRosterStore
-        .getState()
-        .recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      const roster = useRosterStore.getState();
+      roster.recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
+      // A new chat is the newest one, so the bot stops showing an older chat.
+      roster.openBotChat(botId, null);
       return threadRef;
     },
     [
@@ -317,10 +365,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     if (retained.threadRef !== null && !retained.linked) return false;
     startingNewChatRef.current = true;
     setError(null);
-    const pending = createBotChat(PLACEHOLDER_THREAD_TITLE);
+    const pending = {
+      selection: readChatSelection(botId),
+      promise: createBotChat(PLACEHOLDER_THREAD_TITLE),
+    };
     pendingNewChatRef.current = pending;
     try {
-      const threadRef = await pending;
+      const threadRef = await pending.promise;
       if (!threadRef) {
         setError(localFailure("Could not start a new chat."));
         return false;
@@ -331,7 +382,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       startingNewChatRef.current = false;
       if (pendingNewChatRef.current === pending) pendingNewChatRef.current = null;
     }
-  }, [canStartNewChat, createBotChat]);
+  }, [botId, canStartNewChat, createBotChat]);
 
   const send = useCallback(
     async (
@@ -376,6 +427,12 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       }
 
       const pendingNewChat = pendingNewChatRef.current;
+      // A send made after opening another chat during New chat goes to that chat.
+      const submittedSelection = readChatSelection(botId);
+      const sendsToNewChat = pendingNewChat?.selection === submittedSelection;
+      // The chat on screen when the message was submitted. Reading attachments and
+      // waiting behind earlier sends takes time, and the user may open another chat.
+      const submittedThreadRef = retainedThreadRef.current.threadRef;
       queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
@@ -402,15 +459,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               };
             }),
           );
-          const newChatRef = pendingNewChat ? await pendingNewChat : null;
-          if (pendingNewChat && !newChatRef) {
+          const newChatRef = sendsToNewChat ? await pendingNewChat.promise : null;
+          if (sendsToNewChat && !newChatRef) {
             setError(localFailure("Could not start a new chat."));
             return false;
           }
           const currentThreadRef =
-            newChatRef ??
-            retainedThreadRef.current.threadRef ??
-            (await ensureTranscriptThread(title));
+            newChatRef ?? submittedThreadRef ?? (await ensureTranscriptThread(title));
           if (!currentThreadRef) {
             setError(localFailure("Could not send the message."));
             return false;
@@ -464,34 +519,47 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               currentThreadRef.threadId,
               shellTitle,
               placeholderChatIdRef.current,
+              titledChatIdRef.current,
             )
           ) {
-            if (placeholderChatIdRef.current === currentThreadRef.threadId) {
+            const titledChatId = currentThreadRef.threadId;
+            if (placeholderChatIdRef.current === titledChatId) {
               placeholderChatIdRef.current = null;
             }
-            // Best effort: the turn already started, so a failed rename only keeps the placeholder.
+            titledChatIdRef.current = titledChatId;
+            // Best effort: the turn already started, so a failed rename only keeps the
+            // placeholder, and the next send may try again.
             void updateMetadata({
               environmentId: currentThreadRef.environmentId,
-              input: { threadId: currentThreadRef.threadId, title },
+              input: { threadId: titledChatId, title },
+            }).then((result) => {
+              if (result._tag === "Failure" && titledChatIdRef.current === titledChatId) {
+                titledChatIdRef.current = null;
+              }
             });
           }
 
-          if (retainedThreadRef.current.threadRef !== currentThreadRef) {
-            retainedThreadRef.current = {
-              ownerId: botId,
-              threadRef: currentThreadRef,
-              linked: false,
-            };
+          // Another chat was opened, or New chat adopted its chat, while this message
+          // was on its way. It still goes where it was typed, but the view stays put.
+          if (readChatSelection(botId) === submittedSelection) {
+            if (retainedThreadRef.current.threadRef !== currentThreadRef) {
+              retainedThreadRef.current = {
+                ownerId: botId,
+                threadRef: currentThreadRef,
+                linked: false,
+              };
+            }
+            useRosterStore
+              .getState()
+              .recordChatPath(
+                botId,
+                `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
+              );
           }
-          useRosterStore
-            .getState()
-            .recordChatPath(
-              botId,
-              `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
-            );
           useRosterStore.getState().recordLastMessage(botId, {
             text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
             at: createdAt,
+            threadId: currentThreadRef.threadId,
           });
           return true;
         } catch (cause) {

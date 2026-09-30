@@ -1,5 +1,6 @@
 import type { AuthSessionState } from "@t3tools/contracts";
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
 import {
@@ -12,7 +13,10 @@ import {
   submitServerAuthCredential,
 } from "../../environments/primary";
 import { isPrimaryEnvironmentPairingCredentialRequiredError } from "../../environments/primary/auth";
+import { connectPairing } from "../../connection/onboarding";
+import { readHostedPairingLink, runHostedPairing } from "../../hostedPairing";
 import { useI18n } from "../../i18n";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Spinner } from "../ui/spinner";
@@ -144,6 +148,83 @@ export function PairingRouteSurface({
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
           {t(supportedMethodsNote)}
         </p>
+      ) : null}
+    </PairingPanel>
+  );
+}
+
+/**
+ * Opens a hosted pairing link (`/pair?host=…#token=…`): saves the remote server
+ * named by `host` in this browser, whatever origin served the page. The token
+ * is stripped from the address bar before it is submitted, and only once.
+ */
+export function HostedPairingRouteSurface() {
+  const { t } = useI18n();
+  const connect = useAtomCommand(connectPairing, { reportFailure: false });
+  const requestRef = useRef(readHostedPairingLink(window.location.href));
+  const [status, setStatus] = useState<PairingPanelStatus>(() =>
+    requestRef.current ? { kind: "checking" } : { kind: "incomplete" },
+  );
+  const startedRef = useRef(false);
+  const pairingRef = useRef(false);
+
+  const pair = useCallback(async () => {
+    if (pairingRef.current) return;
+    pairingRef.current = true;
+    setStatus({ kind: "submitting" });
+    try {
+      setStatus(
+        await runHostedPairing(requestRef.current, async (input) => {
+          const result = await connect(input);
+          if (result._tag === "Success") return { ok: true };
+          return {
+            ok: false,
+            message: `${errorMessageFromUnknown(squashAtomCommandFailure(result))} ${t(
+              "If the server accepted this one-time token, get a new pairing link before trying again.",
+            )}`,
+          };
+        }),
+      );
+    } finally {
+      pairingRef.current = false;
+    }
+  }, [connect, t]);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    stripPairingTokenFromUrl();
+    if (requestRef.current) void pair();
+  }, [pair]);
+
+  // Opening the same link with its #token in this tab is a same-document
+  // navigation, so read the link again rather than keep the first verdict.
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = readHostedPairingLink(window.location.href);
+      if (!next || pairingRef.current) return;
+      requestRef.current = next;
+      stripPairingTokenFromUrl();
+      void pair();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [pair]);
+
+  const request = requestRef.current;
+  return (
+    <PairingPanel
+      environment={{ name: request?.label || null, address: request?.host ?? null }}
+      status={status}
+    >
+      {status.kind === "failed" ? (
+        <Button className="w-full" onClick={() => void pair()} size="lg">
+          {t("Try again")}
+        </Button>
+      ) : status.kind === "paired" ? (
+        <Button className="w-full" onClick={() => window.location.assign("/")} size="lg">
+          {t("Open app")}
+        </Button>
       ) : null}
     </PairingPanel>
   );

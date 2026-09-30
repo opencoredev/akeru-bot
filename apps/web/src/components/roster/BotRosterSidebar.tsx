@@ -114,6 +114,7 @@ import {
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
+import { resolveRosterListState } from "./rosterRouteSelection";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotChatTarget, useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
@@ -299,8 +300,8 @@ function useLatestBotMessage(
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
   const message = useMemo(
-    () => resolveLatestRosterMessage(fallback, visibleMessages),
-    [fallback, visibleMessages],
+    () => resolveLatestRosterMessage(fallback, visibleMessages, threadRef?.threadId),
+    [fallback, visibleMessages, threadRef?.threadId],
   );
   // The chat title reads as the bot's current task; the placeholder title of
   // a brand-new chat says nothing, so the chip stays hidden until a real
@@ -548,15 +549,11 @@ const BotRosterRow = memo(function BotRosterRow({
                   </time>
                 ) : null}
               </span>
-              {taskTitle || latestMessage ? (
-                // The chat title leads the preview line, so the bot name on the
-                // first line keeps the full width.
+              {latestMessage || taskTitle ? (
+                // Messenger preview: the last thing said. A chat with no
+                // messages yet shows its title instead.
                 <span className="truncate text-sm text-sidebar-muted-foreground">
-                  {taskTitle ? (
-                    <span className="font-medium text-sidebar-foreground/80">{taskTitle}</span>
-                  ) : null}
-                  {taskTitle && latestMessage ? " · " : null}
-                  {latestMessage?.text}
+                  {latestMessage ? latestMessage.text : taskTitle}
                 </span>
               ) : null}
             </span>
@@ -931,6 +928,8 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         unassignedItems: state.unassignedItems,
       })),
     );
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const rosterListState = resolveRosterListState(environmentId, rosterEnvironmentId, bots);
   const [query, setQuery] = useState("");
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
@@ -1450,7 +1449,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           )
         }
       >
-        {bots.every((bot) => bot.archivedAt !== null) ? (
+        {rosterListState === "loading" ? null : rosterListState === "empty" ? (
           <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
             {t("No bots yet")}
           </div>

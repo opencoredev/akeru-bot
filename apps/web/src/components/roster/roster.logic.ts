@@ -5,6 +5,9 @@ import {
   type GroupPersonMembership,
 } from "@t3tools/contracts";
 import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { threadJumpIndexFromCommand } from "../../keybindings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
@@ -226,6 +229,131 @@ export function resolveRosterBotId(
 export interface RosterLastMessage {
   text: string;
   at: string;
+  /** The chat the message went to, when known. */
+  threadId?: string;
+}
+
+type MarkdownNode = ReturnType<typeof fromMarkdown> | MarkdownNodeChild;
+type MarkdownNodeChild = ReturnType<typeof fromMarkdown>["children"][number];
+
+const markdownPreviewOptions = {
+  extensions: [gfm()],
+  mdastExtensions: [gfmFromMarkdown()],
+};
+const markdownPreviewCache = new Map<string, string>();
+const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
+
+/**
+ * One-line plain text for a roster preview. Chat messages are markdown, and a
+ * preview row shows only the words: emphasis, code ticks and fences, link and
+ * image syntax, headings, and list or quote markers go, and whitespace
+ * collapses to single spaces. Links keep their label; images drop out; code
+ * and URLs stay literal. The text is parsed with the same micromark/GFM stack
+ * the chat renders with, and results are cached by text so a roster render
+ * never reparses an unchanged message.
+ */
+export function flattenMarkdownPreview(markdown: string): string {
+  const cached = markdownPreviewCache.get(markdown);
+  if (cached !== undefined) return cached;
+  // A row shows one line, so parse only a prefix cut at a line or word
+  // boundary. Parsing costs several milliseconds per long answer; only a
+  // prefix with no visible words (a big image block, say) pays for the rest.
+  const prefix = markdownPreviewPrefix(markdown);
+  let flattened = flattenMarkdownText(prefix);
+  if (flattened.length === 0 && prefix.length < markdown.length) {
+    flattened = flattenMarkdownText(markdown);
+  }
+  if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
+  markdownPreviewCache.set(markdown, flattened);
+  return flattened;
+}
+
+const MARKDOWN_PREVIEW_PARSE_LIMIT = 600;
+
+function markdownPreviewPrefix(markdown: string): string {
+  if (markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT) return markdown;
+  const lineEnd = markdown.lastIndexOf("\n", MARKDOWN_PREVIEW_PARSE_LIMIT);
+  if (lineEnd > 0) return markdown.slice(0, lineEnd);
+  const wordEnd = markdown.lastIndexOf(" ", MARKDOWN_PREVIEW_PARSE_LIMIT);
+  return markdown.slice(0, wordEnd > 0 ? wordEnd : MARKDOWN_PREVIEW_PARSE_LIMIT);
+}
+
+function flattenMarkdownText(markdown: string): string {
+  const parts: string[] = [];
+  collectPreviewText(fromMarkdown(markdown, markdownPreviewOptions), parts);
+  return parts.join("").replace(/\s+/g, " ").trim();
+}
+
+function collectPreviewText(node: MarkdownNode, parts: string[]): void {
+  switch (node.type) {
+    case "text":
+    case "inlineCode":
+    case "code":
+      parts.push(node.value);
+      break;
+    case "html":
+      parts.push(visibleHtmlText(node.value));
+      break;
+    case "image":
+    case "imageReference":
+    case "definition":
+    case "break":
+    case "thematicBreak":
+      parts.push(" ");
+      break;
+    default:
+      if ("children" in node) {
+        for (const child of node.children) collectPreviewText(child, parts);
+      }
+  }
+  // Block boundaries become spaces so adjacent paragraphs or list items never
+  // glue their words together.
+  if (node.type !== "text" && !isPhrasingNode(node)) parts.push(" ");
+}
+
+/**
+ * The words raw HTML shows once the chat renders it: tags and comments go,
+ * and line-breaking elements leave a space so their words do not glue.
+ */
+function visibleHtmlText(html: string): string {
+  const text = html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+    .replace(/<\/?(?:br|p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|pre|hr)\b[^>]*>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ");
+  return text.includes("&") ? decodeHtmlEntities(text) : text;
+}
+
+/**
+ * Decodes character references the way the rendered chat does. Markdown parsing
+ * knows every named HTML entity, so the text is parsed with all other ASCII
+ * punctuation escaped and its words read back; unknown names stay as written.
+ */
+function decodeHtmlEntities(text: string): string {
+  const escaped = text.trim().replace(/[!-"$-%'-/:<-@[-`{-~]/g, "\\$&");
+  const parts: string[] = [];
+  collectPreviewText(fromMarkdown(escaped), parts);
+  // Keep the edge spaces that separate this HTML from neighbouring text.
+  const lead = text.startsWith(" ") ? " " : "";
+  const trail = text.endsWith(" ") ? " " : "";
+  return `${lead}${parts.join("").trim()}${trail}`;
+}
+
+function isPhrasingNode(node: MarkdownNode): boolean {
+  switch (node.type) {
+    case "text":
+    case "inlineCode":
+    case "emphasis":
+    case "strong":
+    case "delete":
+    case "link":
+    case "linkReference":
+    case "footnoteReference":
+    case "html":
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function resolveLatestRosterMessage(
@@ -236,23 +364,32 @@ export function resolveLatestRosterMessage(
     createdAt: string;
     parentThreadId?: string | null | undefined;
   }>,
+  threadId?: string | null,
 ): RosterLastMessage | null {
   let latest: RosterLastMessage | null = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (
-      message &&
-      message.parentThreadId == null &&
-      message.role !== "system" &&
-      message.text.trim().length > 0
-    ) {
-      latest = { text: message.text, at: message.createdAt };
+    if (!message || message.parentThreadId != null || message.role === "system") continue;
+    const text = flattenMarkdownPreview(message.text);
+    if (text.length > 0) {
+      latest = { text, at: message.createdAt };
       break;
     }
   }
-  if (!latest) return fallback;
-  if (!fallback) return latest;
-  return latest.at >= fallback.at ? latest : fallback;
+  // A fallback that flattens to nothing (an image-only attachment, say) must
+  // not beat an older visible answer on timestamp alone.
+  // The fallback is kept per bot, so one sent to another chat does not
+  // describe the chat that is open. With no open chat (its last chat was
+  // archived or deleted) no fallback describes anything current.
+  const sameChatFallback =
+    fallback && threadId !== null && (fallback.threadId ?? threadId) === threadId ? fallback : null;
+  const flatFallback = sameChatFallback
+    ? { ...sameChatFallback, text: flattenMarkdownPreview(sameChatFallback.text) }
+    : null;
+  const usableFallback = flatFallback && flatFallback.text.length > 0 ? flatFallback : null;
+  if (!latest) return usableFallback;
+  if (!usableFallback) return latest;
+  return latest.at >= usableFallback.at ? latest : usableFallback;
 }
 
 export interface RosterSection {

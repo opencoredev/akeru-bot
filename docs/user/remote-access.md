@@ -251,6 +251,32 @@ Cloudflare tunnel), point it at the server and pair through that address.
 
 Akeru does not manage certificates on this route; your proxy owns TLS.
 
+### Save a server from another Akeru address
+
+A pairing link can name a different server than the page that opens it:
+
+```text
+https://tunnel.example.com/pair?host=https://box.example.ts.net:3773#token=<token>
+```
+
+Opening it on any Akeru web address saves the server named by `host` in that browser, then
+offers **Open app**. It does not sign the browser in to the address that served the page, so
+**Open app** shows the saved server only when this browser already uses that address. Otherwise
+the address asks you to pair it first. When `host` names the address that served the page, the
+link pairs that address directly and opens the app. You can also paste the whole link into
+**Settings > Connections > Add environment** on web or desktop, or scan it with the mobile app. The
+token still works only once.
+
+If the page said the link was incomplete, open the complete link in the same tab. The page reads
+the link again without a reload.
+
+Keep the token after `#`. The page refuses a link that carries `token=` in the query string,
+because the browser has already sent that token to the address that served the page. Get a new
+link instead of moving the token by hand.
+
+The browser must reach the `host` server directly. When the page is served over HTTPS, the server
+must be served over HTTPS too, or the browser blocks the request.
+
 ## Connect over a LAN
 
 Both devices on the same trusted network can pair directly over HTTP.

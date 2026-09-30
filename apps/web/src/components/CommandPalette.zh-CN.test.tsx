@@ -58,7 +58,7 @@ describe("command palette in Simplified Chinese", () => {
     );
     for (const text of [
       'aria-label="命令面板"',
-      'placeholder="搜索命令..."',
+      'placeholder="搜索命令和聊天..."',
       "切换到浅色模式",
       "切换主题编辑器",
       "打开插件",

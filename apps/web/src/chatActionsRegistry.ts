@@ -1,4 +1,5 @@
 import type { KeybindingCommand } from "@t3tools/contracts";
+import { useSyncExternalStore } from "react";
 
 /**
  * One chat action the command palette can run on the open chat. The chat
@@ -14,8 +15,15 @@ export interface ChatPaletteAction {
   readonly run: () => Promise<void> | void;
 }
 
-let activeActions: ReadonlyArray<ChatPaletteAction> = [];
+const NO_ACTIONS: ReadonlyArray<ChatPaletteAction> = [];
+let activeActions: ReadonlyArray<ChatPaletteAction> = NO_ACTIONS;
 let activeOwner: object | null = null;
+const listeners = new Set<() => void>();
+
+function publish(actions: ReadonlyArray<ChatPaletteAction>): void {
+  activeActions = actions;
+  for (const listener of listeners) listener();
+}
 
 /** Returns a cleanup that only clears the registry when this owner is still the live one. */
 export function registerChatPaletteActions(
@@ -23,14 +31,24 @@ export function registerChatPaletteActions(
   actions: ReadonlyArray<ChatPaletteAction>,
 ): () => void {
   activeOwner = owner;
-  activeActions = actions;
+  publish(actions);
   return () => {
     if (activeOwner !== owner) return;
     activeOwner = null;
-    activeActions = [];
+    publish(NO_ACTIONS);
   };
 }
 
 export function activeChatPaletteActions(): ReadonlyArray<ChatPaletteAction> {
   return activeActions;
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** The open chat's actions, re-read whenever the chat header publishes new ones. */
+export function useActiveChatPaletteActions(): ReadonlyArray<ChatPaletteAction> {
+  return useSyncExternalStore(subscribe, activeChatPaletteActions, () => NO_ACTIONS);
 }

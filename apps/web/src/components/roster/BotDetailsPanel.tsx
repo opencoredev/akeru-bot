@@ -22,11 +22,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotBrowserPreview } from "./BotBrowserPreview";
+import { BotChatsSection } from "./BotChatsSection";
 import { resolveBotModelLabel } from "./botModelLabel";
 import { botPersonalityToneLabel, canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, botSandboxLabel } from "./botSandbox";
 import { RoutinePanel, type RoutinePanelProps } from "./RoutinePanel";
-import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import type { Bot } from "./types";
 import { useDetailsPanelState } from "./useDetailsPanelState";
 import { useBotDetailsOpen } from "./detailsPanelOpen";
@@ -44,7 +44,7 @@ export function BotOverview({
   routinePanel,
   routinePanelRef,
   routinePanelRequest = 0,
-  modelUnavailable = null,
+  chats,
 }: {
   readonly bot: Bot;
   readonly onOpenSettings?: () => void;
@@ -53,8 +53,8 @@ export function BotOverview({
   readonly routinePanel?: Omit<RoutinePanelProps, "botName">;
   readonly routinePanelRequest?: number;
   readonly routinePanelRef?: Ref<HTMLDivElement>;
-  /** Why the bot's model cannot run right now. The model stays on the bot. */
-  readonly modelUnavailable?: string | null;
+  /** Lists the bot's recent chats. Omitted where the panel cannot switch chats. */
+  readonly chats?: { readonly threadRef: ScopedThreadRef | null; readonly onOpenChat?: () => void };
 }) {
   const { t } = useI18n();
   const providers = useAtomValue(primaryServerProvidersAtom);
@@ -103,20 +103,21 @@ export function BotOverview({
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
           <dt className="text-muted-foreground">{t("Model")}</dt>
-          <dd className="min-w-0 max-w-44 text-right">
-            <span className="block truncate font-medium">{modelLabel}</span>
-            {modelUnavailable ? (
-              <span className="block text-xs text-warning" data-model-unavailable="">
-                {t("Unavailable: {reason}", { reason: modelUnavailable })}
-              </span>
-            ) : null}
-          </dd>
+          <dd className="max-w-44 truncate font-medium">{modelLabel}</dd>
         </div>
         <div className="flex items-center justify-between gap-4 py-3">
           <dt className="text-muted-foreground">{t("Sandbox")}</dt>
           <dd className="font-medium">{botSandboxLabel(botSandboxChoice(bot.sandbox), t)}</dd>
         </div>
       </dl>
+
+      {chats ? (
+        <BotChatsSection
+          botId={bot.id}
+          threadRef={chats.threadRef}
+          {...(chats.onOpenChat ? { onOpenChat: chats.onOpenChat } : {})}
+        />
+      ) : null}
 
       <div ref={routinePanelRef}>
         <RoutinePanel
@@ -153,7 +154,6 @@ export function BotDetailsPanel({
   const mobileRoutineRef = useRef<HTMLDivElement>(null);
   const handledRoutineRequest = useRef(0);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
-  const engine = useBotEngineAvailability(bot.engine);
 
   useEffect(() => {
     if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
@@ -213,6 +213,7 @@ export function BotDetailsPanel({
     routinePanelRef: Ref<HTMLDivElement>,
     closeButton?: ReactNode,
     canExpandBrowser = false,
+    onOpenChat?: () => void,
   ) => (
     <>
       <BotBrowserPreview
@@ -235,7 +236,6 @@ export function BotDetailsPanel({
             bot={bot}
             routinePanelRef={routinePanelRef}
             routinePanelRequest={routinePanelRequest}
-            modelUnavailable={engine.blocked ? (engine.unavailability?.title ?? null) : null}
             {...(onOpenSettings ? { onOpenSettings } : {})}
             {...(threadRef
               ? {
@@ -249,6 +249,7 @@ export function BotDetailsPanel({
                 }
               : {})}
             {...(routinePanel ? { routinePanel } : {})}
+            chats={{ threadRef, ...(onOpenChat ? { onOpenChat } : {}) }}
           />
         </>
       ) : null}
@@ -352,6 +353,8 @@ export function BotDetailsPanel({
             >
               <AppIcon icon={Cancel01Icon} />
             </SheetClose>,
+            false,
+            () => setMobileOpen(false),
           )}
         </SheetPopup>
       </Sheet>

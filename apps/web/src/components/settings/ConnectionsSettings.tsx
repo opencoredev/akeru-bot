@@ -41,6 +41,7 @@ import {
   applyWslEnableSelection,
   isAdvertisedEndpointRemotelyReachable,
   isQrShareableEndpoint,
+  parsePairingUrlFields,
   selectQrEndpointOption,
 } from "./ConnectionsSettings.logic";
 import {
@@ -84,7 +85,7 @@ import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
 import { Textarea } from "../ui/textarea";
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "../../pairingUrl";
+import { setPairingTokenOnUrl } from "../../pairingUrl";
 import {
   createServerPairingCredential,
   revokeOtherServerClientSessions,
@@ -283,34 +284,11 @@ function parseManualDesktopSshTarget(input: {
   };
 }
 
-function parsePairingUrlFields(
-  input: string,
-): { readonly host: string; readonly pairingCode: string } | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  try {
-    const urlLikeInput =
-      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
-        ? trimmed
-        : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
-    const pairingCode = getPairingTokenFromUrl(url);
-    if (!pairingCode) return null;
-    return {
-      host: url.origin,
-      pairingCode,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function parseRemotePairingFields(input: { readonly host: string; readonly pairingCode: string }): {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
+  const parsedPairingUrl = parsePairingUrlFields(input.host, window.location.origin);
   if (parsedPairingUrl) return parsedPairingUrl;
 
   const host = input.host.trim();
@@ -2156,7 +2134,7 @@ export function ConnectionsSettings() {
     [setDefaultAdvertisedEndpointKey],
   );
   const handleSavedBackendHostChange = useCallback((value: string) => {
-    const parsedPairingUrl = parsePairingUrlFields(value);
+    const parsedPairingUrl = parsePairingUrlFields(value, window.location.origin);
     if (parsedPairingUrl) {
       setSavedBackendHost(parsedPairingUrl.host);
       setSavedBackendPairingCode(parsedPairingUrl.pairingCode);

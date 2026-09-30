@@ -28,7 +28,7 @@ import { toastManager } from "../components/ui/toast";
 import { useI18n } from "../i18n";
 import { randomUUID } from "../lib/utils";
 import { deriveProviderInstanceEntries } from "../providerInstances";
-import { botRoutePanelKeys } from "./botRoutePanelKeys";
+import { botRoutePanelKeys } from "./-botRoutePanelKeys";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { routineEnvironment } from "../state/routines";
 import { primaryServerProvidersAtom } from "../state/server";

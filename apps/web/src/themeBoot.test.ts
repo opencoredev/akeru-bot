@@ -202,6 +202,11 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
+      name: "a legacy t3-chat preference follows the OS as Akeru Chat",
+      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+    },
+    {
       name: "legacy t3-chat-dark resolves to dark T3 Chat",
       storage: { [THEME_STORAGE_KEY]: "t3-chat-dark" },
       prefersDark: true,
@@ -292,6 +297,14 @@ describe("index.html boot script", () => {
     expect(chat.themeId).toBe("akeru-chat");
     expect(chat.themeSelected).toBe("true");
     expect(chat.isDark).toBe(true);
+
+    // A preference saved before the rename boots straight into the new id.
+    const legacyChat = runBootScript({
+      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+    });
+    expect(legacyChat.themeId).toBe("akeru-chat");
+    expect(legacyChat.themeSelected).toBe("true");
 
     const aurora = runBootScript({
       storage: {

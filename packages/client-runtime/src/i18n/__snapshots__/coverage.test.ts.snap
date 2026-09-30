@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1814,
+  "directMessageCount": 1841,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -56,6 +56,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
     ],
     "apps/web/src/components/onboarding/DesktopOnboarding.tsx": [
       "definition.subscription)}",
+    ],
+    "apps/web/src/components/plugins/ComposioSection.tsx": [
+      "label) : label;",
     ],
     "apps/web/src/components/roster/BotDurableMemory.tsx": [
       "failure.message)}",
@@ -403,6 +406,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/onboarding/OnboardingPreview.tsx",
     "apps/web/src/components/onboarding/desktopOnboarding.logic.ts",
     "apps/web/src/components/onboarding/goalPlan.logic.ts",
+    "apps/web/src/components/plugins/ComposioSection.tsx",
     "apps/web/src/components/plugins/PluginsCatalog.tsx",
     "apps/web/src/components/plugins/PluginsDialog.tsx",
     "apps/web/src/components/roster/AvatarColorPicker.tsx",
@@ -412,6 +416,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotBrowserPreview.tsx",
     "apps/web/src/components/roster/BotChannelsSheet.tsx",
     "apps/web/src/components/roster/BotChatMessageRows.tsx",
+    "apps/web/src/components/roster/BotChatsSection.tsx",
     "apps/web/src/components/roster/BotComposerModelControl.tsx",
     "apps/web/src/components/roster/BotConversationScrollArea.tsx",
     "apps/web/src/components/roster/BotDetailsPanel.tsx",
@@ -485,7 +490,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/ui/sidebar.tsx",
     "apps/web/src/components/ui/toast.tsx",
     "apps/web/src/hooks/useChatActions.ts",
-    "apps/web/src/routes/RootRouteErrorView.tsx",
+    "apps/web/src/routes/-RootRouteErrorView.tsx",
     "apps/web/src/routes/__root.tsx",
     "apps/web/src/routes/_chat.bots.$botId.tsx",
     "packages/client-runtime/src/botInbox.ts",

@@ -16,12 +16,16 @@ interface CommandPaletteResultsProps {
   highlightedItemValue?: string | null;
   keybindings: ResolvedKeybindingsConfig;
   onExecuteItem: (item: CommandPaletteActionItem) => void;
+  /** Replaces the no-results line, such as while chat search is still running. */
+  emptyStateMessage?: string;
 }
 
 export function CommandPaletteResults(props: CommandPaletteResultsProps) {
   if (props.groups.length === 0) {
     return (
-      <div className="py-10 text-center text-sm text-muted-foreground">No matching commands.</div>
+      <div className="py-10 text-center text-sm text-muted-foreground">
+        {props.emptyStateMessage ?? "No matching commands."}
+      </div>
     );
   }
 
