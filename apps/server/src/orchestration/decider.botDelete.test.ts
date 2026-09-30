@@ -169,6 +169,29 @@ function makeDelegation(
 }
 
 it.layer(NodeServices.layer)("bot delete decider", (it) => {
+  it.effect("requires Railway VM retirement before deleting an active or archived bot", () =>
+    Effect.gen(function* () {
+      for (const archivedAt of [null, NOW]) {
+        const error = yield* decideOrchestrationCommand({
+          command: {
+            type: "bot.delete",
+            commandId: CommandId.make("cmd-delete-railway"),
+            botId: BOT_ID,
+          },
+          readModel: makeReadModel({
+            bots: [{ ...makeBot({ id: BOT_ID, archivedAt }), sandbox: "railway" as const }],
+          }),
+        }).pipe(Effect.flip);
+
+        if (error._tag !== "OrchestrationCommandInvariantError") {
+          throw new Error("Expected Railway delete invariant error");
+        }
+        expect(error.detail).toContain("Railway dashboard");
+        expect(error.detail).toContain("switch the bot's sandbox to Local");
+      }
+    }),
+  );
+
   it.effect("deletes a bot and detaches its chats", () =>
     Effect.gen(function* () {
       const readModel = makeReadModel({

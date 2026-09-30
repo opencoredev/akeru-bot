@@ -818,6 +818,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "bot.delete": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
+      if (bot.sandbox === "railway") {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail:
+              "Retire this bot's VM in the Railway dashboard before deleting the bot; it can keep running and accruing charges. Stop its sessions, delete any unneeded VM, then switch the bot's sandbox to Local and retry. Deleting a bot does not delete its Railway VM.",
+          }),
+        );
+      }
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
       if (bossGroup) {
         return yield* Effect.fail(
