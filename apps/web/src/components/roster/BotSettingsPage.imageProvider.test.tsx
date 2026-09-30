@@ -261,9 +261,22 @@ describe("bot settings image provider", () => {
     expect(saveButton(tree).disabled).toBe(true);
   });
 
-  it("can persist the displayed Local sandbox for an inherited bot", async () => {
+  it("preserves inheritance until Local is explicitly selected", async () => {
     state.bots = [makeBot({ sandbox: null })];
-    const tree = renderForm();
+    let tree = renderForm();
+    expect(saveButton(tree).disabled).toBe(true);
+    const select = visitElements(
+      tree,
+      (element) =>
+        typeof element.props.onValueChange === "function" &&
+        visitElements(
+          element.props.children,
+          (child) => child.props["aria-label"] === "Sandbox provider",
+        ) !== null,
+    );
+    expect(select?.props.value).toBe("default");
+    (select!.props.onValueChange as (value: string) => void)("local");
+    tree = renderForm();
     expect(saveButton(tree).disabled).toBe(false);
     saveButton(tree).onClick();
     await flushPromises();

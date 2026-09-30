@@ -501,7 +501,11 @@ function BotSettingsForm({
                 value={draft.sandbox}
                 onValueChange={(value) => {
                   if (value === null) return;
-                  if (!BOT_SANDBOX_OPTIONS.some((option) => option.value === value)) return;
+                  if (
+                    value !== "default" &&
+                    !BOT_SANDBOX_OPTIONS.some((option) => option.value === value)
+                  )
+                    return;
                   draft.setSandbox(value as typeof draft.sandbox);
                   draft.markChanged();
                 }}
@@ -510,6 +514,7 @@ function BotSettingsForm({
                   <SelectValue>{botSandboxLabel(draft.sandbox, t)}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="default">{botSandboxLabel("default", t)}</SelectItem>
                   {BOT_SANDBOX_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {botSandboxLabel(option.value, t)}

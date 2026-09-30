@@ -9,8 +9,9 @@ import {
 } from "./botSandbox";
 
 describe("botSandbox", () => {
-  it("treats a missing bot sandbox as local", () => {
-    expect(botSandboxChoice(null)).toBe("local");
+  it("distinguishes an inherited sandbox from explicit Local", () => {
+    expect(botSandboxChoice(null)).toBe("default");
+    expect(botSandboxLabel("default")).toBe("Default sandbox");
     expect(botSandboxChoice("local")).toBe("local");
     expect(botSandboxChoice("vercel")).toBe("vercel");
   });

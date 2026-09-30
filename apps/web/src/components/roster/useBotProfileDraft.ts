@@ -270,7 +270,7 @@ export function useBotProfileDraft(
     !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
   const toolOverridesDirty =
     mcpServerIdsKey(disabledMcpServerIds) !== mcpServerIdsKey(bot.disabledMcpServerIds);
-  const sandboxDirty = sandbox !== bot.sandbox;
+  const sandboxDirty = sandbox !== botSandboxChoice(bot.sandbox);
   const dirty =
     name.trim() !== bot.name ||
     normalizedLabel !== bot.label ||
@@ -349,7 +349,7 @@ export function useBotProfileDraft(
         description: normalizedDescription,
         engine: nextEngine,
         usageCap: resolvedUsageCap.value,
-        sandbox,
+        sandbox: sandbox === "default" ? null : sandbox,
         personalityTone,
         voiceEnabled,
         imageProvider,
