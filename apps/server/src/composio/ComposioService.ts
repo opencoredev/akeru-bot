@@ -331,7 +331,11 @@ export function make(
             (accounts ?? []).map((account) => account.id),
           ]),
         );
-        const fingerprint = JSON.stringify(accountMap);
+        const fingerprint = JSON.stringify(
+          Object.entries(accountMap)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([toolkit, accountIds]) => [toolkit, [...accountIds].sort()]),
+        );
         const cached = runtimeCache.get(resourceId);
         if (cached?.fingerprint === fingerprint) return cached.server;
         await deleteCachedSession(resourceId);

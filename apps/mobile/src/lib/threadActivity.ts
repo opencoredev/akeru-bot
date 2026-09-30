@@ -1454,8 +1454,35 @@ function withoutCardedDelegationActivities(
   });
 }
 
+const activityFeedDerivations = new WeakMap<
+  ReadonlyArray<OrchestrationThreadActivity>,
+  {
+    readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
+    readonly botStepMeters: ReturnType<typeof buildBotStepMeters>;
+    readonly workLogEntries: ReturnType<typeof deriveWorkLogEntries>;
+  }
+>();
+const NO_FEED_DELEGATIONS: ReadonlyArray<AkeruDelegationRecord> = Object.freeze([]);
+
+function deriveActivityFeed(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+) {
+  const cached = activityFeedDerivations.get(activities);
+  if (cached !== undefined && sameEntries(cached.delegations, delegations)) return cached;
+  const derivation = {
+    delegations,
+    botStepMeters: buildBotStepMeters(activities),
+    workLogEntries: deriveWorkLogEntries(
+      withoutCardedDelegationActivities(activities, delegations),
+    ),
+  };
+  activityFeedDerivations.set(activities, derivation);
+  return derivation;
+}
+
 export function buildThreadFeed(
-  thread: OrchestrationThread,
+  thread: Pick<OrchestrationThread, "messages" | "activities">,
   options?: {
     readonly loadedMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
     readonly localMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
@@ -1489,9 +1516,9 @@ export function buildThreadFeed(
   }
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
-  const botStepMeters = buildBotStepMeters(thread.activities);
-  const workLogEntries = deriveWorkLogEntries(
-    withoutCardedDelegationActivities(thread.activities, options?.delegations ?? []),
+  const { botStepMeters, workLogEntries } = deriveActivityFeed(
+    thread.activities,
+    options?.delegations ?? NO_FEED_DELEGATIONS,
   );
   const timed: Array<{ readonly at: number; readonly entry: RawThreadFeedEntry }> = [];
   for (const message of messages) {
@@ -1522,6 +1549,45 @@ export function buildThreadFeed(
     messages,
     options?.delegations ?? [],
   );
+}
+
+export function createThreadFeedBuilder() {
+  let previous:
+    | {
+        readonly messages: OrchestrationThread["messages"];
+        readonly activities: OrchestrationThread["activities"];
+        readonly loadedMessages: ReadonlyArray<OrchestrationThread["messages"][number]> | undefined;
+        readonly localMessages: ReadonlyArray<OrchestrationThread["messages"][number]> | undefined;
+        readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
+        readonly feed: ThreadFeedEntry[];
+      }
+    | undefined;
+  return (
+    thread: Pick<OrchestrationThread, "messages" | "activities">,
+    options?: Parameters<typeof buildThreadFeed>[1],
+  ): ThreadFeedEntry[] => {
+    const delegations = options?.delegations ?? NO_FEED_DELEGATIONS;
+    if (
+      previous !== undefined &&
+      previous.messages === thread.messages &&
+      previous.activities === thread.activities &&
+      previous.loadedMessages === options?.loadedMessages &&
+      previous.localMessages === options?.localMessages &&
+      sameEntries(previous.delegations, delegations)
+    ) {
+      return previous.feed;
+    }
+    const feed = buildThreadFeed(thread, options);
+    previous = {
+      messages: thread.messages,
+      activities: thread.activities,
+      loadedMessages: options?.loadedMessages,
+      localMessages: options?.localMessages,
+      delegations,
+      feed,
+    };
+    return feed;
+  };
 }
 
 /** Same ordering as `Order.Date`: stable ties, unparsable times first. */

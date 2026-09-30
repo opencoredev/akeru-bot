@@ -293,6 +293,7 @@ interface ActiveSession {
   runtimeMode: RuntimeMode;
   model: string;
   status: ProviderSession["status"];
+  turnAdmissionGeneration: number;
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
@@ -372,6 +373,7 @@ export interface AgentControllerLiveOptions {
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop" | "dispatchDelegation">>;
+  readonly readAttachment?: (path: string) => Promise<Uint8Array>;
   /** Overrides the WebFetch resolver and address policy in tests. */
   readonly webFetch?: AkeruWebFetchOptions;
   /**
@@ -3572,6 +3574,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           runtimeMode: access.runtimeMode,
           model: resolved.modelSelection.model,
           status: "ready" as const,
+          turnAdmissionGeneration: 0,
           activeTurn: null,
           admittingTurn: null,
           pendingTurns: [],
@@ -3761,6 +3764,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               ),
             );
         }
+        const turnAdmissionGeneration = active.turnAdmissionGeneration;
         if (input.timezone !== undefined) {
           active.configuredToolSession = {
             ...active.configuredToolSession,
@@ -3771,36 +3775,55 @@ const make = (options?: AgentControllerLiveOptions) =>
             toolRuntime.registerSession(key, active.toolSession);
           }
         }
-        const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
-          const path = resolveAttachmentPath({
-            attachmentsDir: config.attachmentsDir,
-            attachment,
-          });
-          if (path === null) {
-            return Effect.fail(
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Attachment '${attachment.id}' has an invalid path.`,
-              }),
-            );
-          }
-          return Effect.try({
-            try: () => ({
-              file: {
-                data: NodeFS.readFileSync(path).toString("base64"),
-                mediaType: attachment.mimeType,
-                filename: attachment.name,
+        const attachmentFiles = yield* Effect.forEach(
+          input.attachments ?? [],
+          (attachment) => {
+            const path = resolveAttachmentPath({
+              attachmentsDir: config.attachmentsDir,
+              attachment,
+            });
+            if (path === null) {
+              return Effect.fail(
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn.attachments",
+                  detail: `Attachment '${attachment.id}' has an invalid path.`,
+                }),
+              );
+            }
+            return Effect.tryPromise({
+              try: async () => {
+                const bytes = await (options?.readAttachment ?? NodeFS.promises.readFile)(path);
+                return {
+                  file: {
+                    data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
+                      "base64",
+                    ),
+                    mediaType: attachment.mimeType,
+                    filename: attachment.name,
+                  },
+                  pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
+                };
               },
-              pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
-            }),
-            catch: (cause) =>
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Could not read attachment '${attachment.id}'.`,
-                cause,
-              }),
+              catch: (cause) =>
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn.attachments",
+                  detail: `Could not read attachment '${attachment.id}'.`,
+                  cause,
+                }),
+            });
+          },
+          { concurrency: 1 },
+        );
+        if (
+          sessions.get(key) !== active ||
+          active.status === "closed" ||
+          active.turnAdmissionGeneration !== turnAdmissionGeneration
+        ) {
+          return yield* new AgentControllerRuntimeError({
+            operation: "sendTurn",
+            detail: `Mastra session for thread '${input.threadId}' is not running.`,
           });
-        });
+        }
         const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
           .filter((part): part is string => typeof part === "string" && part.length > 0)
           .join("\n\n");
@@ -3864,6 +3887,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
       }
+      active.turnAdmissionGeneration += 1;
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4242,6 +4266,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      active.turnAdmissionGeneration += 1;
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4414,6 +4439,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          active.turnAdmissionGeneration += 1;
           active.pendingTurns.length = 0;
           active.admittingTurn = null;
           active.session.abort();

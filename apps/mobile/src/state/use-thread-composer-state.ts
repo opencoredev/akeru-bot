@@ -33,7 +33,7 @@ import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
 import { useMobileI18n } from "../lib/i18n";
 import {
-  buildThreadFeed,
+  createThreadFeedBuilder,
   deriveThreadFeedDelegations,
   unchangedPrefixLength,
   type ThreadFeedDelegations,
@@ -78,6 +78,8 @@ export function useThreadDraftForThread(input: {
   };
 }
 
+const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = Object.freeze([]);
+
 const feedDelegationsAtom = Atom.family((key: string) => {
   const [environmentId, threadId] = key.split("\n") as [
     EnvironmentId | undefined,
@@ -97,6 +99,7 @@ export function useThreadComposerState() {
   const { t } = useMobileI18n();
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
+  const buildSelectedThreadFeed = useMemo(() => createThreadFeedBuilder(), []);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
   const [feedbackSubmissionsByThreadKey, setFeedbackSubmissionsByThreadKey] = useState<
@@ -155,27 +158,35 @@ export function useThreadComposerState() {
     () => JSON.parse(selectedThreadDelegations) as ThreadFeedDelegations,
     [selectedThreadDelegations],
   );
-  const selectedThreadFeed = useMemo(() => {
-    if (!selectedThreadDetail) {
-      return [];
-    }
-    const submissions = selectedThreadKey
-      ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? [])
-      : [];
-    const { delegations } = selectedThreadFeedDelegations;
-    return buildThreadFeed(selectedThreadDetail, {
-      localMessages: submissions.flatMap((submission) =>
+  const selectedThreadFeedbackSubmissions = selectedThreadKey
+    ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? EMPTY_FEEDBACK_SUBMISSIONS)
+    : EMPTY_FEEDBACK_SUBMISSIONS;
+  const selectedThreadLocalMessages = useMemo(
+    () =>
+      selectedThreadFeedbackSubmissions.flatMap((submission) =>
         submission.status === "interrupted"
           ? []
           : [codexFeedbackMessage(submission), codexFeedbackMessage(submission, "assistant")],
       ),
-      delegations,
-    });
+    [selectedThreadFeedbackSubmissions],
+  );
+  const selectedThreadActivities = selectedThreadDetail?.activities;
+  const selectedThreadMessages = selectedThreadDetail?.messages;
+  const selectedThreadFeed = useMemo(() => {
+    if (!selectedThreadActivities || !selectedThreadMessages) return [];
+    return buildSelectedThreadFeed(
+      { activities: selectedThreadActivities, messages: selectedThreadMessages },
+      {
+        localMessages: selectedThreadLocalMessages,
+        delegations: selectedThreadFeedDelegations.delegations,
+      },
+    );
   }, [
-    feedbackSubmissionsByThreadKey,
+    buildSelectedThreadFeed,
+    selectedThreadActivities,
+    selectedThreadMessages,
+    selectedThreadLocalMessages,
     selectedThreadFeedDelegations,
-    selectedThreadDetail,
-    selectedThreadKey,
   ]);
 
   // Draft text and attachments are read by the composer itself, so typing
