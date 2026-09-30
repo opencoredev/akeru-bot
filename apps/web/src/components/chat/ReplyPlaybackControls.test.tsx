@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
-import { createReplyPlaybackController } from "@t3tools/client-runtime/reply-playback";
+import { createReplyPlaybackController } from "@akeru/client-runtime/reply-playback";
 import { ReplyPlaybackControls } from "./ReplyPlaybackControls";
 
 const identity = {

@@ -1,4 +1,4 @@
-import { PLACEHOLDER_THREAD_TITLE, TextGenerationError } from "@t3tools/contracts";
+import { PLACEHOLDER_THREAD_TITLE, TextGenerationError } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 

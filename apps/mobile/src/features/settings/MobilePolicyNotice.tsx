@@ -1,6 +1,6 @@
 import { useMobileI18n } from "../../lib/i18n";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@t3tools/contracts/settings";
+import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@akeru/contracts/settings";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { AsyncResult } from "effect/unstable/reactivity";

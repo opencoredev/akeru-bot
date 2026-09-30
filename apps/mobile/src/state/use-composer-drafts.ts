@@ -8,7 +8,7 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { useEffect, useMemo } from "react";
 import { Atom } from "effect/unstable/reactivity";

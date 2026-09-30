@@ -6,7 +6,7 @@ import {
   MessageId,
   ThreadId,
   type AuthClientSession,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

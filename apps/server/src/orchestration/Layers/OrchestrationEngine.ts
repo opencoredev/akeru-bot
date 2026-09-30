@@ -2,8 +2,8 @@ import type {
   OrchestrationClientOrigin,
   OrchestrationEvent,
   OrchestrationReadModel,
-} from "@t3tools/contracts";
-import { OrchestrationCommand } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { OrchestrationCommand } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";

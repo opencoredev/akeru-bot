@@ -4,7 +4,7 @@ import {
   type OrchestrationThreadDetailSnapshot,
   type ServerConfig,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -38,7 +38,7 @@ export class ConnectionTargetStore extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<ConnectionTarget>, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/ConnectionTargetStore") {}
+>()("@akeru/client-runtime/platform/persistence/ConnectionTargetStore") {}
 
 export class ConnectionRegistrationStore extends Context.Service<
   ConnectionRegistrationStore,
@@ -48,7 +48,7 @@ export class ConnectionRegistrationStore extends Context.Service<
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly remove: (target: ConnectionTarget) => Effect.Effect<void, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/ConnectionRegistrationStore") {}
+>()("@akeru/client-runtime/platform/persistence/ConnectionRegistrationStore") {}
 
 export class EnvironmentCacheStore extends Context.Service<
   EnvironmentCacheStore,
@@ -90,11 +90,11 @@ export class EnvironmentCacheStore extends Context.Service<
       environmentId: EnvironmentId,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/EnvironmentCacheStore") {}
+>()("@akeru/client-runtime/platform/persistence/EnvironmentCacheStore") {}
 
 export class EnvironmentOwnedDataCleanup extends Context.Reference<{
   readonly clear: (environmentId: EnvironmentId) => Effect.Effect<void>;
-}>("@t3tools/client-runtime/platform/persistence/EnvironmentOwnedDataCleanup", {
+}>("@akeru/client-runtime/platform/persistence/EnvironmentOwnedDataCleanup", {
   defaultValue: () => ({
     clear: () => Effect.void,
   }),

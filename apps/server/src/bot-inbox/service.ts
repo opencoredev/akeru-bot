@@ -2,7 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import type { AkeruMemoryApprovalRequest, BotId } from "@t3tools/contracts";
+import type { AkeruMemoryApprovalRequest, BotId } from "@akeru/contracts";
 
 export const BOT_INBOX_KINDS = [
   "oauth-expired",

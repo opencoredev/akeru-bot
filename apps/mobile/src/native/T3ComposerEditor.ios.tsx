@@ -4,7 +4,7 @@ import {
   type ComposerInlineToken,
   UNKNOWN_BOT_MENTION_LABEL,
   UNKNOWN_CHAT_MENTION_LABEL,
-} from "@t3tools/shared/composerInlineTokens";
+} from "@akeru/shared/composerInlineTokens";
 import { requireNativeView } from "expo";
 import {
   useCallback,
@@ -18,8 +18,8 @@ import {
 import type { NativeSyntheticEvent, StyleProp, ViewProps, ViewStyle } from "react-native";
 import { Image, StyleSheet } from "react-native";
 
-import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
-import { resolveMarkdownFileIcon } from "@t3tools/mobile-markdown-text/links";
+import { markdownFileIconSource } from "@akeru/mobile-markdown-text/file-icons";
+import { resolveMarkdownFileIcon } from "@akeru/mobile-markdown-text/links";
 import { useBotNames } from "../state/bots";
 import { useThreadTitles } from "../state/entities";
 import { useThemeColor } from "../lib/useThemeColor";

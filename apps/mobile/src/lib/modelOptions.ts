@@ -3,12 +3,12 @@ import type {
   ModelSelection,
   ServerConfig as T3ServerConfig,
   SubscriptionProviderStatus,
-} from "@t3tools/contracts";
-import { PROVIDER_DISPLAY_NAMES, type ProviderDriverKind } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { PROVIDER_DISPLAY_NAMES, type ProviderDriverKind } from "@akeru/contracts";
 import {
   filterProvidersBySubscriptionConnection,
   withRefreshableSubscriptionLogin,
-} from "@t3tools/client-runtime/provider-auth";
+} from "@akeru/client-runtime/provider-auth";
 import {
   presentProviderUnavailability,
   type ProviderAvailabilityTranslate,
@@ -16,11 +16,11 @@ import {
   providerUnavailabilitySummary,
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
-} from "@t3tools/client-runtime/provider-availability";
+} from "@akeru/client-runtime/provider-availability";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+} from "@akeru/shared/model";
 
 export type ModelOption = {
   readonly key: string;

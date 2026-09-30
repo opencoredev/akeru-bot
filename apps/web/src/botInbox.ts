@@ -1,4 +1,4 @@
-import type { SubscriptionAuthStatuses } from "@t3tools/contracts";
+import type { SubscriptionAuthStatuses } from "@akeru/contracts";
 
 export type BotInboxItem = SubscriptionAuthStatuses["inbox"][number];
 

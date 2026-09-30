@@ -3,12 +3,12 @@ import type {
   ImageGenerationSettings,
   ImageProviderId,
   ImageProviderStatus,
-} from "@t3tools/contracts";
-import { IMAGE_PROVIDER_IDS } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { IMAGE_PROVIDER_IDS } from "@akeru/contracts";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import { LoaderIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -37,7 +37,7 @@ import {
   imageProviderOperationsLabel,
   imageProviderTogglePatch,
   isImageProviderEnabled,
-} from "@t3tools/client-runtime/image-generation";
+} from "@akeru/client-runtime/image-generation";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { subscriptionProviderTargetId } from "./subscriptionProviders";

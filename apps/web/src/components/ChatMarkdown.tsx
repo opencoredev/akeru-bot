@@ -13,16 +13,16 @@ import {
   TriangleAlertIcon,
   WrapTextIcon,
 } from "lucide-react";
-import type { EnvironmentId, ScopedThreadRef, ServerProviderSkill } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedThreadRef, ServerProviderSkill } from "@akeru/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
-import { stabilizeStreamingMarkdown } from "@t3tools/client-runtime/markdown-streaming";
-import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
-import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
+} from "@akeru/client-runtime/state/runtime";
+import { classifyMarkdownImageSource } from "@akeru/client-runtime/markdown-images";
+import { stabilizeStreamingMarkdown } from "@akeru/client-runtime/markdown-streaming";
+import { isAppDeepLink } from "@akeru/client-runtime/settings-deep-link";
+import { faviconUrlForOrigin } from "@akeru/shared/favicon";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import React, {

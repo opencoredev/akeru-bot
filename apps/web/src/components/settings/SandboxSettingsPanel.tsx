@@ -1,5 +1,5 @@
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@t3tools/contracts";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@akeru/contracts";
 import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
@@ -43,6 +43,7 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   vercel: "Vercel Sandbox",
   upstash: "Upstash Box",
   railway: "Railway",
+  tenki: "Tenki",
 };
 
 function errorMessage(

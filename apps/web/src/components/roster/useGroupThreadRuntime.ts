@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
   BotId,
   type BotEngine,
@@ -10,7 +10,7 @@ import {
   ThreadId,
   type ModelSelection,
   type ScopedThreadRef,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";

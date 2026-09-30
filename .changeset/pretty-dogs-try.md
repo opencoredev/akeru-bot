@@ -1,5 +1,5 @@
 ---
-"@t3tools/web": patch
+"@akeru/web": patch
 ---
 
 Reposition Akeru Bot's public messaging as an open-source, self-hosted Grok Bot alternative.

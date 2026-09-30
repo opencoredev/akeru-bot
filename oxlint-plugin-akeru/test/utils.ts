@@ -105,12 +105,12 @@ export const createOxlintRuleHarness = (
     const sourcePath = path.join(fixtureDir, options.filename ?? "fixture.ts");
     const repoRoot = path.join(import.meta.dirname, "..", "..");
     const oxlintBin = path.join(path.dirname(oxlintPackageJsonPath), "bin", "oxlint");
-    const pluginPath = path.join(repoRoot, "oxlint-plugin-t3code", "index.ts");
+    const pluginPath = path.join(repoRoot, "oxlint-plugin-akeru", "index.ts");
 
     yield* fs.writeFileString(
       configPath,
       yield* encodeOxlintConfig({
-        jsPlugins: [{ name: "t3code", specifier: pluginPath }],
+        jsPlugins: [{ name: "akeru", specifier: pluginPath }],
         rules: { [ruleName]: "error" },
       }),
     );

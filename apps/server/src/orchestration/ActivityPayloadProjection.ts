@@ -2,8 +2,8 @@ import type {
   OrchestrationEvent,
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
-} from "@t3tools/contracts";
-import { AkeruPluginSearchResult } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { AkeruPluginSearchResult } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);

@@ -1,4 +1,4 @@
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 
 export interface HsvColor {
   readonly h: number;

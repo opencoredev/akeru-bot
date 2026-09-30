@@ -1,9 +1,9 @@
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   ApprovalRequestId,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";

@@ -11,9 +11,9 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE, type ScopedThreadRef } from "@t3tools/contracts";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE, type ScopedThreadRef } from "@akeru/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,

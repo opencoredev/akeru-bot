@@ -1,4 +1,4 @@
-import { McpServerId } from "@t3tools/contracts";
+import { McpServerId } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { runPluginEnablePlan } from "./pluginConnection";

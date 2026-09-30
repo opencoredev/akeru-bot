@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_SETTINGS, VoiceCallError } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, VoiceCallError } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,13 +1,13 @@
 import {
   deriveComputerViewer,
   type ComputerCapabilityExplanation,
-} from "@t3tools/client-runtime/state/computer-viewer";
+} from "@akeru/client-runtime/state/computer-viewer";
 import {
   createComputerViewerController,
   type ComputerViewerController,
   type ComputerViewerPort,
-} from "@t3tools/client-runtime/state/computer-viewer-controller";
-import { ThreadId, type ComputerFrame, type ComputerState } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/computer-viewer-controller";
+import { ThreadId, type ComputerFrame, type ComputerState } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

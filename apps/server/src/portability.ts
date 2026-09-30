@@ -25,12 +25,12 @@ import {
   type OrchestrationReadModel,
   type ServerSettings,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   isWindowsAbsolutePath,
   normalizeProjectPathForComparison,
   normalizeProjectPathForDispatch,
-} from "@t3tools/shared/path";
+} from "@akeru/shared/path";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 

@@ -8,7 +8,7 @@ import {
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
   type GitManagerServiceError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";

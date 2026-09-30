@@ -16,7 +16,7 @@ import {
   type ThemeColors,
   type ThemeDefinition,
   type ThemeVariants,
-} from "@t3tools/shared/themePalettes";
+} from "@akeru/shared/themePalettes";
 
 export {
   AKERU_PAPER_THEME,

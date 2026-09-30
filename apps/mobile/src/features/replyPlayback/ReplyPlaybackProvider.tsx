@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
-import { type ReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
-import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@t3tools/contracts";
+import { type ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@akeru/contracts";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { serverEnvironment } from "../../state/server";

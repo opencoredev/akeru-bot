@@ -1,4 +1,4 @@
-import { MessageId, TurnId, type OrchestrationMessage } from "@t3tools/contracts";
+import { MessageId, TurnId, type OrchestrationMessage } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

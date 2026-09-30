@@ -12,7 +12,7 @@
  *
  * @module state/botUsage
  */
-import { WS_METHODS } from "@t3tools/contracts";
+import { WS_METHODS } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";

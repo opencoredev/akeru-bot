@@ -56,7 +56,14 @@ describe("Usage3hEvent", () => {
   });
 
   it("accepts current remote sandboxes and rejects the retired hosted sandbox", () => {
-    for (const sandbox_provider of ["e2b", "daytona", "vercel", "upstash", "railway"] as const) {
+    for (const sandbox_provider of [
+      "e2b",
+      "daytona",
+      "vercel",
+      "upstash",
+      "railway",
+      "tenki",
+    ] as const) {
       expect(
         decodeUsage3hEvent({
           ...event,
@@ -79,6 +86,23 @@ describe("Usage3hEvent", () => {
       decodeUsage3hEvent({ ...event, properties: legacyProperties }).properties.new_installations,
     ).toBe(0);
   });
+
+  it.each(["sandbox_turns_tenki", "sandbox_turns_railway"])(
+    "defaults queued %s counters without changing event identity",
+    (counter) => {
+      const properties = Object.fromEntries(
+        Object.entries(event.properties).filter(([key]) => key !== counter),
+      );
+      expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
+    },
+  );
+
+  it.each([-1, 1.5, USAGE_3H_COUNTER_MAX + 1, "1", null])(
+    "rejects invalid Tenki counter %s",
+    (sandbox_turns_tenki) => {
+      rejects({ ...event, properties: { ...event.properties, sandbox_turns_tenki } });
+    },
+  );
 
   it("rejects unknown events and properties", () => {
     rejects({ ...event, event: "turn_completed" });

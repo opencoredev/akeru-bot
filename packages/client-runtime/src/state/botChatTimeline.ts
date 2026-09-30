@@ -1,4 +1,4 @@
-import type { AkeruDelegationRecord, MessageId, TurnId } from "@t3tools/contracts";
+import type { AkeruDelegationRecord, MessageId, TurnId } from "@akeru/contracts";
 
 /** The message fields the timeline needs to place rows. */
 export interface BotChatTimelineMessage {

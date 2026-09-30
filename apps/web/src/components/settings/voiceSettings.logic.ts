@@ -6,7 +6,7 @@ import {
   type VoiceProvider,
   type VoiceSettings,
   type VoiceTranscriptionProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export const VOICE_MODE_LABELS: Readonly<Record<VoiceProvider, string>> = {
   chatgpt: "ChatGPT subscription",

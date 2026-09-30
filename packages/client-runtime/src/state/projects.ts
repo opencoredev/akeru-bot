@@ -5,7 +5,7 @@ import {
   isWindowsDrivePath,
   normalizeProjectPathForComparison,
   normalizeProjectPathForDispatch,
-} from "@t3tools/shared/path";
+} from "@akeru/shared/path";
 
 export { normalizeProjectPathForComparison, normalizeProjectPathForDispatch };
 

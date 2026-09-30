@@ -14,7 +14,7 @@ import type {
   UsageProviderPlanLimits,
   UsageSourceFingerprint,
   UsageSummary,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export interface EnvironmentUsage {
   readonly environmentId: EnvironmentId;

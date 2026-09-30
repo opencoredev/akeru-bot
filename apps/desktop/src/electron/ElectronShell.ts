@@ -1,4 +1,4 @@
-import { REMOTE_CAPABLE_EDITOR_IDS, remoteSchemeForEditor } from "@t3tools/contracts";
+import { REMOTE_CAPABLE_EDITOR_IDS, remoteSchemeForEditor } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -70,7 +70,7 @@ export class ElectronShell extends Context.Service<
     readonly openExternal: (rawUrl: unknown) => Effect.Effect<boolean>;
     readonly copyText: (text: string) => Effect.Effect<void>;
   }
->()("@t3tools/desktop/electron/ElectronShell") {}
+>()("@akeru/desktop/electron/ElectronShell") {}
 
 export const make = ElectronShell.of({
   openExternal: (rawUrl) =>

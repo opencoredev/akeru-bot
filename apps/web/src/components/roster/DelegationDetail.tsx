@@ -2,10 +2,10 @@ import type {
   AkeruDelegationAccessGrant,
   AkeruDelegationRecord,
   AkeruDelegationState,
-} from "@t3tools/contracts";
-import { presentDelegation } from "@t3tools/client-runtime/delegation-presentation";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { MessageKey, TranslationParams } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { presentDelegation } from "@akeru/client-runtime/delegation-presentation";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import type { MessageKey, TranslationParams } from "@akeru/client-runtime/i18n";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 

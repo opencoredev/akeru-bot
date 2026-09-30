@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { availableLanguages } from "@t3tools/client-runtime/i18n";
+import { availableLanguages } from "@akeru/client-runtime/i18n";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";

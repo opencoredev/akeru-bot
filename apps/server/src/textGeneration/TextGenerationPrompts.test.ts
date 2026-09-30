@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { buildBranchNamePrompt, buildThreadTitlePrompt } from "./TextGenerationPrompts.ts";
 import { normalizeCliError, sanitizeThreadTitle } from "./TextGenerationUtils.ts";
-import { TextGenerationError } from "@t3tools/contracts";
+import { TextGenerationError } from "@akeru/contracts";
 
 describe("buildBranchNamePrompt", () => {
   it("includes the user message in the prompt", () => {

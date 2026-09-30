@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, type ChannelBinding } from "@t3tools/contracts";
+import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -134,8 +134,8 @@ vi.mock("./settingsDetailLayout", async (importOriginal) => ({
   ),
 }));
 
-import { channelFailureReason } from "@t3tools/client-runtime/channel-presentation";
-import type { ChannelConnectionProfile } from "@t3tools/contracts";
+import { channelFailureReason } from "@akeru/client-runtime/channel-presentation";
+import type { ChannelConnectionProfile } from "@akeru/contracts";
 
 import { BotChannelsSettingsPanel, useChannelSettings } from "./BotChannelsSettings";
 import { ChannelConnectionRow, ChannelDetailPage } from "./ChannelDetailPage";

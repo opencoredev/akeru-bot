@@ -1,13 +1,13 @@
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import type {
   ComposioConnection,
   ComposioConnectionStatus,
   ComposioToolkit,
   EnvironmentId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useDeferredValue, useEffect, useState } from "react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
 import { useI18n } from "../../i18n";

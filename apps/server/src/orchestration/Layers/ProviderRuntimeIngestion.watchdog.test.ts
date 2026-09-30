@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
-// oxlint-disable t3code/no-manual-effect-runtime-in-tests -- This integration harness owns the runtime so it can advance TestClock and drain the ingestion worker.
+// oxlint-disable akeru/no-manual-effect-runtime-in-tests -- This integration harness owns the runtime so it can advance TestClock and drain the ingestion worker.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -24,7 +24,7 @@ import {
   type OrchestrationCommand,
   type ProjectId,
   type ServerSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { ChannelDeliveryStoreLive } from "../../channels/ChannelDeliveryStore.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as Effect from "effect/Effect";

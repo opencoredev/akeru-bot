@@ -1,5 +1,5 @@
 import * as DateTime from "effect/DateTime";
-import { BALANCED_BOT_PERSONALITY_TONE, type BotPersonalityTone } from "@t3tools/contracts";
+import { BALANCED_BOT_PERSONALITY_TONE, type BotPersonalityTone } from "@akeru/contracts";
 
 export interface AkeruInstructionContext {
   readonly name?: string;

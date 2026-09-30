@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import {
   storedReplySynthesisCapability,
   type ReplyPlaybackMessage,
   type ReplyPlaybackSession,
-} from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/client-runtime/reply-playback";
 
 import { useEnvironmentConnectionState } from "~/state/environments";
 import { voiceEnvironmentConnectionLost } from "../components/voice/VoiceCall";

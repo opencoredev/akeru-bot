@@ -4,13 +4,13 @@ import {
   BearerConnectionTarget,
   SshConnectionProfile,
   SshConnectionTarget,
-} from "@t3tools/client-runtime/connection";
+} from "@akeru/client-runtime/connection";
 import {
   ConnectionCatalogDocument as RuntimeConnectionCatalogDocument,
   type ConnectionCatalogDocument as RuntimeConnectionCatalogDocumentType,
-} from "@t3tools/client-runtime/platform";
-import type { PersistedSavedEnvironmentRecord } from "@t3tools/contracts";
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
+} from "@akeru/client-runtime/platform";
+import type { PersistedSavedEnvironmentRecord } from "@akeru/contracts";
+import { fromLenientJson } from "@akeru/shared/schemaJson";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -164,7 +164,7 @@ export class DesktopConnectionCatalogStore extends Context.Service<
     >;
     readonly clear: Effect.Effect<void>;
   }
->()("@t3tools/desktop/app/DesktopConnectionCatalogStore") {}
+>()("@akeru/desktop/app/DesktopConnectionCatalogStore") {}
 
 function decodeSecretBytes(
   catalogPath: string,

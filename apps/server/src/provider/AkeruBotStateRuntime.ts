@@ -9,7 +9,7 @@ import {
   type BotId,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 
 export interface AkeruBotStateRuntimeOptions {

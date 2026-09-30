@@ -6,7 +6,7 @@ import {
   type AkeruMemoryArchiveTarget,
   type AkeruMemoryRevision,
   type AkeruMemoryThreadAccess,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 

@@ -16,9 +16,9 @@ import {
   type PreviewRenderedViewportSize,
   type PreviewTabId,
   type ThreadId,
-} from "@t3tools/contracts";
-import { normalizePreviewUrl } from "@t3tools/shared/preview";
-import { resolvePreviewViewport } from "@t3tools/shared/previewViewport";
+} from "@akeru/contracts";
+import { normalizePreviewUrl } from "@akeru/shared/preview";
+import { resolvePreviewViewport } from "@akeru/shared/previewViewport";
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";

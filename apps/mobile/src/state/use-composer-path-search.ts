@@ -1,4 +1,4 @@
-import { type ComposerPathSearchTarget } from "@t3tools/client-runtime/state/threads";
+import { type ComposerPathSearchTarget } from "@akeru/client-runtime/state/threads";
 
 import { useComposerPathSearch as useComposerPathSearchQuery } from "../state/queries";
 

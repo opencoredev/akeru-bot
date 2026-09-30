@@ -10,7 +10,7 @@ import {
   type UsageResolution,
   type UsageSummaryInput,
   type UsageTokenTotals,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 const CURRENCY = new Intl.NumberFormat("en-US", {
   style: "currency",

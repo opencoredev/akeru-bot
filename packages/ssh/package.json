@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/ssh",
+  "name": "@akeru/ssh",
   "version": "0.0.2",
   "private": true,
   "type": "module",
@@ -30,8 +30,8 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@akeru/contracts": "workspace:*",
+    "@akeru/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

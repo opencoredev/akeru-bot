@@ -3,10 +3,10 @@ import {
   SHARED_PROJECT_MEMORY_SETTING,
   sharedProjectMemoryAutoSaves,
   sharedProjectMemoryMode,
-} from "@t3tools/client-runtime/durable-memory";
-import { AKERU_MARKETING_SITE_URL, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
+} from "@akeru/client-runtime/durable-memory";
+import { AKERU_MARKETING_SITE_URL, DEFAULT_SERVER_SETTINGS } from "@akeru/contracts/settings";
 
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
 import { useI18n } from "../../i18n";

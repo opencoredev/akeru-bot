@@ -1,18 +1,18 @@
-import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
+import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
-import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import type { BotId, EnvironmentId, MessageId, ThreadId, TurnId } from "@akeru/contracts";
 import {
   channelDeliveryLabel,
   channelOriginLabel,
-} from "@t3tools/client-runtime/channel-origin-presentation";
-import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
-import { stabilizeStreamingMarkdown } from "@t3tools/client-runtime/markdown-streaming";
-import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
-import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
-import { formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
+} from "@akeru/client-runtime/channel-origin-presentation";
+import { classifyMarkdownImageSource } from "@akeru/client-runtime/markdown-images";
+import { stabilizeStreamingMarkdown } from "@akeru/client-runtime/markdown-streaming";
+import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@akeru/shared/chatList";
+import { formatElapsed } from "@akeru/shared/orchestrationTiming";
+import { formatTokens, formatUsd } from "@akeru/shared/usageFormat";
 import { SymbolView } from "../../components/AppSymbol";
 import { HeaderHeightContext } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -73,7 +73,7 @@ import { labelSentMessageMentions, useSentMessageMentions } from "./sentMessageM
 import { AppText as Text } from "../../components/AppText";
 import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
 import { ThreadDelegationFeedCard } from "./ThreadDelegationFeedCard";
-import type { OrchestrationBot } from "@t3tools/contracts";
+import type { OrchestrationBot } from "@akeru/contracts";
 import { CopyTextButton } from "../../components/CopyTextButton";
 import { ReplyPlaybackControls } from "../replyPlayback/ReplyPlaybackControls";
 import {
@@ -83,7 +83,7 @@ import {
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import { useEnvironmentPresentation } from "../../state/presentation";
 import type { CodeHighlightTheme } from "./codeHighlighter";
-import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
+import { faviconUrlForOrigin } from "@akeru/shared/favicon";
 import { cn } from "../../lib/cn";
 import {
   deriveCenteredContentHorizontalPadding,
@@ -97,8 +97,8 @@ import {
 } from "../../lib/appearancePreferences";
 import { MOBILE_TYPOGRAPHY } from "../../lib/typography";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
-import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
+import { markdownFileIconSource } from "@akeru/mobile-markdown-text/file-icons";
+import { resolveMarkdownLinkPresentation } from "@akeru/mobile-markdown-text/links";
 import {
   deriveGroupSpeakerLabels,
   deriveThreadFeedPresentation,
@@ -122,7 +122,7 @@ import {
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import { useAssetUrl, useAssetUrlState } from "../../state/assets";
 import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
-import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
+import { isAppDeepLink } from "@akeru/client-runtime/settings-deep-link";
 import { resolveMobileSettingsDestination } from "../settings/settingsDeepLink";
 
 const WIDE_MARKDOWN_BLOCK_OPTIONS = {

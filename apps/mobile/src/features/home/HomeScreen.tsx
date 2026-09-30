@@ -2,13 +2,13 @@ import { useMobileI18n } from "../../lib/i18n";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@akeru/client-runtime/state/shell";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
-} from "@t3tools/client-runtime/state/thread-search";
-import { sortPinnedThreadsByOrderKey } from "@t3tools/client-runtime/state/thread-sort";
-import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/thread-search";
+import { sortPinnedThreadsByOrderKey } from "@akeru/client-runtime/state/thread-sort";
+import type { EnvironmentId, SidebarProjectGroupingMode } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";

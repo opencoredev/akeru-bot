@@ -10,7 +10,7 @@ import {
   ServerSettings,
   type ImageGenerationSettings,
   type ImageProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";

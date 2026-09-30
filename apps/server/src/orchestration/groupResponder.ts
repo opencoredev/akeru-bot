@@ -1,5 +1,5 @@
-import { isGroupBotMember, type BotId, type GroupMembership } from "@t3tools/contracts";
-import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
+import { isGroupBotMember, type BotId, type GroupMembership } from "@akeru/contracts";
+import { collectComposerInlineTokens } from "@akeru/shared/composerInlineTokens";
 import * as Effect from "effect/Effect";
 
 /**

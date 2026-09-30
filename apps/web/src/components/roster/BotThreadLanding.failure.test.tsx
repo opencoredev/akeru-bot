@@ -1,5 +1,5 @@
-import { presentThreadError } from "@t3tools/client-runtime/errors";
-import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { presentThreadError } from "@akeru/client-runtime/errors";
+import { EventId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 

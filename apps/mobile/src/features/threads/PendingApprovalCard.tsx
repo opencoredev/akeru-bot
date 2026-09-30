@@ -1,11 +1,11 @@
-import { routineApprovalSummary } from "@t3tools/client-runtime/routines";
+import { routineApprovalSummary } from "@akeru/client-runtime/routines";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ApprovalRequestId,
   type ProviderApprovalDecision,
   type ProviderApprovalOption,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";

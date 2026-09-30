@@ -2,8 +2,8 @@ import {
   RemoteDoctorError,
   type RemoteDoctorRepairInput,
   type RemoteDoctorStatus,
-} from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+} from "@akeru/contracts";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Effect from "effect/Effect";
 
 import { runRemoteDoctor } from "./diagnostics.ts";

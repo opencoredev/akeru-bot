@@ -1,4 +1,4 @@
-import type { DesktopUpdateChannel } from "@t3tools/contracts";
+import type { DesktopUpdateChannel } from "@akeru/contracts";
 
 export function resolveDefaultDesktopUpdateChannel(_appVersion: string): DesktopUpdateChannel {
   return "latest";

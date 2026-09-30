@@ -306,6 +306,7 @@ describe("ServerSettings sandbox providers", () => {
         vercel: { environment: [] },
         upstash: { environment: [] },
         railway: { environment: [] },
+        tenki: { environment: [] },
       },
     });
   });
@@ -330,6 +331,20 @@ describe("ServerSettings sandbox providers", () => {
         },
       },
     });
+  });
+
+  it("accepts Tenki's secret API key", () => {
+    expect(
+      decodeServerSettingsRpcPatch({
+        sandbox: {
+          providers: {
+            tenki: {
+              environment: [{ name: "TENKI_API_KEY", value: "secret", sensitive: true }],
+            },
+          },
+        },
+      }).sandbox?.providers?.tenki?.environment,
+    ).toEqual([{ name: "TENKI_API_KEY", value: "secret", sensitive: true }]);
   });
 
   it("keeps automatic idle cleanup enabled", () => {

@@ -1,4 +1,4 @@
-import { PRODUCT_FEEDBACK_TEXT_MAX_CHARS } from "@t3tools/contracts";
+import { PRODUCT_FEEDBACK_TEXT_MAX_CHARS } from "@akeru/contracts";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";

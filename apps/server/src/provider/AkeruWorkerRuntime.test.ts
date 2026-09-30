@@ -7,7 +7,7 @@ import {
   type AkeruWorkerStatus,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

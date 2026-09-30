@@ -19,7 +19,7 @@ import {
   type OrchestrationMessage,
   type OrchestrationReadModel,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type { iMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import {
   Message as ChatMessage,
