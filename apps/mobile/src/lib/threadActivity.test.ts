@@ -19,6 +19,7 @@ import {
 import {
   buildPendingUserInputAnswers,
   buildThreadFeed,
+  createThreadFeedBuilder,
   deriveGroupSpeakerLabels,
   derivePendingApprovals,
   deriveThreadFeedPresentation,
@@ -358,6 +359,79 @@ describe("buildThreadFeed", () => {
         botStepMeter: expect.objectContaining({ tokens: 1_200, costUsd: 0.42 }),
       }),
     ]);
+  });
+
+  it("keeps the selected feed stable across metadata and unrelated feedback updates", () => {
+    const buildFeed = createThreadFeedBuilder();
+    const thread = makeThread({
+      id: ThreadId.make("thread-feed-memo"),
+      projectId: ProjectId.make("project-1"),
+      title: "Before",
+    });
+    const submissions = {
+      selected: [],
+      other: [],
+    };
+    const first = buildFeed(thread, { localMessages: submissions.selected });
+    const updated = { ...submissions, other: [{ text: "Other chat feedback" }] };
+    const renamed = { ...thread, title: "After" };
+    expect(buildFeed(renamed, { localMessages: updated.selected })).toBe(first);
+    expect(
+      buildFeed(
+        { ...thread, activities: [...thread.activities] },
+        {
+          localMessages: updated.selected,
+        },
+      ),
+    ).not.toBe(first);
+  });
+
+  it("reuses activity-derived step meters across message deltas and invalidates new activity", () => {
+    const turnId = TurnId.make("turn-meter-cache");
+    const payload = {
+      botId: BotId.make("bot-meter-cache"),
+      engine: { provider: "codex", model: "gpt-5.4" },
+      tokens: 10,
+      estimatedCost: { status: "available", usd: 0.01 },
+    };
+    const activity = makeActivity({
+      id: EventId.make("meter-cache"),
+      kind: "bot.step-usage.updated",
+      summary: "Step usage",
+      createdAt: "2026-08-31T00:00:01.000Z",
+      turnId,
+      payload,
+    });
+    const activities = [activity];
+    const base = {
+      id: ThreadId.make("thread-meter-cache"),
+      projectId: ProjectId.make("project-1"),
+      title: "Meter cache",
+    };
+    const message = {
+      id: MessageId.make("meter-cache-reply"),
+      role: "assistant" as const,
+      text: "Working",
+      turnId,
+      streaming: true,
+      createdAt: "2026-08-31T00:00:02.000Z",
+      updatedAt: "2026-08-31T00:00:02.000Z",
+    };
+    const first = buildThreadFeed(makeThread({ ...base, activities, messages: [message] }));
+    const delta = { ...message, text: "Working on it" };
+    const second = buildThreadFeed(makeThread({ ...base, activities, messages: [delta] }));
+    const firstReply = first.find((entry) => entry.type === "message");
+    const secondReply = second.find((entry) => entry.type === "message");
+    expect(firstReply?.botStepMeter).toBeDefined();
+    expect(secondReply?.botStepMeter).toBe(firstReply?.botStepMeter);
+
+    const updated = { ...activity, payload: { ...payload, tokens: 20 } };
+    const third = buildThreadFeed(
+      makeThread({ ...base, activities: [updated], messages: [delta] }),
+    );
+    expect(third.find((entry) => entry.type === "message")?.botStepMeter).not.toBe(
+      secondReply?.botStepMeter,
+    );
   });
 
   it("keeps unchanged rows referentially stable while a turn streams", () => {
@@ -1147,6 +1221,29 @@ describe("delegation cards in the feed", () => {
     userMessage("user-3", 20),
     assistantMessage("bot-3", 22, "turn-3"),
   ];
+
+  it("invalidates the cached feed when delegation cards or local messages change", () => {
+    const buildFeed = createThreadFeedBuilder();
+    const thread = feedThread(messages);
+    const delegation = feedDelegation("d-cache", 2, "turn-1", "user-1");
+    const initial = buildFeed(thread);
+    const carded = buildFeed(thread, { delegations: [delegation] });
+    expect(carded).not.toBe(initial);
+    expect(carded.some((entry) => entry.type === "delegation")).toBe(true);
+    expect(buildFeed(thread, { delegations: [delegation] })).toBe(carded);
+    const updated = { ...delegation, task: "Updated task" };
+    const changed = buildFeed(thread, { delegations: [updated] });
+    expect(changed).not.toBe(carded);
+    expect(changed.find((entry) => entry.type === "delegation")?.delegation.task).toBe(
+      "Updated task",
+    );
+    expect(
+      buildFeed(thread, {
+        delegations: [updated],
+        localMessages: [userMessage("local-feedback", 30)],
+      }),
+    ).not.toBe(changed);
+  });
 
   it("matches botChatTimeline order for three turns", () => {
     const feed = buildThreadFeed(feedThread(messages), {

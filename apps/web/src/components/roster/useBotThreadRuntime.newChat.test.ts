@@ -25,6 +25,12 @@ const mocks = vi.hoisted(() => {
   };
   return {
     roster,
+    messageProjection: {
+      messages: [] as Array<{ role: "user"; createdAt: string }>,
+      lastMessageRole: "user",
+      hasMessages: true,
+      lastUserMessageAt: "2026-09-01T00:00:00.000Z",
+    },
     threadShells: [] as Array<Record<string, unknown>>,
     commands: {
       create: Symbol("create"),
@@ -59,6 +65,9 @@ vi.mock("../../hooks/useSettings", () => ({
 vi.mock("../../modelSelection", () => ({
   resolveAppModelSelectionState: () => ({ provider: "codex", model: "gpt" }),
 }));
+vi.mock("./botConversationMessageProjection", () => ({
+  useBotConversationMessageProjection: () => mocks.messageProjection,
+}));
 vi.mock("../../state/entities", () => ({
   useProjects: () => [{ environmentId: "env-a", id: "project-1", defaultModelSelection: null }],
   useThreadShells: () => mocks.threadShells,
@@ -69,7 +78,6 @@ vi.mock("../../state/entities", () => ({
         (shell) => shell.environmentId === ref.environmentId && shell.id === ref.threadId,
       )) ??
     null,
-  useThreadMessages: () => [{ role: "user", createdAt: "2026-09-01T00:00:00.000Z" }],
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
@@ -135,6 +143,8 @@ const startedThreadIds = () =>
 beforeEach(() => {
   hooks.reset();
   vi.clearAllMocks();
+  mocks.messageProjection.messages = [{ role: "user", createdAt: "2026-09-01T00:00:00.000Z" }];
+  mocks.messageProjection.hasMessages = true;
   mocks.roster.chatPathByBotId = {};
   mocks.roster.openChatByBotId = {};
   mocks.threadShells = [
@@ -146,6 +156,19 @@ beforeEach(() => {
 });
 
 describe("New chat while another chat is opened", () => {
+  it("allows a new chat after a hidden routine request but not for empty history", async () => {
+    mocks.messageProjection.messages = [];
+    expect(render().canStartNewChat).toBe(true);
+    const finishCreate = deferredCreate();
+    const creating = render().startNewChat();
+    finishCreate();
+    expect(await creating).toBe(true);
+    expect(mocks.createThread).toHaveBeenCalledTimes(1);
+
+    mocks.messageProjection.hasMessages = false;
+    expect(render().canStartNewChat).toBe(false);
+  });
+
   it("keeps the opened chat and sends into it when creation finishes later", async () => {
     const finishCreate = deferredCreate();
     const creating = render().startNewChat();

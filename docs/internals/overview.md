@@ -100,7 +100,8 @@ does not define turn end.
 
 ## Drainable workers
 
-Follow-up work runs asynchronously in queue-backed workers built on [`DrainableWorker`][worker]:
+Follow-up work runs asynchronously in queue-backed workers built on [`DrainableWorker`][worker]
+or the keyed provider worker:
 [`ProviderRuntimeIngestion`][ingest] normalizes provider runtime streams into orchestration commands,
 [`ProviderCommandReactor`][cmd] dispatches provider calls in response to intent events, and
 [`CheckpointReactor`][checkpoint] captures and reverts workspace checkpoints.
@@ -109,6 +110,19 @@ Follow-up work runs asynchronously in queue-backed workers built on [`DrainableW
 `enqueue` atomically offers and increments; processing always decrements. `drain` retries until the
 count reaches zero, so a test can await "queue empty and current item finished" instead of sleeping.
 Each of the three services exposes `drain` for exactly this.
+
+`ProviderCommandReactor` uses a keyed worker with four concurrent lanes. Commands for the same
+thread run in FIFO order; unrelated threads can progress while session setup waits. Its drain
+retains the subscription sequence barrier and repeats when worker execution publishes more events.
+
+Workspace entry refreshes run in the background with at most two concurrent scans. Requests for
+the same workspace coalesce into generations. Entry searches and lists await the latest requested
+generation, while checkpoint publication only queues the refresh. Browsing and content search
+remain separate workspace services.
+
+Mastra attachment preparation reads bytes asynchronously in attachment order. Before admitting the
+turn, the controller checks that the session is still current and has not been interrupted or
+stopped during preparation.
 
 Runtime receipts are a test-only mechanism. `RuntimeReceiptBusLive` in
 [`RuntimeReceiptBus.ts`][receipts] publishes nothing; only the test layer is PubSub-backed. Do not

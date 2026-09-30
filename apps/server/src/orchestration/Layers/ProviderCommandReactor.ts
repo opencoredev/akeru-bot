@@ -54,7 +54,10 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as TxQueue from "effect/TxQueue";
+import * as TxRef from "effect/TxRef";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 
@@ -180,6 +183,102 @@ const MANUAL_RECOVERY_INPUT = [
 ].join(" ");
 const THREAD_TITLE_CONTEXT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
 const FIRST_USER_CONTEXT_TRUNCATION_MARKER = "\n[First user message truncated]";
+const PROVIDER_COMMAND_CONCURRENCY = 4;
+
+export interface KeyedDrainableWorker<K, A> {
+  readonly enqueue: (key: K, item: A) => Effect.Effect<void>;
+  readonly drain: Effect.Effect<void>;
+}
+
+interface KeyedDrainableWorkerState<K, A> {
+  readonly lanes: Map<K, ReadonlyArray<A>>;
+  readonly outstanding: number;
+}
+
+export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
+  readonly concurrency: number;
+  readonly process: (item: A) => Effect.Effect<void, E, R>;
+}): Effect.Effect<KeyedDrainableWorker<K, A>, never, Scope.Scope | R> =>
+  Effect.gen(function* () {
+    const concurrency = Math.max(1, Math.floor(options.concurrency));
+    const readyKeys = yield* Effect.acquireRelease(TxQueue.unbounded<K>(), TxQueue.shutdown);
+    const stateRef = yield* TxRef.make<KeyedDrainableWorkerState<K, A>>({
+      lanes: new Map(),
+      outstanding: 0,
+    });
+
+    const take = TxQueue.take(readyKeys).pipe(
+      Effect.flatMap((key) =>
+        TxRef.modify(stateRef, (state) => {
+          const lane = state.lanes.get(key);
+          if (lane === undefined || lane.length === 0) {
+            return [undefined, state] as const;
+          }
+          const item = lane[0] as A;
+          const lanes = new Map(state.lanes);
+          lanes.set(key, lane.slice(1));
+          return [
+            { key, item },
+            { ...state, lanes },
+          ] as const;
+        }),
+      ),
+      Effect.tx,
+    );
+
+    const complete = (key: K) =>
+      TxRef.modify(stateRef, (state) => {
+        const lane = state.lanes.get(key);
+        const lanes = new Map(state.lanes);
+        if (lane === undefined || lane.length === 0) {
+          lanes.delete(key);
+          return [false, { lanes, outstanding: state.outstanding - 1 }] as const;
+        }
+        return [true, { lanes, outstanding: state.outstanding - 1 }] as const;
+      }).pipe(
+        Effect.flatMap((requeue) => (requeue ? TxQueue.offer(readyKeys, key) : Effect.void)),
+        Effect.tx,
+        Effect.asVoid,
+      );
+
+    const runWorker = take.pipe(
+      Effect.flatMap((work) =>
+        work === undefined
+          ? Effect.void
+          : options.process(work.item).pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.void,
+              ),
+              Effect.ensuring(complete(work.key)),
+            ),
+      ),
+      Effect.forever,
+    );
+
+    yield* Effect.forEach(Array.from({ length: concurrency }), () => Effect.forkScoped(runWorker), {
+      discard: true,
+    });
+
+    const enqueue: KeyedDrainableWorker<K, A>["enqueue"] = (key, item) =>
+      TxRef.modify(stateRef, (state) => {
+        const lane = state.lanes.get(key);
+        const lanes = new Map(state.lanes);
+        lanes.set(key, [...(lane ?? []), item]);
+        return [lane === undefined, { lanes, outstanding: state.outstanding + 1 }] as const;
+      }).pipe(
+        Effect.flatMap((offer) => (offer ? TxQueue.offer(readyKeys, key) : Effect.void)),
+        Effect.tx,
+        Effect.asVoid,
+      );
+
+    const drain = TxRef.get(stateRef).pipe(
+      Effect.tap((state) => (state.outstanding > 0 ? Effect.txRetry : Effect.void)),
+      Effect.tx,
+      Effect.asVoid,
+    );
+
+    return { enqueue, drain } satisfies KeyedDrainableWorker<K, A>;
+  });
 
 type ThreadTitleMessage = {
   readonly role: "user" | "assistant" | "system";
@@ -2432,7 +2531,22 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const worker = yield* makeDrainableWorker(processDomainEventSafely);
+  const providerCommandLaneKey = (event: ProviderIntentEvent): string =>
+    event.type === "delegation.updated"
+      ? event.payload.delegation.phase._tag === "Queued"
+        ? event.payload.delegation.parentThreadId
+        : (event.payload.delegation.phase.childThreadId ?? event.payload.delegation.parentThreadId)
+      : event.type === "delegation.retry-requested"
+        ? event.payload.parentThreadId
+        : event.payload.threadId;
+
+  const worker = yield* makeKeyedDrainableWorker({
+    concurrency: PROVIDER_COMMAND_CONCURRENCY,
+    process: processDomainEventSafely,
+  });
+
+  const enqueueProviderCommand = (event: ProviderIntentEvent) =>
+    worker.enqueue(providerCommandLaneKey(event), event);
 
   const findPersistedTurnStart = Effect.fn("findPersistedTurnStart")(function* (input: {
     readonly threadId: ThreadId;
@@ -2644,7 +2758,7 @@ const make = Effect.gen(function* () {
         throughSequence,
       });
       if (event) {
-        yield* worker.enqueue(event);
+        yield* enqueueProviderCommand(event);
       } else {
         yield* Effect.logWarning("provider command reactor could not recover pending turn event", {
           threadId: pending.threadId,
@@ -2670,7 +2784,7 @@ const make = Effect.gen(function* () {
       });
       if (event) {
         pendingThreadIds.add(String(thread.id));
-        yield* worker.enqueue(event);
+        yield* enqueueProviderCommand(event);
       } else {
         yield* Effect.logWarning(
           "provider command reactor could not recover pending resume event",
@@ -2826,7 +2940,7 @@ const make = Effect.gen(function* () {
         event.type === "delegation.updated" ||
         event.type === "delegation.retry-requested"
       ) {
-        return yield* worker.enqueue(event);
+        yield* enqueueProviderCommand(event);
       }
     });
 
