@@ -16,6 +16,7 @@ import {
   useRemoteEnvironmentRuntime,
   useSavedRemoteConnection,
 } from "./use-remote-environment-registry";
+import { resolveThreadSelectionDetailRef } from "./thread-selection";
 type ThreadSelectionRouteParams = {
   readonly environmentId?: string | string[];
   readonly threadId?: string | string[];
@@ -93,9 +94,13 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
   }
   const selectedThreadRef = routeThreadRef ?? lastRouteThreadRef.current;
   const selectedThreadShell = useThreadShell(selectedThreadRef);
+  const selectedThreadDetailRef = resolveThreadSelectionDetailRef(
+    selectedThreadRef,
+    selectedThreadShell !== null,
+  );
   const selectedThreadDetailState = useEnvironmentThread(
-    selectedThreadRef?.environmentId ?? null,
-    selectedThreadRef?.threadId ?? null,
+    selectedThreadDetailRef?.environmentId ?? null,
+    selectedThreadDetailRef?.threadId ?? null,
   );
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const selectedThread = useMemo(
