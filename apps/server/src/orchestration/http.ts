@@ -14,13 +14,13 @@ import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import * as ChannelCommand from "../channels/ChannelCommand.ts";
 import * as ChannelRuntime from "../channels/ChannelRuntime.ts";
 import * as ServerRuntimeStartup from "../serverRuntimeStartup.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import { resolveGroupResponderBotId } from "./groupResponder.ts";
@@ -56,10 +56,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
     const botUsageLedger = yield* BotUsageLedger;
     const config = yield* ServerConfig.ServerConfig;
-    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
     const startup = yield* Effect.serviceOption(ServerRuntimeStartup.ServerRuntimeStartup);
-    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
 
     return handlers
       .handle(
@@ -195,6 +195,47 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
           }
+          // Bot engines bypass the turn preflight, so a changed engine is
+          // checked here as in WebSocket dispatch. Only an unknown model
+          // blocks the save; a missing provider is not evidence of that.
+          if (
+            (normalizedCommand.type === "bot.create" || normalizedCommand.type === "bot.update") &&
+            normalizedCommand.engine &&
+            Option.isSome(providerRegistry)
+          ) {
+            const engine = normalizedCommand.engine;
+            const existingBot =
+              normalizedCommand.type === "bot.update"
+                ? yield* projectionBots.getById({ botId: normalizedCommand.botId }).pipe(
+                    Effect.map(Option.getOrUndefined),
+                    Effect.catch((cause) =>
+                      failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                    ),
+                  )
+                : undefined;
+            const engineChanged =
+              existingBot === undefined ||
+              existingBot.engine?.provider !== engine.provider ||
+              existingBot.engine?.model !== engine.model;
+            if (engineChanged) {
+              const verdict = preflightProvider({
+                providers: yield* providerRegistry.value.getProviders,
+                providerId: engine.provider,
+                model: engine.model,
+                subscriptionStatuses: subscriptionAuth.statuses(),
+                subscriptionHealth: (instanceId) =>
+                  subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                now: yield* Clock.currentTimeMillis,
+                requireSettledCatalog: true,
+              });
+              if (verdict?.category === "unsupported-model") {
+                return yield* failEnvironmentInvalidRequest("invalid_command", {
+                  detail: verdict.detail,
+                  unavailability: verdict.category,
+                });
+              }
+            }
+          }
           const shouldPreflightTurn =
             normalizedCommand.type === "thread.turn.start" &&
             Option.isNone(
@@ -284,6 +325,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 subscriptionHealth: (instanceId) =>
                   subscriptionAuth.providerInstanceRequestHealth(instanceId),
                 now: yield* Clock.currentTimeMillis,
+                requireSettledCatalog: true,
               });
               if (verdict) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);

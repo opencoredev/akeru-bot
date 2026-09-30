@@ -221,6 +221,39 @@ actions.
 when it creates a runtime session, so selecting a model keeps the subscription and custom instance
 that supplied it. Runtime ingestion reads the merged Mastra and adapter event stream once.
 
+## Model routing
+
+A bot's saved model is `BotEngine.model` in [contracts](../../packages/contracts/src/orchestration.ts).
+On `thread.turn.start` the decider rewrites the command's `modelSelection` from the responding bot's
+engine, so the controller — not the composer selection — decides what model the turn runs on. For
+Mastra drivers (Codex, Claude, Grok, Kimi, OpenCode Go) `AgentController.resolveEngine` maps the
+slug to the driver's wire format (`openai/<model>`, `anthropic/<model>`, `xai/<model>`,
+`kimi-for-coding/<model>`, `opencode-go/<model>`) and calls `session.model.switch` on the live
+session, so a mid-chat model change does not rebuild the session. Standard OpenCode runs through the
+legacy adapter bridge and re-sends `modelSelection` on each turn.
+
+Model validation fails closed at three layers, and all three only honor the model catalog once
+the provider snapshot reports `status === "ready"`. Pending and fallback snapshots still carry the
+built-in catalog, so an unlisted model there is not evidence the model is gone:
+
+- `bot.create`/`bot.update` reject an engine whose model is absent from a settled provider
+  snapshot's model list. Custom model slugs configured in settings are already merged into that
+  list.
+- `thread.turn.start` preflights both the command selection and the responding bot's saved engine
+  against the same settled snapshot; an unadvertised model returns a typed `unsupported-model`
+  dispatch error before `turn.started` is emitted.
+- `AgentController.inspectEngine`/`resolveEngine` re-check the saved model against the instance's
+  settled snapshot before dispatch, which also covers channels and delegations that never pass
+  through the WebSocket layer. An absent, unsettled, or empty catalog is treated as unknown, not
+  as proof the model is wrong.
+
+When a provider reroutes a request to a different model at runtime and reports it, adapters emit
+the `model.rerouted` runtime event and `ProviderRuntimeIngestion` projects it as a
+`model.rerouted` chat activity line (`Model rerouted from X to Y`), so the effective model is
+visible rather than a silent fallback. Today only the legacy Codex adapter emits this event;
+Mastra sessions do not report the effective model yet, so a reroute inside a Mastra driver never
+produces the activity.
+
 Adding a driver means writing the driver plus adapter and adding it to `BUILT_IN_DRIVERS`. No
 orchestration, contract, or client change is required for the common case.
 

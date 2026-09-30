@@ -60,7 +60,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
       Effect.gen(function* () {
         const secretsDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-claude-home-"));
         try {
-          const auth = SubscriptionAuthService.forSecretsDir(secretsDir);
+          const auth = yield* SubscriptionAuthService.forSecretsDir(secretsDir);
           const login = yield* Effect.promise(() =>
             auth.startLogin("anthropic", { authMode: "api-key" }),
           );
@@ -69,7 +69,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
             { homePath: "~/.claude-work" },
             { CLAUDE_CODE_OAUTH_TOKEN: "native-oauth" },
           );
-          expect(subscriptionRuntimeEnvironment(secretsDir, "anthropic", environment)).toBe(
+          expect(yield* subscriptionRuntimeEnvironment(secretsDir, "anthropic", environment)).toBe(
             environment,
           );
           expect(environment.ANTHROPIC_API_KEY).toBeUndefined();

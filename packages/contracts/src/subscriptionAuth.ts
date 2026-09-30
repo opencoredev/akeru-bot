@@ -80,6 +80,17 @@ export const SubscriptionProviderStatus = Schema.Struct({
     }),
   ),
   nextRetryAt: Schema.optional(IsoDateTime),
+  /**
+   * The saved credential file changed on disk and could not be reread. The
+   * server keeps using the credentials it loaded earlier, so `connected` and
+   * health still describe them.
+   */
+  credentialWarning: Schema.optional(
+    Schema.Struct({
+      at: IsoDateTime,
+      message: TrimmedNonEmptyString,
+    }),
+  ),
   reconnectAction: Schema.optional(TrimmedNonEmptyString),
   healthTest: Schema.optional(
     Schema.Struct({

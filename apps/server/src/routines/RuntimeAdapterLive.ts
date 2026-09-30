@@ -56,7 +56,7 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* ServerConfig;
   const inbox = BotInboxService.forSecretsDir(config.secretsDir);
-  const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+  const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
   const botUsageLedger = yield* BotUsageLedger;
 
   const dispatch = (command: OrchestrationCommand) => engine.dispatch(command);

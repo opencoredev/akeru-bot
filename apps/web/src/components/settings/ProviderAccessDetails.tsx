@@ -44,6 +44,11 @@ export function ProviderAccessDetails({
           {guide.failure}
         </p>
       ) : null}
+      {guide.warning ? (
+        <p data-access-warning className="text-warning-foreground">
+          {guide.warning}
+        </p>
+      ) : null}
       <details className="mt-1">
         <summary className="w-fit cursor-pointer rounded-sm py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           {t("Access details")}

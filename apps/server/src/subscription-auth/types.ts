@@ -26,7 +26,3 @@ export interface ApiKeyCredential {
   readonly baseUrl?: string;
   readonly connectionId?: string;
 }
-
-export type SubscriptionCredential = OAuthCredential | ApiKeyCredential;
-
-export type SubscriptionAuthData = Record<string, SubscriptionCredential>;

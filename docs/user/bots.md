@@ -49,6 +49,11 @@ what went wrong, and gives one next step:
 | Your provider plan hit its usage or rate limit       | Wait for the limit to reset                         |
 | The bot hit its Akeru usage cap                      | Raise the cap in the bot's settings                 |
 
+When a provider reports that it rerouted a message to a different model while the chat is running,
+the work log notes it as `Model rerouted from <requested> to <effective>`. Providers that run
+through Akeru's session controller do not report the effective model yet, so a reroute that stays
+silent never appears.
+
 When you connect or turn on a provider, its models become available right away. You do not need to
 restart Akeru. A brief provider error does not turn **Send** off, so you can try again. The same
 check covers new-bot setup and the voice call button. On mobile, the composer shows the same note
@@ -118,7 +123,9 @@ On mobile, open a bot's chat, open chat settings, and select **Routines**. Each 
 schedule, status, next and last run, and recent runs. You can approve its procedure, test it, run it,
 pause, resume, or turn it back on, and delete it. Creating and editing routines needs the desktop or
 web app, or you can ask the bot in chat. When a bot asks to create a routine, the approval card shows
-the routine's name, schedule, and instructions before you allow it.
+the routine's name, schedule, and instructions before you allow it. For a routine proposed through
+the built-in create-routine tool, an unanswered review closes after an hour. No routine is created,
+and the bot learns that the review expired.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
 adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. The routine card

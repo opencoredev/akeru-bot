@@ -199,7 +199,7 @@ export const make = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const httpClient = yield* HttpClient.HttpClient;
   const providerUsageHistory = yield* ProviderUsageHistory;
-  const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+  const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
   const readPlanLimits = yield* makePlanLimitsReader((provider) =>
     subscriptionAuth.getPlanAccess(provider),
   );
@@ -345,7 +345,7 @@ export const make = Effect.gen(function* () {
 
     const startedAtMs = yield* Clock.currentTimeMillis;
     yield* ensureRates();
-    subscriptionAuth.reload();
+    yield* subscriptionAuth.reload();
     const connectedProviders = subscriptionAuth
       .statuses()
       .filter((status) => status.connected)

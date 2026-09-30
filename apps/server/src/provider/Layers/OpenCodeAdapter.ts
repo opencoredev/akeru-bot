@@ -1586,10 +1586,13 @@ export function makeOpenCodeAdapter(
               const server = yield* openCodeRuntime.connectToOpenCodeServer({
                 binaryPath,
                 serverUrl,
-                environment: subscriptionRuntimeEnvironment(
+                environment: yield* subscriptionRuntimeEnvironment(
                   serverConfig.secretsDir,
                   "opencode-go",
                   options?.environment,
+                ).pipe(
+                  Effect.provideService(FileSystem.FileSystem, fileSystem),
+                  Effect.provideService(Path.Path, path),
                 ),
               });
               const client = openCodeRuntime.createOpenCodeSdkClient({

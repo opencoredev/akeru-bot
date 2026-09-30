@@ -29,9 +29,12 @@ import {
   type TurnId,
   isGroupBotMember,
 } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
+import { PendingWaiterTimeoutError } from "./PendingWaiters.ts";
 
+const isPendingWaiterTimeout = Schema.is(PendingWaiterTimeoutError);
 const TERMINAL_PHASES = new Set<AkeruDelegationPhase["_tag"]>(["Completed", "Failed", "Canceled"]);
 const phaseChildThreadId = (delegation: AkeruDelegationRecord): ThreadId | null =>
   delegation.phase._tag === "Queued" ? null : delegation.phase.childThreadId;
@@ -64,6 +67,11 @@ export interface AkeruDelegationChildOutcome {
 export interface AkeruDelegationRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
   readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  /**
+   * Resolves with the child's turn outcome. Rejects with
+   * `PendingWaiterTimeoutError` at the deadline, or after a bounded default
+   * when the deadline is null, so a silent child never hangs the watch.
+   */
   readonly awaitChild: (
     threadId: ThreadId,
     deadline: string | null,
@@ -618,8 +626,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       } catch (cause) {
         const latest = await latestRecord();
         if (latest === undefined) return;
+        // The waiter also times out a silent child that has no deadline.
         const timeout =
-          request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now());
+          isPendingWaiterTimeout(cause) ||
+          (request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now()));
         if (timeout) await options.interruptChild(childThreadId, null);
         await fail(
           latest,

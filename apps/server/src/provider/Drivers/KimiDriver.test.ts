@@ -32,7 +32,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>
@@ -90,7 +90,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>

@@ -19,7 +19,20 @@ The environment server owns credentials. It writes them to:
 <stateDir>/secrets/subscription-auth.json
 ```
 
-The directory uses mode `0700`. The file uses mode `0600`. Writes use a temporary file and atomic rename. Clients submit API keys through `subscriptionAuth.complete`; the server never returns saved keys. OAuth access tokens and refresh tokens never cross the WebSocket contract. Status includes the authentication method and custom base URL, but no credentials.
+The directory uses mode `0700`. The file uses mode `0600`. Clients submit API keys through `subscriptionAuth.complete`; the server never returns saved keys. OAuth access tokens and refresh tokens never cross the WebSocket contract. Status includes the authentication method and custom base URL, but no credentials.
+
+`apps/server/src/subscription-auth/credentialStore.ts` owns the file. It reads and writes through the Effect `FileSystem` and `Path` services and decodes with Schema. Known provider entries must match the OAuth or API key shape. Other keys, such as the `apikey:<provider>` records Mastra's `AuthStorage` writes to the same file, pass through and survive rewrites.
+
+Every `SubscriptionAuthService` in the process shares one store per resolved path, so a login through one service is visible to every other service in the process at once. An update rereads the file, applies the change, writes a temporary file with mode `0600` in the same directory, and renames it over the original. Updates and reloads hold one semaphore, so concurrent updates run one at a time and none is lost.
+
+Other writers change the file too: Mastra's `AuthStorage` rewrites it in place, and another server process has its own store. The synchronous readers (`isConnected`, `getApiKeyCredential`, `getAccessToken`, `statuses`) stay fresh through a stat check in `current()`. The store remembers the device, inode, size, and nanosecond mtime of the version it last read or wrote. When a `statSync` shows a different fingerprint, `current()` rereads and decodes the file before answering. An unchanged file costs one `stat`. While an update or reload owns the file, `current()` answers from memory instead of reading a half-finished replacement. A same-size in-place rewrite inside one filesystem timestamp tick can go unseen until the next change or explicit reload. `sessionReset` compares `getApiKeyCredential` before and after an RPC operation, so it also sees a key another writer saved during that operation.
+
+A file that cannot be decoded does not look like a logout, and the UI and runtime always agree on what it means:
+
+- **Damaged after a good read.** If this process already read or wrote a good version, the store keeps serving that last good state everywhere. The state carries a typed `SubscriptionCredentialStoreError` and `servingLastGood: true`, and the store logs a warning once when the damage first appears. Provider statuses keep their real `connected`, health, and test fields and add a `credentialWarning` with the time the damage was first seen. Settings on web and mobile show the warning under each provider row. Runtime getters keep returning the last good credentials.
+- **Damaged with no good read.** If the file was already damaged when the store first loaded it, there is nothing to fall back on. The store state is empty, every provider status reports `connected: false` and `failed-first-request` with a reconnect message, and `getAccessToken`, `getApiKeyCredential`, and `isConnected` report no credential.
+
+Either way the damaged file stays on disk until the next successful write. That write builds on the served state (the last good credentials, or nothing), moves the damaged file to `subscription-auth.json.corrupt`, and writes the new file. A repaired file clears the error on the next read. A file the server cannot read at all reports reason `unreadable`, and updates refuse to overwrite it.
 
 Local desktop, a remote server, and a future hosted control plane use the same boundary. The storage adapter can move from the local file to an encrypted tenant secret store without changing the client contract.
 
@@ -68,7 +81,7 @@ Tests replace the client with `testUtils/scriptedHttpClient.ts` and drive timeou
 
 ## Runtime integration
 
-`SubscriptionAuthService.getAccessToken(provider)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests. `getApiKeyCredential(provider)` reloads the server-owned credential and returns its optional base URL for runtime use only.
+`SubscriptionAuthService.getAccessToken(provider)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests. `getApiKeyCredential(provider)` returns the current server-owned API key and its optional base URL for runtime use only. Both read through the store's stat check, so they see changes other writers made.
 
 Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Kimi and OpenCode Go resolve keys and custom endpoints for model requests. Claude, Grok, and OpenCode receive saved API credentials when their adapter starts a provider process. The login, completion, and logout RPC paths stop affected bridge sessions when the API key or endpoint changes. The next turn starts a new process with the current connection. Grok supports API keys at its default endpoint; its current bridge rejects custom base URLs.
 

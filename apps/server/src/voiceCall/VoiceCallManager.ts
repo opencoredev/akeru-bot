@@ -270,7 +270,7 @@ const make = (options?: VoiceCallManagerOptions) =>
     const bots = yield* ProjectionBotRepository;
     const serverSettings = yield* ServerSettingsService;
     const lock = yield* Semaphore.make(1);
-    const auth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const auth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     let active: ActiveVoiceCall | null = null;
     const secrets = yield* Effect.serviceOption(ServerSecretStore);
     const adapters = options?.adapters ?? makeVoiceAdapters();

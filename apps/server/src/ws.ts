@@ -750,7 +750,7 @@ const makeWsRpcLayer = (
         }),
       };
       const botMemoryStore = new BotMemoryStore(config.stateDir);
-      const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir, {
+      const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir, {
         checkHealthOnConnect: true,
       });
       const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
@@ -951,7 +951,7 @@ const makeWsRpcLayer = (
           requiredScope,
         });
       const getAccessHealthSnapshot = Effect.fn("getAccessHealthSnapshot")(function* () {
-        subscriptionAuth.reload();
+        yield* subscriptionAuth.reload();
         botInbox.reload();
         yield* syncSubscriptionProviderSettings;
         const [providers, bots, snapshot] = yield* Effect.all([
@@ -992,7 +992,7 @@ const makeWsRpcLayer = (
         };
       });
       const getImageProviderSnapshot = Effect.fn("getImageProviderSnapshot")(function* () {
-        subscriptionAuth.reload();
+        yield* subscriptionAuth.reload();
         const settings = yield* serverSettings.getSettings.pipe(
           Effect.mapError((cause) => new ImageGenerationError({ reason: cause.message })),
         );
@@ -1986,6 +1986,47 @@ const makeWsRpcLayer = (
                 }
                 normalizedCommand = knownPersonCommand;
               }
+              // Bot engines bypass the thread.turn.start preflight (the
+              // decider overwrites the command's modelSelection with the
+              // bot engine), so validate the slug here while the provider
+              // snapshot is available. A missing provider or empty model
+              // list is not evidence the model is unknown. On bot.update the
+              // check only runs when the engine actually changes, so a model
+              // that dropped out of the catalog cannot block unrelated saves.
+              const existingBot =
+                normalizedCommand.type === "bot.update"
+                  ? yield* projectionBots
+                      .getById({ botId: normalizedCommand.botId })
+                      .pipe(Effect.map(Option.getOrUndefined))
+                  : undefined;
+              const engineForValidation =
+                normalizedCommand.type === "bot.create" || normalizedCommand.type === "bot.update"
+                  ? (normalizedCommand.engine ?? undefined)
+                  : undefined;
+              const engineChanged =
+                engineForValidation !== undefined &&
+                (existingBot === undefined ||
+                  existingBot.engine?.provider !== engineForValidation.provider ||
+                  existingBot.engine?.model !== engineForValidation.model);
+              if (engineForValidation !== undefined && engineChanged) {
+                const engine = engineForValidation;
+                const verdict = preflightProvider({
+                  providers: yield* providerRegistry.getProviders,
+                  providerId: engine.provider,
+                  model: engine.model,
+                  subscriptionStatuses: subscriptionAuth.statuses(),
+                  subscriptionHealth: (instanceId) =>
+                    subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                  now: yield* Clock.currentTimeMillis,
+                  requireSettledCatalog: true,
+                });
+                if (verdict?.category === "unsupported-model") {
+                  return yield* new OrchestrationDispatchCommandError({
+                    message: verdict.detail,
+                    unavailability: verdict.category,
+                  });
+                }
+              }
               // A retried turn the engine already accepted replays its receipt, so
               // provider and cap gates must not turn that success into a failure.
               const alreadyAccepted =
@@ -2055,6 +2096,7 @@ const makeWsRpcLayer = (
                     subscriptionHealth: (instanceId) =>
                       subscriptionAuth.providerInstanceRequestHealth(instanceId),
                     now: yield* Clock.currentTimeMillis,
+                    requireSettledCatalog: true,
                   });
                   if (verdict) {
                     yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
@@ -3027,8 +3069,12 @@ const makeWsRpcLayer = (
         [WS_METHODS.subscriptionAuthLogout]: ({ provider }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthLogout,
-            Effect.sync(() => {
-              subscriptionAuth.logout(provider);
+            Effect.tryPromise({
+              try: () => subscriptionAuth.logout(provider),
+              catch: (cause) =>
+                new SubscriptionAuthError({
+                  reason: cause instanceof Error ? cause.message : String(cause),
+                }),
             }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),

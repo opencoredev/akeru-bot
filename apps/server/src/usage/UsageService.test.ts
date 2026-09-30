@@ -20,15 +20,19 @@ import * as ServerConfig from "../config.ts";
 import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import * as UsageService from "./UsageService.ts";
 
-vi.mock("../subscription-auth/service.ts", () => ({
-  SubscriptionAuthService: {
-    forSecretsDir: () => ({
-      reload: () => {},
-      statuses: () => [],
-      getPlanAccess: async () => undefined,
-    }),
-  },
-}));
+vi.mock("../subscription-auth/service.ts", async () => {
+  const Effect = await import("effect/Effect");
+  return {
+    SubscriptionAuthService: {
+      forSecretsDir: () =>
+        Effect.succeed({
+          reload: () => Effect.void,
+          statuses: () => [],
+          getPlanAccess: async () => undefined,
+        }),
+    },
+  };
+});
 const planLimits = vi.hoisted(() => ({ readerCreations: 0, reads: 0 }));
 vi.mock("./usagePlanLimits.ts", async () => {
   const Effect = await import("effect/Effect");

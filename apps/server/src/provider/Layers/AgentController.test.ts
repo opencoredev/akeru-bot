@@ -29,6 +29,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProjectId,
+  RoutineId,
   RuntimeItemId,
   ThreadId,
   TurnId,
@@ -48,12 +49,15 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
@@ -69,7 +73,7 @@ import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
 import type { AkeruRuntimeToolId } from "../AkeruToolRuntime.ts";
-import { ProviderValidationError } from "../Errors.ts";
+import { AgentControllerRuntimeError, ProviderValidationError } from "../Errors.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
@@ -83,8 +87,14 @@ import {
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import { makeTestSubscriptionAuthService } from "../../subscription-auth/testUtils/subscriptionAuthService.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  RoutineDraftDispatcher,
+  RoutineDraftError,
+  type RoutineDraftDispatcherShape,
+} from "../../routines/RoutineDraftDispatcher.ts";
 import {
   BotUsageCapExceeded,
   BotUsageLedger,
@@ -262,7 +272,41 @@ function completeLegacyTurnWithMemoryReview(
   });
 }
 
+const instanceModelCatalog = new Map<
+  string,
+  { readonly models: ReadonlyArray<string>; readonly status?: "ready" | "warning" | "error" }
+>();
+
+function makeInstanceSnapshot(
+  instanceId: ProviderInstanceId,
+  driverKind: ProviderDriverKind,
+  entry: {
+    readonly models: ReadonlyArray<string>;
+    readonly status?: "ready" | "warning" | "error";
+  },
+) {
+  return {
+    instanceId,
+    driver: driverKind,
+    enabled: true,
+    installed: true,
+    version: null,
+    status: entry.status ?? ("ready" as const),
+    auth: { status: "authenticated" as const },
+    checkedAt: "2026-01-01T00:00:00.000Z",
+    models: entry.models.map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: null,
+    })),
+    slashCommands: [],
+    skills: [],
+  };
+}
+
 function makeBridge() {
+  instanceModelCatalog.clear();
   let instanceEnabled = true;
   let disableBeforeNextDispatchAdmission = false;
   let nextDispatchAdmissionWait: Promise<void> | undefined;
@@ -309,6 +353,7 @@ function makeBridge() {
         const driverKind = ProviderDriverKind.make(
           instanceId === kimiInstanceId ? "kimi" : String(instanceId),
         );
+        const advertisedModels = instanceModelCatalog.get(String(instanceId));
         return {
           instanceId,
           driverKind,
@@ -318,6 +363,11 @@ function makeBridge() {
             driverKind,
             continuationKey: `${driverKind}:instance:${instanceId}`,
           },
+          ...(advertisedModels !== undefined
+            ? {
+                instanceSnapshot: makeInstanceSnapshot(instanceId, driverKind, advertisedModels),
+              }
+            : {}),
         };
       }),
     dispatchIfEnabled: (instanceId, operation, dispatch) => {
@@ -637,13 +687,18 @@ function makeLayer(
           process.cwd(),
           baseDir ?? { prefix: "akeru-mastra-controller-test-" },
         ).pipe(Layer.provide(NodeServices.layer)),
+        NodeServices.layer,
       ),
     ),
   );
 }
 
 function provideController<A, E>(
-  effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
+  effect: Effect.Effect<
+    A,
+    E,
+    AgentController | ServerSettingsService | FileSystem.FileSystem | Path.Path
+  >,
   bridge: ProviderServiceShape,
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
@@ -807,7 +862,7 @@ describe("provider access health", () => {
     ["claudeAgent", "anthropic"],
     ["grok", "xai"],
     ["kimi", "kimi-for-coding"],
-  ] as const)("maps %s runtime requests to %s access health", (driver, provider) => {
+  ] as const)("maps %s runtime requests to %s access health", async (driver, provider) => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
     try {
@@ -817,7 +872,7 @@ describe("provider access health", () => {
           [provider]: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
         }),
       );
-      const service = new SubscriptionAuthService(authPath);
+      const service = await makeTestSubscriptionAuthService(authPath);
       const providerInstanceId = ProviderInstanceId.make(`instance-${driver}`);
       const base = {
         provider: ProviderDriverKind.make(driver),
@@ -853,7 +908,7 @@ describe("provider access health", () => {
     }
   });
 
-  it("records a failed first request and recovery at the runtime event boundary", () => {
+  it("records a failed first request and recovery at the runtime event boundary", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-health-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
     try {
@@ -863,7 +918,7 @@ describe("provider access health", () => {
           xai: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
         }),
       );
-      const service = new SubscriptionAuthService(authPath);
+      const service = await makeTestSubscriptionAuthService(authPath);
       const base = {
         provider: ProviderDriverKind.make("grok"),
         providerInstanceId: ProviderInstanceId.make("grok"),
@@ -898,10 +953,10 @@ describe("provider access health", () => {
     }
   });
 
-  it("records the model a failed turn ran on with the instance failure", () => {
+  it("records the model a failed turn ran on with the instance failure", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-model-"));
     try {
-      const service = new SubscriptionAuthService(
+      const service = await makeTestSubscriptionAuthService(
         NodePath.join(directory, "subscription-auth.json"),
       );
       recordProviderAccessHealth(
@@ -931,11 +986,11 @@ describe("provider access health", () => {
 
   it.each(["interrupted", "cancelled"] as const)(
     "does not call a %s turn a successful provider request",
-    (state) => {
+    async (state) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-stop-"));
       const authPath = NodePath.join(directory, "subscription-auth.json");
       try {
-        const service = new SubscriptionAuthService(authPath);
+        const service = await makeTestSubscriptionAuthService(authPath);
         recordProviderAccessHealth(service, {
           provider: ProviderDriverKind.make("grok"),
           providerInstanceId: ProviderInstanceId.make("grok"),
@@ -1106,7 +1161,7 @@ describe("AgentControllerLive", () => {
         turnId: expect.any(String),
         failed: false,
       });
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("reads Akeru subscription credentials through Mastra AuthStorage", () =>
@@ -2890,7 +2945,7 @@ describe("AgentControllerLive", () => {
       assert.equal(session.model, "gpt-5.6-sol");
       yield* controller.stopSession({ threadId: codexThreadId });
       expect(bridge.startSession).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("runs Codex turns through Mastra Session.sendMessage and normalizes events", () => {
@@ -4007,6 +4062,343 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  describe("routine review", () => {
+    const routineInput = {
+      name: "Morning summary",
+      instructions: "Summarize overnight changes.",
+      schedule: { kind: "daily", time: "09:00" },
+    } as const;
+
+    // Opens a routine review on a running Codex turn and returns the pending tool call.
+    const openRoutineReview = (
+      mastra: ReturnType<typeof makeMastraHarness>,
+      events: Array<ProviderRuntimeEvent>,
+    ) =>
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const opened = yield* Deferred.make<string>();
+        const nextOpened = yield* Deferred.make<string>();
+        let openedCount = 0;
+        yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event);
+              if (event.type === "request.opened" && event.requestId) {
+                Deferred.doneUnsafe(
+                  openedCount++ === 0 ? opened : nextOpened,
+                  Exit.succeed(String(event.requestId)),
+                );
+              }
+            }),
+          ),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Effect.yieldNow;
+        yield* controller.sendTurn({
+          threadId: codexThreadId,
+          input: "Make a routine.",
+          timezone: "UTC",
+        });
+        const createRoutine = mastra.harnessOptions[0]?.createRoutine;
+        assert.isDefined(createRoutine);
+        const toolCall = yield* Effect.promise(() =>
+          createRoutine(String(codexThreadId), routineInput).then(
+            (value) => Exit.succeed(value),
+            (cause: unknown) => Exit.fail(cause),
+          ),
+        ).pipe(Effect.forkChild({ startImmediately: true }));
+        const requestId = yield* Deferred.await(opened);
+        return { controller, toolCall, requestId, nextOpened };
+      });
+
+    const provideRoutineController = <A, E>(
+      effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
+      mastra: ReturnType<typeof makeMastraHarness>,
+      dispatcher: Partial<RoutineDraftDispatcherShape>,
+    ) =>
+      effect.pipe(
+        Effect.provide(
+          makeLayer(makeBridge().service, mastra.factory).pipe(
+            Layer.provide(Layer.mock(RoutineDraftDispatcher)(dispatcher)),
+          ),
+        ),
+        Effect.orDie,
+      );
+
+    it.effect("creates the routine when the answer lands before the limit", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      const created = {
+        routineId: RoutineId.make("routine-created"),
+        sequence: 1,
+        status: "approved" as const,
+      };
+      let dispatched = 0;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(60 * 60_000 - 1_000);
+          // Creation is slow enough to cross the one-hour review limit.
+          const answer = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.forkChild({ startImmediately: true }));
+          yield* TestClock.adjust(5 * 60_000);
+          yield* Fiber.join(answer);
+          const result = yield* Fiber.join(toolCall);
+          assert.deepStrictEqual(result, Exit.succeed(created));
+          assert.strictEqual(dispatched, 1);
+          const resolved = events.filter((event) => event.type === "request.resolved");
+          assert.deepStrictEqual(
+            resolved.map((event) => event.payload),
+            [{ requestType: "dynamic_tool_call", decision: "accept" }],
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sync(() => dispatched++).pipe(
+              Effect.andThen(Effect.sleep("2 minutes")),
+              Effect.as(created),
+            ),
+        },
+      );
+    });
+
+    it.effect("keeps an accepted review waiting until its routine is created", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      const lastState = () =>
+        events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          const answer = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+          yield* Effect.yieldNow;
+          assert.isFalse(events.some((event) => event.type === "request.resolved"));
+          assert.strictEqual(lastState(), "waiting");
+
+          yield* TestClock.adjust("2 minutes");
+          assert.instanceOf(yield* Fiber.join(answer), AgentControllerRuntimeError);
+          assert.isTrue(Exit.isFailure(yield* Fiber.join(toolCall)));
+          assert.deepStrictEqual(
+            events.filter((event) => event.type === "request.resolved").map((e) => e.payload),
+            [{ requestType: "dynamic_tool_call", decision: "accept", outcome: "failed" }],
+          );
+          assert.strictEqual(lastState(), "running");
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sleep("2 minutes").pipe(
+              Effect.andThen(
+                Effect.fail(new RoutineDraftError({ message: "The routine could not be saved." })),
+              ),
+            ),
+        },
+      );
+    });
+
+    it.effect("keeps the turn waiting on a routine review after a tool approval answer", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          mastra.emit({
+            type: "tool_approval_required",
+            toolCallId: "restart-tool-1",
+            toolName: "RestartMcpServers",
+            args: {},
+          } as AgentControllerEvent);
+          yield* Effect.yieldNow;
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("restart-tool-1"),
+            decision: "accept",
+          });
+          yield* Effect.yieldNow;
+          assert.isTrue(
+            events.some(
+              (event) =>
+                event.type === "request.resolved" && String(event.requestId) === "restart-tool-1",
+            ),
+          );
+          assert.strictEqual(
+            events.findLast((event) => event.type === "session.state.changed")?.payload.state,
+            "waiting",
+          );
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(requestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(toolCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {},
+      );
+    });
+
+    it.effect("closes an unanswered review as a system cancellation", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      let dispatched = 0;
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(60 * 60_000);
+          const result = yield* Fiber.join(toolCall);
+          assert.isTrue(Exit.isFailure(result));
+          const resolved = events.filter((event) => event.type === "request.resolved");
+          assert.deepStrictEqual(
+            resolved.map((event) => event.payload),
+            [
+              {
+                requestType: "dynamic_tool_call",
+                decision: "cancel",
+                actor: "system",
+                target: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                outcome: "cancelled",
+              },
+            ],
+          );
+          const late = yield* controller
+            .respondToRequest({
+              threadId: codexThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip);
+          assert.instanceOf(late, AgentControllerRuntimeError);
+          assert.strictEqual(dispatched, 0);
+          mastra.finishSend();
+        }),
+        mastra,
+        {
+          createApprovedForThread: () =>
+            Effect.sync(() => dispatched++).pipe(
+              Effect.as({
+                routineId: RoutineId.make("routine-late"),
+                sequence: 1,
+                status: "approved" as const,
+              }),
+            ),
+        },
+      );
+    });
+
+    it.effect("keeps the turn waiting when another routine review remains open", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const {
+            controller,
+            toolCall: firstCall,
+            nextOpened,
+          } = yield* openRoutineReview(mastra, events);
+          yield* TestClock.adjust(30 * 60_000);
+          const createRoutine = mastra.harnessOptions[0]?.createRoutine;
+          assert.isDefined(createRoutine);
+          const secondCall = yield* Effect.promise(() =>
+            createRoutine(String(codexThreadId), routineInput).then(
+              (value) => Exit.succeed(value),
+              (cause: unknown) => Exit.fail(cause),
+            ),
+          ).pipe(Effect.forkChild({ startImmediately: true }));
+          const secondRequestId = yield* Deferred.await(nextOpened);
+
+          yield* TestClock.adjust(30 * 60_000);
+          assert.isTrue(Exit.isFailure(yield* Fiber.join(firstCall)));
+          mastra.finishSend();
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(secondRequestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(secondCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+        }),
+        mastra,
+        {},
+      );
+    });
+
+    it.effect("rejects a routine answer from another active chat without claiming it", () => {
+      const mastra = makeMastraHarness();
+      const events: Array<ProviderRuntimeEvent> = [];
+      return provideRoutineController(
+        Effect.gen(function* () {
+          const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+          yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: { provider: "codex", model: "gpt-5.6-sol" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access",
+          });
+          yield* controller.sendTurn({ threadId: claudeThreadId, input: "Another chat." });
+
+          const wrongChat = yield* controller
+            .respondToRequest({
+              threadId: claudeThreadId,
+              requestId: ApprovalRequestId.make(requestId),
+              decision: "accept",
+            })
+            .pipe(Effect.flip);
+          assert.instanceOf(wrongChat, AgentControllerRuntimeError);
+          assert.strictEqual(events.filter((event) => event.type === "request.resolved").length, 0);
+
+          yield* controller.respondToRequest({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make(requestId),
+            decision: "decline",
+          });
+          assert.deepStrictEqual(
+            yield* Fiber.join(toolCall),
+            Exit.succeed({ status: "cancelled" }),
+          );
+          mastra.finishSend();
+        }),
+        mastra,
+        {},
+      );
+    });
+  });
+
   it.effect("keeps product feedback approval-gated in full-access mode", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -4936,9 +5328,9 @@ describe("AgentControllerLive", () => {
           denied: false,
         } as AgentControllerEvent);
         expect(
-          SubscriptionAuthService.forSecretsDir(
+          (yield* SubscriptionAuthService.forSecretsDir(
             NodePath.join(baseDir, "userdata", "secrets"),
-          ).mcpRequestHealth(exaServer.id)?.health,
+          )).mcpRequestHealth(exaServer.id)?.health,
         ).toBe("failed-first-request");
 
         mastra.emit({
@@ -4955,9 +5347,9 @@ describe("AgentControllerLive", () => {
           denied: false,
         } as AgentControllerEvent);
         expect(
-          SubscriptionAuthService.forSecretsDir(
+          (yield* SubscriptionAuthService.forSecretsDir(
             NodePath.join(baseDir, "userdata", "secrets"),
-          ).mcpRequestHealth(exaServer.id)?.health,
+          )).mcpRequestHealth(exaServer.id)?.health,
         ).toBe("recovered");
         mastra.finishSend();
 
@@ -5411,7 +5803,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.harnessOptions[0]?.toolRuntime.toolsForThread(String(codexThreadId))).toEqual(
         [],
       );
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("creates a credentialed remote workspace for a delegated sandbox grant", () => {
@@ -5482,7 +5874,24 @@ describe("AgentControllerLive", () => {
           UPSTASH_REDIS_REST_URL: "https://sandbox.example",
           UPSTASH_REDIS_REST_TOKEN: "sandbox-token",
         },
+        cwd: "/workspace/remote-project",
       });
+      // Reusing the remote session without a cwd clears the old project path.
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        modelSelection: codexSelection,
+        runtimeMode: "full-access",
+        botSandbox: "upstash",
+        botSandboxEnvironment: {
+          UPSTASH_REDIS_REST_URL: "https://sandbox.example",
+          UPSTASH_REDIS_REST_TOKEN: "sandbox-token",
+        },
+      });
+      const reusedState = vi.mocked(mastra.session.state.set).mock.calls.at(-1)?.[0];
+      expect(reusedState && Object.hasOwn(reusedState, "projectPath")).toBe(true);
+      expect(reusedState?.projectPath).toBeUndefined();
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
       expect(makeRemoteWorkspace).toHaveBeenCalledWith(
@@ -5500,7 +5909,7 @@ describe("AgentControllerLive", () => {
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
       expect(makeBotBrowser).toHaveBeenCalledOnce();
       yield* controller.stopSession({ threadId: codexThreadId });
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
@@ -5552,7 +5961,7 @@ describe("AgentControllerLive", () => {
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
         yield* controller.startSession(codexThreadId, { ...input, botSandbox: "vercel" });
         expect(firstDestroy).toHaveBeenCalledOnce();
-      }).pipe(Effect.provide(layer), Effect.orDie);
+      }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
 
       expect(secondStop).toHaveBeenCalledOnce();
       expect(secondDestroy).not.toHaveBeenCalled();
@@ -5591,7 +6000,7 @@ describe("AgentControllerLive", () => {
     });
   });
 
-  it.effect("preserves remote workspace identity when only cwd changes", () => {
+  it.effect("reuses the remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const remote = new Workspace({
@@ -5639,12 +6048,63 @@ describe("AgentControllerLive", () => {
       yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
 
       expect(makeRemoteWorkspace).toHaveBeenCalledOnce();
-      expect(mastra.createSession).toHaveBeenCalledTimes(2);
+      expect(mastra.createSession).toHaveBeenCalledOnce();
       expect(mastra.createSession.mock.calls[0]?.[0]).toMatchObject({ workspace: remote });
-      expect(mastra.createSession.mock.calls[1]?.[0]).toMatchObject({ workspace: remote });
       expect(destroy).not.toHaveBeenCalled();
       expect(makeBotBrowser).toHaveBeenCalledOnce();
-    }).pipe(Effect.provide(layer), Effect.orDie);
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
+  });
+
+  it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const makeBotBrowser = vi.fn(() => ({
+      tools: {},
+      attachment: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    }));
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeBotBrowser: makeBotBrowser as never,
+    }).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "akeru-mastra-cwd-change-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      const firstCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-a-"));
+      const secondCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-b-"));
+      try {
+        const input = {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access" as const,
+        };
+        yield* controller.startSession(codexThreadId, { ...input, cwd: firstCwd });
+        yield* controller.startSession(codexThreadId, { ...input, cwd: secondCwd });
+
+        const [session] = yield* controller.listSessions();
+        assert.equal(session?.cwd, secondCwd);
+        // A new Mastra session means the old one and its user-computer
+        // workspace lease were torn down instead of reused.
+        expect(mastra.createSession).toHaveBeenCalledTimes(2);
+      } finally {
+        NodeFS.rmSync(firstCwd, { recursive: true, force: true });
+        NodeFS.rmSync(secondCwd, { recursive: true, force: true });
+      }
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
   it.effect("runs Claude through the Akeru Mastra harness", () => {
@@ -6418,6 +6878,197 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  describe("in-session model switch between turns", () => {
+    const switchCases = [
+      {
+        provider: "codex",
+        threadId: codexThreadId,
+        instanceId: codexInstanceId,
+        from: "gpt-5.6-sol",
+        to: "gpt-5.6-astra",
+        wirePrefix: "openai",
+      },
+      {
+        provider: "claudeAgent",
+        threadId: claudeThreadId,
+        instanceId: claudeInstanceId,
+        from: "claude-fable-5",
+        to: "claude-opus-4-6",
+        wirePrefix: "anthropic",
+      },
+      {
+        provider: "grok",
+        threadId: grokThreadId,
+        instanceId: grokInstanceId,
+        from: "grok-code-fast-1",
+        to: "grok-4.20-beta",
+        wirePrefix: "xai",
+      },
+      {
+        provider: "opencodeGo",
+        threadId: openCodeGoThreadId,
+        instanceId: openCodeGoInstanceId,
+        from: "gpt-5.6-sol",
+        to: "gpt-5.6-luna",
+        wirePrefix: "opencode-go",
+      },
+    ] as const;
+
+    for (const testCase of switchCases) {
+      it.effect(
+        `switches the saved ${testCase.provider} model in-session between turns via resolveEngine`,
+        () => {
+          const bridge = makeBridge();
+          const mastra = makeMastraHarness();
+          const model = (model: string) => ({
+            instanceId: testCase.instanceId,
+            model,
+          });
+          return provideController(
+            Effect.gen(function* () {
+              const controller = yield* AgentController;
+              const resolve = (model: string) =>
+                controller.resolveEngine({
+                  threadId: testCase.threadId,
+                  engine: { provider: String(testCase.instanceId), model },
+                  fallback: codexSelection,
+                  mode: "default",
+                  botConversation: true,
+                });
+              yield* resolve(testCase.from);
+              yield* controller.startSession(testCase.threadId, {
+                threadId: testCase.threadId,
+                provider: ProviderDriverKind.make(testCase.provider),
+                providerInstanceId: testCase.instanceId,
+                cwd: process.cwd(),
+                modelSelection: model(testCase.from),
+                runtimeMode: "approval-required",
+              });
+              yield* controller.sendTurn({
+                threadId: testCase.threadId,
+                input: "First turn.",
+              });
+              yield* Effect.yieldNow;
+              mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+              mastra.finishSend();
+              yield* Effect.yieldNow;
+              expect(mastra.session.model.switch).toHaveBeenCalledWith({
+                modelId: `${testCase.wirePrefix}/${testCase.from}`,
+              });
+
+              yield* resolve(testCase.to);
+              expect(mastra.session.model.switch).toHaveBeenCalledWith({
+                modelId: `${testCase.wirePrefix}/${testCase.to}`,
+              });
+              expect(mastra.createSession).toHaveBeenCalledOnce();
+
+              const completed = yield* controller.streamEvents.pipe(
+                Stream.filter((event) => event.type === "turn.completed"),
+                Stream.runHead,
+                Effect.forkChild({ startImmediately: true }),
+              );
+              yield* controller.sendTurn({
+                threadId: testCase.threadId,
+                input: "Second turn.",
+                modelSelection: model(testCase.to),
+              });
+              yield* Effect.yieldNow;
+              mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
+              mastra.finishSend();
+              assert.equal((yield* Fiber.join(completed))._tag, "Some");
+
+              const [session] = yield* controller.listSessions();
+              assert.equal(session?.model, testCase.to);
+              expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, {
+                content: "Second turn.",
+              });
+              expect(bridge.sendTurn).not.toHaveBeenCalled();
+            }),
+            bridge.service,
+            mastra.factory,
+          );
+        },
+      );
+    }
+
+    it.effect("fails closed when the saved model is not in the instance snapshot", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      instanceModelCatalog.set(String(codexInstanceId), { models: ["gpt-5.6-sol"] });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const failure = yield* Effect.flip(
+            controller.resolveEngine({
+              threadId: codexThreadId,
+              engine: { provider: "codex", model: "not-a-model" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            }),
+          );
+          assert.equal(failure._tag, "AgentControllerUnsupportedEngineError");
+          if (failure._tag === "AgentControllerUnsupportedEngineError") {
+            assert.include(failure.detail, "Model 'not-a-model' is not available for codex.");
+          }
+          expect(mastra.createSession).not.toHaveBeenCalled();
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect("allows a saved model advertised through the instance snapshot", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      instanceModelCatalog.set(String(codexInstanceId), {
+        models: ["gpt-5.6-sol", "custom-codex"],
+      });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const resolved = yield* controller.resolveEngine({
+            threadId: codexThreadId,
+            engine: { provider: "codex", model: "custom-codex" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          assert.equal(resolved.modelSelection.model, "custom-codex");
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
+    it.effect("does not fail closed on a pending snapshot's model list", () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      // A pending probe still advertises the built-in catalog. The saved model
+      // may be real but only show up once the probe finishes, so the check
+      // must not reject it.
+      instanceModelCatalog.set(String(codexInstanceId), {
+        models: ["gpt-5.6-sol"],
+        status: "warning",
+      });
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const resolved = yield* controller.resolveEngine({
+            threadId: codexThreadId,
+            engine: { provider: "codex", model: "cli-only-model" },
+            fallback: codexSelection,
+            mode: "default",
+            botConversation: true,
+          });
+          assert.equal(resolved.modelSelection.model, "cli-only-model");
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+  });
+
   describe("Kimi Mastra normalization", () => {
     const kimiModel = (model: string) => ({
       instanceId: kimiInstanceId,
@@ -6865,6 +7516,7 @@ describe("AgentControllerLive", () => {
             Layer.mock(EntityMemoryRepository)({}),
             serverSettingsLayerTest({}),
             ServerConfig.layerTest(process.cwd(), baseDir).pipe(Layer.provide(NodeServices.layer)),
+            NodeServices.layer,
           ),
         ),
       );

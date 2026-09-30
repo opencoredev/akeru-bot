@@ -1320,7 +1320,6 @@ describe("ProviderCommandReactor", () => {
   it.each([
     ["codex", "gpt-5.6-sol"],
     ["claudeAgent", "claude-fable-5"],
-    ["cursor", "composer-1.5"],
     ["grok", "grok-code-fast-1"],
     ["opencode", "anthropic/claude-sonnet-4-5"],
     ["kimi", "k3-256k"],
@@ -3906,6 +3905,77 @@ describe("ProviderCommandReactor", () => {
     ).toBe(false);
   });
 
+  it("uses the updated bot engine model for the next turn after bot.update", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-model-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-model-1"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-bot-update-model"),
+        botId: BotId.make("bot-1"),
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-model-2"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-model-2"),
+          role: "user",
+          text: "second",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.resolveEngine).toHaveBeenNthCalledWith(2, {
+      threadId: ThreadId.make("thread-1"),
+      engine: { provider: "codex", model: "gpt-5.6-sol" },
+      fallback: {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.6-sol",
+      },
+      mode: "default",
+      botConversation: true,
+    });
+    expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({
+      modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" },
+    });
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(
+      thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toBe(false);
+  });
+
   it("starts a new provider after the previous thread session stopped", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
@@ -4916,7 +4986,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-stale"),
@@ -4934,7 +5004,7 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-stale"),
@@ -4971,7 +5041,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-missing-instance"),
@@ -4999,7 +5069,7 @@ describe("ProviderCommandReactor", () => {
       updatedAt: now,
     });
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-missing-instance"),

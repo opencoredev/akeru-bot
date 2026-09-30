@@ -742,6 +742,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         operation: "ProviderService.sendTurn",
         allowRecovery: true,
       });
+      // A selection pinned to a different instance than the persisted session
+      // binding must not reach the adapter: adapters that re-resolve the
+      // provider would otherwise route the turn away from the session's own
+      // instance (or silently drop the model switch).
+      if (
+        input.modelSelection !== undefined &&
+        input.modelSelection.instanceId !== routed.instanceId
+      ) {
+        return yield* toValidationError(
+          "ProviderService.sendTurn",
+          `Model selection targets provider instance '${input.modelSelection.instanceId}' but thread '${input.threadId}' is bound to '${routed.instanceId}'.`,
+        );
+      }
       metricProvider = routed.adapter.provider;
       metricModel = input.modelSelection?.model;
       yield* Effect.annotateCurrentSpan({
