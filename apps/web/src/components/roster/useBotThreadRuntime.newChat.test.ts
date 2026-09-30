@@ -59,6 +59,12 @@ vi.mock("../../hooks/useSettings", () => ({
 vi.mock("../../modelSelection", () => ({
   resolveAppModelSelectionState: () => ({ provider: "codex", model: "gpt" }),
 }));
+vi.mock("./botConversationMessageProjection", () => ({
+  useBotConversationMessageProjection: () => ({
+    messages: [{ role: "user", createdAt: "2026-09-01T00:00:00.000Z" }],
+    lastMessageRole: "user",
+  }),
+}));
 vi.mock("../../state/entities", () => ({
   useProjects: () => [{ environmentId: "env-a", id: "project-1", defaultModelSelection: null }],
   useThreadShells: () => mocks.threadShells,
@@ -69,7 +75,6 @@ vi.mock("../../state/entities", () => ({
         (shell) => shell.environmentId === ref.environmentId && shell.id === ref.threadId,
       )) ??
     null,
-  useThreadMessages: () => [{ role: "user", createdAt: "2026-09-01T00:00:00.000Z" }],
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
