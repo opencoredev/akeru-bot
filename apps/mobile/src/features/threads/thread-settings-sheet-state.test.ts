@@ -19,6 +19,7 @@ function modelOption(
     isDefault: false,
     isLegacy: false,
     capabilities: null,
+    disabledReason: null,
     selection: {
       instanceId: ProviderInstanceId.make("codex"),
       model,

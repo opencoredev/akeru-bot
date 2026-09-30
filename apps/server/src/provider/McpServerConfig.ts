@@ -33,10 +33,16 @@ export function getMcpRuntimeHeaders(server: McpServer): Readonly<Record<string,
 function sameHeaders(left: McpServer, right: McpServer): boolean {
   const leftHeaders = getMcpRuntimeHeaders(left);
   const rightHeaders = getMcpRuntimeHeaders(right);
-  const names = Object.keys(leftHeaders);
+  // HTTP field names are case-insensitive. OAuth refreshes can return the same
+  // credential under a different casing without changing the MCP connection.
+  const normalize = (headers: Readonly<Record<string, string>>) =>
+    new Map(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
+  const normalizedLeft = normalize(leftHeaders);
+  const normalizedRight = normalize(rightHeaders);
+  const names = [...normalizedLeft.keys()];
   return (
-    names.length === Object.keys(rightHeaders).length &&
-    names.every((name) => leftHeaders[name] === rightHeaders[name])
+    names.length === normalizedRight.size &&
+    names.every((name) => normalizedLeft.get(name) === normalizedRight.get(name))
   );
 }
 
@@ -69,6 +75,19 @@ export function sameMcpServerConfigurations(
     const other = right.find((candidate) => candidate.id === server.id);
     return other !== undefined && sameServer(server, other);
   });
+}
+
+/**
+ * Prompt section with the user-set guidance for each attached MCP server, or an
+ * empty string when no server has instructions.
+ */
+export function formatMcpServerInstructions(servers: readonly McpServer[]): string {
+  const lines = servers.flatMap((server) =>
+    server.instructions?.trim()
+      ? [`- ${server.name} (${server.id}): ${server.instructions.trim()}`]
+      : [],
+  );
+  return lines.length > 0 ? ["MCP server guidance:", ...lines].join("\n") : "";
 }
 
 export function toAcpMcpServers(

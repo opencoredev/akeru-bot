@@ -45,7 +45,7 @@ export function CompactBrandTitle(
   return (
     <View
       aria-level={1}
-      accessibilityLabel="Akeru Bot, Chats"
+      accessibilityLabel="Akeru Bot, Bots"
       accessible
       role="heading"
       style={{
@@ -111,9 +111,9 @@ export function getCompactBrandHeaderOptions(
 ): NativeStackNavigationOptions {
   if (Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED) {
     return {
-      headerTitle: "Chats",
+      headerTitle: "Bots",
       headerTitleStyle: { color: "transparent", fontSize: 18, fontWeight: "800" },
-      title: "Chats",
+      title: "Bots",
       unstable_headerLeftItems: renderCompactBrandHeaderItems,
     };
   }
@@ -121,6 +121,6 @@ export function getCompactBrandHeaderOptions(
   return {
     headerTitle: renderCompactBrandTitle,
     headerTitleStyle: fallbackTitleStyle,
-    title: "Chats",
+    title: "Bots",
   };
 }

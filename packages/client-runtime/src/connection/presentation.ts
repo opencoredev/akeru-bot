@@ -2,7 +2,12 @@ import type { ServerConfig } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 
 import type { ConnectionCatalogEntry } from "./catalog.ts";
-import type { NetworkStatus, SupervisorConnectionState } from "./model.ts";
+import type {
+  ConnectionBlockedReason,
+  ConnectionTransientReason,
+  NetworkStatus,
+  SupervisorConnectionState,
+} from "./model.ts";
 
 export type EnvironmentConnectionPhase =
   | "available"
@@ -12,9 +17,13 @@ export type EnvironmentConnectionPhase =
   | "connected"
   | "error";
 
+/** Stable failure code clients translate; `error` keeps the raw diagnostic. */
+export type ConnectionFailureCode = ConnectionTransientReason | ConnectionBlockedReason;
+
 export interface EnvironmentConnectionPresentation {
   readonly phase: EnvironmentConnectionPhase;
   readonly error: string | null;
+  readonly errorCode?: ConnectionFailureCode | null;
   readonly traceId: string | null;
 }
 
@@ -29,27 +38,30 @@ export function presentConnectionState(
 ): EnvironmentConnectionPresentation {
   switch (state.phase) {
     case "available":
-      return { phase: "available", error: null, traceId: null };
+      return { phase: "available", error: null, errorCode: null, traceId: null };
     case "offline":
-      return { phase: "offline", error: null, traceId: null };
+      return { phase: "offline", error: null, errorCode: null, traceId: null };
     case "connecting":
       return {
         phase: state.attempt <= 1 && state.lastFailure === null ? "connecting" : "reconnecting",
         error: state.lastFailure?.message ?? null,
+        errorCode: state.lastFailure?.reason ?? null,
         traceId: state.lastFailure?.traceId ?? null,
       };
     case "connected":
-      return { phase: "connected", error: null, traceId: null };
+      return { phase: "connected", error: null, errorCode: null, traceId: null };
     case "backoff":
       return {
         phase: "reconnecting",
         error: state.lastFailure?.message ?? null,
+        errorCode: state.lastFailure?.reason ?? null,
         traceId: state.lastFailure?.traceId ?? null,
       };
     case "blocked":
       return {
         phase: "error",
         error: state.lastFailure?.message ?? null,
+        errorCode: state.lastFailure?.reason ?? null,
         traceId: state.lastFailure?.traceId ?? null,
       };
   }

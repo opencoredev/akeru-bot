@@ -1,4 +1,6 @@
 import {
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   WS_METHODS,
@@ -48,6 +50,13 @@ describe("RPC authorization scopes", () => {
   it("requires permission to operate on a thread before uploading feedback", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.providerUploadFeedback)).toBe(
       AuthOrchestrationOperateScope,
+    );
+  });
+
+  it("keeps the remote doctor behind administrative scopes", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverGetRemoteDoctor)).toBe(AuthAccessReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverRepairRemoteDoctor)).toBe(
+      AuthAccessWriteScope,
     );
   });
 

@@ -158,6 +158,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         effectiveConfig,
         processEnv,
         secretsDir,
+        instanceId,
       );
 
       // Per-instance capabilities cache: keyed on binary + resolved HOME so

@@ -277,6 +277,14 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
             description: "This incomplete SDK row should be skipped.",
             location: "",
           },
+          {
+            // The OpenCode SDK reports no icon field; unknown keys are
+            // tolerated but never mapped onto the provider skill.
+            name: "no-icon",
+            description: "No icon available.",
+            location: "/Users/test/.agents/skills/no-icon/SKILL.md",
+            icon: "should-be-ignored",
+          },
         ],
       };
 
@@ -288,6 +296,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
           path: skill.path,
           enabled: skill.enabled,
           shortDescription: skill.shortDescription,
+          icon: skill.icon,
         })),
         [
           {
@@ -295,14 +304,23 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
             path: "/Users/test/.agents/skills/openclaw-review/SKILL.md",
             enabled: true,
             shortDescription: "Review OpenClaw workflow changes.",
+            icon: undefined,
           },
           {
             name: "openclaw-triage",
             path: "/Users/test/.agents/skills/openclaw-triage/SKILL.md",
             enabled: true,
             shortDescription: "Triage OpenClaw routing issues.",
+            icon: undefined,
           },
-        ],
+          {
+            name: "no-icon",
+            path: "/Users/test/.agents/skills/no-icon/SKILL.md",
+            enabled: true,
+            shortDescription: "No icon available.",
+            icon: undefined,
+          },
+        ].sort((left, right) => left.name.localeCompare(right.name)),
       );
     }),
   );

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "executor",
   "name": "Executor",
-  "description": "Use the integrations configured in your local Executor account.",
+  "description": "Use the integrations configured in your Executor account.",
   "primaryCategory": "Work",
-  "tags": ["integrations", "automation", "local"],
-  "capabilities": ["use configured integrations", "run local integration tools"],
+  "tags": ["integrations", "automation", "hosted"],
+  "capabilities": ["use configured integrations", "run configured integration tools"],
   "publisher": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "maintainer": { "name": "Useful Software Co.", "url": "https://executor.sh" },
   "documentationUrl": "https://executor.sh/docs",
@@ -17,18 +17,18 @@
       "license": "Executor brand asset"
     }
   },
-  "platforms": ["macos", "windows", "linux"],
-  "transport": { "type": "stdio", "command": "executor", "args": ["mcp"] },
+  "platforms": ["web", "desktop", "mobile", "macos", "windows", "linux"],
+  "transport": { "type": "url", "url": "https://executor.sh/mcp" },
   "connection": {
     "type": "verification-pending",
-    "blocker": "The local Executor CLI recipe is documented, but the full add, use, disable, reconnect, and remove lifecycle still needs current verification."
+    "blocker": "The Executor 2 HTTP connection and full add, use, disable, reconnect, and remove lifecycle still needs current verification."
   },
-  "authentication": "none",
+  "authentication": "oauth",
   "requiredCredentials": [],
   "setup": [
-    "Install the Executor CLI with `npm install -g executor` on Node.js 20 or newer, and keep `executor` on PATH.",
-    "Install and start Executor with `executor install` and `executor web`, then use the local UI to add and configure the integrations you want and complete integration authentication where required.",
-    "The CLI and its configured local service must be available to the Akeru server process when it launches `executor mcp`."
+    "Use an existing Executor 2 account and complete its OAuth sign-in when Akeru asks to connect.",
+    "Akeru connects to Executor 2's authenticated HTTP MCP server at `https://executor.sh/mcp`.",
+    "Executor remains verification-pending until its live add, safe read, disable, reconnect, and removal lifecycle is verified."
   ],
   "permissions": [
     {

@@ -30,7 +30,11 @@ type PluginConnection =
   | { readonly type: "ready" }
   | { readonly type: "api-key" }
   | { readonly type: "local" }
-  | { readonly type: "brokered"; readonly broker: Party }
+  | {
+      readonly type: "brokered";
+      readonly broker: Party;
+      readonly pendingBlocker?: string;
+    }
   | { readonly type: "approval-pending"; readonly blocker: string }
   | { readonly type: "verification-pending"; readonly blocker: string };
 
@@ -219,8 +223,14 @@ function transport(value: unknown, path: string): PluginTransport {
 function connection(value: unknown, path: string): PluginConnection {
   const input = object(value, path);
   if (input.type === "brokered") {
-    exactKeys(input, ["type", "broker"], path);
-    return { type: "brokered", broker: party(input.broker, `${path}.broker`) };
+    exactKeys(input, ["type", "broker", "pendingBlocker"], path);
+    return {
+      type: "brokered",
+      broker: party(input.broker, `${path}.broker`),
+      ...(input.pendingBlocker === undefined
+        ? {}
+        : { pendingBlocker: nonEmptyString(input.pendingBlocker, `${path}.pendingBlocker`) }),
+    };
   }
   if (input.type === "approval-pending" || input.type === "verification-pending") {
     exactKeys(input, ["type", "blocker"], path);
@@ -431,6 +441,15 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
     throw new TypeError(`Plugin '${manifest.id}' must label its connection as approval-pending.`);
   }
   if (
+    manifest.connection.type === "brokered" &&
+    manifest.connection.pendingBlocker !== undefined &&
+    manifest.catalogStatus !== "verification-pending"
+  ) {
+    throw new TypeError(
+      `Plugin '${manifest.id}' must label its pending brokered connection as verification-pending.`,
+    );
+  }
+  if (
     manifest.connection.type === "verification-pending" &&
     manifest.catalogStatus !== "verification-pending"
   ) {
@@ -438,7 +457,8 @@ function validateManifest(manifest: PluginManifest): PluginManifest {
   }
   if (
     manifest.catalogStatus === "verification-pending" &&
-    manifest.connection.type !== "verification-pending"
+    manifest.connection.type !== "verification-pending" &&
+    !(manifest.connection.type === "brokered" && manifest.connection.pendingBlocker !== undefined)
   ) {
     throw new TypeError(
       `Plugin '${manifest.id}' must label its connection as verification-pending.`,

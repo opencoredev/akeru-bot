@@ -2,29 +2,20 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   DEFAULT_BASE_FONT_SIZE,
-  deriveCodeFontSize,
-  deriveTerminalFontSize,
   normalizeBaseFontSize,
-  normalizeCodeFontSize,
-  normalizeCodeWordBreak,
   resolveAppearance,
   resolveAppearancePreferences,
   resolveMarkdownFontSizes,
-  resolveMobileCodeSurface,
   resolveNativeMarkdownTypography,
   resolveTextScaleVariables,
   stepBaseFontSize,
-  stepCodeFontSize,
-  stepTerminalFontSize,
 } from "./appearancePreferences";
 
 describe("appearancePreferences", () => {
   it("resolves defaults for empty stored preferences", () => {
-    expect(resolveAppearancePreferences({})).toEqual({
+    expect(resolveAppearancePreferences({})).toEqual({ baseFontSize: DEFAULT_BASE_FONT_SIZE });
+    expect(resolveAppearance(resolveAppearancePreferences({}))).toEqual({
       baseFontSize: DEFAULT_BASE_FONT_SIZE,
-      terminalFontSize: null,
-      codeFontSize: null,
-      codeWordBreak: false,
     });
   });
 
@@ -35,48 +26,13 @@ describe("appearancePreferences", () => {
     ).toBe(16);
   });
 
-  it("keeps explicit overrides and treats missing values as automatic", () => {
-    const preferences = resolveAppearancePreferences({ terminalFontSize: 12, codeFontSize: 14 });
-    expect(preferences.terminalFontSize).toBe(12);
-    expect(preferences.codeFontSize).toBe(14);
-    expect(resolveAppearancePreferences({ terminalFontSize: null }).terminalFontSize).toBe(null);
-  });
-
-  it("derives terminal and code sizes from the base size when not overridden", () => {
-    const appearance = resolveAppearance(resolveAppearancePreferences({ baseFontSize: 15 }));
-    expect(appearance.terminalFontSize).toBe(10);
-    expect(appearance.codeFontSize).toBe(11);
-    expect(appearance.isTerminalFontSizeCustom).toBe(false);
-    expect(appearance.isCodeFontSizeCustom).toBe(false);
-
-    const scaled = resolveAppearance(resolveAppearancePreferences({ baseFontSize: 22 }));
-    expect(scaled.terminalFontSize).toBe(deriveTerminalFontSize(22));
-    expect(scaled.codeFontSize).toBe(deriveCodeFontSize(22));
-    expect(scaled.terminalFontSize).toBeGreaterThan(10);
-    expect(scaled.codeFontSize).toBeGreaterThan(11);
-  });
-
-  it("applies explicit overrides over derived values", () => {
-    const appearance = resolveAppearance(
-      resolveAppearancePreferences({ baseFontSize: 22, terminalFontSize: 8, codeFontSize: 9 }),
-    );
-    expect(appearance.terminalFontSize).toBe(8);
-    expect(appearance.codeFontSize).toBe(9);
-    expect(appearance.isTerminalFontSizeCustom).toBe(true);
-    expect(appearance.isCodeFontSizeCustom).toBe(true);
-  });
-
-  it("clamps base and code font sizes", () => {
+  it("clamps the base font size", () => {
     expect(normalizeBaseFontSize(4)).toBe(11);
     expect(normalizeBaseFontSize(30)).toBe(22);
-    expect(normalizeCodeFontSize(4)).toBe(8);
-    expect(normalizeCodeFontSize(30)).toBe(18);
   });
 
-  it("steps font sizes within bounds", () => {
-    expect(stepTerminalFontSize(6, -1)).toBe(6);
+  it("steps the base font size within bounds", () => {
     expect(stepBaseFontSize(11, -1)).toBe(11);
-    expect(stepCodeFontSize(8, -1)).toBe(8);
     expect(stepBaseFontSize(15, 1)).toBe(16);
   });
 
@@ -88,18 +44,6 @@ describe("appearancePreferences", () => {
       codeBlockFontSize: 12,
       codeBlockLineHeight: 18,
     });
-  });
-
-  it("scales code surface geometry from the code font size", () => {
-    expect(resolveMobileCodeSurface(11)).toMatchObject({
-      fontSize: 11,
-      rowHeight: 20,
-    });
-  });
-
-  it("defaults code word break to false", () => {
-    expect(normalizeCodeWordBreak(undefined)).toBe(false);
-    expect(normalizeCodeWordBreak(true)).toBe(true);
   });
 
   it("returns the authored text scale at the 16pt default", () => {

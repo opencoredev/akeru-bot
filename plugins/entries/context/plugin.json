@@ -20,7 +20,10 @@
   },
   "platforms": ["web", "desktop", "mobile"],
   "transport": { "type": "url", "url": "https://mcp.context.dev/mcp" },
-  "connection": { "type": "ready" },
+  "connection": {
+    "type": "verification-pending",
+    "blocker": "The Context.dev OAuth sign-in and install, use, disable, reconnect, and remove lifecycle still needs verification against the live endpoint."
+  },
   "authentication": "oauth",
   "requiredCredentials": [],
   "setup": ["Sign in through the Context.dev OAuth flow."],
@@ -32,5 +35,5 @@
     }
   ],
   "approvals": [],
-  "catalogStatus": "available"
+  "catalogStatus": "verification-pending"
 }

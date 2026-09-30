@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as Layer from "effect/Layer";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -44,8 +44,9 @@ describe("createAssetEnvironmentAtoms", () => {
       environmentId,
       input: {
         resource: {
-          _tag: "project-favicon" as const,
-          cwd: "/repo/original",
+          _tag: "workspace-file" as const,
+          threadId: ThreadId.make("thread-1"),
+          path: "docs/original.png",
         },
       },
     };
@@ -55,8 +56,9 @@ describe("createAssetEnvironmentAtoms", () => {
         environmentId,
         input: {
           resource: {
-            _tag: "project-favicon",
-            cwd: "/repo/original",
+            _tag: "workspace-file",
+            threadId: ThreadId.make("thread-1"),
+            path: "docs/original.png",
           },
         },
       }),
@@ -66,8 +68,9 @@ describe("createAssetEnvironmentAtoms", () => {
         environmentId,
         input: {
           resource: {
-            _tag: "project-favicon",
-            cwd: "/repo/next",
+            _tag: "workspace-file",
+            threadId: ThreadId.make("thread-1"),
+            path: "docs/next.png",
           },
         },
       }),
@@ -77,9 +80,9 @@ describe("createAssetEnvironmentAtoms", () => {
         environmentId,
         input: {
           resource: {
-            _tag: "project-favicon",
-            cwd: "/repo/original",
-            path: "brand/icon.svg",
+            _tag: "workspace-file",
+            threadId: ThreadId.make("thread-2"),
+            path: "docs/original.png",
           },
         },
       }),

@@ -11,10 +11,18 @@ import { useLocation } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
+import { useI18n } from "../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
+import {
+  ExperimentalSidebar,
+  EXPERIMENTAL_RAIL_ONLY_WIDTH,
+  EXPERIMENTAL_SIDEBAR_WIDTH,
+  isRailOnlyPath,
+  useSidebarExperiment,
+} from "./sidebar/ExperimentalSidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { useServerRosterSync } from "./roster/useServerRoster";
 import { openSettings } from "~/settingsDialogStore";
@@ -66,6 +74,7 @@ function readInitialThreadSidebarWidth(): number {
 }
 
 function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean }) {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { isMobile, toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
@@ -122,12 +131,14 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
                   stageBackdropVariant &&
                   resolveSidebarStageFocusRingOffsetClass(stageBackdropVariant),
               )}
-              aria-label="Toggle main sidebar"
+              aria-label={t("Toggle main sidebar")}
             />
           }
         />
         <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+          {shortcutLabel
+            ? t("Toggle main sidebar ({shortcut})", { shortcut: shortcutLabel })
+            : t("Toggle main sidebar")}
         </TooltipPopup>
       </Tooltip>
     </div>
@@ -168,8 +179,17 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? getWindowFullscreenState()
       : false;
   });
+  const sidebarExperiment = useSidebarExperiment();
   const sidebarProviderStyle = {
-    "--sidebar-width": `${sidebarWidth}px`,
+    "--sidebar-width": `${
+      sidebarExperiment
+        ? isRailOnlyPath(pathname)
+          ? EXPERIMENTAL_RAIL_ONLY_WIDTH
+          : EXPERIMENTAL_SIDEBAR_WIDTH
+        : sidebarWidth
+    }px`,
+    // Collapsed, the experiment keeps its full rail.
+    ...(sidebarExperiment ? { "--sidebar-width-icon": `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px` } : {}),
     ...(isMacosDesktop && !isWindowFullscreen
       ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
       : {}),
@@ -212,13 +232,21 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+    <SidebarProvider
+      className="h-dvh! min-h-0!"
+      data-sidebar-experiment={sidebarExperiment ? "" : undefined}
+      defaultOpen
+      style={sidebarProviderStyle}
+    >
       <ProjectProjectionRetention />
       <Sidebar
         side="left"
         collapsible="icon"
         data-app-sidebar=""
-        className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className={cn(
+          "bg-sidebar text-sidebar-foreground",
+          !sidebarExperiment && "border-r border-sidebar-border",
+        )}
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
@@ -229,8 +257,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           onResize: setSidebarWidth,
         }}
       >
-        {isOnSettings ? <SettingsSidebarNav /> : <BotRosterSidebar />}
-        <SidebarRail onDoubleClick={resetSidebarWidth} />
+        {sidebarExperiment ? (
+          <ExperimentalSidebar />
+        ) : isOnSettings ? (
+          <SettingsSidebarNav />
+        ) : (
+          <BotRosterSidebar />
+        )}
+        {sidebarExperiment ? null : <SidebarRail onDoubleClick={resetSidebarWidth} />}
       </Sidebar>
       {children}
       <SidebarControl stageArtworkVisible={stageArtworkVisible} />

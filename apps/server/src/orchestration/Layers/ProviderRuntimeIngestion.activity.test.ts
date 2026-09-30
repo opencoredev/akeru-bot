@@ -142,3 +142,30 @@ describe("runtimeEventToActivities tool streaming persistence", () => {
     expect(payload.data).toEqual(streamingData);
   });
 });
+
+describe("runtimeEventToActivities model.rerouted", () => {
+  it("projects a provider-reported reroute as a model.rerouted activity", () => {
+    const event = {
+      ...base,
+      type: "model.rerouted",
+      eventId: EventId.make("evt-rerouted"),
+      payload: {
+        fromModel: "gpt-5.6-sol",
+        toModel: "gpt-5.6-astra",
+        reason: "The requested model is unavailable on this plan.",
+      },
+    } satisfies ProviderRuntimeEvent;
+
+    const activities = runtimeEventToActivities(event);
+
+    expect(activities).toHaveLength(1);
+    const activity = activities[0];
+    expect(activity?.kind).toBe("model.rerouted");
+    expect(activity?.tone).toBe("info");
+    expect(activity?.summary).toBe("Model rerouted from gpt-5.6-sol to gpt-5.6-astra");
+    const payload = activity?.payload as Record<string, unknown>;
+    expect(payload.fromModel).toBe("gpt-5.6-sol");
+    expect(payload.toModel).toBe("gpt-5.6-astra");
+    expect(payload.reason).toBe("The requested model is unavailable on this plan.");
+  });
+});

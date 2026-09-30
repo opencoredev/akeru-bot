@@ -6,7 +6,6 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
-  ProjectFaviconPath,
 } from "./orchestration.ts";
 
 const ASSET_PATH_MAX_LENGTH = 1024;
@@ -18,12 +17,6 @@ export const AssetResource = Schema.Union([
   }),
   Schema.TaggedStruct("attachment", {
     attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
-  }),
-  Schema.TaggedStruct("project-favicon", {
-    cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
-    // A cache-key hint only. The server reads the authoritative path from the
-    // project projection before it issues the signed URL.
-    path: Schema.optional(ProjectFaviconPath),
   }),
 ]);
 export type AssetResource = typeof AssetResource.Type;
@@ -78,6 +71,23 @@ export const AttachmentDeleteInput = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
 });
 export type AttachmentDeleteInput = typeof AttachmentDeleteInput.Type;
+
+/** Reveals a stored chat attachment in the environment's file manager. */
+export const AttachmentRevealInput = Schema.Struct({
+  attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+});
+export type AttachmentRevealInput = typeof AttachmentRevealInput.Type;
+
+export class AttachmentNotFoundError extends Schema.TaggedErrorClass<AttachmentNotFoundError>()(
+  "AttachmentNotFoundError",
+  {
+    attachmentId: TrimmedNonEmptyString,
+  },
+) {
+  override get message(): string {
+    return "The attachment is no longer stored on this environment.";
+  }
+}
 
 export class AttachmentUploadSigningKeyError extends Schema.TaggedErrorClass<AttachmentUploadSigningKeyError>()(
   "AttachmentUploadSigningKeyError",
@@ -194,41 +204,6 @@ export class AssetAttachmentNotFoundError extends Schema.TaggedErrorClass<AssetA
   }
 }
 
-export class AssetProjectFaviconResolutionError extends Schema.TaggedErrorClass<AssetProjectFaviconResolutionError>()(
-  "AssetProjectFaviconResolutionError",
-  {
-    resource: AssetResource,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return "Failed to resolve project favicon.";
-  }
-}
-
-export class AssetProjectFaviconInspectionError extends Schema.TaggedErrorClass<AssetProjectFaviconInspectionError>()(
-  "AssetProjectFaviconInspectionError",
-  {
-    resource: AssetResource,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return "Failed to inspect the project favicon.";
-  }
-}
-
-export class AssetProjectFaviconNotFoundError extends Schema.TaggedErrorClass<AssetProjectFaviconNotFoundError>()(
-  "AssetProjectFaviconNotFoundError",
-  {
-    resource: AssetResource,
-  },
-) {
-  override get message(): string {
-    return "Project favicon was not found.";
-  }
-}
-
 export class AssetSigningKeyLoadError extends Schema.TaggedErrorClass<AssetSigningKeyLoadError>()(
   "AssetSigningKeyLoadError",
   {
@@ -251,9 +226,6 @@ export const AssetAccessError = Schema.Union([
   AssetWorkspaceAssetNotFoundError,
   AssetWorkspaceResolutionError,
   AssetAttachmentNotFoundError,
-  AssetProjectFaviconResolutionError,
-  AssetProjectFaviconInspectionError,
-  AssetProjectFaviconNotFoundError,
   AssetSigningKeyLoadError,
 ]);
 export type AssetAccessError = typeof AssetAccessError.Type;

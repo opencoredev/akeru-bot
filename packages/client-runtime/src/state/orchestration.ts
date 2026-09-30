@@ -2,7 +2,12 @@ import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
 
-import { cancelDelegation, type CancelDelegationInput } from "../operations/commands.ts";
+import {
+  cancelDelegation,
+  retryDelegation,
+  type CancelDelegationInput,
+  type RetryDelegationInput,
+} from "../operations/commands.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import {
   createAtomCommandScheduler,
@@ -18,6 +23,16 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
     cancelDelegation: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:delegation:cancel",
       execute: (input: CancelDelegationInput) => cancelDelegation(input),
+      scheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, "delegation", input.delegationId]),
+      },
+    }),
+    retryDelegation: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:delegation:retry",
+      execute: (input: RetryDelegationInput) => retryDelegation(input),
       scheduler,
       concurrency: {
         mode: "serial",

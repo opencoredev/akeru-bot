@@ -1,10 +1,14 @@
 import type {
   ChannelBinding,
   ChannelBindingStatus,
-  ChannelMessageOrigin,
+  ChannelFailureCategory,
   ChannelProvider,
   ProjectId,
 } from "@t3tools/contracts";
+
+import { createTranslator, type MessageKey, type TranslationParams } from "./i18n/index.ts";
+
+type ProjectRef = { readonly id: ProjectId };
 
 export function channelProviderLabel(provider: ChannelProvider): string {
   if (provider === "imessage") return "iMessage";
@@ -14,8 +18,54 @@ export function channelProviderLabel(provider: ChannelProvider): string {
   return "Discord";
 }
 
+export type ChannelTranslate = (message: MessageKey, params?: TranslationParams) => string;
+
+const englishTranslate: ChannelTranslate = createTranslator("en").t;
+
+/**
+ * Why a channel connection failed, in words a user can act on. Every category the server sends
+ * has a sentence naming the provider, so clients never show a bare "could not connect".
+ */
+export function channelFailureReason(
+  category: ChannelFailureCategory,
+  provider: ChannelProvider,
+  t: ChannelTranslate = englishTranslate,
+): string {
+  if (category === "credentials") {
+    switch (provider) {
+      case "telegram":
+        return t("Telegram rejected the bot token.");
+      case "slack":
+        return t("Slack rejected the bot token or app token.");
+      case "discord":
+        return t("Discord rejected the bot token.");
+      case "whatsapp":
+        return t("WhatsApp rejected the access token.");
+      case "imessage":
+        return t("Photon rejected the connection credentials.");
+    }
+  }
+  const name = channelProviderLabel(provider);
+  switch (category) {
+    case "network":
+      return t("Could not reach {provider}. Check the network and try again.", { provider: name });
+    case "project":
+      return t("The project for this channel is unavailable. Choose another project.");
+    case "delivery-unknown":
+      return t("A reply may not have reached {provider}. Check the chat before replying again.", {
+        provider: name,
+      });
+    case "restore":
+      return t("{provider} did not reconnect after a restart. Reconnect to resume.", {
+        provider: name,
+      });
+  }
+}
+
 export function channelHealthLabel(status: ChannelBindingStatus): string {
   switch (status) {
+    case "connecting":
+      return "Connecting";
     case "connected":
       return "Connected";
     case "disconnected":
@@ -24,8 +74,88 @@ export function channelHealthLabel(status: ChannelBindingStatus): string {
       return "Reconnect required";
     case "failed":
       return "Connection failed";
+    case "blocked":
+      return "Choose another project";
     case "not-live":
       return "Not live";
+  }
+}
+
+/** The single repair a client offers for a binding. */
+export type ChannelRepairAction =
+  | "none"
+  | "wait"
+  | "connect"
+  | "reconnect"
+  | "update-credentials"
+  | "choose-project"
+  | "check-delivery"
+  | "configure-public-url";
+
+/**
+ * Picks one repair action from status and failure category. With `liveProjects`, a binding whose
+ * project is gone asks for a project first, because every other repair would start it there.
+ */
+export function channelRepairAction(
+  binding: Pick<ChannelBinding, "status" | "projectId" | "failureCategory">,
+  liveProjects?: ReadonlyArray<ProjectRef>,
+): ChannelRepairAction {
+  if (binding.status === "connecting") return "wait";
+  if (binding.status === "not-live") return "configure-public-url";
+  if (
+    binding.status === "blocked" ||
+    binding.failureCategory === "project" ||
+    (liveProjects && channelBindingNeedsProject(binding, liveProjects))
+  ) {
+    return "choose-project";
+  }
+  if (
+    binding.failureCategory === "delivery-unknown" &&
+    (binding.status === "connected" || binding.status === "failed")
+  ) {
+    return "check-delivery";
+  }
+  switch (binding.status) {
+    case "connected":
+      // A connected binding with a failure means a later attempt or reply failed while the
+      // running transport stayed up. Offer the repair for that failure.
+      switch (binding.failureCategory) {
+        case "credentials":
+          return "update-credentials";
+        case "network":
+        case "restore":
+          return "reconnect";
+        default:
+          return "none";
+      }
+    // Rejected credentials would fail again, so every idle state asks for new ones first.
+    case "disconnected":
+      return binding.failureCategory === "credentials" ? "update-credentials" : "connect";
+    case "needs-reconnect":
+      return binding.failureCategory === "credentials" ? "update-credentials" : "reconnect";
+    case "failed":
+      return binding.failureCategory === "credentials" ? "update-credentials" : "reconnect";
+  }
+}
+
+export function channelRepairLabel(action: ChannelRepairAction): string | null {
+  switch (action) {
+    case "none":
+      return null;
+    case "wait":
+      return "Connecting…";
+    case "connect":
+      return "Connect";
+    case "reconnect":
+      return "Reconnect";
+    case "update-credentials":
+      return "Update credentials";
+    case "choose-project":
+      return "Choose project";
+    case "check-delivery":
+      return "Check the channel";
+    case "configure-public-url":
+      return "Set a public URL";
   }
 }
 
@@ -34,10 +164,16 @@ export function channelBindingPresentation(
   projects: ReadonlyArray<{ readonly id: ProjectId; readonly title: string }>,
 ) {
   const deliveredCount = new Set(binding.sentMessageIds).size;
+  const needsProject = channelBindingNeedsProject(binding, projects);
   return {
     provider: channelProviderLabel(binding.provider),
     health: channelHealthLabel(binding.status),
-    warning: binding.lastError ? "Channel needs attention" : null,
+    needsProjectConfirmation: needsProject,
+    warning: needsProject
+      ? "Choose a project before reconnecting"
+      : binding.lastError
+        ? "Channel needs attention"
+        : null,
     project: binding.projectId
       ? (projects.find((project) => project.id === binding.projectId)?.title ??
         "Project unavailable")
@@ -49,11 +185,79 @@ export function channelBindingPresentation(
   };
 }
 
-export function channelOriginLabel(
-  origin: ChannelMessageOrigin,
-  senderDisplayName?: string | null,
-): string {
-  const sender = senderDisplayName?.trim() || origin.externalSenderId;
-  const provider = channelProviderLabel(origin.provider);
-  return sender ? `${provider} · ${sender}` : provider;
+/** Where a failed reassignment puts the channel back: its old project while live, else the attempted one. */
+export function channelRestoreProjectId(
+  previousProjectId: ProjectId | undefined,
+  attemptedProjectId: ProjectId,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): ProjectId {
+  return previousProjectId && liveProjects.some((project) => project.id === previousProjectId)
+    ? previousProjectId
+    : attemptedProjectId;
+}
+
+/** A binding needs a new project when the server blocked it or its project is no longer live. */
+export function channelBindingNeedsProject(
+  binding: Pick<ChannelBinding, "status" | "projectId">,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): boolean {
+  return (
+    binding.status === "blocked" ||
+    !binding.projectId ||
+    !liveProjects.some((project) => project.id === binding.projectId)
+  );
+}
+
+/**
+ * The project a channel picker shows. An explicit choice wins, then the binding's own live project,
+ * then the hint (usually `defaultProjectIdForBot`). Returns null when no live project applies, so
+ * callers keep attach and repair disabled until the user picks one.
+ */
+export function channelPickerProjectId(input: {
+  readonly selected: ProjectId | null | undefined;
+  readonly binding: Pick<ChannelBinding, "status" | "projectId"> | undefined;
+  readonly hint: ProjectId | null;
+  readonly liveProjects: ReadonlyArray<ProjectRef>;
+}): ProjectId | null {
+  const live = (id: ProjectId | null | undefined): id is ProjectId =>
+    !!id && input.liveProjects.some((project) => project.id === id);
+  if (live(input.selected)) return input.selected;
+  if (input.binding && !channelBindingNeedsProject(input.binding, input.liveProjects)) {
+    return input.binding.projectId ?? null;
+  }
+  return live(input.hint) ? input.hint : null;
+}
+
+/** Whether the picked project differs from where the binding runs, or repairs a blocked binding. */
+export function canChangeChannelProject(
+  binding: Pick<ChannelBinding, "status" | "projectId">,
+  pickedProjectId: ProjectId | null,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): pickedProjectId is ProjectId {
+  // Moving starts the channel, so a disconnected channel stays put until it is reconnected,
+  // unless its project is gone and choosing a new one is the only repair.
+  if (binding.status === "disconnected" && !channelBindingNeedsProject(binding, liveProjects)) {
+    return false;
+  }
+  if (!pickedProjectId || !liveProjects.some((project) => project.id === pickedProjectId)) {
+    return false;
+  }
+  return channelBindingNeedsProject(binding, liveProjects) || pickedProjectId !== binding.projectId;
+}
+
+/**
+ * The project a reconnect should start a disconnected binding in when the picker shows another
+ * live project. Null means reconnect where the binding already runs.
+ */
+export function channelReconnectProject(
+  binding: Pick<ChannelBinding, "status" | "projectId">,
+  pickedProjectId: ProjectId | null,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): ProjectId | null {
+  return binding.status === "disconnected" &&
+    pickedProjectId !== null &&
+    pickedProjectId !== binding.projectId &&
+    liveProjects.some((project) => project.id === pickedProjectId)
+    ? pickedProjectId
+    : null;
 }

@@ -2,7 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import type { BotId } from "@t3tools/contracts";
+import type { AkeruMemoryApprovalRequest, BotId } from "@t3tools/contracts";
 
 export const BOT_INBOX_KINDS = [
   "oauth-expired",
@@ -29,12 +29,26 @@ export interface BotInboxItem {
   readonly lastSeenAt: string;
   readonly resolvedAt?: string;
   readonly acknowledgedAt?: string;
+  // Provider-reported failure timestamp, when the caller knows it. Resolution
+  // snapshots it so the same persisted failure cannot reopen a closed incident.
+  readonly lastFailedRequestAt?: string;
+  readonly resolvedFailureAt?: string;
   readonly occurrenceCount: number;
+  // Set on approval requests that ask to save shared memory.
+  readonly memoryApproval?: AkeruMemoryApprovalRequest;
 }
 
 export type BotInboxIncident = Pick<
   BotInboxItem,
-  "incidentKey" | "kind" | "botId" | "botName" | "taskOrRoutine" | "lastFailure" | "nextAction"
+  | "incidentKey"
+  | "kind"
+  | "botId"
+  | "botName"
+  | "taskOrRoutine"
+  | "lastFailure"
+  | "nextAction"
+  | "lastFailedRequestAt"
+  | "memoryApproval"
 >;
 
 export class BotInboxService {
@@ -88,13 +102,14 @@ export class BotInboxService {
       return updated;
     }
 
+    const previous = this.items.findLast((item) => item.incidentKey === incident.incidentKey);
     const created: BotInboxItem = {
       id: NodeCrypto.randomUUID(),
       ...incident,
       status: "open",
       firstSeenAt: seenAt,
       lastSeenAt: seenAt,
-      occurrenceCount: 1,
+      occurrenceCount: (previous?.occurrenceCount ?? 0) + 1,
     };
     this.items.push(created);
     this.save();
@@ -107,20 +122,70 @@ export class BotInboxService {
       (item) => item.incidentKey === incident.incidentKey && item.status === "open",
     );
     if (existingIndex < 0) {
+      // A silent turn keeps one item per chat and turn, so its later silent windows
+      // reopen that item even when nobody acknowledged the earlier one.
+      const reopensUnacknowledged = incident.kind === "silence-watchdog-failure";
       existingIndex = this.items.findLastIndex(
-        (item) => item.incidentKey === incident.incidentKey && item.acknowledgedAt !== undefined,
+        (item) =>
+          item.incidentKey === incident.incidentKey &&
+          (reopensUnacknowledged || item.acknowledgedAt !== undefined),
       );
     }
     if (existingIndex < 0) return this.upsert(incident);
 
     const existing = this.items[existingIndex]!;
+    if (existing.status === "resolved") {
+      // Reopen in place only when the reported failure is genuinely newer than
+      // the one the item was closed against. Comparisons use provider failure
+      // timestamps, never the local resolution time, so clock skew cannot hide
+      // a new failure. Kinds that represent discrete lifecycle events
+      // (browser-dead) carry no timestamp and always reopen; recurring kinds
+      // (connector, approval, routine) must not resurrect on every sync.
+      const failureAt = incident.lastFailedRequestAt;
+      const storedFailureAt = existing.resolvedFailureAt ?? existing.lastFailedRequestAt ?? null;
+      const timestampedReopenAllowed =
+        incident.kind === "browser-dead" || incident.kind === "silence-watchdog-failure";
+      if (failureAt === undefined) {
+        if (!timestampedReopenAllowed) return existing;
+      } else if (storedFailureAt !== null) {
+        if (failureAt <= storedFailureAt) return existing;
+      } else {
+        // Legacy rows carry no provider timestamp at all, so the first reported
+        // failure is ambiguous: it may be the one the item was resolved on.
+        // Adopt it as the baseline and reopen only on a strictly newer one.
+        const baselined: BotInboxItem = {
+          ...existing,
+          resolvedFailureAt: failureAt,
+        };
+        this.items[existingIndex] = baselined;
+        this.save();
+        return baselined;
+      }
+      const {
+        resolvedAt: _resolvedAt,
+        acknowledgedAt: _acknowledgedAt,
+        resolvedFailureAt: _resolvedFailureAt,
+        ...active
+      } = existing;
+      const reopened: BotInboxItem = {
+        ...active,
+        ...incident,
+        status: "open",
+        lastSeenAt: this.now(),
+        occurrenceCount: existing.occurrenceCount + 1,
+      };
+      this.items[existingIndex] = reopened;
+      this.save();
+      return reopened;
+    }
     if (
       existing.kind === incident.kind &&
       existing.botId === incident.botId &&
       existing.botName === incident.botName &&
       existing.taskOrRoutine === incident.taskOrRoutine &&
       existing.lastFailure === incident.lastFailure &&
-      existing.nextAction === incident.nextAction
+      existing.nextAction === incident.nextAction &&
+      existing.lastFailedRequestAt === incident.lastFailedRequestAt
     ) {
       return existing;
     }
@@ -153,18 +218,25 @@ export class BotInboxService {
         status: "resolved",
         resolvedAt,
         lastSeenAt: resolvedAt,
+        ...(item.lastFailedRequestAt !== undefined
+          ? { resolvedFailureAt: item.lastFailedRequestAt }
+          : {}),
       };
     });
     if (changed) this.save();
     return changed;
   }
 
+  // Generic dismissal. Memory approvals close only when their candidate is
+  // decided, so this leaves them open.
   resolveById(id: string): boolean {
     this.reload();
     const resolvedAt = this.now();
     let changed = false;
     this.items = this.items.map((item) => {
-      if (item.id !== id || item.status === "resolved") return item;
+      if (item.id !== id || item.status === "resolved" || item.memoryApproval !== undefined) {
+        return item;
+      }
       changed = true;
       return {
         ...item,
@@ -172,6 +244,9 @@ export class BotInboxService {
         resolvedAt,
         lastSeenAt: resolvedAt,
         acknowledgedAt: resolvedAt,
+        ...(item.lastFailedRequestAt !== undefined
+          ? { resolvedFailureAt: item.lastFailedRequestAt }
+          : {}),
       };
     });
     if (changed) this.save();

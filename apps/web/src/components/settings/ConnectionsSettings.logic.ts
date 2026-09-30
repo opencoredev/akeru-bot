@@ -1,4 +1,5 @@
 import type { AdvertisedEndpoint, DesktopBridge, DesktopWslState } from "@t3tools/contracts";
+import { getPairingTokenFromUrl, readHostedPairingRequest } from "@t3tools/shared/remote";
 
 type WslEnableBridge = Pick<DesktopBridge, "setWslBackendEnabled" | "setWslDistro" | "setWslOnly">;
 
@@ -9,6 +10,15 @@ type WslEnableBridge = Pick<DesktopBridge, "setWslBackendEnabled" | "setWslDistr
  */
 export function isQrShareableEndpoint(endpoint: AdvertisedEndpoint): boolean {
   return endpoint.status !== "unavailable" && endpoint.reachability !== "loopback";
+}
+
+/** A remote backend is reachable when any advertised non-loopback endpoint is available. */
+export function isAdvertisedEndpointRemotelyReachable(
+  endpoints: ReadonlyArray<AdvertisedEndpoint>,
+): boolean {
+  return endpoints.some(
+    (endpoint) => endpoint.status === "available" && endpoint.reachability !== "loopback",
+  );
 }
 
 export type QrEndpointOption = {
@@ -61,4 +71,35 @@ export async function applyWslEnableSelection(input: {
     await bridge.setWslDistro(nextDistro);
   }
   return await bridge.setWslBackendEnabled(true);
+}
+
+/**
+ * Reads a pasted pairing link into the host and code the add-environment form
+ * submits. A hosted link (`/pair?host=…#token=…`) pairs with its `host`, not
+ * with the origin that served the link; a direct link pairs with its own origin.
+ * Returns null when the input is not a link that carries a token.
+ */
+export function parsePairingUrlFields(
+  input: string,
+  baseOrigin: string,
+): { readonly host: string; readonly pairingCode: string } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    const urlLikeInput =
+      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
+        ? trimmed
+        : `https://${trimmed}`;
+    const url = new URL(urlLikeInput, baseOrigin);
+    const hostedPairingRequest = readHostedPairingRequest(url);
+    if (hostedPairingRequest) {
+      return { host: hostedPairingRequest.host, pairingCode: hostedPairingRequest.token };
+    }
+    const pairingCode = getPairingTokenFromUrl(url);
+    if (!pairingCode) return null;
+    return { host: url.origin, pairingCode };
+  } catch {
+    return null;
+  }
 }

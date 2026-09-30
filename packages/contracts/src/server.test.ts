@@ -92,6 +92,32 @@ describe("ServerProvider", () => {
     expect(parsed.continuation?.groupKey).toBe("codex:home:/Users/julius/.codex");
   });
 
+  it("decodes a pre-icon skill snapshot and round-trips the icon field", () => {
+    const preIconSkill = {
+      name: "gh-fix-ci",
+      path: "/tmp/skills/gh-fix-ci/SKILL.md",
+      enabled: true,
+      scope: "user",
+      displayName: "CI Debug",
+      shortDescription: "Fix CI failures.",
+      description: "Debug a failing CI run.",
+    };
+    const parsed = decodeServerProvider({
+      ...baseProviderSnapshot,
+      skills: [preIconSkill],
+    });
+    expect(parsed.skills[0]?.name).toBe("gh-fix-ci");
+    expect(parsed.skills[0]?.icon).toBeUndefined();
+    expect(parsed.skills[0]?.displayName).toBe("CI Debug");
+    expect(parsed.skills[0]?.shortDescription).toBe("Fix CI failures.");
+
+    const withIcon = decodeServerProvider({
+      ...baseProviderSnapshot,
+      skills: [{ ...preIconSkill, icon: "🔧" }],
+    });
+    expect(withIcon.skills[0]?.icon).toBe("🔧");
+  });
+
   it("decodes optional legacy model metadata", () => {
     const parsed = decodeServerProvider({
       instanceId: "codex",

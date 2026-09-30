@@ -8,13 +8,14 @@
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { AkeruMemoryApprovalRequest } from "./akeruMemory.ts";
 import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const SubscriptionProviderId = Schema.Literals([
   "anthropic",
   "openai-codex",
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",
@@ -46,7 +47,10 @@ export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
 
 export const SubscriptionProviderStatus = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
   connected: Schema.Boolean,
+  /** Account identifier supplied by the provider, when available. Never a token. */
+  accountLabel: Schema.optional(TrimmedNonEmptyString),
   authMode: Schema.optional(SubscriptionAuthMode),
   baseUrl: Schema.optional(SubscriptionBaseUrl),
   /** ms epoch when the current access token expires. Absent when disconnected. */
@@ -65,6 +69,11 @@ export const SubscriptionProviderStatus = Schema.Struct({
       "recovered",
     ]),
   ),
+  /**
+   * True while the server runs the health check that follows a login. A separate
+   * optional field so older clients still decode the status list.
+   */
+  healthChecking: Schema.optional(Schema.Boolean),
   lastSuccessfulRequestAt: Schema.optional(IsoDateTime),
   lastFailedRequest: Schema.optional(
     Schema.Struct({
@@ -73,6 +82,17 @@ export const SubscriptionProviderStatus = Schema.Struct({
     }),
   ),
   nextRetryAt: Schema.optional(IsoDateTime),
+  /**
+   * The saved credential file changed on disk and could not be reread. The
+   * server keeps using the credentials it loaded earlier, so `connected` and
+   * health still describe them.
+   */
+  credentialWarning: Schema.optional(
+    Schema.Struct({
+      at: IsoDateTime,
+      message: TrimmedNonEmptyString,
+    }),
+  ),
   reconnectAction: Schema.optional(TrimmedNonEmptyString),
   healthTest: Schema.optional(
     Schema.Struct({
@@ -154,6 +174,8 @@ export const BotInboxItem = Schema.Struct({
   lastSeenAt: IsoDateTime,
   resolvedAt: Schema.optional(IsoDateTime),
   occurrenceCount: Schema.Int.check(Schema.isGreaterThan(0)),
+  // Present on approval requests that ask to save shared memory.
+  memoryApproval: Schema.optional(AkeruMemoryApprovalRequest),
 });
 export type BotInboxItem = typeof BotInboxItem.Type;
 
@@ -164,6 +186,9 @@ export type BotInboxResolveInput = typeof BotInboxResolveInput.Type;
 
 export const SubscriptionAuthStatuses = Schema.Struct({
   providers: Schema.Array(SubscriptionProviderStatus),
+  accounts: Schema.Array(SubscriptionProviderStatus).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   inbox: Schema.Array(BotInboxItem).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
@@ -171,11 +196,13 @@ export type SubscriptionAuthStatuses = typeof SubscriptionAuthStatuses.Type;
 
 export const SubscriptionAuthHealthTestInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
 });
 export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestInput.Type;
 
 export const SubscriptionAuthStartInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
   authMode: Schema.optional(SubscriptionAuthMode),
   /** Custom endpoints apply to API-key authentication only. */
   baseUrl: Schema.optional(SubscriptionBaseUrl),
@@ -210,7 +237,11 @@ export const SubscriptionAuthCompleteInput = Schema.Struct({
 export type SubscriptionAuthCompleteInput = typeof SubscriptionAuthCompleteInput.Type;
 
 export const SubscriptionAuthLoginProgress = Schema.Union([
-  Schema.Struct({ status: Schema.Literal("connected") }),
+  Schema.Struct({
+    status: Schema.Literal("connected"),
+    /** Added field is optional so older clients still decode connected logins. */
+    health: Schema.optional(Schema.Literal("checking")),
+  }),
   Schema.Struct({ status: Schema.Literal("pending"), nextPollMs: Schema.Number }),
   Schema.Struct({ status: Schema.Literal("failed"), error: Schema.String }),
 ]);
@@ -218,6 +249,7 @@ export type SubscriptionAuthLoginProgress = typeof SubscriptionAuthLoginProgress
 
 export const SubscriptionAuthLogoutInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
 });
 export type SubscriptionAuthLogoutInput = typeof SubscriptionAuthLogoutInput.Type;
 

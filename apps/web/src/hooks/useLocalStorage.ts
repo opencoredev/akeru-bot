@@ -15,26 +15,27 @@ export class LocalStorageOperationError extends Schema.TaggedErrorClass<LocalSto
   }
 }
 
-const isomorphicLocalStorage: Storage =
-  typeof window !== "undefined"
-    ? window.localStorage
-    : (function () {
-        const store = new Map<string, string>();
-        return {
-          clear: () => store.clear(),
-          getItem: (_) => store.get(_) ?? null,
-          key: (_) => Record.keys(store).at(_) ?? null,
-          get length() {
-            return store.size;
-          },
-          removeItem: (_) => store.delete(_),
-          setItem: (_, value) => store.set(_, value),
-        };
-      })();
+const memoryStorage: Storage = (function () {
+  const store = new Map<string, string>();
+  return {
+    clear: () => store.clear(),
+    getItem: (_) => store.get(_) ?? null,
+    key: (_) => Record.keys(store).at(_) ?? null,
+    get length() {
+      return store.size;
+    },
+    removeItem: (_) => store.delete(_),
+    setItem: (_, value) => store.set(_, value),
+  };
+})();
+
+function getStorage(): Storage {
+  return typeof window === "undefined" ? memoryStorage : window.localStorage;
+}
 
 const read = (key: string) => {
   try {
-    return isomorphicLocalStorage.getItem(key);
+    return getStorage().getItem(key);
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "read", storageKey: key, cause });
   }
@@ -61,10 +62,30 @@ export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E
   return item ? decode(key, schema, item) : null;
 };
 
+/**
+ * Reads the first key that holds a decodable value, so a corrupt current key
+ * still falls back to a legacy key. Each failed read goes to `onError`.
+ */
+export const getFirstLocalStorageItem = <T, E>(
+  keys: ReadonlyArray<string>,
+  schema: Schema.Codec<T, E>,
+  onError: (error: unknown) => void,
+): T | null => {
+  for (const key of keys) {
+    try {
+      const value = getLocalStorageItem(key, schema);
+      if (value !== null) return value;
+    } catch (error) {
+      onError(error);
+    }
+  }
+  return null;
+};
+
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(key, schema, value);
   try {
-    isomorphicLocalStorage.setItem(key, valueToSet);
+    getStorage().setItem(key, valueToSet);
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "write", storageKey: key, cause });
   }
@@ -72,13 +93,13 @@ export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.
 
 export const removeLocalStorageItem = (key: string) => {
   try {
-    isomorphicLocalStorage.removeItem(key);
+    getStorage().removeItem(key);
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "remove", storageKey: key, cause });
   }
 };
 
-const LOCAL_STORAGE_CHANGE_EVENT = "t3code:local_storage_change";
+const LOCAL_STORAGE_CHANGE_EVENT = "akeru:local_storage_change";
 
 interface LocalStorageChangeDetail {
   key: string;

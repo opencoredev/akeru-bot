@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./dictation": {
+      "types": "./src/dictation/index.ts",
+      "default": "./src/dictation/index.ts"
+    },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "default": "./src/i18n/index.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"
@@ -20,6 +28,14 @@
       "types": "./src/replyPlayback/index.ts",
       "default": "./src/replyPlayback/index.ts"
     },
+    "./voice": {
+      "types": "./src/voice.ts",
+      "default": "./src/voice.ts"
+    },
+    "./silent-run": {
+      "types": "./src/silentRun.ts",
+      "default": "./src/silentRun.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"
@@ -27,6 +43,10 @@
     "./markdown-images": {
       "types": "./src/markdownImages.ts",
       "default": "./src/markdownImages.ts"
+    },
+    "./markdown-streaming": {
+      "types": "./src/markdownStreaming.ts",
+      "default": "./src/markdownStreaming.ts"
     },
     "./errors": {
       "types": "./src/errors/index.ts",
@@ -40,10 +60,6 @@
       "types": "./src/operations/index.ts",
       "default": "./src/operations/index.ts"
     },
-    "./operations/projects": {
-      "types": "./src/operations/projects.ts",
-      "default": "./src/operations/projects.ts"
-    },
     "./platform": {
       "types": "./src/platform/index.ts",
       "default": "./src/platform/index.ts"
@@ -52,17 +68,45 @@
       "types": "./src/providerAuth.ts",
       "default": "./src/providerAuth.ts"
     },
+    "./provider-access": {
+      "types": "./src/providerAccessGuide.ts",
+      "default": "./src/providerAccessGuide.ts"
+    },
     "./providerSkills": {
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
+    },
+    "./delegation-presentation": {
+      "types": "./src/delegationPresentation.ts",
+      "default": "./src/delegationPresentation.ts"
     },
     "./channel-presentation": {
       "types": "./src/channelPresentation.ts",
       "default": "./src/channelPresentation.ts"
     },
+    "./channel-origin-presentation": {
+      "types": "./src/channelOriginPresentation.ts",
+      "default": "./src/channelOriginPresentation.ts"
+    },
+    "./image-generation": {
+      "types": "./src/imageGeneration.ts",
+      "default": "./src/imageGeneration.ts"
+    },
+    "./provider-availability": {
+      "types": "./src/providerAvailability.ts",
+      "default": "./src/providerAvailability.ts"
+    },
     "./settings-deep-link": {
       "types": "./src/settingsDeepLink.ts",
       "default": "./src/settingsDeepLink.ts"
+    },
+    "./durable-memory": {
+      "types": "./src/durableMemory.ts",
+      "default": "./src/durableMemory.ts"
+    },
+    "./routines": {
+      "types": "./src/routines.ts",
+      "default": "./src/routines.ts"
     },
     "./bot-inbox": {
       "types": "./src/botInbox.ts",
@@ -72,6 +116,10 @@
       "types": "./src/state/auth.ts",
       "default": "./src/state/auth.ts"
     },
+    "./state/bot-chat-timeline": {
+      "types": "./src/state/botChatTimeline.ts",
+      "default": "./src/state/botChatTimeline.ts"
+    },
     "./state/bots": {
       "types": "./src/state/bots.ts",
       "default": "./src/state/bots.ts"
@@ -80,6 +128,18 @@
       "types": "./src/state/assets.ts",
       "default": "./src/state/assets.ts"
     },
+    "./state/computer": {
+      "types": "./src/state/computer.ts",
+      "default": "./src/state/computer.ts"
+    },
+    "./state/computer-viewer": {
+      "types": "./src/state/computerViewer.ts",
+      "default": "./src/state/computerViewer.ts"
+    },
+    "./state/computer-viewer-controller": {
+      "types": "./src/state/computerViewerController.ts",
+      "default": "./src/state/computerViewerController.ts"
+    },
     "./state/connections": {
       "types": "./src/state/connections.ts",
       "default": "./src/state/connections.ts"
@@ -87,14 +147,6 @@
     "./state/entities": {
       "types": "./src/state/entities.ts",
       "default": "./src/state/entities.ts"
-    },
-    "./state/filesystem": {
-      "types": "./src/state/filesystem.ts",
-      "default": "./src/state/filesystem.ts"
-    },
-    "./state/git": {
-      "types": "./src/state/git.ts",
-      "default": "./src/state/git.ts"
     },
     "./state/models": {
       "types": "./src/state/models.ts",
@@ -120,17 +172,9 @@
       "types": "./src/state/projects.ts",
       "default": "./src/state/projects.ts"
     },
-    "./state/pull-requests": {
-      "types": "./src/state/pullRequests.ts",
-      "default": "./src/state/pullRequests.ts"
-    },
     "./state/project-grouping": {
       "types": "./src/state/projectGrouping.ts",
       "default": "./src/state/projectGrouping.ts"
-    },
-    "./state/review": {
-      "types": "./src/state/review.ts",
-      "default": "./src/state/review.ts"
     },
     "./state/routines": {
       "types": "./src/state/routines.ts",
@@ -164,14 +208,6 @@
       "types": "./src/state/shell.ts",
       "default": "./src/state/shell.ts"
     },
-    "./state/source-control": {
-      "types": "./src/state/sourceControl.ts",
-      "default": "./src/state/sourceControl.ts"
-    },
-    "./state/terminal": {
-      "types": "./src/state/terminal.ts",
-      "default": "./src/state/terminal.ts"
-    },
     "./state/threads": {
       "types": "./src/state/threads.ts",
       "default": "./src/state/threads.ts"
@@ -191,10 +227,6 @@
     "./state/thread-search": {
       "types": "./src/state/threadSearch.ts",
       "default": "./src/state/threadSearch.ts"
-    },
-    "./state/vcs": {
-      "types": "./src/state/vcs.ts",
-      "default": "./src/state/vcs.ts"
     }
   },
   "scripts": {

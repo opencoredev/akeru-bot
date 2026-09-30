@@ -2,9 +2,9 @@ import { MessageId, TurnId, type OrchestrationMessage } from "@t3tools/contracts
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  channelOriginLabel,
-  channelOriginForAssistantMessage,
+  buildBotConversationEntries,
   channelProviderLabel,
+  conversationSeparatorLabel,
   isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
@@ -26,33 +26,10 @@ const message = (
   }) as const;
 
 describe("bot conversation presentation", () => {
-  it("shows the iMessage sender and maps every channel provider", () => {
-    expect(
-      channelOriginLabel({
-        provider: "imessage",
-        externalThreadId: "group-1",
-        externalSenderId: "+15551234567",
-      }),
-    ).toBe("iMessage · +15551234567");
+  it("maps every channel provider", () => {
     expect(channelProviderLabel("telegram")).toBe("Telegram");
     expect(channelProviderLabel("whatsapp")).toBe("WhatsApp");
-  });
-
-  it("pairs an assistant message with the nearest inbound channel message", () => {
-    const messages = [
-      message("web-user", "user", false),
-      {
-        ...message("telegram-user", "user", false),
-        channelOrigin: { provider: "telegram" as const, externalThreadId: "chat-1" },
-      },
-      message("answer", "assistant", false),
-    ];
-
-    expect(channelOriginForAssistantMessage(messages, 2)).toEqual({
-      provider: "telegram",
-      externalThreadId: "chat-1",
-    });
-    expect(channelOriginForAssistantMessage(messages, 0)).toBeNull();
+    expect(channelProviderLabel("imessage")).toBe("iMessage");
   });
 
   it("shows working as soon as a question response starts", () => {
@@ -70,6 +47,88 @@ describe("bot conversation presentation", () => {
         presence: "needs-you",
       }),
     ).toBe(false);
+  });
+
+  it("keeps working while the turn runs, and stops while a question waits on the person", () => {
+    expect(
+      isBotConversationWorking({
+        sending: false,
+        respondingToUserInput: false,
+        presence: "idle",
+        turnRunning: true,
+      }),
+    ).toBe(true);
+    expect(
+      isBotConversationWorking({
+        sending: false,
+        respondingToUserInput: false,
+        presence: "working",
+        turnRunning: true,
+        waitingForUserInput: true,
+      }),
+    ).toBe(false);
+    expect(
+      isBotConversationWorking({
+        sending: false,
+        respondingToUserInput: true,
+        presence: "idle",
+        turnRunning: true,
+        waitingForUserInput: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("separates a new day and a new sitting, and stays quiet inside one exchange", () => {
+    const now = new Date(2026, 7, 17, 18, 30);
+    const afternoon = new Date(2026, 7, 16, 13, 54).toISOString();
+
+    expect(conversationSeparatorLabel(afternoon, null, now)).toBe("Sun, Aug 16 1:54 PM");
+    expect(
+      conversationSeparatorLabel(new Date(2026, 7, 16, 13, 56).toISOString(), afternoon, now),
+    ).toBeNull();
+    expect(
+      conversationSeparatorLabel(new Date(2026, 7, 16, 19, 30).toISOString(), afternoon, now),
+    ).toBe("Sun, Aug 16 7:30 PM");
+    expect(
+      conversationSeparatorLabel(new Date(2026, 7, 17, 9, 5).toISOString(), afternoon, now),
+    ).toBe("Today 9:05 AM");
+    expect(conversationSeparatorLabel("not-a-date", null, now)).toBeNull();
+  });
+
+  it("formats the separator in the interface language", () => {
+    const now = new Date(2026, 7, 17, 18, 30);
+    const afternoon = new Date(2026, 7, 16, 13, 54).toISOString();
+
+    const label = conversationSeparatorLabel(afternoon, null, now, "今天", "zh-CN");
+    expect(label).toContain("8月16日");
+    expect(label).toContain("周日");
+    expect(label).not.toMatch(/Sun|Aug|PM/);
+    expect(
+      conversationSeparatorLabel(
+        new Date(2026, 7, 17, 9, 5).toISOString(),
+        afternoon,
+        now,
+        "今天",
+        "zh-CN",
+      ),
+    ).toMatch(/^今天 .*9:05/);
+  });
+
+  it("starts a group per author run so one long answer is not a stack of replies", () => {
+    const at = (minutes: number) => new Date(2026, 7, 17, 10, minutes).toISOString();
+    const now = new Date(2026, 7, 17, 11, 0);
+    const entries = buildBotConversationEntries(
+      [
+        { ...message("ask", "user", false), createdAt: at(0) },
+        { ...message("answer-1", "assistant", false, "turn-1"), createdAt: at(1) },
+        { ...message("answer-2", "assistant", false, "turn-1"), createdAt: at(2) },
+        { ...message("next-ask", "user", false), createdAt: at(3) },
+      ],
+      now,
+    );
+
+    expect(entries.map((entry) => entry.startsGroup)).toEqual([true, true, false, true]);
+    expect(entries.map((entry) => entry.separator)).toEqual(["Today 10:00 AM", null, null, null]);
   });
 
   it("keeps user messages and settled answers only", () => {

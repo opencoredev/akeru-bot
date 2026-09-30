@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { useNavigation } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
@@ -20,6 +21,7 @@ import {
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 
 export function SettingsEnvironmentsRouteScreen() {
+  const { t } = useMobileI18n();
   const {
     connectedEnvironments,
     onReconnectEnvironment,
@@ -73,11 +75,11 @@ export function SettingsEnvironmentsRouteScreen() {
           {/* Android renders its own in-screen header instead of the native bar. */}
           <NativeStackScreenOptions options={{ headerShown: false }} />
           <AndroidScreenHeader
-            title="Environments"
+            title={t("Environments")}
             onBack={() => navigation.goBack()}
             actions={[
               {
-                accessibilityLabel: "Add environment",
+                accessibilityLabel: t("Add environment"),
                 icon: "plus",
                 onPress: () =>
                   navigation.navigate("SettingsSheet", {

@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 const settingsDialog = vi.hoisted(() => ({ environmentId: "environment-a" }));
 
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
+
 vi.mock("../../settingsDialogStore", () => ({
   useSettingsEnvironmentId: () => settingsDialog.environmentId,
 }));

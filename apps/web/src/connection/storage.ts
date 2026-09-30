@@ -22,8 +22,8 @@ import {
   OrchestrationThreadDetailSnapshot,
   ServerConfig,
   ThreadId,
-  VcsListRefsResult,
 } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,13 +32,20 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
-const DATABASE_NAME = "t3code:connection-runtime";
-const DATABASE_VERSION = 4;
+const DATABASE_NAME = "akeru:connection-runtime";
+// Database used before the rebrand; its stores are copied forward once and the
+// legacy database is retired only after the copy succeeds.
+const LEGACY_DATABASE_NAME = "t3code:connection-runtime";
+const DATABASE_VERSION = 5;
 const CATALOG_STORE_NAME = "catalog";
 const SHELL_STORE_NAME = "shell";
 const THREAD_STORE_NAME = "thread";
 const SERVER_CONFIG_STORE_NAME = "server-config";
-const VCS_REFS_STORE_NAME = "vcs-refs";
+// Retired with the branch picker; version 5 drops the store from older databases.
+const RETIRED_VCS_REFS_STORE_NAME = "vcs-refs";
+// Written with the copied records so a legacy database that survives a blocked
+// deletion is never copied again over later removals.
+const LEGACY_MIGRATED_KEY = "legacy-migrated";
 const CATALOG_KEY = "document";
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
 
@@ -67,13 +74,6 @@ const StoredServerConfig = Schema.Struct({
   config: ServerConfig,
 });
 const StoredServerConfigJson = Schema.fromJsonString(StoredServerConfig);
-const StoredVcsRefs = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
-  environmentId: EnvironmentId,
-  cwd: Schema.String,
-  refs: VcsListRefsResult,
-});
-const StoredVcsRefsJson = Schema.fromJsonString(StoredVcsRefs);
 const ConnectionCatalogDocumentJson = Schema.fromJsonString(ConnectionCatalogDocument);
 const decodeConnectionCatalogDocument = Schema.decodeUnknownEffect(ConnectionCatalogDocumentJson);
 const encodeConnectionCatalogDocument = Schema.encodeEffect(ConnectionCatalogDocumentJson);
@@ -83,8 +83,6 @@ const decodeStoredThreadSnapshot = Schema.decodeUnknownEffect(StoredThreadSnapsh
 const encodeStoredThreadSnapshot = Schema.encodeEffect(StoredThreadSnapshotJson);
 const decodeStoredServerConfig = Schema.decodeUnknownEffect(StoredServerConfigJson);
 const encodeStoredServerConfig = Schema.encodeEffect(StoredServerConfigJson);
-const decodeStoredVcsRefs = Schema.decodeUnknownEffect(StoredVcsRefsJson);
-const encodeStoredVcsRefs = Schema.encodeEffect(StoredVcsRefsJson);
 
 function catalogError(operation: string, cause: unknown) {
   return new ConnectionTransientError({
@@ -105,10 +103,6 @@ function persistenceError(
     | "remove-thread"
     | "load-server-config"
     | "save-server-config"
-    | "load-vcs-refs"
-    | "save-vcs-refs"
-    | "remove-vcs-refs"
-    | "clear-vcs-refs"
     | "clear-environment",
   cause: unknown,
 ) {
@@ -118,30 +112,30 @@ function persistenceError(
   });
 }
 
-const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
-  return yield* Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
+const OBJECT_STORE_NAMES = [
+  CATALOG_STORE_NAME,
+  SHELL_STORE_NAME,
+  THREAD_STORE_NAME,
+  SERVER_CONFIG_STORE_NAME,
+] as const;
+
+const openDatabaseAt = (name: string) =>
+  Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
     if (typeof indexedDB === "undefined") {
       resume(
         Effect.fail(catalogError("open", "IndexedDB is unavailable in this browser context.")),
       );
       return;
     }
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    const request = indexedDB.open(name, DATABASE_VERSION);
     request.addEventListener("upgradeneeded", () => {
-      if (!request.result.objectStoreNames.contains(CATALOG_STORE_NAME)) {
-        request.result.createObjectStore(CATALOG_STORE_NAME);
+      for (const storeName of OBJECT_STORE_NAMES) {
+        if (!request.result.objectStoreNames.contains(storeName)) {
+          request.result.createObjectStore(storeName);
+        }
       }
-      if (!request.result.objectStoreNames.contains(SHELL_STORE_NAME)) {
-        request.result.createObjectStore(SHELL_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(THREAD_STORE_NAME)) {
-        request.result.createObjectStore(THREAD_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(SERVER_CONFIG_STORE_NAME)) {
-        request.result.createObjectStore(SERVER_CONFIG_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(VCS_REFS_STORE_NAME)) {
-        request.result.createObjectStore(VCS_REFS_STORE_NAME);
+      if (request.result.objectStoreNames.contains(RETIRED_VCS_REFS_STORE_NAME)) {
+        request.result.deleteObjectStore(RETIRED_VCS_REFS_STORE_NAME);
       }
     });
     request.addEventListener("error", () => {
@@ -151,6 +145,108 @@ const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* (
       resume(Effect.succeed(request.result));
     });
   });
+
+const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
+  return yield* openDatabaseAt(DATABASE_NAME);
+});
+
+/** Fill missing target records from `source` and record the migration inside one transaction. */
+const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseContents")(function* (
+  source: IDBDatabase,
+  target: IDBDatabase,
+) {
+  const storeNames = OBJECT_STORE_NAMES.filter(
+    (storeName) =>
+      source.objectStoreNames.contains(storeName) && target.objectStoreNames.contains(storeName),
+  );
+  const entries = yield* Effect.callback<
+    ReadonlyArray<readonly [string, IDBValidKey, unknown]>,
+    ConnectionTransientError
+  >((resume) => {
+    const collected: Array<readonly [string, IDBValidKey, unknown]> = [];
+    if (storeNames.length === 0) {
+      resume(Effect.succeed(collected));
+      return;
+    }
+    const transaction = source.transaction(storeNames, "readonly");
+    transaction.addEventListener("error", () => {
+      resume(
+        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB read error")),
+      );
+    });
+    transaction.addEventListener("complete", () => {
+      resume(Effect.succeed(collected));
+    });
+    for (const storeName of storeNames) {
+      const request = transaction.objectStore(storeName).openCursor();
+      request.addEventListener("success", () => {
+        const cursor = request.result;
+        if (cursor === null) return;
+        collected.push([storeName, cursor.key, cursor.value] as const);
+        cursor.continue();
+      });
+      request.addEventListener("error", () => {
+        resume(
+          Effect.fail(catalogError("migrate", request.error ?? "Unknown IndexedDB cursor error")),
+        );
+      });
+    }
+  });
+
+  yield* Effect.callback<void, ConnectionTransientError>((resume) => {
+    const transaction = target.transaction([...storeNames, CATALOG_STORE_NAME], "readwrite");
+    transaction.addEventListener("error", () => {
+      resume(
+        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error")),
+      );
+    });
+    transaction.addEventListener("complete", () => {
+      resume(Effect.void);
+    });
+    for (const [storeName, key, value] of entries) {
+      const store = transaction.objectStore(storeName);
+      const existing = store.getKey(key);
+      existing.addEventListener("success", () => {
+        if (existing.result === undefined) store.put(value, key);
+      });
+    }
+    transaction.objectStore(CATALOG_STORE_NAME).put(true, LEGACY_MIGRATED_KEY);
+  });
+});
+
+const deleteLegacyDatabase = Effect.fn("web.connectionStorage.deleteLegacyDatabase")(function* () {
+  yield* Effect.callback<void, never>((resume) => {
+    const request = indexedDB.deleteDatabase(LEGACY_DATABASE_NAME);
+    request.addEventListener("success", () => resume(Effect.void));
+    request.addEventListener("error", () => resume(Effect.void));
+    request.addEventListener("blocked", () => resume(Effect.void));
+  });
+});
+
+/** Fill missing Akeru records from the old database, then retire it only
+ * after the copy commits. A failed migration leaves the source for retry. */
+export const migrateLegacyConnectionDatabase = Effect.fn(
+  "web.connectionStorage.migrateLegacyConnectionDatabase",
+)(function* (database: IDBDatabase) {
+  if (typeof indexedDB === "undefined") return;
+  if ((yield* readDatabaseValue(database, CATALOG_STORE_NAME, LEGACY_MIGRATED_KEY)) === true)
+    return;
+  const legacyResult = yield* Effect.result(openDatabaseAt(LEGACY_DATABASE_NAME));
+  if (legacyResult._tag === "Failure") {
+    yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
+      Effect.annotateLogs({ error: legacyResult.failure }),
+    );
+    return;
+  }
+  yield* Effect.scoped(
+    Effect.gen(function* () {
+      const legacy = yield* Effect.acquireRelease(Effect.succeed(legacyResult.success), (db) =>
+        Effect.sync(() => db.close()),
+      );
+      yield* copyDatabaseContents(legacy, database);
+    }),
+  );
+  yield* deleteLegacyDatabase();
 });
 
 function readDatabaseValue(database: IDBDatabase, storeName: string, key: IDBValidKey) {
@@ -230,10 +326,6 @@ function removeDatabaseValuesInRange(database: IDBDatabase, storeName: string, r
 
 function threadCacheKey(environmentId: EnvironmentId, threadId: ThreadId) {
   return `${environmentId}:${threadId}`;
-}
-
-function vcsRefsCacheKey(environmentId: EnvironmentId, cwd: string) {
-  return `${environmentId}:${cwd}`;
 }
 
 const decodeCatalog = Effect.fn("web.connectionStorage.decodeCatalog")(function* (raw: string) {
@@ -366,6 +458,13 @@ export const connectionStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
     const database = yield* Effect.acquireRelease(openDatabase(), (database) =>
       Effect.sync(() => database.close()),
+    );
+    yield* migrateLegacyConnectionDatabase(database).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Connection database migration failed; using the new database.", {
+          cause: Cause.pretty(cause),
+        }),
+      ),
     );
     const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
 
@@ -553,60 +652,6 @@ export const connectionStorageLayer = Layer.effectContext(
               : persistenceError("save-thread", cause),
           ),
         ),
-      loadVcsRefs: (environmentId, cwd) =>
-        readDatabaseValue(database, VCS_REFS_STORE_NAME, vcsRefsCacheKey(environmentId, cwd)).pipe(
-          Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
-              return Effect.succeed(Option.none());
-            }
-            return decodeStoredVcsRefs(raw).pipe(
-              Effect.mapError((cause) => persistenceError("load-vcs-refs", cause)),
-              Effect.map((stored) =>
-                stored.environmentId === environmentId && stored.cwd === cwd
-                  ? Option.some(stored.refs)
-                  : Option.none(),
-              ),
-            );
-          }),
-          Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
-              ? cause
-              : persistenceError("load-vcs-refs", cause),
-          ),
-        ),
-      saveVcsRefs: (environmentId, cwd, refs) =>
-        Effect.gen(function* () {
-          const encoded = yield* encodeStoredVcsRefs({
-            schemaVersion: 1,
-            environmentId,
-            cwd,
-            refs,
-          }).pipe(Effect.mapError((cause) => persistenceError("save-vcs-refs", cause)));
-          yield* writeDatabaseValue(
-            database,
-            VCS_REFS_STORE_NAME,
-            vcsRefsCacheKey(environmentId, cwd),
-            encoded,
-          );
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
-              ? cause
-              : persistenceError("save-vcs-refs", cause),
-          ),
-        ),
-      removeVcsRefs: (environmentId, cwd) =>
-        removeDatabaseValue(
-          database,
-          VCS_REFS_STORE_NAME,
-          vcsRefsCacheKey(environmentId, cwd),
-        ).pipe(Effect.mapError((cause) => persistenceError("remove-vcs-refs", cause))),
-      clearVcsRefs: (environmentId) =>
-        removeDatabaseValuesInRange(
-          database,
-          VCS_REFS_STORE_NAME,
-          IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
-        ).pipe(Effect.mapError((cause) => persistenceError("clear-vcs-refs", cause))),
       removeThread: (environmentId, threadId) =>
         removeDatabaseValue(
           database,
@@ -623,11 +668,6 @@ export const connectionStorageLayer = Layer.effectContext(
               IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
             ),
             removeDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId),
-            removeDatabaseValuesInRange(
-              database,
-              VCS_REFS_STORE_NAME,
-              IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
-            ),
           ],
           { concurrency: "unbounded", discard: true },
         ).pipe(Effect.mapError((cause) => persistenceError("clear-environment", cause))),

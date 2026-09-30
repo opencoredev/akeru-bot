@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
@@ -150,6 +151,8 @@ export const RoutineDefinition = Schema.Struct({
   projectId: ProjectId,
   sandbox: RoutineSandbox,
   approvalPolicy: RoutineApprovalPolicy,
+  /** When set, each run delegates the job to this bot from the target thread's owner. */
+  delegateToBotId: Schema.NullOr(BotId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
 });
 export type RoutineDefinition = typeof RoutineDefinition.Type;
 
@@ -179,6 +182,15 @@ export const Routine = Schema.Struct({
   deletedAt: Schema.NullOr(IsoDateTime),
 });
 export type Routine = typeof Routine.Type;
+
+/** The small piece of a deleted routine needed to keep its chat receipts readable. */
+export const RoutineReceiptSource = Schema.Struct({
+  id: RoutineId,
+  targetThreadId: ThreadId,
+  job: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+export type RoutineReceiptSource = typeof RoutineReceiptSource.Type;
 
 const RoutineRunFields = {
   id: RoutineRunId,
@@ -214,6 +226,22 @@ export type RoutineListRunsInput = typeof RoutineListRunsInput.Type;
 
 export const RoutineListRunsResult = Schema.Struct({ runs: Schema.Array(RoutineRun) });
 export type RoutineListRunsResult = typeof RoutineListRunsResult.Type;
+
+export const RoutineListThreadRunsInput = Schema.Struct({
+  threadId: ThreadId,
+  beforeRunId: Schema.optional(RoutineRunId),
+});
+
+export const RoutineListThreadRunsResult = Schema.Struct({
+  runs: Schema.Array(RoutineRun),
+  nextCursor: Schema.NullOr(RoutineRunId),
+});
+export type RoutineListThreadRunsResult = typeof RoutineListThreadRunsResult.Type;
+
+export class RoutineThreadReadError extends Schema.TaggedErrorClass<RoutineThreadReadError>()(
+  "RoutineThreadReadError",
+  { threadId: ThreadId, message: TrimmedNonEmptyString },
+) {}
 
 export class RoutineReadError extends Schema.TaggedErrorClass<RoutineReadError>()(
   "RoutineReadError",

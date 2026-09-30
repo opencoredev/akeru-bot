@@ -79,6 +79,13 @@ import Migration0063 from "./Migrations/063_RoutineTargetThreadRepair.ts";
 import Migration0064 from "./Migrations/064_ExternalChannelProviders.ts";
 import Migration0065 from "./Migrations/065_ProjectionThreadUserInputLifecycleIndex.ts";
 import Migration0066 from "./Migrations/066_BotPersonalityTone.ts";
+import Migration0067 from "./Migrations/067_BotImageProvider.ts";
+import Migration0068 from "./Migrations/068_AkeruBotUsageCacheTokens.ts";
+import Migration0069 from "./Migrations/069_ProjectionThreadParentLinks.ts";
+import Migration0070 from "./Migrations/070_McpServerInstructions.ts";
+import Migration0071 from "./Migrations/071_RoutineDelegateToBot.ts";
+import Migration0072 from "./Migrations/072_ProjectionThreadMessageChannelDelivery.ts";
+import Migration0073 from "./Migrations/073_RoutineCanceledClaims.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -157,6 +164,13 @@ export const migrationEntries = [
   [64, "ExternalChannelProviders", Migration0064],
   [65, "ProjectionThreadUserInputLifecycleIndex", Migration0065],
   [66, "BotPersonalityTone", Migration0066],
+  [67, "BotImageProvider", Migration0067],
+  [68, "AkeruBotUsageCacheTokens", Migration0068],
+  [69, "ProjectionThreadParentLinks", Migration0069],
+  [70, "McpServerInstructions", Migration0070],
+  [71, "RoutineDelegateToBot", Migration0071],
+  [72, "ProjectionThreadMessageChannelDelivery", Migration0072],
+  [73, "RoutineCanceledClaims", Migration0073],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

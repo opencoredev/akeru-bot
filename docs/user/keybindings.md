@@ -1,7 +1,13 @@
 # Keyboard shortcuts
 
-Edit shortcuts from **Settings > Keybindings**. The page lists every command, its current
-shortcut, whether it is a default or your own, and warns about conflicts.
+Edit shortcuts from **Settings > Keyboard**. Commands are grouped by purpose: General, Chats,
+Composer & models, and Layout. Numbered shortcuts such as
+**Jump to chat 1–9** share one row; expand it to change a single step. Click a shortcut to record a
+new one, or press Escape to cancel. Filter to **Customized** to see only the shortcuts you changed.
+
+The page warns when two commands share the same keys and only one of them can run. A later shortcut
+for a narrower context, such as while the model picker is open, overrides the broader one there and
+is not a conflict.
 
 The same configuration lives in `~/.akeru/userdata/keybindings.json` on the machine running the
 server. Akeru merges your rules with the built-in defaults. It keeps a default when no custom rule
@@ -11,8 +17,8 @@ The file is a JSON array of rules.
 
 ```json
 [
-  { "key": "mod+g", "command": "terminal.toggle" },
-  { "key": "mod+shift+g", "command": "terminal.new", "when": "terminalFocus" }
+  { "key": "mod+shift+p", "command": "commandPalette.toggle" },
+  { "key": "mod+shift+1", "command": "modelPicker.jump.1", "when": "modelPickerOpen" }
 ]
 ```
 
@@ -33,12 +39,11 @@ Examples: `mod+j`, `mod+shift+d`, `ctrl+l`, `cmd+k`.
 
 ## Commands
 
-Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refresh`, and
-`chat.new`. Project scripts are addressable as `script.{id}.run`, for example `script.test.run`.
+Commands are IDs like `commandPalette.toggle`, `composer.stash`, `sidebar.toggle`, and
+`rightPanel.toggle`, which opens or closes the bot and group details panel. Rules for commands from
+older versions, such as `terminal.toggle`, `diff.toggle`, `filePicker.toggle`, or `preview.refresh`,
+still load but no longer do anything. **Settings > Keyboard** hides them.
 
-`filePicker.toggle` opens file search for the active project and defaults to `mod+p`.
-`projectSearch.toggle` searches inside the active project's files and defaults to `mod+shift+f`.
-Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
 `themeEditor.toggle` opens or closes the floating theme editor and defaults to
 `mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
 again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.
@@ -48,34 +53,28 @@ Use **Inspect** to pick an element in the app and reveal its color token. Inspec
 successful pick; its hover glow and badge preview the element and color family that click will select.
 **Cancel** or `Escape` exits Inspect and clears its selection and spotlight.
 
-`rightPanel.toggleMaximized` maximizes or restores the open right panel. It has no default shortcut,
-so add one in **Settings > Keybindings** if you want to use it.
-
-`thread.settle` settles the active chat or restores it when it is already settled. Its default
-shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
-
 `thread.jump.1` through `thread.jump.9` switch to the matching bot and default to `mod+1` through
 `mod+9`. Pinned bots come first. Other bots follow their section and roster order. Groups do not
 take a shortcut number.
 
-The command palette searches active chat titles, projects, branches, user messages, and final bot
-responses across connected environments. Message matches show one labeled excerpt while keeping
-the conversation's project, branch, and machine context visible. Message search begins after two
-characters and uses SQLite's ASCII case-insensitive matching.
+These chat commands have no default shortcut. Add one from **Settings > Keyboard** to use them:
 
-The full command list and the current defaults are shown in **Settings > Keybindings**, which
+- `chat.new` (**New chat**) starts a fresh chat with the open bot, once its current chat has a
+  message.
+- `thread.settle` (**Settle chat**) settles the open chat.
+- `thread.previous` and `thread.next` (**Previous bot** and **Next bot**) move through bots in the
+  same order as the numbered shortcuts, wrapping at either end.
+
+`chat.newLocal` is retired. Rules for it still load but do nothing, and **Settings > Keyboard** hides
+it.
+
+The command palette runs app actions: switch between light and dark mode, toggle the theme editor,
+and open plugins, usage, feedback, archived chats, or settings. While a chat is open, it also lists
+that chat's actions under **This chat**. Type to filter the list. Typing also searches your chats
+by title and message under **Chats**; see [Organize chats](./chats.md#find-a-chat).
+
+The full command list and the current defaults are shown in **Settings > Keyboard**, which
 always matches the build you are running. Use that rather than a copied list.
-
-Note that `chat.new` and `chat.newLocal` both create a chat through the same path. A new chat inherits
-the project you were in, along with model and mode selections. Branch, worktree, and environment mode
-always come from your configured defaults, not from the chat you were looking at. To keep a worktree,
-use the explicit "new chat in this worktree" action in the branch toolbar. The only difference between
-the two commands is that `chat.new` opens a project chooser first when the current sidebar has more
-than one project.
-
-Background submission from a new chat is the exception. `mod+enter` starts that chat and opens
-another new chat with the same workspace mode and base branch. **New worktree** remains selected, but
-the new chat does not reuse the worktree created for the chat that just started.
 
 ## Desktop quit shortcut
 
@@ -92,18 +91,16 @@ Change **Quit shortcut** in **Settings** → **General**. **Direct** quits on th
 
 ## `when` conditions
 
-A `when` expression is evaluated against context keys describing the current UI state. The keys
-the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, and
-`modelPickerOpen`. The set is open and grows over time, so treat that as the current list rather
+A `when` expression is evaluated against context keys describing the current UI state. The key
+the app supplies today is `modelPickerOpen`. The set is open and grows over time, so treat that as the current list rather
 than a fixed one. Any key the running app does not supply evaluates to `false`.
 
 Operators: `!` (not), `&&` (and), `||` (or), and parentheses.
 
 Examples:
 
-- `"when": "terminalFocus"`
-- `"when": "terminalOpen && !terminalFocus"`
-- `"when": "!terminalFocus"`
+- `"when": "modelPickerOpen"`
+- `"when": "!modelPickerOpen"`
 
 ## Precedence
 

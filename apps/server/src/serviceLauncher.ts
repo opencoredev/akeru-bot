@@ -1,8 +1,10 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics globalDate:off
 // @effect-diagnostics globalTimers:off
-// This file is shipped as a standalone bundle and copied to a stable path by
-// `akeru service update`. Keep runtime imports limited to Node built-ins.
+// This file is intentionally excluded from the Effect migration. It is shipped as a
+// standalone bundle and copied to a stable path by `akeru service update`;
+// `apps/server/package.json` packs it separately with `build:bundle`. Keep runtime
+// imports limited to Node built-ins so the standalone updater remains self-contained.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -28,6 +30,7 @@ import {
   SERVICE_STOP_MARKER_FILE,
 } from "./cloud/serviceProtocol.ts";
 import { isEntrypoint } from "./entrypoint.ts";
+import { readAliasedEnv } from "./cli/envAliases.ts";
 
 const HANDOFF_DELAY_MS = 2_000;
 const PREPARED_TIMEOUT_MS = 120_000;
@@ -50,6 +53,16 @@ const runtimePaths = (baseDir: string, version: string) => {
     sentinelPath: NodePath.join(versionDir, ".install-complete"),
   };
 };
+
+/**
+ * The Node binary that runs one runtime version. Windows archives bundle their own Node, so an
+ * update runs on the Node it was built for; other installs keep the launcher's Node.
+ */
+export async function runtimeNodePath(versionDir: string): Promise<string> {
+  const bundled = NodePath.join(versionDir, "node", "node.exe");
+  const stat = await NodeFSP.stat(bundled).catch(() => undefined);
+  return stat?.isFile() ? bundled : process.execPath;
+}
 
 /** SQLite persists across the main file plus its WAL and shared-memory sidecars. */
 const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
@@ -80,12 +93,30 @@ async function syncFile(filePath: string): Promise<void> {
   }
 }
 
-async function syncDirectory(directory: string): Promise<void> {
-  const handle = await NodeFSP.open(directory, "r");
+const UNSUPPORTED_DIRECTORY_SYNC = new Set(["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]);
+
+/**
+ * Flushes a directory entry where the platform allows it. Windows cannot sync a directory.
+ * `open` is replaceable so tests can simulate filesystems that reject a directory sync.
+ */
+export async function syncDirectory(
+  directory: string,
+  open: (
+    path: string,
+    flags: string,
+  ) => Promise<Pick<NodeFSP.FileHandle, "sync" | "close">> = NodeFSP.open,
+): Promise<void> {
   try {
-    await handle.sync();
-  } finally {
-    await handle.close();
+    const handle = await open(directory, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== undefined && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
+    throw error;
   }
 }
 
@@ -189,12 +220,7 @@ export async function writeServiceState(filePath: string, state: ServiceState): 
     await handle.close();
     handle = undefined;
     await NodeFSP.rename(tempPath, filePath);
-    const directoryHandle = await NodeFSP.open(directory, "r");
-    try {
-      await directoryHandle.sync();
-    } finally {
-      await directoryHandle.close();
-    }
+    await syncDirectory(directory);
   } finally {
     await handle?.close().catch(() => undefined);
     await NodeFSP.rm(tempPath, { force: true }).catch(() => undefined);
@@ -402,7 +428,9 @@ export class Launcher {
       childVersion: version,
       ...(update === undefined ? {} : { update }),
     };
-    const child = NodeChildProcess.spawn(process.execPath, [paths.entryPath, "serve"], {
+    const nodePath = await runtimeNodePath(paths.versionDir);
+    if (this.#stopping) return;
+    const child = NodeChildProcess.spawn(nodePath, [paths.entryPath, "serve"], {
       env: { ...process.env, [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     });
@@ -603,9 +631,10 @@ export class Launcher {
 }
 
 async function main(): Promise<void> {
-  const baseDir = process.env.T3CODE_HOME?.trim();
-  if (baseDir === undefined || baseDir === "") {
-    throw new Error("T3CODE_HOME is required by the Akeru Bot service launcher.");
+  // Units written by older installs set T3CODE_HOME; newer ones set AKERU_HOME.
+  const baseDir = readAliasedEnv(process.env, "HOME");
+  if (baseDir === undefined) {
+    throw new Error("AKERU_HOME is required by the Akeru Bot service launcher.");
   }
   const statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
   const state = await readServiceState(statePath);

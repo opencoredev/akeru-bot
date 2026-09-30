@@ -10,6 +10,7 @@
  * HTTPS and pairs through the tailnet URL instead.
  */
 import {
+  AuthAdministrativeScopes,
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
   PortSchema,
@@ -22,6 +23,7 @@ import {
   readTailscaleStatus,
 } from "@t3tools/tailscale";
 import * as Config from "effect/Config";
+import * as Context from "effect/Context";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -38,7 +40,9 @@ import {
   HttpClientResponse,
 } from "effect/unstable/http";
 
+import { hasPairedAdminClient } from "../auth/adminClients.ts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import { reportExpectedCliError } from "./errors.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import {
@@ -54,6 +58,7 @@ import {
   resolveHeadlessConnectionString,
 } from "../startupAccess.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
+import { aliasedEnv } from "./envAliases.ts";
 
 const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
@@ -130,6 +135,90 @@ export class ServePortOccupiedError extends Schema.TaggedErrorClass<ServePortOcc
   }
 }
 
+export class AdminAlreadyPairedError extends Schema.TaggedErrorClass<AdminAlreadyPairedError>()(
+  "AdminAlreadyPairedError",
+  {},
+) {
+  override get message(): string {
+    return "An admin client is already paired, so `akeru pair --admin` is closed. Pair new devices from Settings > Connections on that client, or run `akeru pair` for a standard link.";
+  }
+}
+
+export class InvalidPublicUrlError extends Schema.TaggedErrorClass<InvalidPublicUrlError>()(
+  "InvalidPublicUrlError",
+  { publicUrl: Schema.String, reason: Schema.String },
+) {
+  override get message(): string {
+    return `--public-url ${this.publicUrl} ${this.reason}. Pass the origin your tunnel serves, for example https://akeru.example.com.`;
+  }
+}
+
+export class PublicUrlWithTailscaleError extends Schema.TaggedErrorClass<PublicUrlWithTailscaleError>()(
+  "PublicUrlWithTailscaleError",
+  {},
+) {
+  override get message(): string {
+    return "Pass either --public-url or --tailscale, not both.";
+  }
+}
+
+/**
+ * The origin a user-managed tunnel or reverse proxy serves this server on. The web app lives at the
+ * root of that origin, so anything beyond an http(s) origin is rejected rather than silently
+ * dropped.
+ */
+export const parsePublicPairingBaseUrl = (raw: string): string | InvalidPublicUrlError => {
+  const invalid = (reason: string) => new InvalidPublicUrlError({ publicUrl: raw, reason });
+  if (!URL.canParse(raw)) {
+    return invalid("is not a URL");
+  }
+  const url = new URL(raw);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return invalid("must use http or https");
+  }
+  if (url.username.length > 0 || url.password.length > 0) {
+    return invalid("must not contain credentials");
+  }
+  if (url.pathname !== "/" || url.search.length > 0 || url.hash.length > 0) {
+    return invalid("must be an origin without a path, query, or fragment");
+  }
+  return url.origin;
+};
+
+/**
+ * Errors whose message already tells the user what to do, printed without a
+ * stack trace. Anything else in the channel — auth-store failures, config
+ * errors, defects — falls through to `runMain` with its cause intact.
+ */
+const PAIR_USER_FACING_ERROR_TAGS = [
+  "NoRunningServerError",
+  "InvalidPublicUrlError",
+  "PublicUrlWithTailscaleError",
+  "AdminAlreadyPairedError",
+  "MagicDnsNameMissingError",
+  "ServesOtherEnvironmentError",
+  "ServePortOccupiedError",
+  "TailscaleServeFailedError",
+  "DevServerNotProxiableError",
+  "TailscaleUnavailableError",
+] as const;
+
+const resolvePublicPairingBaseUrl = Effect.fn("pair.resolvePublicPairingBaseUrl")(
+  function* (input: { readonly publicUrl: Option.Option<string>; readonly tailscale: boolean }) {
+    if (Option.isNone(input.publicUrl)) {
+      return undefined;
+    }
+    if (input.tailscale) {
+      return yield* new PublicUrlWithTailscaleError();
+    }
+    const parsed = parsePublicPairingBaseUrl(input.publicUrl.value);
+    if (typeof parsed === "string") {
+      return parsed;
+    }
+    return yield* parsed;
+  },
+);
+
 /** The URL a browser or phone should pair through, absent Tailscale. */
 export const resolveDirectPairingBaseUrl = (state: PersistedServerRuntimeState): string =>
   state.devUrl ?? resolveHeadlessConnectionString(state.host, state.port);
@@ -172,6 +261,15 @@ export const resolveTailscaleLocalTarget = (
   return { localPort: state.port };
 };
 
+/**
+ * Whether stdout is a terminal. A QR code piped into a file or another program is only noise, so
+ * `akeru pair` prints it only when this is true. Tests override it.
+ */
+export const PairStdoutIsTerminal = Context.Reference<boolean>(
+  "akeru-bot/cli/pair/StdoutIsTerminal",
+  { defaultValue: () => process.stdout.isTTY === true },
+);
+
 export const formatPairOutput = (input: {
   readonly serverLabel: string;
   readonly origin: string;
@@ -179,12 +277,12 @@ export const formatPairOutput = (input: {
   readonly token: string;
   readonly expiresAt: DateTime.Utc;
   readonly notes: ReadonlyArray<string>;
+  readonly qrCode: boolean;
 }): string =>
   [
     `Pairing with ${input.serverLabel} (${input.origin}).`,
     "",
-    renderTerminalQrCode(input.pairingUrl),
-    "",
+    ...(input.qrCode ? [renderTerminalQrCode(input.pairingUrl), ""] : []),
     `Pairing URL: ${input.pairingUrl}`,
     `Token: ${input.token}`,
     `Expires: ${DateTime.formatIso(input.expiresAt)}`,
@@ -261,7 +359,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
     if (worktreeHome !== undefined) {
       bases.push(worktreeHome);
     }
-    const envHome = yield* Config.string("T3CODE_HOME").pipe(Config.option);
+    const envHome = yield* aliasedEnv(Config.string, "HOME");
     bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
   }
 
@@ -331,7 +429,7 @@ const makePairServerConfig = Effect.fn(function* (input: {
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
     otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpServiceName: "akeru-server",
     mode: "web",
     port: state.port,
     host: state.host,
@@ -351,6 +449,7 @@ const makePairServerConfig = Effect.fn(function* (input: {
     logWebSocketEvents: false,
     tailscaleServeEnabled: false,
     tailscaleServePort: DEFAULT_TAILSCALE_SERVE_PORT,
+    publicOrigin: undefined,
   });
 });
 
@@ -432,12 +531,37 @@ const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase"
   },
 );
 
+/**
+ * Admin bootstrap for a headless install whose first-boot link was missed or expired. It writes
+ * straight into the environment database, so only someone on the machine can run it, and it closes
+ * for good once a person has paired an admin client. Bot and script sessions do not close it.
+ */
+export const issueAdminPairingLink = Effect.fn("pair.issueAdminPairingLink")(function* (input: {
+  readonly ttl: Option.Option<Duration.Duration>;
+  readonly label: Option.Option<string>;
+}) {
+  const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+  if (hasPairedAdminClient(yield* environmentAuth.listSessions())) {
+    return yield* new AdminAlreadyPairedError();
+  }
+  return yield* environmentAuth.createPairingLink({
+    scopes: AuthAdministrativeScopes,
+    subject: "one-time-token",
+    label: Option.getOrElse(input.label, () => "akeru pair --admin"),
+    ...(Option.isSome(input.ttl) ? { ttl: input.ttl.value } : {}),
+  });
+});
+
 const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
   readonly config: ServerConfig.ServerConfig["Service"];
   readonly ttl: Option.Option<Duration.Duration>;
   readonly label: Option.Option<string>;
+  readonly admin: boolean;
 }) {
   return yield* Effect.gen(function* () {
+    if (input.admin) {
+      return yield* issueAdminPairingLink({ ttl: input.ttl, label: input.label });
+    }
     const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
     return yield* environmentAuth.createPairingLink({
       scopes: AuthStandardClientScopes,
@@ -481,12 +605,36 @@ const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
   Flag.withDefault(DEFAULT_TAILSCALE_SERVE_PORT),
 );
 
+const publicUrlFlag = Flag.string("public-url").pipe(
+  Flag.withDescription(
+    "Build the pairing URL on this http(s) origin, for example the address of a tunnel or reverse proxy in front of the server.",
+  ),
+  Flag.optional,
+);
+
+const adminFlag = Flag.boolean("admin").pipe(
+  Flag.withDescription(
+    "Mint an admin link that can pair and revoke other clients and change Connections. Works only on this machine and only until an admin client is paired.",
+  ),
+  Flag.withDefault(false),
+);
+
+const qrFlag = Flag.boolean("qr").pipe(
+  Flag.withDescription(
+    "Print a QR code of the pairing URL. On by default when stdout is a terminal; turn it off with --no-qr.",
+  ),
+  Flag.withDefault(true),
+);
+
 export const pairCommand = Command.make("pair", {
   baseDir: baseDirFlag,
   ttl: ttlFlag,
   label: labelFlag,
   tailscale: tailscaleFlag,
   tailscaleServePort: tailscaleServePortFlag,
+  publicUrl: publicUrlFlag,
+  admin: adminFlag,
+  qr: qrFlag,
 }).pipe(
   Command.withDescription(
     "Mint a pairing token for a running Akeru Bot server and print it as a QR code.",
@@ -498,11 +646,20 @@ export const pairCommand = Command.make("pair", {
       // an explicit --log-level still wins.
       const logLevel = Option.getOrElse(cliLogLevel, () => "Warn" as const);
 
+      const publicUrl = yield* resolvePublicPairingBaseUrl({
+        publicUrl: flags.publicUrl,
+        tailscale: flags.tailscale,
+      });
+
       const target = yield* discoverPairTarget(Option.getOrUndefined(flags.baseDir));
 
       const notes: Array<string> = [];
       let pairingBaseUrl: string;
-      if (flags.tailscale) {
+      if (publicUrl !== undefined) {
+        // The tunnel is the user's; the server cannot probe it from here without assuming it
+        // loops back, so the URL is used as given.
+        pairingBaseUrl = publicUrl;
+      } else if (flags.tailscale) {
         const resolved = yield* resolveTailscalePairingBase({
           target,
           servePort: flags.tailscaleServePort,
@@ -524,7 +681,17 @@ export const pairCommand = Command.make("pair", {
       }
 
       const config = yield* makePairServerConfig({ target, logLevel });
-      const issued = yield* mintPairingLink({ config, ttl: flags.ttl, label: flags.label });
+      const issued = yield* mintPairingLink({
+        config,
+        ttl: flags.ttl,
+        label: flags.label,
+        admin: flags.admin,
+      });
+      if (flags.admin) {
+        notes.unshift(
+          "This link grants admin scope: that device can pair and revoke other clients and change Connections. It works once.",
+        );
+      }
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential);
 
       yield* Console.log(
@@ -535,8 +702,12 @@ export const pairCommand = Command.make("pair", {
           token: issued.credential,
           expiresAt: issued.expiresAt,
           notes,
+          qrCode: flags.qr && (yield* PairStdoutIsTerminal),
         }),
       );
-    }).pipe(Effect.provide(FetchHttpClient.layer)),
+    }).pipe(
+      reportExpectedCliError(PAIR_USER_FACING_ERROR_TAGS),
+      Effect.provide(FetchHttpClient.layer),
+    ),
   ),
 );

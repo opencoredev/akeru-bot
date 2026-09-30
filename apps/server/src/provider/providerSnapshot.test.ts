@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import type { ModelCapabilities } from "@t3tools/contracts";
+import { type ModelCapabilities, ProviderDriverKind } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
@@ -10,10 +10,119 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
+  buildServerProvider,
   isCommandMissingCause,
   providerModelsFromSettings,
+  providerUnavailabilityFromDetail,
   spawnAndCollect,
 } from "./providerSnapshot.ts";
+
+describe("buildServerProvider", () => {
+  it("does not turn a ready provider's upgrade notice into a login block", () => {
+    const input = {
+      driver: ProviderDriverKind.make("claudeAgent"),
+      presentation: { displayName: "Claude" },
+      enabled: true,
+      checkedAt: "2026-09-28T00:00:00.000Z",
+      models: [],
+      probe: {
+        installed: true,
+        version: null,
+        status: "ready" as const,
+        auth: { status: "authenticated" as const },
+        message: "Please run login after upgrading Claude",
+      },
+    };
+
+    expect(buildServerProvider(input).unavailability).toBeUndefined();
+    expect(
+      buildServerProvider({ ...input, probe: { ...input.probe, status: "error" } }).unavailability,
+    ).toBe("missing-login");
+  });
+});
+
+describe("providerUnavailabilityFromDetail", () => {
+  it.each([
+    ["codex", "Not authenticated", "missing-login"],
+    ["codex", "refresh token expired; rate limit", "expired-login"],
+    ["claudeAgent", "Please run login: OAuth token expired", "expired-login"],
+    ["claudeAgent", "model claude-9 not found", "unsupported-model"],
+    ["grok", "model not found", "unsupported-model"],
+    ["kimi", "rate limit exceeded", "limit-reached"],
+    ["opencodeGo", "spending limit reached", "usage-cap"],
+    ["opencodeGo", "rate limit and usage cap", "usage-cap"],
+    ["opencode", "OpenCode authentication expired; please re-authenticate", "expired-login"],
+    ["opencode", "OpenCode model openai/gpt-5 not found", "unsupported-model"],
+    ["opencode", "OpenCode API rate limit exceeded", "limit-reached"],
+    ["opencode", "OpenCode usage cap exceeded", "usage-cap"],
+    ["codex", "socket closed", "temporary-failure"],
+  ])("maps %s provider detail", (driver, detail, category) => {
+    expect(providerUnavailabilityFromDetail(driver, detail)).toBe(category);
+  });
+});
+
+describe("buildServerProvider unavailability", () => {
+  const build = (probe: Parameters<typeof buildServerProvider>[0]["probe"]) =>
+    buildServerProvider({
+      driver: ProviderDriverKind.make("claudeAgent"),
+      presentation: { displayName: "Claude" },
+      enabled: true,
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [],
+      probe,
+    });
+  const authenticated = { status: "authenticated" as const };
+
+  it("ignores informational messages on usable providers", () => {
+    expect(
+      build({
+        installed: true,
+        version: "1.0.0",
+        status: "ready",
+        auth: authenticated,
+        message: "A newer Claude CLI is available.",
+      }).unavailability,
+    ).toBeUndefined();
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "warning",
+        auth: authenticated,
+        message: "Provider status has not been checked in this session yet.",
+      }).unavailability,
+    ).toBeUndefined();
+  });
+
+  it("keeps specific causes on warnings and any cause on errors", () => {
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "warning",
+        auth: authenticated,
+        message: "rate limit exceeded",
+      }).unavailability,
+    ).toBe("limit-reached");
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "error",
+        auth: authenticated,
+        message: "socket closed",
+      }).unavailability,
+    ).toBe("temporary-failure");
+    expect(
+      build({
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "unauthenticated" },
+      }).unavailability,
+    ).toBe("missing-login");
+  });
+});
 
 const OPENCODE_CUSTOM_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [

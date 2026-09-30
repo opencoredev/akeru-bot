@@ -5,6 +5,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { deriveProviderInstanceEntries } from "./providerInstances";
 import {
   getAppModelOptionsForInstance,
+  getCustomModelOptionsByInstance,
   resolveAppModelSelectionForInstance,
   resolveAppModelSelectionState,
   resolvePlanAgentHealPatch,
@@ -57,7 +58,27 @@ function settingsWithProviderInstances(): UnifiedSettings {
   };
 }
 
+function settingsWithGrokCustomModel(): UnifiedSettings {
+  return {
+    ...settingsWithProviderInstances(),
+    providerInstances: {
+      ...settingsWithProviderInstances().providerInstances,
+      [ProviderInstanceId.make("grok")]: {
+        driver: ProviderDriverKind.make("grok"),
+        config: { customModels: ["grok-test-custom-model"] },
+      },
+    },
+  };
+}
+
 describe("instance-scoped model selection", () => {
+  it("returns an explicit empty selection when no provider is available", () => {
+    expect(resolveAppModelSelectionState(DEFAULT_UNIFIED_SETTINGS, [])).toEqual({
+      instanceId: ProviderInstanceId.make("akeru_no_provider"),
+      model: "",
+    });
+  });
+
   it("preserves server-provided legacy model metadata", () => {
     const baseProvider = provider({
       instanceId: "claudeAgent",
@@ -155,25 +176,64 @@ describe("instance-scoped model selection", () => {
     ).toBe("opus");
   });
 
-  it("includes Grok custom models from the selected provider instance", () => {
-    const providers = [provider({ provider: ProviderDriverKind.make("grok"), instanceId: "grok" })];
-    const settings: UnifiedSettings = {
-      ...settingsWithProviderInstances(),
-      providerInstances: {
-        ...settingsWithProviderInstances().providerInstances,
-        [ProviderInstanceId.make("grok")]: {
-          driver: ProviderDriverKind.make("grok"),
-          config: { customModels: ["grok-test-custom-model"] },
-        },
-      },
-    };
+  it("lists Grok custom models next to the provider catalog", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6", "grok-4.5"],
+      }),
+    ];
+    const settings = settingsWithGrokCustomModel();
     const grok = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "grok",
     )!;
 
-    expect(getAppModelOptionsForInstance(settings, grok).map((option) => option.slug)).toContain(
+    expect(getAppModelOptionsForInstance(settings, grok).map((option) => option.slug)).toEqual([
+      "grok-4.6",
+      "grok-4.5",
       "grok-test-custom-model",
-    );
+    ]);
+  });
+
+  it("keeps a selected model the provider stopped listing, marked unavailable", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6"],
+      }),
+    ];
+    const options = getCustomModelOptionsByInstance(
+      settingsWithGrokCustomModel(),
+      providers,
+      ProviderInstanceId.make("grok"),
+      "grok-4.5",
+    ).get(ProviderInstanceId.make("grok"));
+
+    expect(options?.map((option) => [option.slug, option.unavailable ?? false])).toEqual([
+      ["grok-4.6", false],
+      ["grok-test-custom-model", false],
+      ["grok-4.5", true],
+    ]);
+  });
+
+  it("does not mark a selected model that is still listed", () => {
+    const providers = [
+      provider({
+        provider: ProviderDriverKind.make("grok"),
+        instanceId: "grok",
+        models: ["grok-4.6"],
+      }),
+    ];
+    const options = getCustomModelOptionsByInstance(
+      settingsWithGrokCustomModel(),
+      providers,
+      ProviderInstanceId.make("grok"),
+      "grok-test-custom-model",
+    ).get(ProviderInstanceId.make("grok"));
+
+    expect(options?.some((option) => option.unavailable)).toBe(false);
   });
 
   it("does not inject an unknown selected slug into the stock instance list", () => {
@@ -323,6 +383,50 @@ describe("instance-scoped model selection", () => {
       model: "openai/gpt-5.5",
     });
   });
+
+  it("does not default new work to a signed-out provider", () => {
+    const providers: ServerProvider[] = [
+      {
+        ...provider({ instanceId: "claudeAgent", models: ["claude-sonnet-4-6"] }),
+        auth: { status: "unauthenticated" },
+        unavailability: "missing-login",
+      },
+      provider({ instanceId: "codex", models: ["gpt-5.5"] }),
+    ];
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      textGenerationModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    };
+
+    expect(resolveAppModelSelectionState(settings, providers).instanceId).toBe(
+      ProviderInstanceId.make("codex"),
+    );
+  });
+
+  it("keeps a provider with a temporary failure as the default", () => {
+    const providers: ServerProvider[] = [
+      {
+        ...provider({ instanceId: "claudeAgent", models: ["claude-sonnet-4-6"] }),
+        unavailability: "temporary-failure",
+      },
+      provider({ instanceId: "codex", models: ["gpt-5.5"] }),
+    ];
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      textGenerationModelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+    };
+
+    expect(resolveAppModelSelectionState(settings, providers)).toEqual({
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-sonnet-4-6",
+    });
+  });
 });
 
 describe("withoutPlanAgentSelection", () => {
@@ -363,20 +467,9 @@ describe("resolvePlanAgentHealPatch", () => {
     { id: "variant", value: "high" },
     { id: "agent", value: "plan" },
   ]);
-  const nullPatch = {
-    planModeEnabled: true,
-    textGenerationModelSelection: storedPlan,
-    sourceControlWriterModelSelection: null,
-  };
-
-  it("returns null when plan mode is on", () => {
-    expect(resolvePlanAgentHealPatch(nullPatch)).toBeNull();
-  });
-
   it("returns null when nothing needs healing", () => {
     expect(
       resolvePlanAgentHealPatch({
-        planModeEnabled: false,
         textGenerationModelSelection: healed,
         sourceControlWriterModelSelection: null,
       }),
@@ -386,7 +479,6 @@ describe("resolvePlanAgentHealPatch", () => {
   it("patches the stored text generation selection to drop the plan agent", () => {
     expect(
       resolvePlanAgentHealPatch({
-        planModeEnabled: false,
         textGenerationModelSelection: storedPlan,
         sourceControlWriterModelSelection: null,
       }),
@@ -396,7 +488,6 @@ describe("resolvePlanAgentHealPatch", () => {
   it("patches a stored source control writer selection that uses the plan agent", () => {
     expect(
       resolvePlanAgentHealPatch({
-        planModeEnabled: false,
         textGenerationModelSelection: healed,
         sourceControlWriterModelSelection: storedPlan,
       }),

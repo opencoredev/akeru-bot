@@ -38,6 +38,24 @@ describe("searchProviderSkills", () => {
     ]);
   });
 
+  it("ranks the same with or without skill icons", () => {
+    const plain = [
+      makeSkill({ name: "agent-browser", displayName: "Agent Browser" }),
+      makeSkill({ name: "building-native-ui", displayName: "Building Native Ui" }),
+      makeSkill({ name: "ui", displayName: "Ui" }),
+    ];
+    const withIcons = plain.map((skill, index) => ({
+      ...skill,
+      icon: ["🌐", "🧱", "/icons/ui.png"][index],
+    }));
+
+    for (const query of ["", "ui", "bni", "browser"]) {
+      expect(searchProviderSkills(withIcons, query).map((skill) => skill.name)).toEqual(
+        searchProviderSkills(plain, query).map((skill) => skill.name),
+      );
+    }
+  });
+
   it("uses fuzzy ranking for abbreviated queries", () => {
     const skills = [
       makeSkill({ name: "gh-fix-ci", displayName: "Gh Fix Ci" }),

@@ -228,7 +228,7 @@ function patchMainBundleInfoPlist(appBundlePath, iconPath, executableName) {
   setPlistString(
     infoPlistPath,
     "NSMicrophoneUsageDescription",
-    "Akeru Bot uses the microphone for calls with your bots.",
+    "Akeru Bot uses the microphone for calls and dictation with your bots.",
   );
   setPlistJson(infoPlistPath, "CFBundleURLTypes", [
     {

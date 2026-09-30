@@ -48,19 +48,14 @@ describe("agent readiness files", () => {
     );
   });
 
-  it("serves rate-limit headers on the metadata API paths", () => {
-    const limited = routesWithHeaders().filter((route) => "RateLimit" in route.headers);
+  it("does not advertise a public API", () => {
+    const routes = routesWithHeaders();
 
-    expect(limited.map((route) => route.src)).toEqual([
-      "^/(?:v\\d+/)?(?:schema/.*|openapi\\.json)$",
-      "^/api(?:/.*)?$",
-    ]);
-    for (const route of limited) {
-      expect(route.headers).toMatchObject({
-        "RateLimit-Policy": '"default";q=600;w=60',
-        RateLimit: '"default";r=600;t=60',
-      });
-    }
+    expect(routes.some((route) => "RateLimit" in route.headers)).toBe(false);
+    expect(JSON.stringify(routes)).not.toContain("openapi");
+    expect(NodeFS.existsSync(NodePath.resolve(import.meta.dirname, "../public/openapi.json"))).toBe(
+      false,
+    );
   });
 
   it("publishes a current sitemap with the trust pages", () => {
@@ -87,30 +82,10 @@ describe("agent readiness files", () => {
     );
   });
 
-  it("documents the public metadata endpoint", () => {
-    const openapi = JSON.parse(publicFile("openapi.json"));
+  it("answers unknown API paths with a problem document", () => {
     const apiError = JSON.parse(publicFile("api-error.json"));
 
-    expect(openapi).toMatchObject({
-      openapi: "3.1.0",
-      info: { title: "Akeru Bot public metadata API" },
-    });
-    const versioned = openapi.paths["/v1/schema/t3.json"].get;
-
-    expect(versioned).toMatchObject({
-      operationId: "getProjectFileSchema",
-      responses: {
-        "200": {
-          content: {
-            "application/json": { schema: { $ref: "#/components/schemas/ProjectFileSchema" } },
-          },
-        },
-        "429": { $ref: "#/components/responses/TooManyRequests" },
-      },
-    });
-    expect(openapi.paths["/schema/t3.json"].get.operationId).toBe("getProjectFileSchemaAlias");
-    expect(openapi.info.description).toContain("Sunset");
-    expect(openapi.components.schemas.ProjectFileSchema).toMatchObject({ type: "object" });
     expect(apiError).toMatchObject({ status: 404, code: "api_resource_not_found" });
+    expect(apiError.resolution).toContain("https://www.akeru-bot.com/developers");
   });
 });

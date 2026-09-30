@@ -3,8 +3,14 @@ import {
   type LocalExecutionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 
+import type { useI18n } from "../../i18n";
 import type { Bot } from "./types";
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+const translateEnglish: Translate = createTranslator("en").translate;
 
 export const DEFAULT_BOT_RUNTIME_MODE: RuntimeMode = DEFAULT_LOCAL_EXECUTION_MODE;
 
@@ -22,8 +28,13 @@ export function botSandboxChoice(sandbox: Bot["sandbox"]): BotSandboxChoice {
   return sandbox ?? "local";
 }
 
-export function botSandboxLabel(sandbox: BotSandboxChoice): string {
-  return BOT_SANDBOX_OPTIONS.find((option) => option.value === sandbox)?.label ?? "Local";
+/** "Local" is interface copy; the cloud sandbox labels are product names and stay as written. */
+export function botSandboxLabel(
+  sandbox: BotSandboxChoice,
+  t: Translate = translateEnglish,
+): string {
+  const option = BOT_SANDBOX_OPTIONS.find((candidate) => candidate.value === sandbox);
+  return !option || option.value === "local" ? t("Local") : option.label;
 }
 
 export function resolveBotRuntimeMode(

@@ -1,11 +1,19 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { useAtomValue } from "@effect/atom-react";
+import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@t3tools/contracts";
 import type {
   ReplyPlaybackMessage,
   ReplyPlaybackSession,
 } from "@t3tools/client-runtime/reply-playback";
 
 import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
+import { serverEnvironment } from "../../state/server";
+
+const unavailableSynthesis = storedReplySynthesisCapability();
+const subscribeUnavailable = () => () => {};
+const getUnavailableSynthesis = () => unavailableSynthesis;
 
 export function replyPlaybackControlProps(
   session: ReplyPlaybackSession | null,
@@ -28,6 +36,17 @@ export function useReplyPlaybackThread(options: {
   readonly connected?: boolean;
 }) {
   const session = useOptionalReplyPlayback();
+  const settings = useAtomValue(
+    serverEnvironment.settingsValueAtom(EnvironmentId.make(options.environmentId ?? "none")),
+  );
+  const synthesis = useMemo(
+    () => storedReplySynthesisCapability((settings ?? DEFAULT_SERVER_SETTINGS).voice),
+    [settings],
+  );
+  const appliedSynthesis = useSyncExternalStore(
+    session?.subscribeSynthesis ?? subscribeUnavailable,
+    session?.getSynthesisSnapshot ?? getUnavailableSynthesis,
+  );
   const signature = options.messages
     .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
     .join("|");
@@ -40,20 +59,22 @@ export function useReplyPlaybackThread(options: {
       }
       const environmentId = options.environmentId;
       const threadId = options.threadId;
+      session.setSynthesis(synthesis, environmentId);
       session.setContext({
         environmentId,
         threadId,
-        provider: session.synthesis.provider,
-        voice: session.synthesis.voice,
+        provider: synthesis.provider,
+        voice: synthesis.voice,
         connected: options.connected === true,
         mediaBlocked: false,
       });
       return () => {
         session.clearContextIf(environmentId, threadId);
       };
-    }, [session, options.environmentId, options.threadId, options.connected]),
+    }, [session, options.environmentId, options.threadId, options.connected, synthesis]),
   );
   useEffect(() => {
     session?.observe(options.messages);
   }, [session, options.messages, signature]);
+  return appliedSynthesis;
 }

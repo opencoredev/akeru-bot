@@ -9,13 +9,11 @@ import { resolvePlanAgentHealPatch } from "./modelSelection";
 
 /**
  * Heals persisted text-generation model selections that still reference the
- * opencode "plan" agent. The dropdown hides the option while legacy plan mode
- * is off, but the toggle handler only runs when the setting flips; users who
- * already have plan mode off with a stored "plan" selection need this pass
+ * opencode "plan" agent. Plan mode is retired and the dropdown never offers
+ * the option, but selections stored before the retirement need this pass
  * whenever the settings load.
  */
 export function PlanAgentSelectionHeal() {
-  const planModeEnabled = usePrimarySettings((settings) => settings.planModeEnabled);
   const textGenerationModelSelection = usePrimarySettings(
     (settings) => settings.textGenerationModelSelection,
   );
@@ -26,14 +24,12 @@ export function PlanAgentSelectionHeal() {
   const updateSettings = useUpdatePrimarySettings();
 
   useEffect(() => {
-    // planModeEnabled reads as false until client settings hydrate, so never
-    // heal before then: we would strip a stored plan selection from a user
-    // whose plan mode is actually on.
+    // Settings read as defaults until they hydrate, so wait for the stored
+    // selections before deciding whether they need healing.
     if (!settingsHydrated) {
       return;
     }
     const patch = resolvePlanAgentHealPatch({
-      planModeEnabled,
       textGenerationModelSelection,
       sourceControlWriterModelSelection,
     });
@@ -41,7 +37,6 @@ export function PlanAgentSelectionHeal() {
       updateSettings(patch);
     }
   }, [
-    planModeEnabled,
     settingsHydrated,
     textGenerationModelSelection,
     sourceControlWriterModelSelection,

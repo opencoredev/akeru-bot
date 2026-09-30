@@ -1,4 +1,6 @@
 export interface ExpandedImageItem {
+  /** The chat attachment id, or a draft id for images not yet sent. */
+  id: string;
   src: string;
   name: string;
 }
@@ -24,6 +26,7 @@ export function buildExpandedImagePreview(
   }
   return {
     images: previewableImages.map((image) => ({
+      id: image.id,
       src: image.src,
       name: image.name,
     })),

@@ -141,7 +141,11 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
-      const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig, processEnv);
+      const textGeneration = yield* makeOpenCodeTextGeneration(
+        effectiveConfig,
+        processEnv,
+        instanceId,
+      );
 
       const checkProvider = checkOpenCodeProviderStatus(
         effectiveConfig,

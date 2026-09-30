@@ -34,8 +34,6 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
       return "Claude";
     case "codex":
       return "Codex";
-    case "cursor":
-      return "Cursor";
     case "opencode":
       return "OpenCode";
     case "opencodeGo":

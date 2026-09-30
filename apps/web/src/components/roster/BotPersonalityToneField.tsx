@@ -1,8 +1,11 @@
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { BotAvatarView } from "./BotAvatarView";
 import {
   BOT_PERSONALITY_TONE_OPTIONS,
-  BOT_PERSONALITY_TONE_SAMPLE_PROMPT,
+  botPersonalityToneLabel,
+  botPersonalityToneSamplePrompt,
+  localizeBotPersonalityToneBand,
   resolveBotPersonalityToneBand,
   resolveBotPersonalityToneOption,
 } from "./botPersonalityTone";
@@ -23,15 +26,16 @@ export function BotPersonalityToneField({
   readonly onToneChange: (tone: number) => void;
   readonly className?: string;
 }) {
+  const { t } = useI18n();
   const selected = resolveBotPersonalityToneOption(tone);
-  const band = resolveBotPersonalityToneBand(selected.value);
+  const band = localizeBotPersonalityToneBand(resolveBotPersonalityToneBand(selected.value), t);
 
   return (
     <div className={cn("space-y-4", className)}>
       <div className="space-y-3">
         <div
           role="radiogroup"
-          aria-label={`Personality for ${bot.name}`}
+          aria-label={t("Personality for {name}", { name: bot.name })}
           className="grid grid-cols-3 gap-2"
         >
           {BOT_PERSONALITY_TONE_OPTIONS.map((option) => {
@@ -50,7 +54,7 @@ export function BotPersonalityToneField({
                     : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
                 )}
               >
-                {option.label}
+                {botPersonalityToneLabel(option.value, t)}
               </button>
             );
           })}
@@ -74,7 +78,8 @@ export function BotPersonalityTonePreview({
   readonly bot: Pick<Bot, "name" | "avatar">;
   readonly tone: number;
 }) {
-  const band = resolveBotPersonalityToneBand(tone);
+  const { t } = useI18n();
+  const band = localizeBotPersonalityToneBand(resolveBotPersonalityToneBand(tone), t);
 
   return (
     <figure
@@ -82,12 +87,12 @@ export function BotPersonalityTonePreview({
       data-testid="bot-personality-tone-preview"
     >
       <figcaption className="text-xs font-medium text-muted-foreground">
-        How {bot.name} might sound
+        {t("How {name} might sound", { name: bot.name })}
       </figcaption>
 
       <div className="flex justify-end">
         <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2 text-[13px] leading-[1.45] text-foreground">
-          {BOT_PERSONALITY_TONE_SAMPLE_PROMPT}
+          {botPersonalityToneSamplePrompt(t)}
         </p>
       </div>
 
@@ -102,7 +107,7 @@ export function BotPersonalityTonePreview({
       </div>
 
       <p className="text-[11px] leading-[1.4] text-muted-foreground/70">
-        An illustration of the band, not a live reply.
+        {t("An illustration of the band, not a live reply.")}
       </p>
     </figure>
   );

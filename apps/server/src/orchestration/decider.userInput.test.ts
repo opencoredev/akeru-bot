@@ -1,12 +1,15 @@
 import {
   ApprovalRequestId,
+  BotId,
   CommandId,
+  GroupId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   TurnId,
   type OrchestrationReadModel,
+  type OrchestrationBot,
   type OrchestrationThread,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -19,6 +22,29 @@ import { createEmptyReadModel } from "./projector.ts";
 const NOW = "2026-09-01T03:40:00.000Z";
 const THREAD_ID = ThreadId.make("thread-user-input");
 const REQUEST_ID = ApprovalRequestId.make("request-color");
+const BOT_ID = BotId.make("bot-akeru");
+const GROUP_ID = GroupId.make("group-product");
+
+const archivedBot: OrchestrationBot = {
+  id: BOT_ID,
+  name: "Akeru",
+  title: "Agent",
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "dither", seed: BOT_ID },
+  engine: null,
+  imageProvider: null,
+  sandbox: "local",
+  runtimeMode: "full-access",
+  usageCap: null,
+  voiceEnabled: true,
+  channelBindings: [],
+  groupId: null,
+  archivedAt: NOW,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
 
 function makeThread(): OrchestrationThread {
   return {
@@ -100,4 +126,59 @@ it.layer(NodeServices.layer)("user input response decider", (it) => {
       });
     }),
   );
+
+  for (const type of ["thread.approval.respond", "thread.user-input.respond"] as const) {
+    for (const groupChat of [false, true]) {
+      it.effect(`rejects ${type} for an archived ${groupChat ? "group boss" : "bot"}`, () =>
+        Effect.gen(function* () {
+          const readModel = makeReadModel();
+          const command =
+            type === "thread.approval.respond"
+              ? {
+                  type,
+                  commandId: CommandId.make("command-approval"),
+                  threadId: THREAD_ID,
+                  requestId: REQUEST_ID,
+                  decision: "accept" as const,
+                  createdAt: NOW,
+                }
+              : {
+                  type,
+                  commandId: CommandId.make("command-answer"),
+                  threadId: THREAD_ID,
+                  requestId: REQUEST_ID,
+                  answers: { color: "Red" },
+                  createdAt: NOW,
+                };
+          const error = yield* decideOrchestrationCommand({
+            command,
+            readModel: {
+              ...readModel,
+              bots: [archivedBot],
+              groups: groupChat
+                ? [
+                    {
+                      id: GROUP_ID,
+                      name: "Product",
+                      bossBotId: BOT_ID,
+                      members: [{ kind: "bot" as const, botId: BOT_ID, role: "boss" as const }],
+                      createdAt: NOW,
+                      updatedAt: NOW,
+                    },
+                  ]
+                : [],
+              threads: [
+                {
+                  ...makeThread(),
+                  botId: groupChat ? null : BOT_ID,
+                  groupId: groupChat ? GROUP_ID : null,
+                },
+              ],
+            },
+          }).pipe(Effect.flip);
+          expect(String(error)).toContain("is archived");
+        }),
+      );
+    }
+  }
 });

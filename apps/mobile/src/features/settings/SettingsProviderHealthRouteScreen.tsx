@@ -1,6 +1,15 @@
-import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { useMobileI18n } from "../../lib/i18n";
+import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
+import { botInboxItemCopy, botInboxRowAction } from "@t3tools/client-runtime/bot-inbox";
+import {
+  describeDurableFactFailure,
+  memoryApprovalMutation,
+  type MemoryApprovalIntent,
+} from "@t3tools/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { BotInboxItem, EnvironmentId } from "@t3tools/contracts";
+import { useState } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -8,16 +17,19 @@ import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { botInboxEnvironment } from "../../state/botInbox";
+import { memoryEnvironment } from "../../state/memory";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
+import { settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
+import { ImageGenerationSummary } from "./ImageGenerationSummary";
 import { ProviderConnections } from "./ProviderConnections";
+import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
-  readonly target: "local-execution" | "bot-inbox" | "providers";
+  readonly target: MobileSettingsHealthTarget;
 } & Record<string, unknown>;
 
 function Field(props: { readonly label: string; readonly value: string }) {
@@ -29,82 +41,215 @@ function Field(props: { readonly label: string; readonly value: string }) {
   );
 }
 
+function BotInboxRow({
+  environmentId,
+  item,
+  first,
+  onDecided,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly item: BotInboxItem;
+  readonly first: boolean;
+  readonly onDecided: () => void;
+}) {
+  const { t } = useMobileI18n();
+  const navigation = useNavigation();
+  const resolveIncident = useAtomCommand(botInboxEnvironment.resolve, { reportFailure: false });
+  const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const action = botInboxRowAction(item);
+  const copy = botInboxItemCopy(item, t);
+  const run = async (task: () => Promise<string | null>) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setError(await task());
+    } finally {
+      setBusy(false);
+    }
+  };
+  const decideMemory = (intent: MemoryApprovalIntent) =>
+    run(async () => {
+      const approval = item.memoryApproval;
+      if (!approval) return null;
+      const result = await mutateFact({
+        environmentId,
+        input: {
+          threadId: approval.sourceThreadId,
+          mutation: memoryApprovalMutation(approval, intent),
+        },
+      });
+      if (result._tag === "Failure") {
+        return t(describeDurableFactFailure(squashAtomCommandFailure(result)).message);
+      }
+      // The server closes the inbox item when it records the decision.
+      onDecided();
+      return null;
+    });
+  const resolve = () =>
+    run(async () => {
+      const result = await resolveIncident({ environmentId, input: { id: item.id } });
+      return result._tag === "Failure" ? t("Could not resolve this item") : null;
+    });
+
+  return (
+    <View className={first ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}>
+      <Text className="text-base font-t3-medium text-foreground">{item.botName}</Text>
+      <Field label={t("Bot work or routine")} value={`${item.taskOrRoutine} · ${copy.kind}`} />
+      <Field
+        label={item.memoryApproval ? t("Memory to save") : t("Last failure")}
+        value={copy.detail}
+      />
+      {copy.sensitive ? (
+        <Text className="text-xs text-foreground-muted">{copy.sensitive}</Text>
+      ) : null}
+      <Field label={t("Next action")} value={copy.nextAction} />
+      {action === "memory-approval" ? (
+        <View className="flex-row gap-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            className="rounded-[12px] bg-subtle px-3 py-2"
+            onPress={() => void decideMemory({ action: "reject" })}
+          >
+            <Text className="text-sm font-t3-medium text-foreground">{t("Reject")}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            className="rounded-[12px] bg-foreground px-3 py-2"
+            onPress={() => void decideMemory({ action: "approve" })}
+          >
+            <Text className="text-sm font-t3-medium text-background">{t("Approve")}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          {action === "plugins" ? (
+            <Text className="text-sm text-foreground-muted">
+              {t("Fix this in Plugins on the desktop or web app.")}
+            </Text>
+          ) : null}
+          <View className="flex-row flex-wrap gap-2">
+            {action === "providers" ? (
+              <Pressable
+                accessibilityRole="button"
+                className="rounded-[12px] bg-subtle px-3 py-2"
+                onPress={() =>
+                  navigation.dispatch(
+                    StackActions.push("SettingsProviderHealth", {
+                      environmentId,
+                      target: "providers",
+                    }),
+                  )
+                }
+              >
+                <Text className="text-sm font-t3-medium text-foreground">
+                  {t("Open Providers")}
+                </Text>
+              </Pressable>
+            ) : null}
+            {/* Repair items keep Resolve so they can be cleared once fixed elsewhere. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
+              className="rounded-[12px] bg-subtle px-3 py-2"
+              onPress={() => void resolve()}
+            >
+              <Text className="text-sm font-t3-medium text-foreground">
+                {busy ? t("Resolving…") : t("Resolve")}
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      )}
+      {error ? <Text className="text-sm text-danger">{error}</Text> : null}
+    </View>
+  );
+}
+
 function BotInbox({
   environmentId,
   items,
+  onDecided,
 }: {
   readonly environmentId: EnvironmentId;
   readonly items: ReadonlyArray<BotInboxItem>;
+  readonly onDecided: () => void;
 }) {
-  const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
+  const { t } = useMobileI18n();
   return (
-    <SettingsSection title="Error inbox" card>
+    <SettingsSection title={t("Bot inbox")} card>
       {items.length === 0 ? (
-        <Text className="p-4 text-sm text-foreground-muted">No open items.</Text>
+        <View className="gap-1 p-4">
+          <Text className="text-sm font-t3-medium text-foreground">{t("Nothing open")}</Text>
+          <Text className="text-sm text-foreground-muted">
+            {t("Bot failures and memory approvals appear here.")}
+          </Text>
+        </View>
       ) : (
         items.map((item, index) => (
-          <View
+          <BotInboxRow
             key={item.id}
-            className={index === 0 ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}
-          >
-            <Text className="text-base font-t3-medium text-foreground">{item.botName}</Text>
-            <Field label="Bot work or routine" value={item.taskOrRoutine} />
-            <Field label="Last failure" value={item.lastFailure} />
-            <Field label="Next action" value={item.nextAction} />
-            {canResolveInboxItem(item) ? (
-              <Pressable
-                accessibilityRole="button"
-                className="self-start rounded-[12px] bg-subtle px-3 py-2"
-                onPress={() => {
-                  void resolveIncident({ environmentId, input: { id: item.id } });
-                }}
-              >
-                <Text className="text-sm font-t3-medium text-foreground">Resolve</Text>
-              </Pressable>
-            ) : null}
-          </View>
+            environmentId={environmentId}
+            item={item}
+            first={index === 0}
+            onDecided={onDecided}
+          />
         ))
       )}
     </SettingsSection>
   );
 }
 
+const LOCAL_EXECUTION_OPTIONS = [
+  { value: "auto", label: "Auto review" },
+  { value: "approval-required", label: "Ask first" },
+  { value: "full-access", label: "Full access" },
+] as const;
+
 function LocalExecution({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
-  const mode = settings?.defaultThreadEnvMode ?? "local";
+  const mode = settings?.localExecutionMode;
   return (
-    <SettingsSection title="Local execution" card>
+    <SettingsSection title={t("Local execution")} card>
       <View className="gap-3 p-4">
         <Text className="text-sm text-foreground-muted">
-          Pick the default workspace mode for new threads on this environment.
+          {t("Auto review runs safe actions and asks before sensitive ones.")}
         </Text>
         <View className="flex-row gap-2">
-          {(["local", "worktree"] as const).map((value) => (
+          {LOCAL_EXECUTION_OPTIONS.map((option) => (
             <Pressable
-              key={value}
+              key={option.value}
               accessibilityRole="button"
-              accessibilityState={{ selected: mode === value }}
+              accessibilityState={{ selected: mode === option.value }}
               className={
-                mode === value
+                mode === option.value
                   ? "flex-1 rounded-[14px] bg-foreground px-4 py-3"
                   : "flex-1 rounded-[14px] bg-subtle px-4 py-3"
               }
               onPress={() => {
                 void updateSettings({
                   environmentId,
-                  input: { patch: { defaultThreadEnvMode: value } },
+                  input: { patch: { localExecutionMode: option.value } },
                 });
               }}
             >
               <Text
                 className={
-                  mode === value
+                  mode === option.value
                     ? "text-center text-sm font-t3-medium text-background"
                     : "text-center text-sm font-t3-medium text-foreground"
                 }
               >
-                {value === "local" ? "Local" : "New worktree"}
+                {t(option.label)}
               </Text>
             </Pressable>
           ))}
@@ -117,6 +262,7 @@ function LocalExecution({ environmentId }: { readonly environmentId: Environment
 export function SettingsProviderHealthRouteScreen({
   route,
 }: StaticScreenProps<SettingsProviderHealthParams>) {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const query = useEnvironmentQuery(
@@ -127,6 +273,14 @@ export function SettingsProviderHealthRouteScreen({
           input: {},
         }),
   );
+  const title =
+    route.params.target === "bot-inbox"
+      ? t("Bot inbox")
+      : route.params.target === "providers"
+        ? t("Provider connections")
+        : route.params.target === "image-generation"
+          ? t("Image generation")
+          : t("Local execution");
   const inboxView =
     route.params.target === "bot-inbox"
       ? settingsInboxView({ error: query.error, data: query.data })
@@ -135,16 +289,21 @@ export function SettingsProviderHealthRouteScreen({
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />
     ) : inboxView?.kind === "ready" ? (
-      <BotInbox environmentId={route.params.environmentId} items={inboxView.items} />
+      <BotInbox
+        environmentId={route.params.environmentId}
+        items={inboxView.items}
+        onDecided={query.refresh}
+      />
     ) : null;
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
+      <NativeStackScreenOptions options={{ title }} />
       {Platform.OS === "android" ? (
         <NativeStackScreenOptions options={{ headerShown: false }} />
       ) : null}
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader title="Settings" onBack={() => navigation.goBack()} />
+        <AndroidScreenHeader title={title} onBack={() => navigation.goBack()} />
       ) : null}
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -164,13 +323,18 @@ export function SettingsProviderHealthRouteScreen({
             key={route.params.environmentId}
             environmentId={route.params.environmentId}
           />
+        ) : route.params.target === "image-generation" ? (
+          <ImageGenerationSummary
+            key={route.params.environmentId}
+            environmentId={route.params.environmentId}
+          />
         ) : route.params.target === "local-execution" ? (
           section
         ) : inboxView?.kind === "error" ? (
           <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
         ) : inboxView?.kind === "loading" ? (
           <Text className="py-16 text-center text-sm text-foreground-muted">
-            Loading bot inbox…
+            {t("Loading bot inbox…")}
           </Text>
         ) : (
           section

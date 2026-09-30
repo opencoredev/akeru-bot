@@ -9,14 +9,6 @@ import {
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
-import {
-  BlocksIcon,
-  FolderIcon,
-  PackageIcon,
-  SettingsIcon,
-  UserRoundIcon,
-  type LucideIcon,
-} from "lucide-react";
 import { memo, useLayoutEffect, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
@@ -24,6 +16,7 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
+import { ProviderSkillIcon } from "./ProviderSkillIcon";
 
 export type ComposerCommandItem =
   | {
@@ -168,6 +161,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           theme={props.resolvedTheme}
         />
       ) : null}
+      {props.item.type === "skill" ? (
+        <ProviderSkillIcon skill={props.item.skill} className={SKILL_ROW_ICON_CLASS_NAME} />
+      ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
           {isSlashSkill ? (
@@ -193,14 +189,10 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   );
 });
 
-const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
-  app: BlocksIcon,
-  repo: FolderIcon,
-  project: FolderIcon,
-  personal: UserRoundIcon,
-  system: SettingsIcon,
-  other: PackageIcon,
-};
+// Same tint as the inline skill chip, a little larger so the row reads as the
+// chip it will insert. In em so it follows the row's font size.
+const SKILL_ROW_ICON_CLASS_NAME =
+  "flex size-[1.6em] shrink-0 items-center justify-center rounded-[0.45em] bg-fuchsia-500/14 text-[1em] leading-none text-fuchsia-700 dark:text-fuchsia-300 [&>svg]:size-[1em]";
 
 const SKILL_SOURCE_LABEL_BY_KIND: Record<ProviderSkillSourceKind, string> = {
   app: "App",
@@ -212,10 +204,8 @@ const SKILL_SOURCE_LABEL_BY_KIND: Record<ProviderSkillSourceKind, string> = {
 };
 
 function SkillSourceBadge(props: { kind: ProviderSkillSourceKind; showSkillSuffix: boolean }) {
-  const Icon = SKILL_SOURCE_ICON_BY_KIND[props.kind];
   return (
     <Badge className="ms-auto" variant="secondary">
-      <Icon aria-hidden="true" className="text-current" />
       {SKILL_SOURCE_LABEL_BY_KIND[props.kind]}
       {props.showSkillSuffix ? " Skill" : null}
     </Badge>

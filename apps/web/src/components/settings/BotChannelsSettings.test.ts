@@ -1,14 +1,18 @@
 import { AuthAccessWriteScope, BotId, ChannelConnectionId, ProjectId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   canManageChannels,
+  channelFailureCategoryOf,
   connectedChannelBinding,
+  isChannelIdentityConflict,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
 import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
 import {
   assignedBotForConnection,
+  channelState,
   channelTestInstructions,
   parsePhotonHostedCredentials,
   providerLabel,
@@ -119,6 +123,36 @@ describe("bot channel settings", () => {
     expect(resolveChannelSettingsAccess({ isPending: false, session: null })).toBe("denied");
   });
 
+  it("shows a connecting channel in the overview", () => {
+    const connectionId = ChannelConnectionId.make("telegram-pending");
+    const connection = {
+      id: connectionId,
+      provider: "telegram",
+    } as Parameters<typeof channelState>[1][number];
+    const bot = {
+      id: botId,
+      name: "Scout",
+      archivedAt: null,
+      channelBindings: [
+        {
+          botId,
+          connectionId,
+          provider: "telegram",
+          projectId,
+          status: "connecting",
+          externalIdentity: null,
+          connectedAt: null,
+          sentMessageIds: [],
+        },
+      ],
+    } as Parameters<typeof channelState>[2][number];
+
+    expect(channelState("telegram", [connection], [bot], [{ id: projectId }])).toEqual({
+      tone: "pending",
+      label: "Connecting…",
+    });
+  });
+
   it("finds saved connections assigned to archived bots", () => {
     const connectionId = ChannelConnectionId.make("photon-work");
     const bots = [
@@ -187,5 +221,56 @@ describe("bot channel settings", () => {
     expect(
       parsePhotonHostedCredentials("OTHER_PROJECT_ID=project-1\nSPECTRUM_PROJECT_SECRET=secret"),
     ).toBeNull();
+  });
+});
+
+describe("isChannelIdentityConflict", () => {
+  const failure = (message: string) => ({ cause: Cause.fail(new Error(message)) });
+
+  it("matches the server's fixed identity conflict messages", () => {
+    expect(
+      isChannelIdentityConflict(
+        failure("This channel connection is already connected to another bot."),
+      ),
+    ).toBe(true);
+    expect(
+      isChannelIdentityConflict(failure("This channel connection is attached to another bot.")),
+    ).toBe(true);
+  });
+
+  it("ignores look-alike errors and missing causes", () => {
+    expect(
+      isChannelIdentityConflict(
+        failure("This phone number is already attached to another bot account"),
+      ),
+    ).toBe(false);
+    expect(
+      isChannelIdentityConflict(
+        failure("Request failed: This channel connection is attached to another bot."),
+      ),
+    ).toBe(false);
+    expect(isChannelIdentityConflict({})).toBe(false);
+  });
+});
+
+describe("channelFailureCategoryOf", () => {
+  it("reads the category the server sent with a channel failure", () => {
+    const failure = (error: object) => ({ cause: Cause.fail(error) });
+    expect(
+      channelFailureCategoryOf(
+        failure({ message: "Rejected.", channelFailureCategory: "credentials" }),
+      ),
+    ).toBe("credentials");
+    expect(channelFailureCategoryOf(failure({ channelFailureCategory: "network" }))).toBe(
+      "network",
+    );
+  });
+
+  it("ignores unknown categories and failures without one", () => {
+    expect(
+      channelFailureCategoryOf({ cause: Cause.fail({ channelFailureCategory: "billing" }) }),
+    ).toBeUndefined();
+    expect(channelFailureCategoryOf({ cause: Cause.fail(new Error("Rejected.")) })).toBeUndefined();
+    expect(channelFailureCategoryOf({})).toBeUndefined();
   });
 });

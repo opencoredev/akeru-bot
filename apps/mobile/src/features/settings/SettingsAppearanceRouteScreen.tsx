@@ -1,15 +1,15 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useNavigation } from "@react-navigation/native";
 import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
-import { CodeAppearanceSection } from "./appearance/sections/CodeAppearanceSection";
-import { TerminalAppearanceSection } from "./appearance/sections/TerminalAppearanceSection";
 import { TextAppearanceSection } from "./appearance/sections/TextAppearanceSection";
 import { ThemeAppearanceSection } from "./appearance/sections/ThemeAppearanceSection";
 
 export function SettingsAppearanceRouteScreen() {
+  const { t } = useMobileI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -18,7 +18,7 @@ export function SettingsAppearanceRouteScreen() {
       {Platform.OS === "android" ? (
         <>
           <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Appearance" onBack={() => navigation.goBack()} />
+          <AndroidScreenHeader title={t("Appearance")} onBack={() => navigation.goBack()} />
         </>
       ) : null}
       <ScrollView
@@ -32,8 +32,6 @@ export function SettingsAppearanceRouteScreen() {
       >
         <ThemeAppearanceSection />
         <TextAppearanceSection />
-        <TerminalAppearanceSection />
-        <CodeAppearanceSection />
       </ScrollView>
     </View>
   );

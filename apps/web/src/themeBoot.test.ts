@@ -17,7 +17,7 @@ import {
   toCanonicalThemeColor,
 } from "./themePalette";
 
-const THEME_STORAGE_KEY = "t3code:theme";
+const THEME_STORAGE_KEY = "akeru:theme";
 // A custom theme that omits chrome falls back to the runtime default, so the
 // boot copy of that default stays derived from the real palette.
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
@@ -164,13 +164,13 @@ describe("index.html boot script", () => {
     },
     {
       name: "T3 Chat follows a dark OS",
-      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      storage: { [THEME_STORAGE_KEY]: "akeru-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     },
     {
       name: "an explicit global dark mode applies to T3 Chat",
       storage: {
-        [THEME_STORAGE_KEY]: "t3-chat",
+        [THEME_STORAGE_KEY]: "akeru-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "dark",
         [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "false",
       },
@@ -199,6 +199,11 @@ describe("index.html boot script", () => {
     {
       name: "a legacy t3-grove preference resolves through the alias",
       storage: { [THEME_STORAGE_KEY]: "t3-grove", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+    },
+    {
+      name: "a legacy t3-chat preference follows the OS as Akeru Chat",
+      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     },
     {
@@ -286,12 +291,20 @@ describe("index.html boot script", () => {
 
   it("marks built-in and custom themes on the document element", () => {
     const chat = runBootScript({
+      storage: { [THEME_STORAGE_KEY]: "akeru-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+    });
+    expect(chat.themeId).toBe("akeru-chat");
+    expect(chat.themeSelected).toBe("true");
+    expect(chat.isDark).toBe(true);
+
+    // A preference saved before the rename boots straight into the new id.
+    const legacyChat = runBootScript({
       storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     });
-    expect(chat.themeId).toBe("t3-chat");
-    expect(chat.themeSelected).toBe("true");
-    expect(chat.isDark).toBe(true);
+    expect(legacyChat.themeId).toBe("akeru-chat");
+    expect(legacyChat.themeSelected).toBe("true");
 
     const aurora = runBootScript({
       storage: {
@@ -395,9 +408,9 @@ describe("index.html boot script", () => {
 
   it("applies the matching half of an automatic mix to the splash", () => {
     const storage = {
-      [THEME_STORAGE_KEY]: "t3-chat",
+      [THEME_STORAGE_KEY]: "akeru-chat",
       [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-      "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+      "akeru:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
     };
 
     const dark = runBootScript({ storage, prefersDark: true });
@@ -409,7 +422,7 @@ describe("index.html boot script", () => {
 
     const light = runBootScript({ storage, prefersDark: false });
     expect(light.isDark).toBe(false);
-    expect(light.themeId).toBe("t3-chat");
+    expect(light.themeId).toBe("akeru-chat");
     expect(light.bootVariables["--boot-background"]).toBe(
       getThemeColorsForMode(T3_CHAT_THEME, "light")!.canvas,
     );
@@ -428,7 +441,7 @@ describe("index.html boot script", () => {
             colors: { canvas: "#f8fbff", text: "#10243d", accent: "#5b6cff" },
           },
         ]),
-        "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+        "akeru:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
       },
       prefersDark: true,
     });
@@ -441,7 +454,7 @@ describe("index.html boot script", () => {
       storage: {
         [THEME_STORAGE_KEY]: "gone-theme",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+        "akeru:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
       },
       prefersDark: true,
     });
@@ -456,9 +469,9 @@ describe("index.html boot script", () => {
   it("resolves a legacy-prefixed mix half onto the renamed theme", () => {
     const boot = runBootScript({
       storage: {
-        [THEME_STORAGE_KEY]: "t3-chat",
+        [THEME_STORAGE_KEY]: "akeru-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: "t3-grove" }),
+        "akeru:theme-halves:v1": JSON.stringify({ dark: "t3-grove" }),
       },
       prefersDark: true,
     });
@@ -472,13 +485,13 @@ describe("index.html boot script", () => {
   it("ignores a mix half that names an unknown theme", () => {
     const boot = runBootScript({
       storage: {
-        [THEME_STORAGE_KEY]: "t3-chat",
+        [THEME_STORAGE_KEY]: "akeru-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: "gone-theme" }),
+        "akeru:theme-halves:v1": JSON.stringify({ dark: "gone-theme" }),
       },
       prefersDark: true,
     });
-    expect(boot.themeId).toBe("t3-chat");
+    expect(boot.themeId).toBe("akeru-chat");
     expect(boot.isDark).toBe(true);
   });
 

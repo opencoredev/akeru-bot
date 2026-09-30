@@ -3,11 +3,12 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { buttonVariants } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { ModelPickerContent } from "./ModelPickerContent";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
@@ -35,7 +36,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   activeProviderIconClassName?: string;
   compact?: boolean;
   disabled?: boolean;
-  terminalOpen?: boolean;
   open?: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
@@ -44,6 +44,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
+  const { t } = useI18n();
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = props.open ?? uncontrolledIsMenuOpen;
 
@@ -66,7 +67,24 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     selectedInstanceOptions[0];
   const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
-  const triggerLabel = selectedModel ? getTriggerDisplayModelLabel(selectedModel) : props.model;
+  const triggerLabel = selectedModel?.unavailable
+    ? t("{model} is no longer offered by this provider. Choose another model.", {
+        model: triggerTitle,
+      })
+    : selectedModel
+      ? getTriggerDisplayModelLabel(selectedModel)
+      : props.model;
+  const { getModelDisabledReason } = props;
+  const getDisabledReason = useCallback(
+    (instanceId: ProviderInstanceId, model: string) =>
+      getModelDisabledReason?.(instanceId, model) ??
+      (props.modelOptionsByInstance
+        .get(instanceId)
+        ?.some((option) => option.slug === model && option.unavailable)
+        ? t("No longer offered by this provider")
+        : null),
+    [getModelDisabledReason, props.modelOptionsByInstance, t],
+  );
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
@@ -197,11 +215,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           instanceEntries={props.instanceEntries}
           {...(props.keybindings ? { keybindings: props.keybindings } : {})}
           modelOptionsByInstance={props.modelOptionsByInstance}
-          terminalOpen={props.terminalOpen ?? false}
           onRequestClose={() => setIsMenuOpen(false)}
-          {...(props.getModelDisabledReason
-            ? { getModelDisabledReason: props.getModelDisabledReason }
-            : {})}
+          getModelDisabledReason={getDisabledReason}
           onInstanceModelChange={handleInstanceModelChange}
         />
       </PopoverPopup>

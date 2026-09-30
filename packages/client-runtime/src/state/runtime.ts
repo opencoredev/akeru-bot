@@ -53,6 +53,13 @@ interface EnvironmentQueryAtomOptions<Input, A, E, R> extends EnvironmentAtomOpt
   readonly staleTimeMs?: number;
   readonly idleTtlMs?: number;
   readonly refreshIntervalMs?: number;
+  /**
+   * Revalidate when the client comes back to the foreground. `true` respects
+   * `staleTimeMs`, `"always"` reads unconditionally. Needs `focusSignal`: the
+   * foreground event is platform-specific, so the client supplies it.
+   */
+  readonly revalidateOnFocus?: boolean | "always";
+  readonly focusSignal?: Atom.Atom<unknown>;
 }
 
 interface EnvironmentSubscriptionAtomOptions<Input, A, E, R> {
@@ -545,6 +552,10 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
         Atom.swr({
           staleTime: options.staleTimeMs ?? 30_000,
           revalidateOnMount: true,
+          ...(options.revalidateOnFocus === undefined
+            ? {}
+            : { revalidateOnFocus: options.revalidateOnFocus }),
+          ...(options.focusSignal === undefined ? {} : { focusSignal: options.focusSignal }),
         }),
         Atom.setIdleTTL(idleTtlMs),
       );
@@ -621,6 +632,8 @@ export function createEnvironmentRpcQueryAtomFamily<R, ER, TTag extends Environm
     readonly staleTimeMs?: number;
     readonly idleTtlMs?: number;
     readonly refreshIntervalMs?: number;
+    readonly revalidateOnFocus?: boolean | "always";
+    readonly focusSignal?: Atom.Atom<unknown>;
   },
 ) {
   return createEnvironmentQueryAtomFamily(runtime, {
@@ -630,6 +643,10 @@ export function createEnvironmentRpcQueryAtomFamily<R, ER, TTag extends Environm
     ...(options.refreshIntervalMs === undefined
       ? {}
       : { refreshIntervalMs: options.refreshIntervalMs }),
+    ...(options.revalidateOnFocus === undefined
+      ? {}
+      : { revalidateOnFocus: options.revalidateOnFocus }),
+    ...(options.focusSignal === undefined ? {} : { focusSignal: options.focusSignal }),
     execute: (input: EnvironmentRpcInput<TTag>) => request(options.tag, input),
   });
 }

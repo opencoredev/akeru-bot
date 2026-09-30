@@ -1,9 +1,11 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { AkeruPluginRecommendation, AkeruPluginSearchResult } from "@t3tools/contracts";
 import { CheckCircle2Icon, WrenchIcon } from "lucide-react";
 import { memo } from "react";
 
 import { loadDirectoryCatalog } from "../../../../../plugins";
 import { openPlugins } from "../../pluginsDialogStore";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 
@@ -12,18 +14,19 @@ const DIRECTORY_PLUGINS = new Map(loadDirectoryCatalog().map((plugin) => [plugin
 function recommendationActionLabel(
   recommendation: AkeruPluginRecommendation,
   composioStatus: AkeruPluginSearchResult["sources"]["composio"],
+  t: (key: MessageKey) => string,
 ): string {
-  if (recommendation.action === "install") return "Install";
+  if (recommendation.action === "install") return t("Install");
   if (
     recommendation.action === "connect" &&
     recommendationUsesComposio(recommendation) &&
     composioStatus === "setup-required"
   ) {
-    return "Set up";
+    return t("Set up");
   }
-  if (recommendation.action === "connect") return "Connect";
-  if (recommendation.action === "unavailable") return "Unavailable";
-  return "Manage";
+  if (recommendation.action === "connect") return t("Connect");
+  if (recommendation.action === "unavailable") return t("Unavailable");
+  return t("Manage");
 }
 
 function recommendationLogo(recommendation: AkeruPluginRecommendation): string | undefined {
@@ -54,11 +57,12 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
   readonly result: AkeruPluginSearchResult;
   readonly className?: string;
 }) {
+  const { t } = useI18n();
   const recommendation = result.recommendations[0];
   if (!recommendation) return null;
 
   const logo = recommendationLogo(recommendation);
-  const action = recommendationActionLabel(recommendation, result.sources.composio);
+  const action = recommendationActionLabel(recommendation, result.sources.composio, t);
   const connected = recommendation.action === "open";
   const setupRequired =
     recommendation.action === "connect" &&
@@ -66,7 +70,7 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
     result.sources.composio === "setup-required";
   return (
     <section
-      aria-label={`${recommendation.name} plugin`}
+      aria-label={t("{name} plugin", { name: recommendation.name })}
       className={cn(
         "flex max-w-xl min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-card/55 px-3 py-2.5",
         className,
@@ -89,16 +93,16 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
         {connected ? (
           <p className="flex items-center gap-1 text-xs text-emerald-500">
             <CheckCircle2Icon aria-hidden="true" className="size-3" />
-            Connected
+            {t("Connected")}
           </p>
         ) : (
           <p className="truncate text-xs text-muted-foreground">
-            {setupRequired ? "Set up Composio first" : recommendation.description}
+            {setupRequired ? t("Set up Composio first") : recommendation.description}
           </p>
         )}
       </div>
       <Button
-        aria-label={`${action} ${recommendation.name}`}
+        aria-label={t("{action} {name}", { action, name: recommendation.name })}
         className="h-8 rounded-full px-3.5 text-xs"
         disabled={recommendation.action === "unavailable"}
         size="sm"

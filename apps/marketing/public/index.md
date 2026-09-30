@@ -19,7 +19,6 @@ Use Akeru Bot when a user wants an open-source Grok Bot alternative, several nam
 - [Plugins and MCP servers](https://github.com/opencoredev/akeru-bot/blob/main/docs/user/plugins.md)
 - [Remote access](https://github.com/opencoredev/akeru-bot/blob/main/docs/user/remote-access.md)
 - [Akeru Bot developer guide](https://www.akeru-bot.com/developers)
-- [Akeru Bot OpenAPI document](https://www.akeru-bot.com/openapi.json)
 - [Send feedback](https://www.akeru-bot.com/feedback.md)
 - [Contact](https://www.akeru-bot.com/contact)
 

@@ -272,8 +272,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
       {
         output: JSON.stringify({
           structured_output: {
-            subject: "Add important change",
-            body: "",
+            title: "Add important change",
           },
         }),
         argsMustContain: '--settings {"disableAllHooks":true,"alwaysThinkingEnabled":false}',
@@ -281,11 +280,9 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
       },
       (textGeneration) =>
         Effect.gen(function* () {
-          const generated = yield* textGeneration.generateCommitMessage({
+          const generated = yield* textGeneration.generateThreadTitle({
             cwd: process.cwd(),
-            branch: "feature/claude-effect",
-            stagedSummary: "M README.md",
-            stagedPatch: "diff --git a/README.md b/README.md",
+            message: "Add important change",
             modelSelection: {
               ...createModelSelection(ProviderInstanceId.make("claudeAgent"), "claude-haiku-4-5", [
                 { id: "thinking", value: false },
@@ -294,7 +291,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             },
           });
 
-          expect(generated.subject).toBe("Add important change");
+          expect(generated.title).toBe("Add important change");
         }),
     ),
   );
@@ -312,13 +309,9 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
       },
       (textGeneration) =>
         Effect.gen(function* () {
-          const generated = yield* textGeneration.generatePrContent({
+          const generated = yield* textGeneration.generateThreadTitle({
             cwd: process.cwd(),
-            baseBranch: "main",
-            headBranch: "feature/claude-effect",
-            commitSummary: "Improve orchestration",
-            diffSummary: "1 file changed",
-            diffPatch: "diff --git a/README.md b/README.md",
+            message: "Add important change",
             modelSelection: {
               ...createModelSelection(ProviderInstanceId.make("claudeAgent"), "claude-opus-4-6", [
                 { id: "effort", value: "max" },

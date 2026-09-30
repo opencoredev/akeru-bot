@@ -36,6 +36,29 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds language by English aliases and translated titles without changing its destination", () => {
+    for (const query of [
+      "language",
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "简体中文",
+      "中文",
+    ]) {
+      expect(searchSettings(query)).toContainEqual(
+        expect.objectContaining({
+          id: "language",
+          to: "/settings/general",
+          title: "Language",
+        }),
+      );
+    }
+    expect(
+      searchSettings("langue", undefined, (title) => (title === "Language" ? "Langue" : title)),
+    ).toEqual([expect.objectContaining({ id: "language", to: "/settings/general" })]);
+    expect(searchableSetting("language")).toEqual({ id: "language", title: "Language" });
+  });
   it("matches only setting titles", () => {
     expect(searchSettings("word", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("network", ITEMS).map((item) => item.id)).toEqual(["network-access"]);
@@ -48,13 +71,19 @@ describe("searchSettings", () => {
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
     expect(searchSettings("local execution")[0]).toMatchObject({
       id: "local-execution",
-      to: "/settings/general",
+      to: "/settings/sandbox",
     });
     expect(searchSettings("xyzzy")).toEqual([]);
   });
 
   it("finds bot channels by provider name", () => {
     for (const query of ["telegram", "imessage", "photon", "whatsapp"]) {
+      expect(searchSettings(query).map((item) => item.id)).toContain("bot-channels");
+    }
+  });
+
+  it("finds bot channels by channel repair words", () => {
+    for (const query of ["Channels", "channel", "webhook", "credentials", "messaging"]) {
       expect(searchSettings(query).map((item) => item.id)).toContain("bot-channels");
     }
   });
@@ -82,14 +111,48 @@ describe("searchSettings", () => {
 
   it("serves anchor props to panels from the catalog", () => {
     expect(searchableSetting("word-wrap")).toEqual({ id: "word-wrap", title: "Word wrap" });
-    expect(searchableSetting("archive")).toEqual({ id: "archive", title: "Archived chats" });
+    expect(searchableSetting("diagnostics")).toEqual({ id: "diagnostics", title: "Diagnostics" });
   });
 
-  it("routes sandbox and browser sharing to General settings", () => {
+  it("routes sandbox and browser sharing to the Sandbox page", () => {
     expect(searchSettings("sandbox and browser sharing")[0]).toMatchObject({
       id: "sandbox-browser-sharing",
-      to: "/settings/general",
+      to: "/settings/sandbox",
     });
+  });
+
+  it("routes voice to the Providers page without offering a fallback model control", () => {
+    expect(searchSettings("voice provider")[0]).toMatchObject({
+      id: "voice-provider",
+      to: "/settings/providers",
+    });
+    expect(searchSettings("fallback model")).not.toContainEqual(
+      expect.objectContaining({ id: "text-generation-model" }),
+    );
+  });
+
+  it("routes bot errors and troubleshooting to diagnostics on the Advanced page", () => {
+    expect(searchSettings("errors")[0]).toMatchObject({
+      id: "diagnostics",
+      to: "/settings/advanced",
+    });
+    expect(searchSettings("diagnostics")[0]).toMatchObject({
+      id: "diagnostics",
+      to: "/settings/advanced",
+    });
+  });
+
+  it("drops coding-agent leftovers from the index", () => {
+    const ids: ReadonlyArray<string> = SETTINGS_SEARCH_ITEMS.map((item) => item.id);
+    for (const id of [
+      "hide-whitespace-changes",
+      "skills-in-slash-menu",
+      "add-project-starts-in",
+      "source-control",
+      "archive",
+    ]) {
+      expect(ids).not.toContain(id);
+    }
   });
 
   it("routes sandbox provider settings to Sandbox settings", () => {
@@ -118,7 +181,7 @@ describe("searchSettings", () => {
     expect(searchSettings("environment identification")[0]).toMatchObject({
       id: "environment-identification",
       to: "/settings/appearance",
-      targetId: "appearance",
+      targetId: "display",
     });
   });
 
@@ -130,6 +193,32 @@ describe("searchSettings", () => {
     expect(searchSettings("voice calls")[0]).toMatchObject({
       id: "privacy-voice-calls",
       to: "/settings/privacy",
+    });
+  });
+
+  it("routes memory controls to Privacy settings", () => {
+    expect(searchSettings("shared project memory")[0]).toMatchObject({
+      id: "memory-shared-project",
+      to: "/settings/privacy",
+    });
+    expect(searchSettings("private bot memory")[0]).toMatchObject({
+      id: "memory-private-bot",
+      to: "/settings/privacy",
+    });
+  });
+
+  it("finds image generation separately from chat providers", () => {
+    expect(searchSettings("image generation")[0]).toMatchObject({
+      id: "image-generation",
+      to: "/settings/image-generation",
+    });
+    expect(searchSettings("Grok images")[0]).toMatchObject({
+      id: "image-provider-grok",
+      to: "/settings/image-generation",
+    });
+    expect(searchSettings("image fallback")[0]).toMatchObject({
+      id: "image-fallback-order",
+      to: "/settings/image-generation",
     });
   });
 });

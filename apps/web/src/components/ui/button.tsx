@@ -37,7 +37,7 @@ const buttonVariants = cva(
       },
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground [:active,[data-pressed]]:bg-primary/80 [:hover,[data-pressed]]:bg-primary/90",
+          "border-transparent bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/88",
         destructive:
           "border-transparent bg-destructive text-white [:active,[data-pressed]]:bg-destructive/80 [:hover,[data-pressed]]:bg-destructive/90",
         "destructive-outline":

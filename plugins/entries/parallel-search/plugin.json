@@ -16,7 +16,10 @@
   },
   "platforms": ["web", "desktop", "mobile"],
   "transport": { "type": "url", "url": "https://search.parallel.ai/mcp-oauth" },
-  "connection": { "type": "ready" },
+  "connection": {
+    "type": "verification-pending",
+    "blocker": "The Parallel OAuth sign-in and install, use, disable, reconnect, and remove lifecycle still needs verification against the live endpoint."
+  },
   "authentication": "oauth",
   "requiredCredentials": [],
   "setup": ["Sign in through the Parallel OAuth flow."],
@@ -28,7 +31,7 @@
     }
   ],
   "approvals": [],
-  "catalogStatus": "available",
+  "catalogStatus": "verification-pending",
   "skills": [
     {
       "title": "Parallel Web Search",

@@ -17,6 +17,11 @@ Akeru Bot is an independent fork of [T3 Code](https://t3.codes). The root [`LICE
 | Bluesky markdown text            | Native markdown renderer adapted from Bluesky                    | [MIT](legal/licenses/MIT-Bluesky.txt)                                                                        |
 | Expo composer editor             | Native composer editor adapted from Expo                         | [MIT](legal/licenses/MIT-Expo.txt)                                                                           |
 | Khroma                           | Color utilities bundled through Mermaid                          | [MIT](legal/licenses/MIT-Khroma.txt)                                                                         |
+| Beautiful UI                     | Chat loading state port                                          | [MIT](legal/licenses/MIT-Beautiful-UI.txt)                                                                   |
+
+The "Drive" loading state from Beautiful UI by Shane Levine (<https://www.beautifului.dev/>) is
+adapted in `apps/web/src/components/chat/ResponseLoadingState.tsx`. The file records its source in a
+header comment.
 
 Mastra-derived source is under `apps/server/src/subscription-auth`. Its source references are:
 
