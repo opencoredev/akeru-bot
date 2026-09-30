@@ -1,4 +1,4 @@
-import { EnvironmentId, type OrchestrationThreadShell, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, type OrchestrationThreadShell, ThreadId } from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";

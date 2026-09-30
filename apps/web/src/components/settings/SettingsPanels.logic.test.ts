@@ -1,12 +1,12 @@
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
 import {
   DEFAULT_SERVER_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
   type ProviderInstanceConfig,
-} from "@t3tools/contracts";
-import { getBackgroundActivityPresetSettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@akeru/contracts";
+import { getBackgroundActivityPresetSettings } from "@akeru/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
 import {

@@ -13,7 +13,7 @@ import {
   SlidersHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import { Fragment, Suspense, lazy, type ComponentType } from "react";
 
 import { useI18n } from "~/i18n";

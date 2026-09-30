@@ -3,7 +3,7 @@ import {
   type ComputerAction,
   type ComputerSession,
   type ComputerState,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveComputerViewer } from "./computerViewer.ts";

@@ -1,12 +1,12 @@
-import { PRODUCT_HOME_DIRNAME } from "@t3tools/shared/devHome";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { PRODUCT_HOME_DIRNAME } from "@akeru/shared/devHome";
+import { HostProcessEnvironment, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import {
   listLoginShellCandidates,
   mergePathEntries,
   readPathFromLoginShell,
   readPathFromLaunchctl,
   resolveWindowsEnvironment,
-} from "@t3tools/shared/shell";
+} from "@akeru/shared/shell";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";

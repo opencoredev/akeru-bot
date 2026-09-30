@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
-import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
+import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
+import { codexFeedbackMessage } from "@akeru/client-runtime/state/threads";
 
 import {
   BotId,
@@ -14,7 +14,7 @@ import {
   type AkeruDelegationRecord,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import {
   buildPendingUserInputAnswers,

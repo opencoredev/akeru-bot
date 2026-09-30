@@ -4,12 +4,12 @@ import {
   type ChannelProvider,
   type EnvironmentId,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   channelFailureReason,
   channelPickerProjectId,
-} from "@t3tools/client-runtime/channel-presentation";
-import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+} from "@akeru/client-runtime/channel-presentation";
+import { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";

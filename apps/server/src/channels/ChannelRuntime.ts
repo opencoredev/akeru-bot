@@ -26,7 +26,7 @@ import {
   type ServerSettingsError,
   type OrchestrationReadModel,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { type Adapter, Chat, ConsoleLogger, type Message, type Thread } from "chat";
 import { Context } from "effect";
 import * as Cause from "effect/Cause";
@@ -53,7 +53,7 @@ import {
   HttpServerResponse,
 } from "effect/unstable/http";
 
-export { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+export { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 
 import { ServerSecretStore, type SecretStoreError } from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";

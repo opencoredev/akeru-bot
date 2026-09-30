@@ -10,8 +10,8 @@ import {
   type ComputerCapabilityExplanation,
   type ComputerViewerNotice,
   type ComputerViewerView,
-} from "@t3tools/client-runtime/state/computer-viewer";
-import type { ComputerAction, ComputerFrame } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/computer-viewer";
+import type { ComputerAction, ComputerFrame } from "@akeru/contracts";
 import { useRef, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 
 import { useI18n } from "../../i18n";

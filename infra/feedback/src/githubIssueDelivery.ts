@@ -1,5 +1,5 @@
 // @effect-diagnostics cryptoRandomUUID:off globalConsole:off globalDate:off
-import type { StoredProductFeedbackSubmission } from "@t3tools/contracts";
+import type { StoredProductFeedbackSubmission } from "@akeru/contracts";
 import * as NodeBuffer from "node:buffer";
 import * as NodeCrypto from "node:crypto";
 

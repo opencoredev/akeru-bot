@@ -1,5 +1,5 @@
-import { catalogRegistry } from "@t3tools/client-runtime/i18n";
-import { BotId, EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
+import { catalogRegistry } from "@akeru/client-runtime/i18n";
+import { BotId, EnvironmentId, ProviderInstanceId } from "@akeru/contracts";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";

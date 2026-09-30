@@ -1,6 +1,6 @@
 import * as NodeBuffer from "node:buffer";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { VOICE_AUDIO_MAX_BYTES } from "@t3tools/contracts";
+import { VOICE_AUDIO_MAX_BYTES } from "@akeru/contracts";
 import { makeVoiceAdapters, readVoiceResponse, type VoiceFetch } from "./VoiceAdapters.ts";
 
 const signal = () => new AbortController().signal;

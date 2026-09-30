@@ -8,8 +8,8 @@ export const config: VercelConfig = {
       "*": false,
     },
   },
-  installCommand: "npm install -g vite-plus && vp install --filter '@t3tools/marketing...'",
-  buildCommand: "vp run --filter @t3tools/marketing build",
+  installCommand: "npm install -g vite-plus && vp install --filter '@akeru/marketing...'",
+  buildCommand: "vp run --filter @akeru/marketing build",
   outputDirectory: "dist",
   routes: [
     {

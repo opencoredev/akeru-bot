@@ -28,7 +28,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
   type SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import {

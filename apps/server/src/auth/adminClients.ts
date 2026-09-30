@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, type AuthClientSession } from "@t3tools/contracts";
+import { AuthAccessWriteScope, type AuthClientSession } from "@akeru/contracts";
 
 /**
  * True once a person has paired a client that can manage Connections. Bearer sessions minted by

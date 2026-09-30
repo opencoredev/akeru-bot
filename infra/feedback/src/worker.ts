@@ -1,5 +1,5 @@
 // @effect-diagnostics globalConsole:off globalFetch:off globalDate:off
-import { StoredProductFeedbackSubmission } from "@t3tools/contracts";
+import { StoredProductFeedbackSubmission } from "@akeru/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 

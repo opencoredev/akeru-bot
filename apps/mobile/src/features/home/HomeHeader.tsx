@@ -1,5 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, Text as RNText, TextInput, View } from "react-native";

@@ -1,12 +1,11 @@
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { it as effectIt } from "@effect/vitest";
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { AkeruBotWorkspace } from "./botWorkspace.ts";
-
 import {
   botRuntimeResourceScope,
   BotWorkspacePool,
@@ -21,7 +20,65 @@ const localWorkspace = () =>
     sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
   });
 
+function remoteWorkspace(overrides: Partial<AkeruBotWorkspace> = {}): AkeruBotWorkspace {
+  return {
+    id: "akeru-persistent",
+    provider: "tenki",
+    workspace: localWorkspace(),
+    inspect: vi.fn(async () => "running" as const),
+    wake: vi.fn(async () => undefined),
+    sleep: vi.fn(async () => undefined),
+    destroy: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
+
 describe("BotWorkspacePool", () => {
+  effectIt.effect("never destroys a durable Railway VM on initial or subsequent wake failure", () =>
+    Effect.promise(async () => {
+      const pool = new BotWorkspacePool();
+      const destroy = vi.fn(async () => undefined);
+      const wake = vi.fn(async () => undefined);
+      const create = async () => ({
+        id: "shared-railway",
+        provider: "railway" as const,
+        workspace: localWorkspace(),
+        inspect: async () => "running" as const,
+        wake,
+        sleep: async () => undefined,
+        destroy,
+      });
+      const active = await pool.acquire("old-credentials", create);
+      wake.mockRejectedValueOnce(new Error("new credentials unavailable"));
+      await expect(pool.acquire("new-credentials", create)).rejects.toThrow(
+        "new credentials unavailable",
+      );
+      expect(destroy).not.toHaveBeenCalled();
+      await active.release();
+      wake.mockRejectedValueOnce(new Error("wake failed"));
+      await expect(pool.acquire("old-credentials", create)).rejects.toThrow("wake failed");
+      expect(destroy).not.toHaveBeenCalled();
+    }),
+  );
+
+  effectIt.effect(
+    "keeps Railway identities across credential changes without reusing credential-bound clients",
+    () =>
+      Effect.sync(() => {
+        const key = (token: string, scope = "bot-one") =>
+          botWorkspaceResourceKey({
+            resourceScope: scope,
+            sandbox: "railway",
+            credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
+          });
+        expect(key("old")).not.toBe(key("new"));
+        expect(botWorkspaceIdentity(key("old"))).toBe(botWorkspaceIdentity(key("new")));
+        expect(botWorkspaceIdentity(key("old"))).not.toBe(
+          botWorkspaceIdentity(key("old", "bot-two")),
+        );
+      }),
+  );
+
   effectIt.effect("derives workspace identities", () =>
     Effect.sync(() => {
       expect(
@@ -152,6 +209,154 @@ describe("BotWorkspacePool", () => {
     expect(create).toHaveBeenCalledTimes(2);
     await retry.release({ destroy: true });
     expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it("pauses and reuses a remote workspace after initial wake failure", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")).mockResolvedValue(undefined),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    await expect(pool.acquire("remote-initial", create)).rejects.toThrow("wake failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    await pool.retryFailedSleeps();
+    expect(failed.sleep).toHaveBeenCalledOnce();
+    const lease = await pool.acquire("remote-initial", create);
+    expect(create).toHaveBeenCalledOnce();
+    expect(lease.workspace).toBe(failed);
+    await lease.release({ destroy: true });
+    expect(failed.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("does not pause a retained workspace while acquisition is starting", async () => {
+    const pool = new BotWorkspacePool();
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause failed"))
+      .mockResolvedValue(undefined);
+    const workspace = remoteWorkspace({ sleep });
+    const create = vi.fn().mockResolvedValue(workspace);
+    const initial = await pool.acquire("acquiring", create);
+    await expect(initial.release()).rejects.toThrow("pause failed");
+
+    const acquisition = pool.acquire("acquiring", create);
+    await pool.retryFailedSleeps();
+    const lease = await acquisition;
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(lease.workspace).toBe(workspace);
+    await lease.release({ destroy: true });
+  });
+
+  it("preserves a remote workspace after cached wake failure and retries cleanup", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      wake: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("wake failed"))
+        .mockResolvedValue(undefined),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    const initial = await pool.acquire("remote-cached", create);
+    await initial.release();
+    await expect(pool.acquire("remote-cached", create)).rejects.toThrow("wake failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    await pool.retryFailedSleeps();
+    expect(failed.sleep).toHaveBeenCalledTimes(2);
+    const lease = await pool.acquire("remote-cached", create);
+    expect(lease.workspace).toBe(failed);
+    await lease.release({ destroy: true });
+  });
+
+  it("preserves and reuses a remote workspace after sleep failure", async () => {
+    const pool = new BotWorkspacePool();
+    const failed = remoteWorkspace({
+      sleep: vi.fn().mockRejectedValueOnce(new Error("sleep failed")),
+    });
+    const reattached = remoteWorkspace();
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    const initial = await pool.acquire("remote-sleep", create);
+    await expect(initial.release()).rejects.toThrow("sleep failed");
+    expect(failed.destroy).not.toHaveBeenCalled();
+    const lease = await pool.acquire("remote-sleep", create);
+    expect(lease.workspace).toBe(failed);
+    expect(create).toHaveBeenCalledOnce();
+    await lease.release({ destroy: true });
+    expect(failed.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("retries failed remote pauses without another acquisition and retains repeated failures", async () => {
+    const pool = new BotWorkspacePool();
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause failed"))
+      .mockRejectedValueOnce(new Error("pause still unavailable"))
+      .mockResolvedValue(undefined);
+    const workspace = remoteWorkspace({ sleep });
+    const lease = await pool.acquire("idle-retry", async () => workspace);
+    await expect(lease.release()).rejects.toThrow("pause failed");
+    await expect(pool.retryFailedSleeps()).rejects.toThrow("pause still unavailable");
+    await pool.retryFailedSleeps();
+    expect(sleep).toHaveBeenCalledTimes(3);
+    expect(workspace.destroy).not.toHaveBeenCalled();
+    await pool.retryFailedSleeps();
+    expect(sleep).toHaveBeenCalledTimes(3);
+    await pool.destroyAll();
+    expect(workspace.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry pause while a recovered workspace is leased", async () => {
+    const pool = new BotWorkspacePool();
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause failed"))
+      .mockResolvedValue(undefined);
+    const workspace = remoteWorkspace({ sleep });
+    const create = vi.fn(async () => workspace);
+    const lease = await pool.acquire("active-retry", create);
+    await expect(lease.release()).rejects.toThrow("pause failed");
+    const active = await pool.acquire("active-retry", create);
+    await pool.retryFailedSleeps();
+    expect(sleep).toHaveBeenCalledTimes(1);
+    await active.release();
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for an in-flight idle retry before waking a new lease", async () => {
+    const pool = new BotWorkspacePool();
+    let finishPause!: () => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause failed"))
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPause = resolve;
+            markStarted();
+          }),
+      );
+    const workspace = remoteWorkspace({ sleep });
+    const create = vi.fn(async () => workspace);
+    const lease = await pool.acquire("concurrent-retry", create);
+    await expect(lease.release()).rejects.toThrow("pause failed");
+    const retry = pool.retryFailedSleeps();
+    await started;
+    const acquire = pool.acquire("concurrent-retry", create);
+    expect(workspace.wake).toHaveBeenCalledOnce();
+    finishPause();
+    await retry;
+    const active = await acquire;
+    expect(workspace.wake).toHaveBeenCalledTimes(2);
+    await active.release({ destroy: true });
   });
   effectIt.effect("sleeps after final release and wakes once on reuse", () =>
     Effect.gen(function* () {

@@ -15,9 +15,9 @@ import {
   durableFactMoveScopes,
   durableFactSourceLabel,
   type ImportConflictDecision,
-} from "@t3tools/client-runtime/durable-memory";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { AkeruMemoryImportClassification } from "@t3tools/contracts";
+} from "@akeru/client-runtime/durable-memory";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { AkeruMemoryImportClassification } from "@akeru/contracts";
 
 import { useI18n } from "../../i18n";
 

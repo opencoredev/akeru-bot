@@ -1,5 +1,5 @@
-import { relativeRunTime } from "@t3tools/client-runtime/routines";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { relativeRunTime } from "@akeru/client-runtime/routines";
+import type { ScopedThreadRef } from "@akeru/contracts";
 import { PlusIcon } from "lucide-react";
 import { useMemo } from "react";
 

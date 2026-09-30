@@ -5,7 +5,7 @@ import {
   ThreadId,
   type OrchestrationThreadShell,
   type ServerConfig,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { isValidElement, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -78,7 +78,7 @@ vi.mock("../../components/ControlPill", () => ({ ControlPill: "ControlPill" }));
 vi.mock("../../components/ProviderIcon", () => ({ ProviderIcon: "ProviderIcon" }));
 vi.mock("../../lib/useThemeColor", () => ({ useThemeColor: () => "#000000" }));
 vi.mock("../../lib/i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useMobileI18n: () => ({ t: translator.translate, plural: translator.plural }) };
 });

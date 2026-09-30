@@ -1,10 +1,10 @@
-import { type EnvironmentShellSummary } from "@t3tools/client-runtime/state/shell";
-import { type NetworkStatus } from "@t3tools/client-runtime/connection";
+import { type EnvironmentShellSummary } from "@akeru/client-runtime/state/shell";
+import { type NetworkStatus } from "@akeru/client-runtime/connection";
 import {
   type ConnectionFailureCode,
   type EnvironmentConnectionPhase,
-} from "@t3tools/client-runtime/connection";
-import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
+} from "@akeru/client-runtime/connection";
+import type { EnvironmentId, ServerConfig } from "@akeru/contracts";
 
 import type { EnvironmentPresentation } from "./environments";
 

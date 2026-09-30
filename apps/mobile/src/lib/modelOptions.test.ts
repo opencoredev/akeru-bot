@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
-import { ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
+import { ProviderInstanceId, type ServerConfig } from "@akeru/contracts";
 
 import {
   buildModelOptions,

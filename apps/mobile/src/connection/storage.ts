@@ -6,12 +6,12 @@ import {
   removeConnectionFromCatalog,
   removeCatalogValue,
   replaceCatalogValue,
-} from "@t3tools/client-runtime/platform";
+} from "@akeru/client-runtime/platform";
 import {
   ConnectionTransientError,
   CredentialStore,
   ProfileStore,
-} from "@t3tools/client-runtime/connection";
+} from "@akeru/client-runtime/connection";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

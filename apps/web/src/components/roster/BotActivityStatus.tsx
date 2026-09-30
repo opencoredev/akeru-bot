@@ -1,6 +1,6 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { ThreadSilentRun } from "@t3tools/client-runtime/silent-run";
-import type { OrchestrationThreadActivity, TurnId } from "@t3tools/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
+import type { OrchestrationThreadActivity, TurnId } from "@akeru/contracts";
 import type { CSSProperties } from "react";
 
 import { useI18n } from "../../i18n";

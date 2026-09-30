@@ -1,4 +1,4 @@
-import { ProviderDriverKind } from "@t3tools/contracts";
+import { ProviderDriverKind } from "@akeru/contracts";
 
 import type { Icon } from "../Icons";
 import {

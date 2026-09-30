@@ -2,9 +2,9 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   type OperateAccess,
   resolveRemoteOperateAccess,
-} from "@t3tools/client-runtime/authorization";
-import { createEnvironmentSessionAtoms } from "@t3tools/client-runtime/state/session";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/authorization";
+import { createEnvironmentSessionAtoms } from "@akeru/client-runtime/state/session";
+import type { EnvironmentId } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 

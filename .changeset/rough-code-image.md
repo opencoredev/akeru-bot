@@ -1,5 +1,5 @@
 ---
-"@t3tools/web": patch
+"@akeru/web": patch
 ---
 
 Keep literal image examples inside code spans in long chat previews.

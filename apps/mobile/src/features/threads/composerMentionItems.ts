@@ -3,22 +3,22 @@ import {
   type OrchestrationBot,
   type OrchestrationGroup,
   type ServerProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   type ComposerMentionBot,
   composerBotMentionDetail,
-} from "@t3tools/shared/composerBotMentions";
+} from "@akeru/shared/composerBotMentions";
 import {
   BROWSER_MENTION_LABEL,
   COMPOSER_BROWSER_MENTION,
   serializeComposerBotMention,
   serializeComposerThreadMention,
-} from "@t3tools/shared/composerInlineTokens";
+} from "@akeru/shared/composerInlineTokens";
 import {
   type ComposerThreadMentionCandidate,
   rankComposerThreadMentions,
-} from "@t3tools/shared/composerThreadMentions";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
+} from "@akeru/shared/composerThreadMentions";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 

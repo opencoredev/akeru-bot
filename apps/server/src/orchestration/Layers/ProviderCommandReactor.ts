@@ -26,8 +26,8 @@ import {
   SANDBOX_PROVIDER_CREDENTIALS,
   type RuntimeMode,
   type TurnId,
-} from "@t3tools/contracts";
-import { collectComposerMentionReferences } from "@t3tools/shared/composerInlineTokens";
+} from "@akeru/contracts";
+import { collectComposerMentionReferences } from "@akeru/shared/composerInlineTokens";
 import {
   appendComposerMentionContext,
   isHiddenComposerThread,
@@ -35,12 +35,12 @@ import {
   THREAD_MENTION_MAX_THREADS,
   THREAD_MENTION_TURN_LIMIT,
   type ThreadMentionSource,
-} from "@t3tools/shared/composerThreadMentions";
+} from "@akeru/shared/composerThreadMentions";
 import {
   isTemporaryWorktreeBranch,
   stripWorktreeBranchPrefix,
   WORKTREE_BRANCH_PREFIX,
-} from "@t3tools/shared/git";
+} from "@akeru/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -56,7 +56,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";

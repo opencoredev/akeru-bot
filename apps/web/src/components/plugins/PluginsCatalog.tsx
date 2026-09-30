@@ -4,7 +4,7 @@ import {
   PlusSignIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
-import type { ComposioToolkit, McpServer, ProviderAccessStatus } from "@t3tools/contracts";
+import type { ComposioToolkit, McpServer, ProviderAccessStatus } from "@akeru/contracts";
 import type { ReactNode } from "react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
 import { useI18n } from "../../i18n";

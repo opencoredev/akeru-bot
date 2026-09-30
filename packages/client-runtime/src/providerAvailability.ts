@@ -2,7 +2,7 @@ import type {
   OrchestrationThreadActivity,
   ServerProvider,
   ServerProviderUnavailability,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { createTranslator, type MessageKey, type TranslationParams } from "./i18n/index.ts";
 

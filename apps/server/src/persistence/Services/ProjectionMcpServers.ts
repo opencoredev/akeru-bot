@@ -1,5 +1,5 @@
 /** Workspace-level raw MCP server projection persistence. */
-import { McpServer, McpServerId } from "@t3tools/contracts";
+import { McpServer, McpServerId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

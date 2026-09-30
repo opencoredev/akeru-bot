@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import type { RemoteEnvironmentAuthError } from "../authorization/remote.ts";
 import {
   ConnectionBlockedError,

@@ -6,9 +6,9 @@ import {
   type ImportConflictDecision,
   memoryArchiveSchemaVersion,
   resolveImportConflicts,
-} from "@t3tools/client-runtime/durable-memory";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/durable-memory";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
   AkeruMarkdownMemoryArchiveV3,
   AkeruMemoryArchiveV2,
@@ -16,7 +16,7 @@ import {
   type AkeruMarkdownMemoryImportPreviewItem,
   type AkeruMemoryImportPreview,
   type ScopedThreadRef,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { useMemo, useRef, useState } from "react";
 

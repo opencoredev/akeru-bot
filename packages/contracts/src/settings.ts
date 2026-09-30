@@ -664,7 +664,15 @@ export const SandboxProvider = BotSandbox;
 export type SandboxProvider = BotSandbox;
 export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
 
-export const CLOUD_SANDBOX_PROVIDERS = ["e2b", "daytona", "vercel", "upstash", "ascii"] as const;
+export const CLOUD_SANDBOX_PROVIDERS = [
+  "e2b",
+  "daytona",
+  "vercel",
+  "upstash",
+  "ascii",
+  "railway",
+  "tenki",
+] as const;
 export const SANDBOX_PROVIDER_CREDENTIALS = {
   e2b: [{ name: "E2B_API_KEY", sensitive: true }],
   daytona: [{ name: "DAYTONA_API_KEY", sensitive: true }],
@@ -675,6 +683,11 @@ export const SANDBOX_PROVIDER_CREDENTIALS = {
   ],
   upstash: [{ name: "UPSTASH_BOX_API_KEY", sensitive: true }],
   ascii: [{ name: "BOX_API_KEY", sensitive: true }],
+  railway: [
+    { name: "RAILWAY_API_TOKEN", sensitive: true },
+    { name: "RAILWAY_ENVIRONMENT_ID", sensitive: false },
+  ],
+  tenki: [{ name: "TENKI_API_KEY", sensitive: true }],
 } as const satisfies Readonly<
   Record<
     CloudSandboxProvider,
@@ -700,6 +713,8 @@ export const SandboxSettings = Schema.Struct({
     vercel: SandboxProviderConnection,
     upstash: SandboxProviderConnection,
     ascii: SandboxProviderConnection,
+    railway: SandboxProviderConnection,
+    tenki: SandboxProviderConnection,
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type SandboxSettings = typeof SandboxSettings.Type;
@@ -1013,6 +1028,8 @@ const SandboxSettingsPatch = Schema.Struct({
       vercel: Schema.optionalKey(SandboxProviderConnectionPatch),
       upstash: Schema.optionalKey(SandboxProviderConnectionPatch),
       ascii: Schema.optionalKey(SandboxProviderConnectionPatch),
+      railway: Schema.optionalKey(SandboxProviderConnectionPatch),
+      tenki: Schema.optionalKey(SandboxProviderConnectionPatch),
     }),
   ),
 });

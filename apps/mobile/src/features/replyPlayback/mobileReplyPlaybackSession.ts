@@ -1,8 +1,8 @@
-import { createReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
-import { EnvironmentId } from "@t3tools/contracts";
-import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
+import { createReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
+import { EnvironmentId } from "@akeru/contracts";
+import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 import { createExpoReplyAudio } from "./expoReplyAudio";
-import { synthesizeVoiceChunks } from "@t3tools/client-runtime/voice";
+import { synthesizeVoiceChunks } from "@akeru/client-runtime/voice";
 import { decodeReplyAudioBase64 } from "./base64";
 import * as SecureStore from "expo-secure-store";
 

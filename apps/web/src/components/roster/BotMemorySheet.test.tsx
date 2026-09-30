@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The component contract reads its source.
 import * as NodeFS from "node:fs";
 
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { memoryDocumentCopy } from "./botMemoryCopy";

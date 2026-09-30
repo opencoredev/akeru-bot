@@ -4,7 +4,7 @@ import {
   sameReplyPlaybackIdentity,
   type ReplyPlaybackController,
   type ReplyPlaybackRequest,
-} from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/client-runtime/reply-playback";
 
 import { AppText } from "../../components/AppText";
 

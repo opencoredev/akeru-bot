@@ -9,7 +9,7 @@ import {
   type McpServerConfig,
 } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
-import type { BotId, BotSandbox, McpServer } from "@t3tools/contracts";
+import type { BotId, BotSandbox, McpServer } from "@akeru/contracts";
 
 import {
   createBotBrowser,
@@ -114,6 +114,7 @@ export class AkeruSessionResources {
   private readonly browserFailures = new Map<string, string>();
   private readonly browserThreadBots = new Map<string, string>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
+  private readonly tenkiThreads = new Set<string>();
   private controllingThreadId: string | undefined;
   private shuttingDown = false;
 
@@ -124,6 +125,16 @@ export class AkeruSessionResources {
   acquire(input: AkeruSessionResourceInput): Promise<AkeruSessionResourceView> {
     if (this.shuttingDown) {
       return Promise.reject(new Error("Akeru session resources are shutting down."));
+    }
+    if (
+      input.botSandbox === "railway" &&
+      input.mcpServers.some((server) => mcpServerNeedsBrowserAttachment(server, true))
+    ) {
+      return Promise.reject(
+        new Error(
+          "Railway previews require a Railway CLI tunnel. Disable browser-dependent connectors before starting this bot; automatic browser routing is not supported.",
+        ),
+      );
     }
     const pending = this.acquisitions.get(input.threadId);
     if (pending) return pending;
@@ -303,11 +314,11 @@ export class AkeruSessionResources {
 
       const previewMcpServerConfig = this.options.getPreviewMcpServerConfig?.(key);
       if (input.mcpServers.length > 0 || previewMcpServerConfig) {
-        const attachment = input.mcpServers.some((server) =>
-          mcpServerNeedsBrowserAttachment(server, remote),
-        )
-          ? await browser.attachment()
-          : undefined;
+        const attachment =
+          input.botSandbox !== "tenki" &&
+          input.mcpServers.some((server) => mcpServerNeedsBrowserAttachment(server, remote))
+            ? await browser.attachment()
+            : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
           configs[AKERU_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
@@ -362,20 +373,24 @@ export class AkeruSessionResources {
         }
       }
 
+      if (input.botSandbox === "tenki") this.tenkiThreads.add(key);
       return {
         workspace:
           userComputerWorkspaceLease?.workspace.workspace ?? workspaceLease.workspace.workspace,
         botWorkspace: workspaceLease.workspace.workspace,
       };
     } catch (cause) {
-      await this.releaseOnce(key, { destroy: true }).catch(() => undefined);
+      await this.releaseOnce(key, {
+        destroy: input.botSandbox !== "railway" && input.botSandbox !== "tenki",
+      }).catch(() => undefined);
       throw cause;
     }
   }
 
   getConnectorTools(threadId: string): ToolsInput {
+    const browserTools = this.threadBrowsers.get(threadId)?.tools;
     const tools: ToolsInput = {
-      ...this.threadBrowsers.get(threadId)?.tools,
+      ...(!this.tenkiThreads.has(threadId) ? browserTools : undefined),
       ...this.mcpManagers.get(threadId)?.getTools(),
     };
     return Object.fromEntries(
@@ -429,6 +444,10 @@ export class AkeruSessionResources {
     );
   }
 
+  retryFailedWorkspaceSleeps(): Promise<void> {
+    return this.workspacePool.retryFailedSleeps();
+  }
+
   async release(threadId: string, options?: { readonly destroy?: boolean }): Promise<void> {
     await this.acquisitions.get(threadId)?.catch(() => undefined);
     await this.releaseOnce(threadId, options);
@@ -441,6 +460,7 @@ export class AkeruSessionResources {
     const failures: unknown[] = [];
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);
+    this.tenkiThreads.delete(threadId);
     if (manager) await manager.disconnect().catch((cause) => failures.push(cause));
     const computerUseTemporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
     this.computerUseTemporaryDirectories.delete(threadId);
@@ -530,6 +550,7 @@ export class AkeruSessionResources {
   }
 
   async shutdown(): Promise<void> {
+    const failures: unknown[] = [];
     this.shuttingDown = true;
     await Promise.allSettled(this.acquisitions.values());
     const threadIds = new Set([
@@ -539,8 +560,23 @@ export class AkeruSessionResources {
       ...this.mcpManagers.keys(),
       ...this.threadBrowsers.keys(),
     ]);
-    await Promise.allSettled([...threadIds].map((threadId) => this.release(threadId)));
-    await Promise.allSettled([...this.resourceBrowsers.values()].map((browser) => browser.close()));
+    const releases = await Promise.allSettled(
+      [...threadIds].map((threadId) => this.release(threadId)),
+    );
+    for (const result of releases) {
+      if (result.status === "rejected") failures.push(result.reason);
+    }
+    try {
+      await this.workspacePool.retryFailedSleeps();
+    } catch (cause) {
+      failures.push(cause);
+    }
+    const browserClosures = await Promise.allSettled(
+      [...this.resourceBrowsers.values()].map((browser) => browser.close()),
+    );
+    for (const result of browserClosures) {
+      if (result.status === "rejected") failures.push(result.reason);
+    }
     this.resourceBrowsers.clear();
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
@@ -548,5 +584,6 @@ export class AkeruSessionResources {
     this.browserAttributions.clear();
     this.browserFailures.clear();
     this.browserThreadBots.clear();
+    if (failures.length > 0) throw failures[0];
   }
 }

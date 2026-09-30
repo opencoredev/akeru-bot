@@ -30,7 +30,7 @@ vi.mock("./AppText", () => ({ AppText: "Text" }));
 vi.mock("./AppSymbol", () => ({ SymbolView: "SymbolView" }));
 vi.mock("../lib/useThemeColor", () => ({ useThemeColor: () => "#000" }));
 vi.mock("../lib/i18n", async () => {
-  const { catalogRegistry, createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const zhCN = await catalogRegistry["zh-CN"]!();
   const translators = { en: createTranslator("en"), "zh-CN": createTranslator("zh-CN", zhCN) };
   return { useMobileI18n: () => ({ t: translators[state.locale].translate }) };

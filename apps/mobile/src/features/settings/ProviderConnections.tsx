@@ -8,7 +8,7 @@ import type {
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   anyProviderHealthChecking,
   apiKeyStartInput,
@@ -18,12 +18,12 @@ import {
   providerConnectionLabel,
   providerUsesApiKey,
   providerSupportsBaseUrl,
-} from "@t3tools/client-runtime/provider-auth";
-import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
+} from "@akeru/client-runtime/provider-auth";
+import { providerAccessModelNames } from "@akeru/client-runtime/provider-access";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 
 import { AppText as Text } from "../../components/AppText";
 import { ProviderAccessSummary } from "./ProviderAccessSummary";

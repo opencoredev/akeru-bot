@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { View } from "react-native";
-import type { ReplyReadoutPreference as Preference } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyReadoutPreference as Preference } from "@akeru/client-runtime/reply-playback";
 
 import { AppText } from "../../components/AppText";
 import { ThemedSwitch } from "../../components/ThemedSwitch";

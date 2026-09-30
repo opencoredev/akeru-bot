@@ -1,4 +1,4 @@
-import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
+import type { EnvironmentId, SidebarProjectGroupingMode } from "@akeru/contracts";
 import {
   createContext,
   createElement,

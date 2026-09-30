@@ -18,7 +18,7 @@ import {
   type AkeruMemoryRevision,
   type AkeruMemoryScope,
   type AkeruMemoryThreadAccess,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { BotMemoryStore } from "./BotMemory.ts";
 import * as Effect from "effect/Effect";

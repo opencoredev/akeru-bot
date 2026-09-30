@@ -7,7 +7,7 @@ import {
   ThreadId,
   type OrchestrationShellSnapshot,
   type OrchestrationThreadShell,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 

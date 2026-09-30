@@ -67,7 +67,7 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
   let timer;
   let closePromise;
   const signals = new Map();
-  // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone smoke script has no Effect runtime.
+  // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone smoke script has no Effect runtime.
   const grouped = NodeOS.platform() !== "win32";
   const signalChild = (signal) => {
     if (!pid) return;

@@ -16,7 +16,7 @@ import {
   ThreadId,
   TurnId,
   type ProviderApprovalDecision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import type { AgentControllerLiveOptions } from "../src/provider/Layers/AgentController.ts";

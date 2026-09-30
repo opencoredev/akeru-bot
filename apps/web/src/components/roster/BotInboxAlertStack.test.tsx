@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
-import { BotId, type SubscriptionAuthStatuses } from "@t3tools/contracts";
+import { BotId, type SubscriptionAuthStatuses } from "@akeru/contracts";
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";

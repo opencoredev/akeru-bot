@@ -1,4 +1,4 @@
-import { EnvironmentId, MessageId, ThreadId, type OrchestrationMessage } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ThreadId, type OrchestrationMessage } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { assistantRowPropsEqual } from "./BotChatMessageRows";

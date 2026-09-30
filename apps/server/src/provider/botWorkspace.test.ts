@@ -15,6 +15,8 @@ import {
   e2b,
   type AkeruRemoteSession,
   isRemoteBotSandbox,
+  railway,
+  railwayWorkspaceState,
   upstash,
   upstashWorkspaceState,
   vercel,
@@ -468,9 +470,104 @@ function remoteSession(providerId: string): AkeruRemoteSession {
 }
 
 describe("createBotWorkspace", () => {
+  it("creates and reattaches Railway identities with explicit credentials and cleans up", async () => {
+    const { Sandbox } = await import("railway");
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-railway-"));
+    const identityFile = NodePath.join(baseDir, "identity.json");
+    const destroy = vi.fn(async () => undefined);
+    const sandbox = {
+      id: "railway-id",
+      status: "RUNNING",
+      refresh: vi.fn(async () => undefined),
+      destroy,
+    } as unknown as import("railway").Sandbox;
+    const create = vi.spyOn(Sandbox, "create").mockResolvedValue(sandbox);
+    const connect = vi.spyOn(Sandbox, "connect").mockResolvedValue(sandbox);
+    const input = {
+      threadId: "railway-thread",
+      workspaceId: "akeru-railway",
+      identityFile,
+      sandbox: "railway" as const,
+      environment: { RAILWAY_API_TOKEN: " token ", RAILWAY_ENVIRONMENT_ID: " env " },
+    };
+    try {
+      const first = await createRemoteBotWorkspace(input);
+      await first.wake();
+      await first.sleep();
+      expect(destroy).not.toHaveBeenCalled();
+      const second = await createRemoteBotWorkspace(input);
+      expect(second.providerId).toBe("railway-id");
+      expect(create).toHaveBeenCalledExactlyOnceWith({ token: "token", environmentId: "env" });
+      expect(connect).toHaveBeenCalledWith("railway-id", { token: "token", environmentId: "env" });
+      connect.mockRejectedValueOnce(new Error("unavailable"));
+      await expect(createRemoteBotWorkspace(input)).rejects.toThrow("missing or unavailable");
+      expect(create).toHaveBeenCalledTimes(1);
+      await second.wake();
+      await second.destroy();
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(NodeFS.existsSync(identityFile)).toBe(false);
+      for (const environment of [{}, { RAILWAY_API_TOKEN: "token" }]) {
+        await expect(createRemoteBotWorkspace({ ...input, environment })).rejects.toThrow(
+          "Remote sandbox credential",
+        );
+      }
+      expect(create).toHaveBeenCalledTimes(1);
+    } finally {
+      create.mockRestore();
+      connect.mockRestore();
+      NodeFS.rmSync(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it("executes Railway commands and refuses automatic browser ingress", async () => {
+    const exec = vi.fn(
+      async (): Promise<{ exitCode: number | null; stdout: string; stderr: string }> => ({
+        exitCode: 7,
+        stdout: "output",
+        stderr: "error",
+      }),
+    );
+    const refresh = vi.fn(async () => undefined);
+    const sandbox = { id: "railway-id", status: "RUNNING", exec, refresh };
+    const session = railway(sandbox as unknown as import("railway").Sandbox);
+    expect(
+      await session.run("echo", ["it's private"], {
+        cwd: "/tmp",
+        env: { HELLO: "world" },
+        timeout: 1501,
+      }),
+    ).toEqual({ exitCode: 7, stdout: "output", stderr: "error" });
+    expect(exec).toHaveBeenCalledWith("'echo' 'it'\\''s private'", {
+      cwd: "/tmp",
+      env: { HELLO: "world" },
+      timeoutSec: 2,
+    });
+    await expect(session.browserEndpoint(9223)).rejects.toThrow("Railway CLI tunnel");
+    exec.mockResolvedValueOnce({ exitCode: null, stdout: "partial", stderr: "terminated" });
+    await expect(session.run("false", [])).resolves.toEqual({
+      exitCode: 1,
+      stdout: "partial",
+      stderr: "terminated",
+    });
+    await expect(session.inspect()).resolves.toBe("running");
+    sandbox.status = "DESTROYED";
+    await expect(session.wake()).rejects.toThrow("not running");
+    const { SandboxNotFoundError } = await import("railway");
+    refresh.mockRejectedValueOnce(
+      new SandboxNotFoundError({ id: "railway-id", environmentId: "env" }),
+    );
+    await expect(session.inspect()).resolves.toBe("missing");
+    refresh.mockRejectedValueOnce(new Error("unauthorized"));
+    await expect(session.inspect()).rejects.toThrow("unauthorized");
+    expect(railwayWorkspaceState("CREATING")).toBe("sleeping");
+    for (const status of ["DESTROYING", "DESTROYED", "FAILED"] as const) {
+      expect(railwayWorkspaceState(status)).toBe("missing");
+    }
+  });
+
   it("classifies every managed provider", () => {
     expect(isRemoteBotSandbox("local")).toBe(false);
-    for (const sandbox of ["e2b", "daytona", "vercel", "upstash", "ascii"] as const) {
+    for (const sandbox of ["e2b", "daytona", "vercel", "upstash", "ascii", "railway"] as const) {
       expect(isRemoteBotSandbox(sandbox)).toBe(true);
     }
   });

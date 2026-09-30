@@ -1,4 +1,4 @@
-import { BotId, EnvironmentId, WS_METHODS } from "@t3tools/contracts";
+import { BotId, EnvironmentId, WS_METHODS } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";

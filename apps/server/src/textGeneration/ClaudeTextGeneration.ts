@@ -14,11 +14,11 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { type ClaudeSettings, type ModelSelection } from "@t3tools/contracts";
-import { sanitizeBranchFragment } from "@t3tools/shared/git";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { type ClaudeSettings, type ModelSelection } from "@akeru/contracts";
+import { sanitizeBranchFragment } from "@akeru/shared/git";
+import { resolveSpawnCommand } from "@akeru/shared/shell";
 
-import { TextGenerationError } from "@t3tools/contracts";
+import { TextGenerationError } from "@akeru/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import { buildBranchNamePrompt, buildThreadTitlePrompt } from "./TextGenerationPrompts.ts";
 import {
@@ -29,7 +29,7 @@ import {
 import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+} from "@akeru/shared/model";
 import {
   getClaudeModelCapabilities,
   isClaudeUltracodeEffort,

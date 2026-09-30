@@ -1,5 +1,5 @@
-import type { AkeruDelegationRecord, OrchestrationBot } from "@t3tools/contracts";
-import { delegationSummaryText } from "@t3tools/shared/delegationSummaryText";
+import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
+import { delegationSummaryText } from "@akeru/shared/delegationSummaryText";
 
 const DELEGATION_RESULT_MAX_CHARS = 4_000;
 

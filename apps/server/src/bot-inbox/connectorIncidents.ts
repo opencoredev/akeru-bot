@@ -1,4 +1,4 @@
-import type { ProviderAccessStatus } from "@t3tools/contracts";
+import type { ProviderAccessStatus } from "@akeru/contracts";
 
 import type { ProviderStatus } from "../subscription-auth/service.ts";
 import { BotInboxService } from "./service.ts";

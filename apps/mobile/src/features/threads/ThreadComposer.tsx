@@ -6,14 +6,14 @@ import type {
   OrchestrationThreadShell,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import {
   detectComposerTrigger,
   replaceTextRange,
   serializeComposerFileLink,
   type ComposerTrigger,
-} from "@t3tools/shared/composerTrigger";
+} from "@akeru/shared/composerTrigger";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -41,7 +41,7 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
-import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
+import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
 import { DictationControls } from "../../components/DictationControls";
 import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import { GlassSurface } from "../../components/GlassSurface";
@@ -67,7 +67,7 @@ import {
   insertRankedSearchResult,
   normalizeSearchQuery,
   scoreQueryMatch,
-} from "@t3tools/shared/searchRanking";
+} from "@akeru/shared/searchRanking";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
 import { botEnvironment, environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";

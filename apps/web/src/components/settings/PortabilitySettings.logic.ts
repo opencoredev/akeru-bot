@@ -1,10 +1,10 @@
-import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
+import type { ConnectionTarget } from "@akeru/client-runtime/connection";
 import {
   PORTABILITY_ARCHIVE_MAX_CHARS,
   type PortabilityImportPreview,
   type PortabilityProjectFolderMap,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { desktopLocalBackendId } from "../../connection/desktopLocal";
 

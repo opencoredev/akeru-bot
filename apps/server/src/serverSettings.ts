@@ -28,7 +28,7 @@ import {
   ServerSettings,
   ServerSettingsError,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -50,12 +50,12 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import * as ServerConfig from "./config.ts";
-import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
-import { fromJsonStringPretty, fromLenientJson } from "@t3tools/shared/schemaJson";
+import { type DeepPartial, deepMerge } from "@akeru/shared/Struct";
+import { fromJsonStringPretty, fromLenientJson } from "@akeru/shared/schemaJson";
 import {
   applyServerSettingsPatch,
   isModelSelectionProviderEnabled,
-} from "@t3tools/shared/serverSettings";
+} from "@akeru/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import { normalizeImageGenerationPatch } from "./image-generation/service.ts";
 
@@ -191,6 +191,8 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         vercel: redactSandboxProviderConnection(settings.sandbox.providers.vercel),
         upstash: redactSandboxProviderConnection(settings.sandbox.providers.upstash),
         ascii: redactSandboxProviderConnection(settings.sandbox.providers.ascii),
+        railway: redactSandboxProviderConnection(settings.sandbox.providers.railway),
+        tenki: redactSandboxProviderConnection(settings.sandbox.providers.tenki),
       },
     },
     browserProvider: {

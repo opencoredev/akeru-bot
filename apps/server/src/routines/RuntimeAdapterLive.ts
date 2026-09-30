@@ -7,8 +7,8 @@ import {
   type ThreadId,
   MessageId,
   type OrchestrationCommand,
-} from "@t3tools/contracts";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
+} from "@akeru/contracts";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";

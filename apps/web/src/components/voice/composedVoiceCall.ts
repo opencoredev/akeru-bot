@@ -1,18 +1,18 @@
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
   correlatedVoiceReply,
   runVoiceOperation,
   waitForVoiceReply,
   type ComposedVoiceAdapters,
   type VoiceAudio,
-} from "@t3tools/client-runtime/voice";
+} from "@akeru/client-runtime/voice";
 import type {
   OrchestrationLatestTurn,
   OrchestrationMessage,
   VoiceSynthesizeInput,
   VoiceTranscribeInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { randomUUID } from "../../lib/utils";
 

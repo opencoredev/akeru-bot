@@ -1,6 +1,6 @@
-import type { AkeruDelegationRecord } from "@t3tools/contracts";
+import type { AkeruDelegationRecord } from "@akeru/contracts";
 
-export { SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD } from "@t3tools/contracts";
+export { SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD } from "@akeru/contracts";
 
 /** Longest delegation result summary or failure message the shell snapshot carries. */
 export const SHELL_DELEGATION_TEXT_MAX_CHARS = 2_000;

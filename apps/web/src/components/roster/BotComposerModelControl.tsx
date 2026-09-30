@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, ProviderInstanceId } from "@t3tools/contracts";
+import { BotId, ProviderInstanceId } from "@akeru/contracts";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";

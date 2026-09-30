@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Source guard reads this module's renderer map.
 import * as NodeFS from "node:fs";
 
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

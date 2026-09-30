@@ -32,7 +32,7 @@ import {
   ProviderDriverKind,
   type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import type * as Duration from "effect/Duration";

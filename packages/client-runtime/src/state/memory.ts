@@ -3,7 +3,7 @@ import {
   type EnvironmentId,
   type ThreadId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
 

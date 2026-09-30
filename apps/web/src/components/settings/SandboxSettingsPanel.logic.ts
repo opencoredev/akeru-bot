@@ -1,9 +1,9 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type {
   ProviderInstanceEnvironmentVariable,
   SandboxProvider,
   SandboxSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
 
@@ -56,6 +56,22 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     label: "Ascii Box",
     description: "Run bots in a persistent Linux VM. Public previews are enabled by default.",
     fields: [{ name: "BOX_API_KEY", label: "API key", secret: true }],
+  },
+  railway: {
+    id: "railway",
+    label: "Railway",
+    description:
+      "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.",
+    fields: [
+      { name: "RAILWAY_API_TOKEN", label: "API token", secret: true },
+      { name: "RAILWAY_ENVIRONMENT_ID", label: "Environment ID", secret: false },
+    ],
+  },
+  tenki: {
+    id: "tenki",
+    label: "Tenki",
+    description: "Cloud workspaces managed by Tenki. Requires an API key.",
+    fields: [{ name: "TENKI_API_KEY", label: "API key", secret: true }],
   },
 };
 
@@ -146,4 +162,17 @@ export function disconnectSandboxProvider(
     defaultProvider: settings.defaultProvider === provider ? "local" : settings.defaultProvider,
     providers: { ...settings.providers, [provider]: { environment: [] } },
   };
+}
+
+export type RailwayConnectionChange =
+  | { readonly kind: "disconnect" }
+  | { readonly kind: "save"; readonly draft: Readonly<Record<string, string>> };
+
+export function applyRailwayConnectionChange(
+  settings: SandboxSettings,
+  change: RailwayConnectionChange,
+) {
+  return change.kind === "disconnect"
+    ? disconnectSandboxProvider(settings, "railway")
+    : saveSandboxProviderConnection({ settings, provider: "railway", draft: change.draft });
 }

@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - The focus contract reads its source.
 import * as NodeFS from "node:fs";
 
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

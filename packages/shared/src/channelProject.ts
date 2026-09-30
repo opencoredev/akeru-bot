@@ -1,4 +1,4 @@
-import type { BotId, ProjectId } from "@t3tools/contracts";
+import type { BotId, ProjectId } from "@akeru/contracts";
 
 /** Accepts both the server read model and the client shell snapshot, which only lists live projects. */
 export interface ChannelProjectModel {

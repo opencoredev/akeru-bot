@@ -42,12 +42,13 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
   type ServerSettings,
-} from "@t3tools/contracts";
-import type { AkeruUsageEntry } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { AkeruUsageEntry } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
+import * as TestClock from "effect/testing/TestClock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -60,7 +61,6 @@ import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
@@ -7237,6 +7237,66 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
+  it.effect("retries failed remote pauses in the background without a new session", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+      sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    });
+    let paused!: () => void;
+    const pauseRetried = new Promise<void>((resolve) => {
+      paused = resolve;
+    });
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause unavailable"))
+      .mockImplementation(async () => {
+        paused();
+      });
+    const destroy = vi.fn(async () => undefined);
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeRemoteWorkspace: async () => ({
+        id: "tenki-retry",
+        provider: "tenki",
+        workspace,
+        inspect: async () => "running",
+        wake: async () => undefined,
+        sleep,
+        destroy,
+      }),
+    }).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          ServerConfig.layerTest(process.cwd(), { prefix: "akeru-pause-retry-" }).pipe(
+            Layer.provide(NodeServices.layer),
+          ),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        modelSelection: codexSelection,
+        runtimeMode: "full-access",
+        botSandbox: "tenki",
+      });
+      yield* controller.stopSession({ threadId: codexThreadId }).pipe(Effect.ignore);
+      expect(sleep).toHaveBeenCalledOnce();
+      yield* TestClock.adjust("30 seconds");
+      yield* Effect.promise(() => pauseRetried);
+      expect(sleep).toHaveBeenCalledTimes(2);
+      expect(destroy).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
+  });
+
   it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -7323,6 +7383,68 @@ describe("AgentControllerLive", () => {
       yield* Fiber.join(closeScope);
       expect(scopeClosed).toBe(true);
     });
+  });
+
+  it.effect("preserves the Railway VM when an active session rotates credentials", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const destroy = vi.fn(async () => undefined);
+    const makeRemoteWorkspace = vi.fn(
+      async (_input: import("../botWorkspace.ts").CreateRemoteBotWorkspaceInput) => ({
+        id: "railway-vm",
+        provider: "railway" as const,
+        workspace: new Workspace({
+          filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+          sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+        }),
+        inspect: async () => "running" as const,
+        wake: async () => undefined,
+        sleep: async () => undefined,
+        destroy,
+      }),
+    );
+    const layer = makeAgentControllerLive({
+      makeMastraHarness: mastra.factory,
+      makeRemoteWorkspace,
+    }).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(LegacyProviderBridge, bridge.service),
+          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          ServerConfig.layerTest(process.cwd(), { prefix: "akeru-railway-rotation-test-" }).pipe(
+            Layer.provide(NodeServices.layer),
+          ),
+          NodeServices.layer,
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      const input = {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        modelSelection: codexSelection,
+        runtimeMode: "full-access" as const,
+        botSandbox: "railway" as const,
+      };
+      for (const token of ["old", "new"]) {
+        yield* controller.startSession(codexThreadId, {
+          ...input,
+          botSandboxEnvironment: { RAILWAY_API_TOKEN: token, RAILWAY_ENVIRONMENT_ID: "env" },
+        });
+      }
+      expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
+      expect(makeRemoteWorkspace.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          workspaceId: makeRemoteWorkspace.mock.calls[1]?.[0]?.workspaceId,
+        }),
+      );
+      expect(destroy).not.toHaveBeenCalled();
+      yield* controller.startSession(codexThreadId, { ...input, botSandbox: "upstash" });
+      expect(destroy).toHaveBeenCalledOnce();
+    }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
   it.effect("reuses the remote workspace when only cwd changes", () => {
