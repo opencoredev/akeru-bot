@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 
 vi.mock("expo-secure-store", () => ({
   getItemAsync: vi.fn(async () => null),

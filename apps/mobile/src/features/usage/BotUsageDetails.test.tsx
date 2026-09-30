@@ -1,4 +1,4 @@
-import { BotId, type AkeruBotUsageSnapshot } from "@t3tools/contracts";
+import { BotId, type AkeruBotUsageSnapshot } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";

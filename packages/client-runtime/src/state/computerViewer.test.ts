@@ -1,4 +1,4 @@
-import { ThreadId, type ComputerFrame, type ComputerState } from "@t3tools/contracts";
+import { ThreadId, type ComputerFrame, type ComputerState } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

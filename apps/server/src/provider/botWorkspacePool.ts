@@ -2,7 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import { Workspace } from "@mastra/core/workspace";
-import type { BotId, BotSandbox, BotSandboxBrowserSharing } from "@t3tools/contracts";
+import type { BotId, BotSandbox, BotSandboxBrowserSharing } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";

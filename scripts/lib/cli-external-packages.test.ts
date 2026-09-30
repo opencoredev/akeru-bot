@@ -37,7 +37,7 @@ describe("shouldBundleCliDependency", () => {
       "effect",
       "@effect/platform",
       "hono",
-      "@t3tools/shared/hostProcess",
+      "@akeru/shared/hostProcess",
       "@libsql/client",
       "@libsql/core",
       "@libsql/hrana-client",

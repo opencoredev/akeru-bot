@@ -105,7 +105,7 @@ describe("CI workflow budget", () => {
       "node scripts/check-public-dependencies.ts",
       "vp install --frozen-lockfile",
       "vp exec changeset status --since=origin/main",
-      "vp run --filter @t3tools/desktop ensure:electron",
+      "vp run --filter @akeru/desktop ensure:electron",
       "node scripts/validate-plugin-catalog.ts",
       "scripts/validate-plugin-catalog.test.ts",
       "scripts/plugin-contribution-policy.test.ts",

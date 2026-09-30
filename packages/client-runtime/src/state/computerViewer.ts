@@ -5,7 +5,7 @@ import type {
   ComputerFrame,
   ComputerSession,
   ComputerState,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 /**
  * Client lifecycle for watching and controlling a bot's workspace computer.

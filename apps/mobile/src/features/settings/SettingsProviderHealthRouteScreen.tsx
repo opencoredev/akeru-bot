@@ -1,14 +1,14 @@
 import { useMobileI18n } from "../../lib/i18n";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
-import { botInboxItemCopy, botInboxRowAction } from "@t3tools/client-runtime/bot-inbox";
+import { botInboxItemCopy, botInboxRowAction } from "@akeru/client-runtime/bot-inbox";
 import {
   describeDurableFactFailure,
   memoryApprovalMutation,
   type MemoryApprovalIntent,
-} from "@t3tools/client-runtime/durable-memory";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { BotInboxItem, EnvironmentId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import type { BotInboxItem, EnvironmentId } from "@akeru/contracts";
 import { useState } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

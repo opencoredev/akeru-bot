@@ -50,10 +50,10 @@ import {
   type OrchestrationReadModel,
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   decodeAkeruToolInput,
-} from "@t3tools/contracts";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+} from "@akeru/contracts";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
+import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";

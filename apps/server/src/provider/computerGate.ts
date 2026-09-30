@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import { Clock, Duration, Effect, Fiber } from "effect";
 import * as NodeCrypto from "node:crypto";
-import { ComputerError, COMPUTER_SESSION_TTL_MS } from "@t3tools/contracts";
+import { ComputerError, COMPUTER_SESSION_TTL_MS } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 /** One gate per native workspace. Raw MCP attachments must not coexist with this gate. */

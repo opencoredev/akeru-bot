@@ -1,7 +1,7 @@
 import {
   AVAILABLE_CONNECTION_STATE,
   type SupervisorConnectionState,
-} from "@t3tools/client-runtime/connection";
+} from "@akeru/client-runtime/connection";
 
 import type { Bot } from "./types";
 

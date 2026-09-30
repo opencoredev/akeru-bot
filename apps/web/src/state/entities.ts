@@ -3,12 +3,12 @@ import type {
   EnvironmentProject,
   EnvironmentThread,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@akeru/client-runtime/state/shell";
 import {
   type BotChatCompletion,
   type EnvironmentThreadStatus,
   mergeEnvironmentThread,
-} from "@t3tools/client-runtime/state/threads";
+} from "@akeru/client-runtime/state/threads";
 import type {
   OrchestrationMessage,
   OrchestrationSession,
@@ -16,8 +16,8 @@ import type {
   ScopedProjectRef,
   ScopedThreadRef,
   ServerConfig,
-} from "@t3tools/contracts";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";

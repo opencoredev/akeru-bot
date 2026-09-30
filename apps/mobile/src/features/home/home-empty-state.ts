@@ -1,5 +1,5 @@
-import type { EnvironmentShellState } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentShellState } from "@akeru/client-runtime/state/shell";
+import type { EnvironmentId } from "@akeru/contracts";
 import * as Option from "effect/Option";
 
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";

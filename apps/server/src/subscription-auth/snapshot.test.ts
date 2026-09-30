@@ -1,4 +1,4 @@
-import { BotId, McpServerId, ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import { BotId, McpServerId, ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildProviderAccessCapabilities, subscriptionDependentBots } from "./snapshot.ts";

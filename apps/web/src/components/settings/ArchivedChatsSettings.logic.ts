@@ -4,7 +4,7 @@ import type {
   OrchestrationGroup,
   OrchestrationShellSnapshot,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export interface ArchivedChat {
   readonly environmentId: EnvironmentId;

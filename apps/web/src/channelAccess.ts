@@ -7,7 +7,7 @@ import {
   type ChannelBinding,
   ChannelFailureCategory,
   type ChannelProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export function canManageChannels(
   session: Pick<AuthSessionState, "authenticated" | "scopes"> | null,

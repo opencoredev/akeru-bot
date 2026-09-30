@@ -39,7 +39,7 @@ const LEGACY_BASELINE = new Map<string, number>([
   ["apps/server/src/provider/Layers/ProviderService.test.ts", 2],
   ["apps/server/src/provider/Layers/ProviderSessionReaper.test.ts", 21],
   ["apps/server/src/server.test.ts", 1],
-  ["oxlint-plugin-t3code/rules/no-manual-effect-runtime-in-tests.test.ts", 7],
+  ["oxlint-plugin-akeru/rules/no-manual-effect-runtime-in-tests.test.ts", 7],
 ]);
 
 const baselineFor = (filename: string): number => {

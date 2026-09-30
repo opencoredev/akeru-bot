@@ -7,7 +7,7 @@ import {
   type SubscriptionAuthStartInput,
   type SubscriptionProviderId,
   type SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import type { MessageKey } from "./i18n/index.ts";
 

@@ -4,7 +4,7 @@ import {
   ThreadId,
   TurnId,
   type AkeruDelegationRecord,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
 import { delegationResultsContext } from "./delegationResultsContext.ts";

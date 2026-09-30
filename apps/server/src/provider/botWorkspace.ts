@@ -12,7 +12,7 @@ import {
   type ProviderStatus,
   Workspace,
 } from "@mastra/core/workspace";
-import type { BotSandbox } from "@t3tools/contracts";
+import type { BotSandbox } from "@akeru/contracts";
 import { BotWorkspaceFilesystem } from "./botWorkspaceFilesystem.ts";
 import { DaytonaComputer } from "./daytonaComputer.ts";
 import { WorkspaceComputer } from "./workspaceComputer.ts";

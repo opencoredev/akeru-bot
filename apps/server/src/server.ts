@@ -1,4 +1,4 @@
-import { EnvironmentHttpApi } from "@t3tools/contracts";
+import { EnvironmentHttpApi } from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -94,8 +94,8 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
-import * as NetService from "@t3tools/shared/Net";
-import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
+import * as NetService from "@akeru/shared/Net";
+import { disableTailscaleServe, ensureTailscaleServe } from "@akeru/tailscale";
 import { ServerActivation } from "./serverActivation.ts";
 import { RoutineLayerLive } from "./routines/layer.ts";
 import * as ImageGenerationRuntime from "./image-generation/ImageGenerationRuntime.ts";

@@ -6,7 +6,7 @@ import * as NodeTimersPromises from "node:timers/promises";
 import type { ToolsInput } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import type { ProcessHandle, Workspace, WorkspaceSandbox } from "@mastra/core/workspace";
-import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
+import { redactSensitiveText } from "@akeru/shared/sensitiveDataRedaction";
 import { z } from "zod";
 
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";

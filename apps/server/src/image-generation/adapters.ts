@@ -23,7 +23,7 @@ import {
   type ImageProviderId,
   type ImageProviderOperation,
   type ImageQuality,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { ImageResponseTooLargeError, readBoundedText } from "./boundedResponse.ts";

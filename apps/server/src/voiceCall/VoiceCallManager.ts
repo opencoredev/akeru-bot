@@ -21,7 +21,7 @@ import {
   VOICE_API_PROVIDERS,
   VoiceTranscribeInput as TranscribeSchema,
   VoiceSynthesizeInput as SynthesizeSchema,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

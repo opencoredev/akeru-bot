@@ -12,7 +12,7 @@
  * @module features/usage/BotUsageRouteScreen
  */
 import { useFocusEffect, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { BotId, type EnvironmentId } from "@t3tools/contracts";
+import { BotId, type EnvironmentId } from "@akeru/contracts";
 import { useCallback, useMemo, useRef } from "react";
 import { Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

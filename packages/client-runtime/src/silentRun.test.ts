@@ -4,7 +4,7 @@ import {
   THREAD_SILENT_RUN_ACTIVITY_KIND,
   THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { isSilentRunActivity, threadSilentRun } from "./silentRun.ts";

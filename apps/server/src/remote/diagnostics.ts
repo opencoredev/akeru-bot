@@ -9,7 +9,7 @@ import {
   RemoteDoctorReport,
   type RemoteDiagnosticCheck,
   type RemoteDoctorReport as RemoteDoctorReportValue,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { BOOT_SERVICE_LAUNCHD_LABEL, BOOT_SERVICE_UNIT_FILE } from "../cloud/bootService.ts";

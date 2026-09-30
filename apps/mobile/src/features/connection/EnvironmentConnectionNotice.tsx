@@ -2,8 +2,8 @@ import { useMobileI18n } from "../../lib/i18n";
 import {
   type EnvironmentConnectionPhase,
   type EnvironmentConnectionPresentation,
-} from "@t3tools/client-runtime/connection";
-import { connectionFailureMessage } from "@t3tools/client-runtime/i18n";
+} from "@akeru/client-runtime/connection";
+import { connectionFailureMessage } from "@akeru/client-runtime/i18n";
 import { SymbolView } from "../../components/AppSymbol";
 import { ActivityIndicator, Pressable, View } from "react-native";
 

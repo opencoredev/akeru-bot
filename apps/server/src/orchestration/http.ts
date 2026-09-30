@@ -4,7 +4,7 @@ import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

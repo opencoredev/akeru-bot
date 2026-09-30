@@ -1,4 +1,4 @@
-import type { KeybindingCommand } from "@t3tools/contracts";
+import type { KeybindingCommand } from "@akeru/contracts";
 import { useSyncExternalStore } from "react";
 
 /**

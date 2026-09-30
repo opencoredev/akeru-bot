@@ -11,7 +11,7 @@ import {
   ThreadId,
   type AkeruMemoryArchive,
   type AkeruMemoryRevision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import { exportAkeruMemory } from "./MemoryExport.ts";

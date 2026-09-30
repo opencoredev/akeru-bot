@@ -2,7 +2,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   type ProviderDriverKind,
   type ServerProviderUnavailability,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import {
   presentProviderUnavailability,

@@ -42,8 +42,8 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
   type ServerSettings,
-} from "@t3tools/contracts";
-import type { AkeruUsageEntry } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { AkeruUsageEntry } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import type { ReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 
 import { useWebReplyPlaybackSession } from "~/lib/replyPlaybackSession";
 

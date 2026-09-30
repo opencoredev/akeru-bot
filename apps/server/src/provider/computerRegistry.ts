@@ -8,7 +8,7 @@ import {
   type ComputerSessionInput,
   type ComputerState,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type { WorkspaceComputer } from "./workspaceComputer.ts";
 import { Effect, Queue, Schedule, Schema, Stream } from "effect";
 

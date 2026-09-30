@@ -8,7 +8,7 @@ import {
   BotId,
   ThreadId,
   type AkeruMemoryRevision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 
 import { buildProviderMemoryPacket } from "./ProviderMemoryPacket.ts";

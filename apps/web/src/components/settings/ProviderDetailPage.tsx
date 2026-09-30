@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ServerProvider } from "@t3tools/contracts";
+import type { EnvironmentId, ServerProvider } from "@akeru/contracts";
 
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";

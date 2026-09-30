@@ -5,7 +5,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type UploadChatFileAttachment,
   type UploadChatImageAttachment,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 const FILE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   csv: "text/csv",

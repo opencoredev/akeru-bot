@@ -9,7 +9,7 @@ import {
   GroupId,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import {

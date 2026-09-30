@@ -14,9 +14,9 @@ import {
   SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
   SkillId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
-import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
+import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@akeru/contracts";
 
 import { applyShellStreamEvent } from "./shellReducer.ts";
 

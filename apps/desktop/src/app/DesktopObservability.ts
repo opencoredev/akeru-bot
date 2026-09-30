@@ -1,6 +1,6 @@
-import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
-import { makeLocalFileTracer, makeTraceSink } from "@t3tools/shared/observability";
-import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@akeru/contracts";
+import { makeLocalFileTracer, makeTraceSink } from "@akeru/shared/observability";
+import { parsePersistedServerObservabilitySettings } from "@akeru/shared/serverSettings";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -58,12 +58,12 @@ export class DesktopBackendOutputLogFactory extends Context.Service<
   {
     readonly forInstance: (id: string) => Effect.Effect<DesktopBackendOutputLogShape>;
   }
->()("@t3tools/desktop/app/DesktopObservability/DesktopBackendOutputLogFactory") {}
+>()("@akeru/desktop/app/DesktopObservability/DesktopBackendOutputLogFactory") {}
 
 export class DesktopTraceShutdown extends Context.Service<
   DesktopTraceShutdown,
   { readonly close: Effect.Effect<void> }
->()("@t3tools/desktop/app/DesktopObservability/DesktopTraceShutdown") {}
+>()("@akeru/desktop/app/DesktopObservability/DesktopTraceShutdown") {}
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();

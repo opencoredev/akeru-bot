@@ -3,7 +3,7 @@ import {
   readHostedPairingRequest,
   resolveRemotePairingTarget,
   type HostedPairingRequest,
-} from "@t3tools/shared/remote";
+} from "@akeru/shared/remote";
 
 import type { PairingPanelStatus } from "./components/auth/PairingPanel";
 

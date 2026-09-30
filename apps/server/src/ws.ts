@@ -80,7 +80,7 @@ import {
   ThreadId,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";

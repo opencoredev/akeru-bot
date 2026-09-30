@@ -1,5 +1,5 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { AkeruPluginRecommendation, AkeruPluginSearchResult } from "@t3tools/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { AkeruPluginRecommendation, AkeruPluginSearchResult } from "@akeru/contracts";
 import { CheckCircle2Icon, WrenchIcon } from "lucide-react";
 import { memo } from "react";
 

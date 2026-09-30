@@ -7,7 +7,7 @@ import {
   ThreadId,
   type AkeruUsageEntry,
   type SubscriptionProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";

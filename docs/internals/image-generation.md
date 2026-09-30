@@ -29,7 +29,7 @@ Global enable/default/fallback changes go through `server.updateSettings`; conne
 
 The row's `operations` come from the adapter capability tables, so a provider lists `edit` only when its adapter accepts input images.
 
-Shared row logic lives in `@t3tools/client-runtime/image-generation`: the health badge (a row reads healthy only after `healthTest.status === "passed"`), toggle patches that keep the default and fallback order coherent with what the server normalizes, and fallback-order validation. Web renders the editable page at the `image-generation` settings section, which is also the `image-generation` deep-link id. Mobile maps that id to a read-only summary. The bot editor saves `imageProvider` through `bot.update`; the chat composer has no image controls.
+Shared row logic lives in `@akeru/client-runtime/image-generation`: the health badge (a row reads healthy only after `healthTest.status === "passed"`), toggle patches that keep the default and fallback order coherent with what the server normalizes, and fallback-order validation. Web renders the editable page at the `image-generation` settings section, which is also the `image-generation` deep-link id. Mobile maps that id to a read-only summary. The bot editor saves `imageProvider` through `bot.update`; the chat composer has no image controls.
 
 ## Request contract
 

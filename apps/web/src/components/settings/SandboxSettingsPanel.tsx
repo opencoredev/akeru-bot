@@ -1,5 +1,5 @@
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@t3tools/contracts";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@akeru/contracts";
 import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";

@@ -1,17 +1,17 @@
-# @t3tools/ssh
+# @akeru/ssh
 
 ## 0.0.2
 
 ### Patch Changes
 
 - Updated dependencies []:
-  - @t3tools/contracts@0.1.1
-  - @t3tools/shared@0.0.2
+  - @akeru/contracts@0.1.1
+  - @akeru/shared@0.0.2
 
 ## 0.0.1
 
 ### Patch Changes
 
 - Updated dependencies []:
-  - @t3tools/contracts@0.1.0
-  - @t3tools/shared@0.0.1
+  - @akeru/contracts@0.1.0
+  - @akeru/shared@0.0.1

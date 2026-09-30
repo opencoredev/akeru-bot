@@ -3,8 +3,8 @@
  * such as "Open in editor" or "Reveal in file manager" land where the user can
  * see them. Remote clients hide those actions.
  */
-import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { ConnectionTarget } from "@akeru/client-runtime/connection";
+import type { EnvironmentId } from "@akeru/contracts";
 import { useMemo } from "react";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";

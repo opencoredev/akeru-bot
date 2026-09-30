@@ -22,7 +22,7 @@ import {
   type BotId,
   type ProviderInstanceId,
   type SubscriptionAuthStartInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";

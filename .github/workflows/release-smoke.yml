@@ -85,7 +85,7 @@ jobs:
           run-install: false
 
       - name: Install desktop dependencies
-        run: vp install --frozen-lockfile --filter=@t3tools/desktop... --filter=akeru-bot... --filter=@t3tools/scripts...
+        run: vp install --frozen-lockfile --filter=@akeru/desktop... --filter=akeru-bot... --filter=@akeru/scripts...
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -249,8 +249,8 @@ jobs:
           run-install: |
             args:
               - --filter=akeru-bot...
-              - --filter=@t3tools/web...
-              - --filter=@t3tools/scripts...
+              - --filter=@akeru/web...
+              - --filter=@akeru/scripts...
 
       - name: Build CLI package
         run: |
@@ -279,10 +279,10 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/marketing...
+              - --filter=@akeru/marketing...
 
       - name: Typecheck marketing site
-        run: vp run --filter @t3tools/marketing typecheck
+        run: vp run --filter @akeru/marketing typecheck
 
       - name: Build marketing site
-        run: vp run --filter @t3tools/marketing build
+        run: vp run --filter @akeru/marketing build

@@ -1,5 +1,5 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-import { rankComposerThreadMentions } from "@t3tools/shared/composerThreadMentions";
+import type { EnvironmentId } from "@akeru/contracts";
+import { rankComposerThreadMentions } from "@akeru/shared/composerThreadMentions";
 import { AtSignIcon, FileIcon, GlobeIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import {
   type KeyboardEvent,

@@ -5,7 +5,7 @@ import {
   createReplyPlaybackController,
   createReplyReadoutPreference,
   replyMarkdownToSpokenText,
-} from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/client-runtime/reply-playback";
 import {
   MessageControls,
   type MessageReactionOption,

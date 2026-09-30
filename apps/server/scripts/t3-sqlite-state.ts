@@ -4,8 +4,8 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
-import { PRODUCT_HOME_DIRNAME } from "@t3tools/shared/devHome";
-import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
+import { PRODUCT_HOME_DIRNAME } from "@akeru/shared/devHome";
+import { fromJsonStringPretty } from "@akeru/shared/schemaJson";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

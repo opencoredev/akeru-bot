@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, UsagePlanWindow, UsageProviderPlanLimits } from "@t3tools/contracts";
-import type { MergedUsage } from "@t3tools/shared/usageMerge";
-import { makeWindow } from "@t3tools/shared/usageFormat";
+import type { EnvironmentId, UsagePlanWindow, UsageProviderPlanLimits } from "@akeru/contracts";
+import type { MergedUsage } from "@akeru/shared/usageMerge";
+import { makeWindow } from "@akeru/shared/usageFormat";
 import { useEffect, useState } from "react";
 import { Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

@@ -3,8 +3,8 @@ import {
   createVoiceDictationTranscriber,
   dictationTranscriptionCapability,
   type DictationDraft,
-} from "@t3tools/client-runtime/dictation";
-import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/dictation";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@akeru/contracts";
 import { useEffect, useMemo } from "react";
 import { Alert } from "react-native";
 

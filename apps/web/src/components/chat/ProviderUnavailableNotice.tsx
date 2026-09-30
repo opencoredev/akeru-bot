@@ -1,9 +1,9 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import {
   joinProviderUnavailability,
   type ProviderAvailabilityPresentation,
-} from "@t3tools/client-runtime/provider-availability";
-import { settingsDeepLinkHref } from "@t3tools/client-runtime/settings-deep-link";
+} from "@akeru/client-runtime/provider-availability";
+import { settingsDeepLinkHref } from "@akeru/client-runtime/settings-deep-link";
 import { CircleAlertIcon } from "lucide-react";
 
 import { useI18n } from "../../i18n";

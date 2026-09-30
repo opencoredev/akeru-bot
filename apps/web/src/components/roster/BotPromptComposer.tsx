@@ -1,10 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
-import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
+import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
+import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@akeru/contracts";
 import {
   type ComposerBotMention,
   resolveComposerBotMention,
-} from "@t3tools/shared/composerBotMentions";
+} from "@akeru/shared/composerBotMentions";
 import {
   ArrowUpIcon,
   AtSignIcon,
@@ -32,7 +32,7 @@ import {
   type PromptStashEntry,
 } from "../../promptStashStore";
 import { primaryServerKeybindingsAtom } from "../../state/server";
-import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
+import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { DictationControls } from "../chat/DictationControls";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";

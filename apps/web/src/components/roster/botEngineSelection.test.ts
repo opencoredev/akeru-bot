@@ -1,6 +1,6 @@
-import { catalogRegistry, createTranslator } from "@t3tools/client-runtime/i18n";
-import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
+import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";

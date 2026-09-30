@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { ComputerError, type ComputerAction, type ComputerFrame } from "@t3tools/contracts";
+import { ComputerError, type ComputerAction, type ComputerFrame } from "@akeru/contracts";
 import type { BotBrowserRpc } from "./botBrowser.ts";
 import type { AkeruBrowserEndpoint, AkeruWorkspaceState } from "./botWorkspace.ts";
 import { ComputerGate } from "./computerGate.ts";

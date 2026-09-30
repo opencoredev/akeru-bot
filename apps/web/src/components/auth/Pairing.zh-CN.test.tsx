@@ -1,4 +1,4 @@
-import { catalogRegistry } from "@t3tools/client-runtime/i18n";
+import { catalogRegistry } from "@akeru/client-runtime/i18n";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";

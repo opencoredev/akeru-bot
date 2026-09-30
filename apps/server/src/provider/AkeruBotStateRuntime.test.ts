@@ -1,4 +1,4 @@
-import { BotId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
+import { BotId, ThreadId, type OrchestrationCommand } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createEmptyReadModel } from "../orchestration/projector.ts";

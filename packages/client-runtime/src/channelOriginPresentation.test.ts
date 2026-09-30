@@ -1,10 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import {
-  MessageId,
-  type ChannelDeliveryState,
-  type OrchestrationMessage,
-} from "@t3tools/contracts";
+import { MessageId, type ChannelDeliveryState, type OrchestrationMessage } from "@akeru/contracts";
 import {
   channelDeliveryLabel,
   channelOriginForAssistantMessage,

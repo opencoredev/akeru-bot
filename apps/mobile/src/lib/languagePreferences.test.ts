@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { availableLanguages, translate } from "@t3tools/client-runtime/i18n";
+import { availableLanguages, translate } from "@akeru/client-runtime/i18n";
 import {
   normalizeLanguagePreference,
   readDeviceLocales,

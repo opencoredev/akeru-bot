@@ -11,7 +11,7 @@ import type {
   SubscriptionProviderId,
   UsagePlanWindow,
   UsageProviderPlanLimits,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";

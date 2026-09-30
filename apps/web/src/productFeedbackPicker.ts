@@ -1,7 +1,7 @@
 import {
   PRODUCT_FEEDBACK_ELEMENT_LABEL_MAX_CHARS,
   type ProductFeedbackElement,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 const EXCLUDED_SELECTOR = [
   "input",

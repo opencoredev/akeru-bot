@@ -1,4 +1,4 @@
-import { isGroupBotMember } from "@t3tools/contracts";
+import { isGroupBotMember } from "@akeru/contracts";
 import type {
   AkeruDelegationRecord,
   BotId,
@@ -14,8 +14,8 @@ import type {
   OrchestrationThread,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+} from "@akeru/contracts";
+import { normalizeProjectPathForComparison } from "@akeru/shared/path";
 import * as Effect from "effect/Effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";

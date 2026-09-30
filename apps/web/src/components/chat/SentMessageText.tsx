@@ -1,5 +1,5 @@
-import type { ServerProviderSkill } from "@t3tools/contracts";
-import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
+import type { ServerProviderSkill } from "@akeru/contracts";
+import { collectComposerInlineTokens } from "@akeru/shared/composerInlineTokens";
 import { AtSignIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 

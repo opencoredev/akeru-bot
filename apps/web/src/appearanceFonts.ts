@@ -16,7 +16,7 @@ import {
   MIN_CODE_FONT_SIZE,
   MIN_INTERFACE_FONT_SIZE,
   MIN_PROMPT_FONT_SIZE,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export const DEFAULT_SANS_FONT_STACK =
   '"Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';

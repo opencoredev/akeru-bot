@@ -1,4 +1,4 @@
-import { BotId, GroupId, GroupMembership, IsoDateTime } from "@t3tools/contracts";
+import { BotId, GroupId, GroupMembership, IsoDateTime } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

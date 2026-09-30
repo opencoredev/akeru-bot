@@ -13,8 +13,8 @@ import {
   type UsageClientType,
   type UsageOperatingSystem,
   type UsageSandboxProvider,
-} from "@t3tools/contracts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+} from "@akeru/contracts";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
