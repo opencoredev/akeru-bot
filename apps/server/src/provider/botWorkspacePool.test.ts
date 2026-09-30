@@ -110,6 +110,49 @@ describe("BotWorkspacePool", () => {
     expect(failed.destroy).toHaveBeenCalledOnce();
   });
 
+  it.each([false, true])(
+    "evicts a missing remote workspace after failed wake (cached: %s)",
+    async (cached) => {
+      const pool = new BotWorkspacePool();
+      const wake = vi.fn(async () => undefined);
+      const missing = remoteWorkspace({
+        provider: "upstash",
+        wake,
+        inspect: vi.fn(async () => "missing" as const),
+      });
+      const replacement = remoteWorkspace();
+      const create = vi.fn().mockResolvedValueOnce(missing).mockResolvedValueOnce(replacement);
+      if (cached) {
+        const lease = await pool.acquire("missing", create);
+        await lease.release();
+      }
+      wake.mockRejectedValueOnce(new Error("workspace missing"));
+      await expect(pool.acquire("missing", create)).rejects.toThrow("workspace missing");
+      await pool.retryFailedSleeps();
+      expect(missing.sleep).toHaveBeenCalledTimes(cached ? 1 : 0);
+      const lease = await pool.acquire("missing", create);
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(lease.workspace).toBe(replacement);
+      await lease.release({ destroy: true });
+    },
+  );
+
+  it("retains a failed remote wake when inspection is unavailable", async () => {
+    const pool = new BotWorkspacePool();
+    const workspace = remoteWorkspace({
+      wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")).mockResolvedValue(undefined),
+      inspect: vi.fn().mockRejectedValue(new Error("inspection unavailable")),
+    });
+    const create = vi.fn().mockResolvedValue(workspace);
+    await expect(pool.acquire("unavailable", create)).rejects.toThrow("wake failed");
+    await pool.retryFailedSleeps();
+    expect(workspace.sleep).toHaveBeenCalledOnce();
+    const lease = await pool.acquire("unavailable", create);
+    expect(create).toHaveBeenCalledOnce();
+    expect(lease.workspace).toBe(workspace);
+    await lease.release({ destroy: true });
+  });
+
   it("does not pause a retained workspace while acquisition is starting", async () => {
     const pool = new BotWorkspacePool();
     const sleep = vi

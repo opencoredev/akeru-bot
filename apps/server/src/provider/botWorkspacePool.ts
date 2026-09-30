@@ -132,8 +132,9 @@ export class BotWorkspacePool {
           Effect.tapCause(() =>
             workspace.provider === "local"
               ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-              : Effect.sync(() => {
-                  this.sleepers.set(key, workspace);
+              : Effect.promise(async () => {
+                  const state = await workspace.inspect().catch(() => undefined);
+                  if (state !== "missing") this.sleepers.set(key, workspace);
                 }),
           ),
         ),
