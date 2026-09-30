@@ -300,6 +300,7 @@ describe("preflightProvider", () => {
         providers: [provider({ instanceId: workInstanceId })],
         providerId: workInstanceId,
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         providerInstanceConfig: { driver: ProviderDriverKind.make("claudeAgent") },
         subscriptionStatuses: [revoked],
         subscriptionStatusForInstance: accountStatus,
@@ -310,6 +311,7 @@ describe("preflightProvider", () => {
         providers: [provider()],
         providerId: "claude",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         subscriptionStatusForInstance: accountStatus,
       })?.category,
     ).toBe("expired-login");
@@ -335,6 +337,7 @@ describe("preflightProvider", () => {
         ],
         providerId: "codex",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         ...(config ? { providerInstanceConfig: config } : {}),
         subscriptionStatuses: [
           {
@@ -371,6 +374,7 @@ describe("preflightProvider", () => {
         providers: [provider({ instanceId: ProviderInstanceId.make("claudeAgent") })],
         providerId: "claudeAgent",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         ...(config ? { providerInstanceConfig: config } : {}),
         subscriptionStatuses: [
           {
