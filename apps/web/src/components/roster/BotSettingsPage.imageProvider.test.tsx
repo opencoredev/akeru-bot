@@ -285,6 +285,34 @@ describe("bot settings image provider", () => {
     );
   });
 
+  it("preserves an inherited sandbox while saving another field", async () => {
+    state.bots = [makeBot({ sandbox: null })];
+    imageSelect(renderForm()).onValueChange("grok");
+    saveButton(renderForm()).onClick();
+    await flushPromises();
+    expect(state.updateBot).toHaveBeenCalledWith(
+      expectedUpdate(state.bots[0]!, { imageProvider: "grok", sandbox: null }),
+    );
+  });
+
+  it("can restore the default sandbox from an explicit choice", async () => {
+    state.bots = [makeBot({ sandbox: "railway" })];
+    const tree = renderForm();
+    const select = visitElements(
+      tree,
+      (element) =>
+        typeof element.props.onValueChange === "function" &&
+        visitElements(
+          element.props.children,
+          (child) => child.props["aria-label"] === "Sandbox provider",
+        ) !== null,
+    );
+    (select!.props.onValueChange as (value: string) => void)("default");
+    saveButton(renderForm()).onClick();
+    await flushPromises();
+    expect(state.updateBot).toHaveBeenCalledWith(expectedUpdate(state.bots[0]!, { sandbox: null }));
+  });
+
   it("keeps a removed saved provider visible while editing another field", async () => {
     const missingId = ProviderInstanceId.make("removed_claude");
     state.bots = [makeBot({ engine: { provider: missingId, model: "sonnet" } })];
