@@ -323,7 +323,14 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
             config.analyticsStatePath,
             encodeJson({
               ...deliveredState,
-              pending: Array.from({ length: 9 }, () => pendingEvent),
+              pending: Array.from({ length: 9 }, () => ({
+                ...pendingEvent,
+                properties: Object.fromEntries(
+                  Object.entries(pendingEvent.properties).filter(
+                    ([key]) => key !== "sandbox_turns_tenki",
+                  ),
+                ),
+              })),
             }),
           );
           yield* analytics.flush;
@@ -333,6 +340,18 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           assert.equal((captured[2] as { readonly batch: ReadonlyArray<unknown> }).batch.length, 6);
           assert.equal(quotaState.pending.length, 3);
           assert.equal(quotaState.deliveredToday, 8);
+          const upgradedBatch = (
+            captured[2] as {
+              readonly batch: ReadonlyArray<{
+                readonly properties: {
+                  readonly sandbox_turns_tenki: number;
+                  readonly $insert_id: string;
+                };
+              }>;
+            }
+          ).batch;
+          assert.equal(upgradedBatch[0]?.properties.sandbox_turns_tenki, 0);
+          assert.equal(upgradedBatch[0]?.properties.$insert_id, pendingEvent.properties.$insert_id);
 
           yield* settings.updateSettings({ analyticsEnabled: false });
           yield* analytics.flush;

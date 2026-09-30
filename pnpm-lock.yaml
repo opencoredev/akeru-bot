@@ -517,6 +517,9 @@ importers:
       '@photon-ai/chat-adapter-imessage':
         specifier: 3.2.0
         version: 3.2.0(ai@6.0.266(zod@4.4.3))(chat@4.39.0(ai@6.0.266(zod@4.4.3))(zod@4.4.3))(typescript@6.0.3)(zod@4.4.3)
+      '@tenkicloud/sandbox':
+        specifier: 1.3.0
+        version: 1.3.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@upstash/box':
         specifier: 0.5.3
         version: 0.5.3(zod@4.4.3)
@@ -2173,6 +2176,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@bufbuild/protobuf@2.12.1':
+    resolution: {integrity: sha512-BvAMfS6LrgZiryOAZ4pBYucu4wG/Ei/9o9DZ9akbREnMLbPJiom2i8b9C8IsKErQoiKqVhrerzt3kOT/RrzLHg==}
+
   '@bufbuild/protobuf@2.14.0':
     resolution: {integrity: sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==}
 
@@ -2348,6 +2354,13 @@ packages:
     peerDependencies:
       zod: '>=3.25.76 <5'
 
+  '@connectrpc/connect-node@2.1.2':
+    resolution: {integrity: sha512-+i/aAOpsI8sIx1mbYp6d99zvxaUSF6t/jP9Ux9maAmjsZPgmIQ3JuIeYi0zJIP9zlCnBlJjkpPosshCgdRuThQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.7.0
+      '@connectrpc/connect': 2.1.2
+
   '@connectrpc/connect-web@2.1.2':
     resolution: {integrity: sha512-1tfaK85MU+gJjwwmL31d2rzdf0XCYX99chZf63uG89SGBUd4XuZ4ZzhGo2u79TPXOE6nLIZQ2okrpyey42PYdg==}
     peerDependencies:
@@ -2411,6 +2424,7 @@ packages:
 
   '@distilled.cloud/cloudflare-rolldown-plugin@0.13.10':
     resolution: {integrity: sha512-UO9wjepZWYupWMf/KYKY7LUueHNawdp0qBGc9z3XYxjodrQaMwFQWtIGG1yWOHjTWl1BUx86A69hyB8kHYRAeA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     peerDependencies:
       rolldown: ^1.1.5
       vite: ^7.0.0 || ^8.0.0
@@ -2435,6 +2449,7 @@ packages:
 
   '@distilled.cloud/cloudflare-vite-plugin@0.13.10':
     resolution: {integrity: sha512-O8lvG48OQcRkjwkCPUGdEGTtDuaKBlZWIMy+yTCAUnte/8rvixIxUj/PMX6lx4Prj2tx/ciqjRHl9qjtHL8KWA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     peerDependencies:
       '@distilled.cloud/cloudflare': ^0.29.0
       '@distilled.cloud/cloudflare-runtime': 0.13.10
@@ -6104,6 +6119,10 @@ packages:
 
   '@tavily/core@0.7.8':
     resolution: {integrity: sha512-XV3SB2AxpD52SMyTjLHxoZED8K+zWLBxsQ778iCXwmYmp1zTQXwNPV7gUmJX6qLKFHwq7Tum9XVqxFqqbCwagA==}
+
+  '@tenkicloud/sandbox@1.3.0':
+    resolution: {integrity: sha512-wJ5dFLs7cZJl87ATP0MAZ0r8FIeYw1EorKu+JpQFxwwq6OYplewlGvpddBaOn1hLw601QL/jHXJzAKy8e85zvA==}
+    engines: {node: '>=18'}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -15333,6 +15352,8 @@ snapshots:
   '@bruits/satteri-win32-x64-msvc@0.9.3':
     optional: true
 
+  '@bufbuild/protobuf@2.12.1': {}
+
   '@bufbuild/protobuf@2.14.0': {}
 
   '@callstack/liquid-glass@0.7.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)':
@@ -15647,10 +15668,19 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
+  '@connectrpc/connect-node@2.1.2(@bufbuild/protobuf@2.12.1)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.1))':
+    dependencies:
+      '@bufbuild/protobuf': 2.12.1
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.12.1)
+
   '@connectrpc/connect-web@2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))':
     dependencies:
       '@bufbuild/protobuf': 2.14.0
       '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.14.0)
+
+  '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.1)':
+    dependencies:
+      '@bufbuild/protobuf': 2.12.1
 
   '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0)':
     dependencies:
@@ -20044,6 +20074,16 @@ snapshots:
     transitivePeerDependencies:
       - debug
       - supports-color
+
+  '@tenkicloud/sandbox@1.3.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@bufbuild/protobuf': 2.12.1
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.12.1)
+      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.12.1)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.1))
+      ws: 8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@testing-library/dom@10.4.1':
     dependencies:

@@ -33,6 +33,7 @@ export const USAGE_SANDBOX_IDS = [
   "vercel",
   "akeru_cloud",
   "upstash",
+  "tenki",
   "other",
 ] as const;
 
@@ -168,6 +169,7 @@ export const UsageSandboxProvider = Schema.Literals([
   "daytona",
   "vercel",
   "upstash",
+  "tenki",
   "mixed",
   "other",
 ]);
@@ -175,6 +177,7 @@ export type UsageSandboxProvider = typeof UsageSandboxProvider.Type;
 
 const UsageCounters = Schema.Struct({
   ...Object.fromEntries(USAGE_3H_COUNTER_KEYS.map((key) => [key, UsageCounter])),
+  sandbox_turns_tenki: UsageCounter.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
   new_installations: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(0)),
   ),

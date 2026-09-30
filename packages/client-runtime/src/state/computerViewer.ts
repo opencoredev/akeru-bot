@@ -269,6 +269,7 @@ export const COMPUTER_SANDBOX_CAPABILITY: Readonly<
   daytona: { graphical: true },
   vercel: { graphical: false },
   upstash: { graphical: false },
+  tenki: { graphical: false },
 };
 
 /** Provider drivers that route browser input through the shared computer gate. */
