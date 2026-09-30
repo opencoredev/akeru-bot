@@ -20,7 +20,9 @@ import {
   type PluginDirectoryDefinition,
   type PluginSkill,
 } from "../../../../../plugins";
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { isElectron } from "../../env";
+import { useI18n } from "../../i18n";
 import { ensureLocalApi } from "../../localApi";
 import { cn, randomUUID } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
@@ -50,7 +52,12 @@ import { toastManager } from "../ui/toast";
 import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
 import { ComposioSection } from "./ComposioSection";
-import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
+import {
+  CustomMcpServers,
+  pluginLabel,
+  PluginsCatalog,
+  RemovedBuiltinServers,
+} from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
 import { runPluginEnablePlan } from "./pluginConnection";
 import {
@@ -66,6 +73,10 @@ import {
   pluginBlocker,
   type PluginFilter,
 } from "./pluginPresentation";
+
+const englishTranslator = createTranslator("en");
+
+type Translate = typeof englishTranslator.translate;
 
 const ALL_CATEGORIES_VALUE = "all-categories";
 const PRIMARY_FILTERS = ["All", "Featured", "Installed"] as const satisfies readonly PluginFilter[];
@@ -112,6 +123,7 @@ function PluginSearchField({
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="relative">
       <AppIcon
@@ -119,10 +131,10 @@ function PluginSearchField({
         className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
       />
       <input
-        aria-label="Search plugins"
+        aria-label={t("Search plugins")}
         autoComplete="off"
         className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
-        placeholder="Search plugins"
+        placeholder={t("Search plugins")}
         spellCheck={false}
         type="search"
         value={query}
@@ -136,7 +148,7 @@ function PluginSearchField({
       />
       {query ? (
         <button
-          aria-label="Clear search"
+          aria-label={t("Clear search")}
           className="absolute end-1.5 top-1/2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-hidden transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           type="button"
           onClick={() => onQueryChange("")}
@@ -198,12 +210,13 @@ function PluginFilterBar({
   readonly filter: PluginFilter;
   readonly onFilterChange: (filter: PluginFilter) => void;
 }) {
+  const { t } = useI18n();
   const categories = PLUGIN_DIRECTORY_FILTERS.filter((item) => !isPrimaryFilter(item));
   const category = isPrimaryFilter(filter) ? null : filter;
   const { barRef, pillRef } = useSegmentPill(category ? null : filter);
   return (
     <div
-      aria-label="Plugin sections and categories"
+      aria-label={t("Plugin sections and categories")}
       className="flex flex-wrap items-center justify-between gap-2"
       role="group"
     >
@@ -226,7 +239,7 @@ function PluginFilterBar({
             type="button"
             onClick={() => onFilterChange(item)}
           >
-            {item}
+            {pluginLabel(item, t)}
           </button>
         ))}
       </div>
@@ -239,18 +252,18 @@ function PluginFilterBar({
           }}
         >
           <SelectTrigger
-            aria-label="Plugin category"
+            aria-label={t("Plugin category")}
             className={cn("h-8 rounded-lg text-[13px]", category && "text-foreground")}
             size="sm"
             variant="ghost"
           >
-            <SelectValue>{category ?? "All categories"}</SelectValue>
+            <SelectValue>{category ? pluginLabel(category, t) : t("All categories")}</SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value={ALL_CATEGORIES_VALUE}>All categories</SelectItem>
+            <SelectItem value={ALL_CATEGORIES_VALUE}>{t("All categories")}</SelectItem>
             {categories.map((item) => (
               <SelectItem key={item} value={item}>
-                {item}
+                {pluginLabel(item, t)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -261,22 +274,31 @@ function PluginFilterBar({
 }
 
 /** The named blocker for a brokered plugin that cannot connect yet, or null when it can. */
-export function pluginBrokeredBlockerNotice(plugin: PluginDirectoryDefinition) {
+export function pluginBrokeredBlockerNotice(
+  plugin: PluginDirectoryDefinition,
+  t: Translate = englishTranslator.translate,
+) {
   const blocker = pluginBlocker(plugin);
   if (plugin.connection.type !== "brokered" || blocker === null) return null;
   return {
     type: "warning" as const,
-    title: `${plugin.title} is not available yet`,
+    title: t("{name} is not available yet", { name: plugin.title }),
     description: blocker,
   };
 }
 
-export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: readonly string[]) {
+export function pluginRecoveryNotice(
+  pluginTitle: string,
+  recoveryFailures: readonly string[],
+  t: Translate = englishTranslator.translate,
+) {
   if (recoveryFailures.length === 0) return null;
   return {
     type: "warning" as const,
-    title: `${pluginTitle} connected with a session issue`,
-    description: `${recoveryFailures.join(" ")} Restart the affected bot session to retry.`,
+    title: t("{name} connected with a session issue", { name: pluginTitle }),
+    description: t("{failures} Restart the affected bot session to retry.", {
+      failures: recoveryFailures.join(" "),
+    }),
   };
 }
 
@@ -316,30 +338,34 @@ function draftFromServer(server: McpServer): McpServerDraft {
       };
 }
 
-export function validateMcpServerDraft(draft: McpServerDraft): string | null {
-  if (!draft.name.trim()) return "Name is required.";
+export function validateMcpServerDraft(
+  draft: McpServerDraft,
+  t: Translate = englishTranslator.translate,
+): string | null {
+  if (!draft.name.trim()) return t("Name is required.");
   if (draft.transport === "stdio") {
-    return draft.command.trim() ? null : "Command is required.";
+    return draft.command.trim() ? null : t("Command is required.");
   }
   try {
     const url = new URL(draft.url.trim());
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return "URL must start with http:// or https://.";
+      return t("URL must start with http:// or https://.");
     }
-    return url.username || url.password ? "Store credentials outside the server URL." : null;
+    return url.username || url.password ? t("Store credentials outside the server URL.") : null;
   } catch {
-    return "Enter a valid HTTP or HTTPS URL.";
+    return t("Enter a valid HTTP or HTTPS URL.");
   }
 }
 
 /** Standalone page header shared by the directory and plugin details. */
 export function PluginsPageHeader({ children }: { readonly children?: ReactNode }) {
+  const { t } = useI18n();
   return (
     <WorkspacePageHeader electron={isElectron}>
       {children ?? (
         <div className="flex min-w-0 items-center gap-2">
           <AppIcon icon={PuzzleIcon} className="size-4 shrink-0 text-muted-foreground" />
-          <h1 className="truncate text-sm font-medium text-foreground">Plugins</h1>
+          <h1 className="truncate text-sm font-medium text-foreground">{t("Plugins")}</h1>
         </div>
       )}
     </WorkspacePageHeader>
@@ -361,12 +387,13 @@ function PluginDirectoryLayout({
   readonly returning: boolean;
   readonly children: ReactNode;
 }) {
+  const { t } = useI18n();
   if (!standalone) {
     return (
       <>
         <DialogHeader className={PLUGIN_DIRECTORY_HEADER_CLASS_NAME}>
           <div className="pe-8">
-            <DialogTitle>Plugins</DialogTitle>
+            <DialogTitle>{t("Plugins")}</DialogTitle>
           </div>
           {search}
           {filters}
@@ -392,9 +419,11 @@ function PluginDirectoryLayout({
           )}
         >
           <div className="px-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Plugins</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {t("Plugins")}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect a listed integration, or follow a setup guide from integrations.sh.
+              {t("Connect a listed integration, or follow a setup guide from integrations.sh.")}
             </p>
           </div>
           <div className="mt-6 mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -415,6 +444,7 @@ function PluginsDialogForEnvironment({
   readonly environmentId: EnvironmentId;
   readonly standalone?: boolean;
 }) {
+  const { t } = useI18n();
   const requestedQuery = usePluginsDialogStore((state) => state.requestedQuery);
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
@@ -445,7 +475,7 @@ function PluginsDialogForEnvironment({
     filter,
     installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
   });
-  const validationError = validateMcpServerDraft(draft);
+  const validationError = validateMcpServerDraft(draft, t);
   const selectedPluginServer = selectedPlugin
     ? findPluginServer(selectedPlugin, servers)
     : undefined;
@@ -466,7 +496,7 @@ function PluginsDialogForEnvironment({
     toastManager.add({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : "The command failed.",
+      description: error instanceof Error ? error.message : t("The command failed."),
     });
     return true;
   };
@@ -492,7 +522,7 @@ function PluginsDialogForEnvironment({
     // The catalog already disables this toggle; a direct caller still gets
     // the named blocker instead of a dead click.
     if (enabled) {
-      const notice = pluginBrokeredBlockerNotice(plugin);
+      const notice = pluginBrokeredBlockerNotice(plugin, t);
       if (notice) {
         toastManager.add(notice);
         return;
@@ -503,7 +533,7 @@ function PluginsDialogForEnvironment({
       setPendingServerId(mcpServerId);
       const result = await disableServer({ environmentId, input: { mcpServerId } });
       setPendingServerId(null);
-      reportFailure(`Could not disable ${plugin.title}`, result);
+      reportFailure(t("Could not disable {name}", { name: plugin.title }), result);
       return;
     }
     if (!isInstallablePlugin(plugin)) return;
@@ -523,7 +553,7 @@ function PluginsDialogForEnvironment({
       await runPluginEnablePlan(plan, {
         create: async (mcpServerId, configuration) =>
           commandSucceeded(
-            `Could not enable ${plugin.title}`,
+            t("Could not enable {name}", { name: plugin.title }),
             await createServer({
               environmentId,
               input: { mcpServerId, ...configuration },
@@ -531,7 +561,7 @@ function PluginsDialogForEnvironment({
           ),
         update: async (mcpServerId, configuration) =>
           commandSucceeded(
-            `Could not update ${plugin.title}`,
+            t("Could not update {name}", { name: plugin.title }),
             await updateServer({
               environmentId,
               input: { mcpServerId, ...configuration },
@@ -539,7 +569,7 @@ function PluginsDialogForEnvironment({
           ),
         enable: async (mcpServerId) =>
           commandSucceeded(
-            `Could not enable ${plugin.title}`,
+            t("Could not enable {name}", { name: plugin.title }),
             await enableServer({ environmentId, input: { mcpServerId } }),
           ),
         ...(shouldAuthenticate
@@ -551,7 +581,11 @@ function PluginsDialogForEnvironment({
                   onAuthorizationUrl,
                 });
                 if (result._tag === "Success") {
-                  const notice = pluginRecoveryNotice(plugin.title, result.value.recoveryFailures);
+                  const notice = pluginRecoveryNotice(
+                    plugin.title,
+                    result.value.recoveryFailures,
+                    t,
+                  );
                   if (notice) toastManager.add(notice);
                   return true;
                 }
@@ -559,8 +593,9 @@ function PluginsDialogForEnvironment({
                   const error = squashAtomCommandFailure(result);
                   toastManager.add({
                     type: "error",
-                    title: `Could not connect ${plugin.title}`,
-                    description: error instanceof Error ? error.message : "Authentication failed.",
+                    title: t("Could not connect {name}", { name: plugin.title }),
+                    description:
+                      error instanceof Error ? error.message : t("Authentication failed."),
                   });
                 }
                 return false;
@@ -588,7 +623,10 @@ function PluginsDialogForEnvironment({
       input: { mcpServerId: server.id },
     });
     setPendingServerId(null);
-    reportFailure(enabled ? "Could not enable MCP server" : "Could not disable MCP server", result);
+    reportFailure(
+      enabled ? t("Could not enable MCP server") : t("Could not disable MCP server"),
+      result,
+    );
   };
 
   const saveEditor = async () => {
@@ -614,7 +652,7 @@ function PluginsDialogForEnvironment({
     setPendingServerId(null);
     if (
       !reportFailure(
-        editorTarget.server ? "Could not update MCP server" : "Could not add MCP server",
+        editorTarget.server ? t("Could not update MCP server") : t("Could not add MCP server"),
         result,
       )
     ) {
@@ -633,18 +671,21 @@ function PluginsDialogForEnvironment({
   };
 
   const openPluginSkill = (skill: PluginSkill) => {
-    openExternal(skill.url, "Could not open skill");
+    openExternal(skill.url, t("Could not open skill"));
   };
 
   const removeServer = async (server: McpServer) => {
-    const confirmed = await ensureLocalApi().dialogs.confirm(`Remove '${server.name}'?`, {
-      variant: "destructive",
-    });
+    const confirmed = await ensureLocalApi().dialogs.confirm(
+      t("Remove '{name}'?", { name: server.name }),
+      {
+        variant: "destructive",
+      },
+    );
     if (!confirmed) return;
     setPendingServerId(server.id);
     const result = await deleteServer({ environmentId, input: { mcpServerId: server.id } });
     setPendingServerId(null);
-    reportFailure("Could not remove MCP server", result);
+    reportFailure(t("Could not remove MCP server"), result);
   };
 
   return (
@@ -671,10 +712,10 @@ function PluginsDialogForEnvironment({
             onViewDocumentation={() =>
               openExternal(
                 integrationsShListing(selectedPlugin.id) ?? selectedPlugin.documentationUrl,
-                "Could not open integration guide",
+                t("Could not open integration guide"),
               )
             }
-            onViewSource={() => openExternal(selectedPlugin.sourceUrl, "Could not open source")}
+            onViewSource={() => openExternal(selectedPlugin.sourceUrl, t("Could not open source"))}
             onOpenSkill={openPluginSkill}
           />
         </div>
@@ -687,15 +728,16 @@ function PluginsDialogForEnvironment({
         >
           <section className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-xl">
-              <h2 className="text-base font-semibold">Find an integration</h2>
+              <h2 className="text-base font-semibold">{t("Find an integration")}</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Browse integrations.sh for MCP endpoints and setup instructions. Add the server here
-                once you have its URL or command.
+                {t(
+                  "Browse integrations.sh for MCP endpoints and setup instructions. Add the server here once you have its URL or command.",
+                )}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={openCustomCreator}>
-                Add MCP server
+                {t("Add MCP server")}
               </Button>
               <a
                 className="inline-flex h-8 items-center rounded-lg bg-foreground px-3 text-sm font-medium text-background hover:opacity-85"
@@ -703,7 +745,7 @@ function PluginsDialogForEnvironment({
                 rel="noopener noreferrer"
                 target="_blank"
               >
-                Browse integrations.sh
+                {t("Browse integrations.sh")}
               </a>
             </div>
           </section>
@@ -746,11 +788,13 @@ function PluginsDialogForEnvironment({
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>
         <DialogPopup className="max-h-[min(36rem,90dvh)] max-w-lg flex-col overflow-hidden">
           <DialogHeader className="shrink-0 border-b px-6 py-5">
-            <DialogTitle>{editorTarget?.server ? "Edit MCP server" : "Add MCP server"}</DialogTitle>
+            <DialogTitle>
+              {editorTarget?.server ? t("Edit MCP server") : t("Add MCP server")}
+            </DialogTitle>
           </DialogHeader>
           <DialogPanel className="space-y-4 px-6 py-5">
             <Field>
-              <FieldLabel>Name</FieldLabel>
+              <FieldLabel>{t("Name")}</FieldLabel>
               <Input
                 autoFocus
                 value={draft.name}
@@ -758,7 +802,7 @@ function PluginsDialogForEnvironment({
               />
             </Field>
             <Field>
-              <FieldLabel>Transport</FieldLabel>
+              <FieldLabel>{t("Transport")}</FieldLabel>
               <Select
                 value={draft.transport}
                 onValueChange={(transport) => {
@@ -766,21 +810,21 @@ function PluginsDialogForEnvironment({
                     setDraft({ ...draft, transport });
                 }}
               >
-                <SelectTrigger className="w-full" aria-label="MCP transport">
+                <SelectTrigger className="w-full" aria-label={t("MCP transport")}>
                   <SelectValue>
-                    {draft.transport === "stdio" ? "Local command" : "Remote URL"}
+                    {draft.transport === "stdio" ? t("Local command") : t("Remote URL")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
-                  <SelectItem value="stdio">Local command</SelectItem>
-                  <SelectItem value="url">Remote URL</SelectItem>
+                  <SelectItem value="stdio">{t("Local command")}</SelectItem>
+                  <SelectItem value="url">{t("Remote URL")}</SelectItem>
                 </SelectPopup>
               </Select>
             </Field>
             {draft.transport === "stdio" ? (
               <>
                 <Field>
-                  <FieldLabel>Command</FieldLabel>
+                  <FieldLabel>{t("Command")}</FieldLabel>
                   <Input
                     value={draft.command}
                     onChange={(event) => setDraft({ ...draft, command: event.currentTarget.value })}
@@ -788,7 +832,7 @@ function PluginsDialogForEnvironment({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>Arguments, one per line</FieldLabel>
+                  <FieldLabel>{t("Arguments, one per line")}</FieldLabel>
                   <Textarea
                     rows={4}
                     value={draft.args}
@@ -798,7 +842,7 @@ function PluginsDialogForEnvironment({
               </>
             ) : (
               <Field>
-                <FieldLabel>URL</FieldLabel>
+                <FieldLabel>{t("URL")}</FieldLabel>
                 <Input
                   value={draft.url}
                   onChange={(event) => setDraft({ ...draft, url: event.currentTarget.value })}
@@ -812,10 +856,10 @@ function PluginsDialogForEnvironment({
           </DialogPanel>
           <DialogFooter className="shrink-0">
             <Button variant="ghost" onClick={closeEditor}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={pendingServerId !== null} onClick={() => void saveEditor()}>
-              {editorTarget?.server ? "Save" : "Add server"}
+              {editorTarget?.server ? t("Save") : t("Add server")}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -825,6 +869,7 @@ function PluginsDialogForEnvironment({
 }
 
 export function PluginsDialog() {
+  const { t } = useI18n();
   const open = usePluginsDialogStore((state) => state.open);
   const environmentId = usePrimaryEnvironmentId();
   return (
@@ -834,8 +879,8 @@ export function PluginsDialog() {
           <PluginsDialogForEnvironment environmentId={environmentId} />
         ) : (
           <DialogHeader>
-            <DialogTitle>Plugins</DialogTitle>
-            <DialogDescription>Connect an environment to manage plugins.</DialogDescription>
+            <DialogTitle>{t("Plugins")}</DialogTitle>
+            <DialogDescription>{t("Connect an environment to manage plugins.")}</DialogDescription>
           </DialogHeader>
         )}
       </DialogPopup>
@@ -844,6 +889,7 @@ export function PluginsDialog() {
 }
 
 export function PluginsPage() {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
@@ -855,7 +901,7 @@ export function PluginsPage() {
             <PluginsPageHeader />
             <div className={PLUGIN_PAGE_COLUMN_CLASS_NAME}>
               <p className="px-2.5 text-[15px] leading-6 text-muted-foreground">
-                Connect an environment to manage plugins.
+                {t("Connect an environment to manage plugins.")}
               </p>
             </div>
           </>

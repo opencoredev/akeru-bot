@@ -81,7 +81,7 @@ function finiteLabelSources(): Record<string, string[]> {
   const pairing = read("apps/web/src/components/auth/PairingRouteSurface.tsx");
   const dictation = read("apps/mobile/src/components/DictationControls.tsx");
   return {
-    "SettingsDialog: item.title (SETTINGS_SEARCH_ITEMS)": literals(
+    "settingsSearch: item.title (SETTINGS_SEARCH_ITEMS)": literals(
       between(settings, "export const SETTINGS_SEARCH_ITEMS = [", "] as const"),
       /\btitle:\s*("(?:[^"\\]|\\.)*")/g,
     ),

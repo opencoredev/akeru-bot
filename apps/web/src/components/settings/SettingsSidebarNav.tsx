@@ -1,6 +1,7 @@
 import { ArrowLeftIcon } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { AppIcon } from "../ui/app-icon";
 import {
@@ -33,13 +34,14 @@ function useSettingsNavigation() {
  * to chats, so there is no footer here.
  */
 export function SettingsPanelNav() {
+  const { t } = useI18n();
   const { pathname, go } = useSettingsNavigation();
   return (
-    <nav aria-label="Settings sections" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <nav aria-label={t("Settings sections")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       {SETTINGS_NAV_GROUPS.map((group) => (
         <div key={group.label} className="pb-2">
           <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-sidebar-muted-foreground">
-            {group.label}
+            {t(group.label)}
           </div>
           <ul className="flex flex-col gap-0.5">
             {group.items.map((item) => {
@@ -66,7 +68,7 @@ export function SettingsPanelNav() {
                       icon={item.icon}
                       strokeWidth={active ? 2 : 1.7}
                     />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </button>
                 </li>
               );
@@ -80,6 +82,7 @@ export function SettingsPanelNav() {
 
 /** Classic flat sidebar (`?sidebar=classic`) for the settings route. */
 export function SettingsSidebarNav() {
+  const { t } = useI18n();
   const { pathname, go } = useSettingsNavigation();
 
   return (
@@ -88,7 +91,7 @@ export function SettingsSidebarNav() {
       <SidebarContent className="overflow-x-hidden">
         {SETTINGS_NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label} className="p-[var(--sidebar-content-inset)]">
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
                 const to = `/settings/${item.section}`;
@@ -99,14 +102,14 @@ export function SettingsSidebarNav() {
                       aria-current={active ? "page" : undefined}
                       isActive={active}
                       onClick={() => go(to)}
-                      tooltip={item.label}
+                      tooltip={t(item.label)}
                     >
                       <AppIcon
                         className={cn("size-4", !active && "text-sidebar-muted-foreground")}
                         icon={item.icon}
                       />
                       <span className="truncate group-data-[collapsible=icon]:hidden">
-                        {item.label}
+                        {t(item.label)}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -119,9 +122,9 @@ export function SettingsSidebarNav() {
       <SidebarFooter className="p-[var(--sidebar-content-inset)]">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => go("/")} tooltip="Back to chats">
+            <SidebarMenuButton onClick={() => go("/")} tooltip={t("Back to chats")}>
               <ArrowLeftIcon />
-              <span className="group-data-[collapsible=icon]:hidden">Back to chats</span>
+              <span className="group-data-[collapsible=icon]:hidden">{t("Back to chats")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

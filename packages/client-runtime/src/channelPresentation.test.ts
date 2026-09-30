@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { BotId, MessageId, ProjectId, type ChannelBinding } from "@t3tools/contracts";
 import {
   canChangeChannelProject,
+  channelReconnectProject,
   channelBindingNeedsProject,
   channelFailureReason,
   channelBindingPresentation,
@@ -187,7 +188,7 @@ describe("channel presentation", () => {
     ).toBeNull();
   });
 
-  it("allows a project change only to a different live project or to repair a blocked binding", () => {
+  it("allows a project change only to a different live project or to repair a blocked or orphaned binding", () => {
     const first = ProjectId.make("project-1");
     const second = ProjectId.make("project-2");
     const liveProjects = [{ id: first }, { id: second }];
@@ -198,6 +199,20 @@ describe("channel presentation", () => {
     expect(canChangeChannelProject(running, ProjectId.make("gone"), liveProjects)).toBe(false);
     expect(
       canChangeChannelProject({ status: "blocked", projectId: first }, first, liveProjects),
+    ).toBe(true);
+    expect(
+      canChangeChannelProject({ status: "disconnected", projectId: first }, second, liveProjects),
+    ).toBe(false);
+    const deleted = ProjectId.make("deleted");
+    expect(
+      canChangeChannelProject({ status: "disconnected", projectId: deleted }, second, liveProjects),
+    ).toBe(true);
+    expect(
+      canChangeChannelProject(
+        { status: "disconnected", projectId: undefined },
+        second,
+        liveProjects,
+      ),
     ).toBe(true);
   });
 
@@ -250,5 +265,25 @@ describe("channelFailureReason", () => {
     expect(channelFailureReason("network", "slack", zh)).toBe(
       "无法连接到 Slack。请检查网络后重试。",
     );
+  });
+});
+
+describe("channelReconnectProject", () => {
+  it("reconnects a disconnected channel into a different picked live project", () => {
+    const first = ProjectId.make("first");
+    const second = ProjectId.make("second");
+    const liveProjects = [{ id: first }, { id: second }];
+    const disconnected = { status: "disconnected" as const, projectId: first };
+    expect(channelReconnectProject(disconnected, second, liveProjects)).toBe(second);
+    expect(channelReconnectProject(disconnected, first, liveProjects)).toBeNull();
+    expect(channelReconnectProject(disconnected, null, liveProjects)).toBeNull();
+    expect(channelReconnectProject(disconnected, ProjectId.make("gone"), liveProjects)).toBeNull();
+    expect(
+      channelReconnectProject(
+        { status: "needs-reconnect", projectId: first },
+        second,
+        liveProjects,
+      ),
+    ).toBeNull();
   });
 });

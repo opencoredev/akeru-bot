@@ -1,9 +1,10 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { AkeruMemoryDocumentTarget } from "@t3tools/contracts";
 
 /** User-facing names for the bot memory documents, shared by the editor and backup preview. */
 export const memoryDocumentCopy: Record<
   AkeruMemoryDocumentTarget,
-  { readonly title: string; readonly fileName: string; readonly description: string }
+  { readonly title: MessageKey; readonly fileName: string; readonly description: MessageKey }
 > = {
   user: {
     title: "About you",

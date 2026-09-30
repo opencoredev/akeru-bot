@@ -60,7 +60,7 @@ export function BotOverview({
   const { t } = useI18n();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const settings = usePrimarySettings();
-  const modelLabel = resolveBotModelLabel(bot.engine, settings, providers);
+  const modelLabel = resolveBotModelLabel(bot.engine, settings, providers, t);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
       <div className="flex flex-col items-center text-center">
@@ -283,7 +283,7 @@ export function BotDetailsPanel({
                 render={
                   <Button
                     aria-expanded="true"
-                    aria-label={`Collapse ${bot.name} bot sidebar`}
+                    aria-label={t("Collapse {name} bot sidebar", { name: bot.name })}
                     size="icon-sm"
                     variant="ghost"
                     onClick={() => setDesktopOpen(false)}
@@ -293,7 +293,9 @@ export function BotDetailsPanel({
                 }
               />
               <TooltipPopup side="left">
-                Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
+                {shortcutLabel
+                  ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
+                  : t("Collapse")}
               </TooltipPopup>
             </Tooltip>,
             true,

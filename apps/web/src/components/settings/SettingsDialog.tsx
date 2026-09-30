@@ -12,8 +12,10 @@ import {
   SlidersHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { Fragment, Suspense, lazy, type ComponentType } from "react";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { Dialog, DialogPopup, DialogTitle } from "~/components/ui/dialog";
 import { AppIcon } from "~/components/ui/app-icon";
@@ -89,7 +91,8 @@ export function SettingsPanelForSection({ section }: { readonly section: Setting
 
 export interface SettingsNavItem {
   readonly section: SettingsSection;
-  readonly label: string;
+  /** Catalog key; translate with `t(item.label)` at render time. */
+  readonly label: MessageKey;
   readonly icon: IconSvgElement;
 }
 
@@ -99,7 +102,7 @@ export interface SettingsNavItem {
  * other pages.
  */
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
-  readonly label: string;
+  readonly label: MessageKey;
   readonly items: ReadonlyArray<SettingsNavItem>;
 }> = [
   {
@@ -130,19 +133,21 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<SettingsNavItem> = SETTINGS_NAV_G
 );
 
 /** Header labels for pages without a nav row. */
-const UNLISTED_SECTION_LABELS: Readonly<Partial<Record<SettingsSection, string>>> = {
+const UNLISTED_SECTION_LABELS: Readonly<Partial<Record<SettingsSection, MessageKey>>> = {
   diagnostics: "Diagnostics",
 };
 
-export function settingsSectionLabel(section: SettingsSection): string {
+/** Catalog key naming a section; callers translate it with `t`. */
+export function settingsSectionLabel(section: SettingsSection): MessageKey {
   return (
     SETTINGS_NAV_ITEMS.find((item) => item.section === section)?.label ??
     UNLISTED_SECTION_LABELS[section] ??
-    section
+    "Settings"
   );
 }
 
 export function SettingsDialog() {
+  const { t } = useI18n();
   const section = useSettingsDialogStore((state) => state.section);
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
 
@@ -157,15 +162,15 @@ export function SettingsDialog() {
         className="h-[min(44rem,88dvh)] max-w-4xl flex-row overflow-hidden max-sm:flex-col"
         bottomStickOnMobile={false}
       >
-        <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogTitle className="sr-only">{t("Settings")}</DialogTitle>
         <nav
-          aria-label="Settings sections"
+          aria-label={t("Settings sections")}
           className="flex w-52 shrink-0 flex-col gap-0.5 border-e bg-muted/30 p-2 max-sm:w-full max-sm:flex-row max-sm:overflow-x-auto max-sm:border-e-0 max-sm:border-b"
         >
           {SETTINGS_NAV_GROUPS.map((group) => (
             <Fragment key={group.label}>
               <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground max-sm:hidden">
-                {group.label}
+                {t(group.label)}
               </div>
               {group.items.map((item) => {
                 const isActive = section === item.section;
@@ -183,7 +188,7 @@ export function SettingsDialog() {
                     )}
                   >
                     <AppIcon className="size-4 shrink-0" icon={item.icon} />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </button>
                 );
               })}

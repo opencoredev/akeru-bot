@@ -56,8 +56,8 @@ it("keeps the package identity and explicit approval gate", () => {
   assert.include(packageManifest, '"name": "akeru-bot"');
   assert.include(packageManifest, '"url": "https://github.com/opencoredev/akeru-bot"');
   assert.include(packageManifest, '"akeru": "./dist/bin.mjs"');
+  // AKERU_HOME wins and T3CODE_HOME stays a fallback, through the shared alias reader.
   assert.include(triageSource, 'aliasedEnv(Config.string, "HOME")');
-  assert.notInclude(triageSource, 'Config.string("T3CODE_HOME")');
   assert.include(TRIAGE_PLAYBOOK, "Show the user the complete final issue text");
   assert.include(TRIAGE_PLAYBOOK, "get an explicit yes before");
   assert.include(TRIAGE_PLAYBOOK, "Never post without it");

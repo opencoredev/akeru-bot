@@ -1,18 +1,26 @@
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import type { ProviderInstanceId } from "@t3tools/contracts";
 
-export function modelPickerEmptyMessage(input: {
-  searchQuery: string;
-  selectedInstanceId: ProviderInstanceId | "favorites";
-  hasAnyModels: boolean;
-  selectedInstanceModelsLoaded: boolean;
-}): string {
+const englishTranslator = createTranslator("en");
+
+type Translate = typeof englishTranslator.translate;
+
+export function modelPickerEmptyMessage(
+  input: {
+    searchQuery: string;
+    selectedInstanceId: ProviderInstanceId | "favorites";
+    hasAnyModels: boolean;
+    selectedInstanceModelsLoaded: boolean;
+  },
+  t: Translate = englishTranslator.translate,
+): string {
   const query = input.searchQuery.trim();
-  if (query) return `No models match “${query}”.`;
+  if (query) return t("No models match “{query}”.", { query });
   if (input.selectedInstanceId === "favorites") {
-    return "No favorite models yet. Star a model to add it here.";
+    return t("No favorite models yet. Star a model to add it here.");
   }
-  if (!input.selectedInstanceModelsLoaded) return "Loading models…";
+  if (!input.selectedInstanceModelsLoaded) return t("Loading models…");
   return input.hasAnyModels
-    ? "No models available for this provider."
-    : "No models available. Check your provider connection in Settings.";
+    ? t("No models available for this provider.")
+    : t("No models available. Check your provider connection in Settings.");
 }

@@ -222,8 +222,6 @@ import {
 export const WS_METHODS = {
   // Project registry methods
   projectsList: "projects.list",
-  projectsAdd: "projects.add",
-  projectsRemove: "projects.remove",
   projectsListEntries: "projects.listEntries",
   projectsReadFile: "projects.readFile",
   projectsSearchEntries: "projects.searchEntries",

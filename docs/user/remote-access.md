@@ -342,10 +342,5 @@ under **Environments**. Removing a saved environment deletes it from that client
 session under **Connections > Authorized clients** when the device must lose access. That section
 appears when the current environment is reachable remotely and this client can manage access.
 
-Prefer a private network such as Tailscale. Do not expose an HTTP server directly to the public
-internet. Use HTTPS and WSS across untrusted networks.
-
-See [Running Akeru Bot in the background](./background-service.md) for an unattended server.
-
 See [Run Akeru Bot in the background](./background-service.md) for an unattended server and
 [Keep the app and server in sync](./updating.md) for client-side update notices.

@@ -1,4 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
+import {
+  channelBindingNeedsProject,
+  channelFailureReason,
+} from "@t3tools/client-runtime/channel-presentation";
+import {
+  createTranslator,
+  type PluralForms,
+  type TranslationParams,
+} from "@t3tools/client-runtime/i18n";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import {
   BotId,
@@ -7,10 +16,17 @@ import {
   type ChannelProvider,
   type EnvironmentId,
   type OrchestrationBot,
+  type ProjectId,
 } from "@t3tools/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { resolveChannelSettingsAccess } from "../../channelAccess";
+import {
+  channelFailureCategoryOf,
+  isChannelIdentityConflict,
+  resolveChannelSettingsAccess,
+} from "../../channelAccess";
+import { requestConfirmDialog } from "../../confirmDialog";
+import { useI18n } from "../../i18n";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { useEnvironmentSessionState } from "../../state/session";
@@ -27,6 +43,11 @@ import { searchableSetting } from "./settingsSearch";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 export const UNASSIGNED = "unassigned";
+
+type Translate = (message: string, params?: TranslationParams) => string;
+type Pluralize = (count: number, forms: PluralForms) => string;
+
+const englishTranslator = createTranslator("en");
 
 export function assignedBotForConnection(
   connectionId: ChannelConnectionId,
@@ -45,14 +66,19 @@ export function providerLabel(provider: ChannelProvider): string {
   return "Discord Gateway";
 }
 
-export function channelTestInstructions(provider: ChannelProvider, botName?: string): string {
-  if (provider === "imessage") return "Send a direct iMessage to this line to test a reply.";
-  if (provider === "whatsapp") return "Send a direct WhatsApp message to this number.";
-  if (provider === "telegram") return "Send a direct Telegram message to this bot.";
+export function channelTestInstructions(
+  provider: ChannelProvider,
+  botName?: string,
+  t: Translate = englishTranslator.translate,
+): string {
+  if (provider === "imessage") return t("Send a direct iMessage to this line to test a reply.");
+  if (provider === "whatsapp") return t("Send a direct WhatsApp message to this number.");
+  if (provider === "telegram") return t("Send a direct Telegram message to this bot.");
+  const name = botName ?? t("the bot");
   if (provider === "slack") {
-    return `Send a direct message or mention ${botName ?? "the bot"} in a Slack channel thread.`;
+    return t("Send a direct message or mention {name} in a Slack channel thread.", { name });
   }
-  return `Send a direct message or mention ${botName ?? "the bot"} in a Discord server.`;
+  return t("Send a direct message or mention {name} in a Discord server.", { name });
 }
 
 export function parsePhotonHostedCredentials(input: string): {
@@ -82,6 +108,7 @@ export function parsePhotonHostedCredentials(input: string): {
 
 type ChannelBot = Pick<OrchestrationBot, "id" | "name" | "archivedAt" | "channelBindings">;
 type ChannelBinding = OrchestrationBot["channelBindings"][number];
+type LiveProject = { readonly id: ProjectId };
 
 /** The bot bound to a connection and its live binding, when there is one. */
 export function connectionAssignment(
@@ -93,25 +120,33 @@ export function connectionAssignment(
   return { bot, binding };
 }
 
-export function bindingNeedsReconnect(binding: ChannelBinding | undefined): boolean {
-  return (
-    binding?.status === "failed" ||
-    binding?.status === "needs-reconnect" ||
-    binding?.status === "disconnected"
-  );
-}
-
-/** Headline state of one connection. */
+/** Headline state of one connection, for list rows and the channel header. */
 export function connectionState(
   bot: ChannelBot | undefined,
   binding: ChannelBinding | undefined,
+  liveProjects: ReadonlyArray<LiveProject>,
+  t: Translate = englishTranslator.translate,
 ): Pick<ProviderConnectionState, "tone" | "label"> {
-  if (!bot) return { tone: "neutral", label: "No bot" };
-  if (binding?.status === "failed") return { tone: "attention", label: "Connection failed" };
-  if (binding?.status === "needs-reconnect") return { tone: "attention", label: "Needs reconnect" };
-  if (binding?.status === "disconnected") return { tone: "neutral", label: "Disconnected" };
-  if (binding?.status === "not-live") return { tone: "pending", label: "Not live" };
-  return { tone: "positive", label: "Connected" };
+  if (!bot || !binding) return { tone: "neutral", label: t("No bot") };
+  if (channelBindingNeedsProject(binding, liveProjects)) {
+    return { tone: "attention", label: t("Choose another project") };
+  }
+  switch (binding.status) {
+    case "connecting":
+      return { tone: "pending", label: t("Connecting…") };
+    case "failed":
+      return { tone: "attention", label: t("Connection failed") };
+    case "needs-reconnect":
+      return { tone: "attention", label: t("Needs reconnect") };
+    case "disconnected":
+      return { tone: "neutral", label: t("Disconnected") };
+    case "not-live":
+      return { tone: "attention", label: t("Not live") };
+    default:
+      return binding.lastError || binding.failureCategory
+        ? { tone: "attention", label: t("Needs attention") }
+        : { tone: "positive", label: t("Connected") };
+  }
 }
 
 /** Headline state of a channel kind across all of its connections. */
@@ -119,28 +154,36 @@ export function channelState(
   provider: ChannelProvider,
   connections: ReadonlyArray<ChannelConnectionProfile>,
   bots: ReadonlyArray<ChannelBot>,
+  liveProjects: ReadonlyArray<LiveProject>,
+  t: Translate = englishTranslator.translate,
+  plural: Pluralize = englishTranslator.plural,
 ): Pick<ProviderConnectionState, "tone" | "label"> {
   const own = connections.filter((connection) => connection.provider === provider);
-  if (own.length === 0) return { tone: "neutral", label: "Not set up" };
+  if (own.length === 0) return { tone: "neutral", label: t("Not set up") };
   const states = own.map((connection) => {
     const { bot, binding } = connectionAssignment(connection.id, bots);
-    return connectionState(bot, binding);
+    return connectionState(bot, binding, liveProjects, t);
   });
   if (states.some((state) => state.tone === "attention")) {
-    return { tone: "attention", label: "Needs attention" };
+    return { tone: "attention", label: t("Needs attention") };
+  }
+  if (states.some((state) => state.tone === "pending")) {
+    return { tone: "pending", label: t("Connecting…") };
   }
   return {
     tone: states.some((state) => state.tone === "positive") ? "positive" : "neutral",
-    label: own.length === 1 ? "1 connection" : `${own.length} connections`,
+    label: plural(own.length, { one: "{count} connection", other: "{count} connections" }),
   };
 }
 
 /** Everything the channel pages read and change, for one environment. */
 export function useChannelSettings(environmentId: EnvironmentId | null) {
+  const { t } = useI18n();
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
   const bots = useAtomValue(environmentBotsAtom(targetEnvironmentId));
   const snapshot = useAtomValue(environmentSnapshotAtom(targetEnvironmentId));
+  const liveProjects = useMemo(() => snapshot?.projects ?? [], [snapshot]);
   const activeBots = useMemo(() => bots.filter((bot) => bot.archivedAt === null), [bots]);
   const connections = useEnvironmentSettings(
     targetEnvironmentId,
@@ -157,6 +200,9 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
   const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
     reportFailure: false,
   });
+  const changeProject = useAtomCommand(botEnvironment.channels.changeProject, {
+    reportFailure: false,
+  });
   const [busy, setBusy] = useState(false);
   const [busyConnectionId, setBusyConnectionId] = useState<string | null>(null);
   const [pendingProfile, setPendingProfile] = useState<{
@@ -169,6 +215,22 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       ? "no-environment"
       : resolveChannelSettingsAccess({ isPending: session.isPending, session: session.data });
 
+  // Toast detail for a failed channel command: the conflict or the category's reason, if known.
+  const failureDescription = (
+    result: Parameters<typeof channelFailureCategoryOf>[0],
+    provider: ChannelProvider,
+  ) => {
+    if (isChannelIdentityConflict(result)) {
+      return {
+        description: t(
+          "Another bot already uses this account. Unassign it there, then connect again.",
+        ),
+      };
+    }
+    const category = channelFailureCategoryOf(result);
+    return category ? { description: channelFailureReason(category, provider, t) } : {};
+  };
+
   useEffect(() => {
     if (!pendingProfile) return;
     const present = connections.some((connection) => connection.id === pendingProfile.id);
@@ -180,6 +242,14 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
 
   const removeConnection = async (connection: ChannelConnectionProfile) => {
     if (!environmentId || mutationRef.current) return;
+    const confirmed =
+      (await requestConfirmDialog(
+        t("Delete {name}? Its saved credentials are removed from this environment.", {
+          name: connection.name,
+        }),
+        { variant: "destructive", confirmLabel: t("Delete") },
+      )) ?? false;
+    if (!confirmed || mutationRef.current) return;
     mutationRef.current = true;
     setBusy(true);
     const result = await deleteConnection({
@@ -189,19 +259,42 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
     if (result._tag === "Failure") {
       mutationRef.current = false;
       setBusy(false);
-      toastManager.add({ type: "error", title: "Unassign this channel before deleting it" });
+      toastManager.add({ type: "error", title: t("Unassign this channel before deleting it") });
       return;
     }
     setPendingProfile({ id: connection.id, present: false });
   };
 
-  const updateAssignment = async (connection: ChannelConnectionProfile, nextBotId: string) => {
+  /** Moves a connection to another bot, or to no bot. A new bot needs a live project. */
+  const updateAssignment = async (
+    connection: ChannelConnectionProfile,
+    nextBotId: string,
+    projectId: ProjectId | null,
+  ) => {
     if (!environmentId || busyConnectionId) return;
+    if (nextBotId !== UNASSIGNED && projectId === null) return;
     const { bot: assignedBot, binding: assignedBinding } = connectionAssignment(
       connection.id,
       bots,
     );
     if (assignedBot?.id === nextBotId) return;
+    const destinationBinding = bots
+      .find((bot) => bot.id === nextBotId)
+      ?.channelBindings.find((binding) => binding.provider === connection.provider);
+    // A detached binding keeps its provider row without a connection, so only a bound or
+    // still-live legacy binding occupies the bot.
+    const destinationOccupied =
+      destinationBinding !== undefined &&
+      (destinationBinding.connectionId
+        ? destinationBinding.connectionId !== connection.id
+        : destinationBinding.status !== "disconnected");
+    if (destinationOccupied) {
+      toastManager.add({
+        type: "error",
+        title: t("Unassign the channel already connected to this bot first"),
+      });
+      return;
+    }
     setBusyConnectionId(connection.id);
 
     if (assignedBot) {
@@ -211,26 +304,11 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       });
       if (result._tag === "Failure") {
         setBusyConnectionId(null);
-        toastManager.add({ type: "error", title: "Could not unassign channel" });
+        toastManager.add({ type: "error", title: t("Could not unassign channel") });
         return;
       }
     }
 
-    // Channel bindings name an explicit project. Settings has no picker yet, so it uses the
-    // project the bot works in most recently, or another live one.
-    const projectId =
-      nextBotId === UNASSIGNED || !snapshot
-        ? null
-        : defaultProjectIdForBot(snapshot, BotId.make(nextBotId));
-    if (nextBotId !== UNASSIGNED && projectId === null) {
-      setBusyConnectionId(null);
-      toastManager.add({
-        type: "error",
-        title: "Could not assign channel",
-        description: "Add a project before you connect a channel.",
-      });
-      return;
-    }
     if (nextBotId !== UNASSIGNED && projectId !== null) {
       const result = await attach({
         environmentId,
@@ -242,27 +320,75 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         },
       });
       if (result._tag === "Failure") {
+        // A failed attach keeps the new bot on the connection, so it has to let go before the
+        // previous bot can have the connection back.
+        // The previous project may be gone; restore into the chosen live project instead.
+        const previousProjectId = assignedBinding?.projectId ?? null;
+        const restoreProjectId =
+          previousProjectId !== null &&
+          liveProjects.some((project) => project.id === previousProjectId)
+            ? previousProjectId
+            : projectId;
+        const released = assignedBot
+          ? await detach({
+              environmentId,
+              input: { botId: BotId.make(nextBotId), provider: connection.provider },
+            })
+          : null;
         const restored = assignedBot
           ? await attach({
               environmentId,
               input: {
                 botId: assignedBot.id,
                 connectionId: connection.id,
-                projectId: assignedBinding?.projectId ?? projectId,
+                projectId: restoreProjectId,
                 provider: connection.provider,
               },
             })
           : null;
+        // Attaching starts the channel, so a binding the user had disconnected goes back to
+        // disconnected rather than coming back online after a failed move.
+        const stopped =
+          assignedBot && restored?._tag === "Success" && assignedBinding?.status === "disconnected"
+            ? await disconnect({
+                environmentId,
+                input: { botId: assignedBot.id, provider: connection.provider },
+              })
+            : null;
         toastManager.add({
           type: "error",
           title:
-            restored?._tag === "Failure"
-              ? "Could not assign or restore channel"
-              : "Could not assign channel",
+            released?._tag === "Failure" ||
+            restored?._tag === "Failure" ||
+            stopped?._tag === "Failure"
+              ? t("Could not assign or restore channel")
+              : t("Could not assign channel"),
+          ...failureDescription(result, connection.provider),
         });
       }
     }
     setBusyConnectionId(null);
+  };
+
+  const moveToProject = async (
+    connection: ChannelConnectionProfile,
+    botId: BotId,
+    projectId: ProjectId,
+  ) => {
+    if (!environmentId || busyConnectionId) return;
+    setBusyConnectionId(connection.id);
+    const result = await changeProject({
+      environmentId,
+      input: { botId, provider: connection.provider, projectId },
+    });
+    setBusyConnectionId(null);
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: t("Could not move channel to this project"),
+        ...failureDescription(result, connection.provider),
+      });
+    }
   };
 
   const runBindingCommand = async (
@@ -271,29 +397,40 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
     botId: BotId,
     failureTitle: string,
   ) => {
-    if (!environmentId) return;
+    if (!environmentId || busyConnectionId) return;
     setBusyConnectionId(connection.id);
     const result = await command({
       environmentId,
       input: { botId, provider: connection.provider },
     });
     setBusyConnectionId(null);
-    if (result._tag === "Failure") toastManager.add({ type: "error", title: failureTitle });
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: failureTitle,
+        ...failureDescription(result, connection.provider),
+      });
+    }
   };
 
   return {
     access,
     bots,
     activeBots,
+    liveProjects,
     connections,
     busy,
     busyConnectionId,
+    /** The project a picker preselects for a bot, or for any bot when `botId` is null. */
+    projectHint: (botId: BotId | null) =>
+      snapshot ? defaultProjectIdForBot(snapshot, botId) : null,
     removeConnection,
     updateAssignment,
+    moveToProject,
     disconnectConnection: (connection: ChannelConnectionProfile, botId: BotId) =>
-      runBindingCommand(disconnect, connection, botId, "Could not disconnect channel"),
+      runBindingCommand(disconnect, connection, botId, t("Could not disconnect channel")),
     reconnectConnection: (connection: ChannelConnectionProfile, botId: BotId) =>
-      runBindingCommand(reconnect, connection, botId, "Could not reconnect channel"),
+      runBindingCommand(reconnect, connection, botId, t("Could not reconnect channel")),
     /** Hold the page busy until a connection the setup dialog saved shows up. */
     awaitSavedConnection: (connectionId: string) =>
       setPendingProfile({ id: connectionId, present: true }),
@@ -306,15 +443,16 @@ export function ChannelAccessRow({
 }: {
   readonly access: ReturnType<typeof useChannelSettings>["access"];
 }) {
+  const { t } = useI18n();
   if (access === "no-environment") {
-    return <SettingsMessageRow>Connect an environment first.</SettingsMessageRow>;
+    return <SettingsMessageRow>{t("Connect an environment first.")}</SettingsMessageRow>;
   }
   if (access === "pending") {
     return (
       <SettingsMessageRow>
         <span className="inline-flex items-center gap-2">
-          <Spinner aria-label="Loading channel access" className="size-3.5" />
-          Checking access
+          <Spinner aria-label={t("Loading channel access")} className="size-3.5" />
+          {t("Checking access")}
         </span>
       </SettingsMessageRow>
     );
@@ -322,7 +460,7 @@ export function ChannelAccessRow({
   if (access === "denied") {
     return (
       <SettingsMessageRow>
-        This client does not have permission to manage channels.
+        {t("This client does not have permission to manage channels.")}
       </SettingsMessageRow>
     );
   }
@@ -332,13 +470,14 @@ export function ChannelAccessRow({
 /** The Channels overview: one row per channel kind, each opening its subpage. */
 export function BotChannelsSettingsPanel() {
   const environmentId = useSettingsEnvironmentId();
-  const { access, bots, connections } = useChannelSettings(environmentId);
+  const { t, plural } = useI18n();
+  const { access, bots, connections, liveProjects } = useChannelSettings(environmentId);
   return (
     <SettingsPageContainer>
-      <SettingsSection {...searchableSetting("bot-channels")}>
+      <SettingsSection {...searchableSetting("bot-channels", t)}>
         {access === "allowed" ? (
           CHANNEL_PROVIDER_META.map((meta) => {
-            const state = channelState(meta.provider, connections, bots);
+            const state = channelState(meta.provider, connections, bots, liveProjects, t, plural);
             return (
               <SettingsLinkRow
                 key={meta.provider}

@@ -141,7 +141,7 @@ instructions before selecting **Create routine**. If those details are missing, 
 so instead of guessing a name or schedule.
 
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
-adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. The routine card
+adds one item to the bot inbox, which you can open from **Settings > Advanced > Bot inbox**. The routine card
 says it was paused and points you to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived bot does not resume its routines.
 
 Every bot inbox item offers a way to clear it on desktop, web, and mobile. A disconnected provider or
@@ -211,7 +211,7 @@ shows the same summary.
 
 ## Voice calls
 
-1. Open **Settings > Voice**.
+1. Open **Settings > Providers > Voice**.
 2. Enable voice and choose the connected ChatGPT subscription and voice.
 3. Turn on **Voice calls** for the bot.
 4. Select the phone button in the bot's chat header.

@@ -189,17 +189,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
             title={screenTitle}
             subtitle={incomingShareSubtitle}
             onBack={layout.usesSplitView ? () => navigation.goBack() : undefined}
-            actions={
-              catalogState.hasReadyEnvironment
-                ? [
-                    {
-                      accessibilityLabel: t("Add project"),
-                      icon: "plus",
-                      onPress: () => navigation.dispatch(StackActions.push("AddProject")),
-                    },
-                  ]
-                : []
-            }
           />
         </>
       ) : (
@@ -216,13 +205,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                 accessibilityLabel={t("Close chat")}
                 icon="xmark"
                 onPress={() => navigation.goBack()}
-                separateBackground
-              />
-            ) : null}
-            {catalogState.hasReadyEnvironment ? (
-              <NativeHeaderToolbar.Button
-                icon="plus"
-                onPress={() => navigation.dispatch(StackActions.push("AddProject"))}
                 separateBackground
               />
             ) : null}
@@ -259,16 +241,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                   {t("Add environment")}
                 </Text>
               </Pressable>
-            ) : (
-              <Pressable
-                className="mt-1 rounded-full bg-primary px-4 py-2.5 active:opacity-70"
-                onPress={() => navigation.dispatch(StackActions.push("AddProject"))}
-              >
-                <Text className="text-sm font-t3-bold text-primary-foreground">
-                  {t("Add new project")}
-                </Text>
-              </Pressable>
-            )}
+            ) : null}
           </View>
         ) : (
           <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">

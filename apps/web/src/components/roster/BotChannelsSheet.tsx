@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import {
   canChangeChannelProject,
+  channelReconnectProject,
   channelBindingNeedsProject,
   channelPickerProjectId,
   channelRepairAction,
@@ -349,8 +350,19 @@ export function BotChannelsSheet({
                         if (action === "update-credentials")
                           return openChannelSettings(connection.provider);
                         if (!environmentId) return;
+                        // A disconnected channel starts in the project the picker shows.
+                        const target = channelReconnectProject(binding, projectId, liveProjects);
                         void run(connection, () =>
-                          reconnect({ environmentId, input: channelInput(connection) }),
+                          target
+                            ? changeProject({
+                                environmentId,
+                                input: {
+                                  botId: BotId.make(bot.id),
+                                  provider: connection.provider,
+                                  projectId: target,
+                                },
+                              })
+                            : reconnect({ environmentId, input: channelInput(connection) }),
                         );
                       }}
                     />

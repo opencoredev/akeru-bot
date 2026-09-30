@@ -3,7 +3,8 @@
 ## Chat activity and replies
 
 While a bot works, its status names the current step when the provider reports it, such as thinking,
-running a command, or adding a routine. The timer shows how long the current turn has been running.
+running a command, or adding a routine. When a provider stops sending output, the status says so and
+shows how long it has been quiet.
 
 To reply to a specific message, use **Reply** on that message. The sent reply keeps a short reference
 above your text. Select the referenced person's name to jump back to the original message when it
@@ -131,7 +132,7 @@ Bot replies render richer Markdown directly in the chat. There is no separate da
   sentence.
 - **Links** open in your browser.
 - **Settings chips** open a section of Settings for the same environment as the chat. Hover a chip
-  to see which section it opens, for example **Open Settings > Voice**. A chip that points
+  to see which section it opens, for example **Open Settings > Providers > Voice**. A chip that points
   somewhere Akeru does not recognize stays plain text and never opens outside the app.
 
 While a reply is still streaming, Akeru waits for a table's header to finish before it shows the

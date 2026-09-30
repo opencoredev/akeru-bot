@@ -21,11 +21,16 @@ import {
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
 
+import { useAtomValue } from "@effect/atom-react";
+import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
+
+import { useI18n } from "../../i18n";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { ProviderAccessDetails } from "./ProviderAccessDetails";
 import { accountConnectionState } from "./providerStatus";
 import { SettingsMessageRow } from "./settingsDetailLayout";
 import { SignInCodeCopy } from "./SignInCodeCopy";
@@ -40,23 +45,27 @@ interface ActiveLogin {
   readonly error: string | null;
 }
 
-function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function commandError(result: AtomCommandResult<unknown, unknown>, t: Translate): string {
+  if (result._tag !== "Failure") return t("The request failed.");
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "The request failed.";
+  return error instanceof Error ? error.message : t("The request failed.");
 }
 
-function joinNames(names: ReadonlyArray<string>): string {
-  if (names.length <= 1) return names[0] ?? "";
-  if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`;
-}
-
-function disconnectDescription(status: SubscriptionProviderStatus | undefined): string {
+function disconnectDescription(
+  status: SubscriptionProviderStatus | undefined,
+  t: Translate,
+  locale: string,
+): string {
   const bots = status?.dependentBots.map((bot) => bot.name) ?? [];
-  if (bots.length === 0) return "Remove the saved credentials from this environment.";
-  const shown = bots.length > 3 ? [...bots.slice(0, 3), `${bots.length - 3} more`] : bots;
-  return `${joinNames(shown)} ${bots.length === 1 ? "uses" : "use"} this account.`;
+  if (bots.length === 0) return t("Remove the saved credentials from this environment.");
+  const shown =
+    bots.length > 3 ? [...bots.slice(0, 3), t("{count} more", { count: bots.length - 3 })] : bots;
+  const names = new Intl.ListFormat(locale, { type: "conjunction" }).format(shown);
+  return bots.length === 1
+    ? t("{names} uses this account.", { names })
+    : t("{names} use this account.", { names });
 }
 
 function BusyIcon({ busy, idle }: { readonly busy: boolean; readonly idle?: ReactNode }) {
@@ -77,9 +86,12 @@ export function ProviderAccountRows({
   onDisconnect,
   onTest,
   onApiKey,
+  models,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
+  /** Model names this environment serves for the provider, for the access guide. */
+  readonly models?: ReadonlyArray<string>;
   readonly busy: boolean;
   readonly disabled?: boolean;
   readonly onConnect: () => void;
@@ -87,6 +99,7 @@ export function ProviderAccountRows({
   readonly onTest: () => void;
   readonly onApiKey: () => void;
 }) {
+  const { t, locale } = useI18n();
   const connected = status?.connected === true;
   const usesKey = connected && providerUsesApiKey(status);
   const keyOnly = definition.id === "opencode-go";
@@ -98,38 +111,38 @@ export function ProviderAccountRows({
     <>
       {connected ? (
         <SettingsRow
-          title="Connected account"
+          title={t("Connected account")}
           description={
             status.accountLabel ??
-            (usesKey ? "API key saved on this environment" : "Account identity unavailable")
+            (usesKey ? t("API key saved on this environment") : t("Account identity unavailable"))
           }
         />
       ) : null}
       {keyOnly ? null : (
         <SettingsRow
-          title="Subscription"
-          description={definition.subscription}
+          title={t("Subscription")}
+          description={t(definition.subscription)}
           status={
-            problem && !usesKey ? <span className="text-destructive">{problem}</span> : undefined
+            problem && !usesKey ? <span className="text-destructive">{t(problem)}</span> : undefined
           }
           control={
             !connected ? (
               <Button size="xs" disabled={locked} onClick={onConnect}>
                 <BusyIcon busy={busy} />
-                Connect
+                {t("Connect")}
               </Button>
             ) : usesKey ? (
               <Button size="xs" variant="outline" disabled={locked} onClick={onConnect}>
-                Use OAuth
+                {t("Use OAuth")}
               </Button>
             ) : (
               <>
                 <Button size="xs" variant="ghost-muted" disabled={locked} onClick={onConnect}>
-                  Reconnect
+                  {t("Reconnect")}
                 </Button>
                 <Button size="xs" variant="outline" disabled={locked} onClick={onTest}>
                   <BusyIcon busy={busy} idle={<RefreshCwIcon className="size-3.5" />} />
-                  Check
+                  {t("Check")}
                 </Button>
               </>
             )
@@ -137,26 +150,28 @@ export function ProviderAccountRows({
         />
       )}
       <SettingsRow
-        title="API key"
+        title={t("API key")}
         description={
           usesKey
-            ? `Saved${status?.baseUrl ? ` · ${status.baseUrl}` : ""}`
+            ? status?.baseUrl
+              ? t("Saved · {baseUrl}", { baseUrl: status.baseUrl })
+              : t("Saved")
             : keyOnly
-              ? definition.description
-              : "Pay per request instead of using the subscription."
+              ? t(definition.description)
+              : t("Pay per request instead of using the subscription.")
         }
         status={
-          problem && usesKey ? <span className="text-destructive">{problem}</span> : undefined
+          problem && usesKey ? <span className="text-destructive">{t(problem)}</span> : undefined
         }
         control={
           usesKey ? (
             <>
               <Button size="xs" variant="ghost-muted" disabled={locked} onClick={onApiKey}>
-                Replace key
+                {t("Replace key")}
               </Button>
               <Button size="xs" variant="outline" disabled={locked} onClick={onTest}>
                 <BusyIcon busy={busy} idle={<RefreshCwIcon className="size-3.5" />} />
-                Check key
+                {t("Check key")}
               </Button>
             </>
           ) : (
@@ -166,25 +181,36 @@ export function ProviderAccountRows({
               disabled={locked}
               onClick={onApiKey}
             >
-              Add key
+              {t("Add key")}
             </Button>
           )
         }
       />
+      <SettingsRow
+        title={t("Access")}
+        description={
+          <ProviderAccessDetails
+            provider={definition.id}
+            status={status}
+            models={models}
+            showFailure={false}
+          />
+        }
+      />
       {connected ? (
         <SettingsRow
-          title="Disconnect"
-          description={disconnectDescription(status)}
+          title={t("Disconnect")}
+          description={disconnectDescription(status, t, locale)}
           control={
             <Button
               size="xs"
               variant="destructive-outline"
-              aria-label={`Disconnect ${definition.label}`}
+              aria-label={t("Disconnect {provider}", { provider: definition.label })}
               disabled={locked}
               onClick={onDisconnect}
             >
               <LogOutIcon className="size-3.5" />
-              Disconnect
+              {t("Disconnect")}
             </Button>
           }
         />
@@ -214,6 +240,7 @@ export function ProviderApiKeyForm({
   readonly onSave: () => void;
   readonly onCancel: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <form
       className="space-y-3 px-3 pb-3 sm:px-4"
@@ -223,7 +250,7 @@ export function ProviderApiKeyForm({
       }}
     >
       <label className="block space-y-1 text-sm">
-        <span>API key</span>
+        <span>{t("API key")}</span>
         <Input
           type="password"
           autoComplete="off"
@@ -235,12 +262,12 @@ export function ProviderApiKeyForm({
       </label>
       {supportsBaseUrl ? (
         <label className="block space-y-1 text-sm">
-          <span>Base URL (optional)</span>
+          <span>{t("Base URL (optional)")}</span>
           <Input
             type="url"
             autoComplete="off"
             spellCheck={false}
-            placeholder="Provider default"
+            placeholder={t("Provider default")}
             value={baseUrl}
             disabled={busy}
             onChange={(event) => onBaseUrlChange(event.currentTarget.value)}
@@ -249,9 +276,9 @@ export function ProviderApiKeyForm({
       ) : null}
       <p className="text-[13px] text-muted-foreground">
         {supportsBaseUrl
-          ? "The environment sends this key to the selected endpoint."
-          : "Grok uses its default endpoint."}{" "}
-        API billing can be separate from your subscription.
+          ? t("The environment sends this key to the selected endpoint.")
+          : t("Grok uses its default endpoint.")}{" "}
+        {t("API billing can be separate from your subscription.")}
       </p>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -260,10 +287,10 @@ export function ProviderApiKeyForm({
       ) : null}
       <div className="flex gap-2">
         <Button type="submit" size="xs" disabled={busy || !apiKey.trim()}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("Saving…") : t("Save")}
         </Button>
         <Button type="button" size="xs" variant="ghost-muted" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t("Cancel")}
         </Button>
       </div>
     </form>
@@ -285,14 +312,18 @@ function ActiveLoginPanel({
   readonly onCancel: () => void;
   readonly completing: boolean;
 }) {
+  const { t } = useI18n();
   const { flow } = login;
   const isApiKey = flow.provider === "opencode-go";
   return (
     <div data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">
       <p className="text-[13px] leading-[1.45] text-muted-foreground">
         {flow.userCode
-          ? "Copy this code, then open the sign-in page and enter it."
-          : (flow.instructions ?? `Finish signing in to ${login.providerLabel} in the browser.`)}
+          ? t("Copy this code, then open the sign-in page and enter it.")
+          : (flow.instructions ??
+            t("Finish signing in to {provider} in the browser.", {
+              provider: login.providerLabel,
+            }))}
       </p>
 
       {/* The shared copy control falls back to manual copy on plain-HTTP remote clients. */}
@@ -303,7 +334,7 @@ function ActiveLoginPanel({
         variant="outline"
         render={<a href={flow.url} target="_blank" rel="noreferrer" />}
       >
-        {isApiKey ? "Open OpenCode" : "Open sign-in page"}
+        {isApiKey ? t("Open OpenCode") : t("Open sign-in page")}
         <ExternalLinkIcon className="size-3.5" />
       </Button>
 
@@ -314,8 +345,8 @@ function ActiveLoginPanel({
             autoComplete="off"
             value={pastedCode}
             onChange={(event) => onPastedCodeChange(event.currentTarget.value)}
-            placeholder={isApiKey ? "Paste the API key" : "Paste the authorization code"}
-            aria-label={isApiKey ? "API key" : "Authorization code"}
+            placeholder={isApiKey ? t("Paste the API key") : t("Paste the authorization code")}
+            aria-label={isApiKey ? t("API key") : t("Authorization code")}
             className="flex-1"
           />
           <Button
@@ -324,13 +355,13 @@ function ActiveLoginPanel({
             onClick={onComplete}
           >
             {completing ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
-            Connect
+            {t("Connect")}
           </Button>
         </div>
       ) : !login.error ? (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />
-          Waiting for approval…
+          {t("Waiting for approval…")}
         </div>
       ) : null}
 
@@ -341,7 +372,7 @@ function ActiveLoginPanel({
       ) : null}
 
       <Button size="xs" variant="ghost-muted" disabled={completing} onClick={onCancel}>
-        Cancel
+        {t("Cancel")}
       </Button>
     </div>
   );
@@ -369,6 +400,7 @@ function useSubscriptionAccounts(
   environmentId: EnvironmentId | null,
   instanceId?: ProviderInstanceId,
 ) {
+  const { t } = useI18n();
   const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
   const startAuth = useAtomCommand(serverEnvironment.startSubscriptionAuth, {
     reportFailure: false,
@@ -428,7 +460,7 @@ function useSubscriptionAccounts(
       if (cancelled || isAtomCommandInterrupted(result)) return;
       if (result._tag === "Failure") {
         setActiveLogin((current) =>
-          current ? { ...current, error: commandError(result) } : current,
+          current ? { ...current, error: commandError(result, t) } : current,
         );
         setBusyProvider(null);
         return;
@@ -484,7 +516,7 @@ function useSubscriptionAccounts(
     });
     if (started._tag !== "Success") {
       setCompleting(false);
-      if (started._tag === "Failure") setError(commandError(started));
+      if (started._tag === "Failure") setError(commandError(started, t));
       return;
     }
     const result = await completeAuth({
@@ -498,12 +530,12 @@ function useSubscriptionAccounts(
       setBaseUrl("");
       statusQuery.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result));
+      if (result._tag === "Failure") setError(commandError(result, t));
       else if (result._tag === "Success")
         setError(
           result.value.status === "failed"
             ? result.value.error
-            : "The key was not saved. Try again.",
+            : t("The key was not saved. Try again."),
         );
       await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
     }
@@ -524,7 +556,7 @@ function useSubscriptionAccounts(
     });
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
-      setError(commandError(result));
+      setError(commandError(result, t));
       setBusyProvider(null);
       return;
     }
@@ -543,7 +575,7 @@ function useSubscriptionAccounts(
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
-        current ? { ...current, error: commandError(result) } : current,
+        current ? { ...current, error: commandError(result, t) } : current,
       );
       return;
     }
@@ -557,7 +589,7 @@ function useSubscriptionAccounts(
     setPastedCode("");
     if (environmentId === null || !login) return;
     const result = await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
-    if (result._tag === "Failure") setError(commandError(result));
+    if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const disconnect = async (provider: SubscriptionProviderId) => {
@@ -570,7 +602,7 @@ function useSubscriptionAccounts(
     });
     setBusyProvider(null);
     if (result._tag === "Success") statusQuery.refresh();
-    else if (result._tag === "Failure") setError(commandError(result));
+    else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const testHealth = async (provider: SubscriptionProviderId) => {
@@ -590,10 +622,10 @@ function useSubscriptionAccounts(
       if (status?.oauthCheck?.status === "failed" || status?.healthTest?.status === "failed") {
         setError(
           status.lastFailedRequest?.message ??
-            "The provider check failed. Reconnect and try again.",
+            t("The provider check failed. Reconnect and try again."),
         );
       }
-    } else if (result._tag === "Failure") setError(commandError(result));
+    } else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   return {
@@ -632,7 +664,9 @@ export function ProviderAccountSection({
   readonly definition: SubscriptionProviderDefinition;
   readonly instanceId?: ProviderInstanceId;
 }) {
+  const { t } = useI18n();
   const accounts = useSubscriptionAccounts(environmentId, instanceId);
+  const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
   const status = instanceId
     ? accounts.statusQuery.data?.accounts.find(
         (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
@@ -643,13 +677,17 @@ export function ProviderAccountSection({
   let body: ReactNode;
   if (environmentId === null) {
     body = (
-      <SettingsMessageRow>Connect to an environment to manage this account.</SettingsMessageRow>
+      <SettingsMessageRow>
+        {t("Connect to an environment to manage this account.")}
+      </SettingsMessageRow>
     );
   } else if (accounts.keyProvider) {
     body = (
       <div data-settings-row="" className="rounded-xl pt-3">
         <h3 className="px-3 pb-3 text-sm font-medium text-foreground sm:px-4">
-          {status?.connected && providerUsesApiKey(status) ? "Replace API key" : "Add API key"}
+          {status?.connected && providerUsesApiKey(status)
+            ? t("Replace API key")
+            : t("Add API key")}
         </h3>
         <ProviderApiKeyForm
           supportsBaseUrl={providerSupportsBaseUrl(accounts.keyProvider.id)}
@@ -680,7 +718,7 @@ export function ProviderAccountSection({
       <SettingsMessageRow>
         <span className="inline-flex items-center gap-2">
           <LoaderIcon className="size-3.5 animate-spin" />
-          Checking account
+          {t("Checking account")}
         </span>
       </SettingsMessageRow>
     );
@@ -692,7 +730,7 @@ export function ProviderAccountSection({
             tone="error"
             action={
               <Button size="xs" variant="outline" onClick={() => accounts.statusQuery.refresh()}>
-                Try again
+                {t("Try again")}
               </Button>
             }
           >
@@ -705,6 +743,7 @@ export function ProviderAccountSection({
         <ProviderAccountRows
           definition={definition}
           status={status}
+          models={providerAccessModelNames(serverProviders, definition.id)}
           busy={accounts.busyProvider === definition.id}
           disabled={accounts.busyProvider !== null}
           onApiKey={() => accounts.openApiKey(definition)}
@@ -719,7 +758,7 @@ export function ProviderAccountSection({
   return (
     <SettingsSection
       id={instanceId ? `provider-account-${instanceId}` : "provider-account"}
-      title={instanceId ? "Instance account" : "Account"}
+      title={instanceId ? t("Instance account") : t("Account")}
     >
       {body}
     </SettingsSection>

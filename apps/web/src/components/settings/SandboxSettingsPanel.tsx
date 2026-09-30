@@ -33,6 +33,7 @@ import {
 } from "./SandboxSettingsPanel.logic";
 import { useI18n } from "../../i18n";
 
+// Cloud entries are brand names; `local` is translated at render time.
 const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   local: "Local",
   e2b: "E2B",
@@ -41,19 +42,21 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   upstash: "Upstash Box",
 };
 
-function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
+function errorMessage(
+  result: Parameters<typeof squashAtomCommandFailure>[0],
+  fallback: string,
+): string {
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error && error.message.trim()
-    ? error.message
-    : "The server rejected these sandbox settings.";
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
 export function SandboxSettingsPanel() {
+  const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   if (environmentId === null) {
     return (
-      <SettingsSection title="Sandbox">
-        <SettingsRow title="Connect to an environment first." />
+      <SettingsSection title={t("Sandbox")}>
+        <SettingsRow title={t("Connect to an environment first.")} />
       </SettingsSection>
     );
   }
@@ -79,7 +82,7 @@ function EnvironmentSandboxSettingsPanel({
     const result = await updateSettings({ environmentId, input: { patch: { sandbox: next } } });
     setSaving(false);
     if (result._tag === "Failure") {
-      setError(errorMessage(result));
+      setError(errorMessage(result, t("The server rejected these sandbox settings.")));
       return false;
     }
     return true;
@@ -109,6 +112,8 @@ function EnvironmentSandboxSettingsPanel({
   };
 
   const editingDefinition = editingProvider ? sandboxProviderDefinition(editingProvider) : null;
+  const providerLabel = (provider: SandboxProvider) =>
+    provider === "local" ? t("Local") : SANDBOX_PROVIDER_LABELS[provider];
   const canSave =
     editingProvider !== null &&
     canSaveSandboxProviderConnection({ settings: sandbox, provider: editingProvider, draft });
@@ -118,7 +123,7 @@ function EnvironmentSandboxSettingsPanel({
       <SettingsSection {...searchableSetting("sandbox", t)}>
         <SettingsRow
           {...searchableSetting("default-sandbox", t)}
-          description="Bots without an override use this sandbox."
+          description={t("Bots without an override use this sandbox.")}
           control={
             <Select
               value={sandbox.defaultProvider}
@@ -129,13 +134,13 @@ function EnvironmentSandboxSettingsPanel({
                 void persist({ ...sandbox, defaultProvider: provider });
               }}
             >
-              <SelectTrigger className="w-44" aria-label="Default sandbox">
-                <SelectValue>{SANDBOX_PROVIDER_LABELS[sandbox.defaultProvider]}</SelectValue>
+              <SelectTrigger className="w-44" aria-label={t("Default sandbox")}>
+                <SelectValue>{providerLabel(sandbox.defaultProvider)}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
                 {selectableSandboxProviders(sandbox).map((provider) => (
                   <SelectItem key={provider} value={provider}>
-                    {SANDBOX_PROVIDER_LABELS[provider]}
+                    {providerLabel(provider)}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -144,16 +149,18 @@ function EnvironmentSandboxSettingsPanel({
         />
         <SettingsRow
           {...searchableSetting("sandbox-auto-idle", t)}
-          description="Akeru pauses remote sandboxes when bots are idle."
-          control={<Switch checked disabled aria-label="Auto-idle" />}
+          description={t("Akeru pauses remote sandboxes when bots are idle.")}
+          control={<Switch checked disabled aria-label={t("Auto-idle")} />}
         />
       </SettingsSection>
 
-      <SettingsSection title="Sandbox providers">
+      <SettingsSection title={t("Sandbox providers")}>
         <SettingsRow
-          title="Local"
-          description="Run bots on the environment computer. Always available; no credentials needed."
-          status="Available"
+          title={t("Local")}
+          description={t(
+            "Run bots on the environment computer. Always available; no credentials needed.",
+          )}
+          status={t("Available")}
         />
         {SANDBOX_PROVIDER_DEFINITIONS.map((definition) => {
           const connected = isSandboxProviderConnected(sandbox, definition.id);
@@ -161,30 +168,34 @@ function EnvironmentSandboxSettingsPanel({
             <SettingsRow
               key={definition.id}
               title={definition.label}
-              description={definition.description}
-              status={connected ? "Connected" : "Not connected"}
+              description={t(definition.description)}
+              status={connected ? t("Connected") : t("Not connected")}
               control={
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
                   <Button
                     size="xs"
                     variant="outline"
                     disabled={saving}
-                    aria-label={`${connected ? "Edit" : "Connect"} ${definition.label}`}
+                    aria-label={
+                      connected
+                        ? t("Edit {name}", { name: definition.label })
+                        : t("Connect {name}", { name: definition.label })
+                    }
                     onClick={() => openConnection(definition.id)}
                   >
-                    {connected ? "Edit" : "Connect"}
+                    {connected ? t("Edit") : t("Connect")}
                   </Button>
                   {connected ? (
                     <Button
                       size="xs"
                       variant="ghost-muted"
-                      aria-label={`Disconnect ${definition.label}`}
+                      aria-label={t("Disconnect {name}", { name: definition.label })}
                       disabled={saving}
                       onClick={() =>
                         void persist(disconnectSandboxProvider(sandbox, definition.id))
                       }
                     >
-                      Disconnect
+                      {t("Disconnect")}
                     </Button>
                   ) : null}
                 </div>
@@ -199,22 +210,24 @@ function EnvironmentSandboxSettingsPanel({
           <DialogHeader>
             <DialogTitle>
               {editingDefinition
-                ? `${isSandboxProviderConnected(sandbox, editingDefinition.id) ? "Edit" : "Connect"} ${editingDefinition.label}`
-                : "Connect sandbox"}
+                ? isSandboxProviderConnected(sandbox, editingDefinition.id)
+                  ? t("Edit {name}", { name: editingDefinition.label })
+                  : t("Connect {name}", { name: editingDefinition.label })
+                : t("Connect sandbox")}
             </DialogTitle>
             <DialogDescription>
-              The server stores these credentials in its secret store.
+              {t("The server stores these credentials in its secret store.")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             {editingDefinition?.fields.map((field) => (
               <label key={field.name} className="grid gap-1.5 text-sm font-medium">
-                {field.label}
+                {t(field.label)}
                 <Input
                   type={field.secret ? "password" : undefined}
                   autoComplete="off"
                   value={draft[field.name] ?? ""}
-                  placeholder={field.secret ? "Leave blank to keep the saved value" : undefined}
+                  placeholder={field.secret ? t("Leave blank to keep the saved value") : undefined}
                   onChange={(event) =>
                     setDraft((current) => ({ ...current, [field.name]: event.currentTarget.value }))
                   }
@@ -229,14 +242,14 @@ function EnvironmentSandboxSettingsPanel({
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={saving} onClick={closeConnection}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={!canSave || saving} onClick={() => void saveConnection()}>
               {saving
-                ? "Saving…"
+                ? t("Saving…")
                 : editingDefinition && isSandboxProviderConnected(sandbox, editingDefinition.id)
-                  ? "Save changes"
-                  : "Connect"}
+                  ? t("Save changes")
+                  : t("Connect")}
             </Button>
           </DialogFooter>
         </DialogPopup>

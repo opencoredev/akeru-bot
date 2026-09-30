@@ -512,13 +512,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return modelKeys;
   }, [legacySection, visibleModels]);
   const hasResults = filteredItemKeys.length > 0;
-  const emptyMessage = modelPickerEmptyMessage({
-    searchQuery,
-    selectedInstanceId,
-    hasAnyModels: flatModels.length > 0,
-    selectedInstanceModelsLoaded:
-      selectedInstanceId === "favorites" || modelOptionsByInstance.has(selectedInstanceId),
-  });
+  const emptyMessage = modelPickerEmptyMessage(
+    {
+      searchQuery,
+      selectedInstanceId,
+      hasAnyModels: flatModels.length > 0,
+      selectedInstanceModelsLoaded:
+        selectedInstanceId === "favorites" || modelOptionsByInstance.has(selectedInstanceId),
+    },
+    t,
+  );
   const filteredModelByKey = useMemo(
     (): ReadonlyMap<string, ModelPickerItem> =>
       new Map(
@@ -685,7 +688,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   className="[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5"
                   inputClassName="rounded-none bg-transparent text-sm"
                   placeholder={t("Search models…")}
-                  aria-label="Search models"
+                  aria-label={t("Search models")}
                   showTrigger={false}
                   startAddon={
                     <SearchIcon className="-translate-x-0.5 size-4 shrink-0 text-muted-foreground opacity-70" />

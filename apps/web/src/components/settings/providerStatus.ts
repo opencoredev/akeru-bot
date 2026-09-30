@@ -151,6 +151,10 @@ export function accountConnectionState(
       : { tone: "neutral", label: "Not connected", detail: null };
   }
   if (!status.connected) return { tone: "neutral", label: "Not connected", detail: null };
+  // The server checks a new login on its own; say so rather than claiming it is ready.
+  if (status.healthChecking === true) {
+    return { tone: "pending", label: "Checking access", detail: null };
+  }
   const problem = status.health ? ACCOUNT_PROBLEM_LABELS[status.health] : undefined;
   if (problem) {
     return {

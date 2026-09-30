@@ -1,3 +1,4 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n";
@@ -34,7 +35,7 @@ export function canCreateGroup(
 }
 
 /** Hint shown under the bot list until the group has enough members. */
-export function groupSelectionHint(selectedIds: readonly string[]): string | null {
+export function groupSelectionHint(selectedIds: readonly string[]): MessageKey | null {
   return new Set(selectedIds).size >= 2 ? null : "Select at least two bots.";
 }
 
@@ -84,7 +85,7 @@ export function NewGroupDialog({
           <DialogHeader className="shrink-0">
             <DialogTitle>{t("New group")}</DialogTitle>
             <DialogDescription>
-              Choose the bots in this group and which one leads.
+              {t("Choose the bots in this group and which one leads.")}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="space-y-5">
@@ -126,7 +127,7 @@ export function NewGroupDialog({
                 })}
               </div>
               {selectionHint ? (
-                <p className="text-xs text-muted-foreground">{selectionHint}</p>
+                <p className="text-xs text-muted-foreground">{t(selectionHint)}</p>
               ) : null}
             </fieldset>
             <label className="block space-y-2 text-sm font-medium">

@@ -47,6 +47,8 @@ export interface ChannelReplacement {
   readonly name: string;
   readonly botId: BotId;
   readonly projectId: ProjectId | undefined;
+  /** The old binding was disconnected; restoring it after a failure keeps it disconnected. */
+  readonly disconnected?: boolean;
 }
 
 /** The Photon connection type picker. The trigger shows the option label, not the raw mode. */
@@ -156,6 +158,7 @@ export function ChannelSetupDialog({
     reportFailure: false,
   });
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
+  const disconnect = useAtomCommand(botEnvironment.channels.disconnect, { reportFailure: false });
   const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
   const deleteConnection = useAtomCommand(botEnvironment.channels.deleteConnection, {
     reportFailure: false,
@@ -304,6 +307,10 @@ export function ChannelSetupDialog({
       } else {
         await discardNew();
         setUnconfirmed(null);
+        // Attaching starts the channel, so put a disconnected channel back the way it was.
+        if (current.disconnected) {
+          await disconnect({ environmentId, input: { botId: current.botId, provider } });
+        }
       }
       setBusy(false);
       const reason = failureReason(attached);

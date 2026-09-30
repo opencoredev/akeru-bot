@@ -2,6 +2,9 @@ import type { McpServer, McpServerId, ProviderAccessStatus } from "@t3tools/cont
 import { InfoIcon, ServerIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { openPlugins } from "../../pluginsDialogStore";
 import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
@@ -16,7 +19,7 @@ import {
   type BotToolStatus,
 } from "./botTools.logic";
 
-const STATUS_LABEL: Record<BotToolStatus, string> = {
+const STATUS_LABEL: Record<BotToolStatus, MessageKey> = {
   connected: "Connected",
   "needs-setup": "Needs setup",
   error: "Error",
@@ -49,6 +52,7 @@ export function BotToggleRow({
   readonly disabled?: boolean;
   readonly onCheckedChange: (checked: boolean) => void;
 }) {
+  const { t } = useI18n();
   return (
     <SettingsRow
       title={
@@ -65,14 +69,18 @@ export function BotToggleRow({
           {status ? (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span aria-hidden className={cn("size-1.5 rounded-full", STATUS_DOT[status])} />
-              {STATUS_LABEL[status]}
+              {t(STATUS_LABEL[status])}
             </span>
           ) : null}
           <Switch
             checked={checked}
             disabled={disabled}
             onCheckedChange={(next) => onCheckedChange(Boolean(next))}
-            aria-label={`${checked ? "Turn off" : "Turn on"} ${name} for this bot`}
+            aria-label={
+              checked
+                ? t("Turn off {name} for this bot", { name })
+                : t("Turn on {name} for this bot", { name })
+            }
           />
         </>
       }
@@ -109,14 +117,15 @@ export function BotToolsSection({
 }) {
   // Memoized because this walks the plugin catalog and does not depend on the form draft.
   const items = useMemo(() => buildBotToolItems(servers), [servers]);
+  const { t } = useI18n();
 
   return (
     <SettingsSection
       id="tools"
-      title="Tools"
+      title={t("Tools")}
       headerAction={
         <Button variant="ghost" size="xs" type="button" onClick={() => openPlugins()}>
-          Manage plugins
+          {t("Manage plugins")}
         </Button>
       }
     >
@@ -124,15 +133,18 @@ export function BotToolsSection({
         <p role="note" className="flex items-start gap-2 px-4 py-3 text-xs text-muted-foreground">
           <InfoIcon className="mt-px size-3.5 shrink-0" />
           <span>
-            This bot's provider cannot hand off work. It cannot send work to other bots or receive
-            work from them.
+            {t(
+              "This bot's provider cannot hand off work. It cannot send work to other bots or receive work from them.",
+            )}
           </span>
         </p>
       )}
       {items.length === 0 ? (
         <SettingsRow
-          title="No tools yet"
-          description="Add a plugin or an MCP server in Plugins. It shows up here, and you can turn it on or off for this bot."
+          title={t("No tools yet")}
+          description={t(
+            "Add a plugin or an MCP server in Plugins. It shows up here, and you can turn it on or off for this bot.",
+          )}
         />
       ) : (
         items.map((item) => (

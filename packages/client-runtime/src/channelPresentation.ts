@@ -234,8 +234,30 @@ export function canChangeChannelProject(
   pickedProjectId: ProjectId | null,
   liveProjects: ReadonlyArray<ProjectRef>,
 ): pickedProjectId is ProjectId {
+  // Moving starts the channel, so a disconnected channel stays put until it is reconnected,
+  // unless its project is gone and choosing a new one is the only repair.
+  if (binding.status === "disconnected" && !channelBindingNeedsProject(binding, liveProjects)) {
+    return false;
+  }
   if (!pickedProjectId || !liveProjects.some((project) => project.id === pickedProjectId)) {
     return false;
   }
   return channelBindingNeedsProject(binding, liveProjects) || pickedProjectId !== binding.projectId;
+}
+
+/**
+ * The project a reconnect should start a disconnected binding in when the picker shows another
+ * live project. Null means reconnect where the binding already runs.
+ */
+export function channelReconnectProject(
+  binding: Pick<ChannelBinding, "status" | "projectId">,
+  pickedProjectId: ProjectId | null,
+  liveProjects: ReadonlyArray<ProjectRef>,
+): ProjectId | null {
+  return binding.status === "disconnected" &&
+    pickedProjectId !== null &&
+    pickedProjectId !== binding.projectId &&
+    liveProjects.some((project) => project.id === pickedProjectId)
+    ? pickedProjectId
+    : null;
 }

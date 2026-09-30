@@ -14,6 +14,8 @@ import {
 import { SettingsDetailHeader, SettingsLinkRow, SettingsMessageRow } from "./settingsDetailLayout";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { useI18n } from "../../i18n";
+import { subscriptionProviderTargetId } from "./subscriptionProviders";
 
 /**
  * The live snapshot for a catalog entry's default instance. A provider can
@@ -38,6 +40,7 @@ export function useProviderConnectionStates(
   readonly plans: ReadonlyMap<string, string>;
   readonly error: string | null;
 } {
+  const { t, translate } = useI18n();
   const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
   const serverProviders =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
@@ -46,36 +49,54 @@ export function useProviderConnectionStates(
   for (const entry of entries) {
     if (entry.account) {
       const status = statusByProvider.get(entry.account.id);
-      states.set(entry.slug, accountConnectionState(status, statusQuery.isPending));
+      states.set(
+        entry.slug,
+        translateConnectionState(accountConnectionState(status, statusQuery.isPending), translate),
+      );
       plans.set(
         entry.slug,
         status?.connected && status.authMode === "api-key"
-          ? `API key${status.baseUrl ? ` · ${status.baseUrl}` : ""}`
-          : entry.planHint,
+          ? `${t("API key")}${status.baseUrl ? ` · ${status.baseUrl}` : ""}`
+          : translate(entry.planHint),
       );
     } else {
-      states.set(entry.slug, runtimeConnectionState(defaultServerProvider(serverProviders, entry)));
-      plans.set(entry.slug, entry.planHint);
+      states.set(
+        entry.slug,
+        translateConnectionState(
+          runtimeConnectionState(defaultServerProvider(serverProviders, entry)),
+          translate,
+        ),
+      );
+      plans.set(entry.slug, translate(entry.planHint));
     }
   }
   return { states, plans, error: statusQuery.error };
 }
 
-const UNAVAILABLE: ProviderConnectionState = {
-  tone: "neutral",
-  label: "Unavailable",
-  detail: null,
-};
+/** Connection labels are fixed English catalog keys; detail can be server text and stays as sent. */
+function translateConnectionState(
+  state: ProviderConnectionState,
+  translate: (message: string) => string,
+): ProviderConnectionState {
+  return { ...state, label: translate(state.label) };
+}
+
+function useUnavailableState(): ProviderConnectionState {
+  const { t } = useI18n();
+  return { tone: "neutral", label: t("Unavailable"), detail: null };
+}
 
 export function ProviderDetailPage({ entry }: { readonly entry: ProviderCatalogEntry }) {
+  const { t, translate } = useI18n();
+  const unavailable = useUnavailableState();
   const environmentId = useSettingsEnvironmentId();
   if (environmentId === null) {
     return (
       <SettingsPageContainer className="gap-10">
-        <ProviderHeader entry={entry} state={UNAVAILABLE} plan={entry.planHint} />
-        <SettingsSection title="Account">
+        <ProviderHeader entry={entry} state={unavailable} plan={translate(entry.planHint)} />
+        <SettingsSection title={t("Account")}>
           <SettingsMessageRow>
-            Connect to an environment to set up {entry.label}.
+            {t("Connect to an environment to set up {provider}.", { provider: entry.label })}
           </SettingsMessageRow>
         </SettingsSection>
       </SettingsPageContainer>
@@ -95,9 +116,10 @@ function ProviderHeader({
   readonly state: ProviderConnectionState;
   readonly plan: string;
 }) {
+  const { t } = useI18n();
   return (
     <SettingsDetailHeader
-      back={{ section: "providers", label: "Providers" }}
+      back={{ section: "providers", label: t("Providers") }}
       icon={entry.icon}
       title={entry.label}
       tone={state.tone}
@@ -114,13 +136,15 @@ function ConnectedProviderDetail({
   readonly environmentId: EnvironmentId;
   readonly entry: ProviderCatalogEntry;
 }) {
+  const { translate } = useI18n();
+  const unavailable = useUnavailableState();
   const { states, plans } = useProviderConnectionStates(environmentId, [entry]);
   return (
     <SettingsPageContainer className="gap-10">
       <ProviderHeader
         entry={entry}
-        state={states.get(entry.slug) ?? UNAVAILABLE}
-        plan={plans.get(entry.slug) ?? entry.planHint}
+        state={states.get(entry.slug) ?? unavailable}
+        plan={plans.get(entry.slug) ?? translate(entry.planHint)}
       />
       {entry.account ? (
         <ProviderAccountSection environmentId={environmentId} definition={entry.account} />
@@ -137,11 +161,14 @@ function ConnectedProviderDetail({
 
 /** The Providers overview list: one row per provider, each opening its subpage. */
 export function ProvidersListSection() {
+  const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   if (environmentId === null) {
     return (
-      <SettingsSection {...searchableSetting("providers")}>
-        <SettingsMessageRow>Connect to an environment to set up providers.</SettingsMessageRow>
+      <SettingsSection {...searchableSetting("providers", t)}>
+        <SettingsMessageRow>
+          {t("Connect to an environment to set up providers.")}
+        </SettingsMessageRow>
       </SettingsSection>
     );
   }
@@ -149,19 +176,22 @@ export function ProvidersListSection() {
 }
 
 function ConnectedProvidersList({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { t, translate } = useI18n();
+  const unavailable = useUnavailableState();
   const { states, plans, error } = useProviderConnectionStates(environmentId, PROVIDER_CATALOG);
   return (
     <>
-      <SettingsSection {...searchableSetting("providers")}>
+      <SettingsSection {...searchableSetting("providers", t)}>
         {PROVIDER_CATALOG.map((entry) => {
-          const state = states.get(entry.slug) ?? UNAVAILABLE;
+          const state = states.get(entry.slug) ?? unavailable;
           return (
             <SettingsLinkRow
               key={entry.slug}
+              {...(entry.account ? { id: subscriptionProviderTargetId(entry.account.id) } : {})}
               link={{ to: "/settings/providers/$providerId", params: { providerId: entry.slug } }}
               icon={entry.icon}
               title={entry.label}
-              description={plans.get(entry.slug) ?? entry.planHint}
+              description={plans.get(entry.slug) ?? translate(entry.planHint)}
               tone={state.tone}
               statusLabel={state.label}
             />
@@ -170,7 +200,7 @@ function ConnectedProvidersList({ environmentId }: { readonly environmentId: Env
       </SettingsSection>
       {error ? (
         <p role="alert" className="-mt-5 px-3 text-[13px] text-destructive sm:px-4">
-          Could not load account status. {error}
+          {t("Could not load account status.")} {error}
         </p>
       ) : null}
     </>

@@ -23,6 +23,59 @@ export interface CommandPaletteGroup {
   readonly items: ReadonlyArray<CommandPaletteActionItem>;
 }
 
+/** Opens Settings > General at the language row; matches English and translated labels. */
+export function buildLanguageCommandPaletteAction(input: {
+  readonly translate: (message: string) => string;
+  readonly openSettings: (section: "general", targetId: "language") => void;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem {
+  const title = input.translate("Change language");
+  return {
+    value: "action:language",
+    searchTerms: [
+      title,
+      "language",
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "preferences",
+      "Chinese",
+      "中文",
+      "简体中文",
+    ],
+    title,
+    icon: input.icon,
+    run: async () => {
+      input.openSettings("general", "language");
+    },
+  };
+}
+
+/**
+ * Opens the model picker of whichever composer registered one. Disabled when no
+ * composer is mounted; the picker opens after the palette closes so focus lands in it.
+ */
+export function buildModelPickerCommandPaletteAction(input: {
+  readonly composerHandle: { readonly openModelPicker: () => void } | null;
+  readonly scheduleAfterClose: (openModelPicker: () => void) => void;
+  readonly title: string;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem {
+  return {
+    value: "action:change-model",
+    searchTerms: [input.title, "change model", "model", "provider", "reasoning"],
+    title: input.title,
+    icon: input.icon,
+    disabled: input.composerHandle === null,
+    shortcutCommand: "modelPicker.toggle",
+    run: async () => {
+      if (input.composerHandle === null) return;
+      input.scheduleAfterClose(input.composerHandle.openModelPicker);
+    },
+  };
+}
+
 export function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }

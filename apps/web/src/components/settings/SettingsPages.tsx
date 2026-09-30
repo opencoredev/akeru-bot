@@ -1,4 +1,5 @@
 import { BrowserSettingsSection } from "./BrowserSettings";
+import { InboxSection } from "./InboxPanel";
 import { ProvidersListSection } from "./ProviderDetailPage";
 import { SandboxSettingsPanel } from "./SandboxSettingsPanel";
 import { AdvancedSettingsSections, BotWorkspaceSettingsSection } from "./SettingsPanels";
@@ -37,6 +38,8 @@ export function BrowserSettingsPage() {
 export function AdvancedSettingsPage() {
   return (
     <SettingsPageContainer>
+      {/* The bot inbox keeps its `errors` anchor so old inbox and error links land here. */}
+      <InboxSection />
       <AdvancedSettingsSections />
     </SettingsPageContainer>
   );

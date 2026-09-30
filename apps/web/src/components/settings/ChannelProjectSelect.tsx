@@ -13,12 +13,14 @@ export function ChannelProjectSelect({
   onChange,
   label,
   disabled,
+  size,
 }: {
   readonly projects: ReadonlyArray<{ readonly id: ProjectId; readonly title: string }>;
   readonly value: ProjectId | null;
   readonly onChange: (projectId: ProjectId) => void;
   readonly label: string;
   readonly disabled?: boolean;
+  readonly size?: "xs" | "sm" | "default";
 }) {
   const { t } = useI18n();
   if (projects.length === 0) {
@@ -39,7 +41,12 @@ export function ChannelProjectSelect({
           if (project) onChange(project.id);
         }}
       >
-        <SelectTrigger aria-label={label} className="w-full sm:w-48" disabled={disabled}>
+        <SelectTrigger
+          aria-label={label}
+          className="w-full sm:w-48"
+          disabled={disabled}
+          {...(size ? { size } : {})}
+        >
           <SelectValue>{selected?.title ?? t("Choose a project")}</SelectValue>
         </SelectTrigger>
         <SelectPopup>

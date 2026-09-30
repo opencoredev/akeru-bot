@@ -1,6 +1,8 @@
 import { ReplyIcon } from "lucide-react";
 import { useState } from "react";
 
+import { useI18n } from "~/i18n";
+
 import { parseReplyPrompt } from "./MessageControls";
 
 export function ReplyReference({
@@ -14,6 +16,7 @@ export function ReplyReference({
   readonly compact?: boolean;
   readonly sourceMessageId?: string | null;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const longQuote = text.length > 120 || text.split("\n").length > 2;
 
@@ -32,7 +35,7 @@ export function ReplyReference({
           <button
             type="button"
             className="max-w-28 shrink-0 truncate font-semibold text-foreground underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            aria-label={`Jump to original message from ${label}`}
+            aria-label={t("Jump to original message from {name}", { name: label })}
             onClick={jumpToSource}
           >
             {label}
@@ -55,7 +58,7 @@ export function ReplyReference({
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? "Show less" : "Show full message"}
+          {expanded ? t("Show less") : t("Show full message")}
         </button>
       ) : null}
     </div>

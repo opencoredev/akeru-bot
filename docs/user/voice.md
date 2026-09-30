@@ -4,7 +4,7 @@ Call a bot from its chat using the microphone and speaker on your current client
 
 ## Choose how the call works
 
-Open **Settings > Voice**, enable voice, and pick a mode under **Voice provider**. Enable **Voice calls** for the bot, then use its phone button.
+Open **Settings > Providers > Voice**, enable voice, and pick a mode under **Voice provider**. Enable **Voice calls** for the bot, then use its phone button.
 
 | Call mode                | What it does                                                                                                              | Access and billing                                                                                            |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ In **Transcribe, reply, speak** calls, the microphone pauses while the bot works
 
 ## Connect API services
 
-In **Settings > Voice > API connections**:
+In **Settings > Providers > Voice > API connections**:
 
 1. Paste the service's API key and select **Connect**. For an existing connection, select **Replace key**, paste the new key, and select **Save key**. Keys are stored on the selected environment server and are not returned to clients.
 2. Select **Test**. This checks API access, not whether every paid audio capability works for your account. If the service rejects the key, its status changes from **Key saved** to **Key rejected** until you save a replacement key. Every device connected to the environment shows the same status.
