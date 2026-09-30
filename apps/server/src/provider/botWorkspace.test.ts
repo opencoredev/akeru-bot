@@ -257,11 +257,38 @@ describe("Ascii Box", () => {
       boxId: "ascii-id",
       commandRequest: { command: "'sleep' '2'", timeoutSeconds: 600 },
     });
-    await session.run("sleep", ["2"], { timeout: 900_000 });
+    await session.run("sleep", ["2"], { timeout: 600_000 });
     expect(command).toHaveBeenLastCalledWith({
       boxId: "ascii-id",
       commandRequest: { command: "'sleep' '2'", timeoutSeconds: 600 },
     });
+  });
+
+  it.each([900_000, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects unsupported command timeout %s before executing",
+    async (timeout) => {
+      const { client, session } = await setup();
+      const command = vi.spyOn(client, "command");
+
+      await expect(session.run("sleep", ["900"], { timeout })).rejects.toThrow(
+        "Ascii Box command timeout must be greater than 0 and at most 600000 ms.",
+      );
+      expect(command).not.toHaveBeenCalled();
+    },
+  );
+
+  it("bounds readiness polling without deleting the VM", async () => {
+    const { client, get, session } = await setup();
+    const current = await client.get({ boxId: "ascii-id" });
+    get.mockResolvedValue({ ...current, box: { ...current.box, state: "provisioning" } });
+    const deleteBox = vi.spyOn(client, "deleteBox");
+    const clock = vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(300_001);
+    try {
+      await expect(session.wake()).rejects.toThrow("Timed out waiting for Box state");
+      expect(deleteBox).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("protects browser control without forwarding the API credential", async () => {

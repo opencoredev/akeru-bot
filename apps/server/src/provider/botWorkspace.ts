@@ -487,7 +487,7 @@ export function ascii(
       if (box.state === "archived" || box.state === "archiving")
         await client.resume({ boxId, resumeRequest: { ttlSeconds: null } });
       const { waitUntilReady } = await import("@asciidev/box-sdk");
-      await waitUntilReady(client, boxId);
+      await waitUntilReady(client, boxId, { timeoutMs: 300_000 });
     },
     // Stop takes a native lifecycle snapshot; never force-stop and discard VM changes.
     sleep: async () => {
@@ -508,6 +508,9 @@ export function ascii(
       }
     },
     run: async (command, args, options) => {
+      const timeout = options?.timeout ?? 600_000;
+      if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 600_000)
+        throw new Error("Ascii Box command timeout must be greater than 0 and at most 600000 ms.");
       const env = Object.entries(options?.env ?? {}).map(([key, value]) =>
         quote(`${key}=${value}`),
       );
@@ -516,10 +519,7 @@ export function ascii(
         boxId,
         commandRequest: {
           command: options?.cwd ? `cd ${quote(options.cwd)} && ${invocation}` : invocation,
-          timeoutSeconds: Math.max(
-            1,
-            Math.min(600, Math.ceil((options?.timeout ?? 600_000) / 1_000)),
-          ),
+          timeoutSeconds: Math.ceil(timeout / 1_000),
         },
       });
       if (result.type !== "command.finished")

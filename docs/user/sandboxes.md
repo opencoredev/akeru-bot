@@ -38,6 +38,8 @@ Ascii Box runs persistent Linux VMs. Stopping a VM saves a native lifecycle snap
 restores that workspace. Ascii Box supports public previews by default, so do not expose sensitive
 services. Akeru requests protected, token-authenticated access for its browser-control endpoint.
 New VMs do not inherit credentials from your Ascii account environment.
+Ascii Box commands support timeouts of up to ten minutes. Requests for longer timeouts are rejected
+before the command starts rather than silently shortened.
 If Ascii confirms that a saved VM no longer exists, Akeru creates a replacement on the next use.
 Connection failures and permission errors retain the saved VM identity rather than replacing it.
 Connect it with a Box API key. Ascii Box is now Boat; this integration uses the legacy Box API, which
