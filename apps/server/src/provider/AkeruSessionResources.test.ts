@@ -8,6 +8,7 @@ import { BotId, McpServerId, ThreadId } from "@akeru/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
+import { createBotBrowserTools } from "./botBrowser.ts";
 import { computerRegistry } from "./computerRegistry.ts";
 import { WorkspaceComputer } from "./workspaceComputer.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
@@ -135,6 +136,53 @@ describe("AkeruSessionResources", () => {
     expect(sharedBrowser.reconnect).toHaveBeenCalledOnce();
     await resources.shutdown();
     expect(sharedBrowser.close).toHaveBeenCalledOnce();
+  });
+
+  it("retries failed workspace sleeps after releasing sessions during shutdown", async () => {
+    const remote = workspace();
+    const botWorkspace = {
+      ...localBotWorkspace(remote),
+      provider: "vercel" as const,
+      sleep: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("pause unavailable"))
+        .mockResolvedValue(undefined),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => botWorkspace,
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "shutdown-retry" });
+    await expect(resources.shutdown()).rejects.toThrow("pause unavailable");
+    expect(botWorkspace.sleep).toHaveBeenCalledTimes(2);
+    await resources.retryFailedWorkspaceSleeps();
+  });
+
+  it("retries a failed workspace sleep with no active session", async () => {
+    const remote = workspace();
+    const botWorkspace = {
+      ...localBotWorkspace(remote),
+      provider: "vercel" as const,
+      sleep: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("pause unavailable"))
+        .mockResolvedValue(undefined),
+    };
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => botWorkspace,
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "idle-retry" });
+    await expect(resources.release("idle-retry")).rejects.toThrow("pause unavailable");
+    await resources.retryFailedWorkspaceSleeps();
+    expect(botWorkspace.sleep).toHaveBeenCalledTimes(2);
+    await resources.shutdown();
   });
 
   it("attributes shared browser failures and recovery to every active bot", async () => {
@@ -284,7 +332,7 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
-  it.each(["local", "vercel", "e2b", "daytona", "upstash"] as const)(
+  it.each(["local", "vercel", "e2b", "daytona", "upstash", "tenki"] as const)(
     "acquires only usable connector browser attachments in %s workspaces",
     async (botSandbox) => {
       for (const transport of ["stdio", "url"] as const) {
@@ -321,6 +369,7 @@ describe("AkeruSessionResources", () => {
               mcpServers: [server, exaServer],
             });
             const requiresBrowser =
+              botSandbox !== "tenki" &&
               (id === "builtin-executor" || id === "builtin-tinyfish") &&
               (transport === "stdio" || botSandbox !== "local");
             expect(acquireAttachment).toHaveBeenCalledTimes(requiresBrowser ? 1 : 0);
@@ -366,6 +415,74 @@ describe("AkeruSessionResources", () => {
       await resources.shutdown();
     }
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("does not advertise browser tools for Tenki while retaining MCP tools", async () => {
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => ({
+        ...browser(),
+        tools: createBotBrowserTools({
+          call: async () => "",
+          attachment: async () => undefined,
+          reconnect: async () => undefined,
+          close: async () => undefined,
+        }),
+      }),
+      makeMcpManager: () =>
+        mcpManager({ connected: true, toolCount: 1 }, { exa_search: {}, other_tool: {} }) as never,
+      toMcpServerConfigs: () => ({}),
+    });
+    try {
+      await resources.acquire({
+        ...remoteInput,
+        botSandbox: "tenki",
+        threadId: "tenki-tools",
+        mcpServers: [exaServer],
+      });
+      expect(resources.getConnectorTools("tenki-tools")).toEqual({
+        exa_search: {},
+        other_tool: {},
+      });
+    } finally {
+      await resources.shutdown();
+    }
+  });
+
+  it("preserves the Tenki workspace when MCP initialization fails", async () => {
+    const remote: AkeruBotWorkspace = { ...localBotWorkspace(workspace()), provider: "tenki" };
+    const destroy = vi.spyOn(remote, "destroy");
+    const sleep = vi.spyOn(remote, "sleep");
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    manager.init.mockRejectedValueOnce(new Error("connector failed"));
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => remote,
+      makeMcpManager: () => manager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await expect(
+      resources.acquire({
+        ...remoteInput,
+        botSandbox: "tenki",
+        threadId: "tenki-init-failure",
+        mcpServers: [exaServer],
+      }),
+    ).rejects.toThrow("connector failed");
+    expect(destroy).not.toHaveBeenCalled();
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(manager.disconnect).toHaveBeenCalledOnce();
+    const recovered = await resources.acquire({
+      ...remoteInput,
+      botSandbox: "tenki",
+      threadId: "tenki-init-failure",
+      mcpServers: [exaServer],
+    });
+    expect(recovered.botWorkspace).toBe(remote.workspace);
+    await resources.shutdown();
+    expect(destroy).not.toHaveBeenCalled();
   });
 
   it("coalesces concurrent acquisition for the same thread", async () => {

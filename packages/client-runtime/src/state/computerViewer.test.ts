@@ -244,7 +244,7 @@ describe("computer capability", () => {
     expect(explainComputerCapability({ sandbox: null, provider: "codex", state: none })).toBe(
       "local",
     );
-    for (const sandbox of ["e2b", "vercel", "upstash"] as const) {
+    for (const sandbox of ["e2b", "vercel", "upstash", "tenki"] as const) {
       expect(explainComputerCapability({ sandbox, provider: "codex", state: none })).toBe(
         "sandbox",
       );

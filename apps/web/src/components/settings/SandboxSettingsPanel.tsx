@@ -40,6 +40,7 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   daytona: "Daytona",
   vercel: "Vercel Sandbox",
   upstash: "Upstash Box",
+  tenki: "Tenki",
 };
 
 function errorMessage(
@@ -228,9 +229,10 @@ function EnvironmentSandboxSettingsPanel({
                   autoComplete="off"
                   value={draft[field.name] ?? ""}
                   placeholder={field.secret ? t("Leave blank to keep the saved value") : undefined}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, [field.name]: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setDraft((current) => ({ ...current, [field.name]: value }));
+                  }}
                 />
               </label>
             ))}
