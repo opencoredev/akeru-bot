@@ -21,10 +21,10 @@ import {
   PREVIEW_URL_MAX_LENGTH,
   ThreadId,
   type DiscoveredLocalServer,
-} from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import * as Net from "@t3tools/shared/Net";
-import { isLoopbackHost, LSOF_LOCAL_HOST_TOKENS } from "@t3tools/shared/preview";
+} from "@akeru/contracts";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
+import * as Net from "@akeru/shared/Net";
+import { isLoopbackHost, LSOF_LOCAL_HOST_TOKENS } from "@akeru/shared/preview";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";

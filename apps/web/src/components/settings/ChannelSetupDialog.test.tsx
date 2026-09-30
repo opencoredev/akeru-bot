@@ -4,7 +4,7 @@ import {
   EnvironmentId,
   OrchestrationDispatchCommandError,
   ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { act, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";

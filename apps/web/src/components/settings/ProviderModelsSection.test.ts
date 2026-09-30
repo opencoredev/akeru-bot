@@ -1,11 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
-import {
-  ProviderDriverKind,
-  ProviderInstanceId,
-  type ServerProviderModel,
-} from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, type ServerProviderModel } from "@akeru/contracts";
 
 const mocks = vi.hoisted(() => ({
   buttons: new Map<string, { onClick?: () => void }>(),

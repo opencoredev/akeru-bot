@@ -1,4 +1,4 @@
-import type { McpServer, ProviderAccessStatus } from "@t3tools/contracts";
+import type { McpServer, ProviderAccessStatus } from "@akeru/contracts";
 import { ArrowLeft01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import type { PluginDirectoryDefinition, PluginSkill } from "../../../../../plugins";
 import { isElectron } from "../../env";

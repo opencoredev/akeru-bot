@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { OrchestrationBot, OrchestrationGroup } from "@t3tools/contracts";
-import { resolveComposerBotMention } from "@t3tools/shared/composerBotMentions";
+import type { OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
+import { resolveComposerBotMention } from "@akeru/shared/composerBotMentions";
 
 import {
   buildComposerMentionItems,

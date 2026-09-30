@@ -2,7 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import { Workspace } from "@mastra/core/workspace";
-import type { BotId, BotSandbox, BotSandboxBrowserSharing } from "@t3tools/contracts";
+import type { BotId, BotSandbox, BotSandboxBrowserSharing } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -83,11 +83,13 @@ export class BotWorkspacePool {
   private readonly state: Promise<PoolState>;
   private readonly clock: Clock.Clock | undefined;
   private readonly references = new Map<string, number>();
+  private readonly acquisitions = new Map<string, number>();
   private readonly creators = new Map<string, () => Promise<AkeruBotWorkspace | Workspace>>();
   private readonly destroyRequested = new Set<string>();
   private readonly sleepers = new Map<string, AkeruBotWorkspace>();
   private readonly waking = new Set<string>();
   private readonly failed = new Set<string>();
+  private readonly retrying = new Set<string>();
   private readonly closing = new Map<string, Promise<void>>();
   private destroyingAll = false;
   private readonly destroyAllFailures: unknown[] = [];
@@ -130,9 +132,11 @@ export class BotWorkspacePool {
       Effect.tap((workspace) =>
         Effect.tryPromise({ try: () => workspace.wake(), catch: toPoolError }).pipe(
           Effect.tapCause(() =>
-            workspace.provider === "railway"
-              ? Effect.void
-              : Effect.promise(() => workspace.destroy().catch(() => undefined)),
+            workspace.provider === "local"
+              ? Effect.promise(() => workspace.destroy().catch(() => undefined))
+              : Effect.sync(() => {
+                  this.sleepers.set(key, workspace);
+                }),
           ),
         ),
       ),
@@ -175,14 +179,34 @@ export class BotWorkspacePool {
     }
     return Effect.tryPromise(() => workspace.sleep()).pipe(
       Effect.tap(() => Effect.sync(() => this.sleepers.set(key, workspace))),
-      // A workspace that cannot sleep is unusable. Destroy it so the next acquire starts fresh,
-      // then fail the release so callers drop resources, such as a browser, bound to it.
-      Effect.tapError(() => Effect.promise(() => workspace.destroy().catch(() => undefined))),
+      // Remote workspaces can remain usable after a pause failure; retain them for retry.
+      Effect.tapError(() =>
+        workspace.provider === "local"
+          ? Effect.promise(() => workspace.destroy().catch(() => undefined))
+          : Effect.sync(() => {
+              this.sleepers.set(key, workspace);
+              this.failed.add(key);
+            }),
+      ),
       Effect.catch((error) => Effect.die(error.cause)),
     );
   }
 
   async acquire(
+    key: string,
+    create: () => Promise<AkeruBotWorkspace | Workspace>,
+  ): Promise<BotWorkspaceLease> {
+    this.acquisitions.set(key, (this.acquisitions.get(key) ?? 0) + 1);
+    try {
+      return await this.acquireOnce(key, create);
+    } finally {
+      const remaining = (this.acquisitions.get(key) ?? 1) - 1;
+      if (remaining === 0) this.acquisitions.delete(key);
+      else this.acquisitions.set(key, remaining);
+    }
+  }
+
+  private async acquireOnce(
     key: string,
     create: () => Promise<AkeruBotWorkspace | Workspace>,
   ): Promise<BotWorkspaceLease> {
@@ -199,9 +223,12 @@ export class BotWorkspacePool {
     const leaseScope = await this.run(Scope.make());
     const pooled = await this.run(RcMap.get(map, key).pipe(Scope.provide(leaseScope))).catch(
       async (cause: unknown) => {
-        // Drop the failed entry so the next acquire retries instead of reusing the failure while it idles.
-        if (this.failed.delete(key)) await this.run(RcMap.invalidate(map, key));
         await this.run(Scope.close(leaseScope, Exit.void));
+        if (this.failed.delete(key)) {
+          const retained = this.sleepers.has(key);
+          await this.run(RcMap.invalidate(map, key));
+          if (retained) this.failed.add(key);
+        }
         throw cause;
       },
     );
@@ -237,13 +264,45 @@ export class BotWorkspacePool {
     };
   }
 
+  /** Retries failed pauses for retained remote workspaces. */
+  async retryFailedSleeps(): Promise<void> {
+    if (this.destroyingAll) return;
+    const results = await Promise.allSettled(
+      [...this.failed].map(async (key) => {
+        const workspace = this.sleepers.get(key);
+        if (
+          !workspace ||
+          this.references.has(key) ||
+          this.acquisitions.has(key) ||
+          this.retrying.has(key)
+        )
+          return;
+        this.retrying.add(key);
+        const finish = Promise.withResolvers<void>();
+        this.closing.set(key, finish.promise);
+        try {
+          await workspace.sleep();
+          this.failed.delete(key);
+        } finally {
+          this.retrying.delete(key);
+          if (this.closing.get(key) === finish.promise) this.closing.delete(key);
+          finish.resolve();
+        }
+      }),
+    );
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  }
+
   /** Destroys every pooled workspace, including idle ones that are still awake. */
   async destroyAll(): Promise<void> {
     const { scope } = await this.state;
     this.destroyingAll = true;
+    await Promise.all(this.closing.values());
     await this.run(Scope.close(scope, Exit.void));
     const sleepers = [...this.sleepers.values()];
     this.sleepers.clear();
+    this.failed.clear();
     const results = await Promise.allSettled(sleepers.map((workspace) => workspace.destroy()));
     for (const result of results) {
       if (result.status === "rejected") this.destroyAllFailures.push(result.reason);

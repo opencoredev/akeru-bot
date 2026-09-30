@@ -1,5 +1,5 @@
-import { BotId } from "@t3tools/contracts";
-import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import { BotId } from "@akeru/contracts";
+import type { BotInboxItem } from "@akeru/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
 import { settingsInboxView } from "./botInbox.logic";

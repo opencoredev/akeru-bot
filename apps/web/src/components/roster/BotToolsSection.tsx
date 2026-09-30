@@ -1,8 +1,8 @@
-import type { McpServer, McpServerId, ProviderAccessStatus } from "@t3tools/contracts";
+import type { McpServer, McpServerId, ProviderAccessStatus } from "@akeru/contracts";
 import { InfoIcon, ServerIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";

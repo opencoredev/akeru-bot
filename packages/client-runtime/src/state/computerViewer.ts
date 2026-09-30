@@ -5,7 +5,7 @@ import type {
   ComputerFrame,
   ComputerSession,
   ComputerState,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 /**
  * Client lifecycle for watching and controlling a bot's workspace computer.
@@ -270,6 +270,7 @@ export const COMPUTER_SANDBOX_CAPABILITY: Readonly<
   vercel: { graphical: false },
   upstash: { graphical: false },
   railway: { graphical: false },
+  tenki: { graphical: false },
 };
 
 /** Provider drivers that route browser input through the shared computer gate. */

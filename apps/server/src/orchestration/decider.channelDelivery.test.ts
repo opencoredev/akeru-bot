@@ -7,7 +7,7 @@ import {
   ThreadId,
   ProviderInstanceId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

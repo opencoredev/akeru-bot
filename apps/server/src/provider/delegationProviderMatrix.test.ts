@@ -2,11 +2,11 @@ import {
   AkeruDelegationProviderUnsupportedError,
   ProviderInstanceId,
   type OrchestrationCommand,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   DELEGATION_DRIVER_KINDS,
   driverSupportsDelegation,
-} from "@t3tools/shared/delegationProviders";
+} from "@akeru/shared/delegationProviders";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 

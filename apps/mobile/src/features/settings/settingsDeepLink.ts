@@ -1,7 +1,7 @@
 import {
   parseSettingsDeepLinkId,
   type SettingsDeepLinkId,
-} from "@t3tools/client-runtime/settings-deep-link";
+} from "@akeru/client-runtime/settings-deep-link";
 
 export type MobileSettingsHealthTarget =
   | "local-execution"

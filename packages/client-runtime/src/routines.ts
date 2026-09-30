@@ -9,8 +9,8 @@ import type {
   RoutineSandbox,
   RoutineSchedule,
   RoutineSkillAssignment,
-} from "@t3tools/contracts";
-import { withoutErrorStack } from "@t3tools/shared/errorText";
+} from "@akeru/contracts";
+import { withoutErrorStack } from "@akeru/shared/errorText";
 
 import { createTranslator, type MessageKey } from "./i18n/index.ts";
 

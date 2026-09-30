@@ -1,5 +1,5 @@
-import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { type ServerLifecycleWelcomePayload } from "@akeru/contracts";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 

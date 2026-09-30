@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-import type { BotId } from "@t3tools/contracts";
+import type { BotId } from "@akeru/contracts";
 
 import type { BotInboxService } from "./service.ts";
 

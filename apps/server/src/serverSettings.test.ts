@@ -6,8 +6,8 @@ import {
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
-} from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@akeru/contracts";
+import { createModelSelection } from "@akeru/shared/model";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
@@ -1463,6 +1463,9 @@ it.layer(NodeServices.layer)("server settings", (it) => {
                 { name: "RAILWAY_ENVIRONMENT_ID", value: "environment-id", sensitive: false },
               ],
             },
+            tenki: {
+              environment: [{ name: "TENKI_API_KEY", value: "tenki-secret", sensitive: true }],
+            },
           },
         },
       });
@@ -1470,9 +1473,11 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(next.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
       assert.equal(next.sandbox.providers.railway.environment[0]?.value, "railway-secret");
       assert.equal(next.sandbox.providers.railway.environment[1]?.value, "environment-id");
+      assert.equal(next.sandbox.providers.tenki.environment[0]?.value, "tenki-secret");
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
       assert.notInclude(raw, "e2b-secret");
       assert.notInclude(raw, "railway-secret");
+      assert.notInclude(raw, "tenki-secret");
 
       const clientSettings = ServerSettingsModule.redactServerSettingsForClient(next);
       assert.deepInclude(clientSettings.sandbox.providers.e2b.environment[0], {
@@ -1487,6 +1492,10 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         value: "environment-id",
         sensitive: false,
       });
+      assert.deepInclude(clientSettings.sandbox.providers.tenki.environment[0], {
+        value: "",
+        valueRedacted: true,
+      });
 
       const roundTripped = yield* serverSettings.updateSettings({
         sandbox: clientSettings.sandbox,
@@ -1494,6 +1503,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(roundTripped.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
       assert.equal(roundTripped.sandbox.providers.railway.environment[0]?.value, "railway-secret");
       assert.equal(roundTripped.sandbox.providers.railway.environment[1]?.value, "environment-id");
+      assert.equal(roundTripped.sandbox.providers.tenki.environment[0]?.value, "tenki-secret");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 

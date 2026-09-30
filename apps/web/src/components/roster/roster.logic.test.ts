@@ -1,4 +1,4 @@
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@akeru/shared",
   "version": "0.0.2",
   "private": true,
   "type": "module",
@@ -226,7 +226,7 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
+    "@akeru/contracts": "workspace:*",
     "effect": "catalog:",
     "yaml": "catalog:"
   },

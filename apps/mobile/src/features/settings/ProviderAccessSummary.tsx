@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import type { SubscriptionProviderId } from "@t3tools/contracts";
+import type { SubscriptionProviderId } from "@akeru/contracts";
 import {
   providerAccessGuide,
   type ProviderAccessStatusInput,
-} from "@t3tools/client-runtime/provider-access";
+} from "@akeru/client-runtime/provider-access";
 
 import { AppText as Text } from "../../components/AppText";
 import { useMobileI18n } from "../../lib/i18n";

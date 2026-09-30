@@ -24,7 +24,7 @@ import {
   ThreadId,
   TurnId,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { ServerConfig } from "../../config.ts";
 import {

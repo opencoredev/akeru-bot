@@ -1,5 +1,5 @@
-import { BotId, DelegationId, ThreadId, TurnId } from "@t3tools/contracts";
-import type { AkeruDelegationRecord, OrchestrationBot } from "@t3tools/contracts";
+import { BotId, DelegationId, ThreadId, TurnId } from "@akeru/contracts";
+import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -20,12 +20,12 @@ vi.mock("../../components/BotAvatarView", () => ({
 }));
 
 vi.mock("../../lib/i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
-import { delegationActions } from "@t3tools/client-runtime/delegation-presentation";
+import { delegationActions } from "@akeru/client-runtime/delegation-presentation";
 
 import { ThreadDelegationCard } from "./ThreadDelegationCard";
 

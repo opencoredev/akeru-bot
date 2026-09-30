@@ -2307,6 +2307,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Cloud workspaces in your Vercel team and project.": "位于你的 Vercel 团队和项目中的云端工作区。",
   "Cloud workspaces managed by Upstash Box. Requires an API key.":
     "由 Upstash Box 管理的云端工作区。需要 API 密钥。",
+  "Cloud workspaces managed by Tenki. Requires an API key.":
+    "由 Tenki 管理的云端工作区。需要 API 密钥。",
   Token: "令牌",
   "Team ID": "团队 ID",
   "Project ID": "项目 ID",

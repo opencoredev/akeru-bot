@@ -2,17 +2,17 @@ import type {
   AkeruDelegationRecord,
   AkeruDelegationState,
   OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   type DelegationAction,
   delegationActions,
   delegationElapsedMs,
   presentDelegation,
-} from "@t3tools/client-runtime/delegation-presentation";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
-import { formatTokens } from "@t3tools/shared/usageFormat";
+} from "@akeru/client-runtime/delegation-presentation";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import { formatDuration } from "@akeru/shared/orchestrationTiming";
+import { formatTokens } from "@akeru/shared/usageFormat";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n";

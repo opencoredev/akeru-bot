@@ -1,5 +1,5 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { SubscriptionProviderId } from "@t3tools/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { SubscriptionProviderId } from "@akeru/contracts";
 
 import { ClaudeAI, GrokIcon, KimiIcon, OpenAI, OpenCodeIcon, type Icon } from "../Icons";
 

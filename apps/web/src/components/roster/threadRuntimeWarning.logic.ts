@@ -1,14 +1,14 @@
 import {
   isServerProviderUnavailability,
   latestTurnFailure,
-} from "@t3tools/client-runtime/provider-availability";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/provider-availability";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   OrchestrationLatestTurn,
   OrchestrationSession,
   OrchestrationThreadActivity,
   ServerProviderUnavailability,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export function activeThreadRuntimeWarning(
   activities: ReadonlyArray<OrchestrationThreadActivity>,

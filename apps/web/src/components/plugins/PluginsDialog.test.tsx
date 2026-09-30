@@ -1,4 +1,4 @@
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { McpServerId, type McpServer } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import {

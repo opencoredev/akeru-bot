@@ -1,12 +1,12 @@
-import { createReplyPlaybackSession } from "@t3tools/client-runtime/reply-playback";
-import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
+import { createReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
+import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo, useRef } from "react";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { createBrowserReplyAudio } from "./replyPlaybackAudio";
-import { synthesizeVoiceChunks } from "@t3tools/client-runtime/voice";
+import { synthesizeVoiceChunks } from "@akeru/client-runtime/voice";
 
 const OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE =
   "Reading replies aloud is only available for this device's primary environment.";

@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { McpServerId, type McpServer } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { isInstallableManifest, loadManifestCatalog } from "../../../../plugins/manifestCatalog.ts";

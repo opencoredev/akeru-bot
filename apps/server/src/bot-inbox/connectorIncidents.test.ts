@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { BotId, type ProviderAccessStatus } from "@t3tools/contracts";
+import { BotId, type ProviderAccessStatus } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ProviderStatus } from "../subscription-auth/service.ts";

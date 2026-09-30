@@ -1,4 +1,4 @@
-import type { ChatAttachment, EnvironmentId } from "@t3tools/contracts";
+import type { ChatAttachment, EnvironmentId } from "@akeru/contracts";
 import { FileTextIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 

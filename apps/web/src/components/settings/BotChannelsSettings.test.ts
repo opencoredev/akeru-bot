@@ -1,4 +1,4 @@
-import { AuthAccessWriteScope, BotId, ChannelConnectionId, ProjectId } from "@t3tools/contracts";
+import { AuthAccessWriteScope, BotId, ChannelConnectionId, ProjectId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { describe, expect, it } from "vite-plus/test";
 

@@ -1,4 +1,4 @@
-import { type ProviderInstanceId } from "@t3tools/contracts";
+import { type ProviderInstanceId } from "@akeru/contracts";
 
 import {
   providerInstancePickerBlockReason,

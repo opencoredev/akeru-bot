@@ -8,7 +8,7 @@ import {
   ProviderInstanceId,
   ProviderDriverKind,
   type SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   runWithNodeServices,

@@ -2,7 +2,7 @@ import {
   collectComposerInlineTokens,
   collectComposerMentionDisplays,
   type ComposerMentionDisplay,
-} from "@t3tools/shared/composerInlineTokens";
+} from "@akeru/shared/composerInlineTokens";
 import { useMemo } from "react";
 
 import type { SelectableMarkdownSkill } from "../../native/SelectableMarkdownText";

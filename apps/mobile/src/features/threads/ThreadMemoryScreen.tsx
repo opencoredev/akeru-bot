@@ -5,14 +5,14 @@ import {
   type DurableMemoryFact,
   describeDurableFactFailure,
   durableFactMutation,
-} from "@t3tools/client-runtime/durable-memory";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   AkeruMemoryDocument,
   AkeruMemoryDocumentTarget,
   EnvironmentId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo, useState } from "react";

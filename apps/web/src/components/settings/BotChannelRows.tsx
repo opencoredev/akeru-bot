@@ -3,7 +3,7 @@ import {
   type ChannelBinding,
   type ChannelProvider,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 export interface ChannelBot {
   readonly id: BotId;

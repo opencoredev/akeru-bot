@@ -1,5 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
+import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import type {
   BotUsageCap,
   EnvironmentId,
@@ -8,7 +8,7 @@ import type {
   ProviderOptionSelection,
   RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -16,7 +16,7 @@ import {
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+} from "@akeru/shared/model";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import {
   createNativeStackNavigator,

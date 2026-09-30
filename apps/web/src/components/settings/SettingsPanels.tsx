@@ -6,7 +6,7 @@ import {
   type BackgroundActivityProfile,
   type BotSandboxBrowserSharing,
   ProviderDriverKind,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
@@ -24,9 +24,9 @@ import {
   MIN_PROMPT_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
   ProductFeedbackEndpoint,
-} from "@t3tools/contracts/settings";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@akeru/contracts/settings";
+import { resolveServerBackgroundActivitySettings } from "@akeru/shared/backgroundActivitySettings";
+import { createModelSelection } from "@akeru/shared/model";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
@@ -117,7 +117,7 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, MessageKey> = {
   artwork: "Artwork",

@@ -9,7 +9,7 @@ import {
   OrchestrationDispatchCommandError,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import {
   createAttachmentId,

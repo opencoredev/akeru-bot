@@ -1,6 +1,6 @@
-import { createTranslator } from "@t3tools/client-runtime/i18n";
-import { withoutErrorStack } from "@t3tools/shared/errorText";
-import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@t3tools/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
+import { withoutErrorStack } from "@akeru/shared/errorText";
+import type { Routine, RoutineReceiptSource, RoutineRun, ThreadId } from "@akeru/contracts";
 import type { BotConversationEntry } from "./botConversationPresentation";
 
 export interface RoutineReceipt {

@@ -1,4 +1,4 @@
-import { SETTINGS_DEEP_LINK_IDS } from "@t3tools/client-runtime/settings-deep-link";
+import { SETTINGS_DEEP_LINK_IDS } from "@akeru/client-runtime/settings-deep-link";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveMobileSettingsDestination } from "./settingsDeepLink";

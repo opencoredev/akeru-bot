@@ -5,14 +5,14 @@ import {
   type DurableMemoryFact,
   type ImportConflictDecision,
   resolveImportConflicts,
-} from "@t3tools/client-runtime/durable-memory";
-import type { AkeruMemoryImportPreview } from "@t3tools/contracts";
+} from "@akeru/client-runtime/durable-memory";
+import type { AkeruMemoryImportPreview } from "@akeru/contracts";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });

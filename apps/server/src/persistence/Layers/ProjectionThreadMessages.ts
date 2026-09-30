@@ -9,7 +9,7 @@ import {
   ChannelMessageOrigin,
   ChatAttachment,
   OrchestrationMessageReaction,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {

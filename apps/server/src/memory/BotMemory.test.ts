@@ -10,7 +10,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import { vi } from "vite-plus/test";
-import { BotId, GroupId, type AkeruMemoryDocument } from "@t3tools/contracts";
+import { BotId, GroupId, type AkeruMemoryDocument } from "@akeru/contracts";
 
 import {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,

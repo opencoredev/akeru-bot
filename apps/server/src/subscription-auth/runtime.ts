@@ -6,7 +6,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
   type SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -18,7 +18,7 @@ import {
 } from "./service.ts";
 import type { ApiKeyCredential } from "./types.ts";
 
-export { instanceUsesSavedCredential } from "@t3tools/contracts";
+export { instanceUsesSavedCredential } from "@akeru/contracts";
 
 const explicitEnvironmentKeys = Symbol("subscriptionInstanceEnvironmentKeys");
 type SubscriptionEnvironment = NodeJS.ProcessEnv & {

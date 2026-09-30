@@ -1,4 +1,4 @@
-import { ProviderDriverKind, type ServerProviderSkill } from "@t3tools/contracts";
+import { ProviderDriverKind, type ServerProviderSkill } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -38,7 +38,7 @@ function workspaceManifestPaths(repoRoot: string): ReadonlyArray<string> {
     }
   }
 
-  for (const relativePath of ["oxlint-plugin-t3code/package.json", "scripts/package.json"]) {
+  for (const relativePath of ["oxlint-plugin-akeru/package.json", "scripts/package.json"]) {
     const manifestPath = NodePath.join(repoRoot, relativePath);
     if (NodeFS.existsSync(manifestPath)) manifests.push(manifestPath);
   }

@@ -8,12 +8,12 @@ import {
   RoutineRunId,
   SkillAssignmentId,
   SkillId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   botRoutinesView,
   toRoutineSchedule,
   type RoutineAdapterDraft,
-} from "@t3tools/client-runtime/routines";
+} from "@akeru/client-runtime/routines";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 

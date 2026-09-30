@@ -4,7 +4,7 @@ import {
   TurnId,
   type OrchestrationLatestTurn,
   type OrchestrationMessage,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   correlatedVoiceReply,
   createRealtimeVoiceSession,

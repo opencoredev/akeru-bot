@@ -1,5 +1,5 @@
-import type { AdvertisedEndpoint, DesktopBridge, DesktopWslState } from "@t3tools/contracts";
-import { getPairingTokenFromUrl, readHostedPairingRequest } from "@t3tools/shared/remote";
+import type { AdvertisedEndpoint, DesktopBridge, DesktopWslState } from "@akeru/contracts";
+import { getPairingTokenFromUrl, readHostedPairingRequest } from "@akeru/shared/remote";
 
 type WslEnableBridge = Pick<DesktopBridge, "setWslBackendEnabled" | "setWslDistro" | "setWslOnly">;
 

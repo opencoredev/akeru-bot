@@ -19,10 +19,10 @@ import {
   EnvironmentScopeRequiredError,
   EnvironmentAuthenticatedAuth,
   EnvironmentAuthenticatedPrincipal,
-} from "@t3tools/contracts";
-import { parseAllowedOAuthScope } from "@t3tools/shared/oauthScope";
+} from "@akeru/contracts";
+import { parseAllowedOAuthScope } from "@akeru/shared/oauthScope";
 import * as Schema from "effect/Schema";
-import { causeErrorTag } from "@t3tools/shared/observability";
+import { causeErrorTag } from "@akeru/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

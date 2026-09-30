@@ -2,13 +2,13 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import {
   BotId,
   EnvironmentId,
   type SubscriptionAuthLoginProgress,
   type SubscriptionAuthStartResult,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -54,7 +54,7 @@ import {
   apiKeyStartInput,
   apiKeyValidationError,
   providerSupportsBaseUrl,
-} from "@t3tools/client-runtime/provider-auth";
+} from "@akeru/client-runtime/provider-auth";
 import { ProviderApiKeyForm } from "../settings/ProvidersPanel";
 import { SignInCodeCopy } from "../settings/SignInCodeCopy";
 import { SUBSCRIPTION_PROVIDERS } from "../settings/subscriptionProviders";

@@ -1,4 +1,4 @@
-import type { ServerProviderSkill } from "@t3tools/contracts";
+import type { ServerProviderSkill } from "@akeru/contracts";
 import {
   $createParagraphNode,
   $createTextNode,

@@ -1,4 +1,4 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
 import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n";

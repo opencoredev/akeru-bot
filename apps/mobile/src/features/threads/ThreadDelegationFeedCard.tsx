@@ -5,9 +5,9 @@
  *
  * @module features/threads/ThreadDelegationFeedCard
  */
-import type { AkeruDelegationRecord, EnvironmentId, OrchestrationBot } from "@t3tools/contracts";
-import type { DelegationAction } from "@t3tools/client-runtime/delegation-presentation";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import type { AkeruDelegationRecord, EnvironmentId, OrchestrationBot } from "@akeru/contracts";
+import type { DelegationAction } from "@akeru/client-runtime/delegation-presentation";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { useCallback } from "react";
 import { Alert } from "react-native";
 

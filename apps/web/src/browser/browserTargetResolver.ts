@@ -2,14 +2,14 @@ import type {
   BrowserNavigationTarget,
   EnvironmentId,
   PreviewUrlResolution,
-} from "@t3tools/contracts";
-import { isLoopbackHost, normalizePreviewUrl } from "@t3tools/shared/preview";
+} from "@akeru/contracts";
+import { isLoopbackHost, normalizePreviewUrl } from "@akeru/shared/preview";
 import {
   isLocalLoopbackHost,
   isPrivateNetworkHost,
   isPublicFaviconHost,
   normalizeHostname,
-} from "@t3tools/shared/hostClassification";
+} from "@akeru/shared/hostClassification";
 
 import { readPreparedConnection } from "~/state/session";
 

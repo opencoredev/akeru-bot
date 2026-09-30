@@ -8,19 +8,19 @@ import type {
   ServerSettings,
   SidebarProjectGroupingMode,
   UnifiedSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   createTranslator,
   type MessageKey,
   type TranslationParams,
-} from "@t3tools/client-runtime/i18n";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+} from "@akeru/client-runtime/i18n";
+import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import {
   getBackgroundActivityBaseProfile,
   normalizeBackgroundActivitySettings,
   normalizeServerBackgroundActivitySettings,
   resolveServerBackgroundActivitySettings,
-} from "@t3tools/shared/backgroundActivitySettings";
+} from "@akeru/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 

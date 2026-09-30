@@ -14,7 +14,7 @@
  * before publishing, so every path that produces models (pending, probe,
  * error fallbacks) is classified the same way.
  */
-import type { ProviderDriverKind, ServerProviderModel } from "@t3tools/contracts";
+import type { ProviderDriverKind, ServerProviderModel } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

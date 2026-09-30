@@ -23,13 +23,13 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
-} from "@t3tools/contracts";
-import { translateConnectionStatus } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { translateConnectionStatus } from "@akeru/client-runtime/i18n";
 import { useI18n } from "../../i18n";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 

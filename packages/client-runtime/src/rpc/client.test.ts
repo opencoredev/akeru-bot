@@ -1,4 +1,4 @@
-import { EnvironmentId, type ServerSelfUpdateProgressEvent, WS_METHODS } from "@t3tools/contracts";
+import { EnvironmentId, type ServerSelfUpdateProgressEvent, WS_METHODS } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";

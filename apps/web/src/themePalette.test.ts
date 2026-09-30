@@ -3,7 +3,7 @@ import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@akeru/shared/themePalettes";
 
 import {
   AKERU_PAPER_THEME,

@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { GrokSettings } from "@t3tools/contracts";
+import { GrokSettings } from "@akeru/contracts";
 
 import {
   buildGrokModelsFromSessionModelState,

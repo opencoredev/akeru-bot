@@ -1,6 +1,6 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@akeru/contracts";
 import { useMemo } from "react";
 
 import { usePrimaryEnvironmentId } from "../../state/environments";

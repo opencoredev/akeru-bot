@@ -9,7 +9,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationThread,
   type ProviderApprovalDecision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";

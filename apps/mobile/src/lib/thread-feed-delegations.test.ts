@@ -6,7 +6,7 @@ import {
   ThreadId,
   TurnId,
   type AkeruDelegationRecord,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { scopedThreadKey } from "./scopedEntities";
 import { deriveThreadFeedDelegations, type ThreadFeedDelegations } from "./threadActivity";

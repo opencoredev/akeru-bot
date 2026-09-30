@@ -7,7 +7,7 @@ import * as NodeURL from "node:url";
 import { afterEach, expect, it } from "vite-plus/test";
 
 // The helper harness spawns bash with shebang stubs; skip those cases on Windows.
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Host-platform test guard, not Effect code.
+// oxlint-disable-next-line akeru/no-global-process-runtime -- Host-platform test guard, not Effect code.
 const posixIt = it.skipIf(process.platform === "win32");
 
 const root = NodeURL.fileURLToPath(new URL("../../", import.meta.url));

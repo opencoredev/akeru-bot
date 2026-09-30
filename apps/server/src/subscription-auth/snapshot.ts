@@ -5,7 +5,7 @@ import type {
   McpServerId,
   ProviderAccessStatus,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { ProviderStatus, RequestHealthStatus, SubscriptionProviderId } from "./service.ts";
 

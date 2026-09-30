@@ -12,9 +12,9 @@ import {
   DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
   type ModelSelection,
   TextGenerationError,
-} from "@t3tools/contracts";
-import { sanitizeBranchFragment } from "@t3tools/shared/git";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+} from "@akeru/contracts";
+import { sanitizeBranchFragment } from "@akeru/shared/git";
+import { resolveSpawnCommand } from "@akeru/shared/shell";
 
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -27,7 +27,7 @@ import {
   sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "./TextGenerationUtils.ts";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 
 const CODEX_TIMEOUT_MS = 180_000;

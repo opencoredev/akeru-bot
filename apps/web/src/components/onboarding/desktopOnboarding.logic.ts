@@ -3,8 +3,8 @@ import {
   type BotEngine,
   type ModelSelection,
   type SubscriptionProviderId,
-} from "@t3tools/contracts";
-import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 
 import type { BotAnimationState } from "../roster/BotAvatarView";
 import type { BotAvatar, BotBlobShape } from "../roster/types";

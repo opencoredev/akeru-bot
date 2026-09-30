@@ -1,5 +1,5 @@
-import { catalogRegistry } from "@t3tools/client-runtime/i18n";
-import { VOICE_API_PROVIDERS, type VoiceApiProvider } from "@t3tools/contracts";
+import { catalogRegistry } from "@akeru/client-runtime/i18n";
+import { VOICE_API_PROVIDERS, type VoiceApiProvider } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

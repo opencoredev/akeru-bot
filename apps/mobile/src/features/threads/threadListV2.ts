@@ -5,15 +5,15 @@ import {
   QUEUED_TURN_START_GRACE_MS,
   resolveSnoozePresets,
   snoozeWakeLabel,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
+} from "@akeru/client-runtime/state/thread-settled";
+import type { SnoozePreset } from "@akeru/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { threadSearchMatchKey } from "@akeru/client-runtime/state/thread-search";
 import {
   activeThreadAnchorTimestampMs,
   sortPinnedThreadsByOrderKey,
-} from "@t3tools/client-runtime/state/thread-sort";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/thread-sort";
+import type { EnvironmentId, ProjectId } from "@akeru/contracts";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 

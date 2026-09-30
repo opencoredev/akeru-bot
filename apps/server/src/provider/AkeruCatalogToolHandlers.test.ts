@@ -2,7 +2,7 @@
 import * as NodeFS from "node:fs";
 
 import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
-import { BotId, type OrchestrationCommand } from "@t3tools/contracts";
+import { BotId, type OrchestrationCommand } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {

@@ -21,10 +21,10 @@ import { useFontFamily } from "../../lib/useFontFamily";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
-import { composerActionIsDictation } from "@t3tools/client-runtime/dictation";
+import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
 import { DictationControls } from "../../components/DictationControls";
 import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import {

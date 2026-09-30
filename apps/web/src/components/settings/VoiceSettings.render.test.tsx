@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_SETTINGS, type VoiceSettings } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, type VoiceSettings } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -13,7 +13,7 @@ vi.mock("~/hooks/useSettings", () => ({
 vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: vi.fn() }));
 vi.mock("../chat/ReplyPlaybackProvider", () => ({ useOptionalReplyPlayback: () => null }));
 
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import { VoiceApiProviderRow, VoiceModeRows } from "./VoiceSettings";
 
 const environmentId = "environment-1" as EnvironmentId;

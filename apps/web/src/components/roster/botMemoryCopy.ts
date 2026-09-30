@@ -1,5 +1,5 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { AkeruMemoryDocumentTarget } from "@t3tools/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { AkeruMemoryDocumentTarget } from "@akeru/contracts";
 
 /** User-facing names for the bot memory documents, shared by the editor and backup preview. */
 export const memoryDocumentCopy: Record<
