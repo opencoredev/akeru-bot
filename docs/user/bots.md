@@ -229,8 +229,13 @@ Open the bot's settings and choose a provider under **Workspace > Image generati
 
 ## Delete a bot
 
-Open the bot's settings page and select **Delete** under **Danger**, then confirm. Deleting removes
-the bot from the roster. Its chats stay in your history.
+Open the bot's settings page and select **Delete** under **Danger**, then confirm. On mobile, open
+the chat's settings and select **Delete bot** under **Danger**. Deleting removes the bot from the
+roster. Its chats stay in your history.
+
+Deleting stops anything the bot is doing. Running replies stop, work it handed to other bots or
+received from them is canceled, and a voice call with the bot ends. In a group chat the bot was
+answering, the boss picks up the next message.
 
 A bot that leads a group as boss cannot be deleted. Set a new boss for the group first. A bot also
 cannot be deleted when its removal would leave a group with fewer than two active bots.
