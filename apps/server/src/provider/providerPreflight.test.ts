@@ -1,6 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 
+import { deriveProviderInstanceConfigMap } from "./Layers/ProviderInstanceRegistryHydration.ts";
 import { preflightProvider } from "./providerPreflight.ts";
 
 const codexProvider: ServerProvider = {
@@ -272,5 +278,117 @@ describe("preflightProvider", () => {
         subscriptionStatuses: [{ ...status, health: "revoked" }],
       })?.category,
     ).toBe("expired-login");
+  });
+
+  it("uses the selected instance account instead of the revoked default account", () => {
+    const workInstanceId = ProviderInstanceId.make("claude_work");
+    const baseStatus = {
+      provider: "anthropic" as const,
+      connected: true,
+      authMode: "oauth" as const,
+      reconnectAction: "Reconnect Claude",
+      healthTest: { status: "not-run" as const },
+      dependentBots: [],
+      dependentRoutines: [],
+    };
+    const revoked = { ...baseStatus, health: "revoked" as const };
+    const healthy = { ...baseStatus, health: "healthy" as const };
+    const accountStatus = (_provider: string, instanceId: ProviderInstanceId) =>
+      instanceId === workInstanceId ? healthy : revoked;
+    expect(
+      preflightProvider({
+        providers: [provider({ instanceId: workInstanceId })],
+        providerId: workInstanceId,
+        model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
+        providerInstanceConfig: { driver: ProviderDriverKind.make("claudeAgent") },
+        subscriptionStatuses: [revoked],
+        subscriptionStatusForInstance: accountStatus,
+      }),
+    ).toBeUndefined();
+    expect(
+      preflightProvider({
+        providers: [provider()],
+        providerId: "claude",
+        model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
+        subscriptionStatusForInstance: accountStatus,
+      })?.category,
+    ).toBe("expired-login");
+  });
+
+  it("ignores default account health for a legacy independent Codex home", () => {
+    const settings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providers: {
+        ...DEFAULT_SERVER_SETTINGS.providers,
+        codex: { ...DEFAULT_SERVER_SETTINGS.providers.codex, homePath: "/tmp/codex-work" },
+      },
+    };
+    const config = deriveProviderInstanceConfigMap(settings)[ProviderInstanceId.make("codex")];
+    expect(config?.config).toMatchObject({ homePath: "/tmp/codex-work" });
+    expect(
+      preflightProvider({
+        providers: [
+          provider({
+            instanceId: ProviderInstanceId.make("codex"),
+            driver: ProviderDriverKind.make("codex"),
+          }),
+        ],
+        providerId: "codex",
+        model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
+        ...(config ? { providerInstanceConfig: config } : {}),
+        subscriptionStatuses: [
+          {
+            provider: "openai-codex",
+            connected: true,
+            authMode: "oauth",
+            health: "revoked",
+            reconnectAction: "Reconnect Codex",
+            healthTest: { status: "not-run" },
+            dependentBots: [],
+            dependentRoutines: [],
+          },
+        ],
+      }),
+    ).toBeUndefined();
+  });
+
+  it("ignores default account health for a legacy independent Claude home", () => {
+    const settings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providers: {
+        ...DEFAULT_SERVER_SETTINGS.providers,
+        claudeAgent: {
+          ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,
+          homePath: "/tmp/claude-work",
+        },
+      },
+    };
+    const config =
+      deriveProviderInstanceConfigMap(settings)[ProviderInstanceId.make("claudeAgent")];
+    expect(config?.config).toMatchObject({ homePath: "/tmp/claude-work" });
+    expect(
+      preflightProvider({
+        providers: [provider({ instanceId: ProviderInstanceId.make("claudeAgent") })],
+        providerId: "claudeAgent",
+        model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
+        ...(config ? { providerInstanceConfig: config } : {}),
+        subscriptionStatuses: [
+          {
+            provider: "anthropic",
+            connected: true,
+            authMode: "oauth",
+            health: "revoked",
+            reconnectAction: "Reconnect Claude",
+            healthTest: { status: "not-run" },
+            dependentBots: [],
+            dependentRoutines: [],
+          },
+        ],
+      }),
+    ).toBeUndefined();
   });
 });

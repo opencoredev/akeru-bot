@@ -31,6 +31,7 @@ import {
   isGroupBotMember,
 } from "@t3tools/contracts";
 import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
+import { withoutErrorStack } from "@t3tools/shared/errorText";
 import * as Schema from "effect/Schema";
 
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
@@ -504,11 +505,15 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     return { botId: request.botId, stopped: active.map((entry) => entry.delegationId) };
   };
 
+  // Every failure lands here, so the card and the parent's activity get one
+  // readable line whatever error produced it. A stack never reaches the
+  // record; the provider reactor logs the full cause of a failed start.
   const fail = async (
     delegation: AkeruDelegationRecord,
     failureCode: AkeruDelegationFailureCode,
-    message: string,
+    detail: string,
   ) => {
+    const message = withoutErrorStack(detail) || "The bot work failed.";
     const completedAt = now();
     const failed: AkeruDelegationRecord = {
       ...delegation,

@@ -38,6 +38,7 @@ import { BotInboxAlertStack } from "./BotInboxAlertStack";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { DelegationCard } from "./DelegationCard";
+import { RosterLoadStatus } from "./RosterLoadStatus";
 import { GroupMemberStack } from "./GroupMemberStack";
 import {
   buildBotConversationEntries,
@@ -64,7 +65,7 @@ import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
-import { useEnableBotAutoReview } from "./useServerRoster";
+import { useEnableBotAutoReview, useRosterLoadState } from "./useServerRoster";
 import { useGroupDetailsOpen } from "./detailsPanelOpen";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
@@ -96,6 +97,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
   );
+  const rosterLoadState = useRosterLoadState();
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
   useMarkChatVisited(runtime.linkedThreadRef);
@@ -196,7 +198,18 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     [],
   );
 
-  if (!group) return null;
+  if (!group) {
+    // A failed first roster load leaves every group missing; say so and offer
+    // a retry rather than a blank pane.
+    return rosterLoadState.kind === "failed" ? (
+      <SidebarInset
+        aria-label={t("Could not load bots")}
+        className="h-dvh min-h-0 overflow-hidden bg-background text-muted-foreground"
+      >
+        <RosterLoadStatus state={rosterLoadState} variant="page" />
+      </SidebarInset>
+    ) : null;
+  }
   const currentPersonId = peopleIdentity.current?.id;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
   const inboxItems = selectOpenBotInboxItems(

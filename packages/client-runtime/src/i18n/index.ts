@@ -862,6 +862,8 @@ export const englishCatalog = {
   "Could not create bot": "Could not create bot",
   "Could not create group": "Could not create group",
   "No bots yet": "No bots yet",
+  "Loading bots…": "Loading bots…",
+  "Could not load bots": "Could not load bots",
   "Bots and groups": "Bots and groups",
   Pinned: "Pinned",
   Groups: "Groups",

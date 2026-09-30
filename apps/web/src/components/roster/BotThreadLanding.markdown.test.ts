@@ -138,7 +138,11 @@ describe("BotThreadLanding message formatting", () => {
     expect(receiptRow).toContain('const Row = opensRoutines ? "button" : "div"');
     expect(receiptRow).toContain("onClick={opensRoutines ? onOpenRoutines : undefined}");
     expect(source).toContain("{...(onOpenRoutines ? { onOpenRoutines } : {})}");
-    expect(receiptRow).toContain("text-destructive");
+    // The foreground token keeps failed text at WCAG AA on its tinted row in
+    // every built-in theme; the saturated destructive color does not in dark mode.
+    expect(receiptRow).toContain('error && "bg-destructive/8 text-destructive-foreground"');
+    expect(receiptRow).toContain("hover:bg-destructive/12 hover:text-destructive-foreground");
+    expect(receiptRow).not.toMatch(/text-destructive(?!-foreground)/);
     expect(receiptRow).toContain("whitespace-normal break-words");
     expect(receiptRow).not.toContain("truncate");
   });

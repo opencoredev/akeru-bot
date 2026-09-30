@@ -8,6 +8,7 @@ import {
   type AkeruDelegationTrigger,
   type ThreadId,
 } from "@t3tools/contracts";
+import { withoutErrorStack } from "@t3tools/shared/errorText";
 
 /**
  * Whether the parent bot has received a finished result. Completed and failed
@@ -47,13 +48,14 @@ export function presentDelegation(delegation: AkeruDelegationRecord): Delegation
     state,
     terminal: isAkeruDelegationTerminal(phase),
     // Records written before the phase union can decode without details; the text is then empty.
+    // Older failures stored a full server stack, so only its first readable line is shown.
     outcome:
       phase._tag === "Completed"
         ? { kind: "result", text: phase.result?.summary ?? "" }
         : phase._tag === "Failed"
-          ? { kind: "failure", text: phase.failure?.message ?? "" }
+          ? { kind: "failure", text: withoutErrorStack(phase.failure?.message ?? "") }
           : phase._tag === "Blocked"
-            ? { kind: "blocked", text: phase.reason }
+            ? { kind: "blocked", text: withoutErrorStack(phase.reason) }
             : null,
     delivery,
     childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,

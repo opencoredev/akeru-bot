@@ -10,6 +10,7 @@ import type {
   RoutineSchedule,
   RoutineSkillAssignment,
 } from "@t3tools/contracts";
+import { withoutErrorStack } from "@t3tools/shared/errorText";
 
 import { createTranslator, type MessageKey } from "./i18n/index.ts";
 
@@ -134,7 +135,7 @@ function toAdapterRun(run: RoutineRun): RoutineAdapterRun {
     startedAt: run.startedAt ?? run.createdAt,
     finishedAt: run.completedAt,
     summary: run.result?.summary ?? null,
-    error: run.failure?.message ?? null,
+    error: run.failure ? withoutErrorStack(run.failure.message) : null,
     usage: run.usageRef,
   };
 }

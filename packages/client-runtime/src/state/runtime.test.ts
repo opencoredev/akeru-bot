@@ -90,6 +90,7 @@ const makeEnvironmentQueryHarness = Effect.fn("TestEnvironmentQuery.makeHarness"
     connect: Effect.void,
     disconnect: Effect.void,
     retryNow: Effect.void,
+    retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
   const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_environmentId, effect) =>
     Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);

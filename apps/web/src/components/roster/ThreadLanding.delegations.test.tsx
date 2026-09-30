@@ -106,6 +106,10 @@ vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => mocks.snapshotAtom }));
+vi.mock("./useServerRoster", () => ({
+  useRosterLoadState: () => ({ kind: "loading" }),
+  useEnableBotAutoReview: () => vi.fn(),
+}));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
 vi.mock("../voice/VoiceCall", () => ({

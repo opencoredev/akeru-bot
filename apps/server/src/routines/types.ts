@@ -1,4 +1,5 @@
 import type {
+  AkeruDelegationRecord,
   Routine,
   RoutineId,
   RoutineFailureKind,
@@ -61,6 +62,10 @@ export interface RoutineRuntimeAdapterShape {
   readonly recordCanceled: (run: RoutineRun, completedAt: string) => Effect.Effect<void>;
   /** Cancels the scheduled bot work a run started, if it is still open. */
   readonly cancelDelegatedRun: (run: RoutineRun) => Effect.Effect<void>;
+  /** The persisted scheduled bot work whose child chat is `threadRef`, if any. */
+  readonly findDelegatedRunDelegation: (
+    threadRef: string,
+  ) => Effect.Effect<AkeruDelegationRecord | null>;
   readonly openFailureIncident: (
     routine: Routine,
     failure: RoutineDependencyFailure,

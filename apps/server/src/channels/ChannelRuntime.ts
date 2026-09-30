@@ -2472,6 +2472,10 @@ const changeChannelProject = (
       ) {
         return model.snapshotSequence;
       }
+      // The user turned this channel off. Moving it keeps it off until they reconnect.
+      if (binding.status === "disconnected") {
+        return yield* replaceBinding(ctx, { ...binding, projectId });
+      }
       const secret = binding.connectionId
         ? yield* loadConnectionSecret(ctx, binding.connectionId)
         : yield* loadSecret(ctx, botId, provider);

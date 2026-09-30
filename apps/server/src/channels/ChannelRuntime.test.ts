@@ -1274,6 +1274,33 @@ describe("channel runtime", () => {
       }),
     );
 
+    it.effect("moves a disconnected binding without reconnecting it", () =>
+      Effect.gen(function* () {
+        const starts: Array<ProjectId> = [];
+        const harness = makeHarness({
+          bots: [
+            makeBot(BOT_ID, { channelBindings: [legacyBindingOn(PROJECT_ID, "disconnected")] }),
+          ],
+          startTransport: async (input) => {
+            starts.push(input.targetProjectId);
+            return {
+              externalIdentity: "@akeru",
+              runtime: { post: async () => undefined, shutdown: async () => undefined },
+            };
+          },
+        });
+        seedLegacySecret(harness);
+
+        yield* changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID);
+
+        expect(starts).toEqual([]);
+        expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+          projectId: SECOND_PROJECT_ID,
+          status: "disconnected",
+        });
+      }),
+    );
+
     it.effect("rejects an unavailable target without touching the running channel", () =>
       Effect.gen(function* () {
         let stops = 0;

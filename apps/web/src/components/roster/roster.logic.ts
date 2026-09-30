@@ -255,27 +255,182 @@ const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
 export function flattenMarkdownPreview(markdown: string): string {
   const cached = markdownPreviewCache.get(markdown);
   if (cached !== undefined) return cached;
-  // A row shows one line, so parse only a prefix cut at a line or word
-  // boundary. Parsing costs several milliseconds per long answer; only a
-  // prefix with no visible words (a big image block, say) pays for the rest.
-  const prefix = markdownPreviewPrefix(markdown);
-  let flattened = flattenMarkdownText(prefix);
-  if (flattened.length === 0 && prefix.length < markdown.length) {
-    flattened = flattenMarkdownText(markdown);
+  // A row shows one line, so parse whole blocks from the top only until the
+  // flattened text is long enough. Parsing costs several milliseconds per long
+  // answer. Cuts fall on blank lines outside code fences, so they never land
+  // inside a link, image, or code span and leak raw syntax into the preview.
+  // A message longer than the parse limit only parses blocks that end inside
+  // it; past the last such block, a cheap strip of the next few thousand
+  // characters stands in, so one enormous line cannot stall a roster render.
+  const complete = markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT;
+  const source = complete ? markdown : markdown.slice(0, MARKDOWN_PREVIEW_PARSE_LIMIT);
+  // Chunks parse apart, so a reference image or link in one chunk still needs
+  // the definitions another chunk holds; they flatten to nothing themselves.
+  const definitions = (source.match(MARKDOWN_REFERENCE_DEFINITION) ?? []).join("\n");
+  const withDefinitions = definitions ? `\n\n${definitions}` : "";
+  let flattened = "";
+  let offset = 0;
+  while (offset < source.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
+    const end = markdownPreviewChunkEnd(source, offset, complete);
+    if (end === null) break;
+    const chunk = flattenMarkdownText(source.slice(offset, end) + withDefinitions);
+    if (chunk.length > 0) flattened = flattened.length > 0 ? `${flattened} ${chunk}` : chunk;
+    offset = end;
+  }
+  if (flattened.length === 0 && !complete) {
+    flattened = stripMarkdownRoughly(
+      markdown.slice(offset, offset + MARKDOWN_PREVIEW_ROUGH_LIMIT).trimStart(),
+    );
   }
   if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
   markdownPreviewCache.set(markdown, flattened);
   return flattened;
 }
 
-const MARKDOWN_PREVIEW_PARSE_LIMIT = 600;
+const MARKDOWN_PREVIEW_TEXT_TARGET = 280;
+const MARKDOWN_PREVIEW_CHUNK_TARGET = 600;
+const MARKDOWN_PREVIEW_PARSE_LIMIT = 20_000;
+const MARKDOWN_PREVIEW_ROUGH_LIMIT = 2_000;
+const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const MARKDOWN_REFERENCE_DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*\S.*$/gm;
 
-function markdownPreviewPrefix(markdown: string): string {
-  if (markdown.length <= MARKDOWN_PREVIEW_PARSE_LIMIT) return markdown;
-  const lineEnd = markdown.lastIndexOf("\n", MARKDOWN_PREVIEW_PARSE_LIMIT);
-  if (lineEnd > 0) return markdown.slice(0, lineEnd);
-  const wordEnd = markdown.lastIndexOf(" ", MARKDOWN_PREVIEW_PARSE_LIMIT);
-  return markdown.slice(0, wordEnd > 0 ? wordEnd : MARKDOWN_PREVIEW_PARSE_LIMIT);
+/**
+ * End of the next chunk starting at `offset`: a blank line outside a fenced
+ * code block, preferably at least the chunk target long. When `complete` is
+ * false the source is a cut prefix, so its end is not a block boundary and the
+ * result is the last blank line seen, or null when there is none.
+ */
+function markdownPreviewChunkEnd(
+  markdown: string,
+  offset: number,
+  complete: boolean,
+): number | null {
+  let fence: string | null = null;
+  let lastBoundary: number | null = null;
+  let lineStart = offset;
+  while (lineStart < markdown.length) {
+    const newline = markdown.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? markdown.length : newline + 1;
+    const line = markdown.slice(lineStart, lineEnd);
+    const marker = MARKDOWN_FENCE.exec(line)?.[1];
+    if (fence === null) {
+      if (marker !== undefined) fence = marker;
+      else if (newline !== -1 && line.trim().length === 0) {
+        if (lineEnd - offset >= MARKDOWN_PREVIEW_CHUNK_TARGET) return lineEnd;
+        lastBoundary = lineEnd;
+      }
+    } else if (
+      marker !== undefined &&
+      marker[0] === fence[0] &&
+      marker.length >= fence.length &&
+      line.trim() === marker
+    ) {
+      fence = null;
+    }
+    lineStart = lineEnd;
+  }
+  return complete ? markdown.length : lastBoundary;
+}
+
+/**
+ * Rough plain text for the tail of a message too long to parse: drops image
+ * syntax and alt text, keeps link labels, and removes code ticks, emphasis,
+ * and line markers. It is only a fallback, so literal brackets or underscores
+ * next to words may survive or go.
+ */
+function stripMarkdownRoughly(markdown: string): string {
+  const stripProse = (text: string) =>
+    withoutImagesRoughly(text)
+      .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
+      .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
+      .replace(/~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "");
+  let result = "";
+  let offset = 0;
+  while (offset < markdown.length) {
+    const opening = unescapedIndexOf(markdown, "`", offset);
+    // An image that starts before the next code span is dropped whole, so a
+    // backtick inside its label cannot split it and leak the description.
+    const image = unescapedIndexOf(markdown, "![", offset);
+    if (image >= 0 && (opening < 0 || image < opening)) {
+      result += `${stripProse(markdown.slice(offset, image))} `;
+      const end = roughImageEnd(markdown, image);
+      if (end === null) break;
+      offset = end;
+      continue;
+    }
+    if (opening < 0) {
+      result += stripProse(markdown.slice(offset));
+      break;
+    }
+    const delimiter = /^`+/.exec(markdown.slice(opening))![0];
+    const closing = markdown.indexOf(delimiter, opening + delimiter.length);
+    if (closing < 0) {
+      result += stripProse(markdown.slice(offset).replace(/`+/g, ""));
+      break;
+    }
+    result += stripProse(markdown.slice(offset, opening));
+    result += markdown.slice(opening + delimiter.length, closing);
+    offset = closing + delimiter.length;
+  }
+  return result.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Text with every `![` image dropped through the end of its balanced bracket
+ * group and any balanced parenthesis or reference group after it, honoring
+ * backslash escapes. An image with no balanced close drops the rest of the
+ * text, so alt text never leaks even when some ordinary words go with it.
+ */
+function withoutImagesRoughly(markdown: string): string {
+  let result = "";
+  let offset = 0;
+  for (;;) {
+    const start = markdown.indexOf("![", offset);
+    if (start === -1) return result + markdown.slice(offset);
+    result += `${markdown.slice(offset, start)} `;
+    const end = roughImageEnd(markdown, start);
+    if (end === null) return result;
+    offset = end;
+  }
+}
+
+/**
+ * Index just past the `![` image at `start`: its balanced label and any
+ * balanced parenthesis or reference group after it. Null when the label or
+ * target never closes.
+ */
+function roughImageEnd(markdown: string, start: number): number | null {
+  const labelEnd = balancedGroupEnd(markdown, start + 1, "[", "]");
+  if (labelEnd === null) return null;
+  const next = markdown[labelEnd];
+  if (next !== "(" && next !== "[") return labelEnd;
+  return balancedGroupEnd(markdown, labelEnd, next, next === "(" ? ")" : "]");
+}
+
+/** Index of `needle` at or after `from` that no backslash escapes, or -1. */
+function unescapedIndexOf(text: string, needle: string, from: number): number {
+  for (
+    let index = text.indexOf(needle, from);
+    index >= 0;
+    index = text.indexOf(needle, index + 1)
+  ) {
+    let backslashes = 0;
+    while (text[index - 1 - backslashes] === "\\") backslashes += 1;
+    if (backslashes % 2 === 0) return index;
+  }
+  return -1;
+}
+
+/** Index just past the close matching the `open` at `start`, or null. */
+function balancedGroupEnd(text: string, start: number, open: string, close: string): number | null {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "\\") index += 1;
+    else if (char === open) depth += 1;
+    else if (char === close && --depth === 0) return index + 1;
+  }
+  return null;
 }
 
 function flattenMarkdownText(markdown: string): string {

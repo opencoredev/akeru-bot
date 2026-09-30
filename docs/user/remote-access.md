@@ -267,12 +267,12 @@ link pairs that address directly and opens the app. You can also paste the whole
 **Settings > Connections > Add environment** on web or desktop, or scan it with the mobile app. The
 token still works only once.
 
-If the page said the link was incomplete, open the complete link in the same tab. The page reads
-the link again without a reload.
+If the page said the link was incomplete, or still asks for a pairing token, open the complete
+link in the same tab. The page reads the link again without a reload.
 
-Keep the token after `#`. The page refuses a link that carries `token=` in the query string,
-because the browser has already sent that token to the address that served the page. Get a new
-link instead of moving the token by hand.
+Keep the token after `#`. The page refuses a link with a `host` that carries `token=` in the
+query string, even when `host` names the address that served the page, because the browser has
+already sent that token to that address. Get a new link instead of moving the token by hand.
 
 The browser must reach the `host` server directly. When the page is served over HTTPS, the server
 must be served over HTTPS too, or the browser blocks the request.

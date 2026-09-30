@@ -157,6 +157,8 @@ export function createReplyPlaybackSession(options: {
       synthesisListeners.add(listener);
       return () => synthesisListeners.delete(listener);
     },
+    // Tells listeners that a synthesis function now returns different values.
+    refreshSynthesis: notifySynthesis,
     /** Pass `environmentId` when the capability belongs to one environment's settings. */
     setSynthesis: (next: StoredReplySynthesisCapability, environmentId?: string) => {
       if (environmentId) environmentSynthesisOverrides.set(environmentId, next);

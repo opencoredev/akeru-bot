@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   refreshHistory: vi.fn(),
   queryData: { inbox: [], runs: [], nextCursor: null },
   snapshot: null as OrchestrationShellSnapshot | null,
+  rosterLoadState: { kind: "loading" } as { kind: "loading" } | { kind: "failed"; message: string },
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -46,6 +47,10 @@ vi.mock("./useBotEngineAvailability", () => ({
     unavailability: null,
     blocked: false,
   }),
+}));
+vi.mock("./useServerRoster", () => ({
+  useRosterLoadState: () => mocks.rosterLoadState,
+  useEnableBotAutoReview: () => vi.fn(),
 }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
@@ -259,6 +264,7 @@ beforeEach(() => {
   mocks.messages = [];
   mocks.mediaBlocked = false;
   mocks.snapshot = null;
+  mocks.rosterLoadState = { kind: "loading" };
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
   vi.stubGlobal("window", {
@@ -352,6 +358,14 @@ describe("thread landing reply playback hook order", () => {
       expect(mocks.observe).toHaveBeenLastCalledWith([]);
     },
   );
+  it("offers the roster failure page for a missing group when the first load failed", async () => {
+    mocks.rosterLoadState = { kind: "failed", message: "Snapshot failed" };
+    await render();
+    expect(mocks.landing).toHaveBeenCalledWith(
+      expect.objectContaining({ "aria-label": "Could not load bots" }),
+    );
+  });
+
   it("renders an initially missing group then its hydrated group without a hook ordering error", async () => {
     mocks.messages = [message];
     await render();

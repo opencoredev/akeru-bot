@@ -78,7 +78,8 @@ import { useRosterStore } from "./rosterStore";
 import { useBotThreadRuntime } from "./useBotThreadRuntime";
 import { useLocalDay } from "./useLocalDay";
 import { useRosterPendingApproval } from "./useRosterPendingApproval";
-import { useEnableBotAutoReview } from "./useServerRoster";
+import { useEnableBotAutoReview, useRosterLoadState } from "./useServerRoster";
+import { RosterLoadStatus } from "./RosterLoadStatus";
 import { deriveWorkLogEntries, pluginSearchResultForWorkEntry } from "../../session-logic";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import {
@@ -122,8 +123,8 @@ function RoutineReceiptRow({
         "mx-auto flex w-full max-w-3xl items-start gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground",
         opensRoutines &&
           "outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-        error && "bg-destructive/8 text-destructive",
-        error && opensRoutines && "hover:bg-destructive/12 hover:text-destructive",
+        error && "bg-destructive/8 text-destructive-foreground",
+        error && opensRoutines && "hover:bg-destructive/12 hover:text-destructive-foreground",
       )}
       data-testid="routine-receipt"
       onClick={opensRoutines ? onOpenRoutines : undefined}
@@ -160,6 +161,7 @@ export function BotThreadLanding({
   const bots = useRosterStore((state) => state.bots);
   const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
   const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
+  const rosterLoadState = useRosterLoadState();
   const bot = routedBot.status === "available" ? routedBot.bot : undefined;
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
   const {
@@ -434,6 +436,16 @@ export function BotThreadLanding({
   );
 
   if (routedBot.status === "loading") {
+    if (rosterLoadState.kind === "failed") {
+      return (
+        <SidebarInset
+          aria-label={t("Could not load bots")}
+          className="h-dvh min-h-0 overflow-hidden bg-background text-muted-foreground"
+        >
+          <RosterLoadStatus state={rosterLoadState} variant="page" />
+        </SidebarInset>
+      );
+    }
     return (
       <SidebarInset
         aria-label={t("Loading bot…")}

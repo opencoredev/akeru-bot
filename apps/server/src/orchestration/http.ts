@@ -19,6 +19,7 @@ import * as ProjectionBots from "../persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "../persistence/Services/ProjectionGroups.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import { deriveProviderInstanceConfigMap } from "../provider/Layers/ProviderInstanceRegistryHydration.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
@@ -316,18 +317,21 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             const model = selection?.model ?? "";
             if (providerId && model) {
               const providerInstanceConfig = Option.isSome(serverSettings)
-                ? (yield* serverSettings.value.getSettings.pipe(
-                    Effect.catch((cause) =>
-                      failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                ? deriveProviderInstanceConfigMap(
+                    yield* serverSettings.value.getSettings.pipe(
+                      Effect.catch((cause) =>
+                        failEnvironmentInternal("orchestration_dispatch_failed", cause),
+                      ),
                     ),
-                  )).providerInstances[ProviderInstanceId.make(providerId)]
+                  )[ProviderInstanceId.make(providerId)]
                 : undefined;
               const verdict = preflightProvider({
                 providers: yield* providerRegistry.value.getProviders,
                 providerId,
                 model,
                 ...(providerInstanceConfig ? { providerInstanceConfig } : {}),
-                subscriptionStatuses: subscriptionAuth.statuses(),
+                subscriptionStatusForInstance: (subscriptionProvider, instanceId) =>
+                  subscriptionAuth.accountStatus(subscriptionProvider, instanceId),
                 subscriptionHealth: (instanceId) =>
                   subscriptionAuth.providerInstanceRequestHealth(instanceId),
                 now: yield* Clock.currentTimeMillis,

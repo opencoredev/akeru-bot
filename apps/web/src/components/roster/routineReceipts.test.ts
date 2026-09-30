@@ -187,6 +187,22 @@ describe("deriveRoutineReceipts", () => {
     });
   });
 
+  it("drops a server stack stored with a failed run", () => {
+    const failed = {
+      ...run,
+      id: "run-7",
+      status: "failed",
+      result: null,
+      failure: {
+        message:
+          "Error: The workspace is missing\n    at readWorkspace (file:///srv/akeru/server.ts:1:2)",
+      },
+      completedAt: "2026-09-19T09:02:00.000Z",
+    } as unknown as RoutineRun;
+    const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
+    expect(receipts[2]?.text).toBe("“Daily digest” failed: The workspace is missing");
+  });
+
   it("keeps queued and waiting runs out of chat and reports canceled runs neutrally", () => {
     const queued = {
       ...run,

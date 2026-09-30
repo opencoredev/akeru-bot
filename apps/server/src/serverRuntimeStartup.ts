@@ -1,4 +1,5 @@
 import {
+  type AkeruDelegationRecord,
   CommandId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -358,6 +359,69 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   ),
 );
 
+export const DELEGATION_RESTART_FAILURE_MESSAGE = "The server restarted before this work finished.";
+
+/**
+ * Fails bot work that was queued or running when the server last stopped. Its completion watch
+ * lived in memory and did not survive, so nothing else would ever settle the card. Runs before the
+ * reactors start, while no delegation of this process can exist yet. Blocked work waits on the
+ * user and stays; terminal work is untouched, so a second run changes nothing.
+ */
+export const reconcileDelegations = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+
+  const { delegations } = yield* query.getCommandReadModel();
+  for (const delegation of delegations) {
+    const phase = delegation.phase;
+    if (phase._tag !== "Queued" && phase._tag !== "Running") {
+      continue;
+    }
+    yield* Effect.gen(function* () {
+      const reconciledAt = DateTime.formatIso(yield* DateTime.now);
+      const completedAt =
+        Date.parse(reconciledAt) >= Date.parse(delegation.updatedAt)
+          ? reconciledAt
+          : delegation.updatedAt;
+      const failed: AkeruDelegationRecord = {
+        ...delegation,
+        phase: {
+          _tag: "Failed",
+          childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
+          childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
+          startedAt: phase._tag === "Queued" ? null : phase.startedAt,
+          completedAt,
+          failure: { failureCode: "internal", message: DELEGATION_RESTART_FAILURE_MESSAGE },
+          acknowledgedAt: null,
+        },
+        updatedAt: completedAt,
+      };
+      yield* orchestrationEngine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make(yield* crypto.randomUUIDv4),
+        delegation: failed,
+      });
+    }).pipe(
+      Effect.retry({ times: 1 }),
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("failed to settle orphaned delegation", {
+              delegationId: delegation.delegationId,
+              cause,
+            }),
+      ),
+    );
+  }
+}).pipe(
+  Effect.catchCause((cause) =>
+    Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : Effect.logWarning("delegation startup reconciliation failed", { cause }),
+  ),
+);
+
 interface StartupOptions {
   readonly activate?: Effect.Effect<void>;
   readonly awaitAuxiliaryParked?: Effect.Effect<void>;
@@ -441,6 +505,10 @@ export const make = (options?: StartupOptions) =>
           ),
         ),
       );
+
+      // Before the reactors start, so no delegation this process creates can be mistaken for an
+      // orphan, and startup recovery sees the settled records.
+      yield* runStartupPhase("delegations.reconcile", reconcileDelegations);
 
       yield* Effect.logDebug("startup phase: parking orchestration roots at activation");
       yield* runStartupPhase(

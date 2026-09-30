@@ -9,7 +9,9 @@ the server. Connections still shows the mismatch.
 ## Before an update
 
 Let active bot work finish. A server update interrupts the connection and can
-stop bot work that is still running. It does not remove chats, settings, or project files.
+stop bot work that is still running. Work that one bot handed to another is marked as failed
+after the restart, and its card offers **Try again**. An update does not remove chats, settings, or
+project files.
 
 ## Update the environment
 

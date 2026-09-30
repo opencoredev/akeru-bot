@@ -819,6 +819,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Could not create bot": "无法创建机器人",
   "Could not create group": "无法创建群组",
   "No bots yet": "还没有机器人",
+  "Loading bots…": "正在加载机器人…",
+  "Could not load bots": "无法加载机器人",
   "Bots and groups": "机器人和群组",
   Pinned: "已置顶",
   Groups: "群组",

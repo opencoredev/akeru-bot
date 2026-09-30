@@ -174,7 +174,7 @@ const make = Effect.gen(function* () {
       (phase._tag !== "Completed" && phase._tag !== "Failed" && phase._tag !== "Canceled") ||
       phase.childThreadId === null
     )
-      return;
+      return false;
     const run = (yield* repository.listAllRuns).find(
       (candidate) =>
         candidate.threadRef === phase.childThreadId &&
@@ -182,9 +182,9 @@ const make = Effect.gen(function* () {
           candidate.status === "running" ||
           candidate.status === "waiting-for-approval"),
     );
-    if (run === undefined) return;
+    if (run === undefined) return false;
     const routine = yield* repository.getById(run.routineId);
-    if (routine === null || routine.lifecycle === "deleted") return;
+    if (routine === null || routine.lifecycle === "deleted") return false;
     const completedAt = phase.completedAt;
     if (phase._tag === "Completed") {
       const nextRunAt = routine.enabled
@@ -192,12 +192,12 @@ const make = Effect.gen(function* () {
         : null;
       yield* adapter.recordCompleted(run, nextRunAt, phase.result.summary, completedAt);
       yield* repository.markSettled(run.id, "completed", completedAt);
-      return;
+      return true;
     }
     if (phase._tag === "Canceled") {
       yield* adapter.recordCanceled(run, completedAt);
       yield* repository.markSettled(run.id, "canceled", completedAt);
-      return;
+      return true;
     }
     const failure = {
       kind: "execution",
@@ -207,6 +207,7 @@ const make = Effect.gen(function* () {
     yield* adapter.recordFailed(run, failure, completedAt);
     yield* adapter.openFailureIncident(routine, failure);
     yield* repository.markBlocked(run.id, failure.reason, completedAt);
+    return true;
   });
 
   const settleRunForEvent = Effect.fn("RoutineRuntime.settleRunForEvent")(function* (
@@ -313,6 +314,13 @@ const make = Effect.gen(function* () {
           projectedRun.completedAt ?? projectedRun.updatedAt,
         );
         continue;
+      }
+      // Scheduled bot work settles from its delegation. A delegation that
+      // ended while nothing watched it, such as one startup reconciliation
+      // failed after a restart, still settles its run here.
+      if (claim.status === "dispatched" && claim.threadRef != null) {
+        const delegation = yield* adapter.findDelegatedRunDelegation(claim.threadRef);
+        if (delegation !== null && (yield* settleDelegatedRun(delegation))) continue;
       }
       if (
         claim.status === "dispatched" &&

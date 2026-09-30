@@ -668,6 +668,83 @@ describe("flattenMarkdownPreview", () => {
     );
   });
 
+  it("never cuts a long message inside link, image, or code syntax", () => {
+    const alt = "long alt text ".repeat(55);
+    expect(flattenMarkdownPreview(`Intro ![${alt}](chart.png) then answer`)).toBe(
+      "Intro then answer",
+    );
+    const label = "label ".repeat(120);
+    expect(flattenMarkdownPreview(`See [${label}](https://example.com) now`)).toBe(
+      `See ${label.trim()} now`,
+    );
+    const code = "x ".repeat(400);
+    expect(flattenMarkdownPreview(`\`${code}\` done`)).toBe(`${code.trim()} done`);
+    const fenced = `\`\`\`\n${"line\n\n".repeat(200)}\`\`\`\n\n**after**`;
+    expect(flattenMarkdownPreview(fenced)).not.toContain("`");
+    // A long alt text with a line break once put the old cut inside the image.
+    const wrapped = `Intro ![${"alt ".repeat(4_100)}\ncontinued](chart.png) then answer`;
+    expect(flattenMarkdownPreview(wrapped)).toBe("Intro then answer");
+  });
+
+  it("previews one enormous line without parsing all of it", () => {
+    const alt = "alt ".repeat(10_000);
+    const line = `Intro **bold** \`code\` [label](https://example.com) ![${alt}](chart.png) then answer`;
+    expect(flattenMarkdownPreview(line)).toBe("Intro bold code label");
+    const words = `**Start** ${"word ".repeat(10_000)}`;
+    const preview = flattenMarkdownPreview(words);
+    expect(preview).toMatch(/^Start word word/);
+    expect(preview.length).toBeLessThanOrEqual(2_000);
+    expect(flattenMarkdownPreview(`Opening paragraph.\n\n${line}`)).toBe("Opening paragraph.");
+    expect(
+      flattenMarkdownPreview(`Example \`![literal](chart.png)\` ${"word ".repeat(10_000)}`),
+    ).toMatch(/^Example !\[literal\]\(chart\.png\) word/);
+  });
+
+  it("drops nested and escaped image alt text in the rough preview", () => {
+    const tail = "z".repeat(20_000);
+    const nested = flattenMarkdownPreview(
+      `Intro ![public [x] SECRET](chart.png) then answer${tail}`,
+    );
+    expect(nested).toMatch(/^Intro then answerz/);
+    expect(nested).not.toContain("SECRET");
+    const escaped = flattenMarkdownPreview(
+      `Intro ![public \\] SECRET](chart.png) then answer${tail}`,
+    );
+    expect(escaped).toMatch(/^Intro then answerz/);
+    expect(escaped).not.toContain("SECRET");
+    // With no balanced close in the window, the rest of the window goes.
+    expect(flattenMarkdownPreview(`Intro ![open [SECRET ${tail}`)).toBe("Intro");
+    expect(flattenMarkdownPreview(`Intro ![alt](chart.png (SECRET ${tail}`)).toBe("Intro");
+  });
+
+  it("drops an image whose label holds backticks, and treats escaped backticks as prose", () => {
+    const tail = "z".repeat(20_000);
+    const ticked = flattenMarkdownPreview(
+      `Intro ![alt \`code\` SECRET](chart.png) then answer${tail}`,
+    );
+    expect(ticked).toMatch(/^Intro then answerz/);
+    expect(ticked).not.toContain("SECRET");
+    const escaped = flattenMarkdownPreview(
+      `Intro \\\` ![SECRET](chart.png) \\\` then answer${tail}`,
+    );
+    expect(escaped).not.toContain("SECRET");
+  });
+
+  it("resolves a reference image whose definition sits in a later chunk", () => {
+    const paragraph = `Opening ${"word ".repeat(120)}![private diagram][chart] end`;
+    const preview = flattenMarkdownPreview(`${paragraph}\n\n[chart]: chart.png\n\nMore text`);
+    expect(preview).not.toContain("private diagram");
+    expect(preview).not.toContain("[chart]");
+  });
+
+  it("bounds the rough preview to a prefix of the message", () => {
+    // Leading whitespace counts against the window instead of being scanned.
+    expect(flattenMarkdownPreview(`${" ".repeat(30_000)}word`)).toBe("");
+    expect(flattenMarkdownPreview(`${" ".repeat(1_990)}word ${"z".repeat(20_000)}`)).toBe(
+      `word ${"z".repeat(5)}`,
+    );
+  });
+
   it("flattens whitespace-heavy messages", () => {
     // Line prefixes use [ \t], not \s, so no multiline pattern crosses a
     // newline and rescans the blank lines after it. This checks the output

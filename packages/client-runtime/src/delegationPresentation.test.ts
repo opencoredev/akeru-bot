@@ -188,6 +188,29 @@ describe("threadDelegations", () => {
   });
 });
 
+describe("presentDelegation failure text", () => {
+  it("shows only the readable line of a failure stored with a server stack", () => {
+    const failed = makeDelegation({
+      _tag: "Failed",
+      childThreadId: CHILD_THREAD_ID,
+      childTurnId: CHILD_TURN_ID,
+      startedAt: NOW,
+      completedAt: NOW,
+      acknowledgedAt: null,
+      failure: {
+        failureCode: "internal",
+        message:
+          "ProviderValidationError: Provider instance 'codex' is disabled in Akeru Bot settings.\n" +
+          "    at disabledProviderError (file:///srv/akeru/apps/server/src/provider/Layers/AgentController.ts:584:10)",
+      },
+    });
+    expect(presentDelegation(failed).outcome).toEqual({
+      kind: "failure",
+      text: "Provider instance 'codex' is disabled in Akeru Bot settings.",
+    });
+  });
+});
+
 describe("delegationActions", () => {
   it("offers let it finish and cancel for live work", () => {
     expect(delegationActions(makeDelegation({ _tag: "Queued" }), [])).toEqual(["keep", "cancel"]);

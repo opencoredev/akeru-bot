@@ -1,5 +1,6 @@
 import type { AuthSessionState } from "@t3tools/contracts";
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { HostedPairingRequest } from "@t3tools/shared/remote";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
@@ -14,7 +15,13 @@ import {
 } from "../../environments/primary";
 import { isPrimaryEnvironmentPairingCredentialRequiredError } from "../../environments/primary/auth";
 import { connectPairing } from "../../connection/onboarding";
-import { readHostedPairingLink, runHostedPairing } from "../../hostedPairing";
+import {
+  listenForPairingHash,
+  type PairingHashOptions,
+  readHostedPairingLink,
+  runHostedPairing,
+  takePairingHash,
+} from "../../hostedPairing";
 import { useI18n } from "../../i18n";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -75,9 +82,13 @@ export function PairingRouteSurface({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
+  const submittingRef = useRef(false);
+  const hashOptionsRef = useRef<PairingHashOptions<string> | null>(null);
 
   const submitCredential = useCallback(
     async (nextCredential: string) => {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       setIsSubmitting(true);
       setPairingError(null);
 
@@ -86,10 +97,13 @@ export function PairingRouteSurface({
         (error) => pairingErrorFromUnknown(error),
       );
 
+      submittingRef.current = false;
       setIsSubmitting(false);
 
       if (submitError) {
         setPairingError(submitError);
+        // A link opened while this one was in flight waited in the address bar.
+        if (hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
         return;
       }
 
@@ -117,6 +131,22 @@ export function PairingRouteSurface({
     autoSubmitAttemptedRef.current = true;
     stripPairingTokenFromUrl();
     void submitCredential(token);
+  }, [submitCredential]);
+
+  // Opening the same link with its #token in this tab is a same-document
+  // navigation, so read the token again rather than keep the first verdict.
+  useEffect(() => {
+    const options: PairingHashOptions<string> = {
+      read: peekPairingTokenFromUrl,
+      isBusy: () => submittingRef.current,
+      strip: stripPairingTokenFromUrl,
+      submit: (token) => {
+        setCredential(token);
+        void submitCredential(token);
+      },
+    };
+    hashOptionsRef.current = options;
+    return listenForPairingHash(window, options);
   }, [submitCredential]);
 
   const supportedMethodsNote = describeSupportedMethods(auth.bootstrapMethods);
@@ -167,27 +197,30 @@ export function HostedPairingRouteSurface() {
   );
   const startedRef = useRef(false);
   const pairingRef = useRef(false);
+  const hashOptionsRef = useRef<PairingHashOptions<HostedPairingRequest> | null>(null);
 
   const pair = useCallback(async () => {
     if (pairingRef.current) return;
     pairingRef.current = true;
     setStatus({ kind: "submitting" });
+    let next: PairingPanelStatus = { kind: "checking" };
     try {
-      setStatus(
-        await runHostedPairing(requestRef.current, async (input) => {
-          const result = await connect(input);
-          if (result._tag === "Success") return { ok: true };
-          return {
-            ok: false,
-            message: `${errorMessageFromUnknown(squashAtomCommandFailure(result))} ${t(
-              "If the server accepted this one-time token, get a new pairing link before trying again.",
-            )}`,
-          };
-        }),
-      );
+      next = await runHostedPairing(requestRef.current, async (input) => {
+        const result = await connect(input);
+        if (result._tag === "Success") return { ok: true };
+        return {
+          ok: false,
+          message: `${errorMessageFromUnknown(squashAtomCommandFailure(result))} ${t(
+            "If the server accepted this one-time token, get a new pairing link before trying again.",
+          )}`,
+        };
+      });
+      setStatus(next);
     } finally {
       pairingRef.current = false;
     }
+    // A link opened while this one was in flight waited in the address bar.
+    if (next.kind === "failed" && hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
   }, [connect, t]);
 
   useEffect(() => {
@@ -200,15 +233,17 @@ export function HostedPairingRouteSurface() {
   // Opening the same link with its #token in this tab is a same-document
   // navigation, so read the link again rather than keep the first verdict.
   useEffect(() => {
-    const onHashChange = () => {
-      const next = readHostedPairingLink(window.location.href);
-      if (!next || pairingRef.current) return;
-      requestRef.current = next;
-      stripPairingTokenFromUrl();
-      void pair();
+    const options: PairingHashOptions<HostedPairingRequest> = {
+      read: () => readHostedPairingLink(window.location.href),
+      isBusy: () => pairingRef.current,
+      strip: stripPairingTokenFromUrl,
+      submit: (next) => {
+        requestRef.current = next;
+        void pair();
+      },
     };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    hashOptionsRef.current = options;
+    return listenForPairingHash(window, options);
   }, [pair]);
 
   const request = requestRef.current;

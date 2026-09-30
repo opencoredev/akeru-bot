@@ -600,6 +600,30 @@ describe("AkeruDelegationRuntime", () => {
     });
   });
 
+  it("stores one readable line when the child fails with a stack", async () => {
+    const failed = harness(snapshot(), {
+      state: "failed",
+      turnId: CHILD_TURN_ID,
+      error: [
+        "ProviderValidationError: Provider instance 'codex' is disabled in Akeru Bot settings.",
+        "    at disabledProviderError (file:///srv/akeru/apps/server/src/provider/Layers/AgentController.ts:584:10)",
+        "    at ensureSessionForThread (file:///srv/akeru/apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:1282:28)",
+      ].join("\n"),
+    });
+    await failed.runtime.send(parent(), request() as never);
+    await failed.runtime.drain();
+    const message = "Provider instance 'codex' is disabled in Akeru Bot settings.";
+    expect(failed.state.delegations.at(-1)).toMatchObject({
+      phase: { _tag: "Failed", failure: { failureCode: "child_failed", message } },
+    });
+    const delivered = failed.commands.flatMap((command) =>
+      command.type === "thread.activity.append" && command.activity.kind === "delegation.failed"
+        ? [command.activity.summary]
+        : [],
+    );
+    expect(delivered).toEqual([message]);
+  });
+
   it("enforces timeout and interrupts the child", async () => {
     const test = harness();
     const runtime = createAkeruDelegationRuntime({
