@@ -61,6 +61,12 @@ import {
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
+/** The bot's chosen chat, compared across an await to spot an explicit switch. */
+function readChatSelection(botId: string): string {
+  const roster = useRosterStore.getState();
+  return `${roster.chatPathByBotId[botId] ?? ""}\n${roster.openChatByBotId[botId] ?? ""}`;
+}
+
 function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
   return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
@@ -203,7 +209,12 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const ensureThreadRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
   const startingNewChatRef = useRef(false);
   // Sends made while New chat is still creating wait for it instead of reaching the old chat.
-  const pendingNewChatRef = useRef<Promise<ScopedThreadRef | null> | null>(null);
+  // `selection` is the chosen chat when New chat was clicked; a send made after
+  // the user opened another chat follows that chat instead.
+  const pendingNewChatRef = useRef<{
+    promise: Promise<ScopedThreadRef | null>;
+    selection: string;
+  } | null>(null);
   // The chat New chat created with a placeholder title, until a send titles it.
   const placeholderChatIdRef = useRef<string | null>(null);
   // The chat whose first send already requested its title, so a quick second send keeps it.
@@ -277,6 +288,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     async (title: string): Promise<ScopedThreadRef | null> => {
       if (!activeProject) return null;
       const threadId = newThreadId();
+      const selection = readChatSelection(botId);
       const result = await createThread({
         environmentId: activeProject.environmentId,
         input: {
@@ -297,6 +309,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       });
       if (result._tag === "Failure") return null;
       const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
+      // The user opened another chat while this one was being created; stay there.
+      if (readChatSelection(botId) !== selection) return threadRef;
       retainedThreadRef.current = { ownerId: botId, threadRef, linked: false };
       const roster = useRosterStore.getState();
       roster.recordChatPath(botId, `/${threadRef.environmentId}/${threadRef.threadId}`);
@@ -342,10 +356,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     if (retained.threadRef !== null && !retained.linked) return false;
     startingNewChatRef.current = true;
     setError(null);
-    const pending = createBotChat(PLACEHOLDER_THREAD_TITLE);
+    const pending = {
+      selection: readChatSelection(botId),
+      promise: createBotChat(PLACEHOLDER_THREAD_TITLE),
+    };
     pendingNewChatRef.current = pending;
     try {
-      const threadRef = await pending;
+      const threadRef = await pending.promise;
       if (!threadRef) {
         setError(localFailure("Could not start a new chat."));
         return false;
@@ -356,7 +373,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       startingNewChatRef.current = false;
       if (pendingNewChatRef.current === pending) pendingNewChatRef.current = null;
     }
-  }, [canStartNewChat, createBotChat]);
+  }, [botId, canStartNewChat, createBotChat]);
 
   const send = useCallback(
     async (
@@ -401,6 +418,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       }
 
       const pendingNewChat = pendingNewChatRef.current;
+      // A send made after opening another chat during New chat goes to that chat.
+      const sendsToNewChat = pendingNewChat?.selection === readChatSelection(botId);
       queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
@@ -427,11 +446,16 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               };
             }),
           );
-          const newChatRef = pendingNewChat ? await pendingNewChat : null;
-          if (pendingNewChat && !newChatRef) {
+          const newChatRef = sendsToNewChat ? await pendingNewChat.promise : null;
+          if (sendsToNewChat && !newChatRef) {
             setError(localFailure("Could not start a new chat."));
             return false;
           }
+          // New chat was not adopted because another chat was opened meanwhile. The
+          // message still goes where it was typed, but the view stays on the opened chat.
+          const keepsSelection =
+            newChatRef !== null &&
+            retainedThreadRef.current.threadRef?.threadId !== newChatRef.threadId;
           const currentThreadRef =
             newChatRef ??
             retainedThreadRef.current.threadRef ??
@@ -509,19 +533,21 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             });
           }
 
-          if (retainedThreadRef.current.threadRef !== currentThreadRef) {
-            retainedThreadRef.current = {
-              ownerId: botId,
-              threadRef: currentThreadRef,
-              linked: false,
-            };
+          if (!keepsSelection) {
+            if (retainedThreadRef.current.threadRef !== currentThreadRef) {
+              retainedThreadRef.current = {
+                ownerId: botId,
+                threadRef: currentThreadRef,
+                linked: false,
+              };
+            }
+            useRosterStore
+              .getState()
+              .recordChatPath(
+                botId,
+                `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
+              );
           }
-          useRosterStore
-            .getState()
-            .recordChatPath(
-              botId,
-              `/${currentThreadRef.environmentId}/${currentThreadRef.threadId}`,
-            );
           useRosterStore.getState().recordLastMessage(botId, {
             text: prompt || (files.length === 1 ? "Sent an image" : "Sent images"),
             at: createdAt,
