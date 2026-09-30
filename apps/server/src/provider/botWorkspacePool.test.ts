@@ -91,21 +91,42 @@ describe("BotWorkspacePool", () => {
     expect(create).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves a remote workspace after initial wake failure and reattaches", async () => {
+  it("pauses and reuses a remote workspace after initial wake failure", async () => {
     const pool = new BotWorkspacePool();
     const failed = remoteWorkspace({
-      wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")),
+      wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")).mockResolvedValue(undefined),
     });
     const reattached = remoteWorkspace();
     const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
 
     await expect(pool.acquire("remote-initial", create)).rejects.toThrow("wake failed");
     expect(failed.destroy).not.toHaveBeenCalled();
+    await pool.retryFailedSleeps();
+    expect(failed.sleep).toHaveBeenCalledOnce();
     const lease = await pool.acquire("remote-initial", create);
-    expect(create).toHaveBeenCalledTimes(2);
-    expect(lease.workspace).toBe(reattached);
+    expect(create).toHaveBeenCalledOnce();
+    expect(lease.workspace).toBe(failed);
     await lease.release({ destroy: true });
-    expect(reattached.destroy).toHaveBeenCalledOnce();
+    expect(failed.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("does not pause a retained workspace while acquisition is starting", async () => {
+    const pool = new BotWorkspacePool();
+    const sleep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("pause failed"))
+      .mockResolvedValue(undefined);
+    const workspace = remoteWorkspace({ sleep });
+    const create = vi.fn().mockResolvedValue(workspace);
+    const initial = await pool.acquire("acquiring", create);
+    await expect(initial.release()).rejects.toThrow("pause failed");
+
+    const acquisition = pool.acquire("acquiring", create);
+    await pool.retryFailedSleeps();
+    const lease = await acquisition;
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(lease.workspace).toBe(workspace);
+    await lease.release({ destroy: true });
   });
 
   it("preserves a remote workspace after cached wake failure and retries cleanup", async () => {

@@ -450,6 +450,41 @@ describe("AkeruSessionResources", () => {
     }
   });
 
+  it("preserves the Tenki workspace when MCP initialization fails", async () => {
+    const remote: AkeruBotWorkspace = { ...localBotWorkspace(workspace()), provider: "tenki" };
+    const destroy = vi.spyOn(remote, "destroy");
+    const sleep = vi.spyOn(remote, "sleep");
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    manager.init.mockRejectedValueOnce(new Error("connector failed"));
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => remote,
+      makeMcpManager: () => manager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await expect(
+      resources.acquire({
+        ...remoteInput,
+        botSandbox: "tenki",
+        threadId: "tenki-init-failure",
+        mcpServers: [exaServer],
+      }),
+    ).rejects.toThrow("connector failed");
+    expect(destroy).not.toHaveBeenCalled();
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(manager.disconnect).toHaveBeenCalledOnce();
+    const recovered = await resources.acquire({
+      ...remoteInput,
+      botSandbox: "tenki",
+      threadId: "tenki-init-failure",
+      mcpServers: [exaServer],
+    });
+    expect(recovered.botWorkspace).toBe(remote.workspace);
+    await resources.shutdown();
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
   it("coalesces concurrent acquisition for the same thread", async () => {
     const remote = workspace();
     const stop = vi.spyOn(remote, "stop");

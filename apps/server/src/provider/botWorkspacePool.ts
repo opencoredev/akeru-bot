@@ -81,6 +81,7 @@ export class BotWorkspacePool {
   private readonly state: Promise<PoolState>;
   private readonly clock: Clock.Clock | undefined;
   private readonly references = new Map<string, number>();
+  private readonly acquisitions = new Map<string, number>();
   private readonly creators = new Map<string, () => Promise<AkeruBotWorkspace | Workspace>>();
   private readonly destroyRequested = new Set<string>();
   private readonly sleepers = new Map<string, AkeruBotWorkspace>();
@@ -131,11 +132,9 @@ export class BotWorkspacePool {
           Effect.tapCause(() =>
             workspace.provider === "local"
               ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-              : wokeFromSleep
-                ? Effect.sync(() => {
-                    this.sleepers.set(key, workspace);
-                  })
-                : Effect.void,
+              : Effect.sync(() => {
+                  this.sleepers.set(key, workspace);
+                }),
           ),
         ),
       ),
@@ -192,6 +191,20 @@ export class BotWorkspacePool {
   }
 
   async acquire(
+    key: string,
+    create: () => Promise<AkeruBotWorkspace | Workspace>,
+  ): Promise<BotWorkspaceLease> {
+    this.acquisitions.set(key, (this.acquisitions.get(key) ?? 0) + 1);
+    try {
+      return await this.acquireOnce(key, create);
+    } finally {
+      const remaining = (this.acquisitions.get(key) ?? 1) - 1;
+      if (remaining === 0) this.acquisitions.delete(key);
+      else this.acquisitions.set(key, remaining);
+    }
+  }
+
+  private async acquireOnce(
     key: string,
     create: () => Promise<AkeruBotWorkspace | Workspace>,
   ): Promise<BotWorkspaceLease> {
@@ -255,7 +268,13 @@ export class BotWorkspacePool {
     const results = await Promise.allSettled(
       [...this.failed].map(async (key) => {
         const workspace = this.sleepers.get(key);
-        if (!workspace || this.references.has(key) || this.retrying.has(key)) return;
+        if (
+          !workspace ||
+          this.references.has(key) ||
+          this.acquisitions.has(key) ||
+          this.retrying.has(key)
+        )
+          return;
         this.retrying.add(key);
         const finish = Promise.withResolvers<void>();
         this.closing.set(key, finish.promise);

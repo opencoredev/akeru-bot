@@ -111,7 +111,8 @@ describe("Tenki workspace", () => {
       session.state = "RUNNING";
       const lease = await pool.acquire("tenki", create);
       expect(sdk.create).toHaveBeenCalledTimes(1);
-      expect(sdk.get).toHaveBeenCalledExactlyOnceWith("tenki-session");
+      expect(sdk.get).not.toHaveBeenCalled();
+      expect(session.waitReady).toHaveBeenCalledTimes(2);
       await lease.release({ destroy: true });
       expect(session.close).toHaveBeenCalledOnce();
     } finally {

@@ -370,7 +370,7 @@ export class AkeruSessionResources {
         botWorkspace: workspaceLease.workspace.workspace,
       };
     } catch (cause) {
-      await this.releaseOnce(key, { destroy: true }).catch(() => undefined);
+      await this.releaseOnce(key, { destroy: input.botSandbox !== "tenki" }).catch(() => undefined);
       throw cause;
     }
   }
