@@ -20,9 +20,7 @@ export const PROVIDER_CONNECTIONS = [
 ] as const satisfies ReadonlyArray<{ id: SubscriptionProviderId; label: string }>;
 
 export function providerSupportsBaseUrl(provider: SubscriptionProviderId): boolean {
-  // "cursor" stays in SubscriptionProviderId only so legacy settings decode; it has
-  // no auth flow and must not accept a base URL.
-  return provider !== "xai" && provider !== "cursor";
+  return provider !== "xai";
 }
 
 export function providerUsesApiKey(status: SubscriptionProviderStatus | undefined): boolean {

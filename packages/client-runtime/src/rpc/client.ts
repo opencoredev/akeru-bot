@@ -45,20 +45,15 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribeAuthAccess
   | typeof WS_METHODS.subscribeServerConfig
   | typeof WS_METHODS.subscribeServerLifecycle
-  | typeof WS_METHODS.subscribeTerminalEvents
-  | typeof WS_METHODS.subscribeTerminalMetadata
   | typeof WS_METHODS.subscribePreviewEvents
   | typeof WS_METHODS.computerEvents
   | typeof WS_METHODS.subscribeDiscoveredLocalServers
   | typeof WS_METHODS.subscribeResourceTelemetry
-  | typeof WS_METHODS.previewAutomationConnect
-  | typeof WS_METHODS.subscribeVcsStatus
-  | typeof WS_METHODS.terminalAttach;
+  | typeof WS_METHODS.previewAutomationConnect;
 
 export type EnvironmentStreamCommandRpcTag =
   | typeof WS_METHODS.serverUpdateServerWithProgress
-  | typeof WS_METHODS.mcpServerAuthenticate
-  | typeof WS_METHODS.gitRunStackedAction;
+  | typeof WS_METHODS.mcpServerAuthenticate;
 
 export type EnvironmentStreamRpcTag =
   | EnvironmentSubscriptionRpcTag

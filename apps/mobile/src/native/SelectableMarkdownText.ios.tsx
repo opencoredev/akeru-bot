@@ -3,7 +3,7 @@ import {
   type SelectableMarkdownTextProps,
 } from "@t3tools/mobile-markdown-text/renderer";
 
-import { highlightCodeSnippet } from "../features/review/shikiReviewHighlighter";
+import { highlightCodeSnippet } from "../features/threads/codeHighlighter";
 
 type MobileSelectableMarkdownTextProps = Omit<SelectableMarkdownTextProps, "highlightCode">;
 

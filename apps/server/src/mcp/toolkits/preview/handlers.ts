@@ -18,10 +18,8 @@ import { PreviewSnapshotToolkit, PreviewStandardToolkit, PreviewToolkit } from "
 /**
  * Collapses the `show` alias onto `open` and defaults tab reuse.
  *
- * Deliberately leaves an unstated `open` unstated. Whether a preview the agent
- * said nothing about surfaces is the user's `browserAutoShowFloatingPreview`
- * preference, which is desktop-local and unreadable from here — filling in
- * `true` would silently override it for every `preview_open`.
+ * Deliberately leaves an unstated `open` unstated so the client decides how
+ * to present a preview the agent said nothing about.
  */
 export function normalizePreviewOpenInput(
   input: PreviewAutomationOpenInput,

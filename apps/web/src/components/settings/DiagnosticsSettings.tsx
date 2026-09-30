@@ -992,7 +992,7 @@ export function DiagnosticsSettingsPanel() {
     : false;
 
   return (
-    <SettingsPageContainer width="expanded" className="gap-10">
+    <SettingsPageContainer width="expanded">
       <ResourceTelemetryDiagnostics />
 
       <SettingsSection

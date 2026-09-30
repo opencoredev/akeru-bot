@@ -36,7 +36,7 @@ Use **Supervised** for unfamiliar bot work or a repository where an unwanted com
 
 Use **Auto-accept edits** when you want the refactor but still want to inspect shell commands.
 
-Use **Full access** for a worktree or sandbox that you can restore. Check the workspace and Git diff
+Use **Full access** in a sandbox or a checkout that you can restore. Check the workspace with Git
 after the bot finishes.
 
 Web, desktop, and mobile use the same four labels.

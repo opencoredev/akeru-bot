@@ -134,6 +134,11 @@ function editDraft(routine: RoutineAdapterItem): RoutineAdapterDraft {
   };
 }
 
+/** Most environments have a single workspace, so the picker only appears when there is a choice. */
+export function showsWorkspacePicker(options: readonly RoutineAdapterProject[]) {
+  return options.length > 1;
+}
+
 function csv(value: string) {
   return value
     .split(",")
@@ -306,9 +311,9 @@ function RoutineFormDialog({
               }
             />
           </label>
-          {projectOptions.length > 0 ? (
+          {showsWorkspacePicker(projectOptions) ? (
             <label className="block space-y-1.5 text-sm">
-              <span>{t("Project")}</span>
+              <span>{t("Workspace")}</span>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={draft.projectId}
@@ -827,6 +832,9 @@ export function RoutinePanel({
     previousOpenId.current = openRoutineId;
   }, [openRoutineId]);
 
+  // The environment cannot run routines, so there is nothing to show or act on.
+  if (status === "unavailable") return null;
+
   return (
     <section className="px-4 py-4">
       {openRoutine === null ? (
@@ -855,10 +863,6 @@ export function RoutinePanel({
         </div>
       ) : status === "error" ? (
         <p className="mt-2 text-xs text-destructive">{error || t("Could not load routines.")}</p>
-      ) : status === "unavailable" ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("Routines are not available for this environment.")}
-        </p>
       ) : openRoutine !== null ? (
         <div ref={detailRef}>
           <RoutineDetail

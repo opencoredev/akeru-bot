@@ -4896,7 +4896,7 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("sets plan permission mode on sendTurn when interactionMode is plan", () => {
+  it.effect("never enters the plan permission mode, even for a stored plan-mode turn", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
@@ -4913,7 +4913,7 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      assert.deepEqual(harness.query.setPermissionModeCalls, ["plan"]);
+      assert.deepEqual(harness.query.setPermissionModeCalls, ["bypassPermissions"]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -4925,7 +4925,7 @@ describe("ClaudeAdapterLive", () => {
     { runtimeMode: "approval-required", expectedBase: "default" },
     { runtimeMode: "auto-accept-edits", expectedBase: "acceptEdits" },
   ])(
-    "restores $expectedBase permission mode after plan turn ($runtimeMode)",
+    "applies the $expectedBase base permission mode on default turns ($runtimeMode)",
     ({ runtimeMode, expectedBase }) => {
       const harness = makeHarness();
       return Effect.gen(function* () {
@@ -4937,32 +4937,6 @@ describe("ClaudeAdapterLive", () => {
           runtimeMode,
         });
 
-        // First turn in plan mode
-        yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "plan this",
-          interactionMode: "plan",
-          attachments: [],
-        });
-
-        // Complete the turn so we can send another
-        const turnCompletedFiber = yield* Stream.filter(
-          adapter.streamEvents,
-          (event) => event.type === "turn.completed",
-        ).pipe(Stream.runHead, Effect.forkChild);
-
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: `sdk-session-${runtimeMode}`,
-          uuid: `result-${runtimeMode}`,
-        } as unknown as SDKMessage);
-
-        yield* Fiber.join(turnCompletedFiber);
-
-        // Second turn back to default
         yield* adapter.sendTurn({
           threadId: session.threadId,
           input: "now do it",
@@ -4970,7 +4944,7 @@ describe("ClaudeAdapterLive", () => {
           attachments: [],
         });
 
-        assert.deepEqual(harness.query.setPermissionModeCalls, ["plan", expectedBase]);
+        assert.deepEqual(harness.query.setPermissionModeCalls, [expectedBase]);
       }).pipe(
         Effect.provideService(Random.Random, makeDeterministicRandomService()),
         Effect.provide(harness.layer),

@@ -6,7 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { MessageList } from "@mastra/core/agent";
+import { MessageList, type Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import { Memory } from "@mastra/memory";
 import { ObservationalMemory, type ObserveHooks } from "@mastra/memory/processors";
@@ -271,6 +271,34 @@ describe("AkeruMastraHarness", () => {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it.effect(
+    "does not give the agent task-list tools, which cost a model round trip per update",
+    () =>
+      harnessTest(async (open) => {
+        const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-no-tasks-"));
+        const harness = await open({
+          authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+          memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+          getThreadTools: () => ({}),
+          toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+        });
+        try {
+          // The controller keeps its agent private; the tool list is what the model sees.
+          const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
+          const requestContext = new RequestContext();
+          requestContext.setRaw("controller", { resourceId: "thread-tools" });
+          const toolIds = Object.keys(await agent.listTools({ requestContext }));
+          assert.isNotEmpty(toolIds);
+          for (const id of ["task_write", "task_update", "task_complete", "task_check"]) {
+            assert.notInclude(toolIds, id);
+          }
+        } finally {
+          await harness.close();
+          NodeFS.rmSync(directory, { recursive: true, force: true });
+        }
+      }),
+  );
 
   it.effect("keeps /new thread observational memory isolated", () =>
     harnessTest(async (open) => {
@@ -1790,6 +1818,30 @@ describe("AkeruMastraHarness", () => {
       ),
     ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
     expect(getCredential).not.toHaveBeenCalled();
+  });
+
+  it("resolves a saved API key for the selected account instance", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-bound-auth.json");
+    const getCredential = vi.fn((_provider: string, instanceId?: string) =>
+      instanceId === "grok_work" ? { type: "api-key" as const, access: "work-key" } : undefined,
+    );
+    expect(
+      resolveAkeruMastraModel(
+        "xai/grok-code-fast-1",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+        {
+          environment: {},
+          instanceEnvironment: {},
+          useSavedCredential: true,
+          instanceId: "grok_work",
+        },
+      ),
+    ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
+    expect(getCredential).toHaveBeenCalledWith("xai", "grok_work");
   });
 
   it("does not leak provider-wide credentials into an isolated instance", () => {

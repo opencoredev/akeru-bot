@@ -19,7 +19,7 @@ describe("GroupDetailsPanel", () => {
     expect(source).not.toContain("Invite people");
     expect(source).toContain("dialogs.confirm(");
     expect(source).toContain('confirmLabel: t("Delete group")');
-    expect(source).toContain('whitespace-nowrap">{t("Delete group")}');
+    expect(source).toContain('variant="destructive-outline"');
   });
 
   it("explains why a bot cannot be removed yet", () => {

@@ -1,5 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import type { EnvironmentId, SidebarThreadSortOrder } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, Text as RNText, TextInput, View } from "react-native";
@@ -11,18 +11,11 @@ import { HOME_HORIZONTAL_INSET } from "../../lib/layoutMetrics";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
-import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
-import type { HomeProjectSortOrder } from "./homeThreadList";
 import { WorkspaceConnectionTitle } from "./WorkspaceConnectionTitle";
 import type {
   HomeListFilterMenuEnvironment,
   HomeListFilterMenuProject,
 } from "./home-list-filter-menu";
-import {
-  hasCustomHomeListOptions,
-  PROJECT_SORT_OPTIONS,
-  THREAD_SORT_OPTIONS,
-} from "./home-list-options";
 
 export type HomeHeaderEnvironment = HomeListFilterMenuEnvironment;
 
@@ -52,13 +45,9 @@ export function HomeHeader(props: {
   readonly searchQuery: string;
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
-  readonly projectSortOrder: HomeProjectSortOrder;
-  readonly threadSortOrder: SidebarThreadSortOrder;
   readonly onSearchQueryChange: (query: string) => void;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
-  readonly onProjectSortOrderChange: (sortOrder: HomeProjectSortOrder) => void;
-  readonly onThreadSortOrderChange: (sortOrder: SidebarThreadSortOrder) => void;
   readonly onOpenEnvironments: () => void;
   readonly onOpenArchive: () => void;
   readonly onOpenSettings: () => void;
@@ -70,13 +59,8 @@ export function HomeHeader(props: {
   const mutedColor = useThemeColor("--color-foreground-muted");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
-  // Thread List v2 lays the list out in fixed creation order, so the
-  // sort/group filter controls would be silently ignored — hide them and
-  // key the "customized" state off the environment filter alone.
-  const threadListV2Enabled = useThreadListV2Enabled();
-  const hasCustomListOptions = threadListV2Enabled
-    ? props.selectedEnvironmentId !== null || props.selectedProjectKey !== null
-    : hasCustomHomeListOptions(props);
+  const hasCustomListOptions =
+    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null;
   const selectedEnvironmentLabel =
     props.selectedEnvironmentId === null
       ? null
@@ -139,42 +123,11 @@ export function HomeHeader(props: {
               ],
             },
           ] satisfies MenuAction[])),
-      ...(threadListV2Enabled
-        ? []
-        : ([
-            {
-              id: "project-sort",
-              title: t("Sort projects"),
-              subactions: PROJECT_SORT_OPTIONS.map((option) => ({
-                id: `project-sort:${option.value}`,
-                title: option.value === "created_at" ? t("Created at") : t("Last user message"),
-                state: checkedMenuState(props.projectSortOrder === option.value),
-              })),
-            },
-            {
-              id: "thread-sort",
-              title: t("Sort chats"),
-              subactions: THREAD_SORT_OPTIONS.map((option) => ({
-                id: `thread-sort:${option.value}`,
-                title: option.value === "created_at" ? t("Created at") : t("Last user message"),
-                state: checkedMenuState(props.threadSortOrder === option.value),
-              })),
-            },
-          ] satisfies MenuAction[])),
       { id: "archive", title: t("Archived chats"), image: "archivebox" },
       { id: "environments", title: t("Environments"), image: "desktopcomputer" },
       { id: "settings", title: t("Settings"), image: "gearshape" },
     ],
-    [
-      props.environments,
-      props.projectSortOrder,
-      props.projects,
-      props.selectedEnvironmentId,
-      props.selectedProjectKey,
-      props.threadSortOrder,
-      t,
-      threadListV2Enabled,
-    ],
+    [props.environments, props.projects, props.selectedEnvironmentId, props.selectedProjectKey, t],
   );
 
   const handleMenuAction = useCallback(
@@ -215,18 +168,6 @@ export function HomeHeader(props: {
         if (props.projects.some((project) => project.key === projectKey)) {
           props.onProjectChange(projectKey);
         }
-        return;
-      }
-      const projectSort = PROJECT_SORT_OPTIONS.find(
-        (option) => id === `project-sort:${option.value}`,
-      );
-      if (projectSort) {
-        props.onProjectSortOrderChange(projectSort.value);
-        return;
-      }
-      const threadSort = THREAD_SORT_OPTIONS.find((option) => id === `thread-sort:${option.value}`);
-      if (threadSort) {
-        props.onThreadSortOrderChange(threadSort.value);
         return;
       }
     },

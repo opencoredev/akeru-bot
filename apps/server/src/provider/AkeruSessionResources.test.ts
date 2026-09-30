@@ -424,15 +424,15 @@ describe("AkeruSessionResources", () => {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({
-        "t3-code_preview_status": previewStatus,
-        "t3-code_preview_snapshot": previewSnapshot,
+        akeru_preview_status: previewStatus,
+        akeru_preview_snapshot: previewSnapshot,
       })),
       getServerStatuses: vi.fn(() => [
         {
-          name: "t3-code",
+          name: "akeru",
           connected: true,
           toolCount: 2,
-          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+          toolNames: ["akeru_preview_status", "akeru_preview_snapshot"],
         },
       ]),
     };
@@ -459,7 +459,7 @@ describe("AkeruSessionResources", () => {
     expect(getPreviewMcpServerConfig).toHaveBeenCalledExactlyOnceWith("preview-thread");
     expect(makeMcpManager).toHaveBeenCalledOnce();
     expect(makeMcpManager.mock.calls[0]?.[2]).toEqual({
-      "t3-code": {
+      akeru: {
         url: "http://127.0.0.1:4000/mcp",
         headers: { Authorization: "Bearer preview-token" },
       },

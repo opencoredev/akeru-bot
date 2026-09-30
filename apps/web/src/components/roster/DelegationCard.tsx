@@ -30,11 +30,11 @@ import type { Bot } from "./types";
 
 const STATE_DOT: Record<AkeruDelegationState, string> = {
   queued: "bg-muted-foreground/50",
-  running: "bg-info",
+  running: "bg-primary",
   blocked: "bg-warning",
   failed: "bg-destructive",
   canceled: "bg-muted-foreground/60",
-  completed: "bg-success",
+  completed: "bg-muted-foreground/60",
 };
 
 export function delegationUsageTokens(
@@ -242,21 +242,17 @@ export function DelegationCard({
       <p className="mt-1 line-clamp-2 text-sm leading-5">{delegation.task}</p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         <DelegationElapsed delegation={delegation} live={!presentation.terminal} />
-        <span
-          className="tabular-nums"
-          aria-label={
-            usageTokens === null
-              ? t("Usage unavailable for {name}", { name: childName })
-              : t("{tokens} tokens billed to {name}", {
-                  tokens: usageTokens.toLocaleString(),
-                  name: childName,
-                })
-          }
-        >
-          {usageTokens === null
-            ? t("Usage unavailable")
-            : t("{tokens} tokens", { tokens: formatTokens(usageTokens) })}
-        </span>
+        {usageTokens === null ? null : (
+          <span
+            className="tabular-nums"
+            aria-label={t("{tokens} tokens billed to {name}", {
+              tokens: usageTokens.toLocaleString(),
+              name: childName,
+            })}
+          >
+            {t("{tokens} tokens", { tokens: formatTokens(usageTokens) })}
+          </span>
+        )}
       </div>
       {outcome ? (
         <p

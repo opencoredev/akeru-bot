@@ -909,7 +909,8 @@ describe("provider access health", () => {
         }),
       );
       const service = await makeTestSubscriptionAuthService(authPath);
-      const providerInstanceId = ProviderInstanceId.make(`instance-${driver}`);
+      // The default instance reports as the provider-level account.
+      const providerInstanceId = ProviderInstanceId.make(driver);
       const base = {
         provider: ProviderDriverKind.make(driver),
         providerInstanceId,
@@ -5189,6 +5190,86 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("offers Enable Auto Review for workspace commands and then stops asking", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "List files." });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shell-review-1",
+          toolName: "Shell",
+          args: { command: "sleep 5; ls -la" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        const opened = events.find(
+          (event): event is Extract<ProviderRuntimeEvent, { readonly type: "request.opened" }> =>
+            event.type === "request.opened" && event.requestId === "shell-review-1",
+        );
+        expect(opened?.payload.options?.map((option) => option.decision)).toEqual([
+          "decline",
+          "acceptAlways",
+          "accept",
+        ]);
+
+        yield* controller.respondToRequest({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("shell-review-1"),
+          decision: "acceptAlways",
+        });
+        mastra.emit({
+          type: "tool_approval_required",
+          toolCallId: "shell-review-2",
+          toolName: "Shell",
+          args: { command: "ls" },
+        } as AgentControllerEvent);
+        yield* Effect.yieldNow;
+
+        expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
+          toolCallId: "shell-review-2",
+          decision: "approve",
+        });
+        expect(
+          events.some(
+            (event) => event.type === "request.opened" && event.requestId === "shell-review-2",
+          ),
+        ).toBe(false);
+        // The auto-approved call must also pass the runtime's own grant check.
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        yield* Effect.promise(() =>
+          runtime.execute({
+            threadId: String(codexThreadId),
+            toolId: "Shell",
+            toolCallId: "shell-review-2",
+            input: { command: "ls" },
+            approvalMode: "require-grant",
+          }),
+        );
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("keeps a pending approval across reconnect and grants one exact tool call", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
@@ -5202,7 +5283,7 @@ describe("AgentControllerLive", () => {
           providerInstanceId: codexInstanceId,
           cwd: process.cwd(),
           modelSelection: codexSelection,
-          runtimeMode: "full-access",
+          runtimeMode: "approval-required",
         });
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Run pwd." });
         mastra.emit({
@@ -5217,7 +5298,7 @@ describe("AgentControllerLive", () => {
           providerInstanceId: codexInstanceId,
           cwd: process.cwd(),
           modelSelection: codexSelection,
-          runtimeMode: "full-access",
+          runtimeMode: "approval-required",
         });
         yield* controller.respondToRequest({
           threadId: codexThreadId,
@@ -5286,8 +5367,8 @@ describe("AgentControllerLive", () => {
         mastra.emit({
           type: "tool_approval_required",
           toolCallId: "shell-tool-stale",
-          toolName: "Shell",
-          args: { command: "pwd" },
+          toolName: "gmail_send_message",
+          args: { to: "user@example.com" },
         } as AgentControllerEvent);
         mastra.emit({
           type: "tool_end",
@@ -6483,7 +6564,7 @@ describe("AgentControllerLive", () => {
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      getTools: vi.fn(() => ({ "builtin-exa_search": {}, "t3-code_preview_status": {} })),
+      getTools: vi.fn(() => ({ "builtin-exa_search": {}, akeru_preview_status: {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
@@ -6517,7 +6598,7 @@ describe("AgentControllerLive", () => {
         expect(makeMcpManagerMock).toHaveBeenCalledOnce();
         expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
           "builtin-exa": { url: "https://mcp.exa.ai/mcp" },
-          "t3-code": {
+          akeru: {
             url: "http://127.0.0.1:15070/mcp",
             headers: { Authorization: "Bearer preview-test" },
           },

@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { SubscriptionCredentialStore } from "./credentialStore.ts";
@@ -246,6 +247,166 @@ describe("subscription auth storage", () => {
     expect(service.isConnected("xai")).toBe(false);
     expect(service.getApiKeyCredential("xai")).toBeUndefined();
   });
+  it("sees a login completed by another service instance before admitting a turn", async () => {
+    const { authPath } = fixture();
+    const runtime = await makeTestSubscriptionAuthService(authPath);
+    const loginService = await makeTestSubscriptionAuthService(authPath);
+    expect(runtime.isConnected("openai-codex", "codex")).toBe(false);
+
+    const login = await loginService.startLogin("openai-codex", { authMode: "api-key" });
+    expect(await loginService.completeLogin(login.loginId, "test-key")).toEqual({
+      status: "connected",
+    });
+    expect(runtime.isConnected("openai-codex", "codex")).toBe(true);
+
+    await loginService.logout("openai-codex", "codex");
+    expect(runtime.isConnected("openai-codex", "codex")).toBe(false);
+  });
+
+  it("keeps two instance accounts separate across restart and sign-out", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: "legacy-access",
+          refresh: "legacy-refresh",
+          expires: Date.now() + 60_000,
+          accountId: "personal",
+        },
+      }),
+    );
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const runtime = await makeTestSubscriptionAuthService(authPath);
+    const login = await service.startLogin("openai-codex", {
+      instanceId: ProviderInstanceId.make("codex_work"),
+      authMode: "api-key",
+    });
+    expect(await service.completeLogin(login.loginId, "work-key")).toEqual({ status: "connected" });
+    expect(await runtime.getAccessToken("openai-codex", "codex_work")).toBe("work-key");
+
+    const restarted = await makeTestSubscriptionAuthService(authPath);
+    expect(await restarted.getOpenAICodexAccess("codex")).toEqual({
+      accessToken: "legacy-access",
+      accountId: "personal",
+    });
+    expect(restarted.getApiKeyCredential("openai-codex", "codex_work")?.access).toBe("work-key");
+    expect(
+      restarted.accountStatus("openai-codex", ProviderInstanceId.make("codex_work")),
+    ).toMatchObject({ connected: true, authMode: "api-key" });
+    expect(restarted.statuses().find((status) => status.provider === "openai-codex")).toMatchObject(
+      { accountLabel: "personal", authMode: "oauth" },
+    );
+
+    restarted.recordAccountRequestSuccess("openai-codex", "codex_work", "2026-01-01T00:00:00.000Z");
+    expect(
+      restarted.accountStatus("openai-codex", ProviderInstanceId.make("codex_work")).health,
+    ).toBe("healthy");
+    expect(restarted.statuses().find((status) => status.provider === "openai-codex")?.health).toBe(
+      "detected",
+    );
+
+    await restarted.logout("openai-codex", "codex_work");
+    expect(restarted.isConnected("openai-codex", "codex_work")).toBe(false);
+    expect(restarted.isConnected("openai-codex", "codex")).toBe(true);
+    expect(NodeFS.readFileSync(authPath, "utf-8")).not.toContain("work-key");
+  });
+
+  it("removes credentials for deleted custom instances while preserving the default account", async () => {
+    const { authPath } = fixture();
+    const service = await makeTestSubscriptionAuthService(authPath);
+    for (const instanceId of ["codex", "codex_work", "codex_other"]) {
+      const login = await service.startLogin("openai-codex", {
+        instanceId: ProviderInstanceId.make(instanceId),
+        authMode: "api-key",
+      });
+      expect(await service.completeLogin(login.loginId, `${instanceId}-key`)).toEqual({
+        status: "connected",
+      });
+    }
+
+    await service.pruneDeletedInstanceCredentials(
+      {
+        codex: { driver: "codex" },
+        codex_work: { driver: "codex" },
+        codex_other: { driver: "codex" },
+      },
+      { codex_other: { driver: "codex" } },
+    );
+
+    const restarted = await makeTestSubscriptionAuthService(authPath);
+    expect(restarted.isConnected("openai-codex", "codex")).toBe(true);
+    expect(restarted.isConnected("openai-codex", "codex_work")).toBe(false);
+    expect(restarted.isConnected("openai-codex", "codex_other")).toBe(true);
+    expect(NodeFS.readFileSync(authPath, "utf-8")).not.toContain("codex_work-key");
+  });
+
+  it("binds a completed OAuth sign-in to its selected instance", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        anthropic: {
+          type: "oauth",
+          access: "personal-access",
+          refresh: "personal-refresh",
+          expires: Date.now() + 60_000,
+        },
+      }),
+    );
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const login = await service.startLogin("anthropic", {
+      instanceId: ProviderInstanceId.make("claude_work"),
+    });
+    const state = new URL(login.url).searchParams.get("state");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: "work-access",
+            refresh_token: "work-refresh",
+            expires_in: 3600,
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    try {
+      expect(await service.completeLogin(login.loginId, `code#${state}`)).toEqual({
+        status: "connected",
+      });
+      const restarted = await makeTestSubscriptionAuthService(authPath);
+      expect(await restarted.getAccessToken("anthropic", "claude_work")).toBe("work-access");
+      expect(await restarted.getAccessToken("anthropic", "claudeAgent")).toBe("personal-access");
+      await restarted.logout("anthropic", "claude_work");
+      expect(await restarted.getAccessToken("anthropic", "claudeAgent")).toBe("personal-access");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("reports a provider-supplied account identifier without returning credentials", async () => {
+    const { authPath } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: "private-access",
+          refresh: "private-refresh",
+          expires: Date.now() + 60_000,
+          accountId: "account-123",
+        },
+      }),
+    );
+    const status = (await makeTestSubscriptionAuthService(authPath))
+      .statuses()
+      .find((entry) => entry.provider === "openai-codex");
+    expect(status?.accountLabel).toBe("account-123");
+    expect(JSON.stringify(status)).not.toContain("private-");
+  });
+
   it("keeps API keys away from subscription plan endpoints except default OpenCode Go", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
@@ -725,9 +886,6 @@ describe("subscription auth storage", () => {
   it("rejects unsupported modes and base URLs before creating pending state", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
-    await expect(service.startLogin("cursor", { authMode: "api-key" })).rejects.toThrow(
-      "not supported",
-    );
     await expect(
       service.startLogin("xai", { authMode: "api-key", baseUrl: "https://example.com" }),
     ).rejects.toThrow("does not support");
@@ -925,11 +1083,11 @@ describe("subscription auth storage", () => {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({
-        cursor: { type: "oauth", access: "a", refresh: "r", expires: 1 },
+        xai: { type: "oauth", access: "a", refresh: "r", expires: 1 },
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
-    await service.logout("cursor");
+    await service.logout("xai");
     expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
     expect(NodeFS.statSync(authPath).mode & 0o777).toBe(0o600);
   });
@@ -1212,6 +1370,21 @@ describe("provider health checks", () => {
     const status = service.statuses().find((s) => s.provider === "anthropic");
     expect(status?.health).toBe("revoked");
     expect(status?.healthChecking).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it("clears checking state for a custom provider instance", async () => {
+    const { authPath } = fixture();
+    recordRequests();
+    const service = await makeTestSubscriptionAuthService(authPath, { checkHealthOnConnect: true });
+    const instanceId = ProviderInstanceId.make("grok_work");
+    const login = await service.startLogin("xai", { instanceId, authMode: "api-key" });
+    await service.completeLogin(login.loginId, "work-key");
+    await service.awaitHealthCheck("xai", instanceId);
+
+    const status = service.accountStatus("xai", instanceId);
+    expect(status.health).toBe("healthy");
+    expect(status.healthChecking).toBeUndefined();
     vi.unstubAllGlobals();
   });
 

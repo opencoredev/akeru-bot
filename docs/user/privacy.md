@@ -37,8 +37,9 @@ or client storage. A run receives only the short-lived access that it needs.
 
 ## Privacy controls
 
-Open **Settings > Privacy** to control anonymous analytics, product feedback, voice calls, and
-provider update checks. Mobile exposes the same controls for the connected environment.
+Open **Settings > Privacy & data** to control anonymous analytics, product feedback, and voice calls.
+You can also export or import environment data under **Backup and
+transfer**. Mobile exposes the sharing controls for the connected environment.
 
 Turning a control off stops new transfers for that feature. Provider requests still leave the
 environment when you run a connected online model.

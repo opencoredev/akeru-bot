@@ -114,6 +114,7 @@ vi.mock("../../state/use-composer-path-search", () => ({
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update") },
   environmentBotsAtom: () => Symbol("bots"),
+  environmentGroupsAtom: () => Symbol("groups"),
 }));
 vi.mock("./thread-list-v2-items", () => ({ providerBotName: () => "Codex" }));
 vi.mock("../../state/server", () => ({
@@ -237,7 +238,6 @@ function render(sessionStatus: "idle" | "running" = "idle") {
     onSendMessage: vi.fn(),
     onUpdateModelSelection: vi.fn(),
     onUpdateRuntimeMode: vi.fn(),
-    onUpdateInteractionMode: vi.fn(),
     onReconnectEnvironment: vi.fn(),
   } satisfies ThreadComposerProps;
   const tree = (ThreadComposer as unknown as (props: ThreadComposerProps) => unknown)(props);

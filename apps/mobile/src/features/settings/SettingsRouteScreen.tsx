@@ -1,5 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import {
   MEMORY_SETTING_DISABLED_HINT,
   SHARED_PROJECT_MEMORY_SETTING,
@@ -13,7 +13,6 @@ import Constants from "expo-constants";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { SymbolView } from "../../components/AppSymbol";
-import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,8 +22,6 @@ import { AppText as Text } from "../../components/AppText";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
 import { useThemeColor } from "../../lib/useThemeColor";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
 import {
   type AppUpdateCheckState,
   isAppUpdateCheckAvailable,
@@ -149,8 +146,6 @@ function LocalSettingsRouteScreen({
         <SettingsSection title={t("Appearance")}>
           <SettingsRow icon="paintbrush" label={t("Appearance")} target="SettingsAppearance" />
         </SettingsSection>
-
-        <LegacySettingsSection />
 
         <ArchivedThreadsSettingsSection />
 
@@ -294,12 +289,6 @@ function EnvironmentPrivacySettingsSection({
         onValueChange={(enabled) => updateControl("voice", enabled)}
       />
       <AutomaticReadoutSettingsRow />
-      <SettingsSwitchRow
-        icon="arrow.clockwise"
-        label={t("Provider update checks")}
-        value={settings.enableProviderUpdateChecks}
-        onValueChange={(enabled) => updateControl("provider-update-checks", enabled)}
-      />
     </SettingsSection>
   );
 }
@@ -368,44 +357,6 @@ function GeneralSettingsSection() {
       <SettingsRow icon="folder" label={t("Project Grouping")} target="SettingsProjectGrouping" />
       <SettingsRow icon="chart.bar.xaxis" label={t("Usage")} target="SettingsUsage" />
     </SettingsSection>
-  );
-}
-
-/**
- * Device-local legacy toggles. Mobile has no client-settings sync, so this is
- * the counterpart of web's Settings → General → Legacy features backed by
- * mobile preferences.
- */
-function LegacySettingsSection() {
-  const { t } = useMobileI18n();
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const preferences = useAtomValue(mobilePreferencesAtom);
-  const threadListV2Enabled = useThreadListV2Enabled();
-  const planModeEnabled =
-    AsyncResult.isSuccess(preferences) && preferences.value.planModeEnabled === true;
-
-  return (
-    <View className="gap-3">
-      <SettingsSection title={t("Legacy")}>
-        <SettingsSwitchRow
-          icon="sidebar.left"
-          label={t("Legacy Chat List")}
-          value={!threadListV2Enabled}
-          onValueChange={(value) => savePreferences({ legacyThreadListEnabled: value })}
-        />
-        <SettingsSwitchRow
-          icon="hammer"
-          label={t("Plan Mode")}
-          value={planModeEnabled}
-          onValueChange={(value) => savePreferences({ planModeEnabled: value })}
-        />
-      </SettingsSection>
-      <Text className="px-2 text-sm text-foreground-muted">
-        {t(
-          "Opt into retired interfaces kept for compatibility. Plan Mode restores the Build/Plan control; otherwise every task runs in Build mode.",
-        )}
-      </Text>
-    </View>
   );
 }
 

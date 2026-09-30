@@ -20,6 +20,11 @@ describe("subscription auth contracts", () => {
     expect(
       decode({ provider: "anthropic", authMode: "api-key", baseUrl: "https://proxy.example/v1" }),
     ).toEqual({ provider: "anthropic", authMode: "api-key", baseUrl: "https://proxy.example/v1" });
+    expect(decode({ provider: "anthropic", instanceId: "claude_work" })).toEqual({
+      provider: "anthropic",
+      instanceId: "claude_work",
+    });
+    expect(() => decode({ provider: "anthropic", instanceId: "bad instance" })).toThrow();
   });
 
   it.each([
@@ -87,6 +92,28 @@ describe("subscription auth contracts", () => {
     expect(decoded.providers[0]).toMatchObject({
       authMode: "api-key",
       baseUrl: "http://localhost:8080/v1",
+    });
+    expect(JSON.stringify(decoded)).not.toContain("secret");
+    expect(decoded.accounts).toEqual([]);
+  });
+
+  it("exposes separate account status without credentials", () => {
+    const decoded = decodeStatuses({
+      providers: [],
+      accounts: [
+        {
+          provider: "xai",
+          instanceId: "grok_work",
+          connected: true,
+          accountLabel: "work@example.com",
+          access: "secret",
+        },
+      ],
+    });
+    expect(decoded.accounts[0]).toMatchObject({
+      provider: "xai",
+      instanceId: "grok_work",
+      accountLabel: "work@example.com",
     });
     expect(JSON.stringify(decoded)).not.toContain("secret");
   });

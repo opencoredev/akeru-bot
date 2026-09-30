@@ -15,6 +15,7 @@ import { Argument, Flag } from "effect/unstable/cli";
 
 import { readBootstrapEnvelope } from "../bootstrap.ts";
 import * as ServerConfig from "../config.ts";
+import { aliasedEnv } from "./envAliases.ts";
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 
 /** An http(s) origin with no credentials, path, query, or fragment, normalized to `URL.origin`. */
@@ -62,7 +63,7 @@ export const hostFlag = Flag.string("host").pipe(
 );
 export const baseDirFlag = Flag.string("base-dir").pipe(
   Flag.withDescription(
-    "Explicit Akeru Bot data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
+    "Explicit Akeru Bot data directory; runtime state is stored under userdata (equivalent to AKERU_HOME).",
   ),
   Flag.optional,
 );
@@ -88,7 +89,7 @@ export const autoBootstrapProjectFromCwdFlag = Flag.boolean("auto-bootstrap-proj
 );
 export const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withDescription(
-    "Emit server-side logs for outbound WebSocket push traffic (equivalent to T3CODE_LOG_WS_EVENTS).",
+    "Emit server-side logs for outbound WebSocket push traffic (equivalent to AKERU_LOG_WS_EVENTS).",
   ),
   Flag.withAlias("log-ws-events"),
   Flag.optional,
@@ -112,41 +113,31 @@ export const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
   Flag.optional,
 );
 
+const optionalEnv = <A>(read: (name: string) => Config.Config<A>, suffix: string) =>
+  aliasedEnv(read, suffix).pipe(Config.map(Option.getOrUndefined));
+const envWithDefault = <A>(read: (name: string) => Config.Config<A>, suffix: string, fallback: A) =>
+  aliasedEnv(read, suffix).pipe(Config.map(Option.getOrElse(() => fallback)));
+
+// Every server variable reads `AKERU_<name>` first and `T3CODE_<name>` as a
+// fallback alias; see envAliases.ts.
 const EnvServerConfig = Config.all({
-  logLevel: Config.logLevel("T3CODE_LOG_LEVEL").pipe(Config.withDefault("Info")),
-  traceMinLevel: Config.logLevel("T3CODE_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
-  traceTimingEnabled: Config.boolean("T3CODE_TRACE_TIMING_ENABLED").pipe(Config.withDefault(true)),
-  traceFile: Config.string("T3CODE_TRACE_FILE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  traceMaxBytes: Config.int("T3CODE_TRACE_MAX_BYTES").pipe(Config.withDefault(10 * 1024 * 1024)),
-  traceMaxFiles: Config.int("T3CODE_TRACE_MAX_FILES").pipe(Config.withDefault(10)),
-  traceBatchWindowMs: Config.int("T3CODE_TRACE_BATCH_WINDOW_MS").pipe(Config.withDefault(1_000)),
-  otlpTracesUrl: Config.string("T3CODE_OTLP_TRACES_URL").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  otlpMetricsUrl: Config.string("T3CODE_OTLP_METRICS_URL").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  otlpExportIntervalMs: Config.int("T3CODE_OTLP_EXPORT_INTERVAL_MS").pipe(
-    Config.withDefault(10_000),
-  ),
-  otlpServiceName: Config.string("T3CODE_OTLP_SERVICE_NAME").pipe(
-    Config.withDefault("akeru-server"),
-  ),
-  mode: Config.schema(ServerConfig.RuntimeMode, "T3CODE_MODE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  port: Config.port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  logLevel: envWithDefault(Config.logLevel, "LOG_LEVEL", "Info"),
+  traceMinLevel: envWithDefault(Config.logLevel, "TRACE_MIN_LEVEL", "Info"),
+  traceTimingEnabled: envWithDefault(Config.boolean, "TRACE_TIMING_ENABLED", true),
+  traceFile: optionalEnv(Config.string, "TRACE_FILE"),
+  traceMaxBytes: envWithDefault(Config.int, "TRACE_MAX_BYTES", 10 * 1024 * 1024),
+  traceMaxFiles: envWithDefault(Config.int, "TRACE_MAX_FILES", 10),
+  traceBatchWindowMs: envWithDefault(Config.int, "TRACE_BATCH_WINDOW_MS", 1_000),
+  otlpTracesUrl: optionalEnv(Config.string, "OTLP_TRACES_URL"),
+  otlpMetricsUrl: optionalEnv(Config.string, "OTLP_METRICS_URL"),
+  otlpExportIntervalMs: envWithDefault(Config.int, "OTLP_EXPORT_INTERVAL_MS", 10_000),
+  otlpServiceName: envWithDefault(Config.string, "OTLP_SERVICE_NAME", "akeru-server"),
+  mode: optionalEnv((name) => Config.schema(ServerConfig.RuntimeMode, name), "MODE"),
+  port: optionalEnv(Config.port, "PORT"),
+  host: optionalEnv(Config.string, "HOST"),
+  t3Home: optionalEnv(Config.string, "HOME"),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  devAllowedOrigins: Config.string("T3CODE_DEV_ALLOWED_ORIGINS").pipe(
-    Config.withDefault(""),
+  devAllowedOrigins: envWithDefault(Config.string, "DEV_ALLOWED_ORIGINS", "").pipe(
     Config.map((value) =>
       value
         .split(",")
@@ -154,34 +145,13 @@ const EnvServerConfig = Config.all({
         .filter((entry) => entry.length > 0),
     ),
   ),
-  noBrowser: Config.boolean("T3CODE_NO_BROWSER").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  bootstrapFd: Config.int("T3CODE_BOOTSTRAP_FD").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  autoBootstrapProjectFromCwd: Config.boolean("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  logWebSocketEvents: Config.boolean("T3CODE_LOG_WS_EVENTS").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  tailscaleServeEnabled: Config.boolean("T3CODE_TAILSCALE_SERVE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  tailscaleServePort: Config.port("T3CODE_TAILSCALE_SERVE_PORT").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  publicOrigin: Config.schema(PublicOriginFromString, "T3CODE_PUBLIC_ORIGIN").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
+  noBrowser: optionalEnv(Config.boolean, "NO_BROWSER"),
+  bootstrapFd: optionalEnv(Config.int, "BOOTSTRAP_FD"),
+  autoBootstrapProjectFromCwd: optionalEnv(Config.boolean, "AUTO_BOOTSTRAP_PROJECT_FROM_CWD"),
+  logWebSocketEvents: optionalEnv(Config.boolean, "LOG_WS_EVENTS"),
+  tailscaleServeEnabled: optionalEnv(Config.boolean, "TAILSCALE_SERVE"),
+  tailscaleServePort: optionalEnv(Config.port, "TAILSCALE_SERVE_PORT"),
+  publicOrigin: optionalEnv((name) => Config.schema(PublicOriginFromString, name), "PUBLIC_ORIGIN"),
 });
 
 export interface CliServerFlags {

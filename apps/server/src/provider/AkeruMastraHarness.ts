@@ -10,18 +10,21 @@ import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
-import type { ToolsInput } from "@mastra/core/agent";
+import { Agent, type ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
   type MastraDBMessage,
   type Session,
 } from "@mastra/core/agent-controller";
-import { createCodingAgent } from "@mastra/core/coding-agent";
 import { RequestContext } from "@mastra/core/request-context";
-import type {
-  Processor,
-  ProcessInputStepArgs,
-  ProcessOutputResultArgs,
+import {
+  isBadRequestError,
+  PrefillErrorHandler,
+  ProviderHistoryCompat,
+  StreamErrorRetryProcessor,
+  type Processor,
+  type ProcessInputStepArgs,
+  type ProcessOutputResultArgs,
 } from "@mastra/core/processors";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
 import type { ObservationalMemoryRecord } from "@mastra/core/storage";
@@ -212,14 +215,17 @@ export function withAkeruModelRunOptions(
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
-  readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
-  readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
+  readonly getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>;
+  readonly getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>;
   readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
+  readonly getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"];
+  readonly getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"];
   readonly getModelConnection?: (providerInstanceId: string) =>
     | {
         readonly environment: NodeJS.ProcessEnv;
         readonly instanceEnvironment: NodeJS.ProcessEnv;
         readonly useSavedCredential: boolean;
+        readonly instanceId?: string;
       }
     | undefined;
   readonly memoryDbPath: string;
@@ -460,6 +466,8 @@ export async function createAkeruMastraMemory(
     | "getKimiAccess"
     | "getOpenCodeGoApiKey"
     | "getSubscriptionApiKey"
+    | "getSubscriptionOAuth"
+    | "getSubscriptionAccessToken"
     | "getModelConnection"
     | "memoryDbPath"
   >,
@@ -479,6 +487,8 @@ export async function createAkeruMastraMemory(
       undefined,
       options.getSubscriptionApiKey,
       controllerModelConnection(requestContext, options.getModelConnection),
+      options.getSubscriptionOAuth,
+      options.getSubscriptionAccessToken,
     );
   const memory = new Memory({
     storage,
@@ -572,21 +582,43 @@ export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | unde
 export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
-  getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: () => Promise<string | undefined>,
+  getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
     readonly environment: NodeJS.ProcessEnv;
     readonly instanceEnvironment: NodeJS.ProcessEnv;
     readonly useSavedCredential: boolean;
+    readonly instanceId?: string;
   },
+  getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"],
+  getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"],
 ) {
   const trimmed = modelId.trim();
   const environment = connection?.useSavedCredential
     ? connection.environment
     : connection?.instanceEnvironment;
   const useSavedCredential = connection?.useSavedCredential !== false;
+  const instanceId = connection?.instanceId;
+  const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
+    instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
+  const scopedAuthStorage =
+    instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
+      ? Object.assign(Object.create(authStorage) as AuthStorage, {
+          reload: () => {},
+          get: (provider: string) =>
+            getSubscriptionOAuth(
+              provider as Parameters<typeof getSubscriptionOAuth>[0],
+              instanceId,
+            ),
+          getApiKey: (provider: string) =>
+            getSubscriptionAccessToken(
+              provider as Parameters<typeof getSubscriptionAccessToken>[0],
+              instanceId,
+            ),
+        })
+      : authStorage;
   if (trimmed.startsWith("openai/")) {
     const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
     const getCredential = instanceApiKey
@@ -598,7 +630,7 @@ export function resolveAkeruMastraModel(
             : {}),
         })
       : useSavedCredential
-        ? () => getSubscriptionApiKey?.("openai-codex")
+        ? () => savedApiKey("openai-codex")
         : undefined;
     if (getCredential?.()) {
       return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
@@ -608,7 +640,7 @@ export function resolveAkeruMastraModel(
     }
     const reasoningEffort = modelOptions?.reasoningEffort;
     return openaiCodexProvider(trimmed.slice("openai/".length), {
-      authStorage,
+      authStorage: scopedAuthStorage,
       ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
     });
   }
@@ -625,7 +657,7 @@ export function resolveAkeruMastraModel(
           : {}),
       })(model);
     }
-    const credential = useSavedCredential ? getSubscriptionApiKey?.("anthropic") : undefined;
+    const credential = useSavedCredential ? savedApiKey("anthropic") : undefined;
     if (credential) {
       return createAnthropic({
         apiKey: credential.access,
@@ -637,7 +669,7 @@ export function resolveAkeruMastraModel(
         "This Claude instance has no API key or auth token transport for Akeru Mastra.",
       );
     }
-    return opencodeClaudeMaxProvider(model, { authStorage });
+    return opencodeClaudeMaxProvider(model, { authStorage: scopedAuthStorage });
   }
   if (trimmed.startsWith("xai/")) {
     const model = trimmed.slice("xai/".length);
@@ -648,7 +680,7 @@ export function resolveAkeruMastraModel(
           baseUrl: environment?.XAI_BASE_URL?.trim() || undefined,
         }
       : useSavedCredential
-        ? getSubscriptionApiKey?.("xai")
+        ? savedApiKey("xai")
         : undefined;
     if (credential) {
       return createOpenAICompatible({
@@ -660,7 +692,7 @@ export function resolveAkeruMastraModel(
     if (!useSavedCredential) {
       throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
     }
-    return xaiProvider(model, { authStorage });
+    return xaiProvider(model, { authStorage: scopedAuthStorage });
   }
   if (trimmed.startsWith("kimi-for-coding/")) {
     if (!useSavedCredential) {
@@ -669,15 +701,17 @@ export function resolveAkeruMastraModel(
       );
     }
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
-    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
+    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), () =>
+      getKimiAccess(instanceId),
+    );
   }
   if (trimmed.startsWith("opencode-go/")) {
     const inlineConnection = openCodeGoInlineConnection(environment);
     const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
     const resolveApiKey = instanceApiKey
       ? async () => instanceApiKey
-      : useSavedCredential
-        ? getOpenCodeGoApiKey
+      : useSavedCredential && getOpenCodeGoApiKey
+        ? () => getOpenCodeGoApiKey(instanceId)
         : undefined;
     if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
     return akeruOpenCodeGoProvider(
@@ -686,7 +720,7 @@ export function resolveAkeruMastraModel(
       () =>
         environment?.OPENCODE_BASE_URL?.trim() ||
         inlineConnection.baseUrl ||
-        (useSavedCredential ? getSubscriptionApiKey?.("opencode-go")?.baseUrl : undefined),
+        (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
     );
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
@@ -748,7 +782,7 @@ export async function resolveAkeruTools(
     ? createTool({
         id: AKERU_CREATE_ROUTINE_TOOL_NAME,
         description:
-          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
+          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Put the timing only in schedule, and make instructions describe only what each run should do. Keep the name short and specific. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
         inputSchema: routineToolInputSchema,
         requireApproval: false,
         execute: async ({ skillNames, connectorNames, ...input }) =>
@@ -1090,6 +1124,38 @@ export function routineToolNeedsGlobalApproval(toolName: string): boolean {
   );
 }
 
+function isConnectionReset(error: unknown): boolean {
+  if (!error) return false;
+  const code = typeof error === "object" && "code" in error ? error.code : undefined;
+  if (typeof code === "string" && code.toUpperCase() === "ECONNRESET") return true;
+  return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
+}
+
+/**
+ * The stream retry policy `createCodingAgent` applies by default. Akeru builds
+ * its Agent directly because `createCodingAgent` also adds a task-list tool
+ * whenever memory is on, and each list update costs a full model round trip.
+ */
+function akeruErrorProcessors() {
+  return [
+    new StreamErrorRetryProcessor({
+      retryUnknownErrors: true,
+      maxRetries: 2,
+      delayMs: 3_000,
+      matchers: [
+        { match: isBadRequestError, maxRetries: 1, delayMs: 2_000 },
+        {
+          match: isConnectionReset,
+          maxRetries: 2,
+          delayMs: ({ retryCount }) => Math.min(1_000 * 2 ** retryCount, 30_000),
+        },
+      ],
+    }),
+    new PrefillErrorHandler(),
+    new ProviderHistoryCompat(),
+  ];
+}
+
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 /** Harness construction failed before it could serve any session. */
@@ -1307,7 +1373,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   // same synchronous step as its last empty claim, so a row enqueued after that
   // starts a new drain instead of joining one that already finished.
   let drainActive = false;
-  const agent = createCodingAgent({
+  const agent = new Agent({
     id: "akeru-agent",
     name: "Akeru",
     instructions: ({ requestContext }) => resolveAkeruInstructions(requestContext),
@@ -1320,12 +1386,14 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         controllerModelOptions(requestContext),
         options.getSubscriptionApiKey,
         controllerModelConnection(requestContext, options.getModelConnection),
+        options.getSubscriptionOAuth,
+        options.getSubscriptionAccessToken,
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,
     inputProcessors: [observationalMemory.processor],
     outputProcessors: [observationalMemory.processor],
-    workspace: undefined,
+    errorProcessors: akeruErrorProcessors(),
   });
 
   const controller = new MastraAgentController<AkeruMastraState>({

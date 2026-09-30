@@ -17,6 +17,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { PortabilitySettings } from "./PortabilitySettings";
 import { searchableSetting, type SettingsSearchItemId } from "./settingsSearch";
 
 const privacyPolicyUrl = `${AKERU_MARKETING_SITE_URL}/privacy-policy`;
@@ -34,10 +35,10 @@ export function PrivacySettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Privacy controls">
+      <SettingsSection title="Data sharing">
         <SettingsRow
           {...searchableSetting("anonymous-analytics", t)}
-          description="Send app version, platform, architecture, client type, and feature events to PostHog. Akeru Bot does not use provider account IDs."
+          description="Share anonymous usage counts and app details. Prompts, files, and provider account IDs are excluded."
           resetAction={
             settings.analyticsEnabled !== DEFAULT_SERVER_SETTINGS.analyticsEnabled ? (
               <SettingResetButton
@@ -58,7 +59,7 @@ export function PrivacySettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("privacy-product-feedback", t)}
-          description="Send feedback you submit to the Akeru feedback service. The service keeps submissions for up to 90 days."
+          description="Allow feedback you submit to reach the Akeru feedback service. Submissions may be kept for up to 90 days."
           control={
             <Switch
               checked={settings.productFeedbackEnabled}
@@ -71,7 +72,7 @@ export function PrivacySettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("privacy-voice-calls", t)}
-          description="Send live microphone audio and session data to the ChatGPT Realtime service during a call."
+          description="Allow calls through ChatGPT Realtime. Microphone audio and call data leave this environment during a call."
           control={
             <Switch
               checked={settings.voice.enabled}
@@ -79,19 +80,6 @@ export function PrivacySettingsPanel() {
                 updateSettings({ voice: { enabled: Boolean(checked) } })
               }
               aria-label="Enable voice calls"
-            />
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("privacy-provider-update-checks", t)}
-          description="Contact provider release sources to check for newer CLI versions."
-          control={
-            <Switch
-              checked={settings.enableProviderUpdateChecks}
-              onCheckedChange={(checked) =>
-                updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
-              }
-              aria-label="Enable provider update checks"
             />
           }
         />
@@ -143,20 +131,20 @@ export function PrivacySettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Outbound data">
-        <SettingsRow
-          title="Provider CLIs"
-          description="Prompts, selected files, tool results, screenshots, and conversation context go to the provider you choose. Provider terms and retention rules apply."
-        />
+      <SettingsSection title="Backup and transfer">
+        <PortabilitySettings />
+      </SettingsSection>
+
+      <SettingsSection title="Other connections">
         <SettingsRow
           title="Desktop updates"
           description="Signed desktop builds contact the configured release host to check for and download updates."
         />
       </SettingsSection>
 
-      <SettingsSection title="Legal">
+      <SettingsSection title="Policies">
         <SettingsRow
-          title="Policies"
+          title="Read the terms and privacy policy"
           description={
             <span className="flex gap-3">
               <a

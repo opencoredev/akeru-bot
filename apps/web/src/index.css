@@ -124,6 +124,34 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --workspace-native-controls-inset: 0px;
   --workspace-titlebar-control-size: 1.75rem;
   --workspace-titlebar-control-gap: 0.75rem;
+  /*
+   * Motion scale (transitions.dev). Use these instead of literal durations.
+   * --ease-out and --ease-in-out already come from Tailwind's theme, so they
+   * are not redefined here.
+   */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-linear: linear;
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --ease-bounce-strong: cubic-bezier(0.34, 3.85, 0.64, 1);
+  --distance-micro: 4px;
+  --distance-small: 6px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  --distance-large: 30px;
+  --scale-large: 0.96;
+  --scale-medium: 0.97;
+  --scale-small: 0.98;
+  --scale-tiny: 0.99;
+  --blur-small: 2px;
+  --blur-medium: 3px;
+  --blur-large: 8px;
 
   @variant dark {
     --appearance-contrast-target: white;
@@ -211,6 +239,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-foreground: var(--contrast-foreground);
   --color-background: var(--background);
   --color-surface-raised: var(--surface-raised);
+  --color-settings-surface: var(--settings-surface);
+  --color-settings-control: var(--settings-control);
   --color-message: var(--message-surface);
   --color-message-foreground: var(--contrast-message-foreground);
   --color-message-action: var(--message-action);
@@ -1337,7 +1367,7 @@ html[data-theme-id="akeru-noir"] {
     margin-top: -0.3125rem;
     border: 2px solid var(--primary);
     border-radius: 9999px;
-    background: var(--background);
+    background: var(--settings-surface);
     box-shadow: 0 1px 2px color-mix(in srgb, var(--contrast-foreground) 12%, transparent);
     transition:
       transform 120ms ease,
@@ -1349,7 +1379,7 @@ html[data-theme-id="akeru-noir"] {
     height: 1rem;
     border: 2px solid var(--primary);
     border-radius: 9999px;
-    background: var(--background);
+    background: var(--settings-surface);
     box-shadow: 0 1px 2px color-mix(in srgb, var(--contrast-foreground) 12%, transparent);
     transition:
       transform 120ms ease,
@@ -1440,6 +1470,219 @@ html[data-theme-id="akeru-noir"] {
   background-size: var(--surface-grain-size);
 }
 
+/* Sidebar experiment (?sidebar=places): the window is the rail color and the
+   workspace floats as a card beside the sidebar panel. A details aside joins
+   that card, split by a soft inset hairline instead of a full-height border.
+   The join holds while the aside is closing, then the card corners ease back. */
+[data-sidebar-experiment] {
+  --workspace-controls-top: calc(0.5rem + 1px);
+  --workspace-controls-right: calc(env(safe-area-inset-right) + 1.25rem);
+  --shell-card-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 4px 12px -6px rgb(0 0 0 / 7%);
+  /* Resolved here, before the sidebar re-bases --card (to pure black in dark),
+     so the panel card and the main card share one surface. */
+  --shell-card: var(--card);
+  background-color: var(--sidebar);
+
+  @variant dark {
+    --shell-card-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  }
+}
+[data-sidebar-experiment] [data-slot="sidebar-container"] {
+  border-right-width: 0;
+}
+/* The default collapse overshoots, which would clip the rail. */
+[data-sidebar-experiment] :is([data-slot="sidebar-container"], [data-slot="sidebar-gap"]) {
+  transition-duration: var(--duration-slow);
+  transition-timing-function: var(--ease-smooth-out);
+}
+[data-sidebar-experiment] [data-workspace-header] {
+  border-bottom-color: transparent;
+}
+/* The rail stays visible when collapsed, so the title needs no toggle inset. */
+[data-sidebar-experiment] [data-workspace-header] {
+  --workspace-titlebar-content-left: calc(env(safe-area-inset-left) + 0.75rem);
+}
+@media (min-width: 40rem) {
+  [data-sidebar-experiment] [data-workspace-header] {
+    --workspace-titlebar-content-left: calc(env(safe-area-inset-left) + 1.25rem);
+  }
+}
+[data-sidebar-experiment] [data-testid="bot-prompt-composer"] {
+  background-color: var(--card);
+  border-color: color-mix(in srgb, var(--border) 85%, transparent);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 10px 28px -14px rgb(0 0 0 / 16%);
+}
+[data-sidebar-experiment] > [data-slot="sidebar-inset"] {
+  height: auto;
+  margin-block: 0.5rem;
+  margin-right: 0.5rem;
+  overflow: hidden;
+  background-color: var(--card);
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  border-radius: 1rem;
+  box-shadow: var(--shell-card-shadow);
+  transition: border-radius var(--duration-quick) var(--ease-smooth-out);
+}
+@media (min-width: 981px) {
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]:has(
+      + aside:is(:not([aria-hidden="true"]), [data-state="closing"])
+    ) {
+    margin-right: 0;
+    border-right-width: 0;
+    border-radius: 1rem 0 0 1rem;
+  }
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]
+    + aside:is(:not([aria-hidden="true"]), [data-state="closing"]) {
+    position: relative;
+    height: auto;
+    margin-block: 0.5rem;
+    margin-right: 0.5rem;
+    overflow: hidden;
+    background-color: var(--card);
+    border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+    border-left-width: 0;
+    border-radius: 0 1rem 1rem 0;
+    box-shadow: var(--shell-card-shadow);
+  }
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]
+    + aside:is(:not([aria-hidden="true"]), [data-state="closing"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 1rem;
+    left: 0;
+    width: 1px;
+    background-color: color-mix(in srgb, var(--sidebar-border) 55%, transparent);
+    pointer-events: none;
+  }
+}
+
+/* Motion. Short one-shot entrances and state transitions on the motion scale.
+   Nothing here loops, and prefers-reduced-motion turns all of it off. Entrances
+   fill backwards only, so no transform or filter lingers after they finish. */
+@keyframes motion-enter {
+  from {
+    opacity: 0;
+    translate: var(--motion-enter-x, 0) var(--motion-enter-y, 0);
+    filter: blur(var(--motion-enter-blur, 0));
+  }
+}
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Sidebar panel content when switching places on the rail. */
+.motion-place-enter {
+  --motion-enter-y: var(--distance-micro);
+  --motion-enter-blur: var(--blur-small);
+  animation: motion-enter var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+/* A chat message that arrived while the chat was open. */
+.motion-message-enter {
+  --motion-enter-y: var(--distance-base);
+  animation: motion-enter var(--duration-medium) var(--ease-smooth-out) backwards;
+}
+/* Side-by-side page swaps: forward enters from the right, back from the left. */
+.motion-page-forward,
+.motion-page-back {
+  --motion-enter-x: var(--distance-base);
+  animation: motion-enter var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+.motion-page-back {
+  --motion-enter-x: calc(var(--distance-base) * -1);
+}
+/* A section or page rising into place after navigation. */
+.motion-section-enter {
+  --motion-enter-y: var(--distance-micro);
+  animation: motion-enter var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+.motion-fade-in {
+  animation: motion-fade-in var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+
+/* Sliding pill for segmented controls. JS writes translate and width. */
+.motion-segment-pill {
+  transition:
+    translate var(--duration-fast) var(--ease-smooth-out),
+    width var(--duration-fast) var(--ease-smooth-out),
+    opacity var(--duration-quick) var(--ease-smooth-out);
+}
+
+/* Right details asides reveal by width. The column inside keeps its open width
+   and hugs the right edge, so it slides out from under the card edge instead of
+   reflowing. `closing` keeps the card join until the width reaches zero. Width
+   only eases while opening or closing, so browser expand and collapse stay
+   instant for the fixed webview overlay. */
+@media (min-width: 981px) {
+  aside[data-details-panel] {
+    width: var(--details-width);
+  }
+  aside[data-details-panel][data-state="opening"] {
+    transition: width var(--duration-slow) var(--ease-smooth-out);
+  }
+  aside[data-details-panel]:is([data-state="closing"], [data-state="closed"]) {
+    width: 0;
+  }
+  aside[data-details-panel][data-state="closing"] {
+    transition: width var(--duration-medium) var(--ease-smooth-out);
+  }
+  aside[data-details-panel][data-state="closed"] {
+    visibility: hidden;
+    border-width: 0;
+  }
+  aside[data-details-panel] > [data-details-column] {
+    width: var(--details-width);
+    transition: opacity var(--duration-slow) var(--ease-smooth-out);
+  }
+  aside[data-details-panel]:is([data-state="closing"], [data-state="closed"])
+    > [data-details-column] {
+    opacity: 0;
+    transition-duration: var(--duration-quick);
+  }
+}
+
+/* Dropdown menus and select lists grow from their trigger and settle back on
+   close (Base UI holds the popup until the transition ends). Popovers,
+   tooltips, dialogs, and sheets already carry their own transitions. */
+:is([data-slot="menu-popup"], [data-slot="select-popup"]) {
+  transition:
+    scale var(--duration-fast) var(--ease-smooth-out),
+    opacity var(--duration-fast) var(--ease-smooth-out);
+}
+:is([data-slot="menu-popup"], [data-slot="select-popup"])[data-starting-style] {
+  scale: var(--scale-medium);
+  opacity: 0;
+}
+:is([data-slot="menu-popup"], [data-slot="select-popup"])[data-ending-style] {
+  scale: var(--scale-tiny);
+  opacity: 0;
+  transition-duration: var(--duration-quick);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-place-enter,
+  .motion-message-enter,
+  .motion-page-forward,
+  .motion-page-back,
+  .motion-section-enter,
+  .motion-fade-in {
+    animation: none;
+  }
+  .motion-segment-pill,
+  aside[data-details-panel],
+  aside[data-details-panel] > [data-details-column],
+  [data-sidebar-experiment] > [data-slot="sidebar-inset"],
+  :is([data-slot="menu-popup"], [data-slot="select-popup"]) {
+    transition: none;
+  }
+}
+
 /* Suppress all transitions during theme changes */
 .no-transitions,
 .no-transitions *,
@@ -1488,7 +1731,7 @@ html[data-theme-id="akeru-noir"] {
   --destructive: var(--error);
   --border: var(--color-zinc-200);
   --input: var(--color-zinc-300);
-  --ring: var(--primary);
+  --ring: color-mix(in oklab, var(--foreground) 45%, transparent);
   --destructive-foreground: var(--error-foreground);
   --info: var(--color-blue-500);
   --info-foreground: var(--color-blue-700);
@@ -1562,6 +1805,23 @@ html[data-theme-id="akeru-noir"] {
     --terminal-cursor: rgb(180 203 255);
     --terminal-selection-background: rgb(180 203 255 / 25%);
   }
+}
+
+/* Settings surfaces. A grouped block of settings rows lifts off the page card
+   by mixing in a little foreground, so it tracks every theme's card in light
+   and dark. Controls (inputs, selects, secondary buttons) sit one step
+   further, which keeps them visible both on the card and inside a group. */
+:root {
+  --settings-surface: color-mix(in srgb, var(--card) 96.5%, var(--foreground));
+  --settings-control: color-mix(in srgb, var(--card) 93%, var(--foreground));
+
+  @variant dark {
+    --settings-surface: color-mix(in srgb, var(--card) 95.5%, var(--foreground));
+    --settings-control: color-mix(in srgb, var(--card) 91%, var(--foreground));
+  }
+}
+[data-settings-page-scroll] {
+  --secondary: var(--settings-control);
 }
 
 /* Keep both sidebar implementations (default and legacy) on the same quiet
@@ -1667,7 +1927,8 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --update-surface: var(--app-theme-update-surface);
   --border: var(--app-theme-border);
   --input: var(--app-theme-input);
-  --ring: var(--app-theme-focus);
+  /* Focus stays neutral so the theme accent never paints outlines. */
+  --ring: color-mix(in oklab, var(--app-theme-text) 45%, transparent);
   --sidebar: var(--app-theme-sidebar);
   --sidebar-foreground: var(--app-theme-sidebar-foreground);
   --sidebar-muted-foreground: var(--app-theme-sidebar-muted-foreground);
@@ -2102,7 +2363,11 @@ body {
   --surface-grain-size: 256px 256px;
 }
 
+/* Akeru Paper is the default theme. Its light mode is a neutral gray window
+   with white cards, so grain would only read as dirt on the rail. */
 html[data-theme-id="akeru-paper"] {
+  --surface-grain: none;
+
   @variant dark {
     --surface-grain: none;
     --glass-opacity: 100%;
@@ -2718,9 +2983,75 @@ code {
   animation: bot-status-shimmer 1.8s steps(27) infinite;
 }
 
-@keyframes bot-status-shimmer {
+/* The thinking glyph: a comet head steps clockwise around eight pixel cells
+   and its tail fades behind it. Stepped opacity only, about eleven frames a second. */
+.bot-thinking-glyph rect {
+  opacity: 0.12;
+  animation: bot-thinking-comet 720ms step-end infinite;
+  animation-delay: calc(var(--cell) * 90ms - 720ms);
+}
+
+@keyframes bot-thinking-comet {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: 0.7;
+  }
+  25% {
+    opacity: 0.45;
+  }
+  37.5% {
+    opacity: 0.25;
+  }
+  50%,
+  100% {
+    opacity: 0.12;
+  }
+}
+
+/* A light band slides across in-progress text. The band is a masked copy of the
+   text that moves with transform while its inner text counter-moves to stay aligned. */
+.bot-shimmer-text {
+  position: relative;
+  overflow: hidden;
+  --bot-shimmer-duration: 1800ms;
+}
+
+.bot-shimmer-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent 25%, #000 50%, transparent 75%);
+  animation: bot-shimmer-sheen var(--bot-shimmer-duration) linear infinite;
+  will-change: transform;
+}
+
+.bot-shimmer-sheen-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--background) 62%, transparent);
+  animation: bot-shimmer-sheen-counter var(--bot-shimmer-duration) linear infinite;
+  will-change: transform;
+}
+
+@keyframes bot-shimmer-sheen {
+  from {
+    transform: translateX(-75%);
+  }
   to {
-    background-position: -120% 0;
+    transform: translateX(75%);
+  }
+}
+
+@keyframes bot-shimmer-sheen-counter {
+  from {
+    transform: translateX(75%);
+  }
+  to {
+    transform: translateX(-75%);
   }
 }
 
@@ -2763,9 +3094,11 @@ code {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bot-status-shimmer {
+  .bot-thinking-glyph rect {
     animation: none;
-    color: var(--foreground);
-    background: none;
+    opacity: calc(1 - var(--cell) * 0.11);
+  }
+  .bot-shimmer-sheen {
+    display: none;
   }
 }

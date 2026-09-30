@@ -10,6 +10,7 @@ import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
+import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -43,7 +44,6 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
 import { isPreviewFocused } from "../../lib/previewFocus";
-import { isTerminalFocused } from "../../lib/terminalFocus";
 import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
@@ -52,8 +52,7 @@ import { useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
-import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
+import { SidebarChromeFooter, SidebarStatusStack } from "../sidebar/SidebarChrome";
 import { AkeruWordmark } from "../AkeruWordmark";
 import {
   AlertDialog,
@@ -64,6 +63,7 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
@@ -114,7 +114,7 @@ import { useRosterStore } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
 import { useBotChatTarget, useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
-/** Avatar with a yellow needs-you light and a green working light. */
+/** Avatar with a warning needs-you light and an accent working light. */
 function RosterAvatar({
   bot,
   presence,
@@ -136,7 +136,7 @@ function RosterAvatar({
           data-status={indicator}
           className={cn(
             "absolute -bottom-px -right-px rounded-full ring-1 ring-sidebar",
-            indicator === "working" ? "bg-success" : "bg-warning",
+            indicator === "working" ? "bg-primary" : "bg-warning",
             dotClassName ?? "size-2",
           )}
         />
@@ -208,6 +208,79 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
     </SidebarHeader>
   );
 });
+
+/**
+ * Header for the roster when it sits inside the experimental rail layout:
+ * the wordmark as the panel title, with search and create beside it.
+ */
+function RosterPanelHeader({
+  onNewBot,
+  onNewGroup,
+  onSearch,
+}: {
+  onNewBot: () => void;
+  onNewGroup: () => void;
+  onSearch: () => void;
+}) {
+  const iconButton =
+    "size-8! rounded-lg text-sidebar-muted-foreground hover:text-sidebar-foreground [-webkit-app-region:no-drag]";
+  return (
+    <SidebarHeader
+      className={cn(
+        "h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5",
+        isElectron && "drag-region",
+      )}
+    >
+      <Link
+        to="/"
+        className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]"
+      >
+        <AkeruWordmark className="text-[26px]" />
+      </Link>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-label="Search"
+              className={iconButton}
+              size="icon"
+              variant="ghost"
+              onClick={onSearch}
+            >
+              <AppIcon icon={Search01Icon} className="size-[18px]" />
+            </Button>
+          }
+        />
+        <TooltipPopup>Search</TooltipPopup>
+      </Tooltip>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label="Create"
+              data-testid="roster-new-bot"
+              className={iconButton}
+              size="icon"
+              variant="ghost"
+            >
+              <AppIcon icon={PencilEdit02Icon} className="size-[18px]" />
+            </Button>
+          }
+        />
+        <MenuPopup align="end">
+          <MenuItem onClick={onNewBot}>
+            <BotIcon />
+            New bot
+          </MenuItem>
+          <MenuItem onClick={onNewGroup}>
+            <UsersIcon />
+            New group
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </SidebarHeader>
+  );
+}
 
 function useLatestBotMessage(
   botId: string,
@@ -436,7 +509,7 @@ const BotRosterRow = memo(function BotRosterRow({
                 ) : null}
               </span>
               {latestMessage ? (
-                <span className="truncate text-[13px] text-sidebar-muted-foreground">
+                <span className="truncate text-sm text-sidebar-muted-foreground">
                   {latestMessage.text}
                 </span>
               ) : null}
@@ -596,15 +669,6 @@ const GroupRosterRow = memo(function GroupRosterRow({
         >
           {group.name}
         </span>
-        {pinned ? null : (
-          <span
-            aria-label={plural(members, { one: "{count} bot", other: "{count} bots" })}
-            className="flex flex-none items-center gap-1 text-xs text-sidebar-muted-foreground"
-          >
-            <UsersIcon aria-hidden className="size-3" />
-            {members}
-          </span>
-        )}
       </button>
       <Menu>
         <MenuTrigger
@@ -741,7 +805,9 @@ function RosterSectionPlaceholder(props: {
   );
 }
 
-export default function BotRosterSidebar() {
+/** `panel` drops the roster's own chrome for the experimental rail layout. */
+export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" | "panel" } = {}) {
+  const [searchOpen, setSearchOpen] = useState(false);
   const { t } = useI18n();
   const navigate = useNavigate();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -769,12 +835,6 @@ export default function BotRosterSidebar() {
   const [query, setQuery] = useState("");
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
-  );
-  const terminalOpen = useTerminalUiStateStore((state) =>
-    activeBotThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, activeBotThreadRef)
-          .terminalOpen
-      : false,
   );
   const previewOpen = useRightPanelStore((state) =>
     activeBotThreadRef
@@ -1036,8 +1096,6 @@ export default function BotRosterSidebar() {
       if (event.defaultPrevented || event.repeat) return;
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
-          terminalFocus: isTerminalFocused(),
-          terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
           modelPickerOpen: isModelPickerOpen(),
@@ -1055,7 +1113,7 @@ export default function BotRosterSidebar() {
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, previewOpen, shortcutBots, terminalOpen]);
+  }, [keybindings, navigate, previewOpen, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
@@ -1244,30 +1302,46 @@ export default function BotRosterSidebar() {
 
   return (
     <>
-      <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
+      {chrome === "panel" ? (
+        <RosterPanelHeader
+          onNewBot={handleNewBot}
+          onNewGroup={handleNewGroup}
+          onSearch={() => setSearchOpen(true)}
+        />
+      ) : (
+        <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
+      )}
       <SidebarContent
         className="gap-0 [overflow-anchor:none]"
         fixedHeader={
-          <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
-            <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
-              <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
-              <input
-                ref={rosterSearchRef}
-                type="text"
-                data-testid="roster-search-input"
-                placeholder={t("Search")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && query.length > 0) {
-                    event.stopPropagation();
-                    setQuery("");
-                  }
-                }}
-                className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
-              />
-            </label>
-          </SidebarGroup>
+          chrome === "panel" && !searchOpen && query.length === 0 ? null : (
+            <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
+              <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
+                <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
+                <input
+                  type="text"
+                  ref={rosterSearchRef}
+                  data-testid="roster-search-input"
+                  placeholder={t("Search")}
+                  autoFocus={chrome === "panel"}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onBlur={() => {
+                    if (query.length === 0) setSearchOpen(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && query.length > 0) {
+                      event.stopPropagation();
+                      setQuery("");
+                    } else if (event.key === "Escape") {
+                      setSearchOpen(false);
+                    }
+                  }}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
+                />
+              </label>
+            </SidebarGroup>
+          )
         }
       >
         {bots.every((bot) => bot.archivedAt !== null) ? (
@@ -1435,48 +1509,15 @@ export default function BotRosterSidebar() {
                             />
                           );
                         case "unassigned-header":
+                          // Unlabeled drop anchor: the pinned divider marks the
+                          // boundary while dragging, so the list needs no heading.
                           return (
                             <SortableRosterMarker
                               key="unassigned-header"
                               marker="unassigned-header"
                               data-testid="roster-unassigned-header"
-                              className="relative w-full flex-none"
-                            >
-                              <div
-                                className={cn(
-                                  "flex h-8 items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground",
-                                  dragging && "text-sidebar-foreground/80",
-                                  dragTargetZone === "unassigned" && "text-primary",
-                                )}
-                              >
-                                <ChevronDownIcon className="size-3.5" />
-                                <span>
-                                  {(() => {
-                                    const heading = rosterZoneHeading(visibleUnassignedItems);
-                                    if (heading === "Bots and groups") return t("Bots and groups");
-                                    if (heading === "Groups") return t("Groups");
-                                    return t("Bots");
-                                  })()}
-                                </span>
-                                <span
-                                  className="tabular-nums"
-                                  aria-label={t("{count} unpinned", {
-                                    count: visibleUnassignedItems.length,
-                                  })}
-                                >
-                                  {visibleUnassignedItems.length}
-                                </span>
-                                <span
-                                  aria-hidden
-                                  className={cn(
-                                    "h-px min-w-2 flex-1",
-                                    dragTargetZone === "unassigned"
-                                      ? "bg-primary/50"
-                                      : "bg-sidebar-border/60",
-                                  )}
-                                />
-                              </div>
-                            </SortableRosterMarker>
+                              className="relative -mb-px h-0 w-full flex-none"
+                            />
                           );
                         case "unassigned-placeholder":
                           return (
@@ -1647,7 +1688,11 @@ export default function BotRosterSidebar() {
           </AlertDialogPopup>
         ) : null}
       </AlertDialog>
-      <SidebarChromeFooter />
+      {chrome === "panel" ? (
+        <SidebarStatusStack className="shrink-0 p-2" />
+      ) : (
+        <SidebarChromeFooter />
+      )}
     </>
   );
 }

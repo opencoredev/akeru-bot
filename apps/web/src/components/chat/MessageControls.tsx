@@ -1,11 +1,11 @@
-import { CheckIcon, CopyIcon, EllipsisIcon, ReplyIcon, SmilePlusIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, ReplyIcon, SmilePlusIcon } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useI18n } from "~/i18n";
 import { ReplyPlaybackControls, type ReplyPlaybackControlsProps } from "./ReplyPlaybackControls";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -82,9 +82,24 @@ export function parseReplyPrompt(text: string): ParsedReplyPrompt | null {
   };
 }
 
+export function findReplySourceMessageId(
+  messages: ReadonlyArray<{ readonly id: string; readonly text: string }>,
+  replyIndex: number,
+  replyText: string,
+): string | null {
+  const reply = parseReplyPrompt(replyText);
+  if (!reply) return null;
+  const matches = messages
+    .slice(0, replyIndex)
+    .filter((message) => message.text.trim() === reply.quotedText);
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
 export function MessageControls(props: {
   readonly copyText: string;
   readonly align?: "start" | "end";
+  /** Pull the first control left by its inner padding so its glyph sits on the text edge. */
+  readonly flushStart?: boolean;
   readonly selectedReaction?: MessageReactionOption | null;
   readonly onReply?: () => void;
   readonly onReactionChange?: (reaction: MessageReactionOption | null) => void;
@@ -109,40 +124,35 @@ export function MessageControls(props: {
 
   return (
     <div
-      className={cn("flex flex-wrap items-center gap-0.5", props.align === "end" && "justify-end")}
+      className={cn(
+        "flex flex-wrap items-center gap-0.5",
+        props.align === "end" && "justify-end",
+        // Read aloud leads with an xs text button (8px to its icon); otherwise an
+        // icon-xs button (6px, 5px from sm).
+        props.flushStart && (props.readAloud ? "-ms-2" : "-ms-1.5 sm:-ms-[5px]"),
+      )}
       data-message-controls="true"
     >
       {props.readAloud ? <ReplyPlaybackControls {...props.readAloud} /> : null}
-      <Menu>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <MenuTrigger
-                render={
-                  <Button
-                    aria-label={isCopied ? t("Copied") : t("More message actions")}
-                    size="icon-xs"
-                    variant="ghost"
-                  />
-                }
-              />
-            }
-          >
-            {isCopied ? (
-              <CheckIcon className="size-3.5 text-primary" />
-            ) : (
-              <EllipsisIcon className="size-3.5" />
-            )}
-          </TooltipTrigger>
-          <TooltipPopup side="top">{isCopied ? t("Copied") : t("More")}</TooltipPopup>
-        </Tooltip>
-        <MenuPopup align={props.align === "end" ? "end" : "start"} side="top">
-          <MenuItem onClick={() => copyToClipboard(props.copyText)}>
-            <CopyIcon />
-            {t("Copy")}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-label={isCopied ? t("Copied") : t("Copy message")}
+              size="icon-xs"
+              variant="ghost"
+              onClick={() => copyToClipboard(props.copyText)}
+            />
+          }
+        >
+          {isCopied ? (
+            <CheckIcon className="size-3.5 text-primary" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+        </TooltipTrigger>
+        <TooltipPopup side="top">{isCopied ? t("Copied") : t("Copy")}</TooltipPopup>
+      </Tooltip>
       {props.onReply ? (
         <Tooltip>
           <TooltipTrigger
@@ -183,7 +193,7 @@ export function MessageControls(props: {
               }
             >
               {props.selectedReaction ? (
-                <span className="text-sm [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]">
+                <span className="text-xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]">
                   {props.selectedReaction}
                 </span>
               ) : (
@@ -196,11 +206,11 @@ export function MessageControls(props: {
               being reacted to. Picking the selected emoji again removes the reaction. */}
           <MenuPopup
             align={props.align === "end" ? "end" : "start"}
-            className="min-w-0"
+            className="min-w-0 p-1.5"
             side="top"
             sideOffset={8}
           >
-            <div aria-label={t("Choose a reaction")} className="flex gap-0.5" role="group">
+            <div aria-label={t("Choose a reaction")} className="flex gap-1" role="group">
               {MESSAGE_REACTION_OPTIONS.map((option) => (
                 <Button
                   key={option}
@@ -210,7 +220,7 @@ export function MessageControls(props: {
                       : t("React {emoji}", { emoji: option })
                   }
                   aria-pressed={props.selectedReaction === option}
-                  className="text-base [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]"
+                  className="size-11 text-2xl sm:size-11 sm:text-2xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]"
                   size="icon-sm"
                   variant={props.selectedReaction === option ? "secondary" : "ghost"}
                   onClick={() => chooseReaction(option)}

@@ -13,9 +13,7 @@ import {
   AuthAdministrativeScopes,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
-  AuthReviewWriteScope,
   AuthStandardClientScopes,
-  AuthTerminalOperateScope,
   type AuthClientSession,
   type AuthEnvironmentScope,
   type AuthPairingLink,
@@ -87,7 +85,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 import { AnimatedHeight } from "../AnimatedHeight";
 import { Textarea } from "../ui/textarea";
 import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "../../pairingUrl";
-import { readHostedPairingRequest } from "../../hostedPairing";
 import {
   createServerPairingCredential,
   revokeOtherServerClientSessions,
@@ -160,22 +157,12 @@ const PAIRING_SCOPE_OPTIONS: ReadonlyArray<{
   {
     scope: AuthOrchestrationReadScope,
     title: "View environment",
-    description: "Read conversations, status, diffs, and configuration.",
+    description: "Read conversations, status, and configuration.",
   },
   {
     scope: AuthOrchestrationOperateScope,
     title: "Operate bot work",
     description: "Start bot work and perform changes in the environment.",
-  },
-  {
-    scope: AuthTerminalOperateScope,
-    title: "Use terminals",
-    description: "Create terminals and send input to running shells.",
-  },
-  {
-    scope: AuthReviewWriteScope,
-    title: "Write reviews",
-    description: "Create comments while reviewing changes.",
   },
   {
     scope: AuthAccessReadScope,
@@ -308,14 +295,6 @@ function parsePairingUrlFields(
         ? trimmed
         : `https://${trimmed}`;
     const url = new URL(urlLikeInput, window.location.origin);
-    const hostedPairingRequest = readHostedPairingRequest(url);
-    if (hostedPairingRequest) {
-      return {
-        host: hostedPairingRequest.host,
-        pairingCode: hostedPairingRequest.token,
-      };
-    }
-
     const pairingCode = getPairingTokenFromUrl(url);
     if (!pairingCode) return null;
     return {
@@ -1142,7 +1121,9 @@ const PairingClientsList = memo(function PairingClientsList({
 
       {pairingLinks.length === 0 && clientSessions.length === 0 && !isLoading ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-muted-foreground/60">No pairing links or client sessions.</p>
+          <p className="text-xs text-muted-foreground">
+            No other clients have access. Create a pairing link to connect a device.
+          </p>
         </div>
       ) : null}
     </>
@@ -1177,7 +1158,10 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
   return (
     <div className={endpointRowClassName(presentation, isAvailable)}>
       {isEndpointRail && isDefault ? (
-        <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary" aria-hidden />
+        <span
+          className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-foreground/70"
+          aria-hidden
+        />
       ) : null}
       <div className="flex min-h-6 min-w-0 flex-col gap-2 sm:-my-0.5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-baseline gap-3">
@@ -1206,7 +1190,7 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
         </div>
         <div className="ml-auto flex min-h-6 shrink-0 items-center justify-end gap-2">
           {isDefault ? (
-            <span className="rounded-md border border-primary/30 bg-primary/10 px-1 py-0.5 text-[10px] text-primary">
+            <span className="rounded-md border border-border bg-muted px-1 py-0.5 text-[10px] text-foreground">
               Default
             </span>
           ) : null}
@@ -1531,8 +1515,10 @@ function EmptyRemoteEnvironments() {
         <ChevronsLeftRightEllipsisIcon />
       </EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle>No saved remote environments</EmptyTitle>
-        <EmptyDescription>Click “Add environment” to pair another environment.</EmptyDescription>
+        <EmptyTitle>No other environments</EmptyTitle>
+        <EmptyDescription>
+          Add a server to work with its bots, chats, and projects from this client.
+        </EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
@@ -2192,7 +2178,7 @@ export function ConnectionsSettings() {
         aria-pressed={selected}
         className={cn(
           "group flex min-h-24 items-start gap-3 rounded-lg border p-4 text-left",
-          selected ? "border-primary/50 bg-primary/5" : "border-border/60 hover:bg-muted/40",
+          selected ? "border-foreground/50 bg-muted/70" : "border-border/60 hover:bg-muted/40",
         )}
         disabled={isAddingSavedBackend}
         onClick={() => {
@@ -2204,8 +2190,8 @@ export function ConnectionsSettings() {
             className={cn(
               "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border",
               selected
-                ? "border-primary/30 bg-primary/10 text-primary"
-                : "border-border/70 bg-background text-muted-foreground group-hover:text-foreground",
+                ? "border-foreground/30 bg-secondary text-foreground"
+                : "border-border/70 bg-secondary text-muted-foreground group-hover:text-foreground",
             )}
           >
             {input.icon}
@@ -3178,8 +3164,8 @@ export function ConnectionsSettings() {
       ) : (
         <SettingsSection title="This environment">
           <SettingsRow
-            title="Administrative access"
-            description="Pairing links and client-session management require the access:write scope for this backend."
+            title="Pairing and device access"
+            description="This device can use your bots, but it can't create pairing links or sign other devices out. Do that from Akeru Bot on the computer that runs this server."
           />
         </SettingsSection>
       )}
@@ -3203,8 +3189,8 @@ export function ConnectionsSettings() {
                     render={
                       <Button
                         size="xs"
-                        variant="ghost"
-                        className="h-5 gap-1 rounded-sm px-1 text-[11px] font-normal text-muted-foreground/60 hover:text-muted-foreground"
+                        variant="outline"
+                        className="gap-1"
                         aria-label="Add environment"
                       >
                         <PlusIcon className="size-3" />
@@ -3218,8 +3204,11 @@ export function ConnectionsSettings() {
             </Tooltip>
             <DialogPopup className="max-h-[80dvh] sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Add Environment</DialogTitle>
-                <DialogDescription>Pair another environment to this client.</DialogDescription>
+                <DialogTitle>Add environment</DialogTitle>
+                <DialogDescription>
+                  Connect this client to another server. Its bots, chats, and projects stay on that
+                  server.
+                </DialogDescription>
               </DialogHeader>
               <DialogPanel>
                 <div className="space-y-4">

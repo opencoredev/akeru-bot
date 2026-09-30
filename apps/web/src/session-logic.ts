@@ -15,21 +15,12 @@ import {
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
-  type OrchestrationProposedPlanId,
   ProviderDriverKind,
   type ToolLifecycleItemType,
-  type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
 
-import type {
-  ChatMessage,
-  ProposedPlan,
-  SessionPhase,
-  Thread,
-  ThreadSession,
-  TurnDiffSummary,
-} from "./types";
+import type { ChatMessage, SessionPhase, Thread, ThreadSession, TurnDiffSummary } from "./types";
 
 export type ProviderPickerKind = ProviderDriverKind;
 
@@ -143,28 +134,12 @@ export interface ActivePlanState {
   }>;
 }
 
-export interface LatestProposedPlanState {
-  id: OrchestrationProposedPlanId;
-  createdAt: string;
-  updatedAt: string;
-  turnId: TurnId | null;
-  planMarkdown: string;
-  implementedAt: string | null;
-  implementationThreadId: ThreadId | null;
-}
-
 export type TimelineEntry =
   | {
       id: string;
       kind: "message";
       createdAt: string;
       message: ChatMessage;
-    }
-  | {
-      id: string;
-      kind: "proposed-plan";
-      createdAt: string;
-      proposedPlan: ProposedPlan;
     }
   | {
       id: string;
@@ -542,42 +517,6 @@ export function deriveTurnPlans(
     ...entry,
     plan: addPlanStepDurations(entry.plan, planActivities),
   }));
-}
-
-export function findLatestProposedPlan(
-  proposedPlans: ReadonlyArray<ProposedPlan>,
-  latestTurnId: TurnId | string | null | undefined,
-): LatestProposedPlanState | null {
-  if (latestTurnId) {
-    const matchingTurnPlan = [...proposedPlans]
-      .filter((proposedPlan) => proposedPlan.turnId === latestTurnId)
-      .toSorted(
-        (left, right) =>
-          left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
-      )
-      .at(-1);
-    if (matchingTurnPlan) {
-      return toLatestProposedPlanState(matchingTurnPlan);
-    }
-  }
-
-  const latestPlan = [...proposedPlans]
-    .toSorted(
-      (left, right) =>
-        left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
-    )
-    .at(-1);
-  if (!latestPlan) {
-    return null;
-  }
-
-  return toLatestProposedPlanState(latestPlan);
-}
-
-export function hasActionableProposedPlan(
-  proposedPlan: LatestProposedPlanState | Pick<ProposedPlan, "implementedAt"> | null,
-): boolean {
-  return proposedPlan !== null && proposedPlan.implementedAt === null;
 }
 
 /**
@@ -1052,18 +991,6 @@ function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | un
 
 function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
-}
-
-function toLatestProposedPlanState(proposedPlan: ProposedPlan): LatestProposedPlanState {
-  return {
-    id: proposedPlan.id,
-    createdAt: proposedPlan.createdAt,
-    updatedAt: proposedPlan.updatedAt,
-    turnId: proposedPlan.turnId,
-    planMarkdown: proposedPlan.planMarkdown,
-    implementedAt: proposedPlan.implementedAt,
-    implementationThreadId: proposedPlan.implementationThreadId,
-  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1616,7 +1543,6 @@ function compareActivityLifecycleRank(kind: string): number {
 
 export function deriveTimelineEntries(
   messages: ReadonlyArray<ChatMessage>,
-  proposedPlans: ReadonlyArray<ProposedPlan>,
   workEntries: ReadonlyArray<WorkLogEntry>,
   turnPlans: ReadonlyArray<TurnPlanEntry> = [],
 ): TimelineEntry[] {
@@ -1625,12 +1551,6 @@ export function deriveTimelineEntries(
     kind: "message",
     createdAt: message.createdAt,
     message,
-  }));
-  const proposedPlanRows: TimelineEntry[] = proposedPlans.map((proposedPlan) => ({
-    id: proposedPlan.id,
-    kind: "proposed-plan",
-    createdAt: proposedPlan.createdAt,
-    proposedPlan,
   }));
   const turnPlanRows: TimelineEntry[] = turnPlans.map((turnPlan) => ({
     id: turnPlan.id,
@@ -1644,7 +1564,7 @@ export function deriveTimelineEntries(
     createdAt: entry.createdAt,
     entry,
   }));
-  return [...messageRows, ...proposedPlanRows, ...turnPlanRows, ...workRows].toSorted((a, b) =>
+  return [...messageRows, ...turnPlanRows, ...workRows].toSorted((a, b) =>
     a.createdAt.localeCompare(b.createdAt),
   );
 }

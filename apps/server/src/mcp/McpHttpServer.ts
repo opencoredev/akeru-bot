@@ -87,7 +87,7 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
         const invocation = yield* registry.resolve(token);
         if (!invocation) {
           // Without this the only symptom of a dead credential is the agent
-          // quietly losing the whole `t3-code` toolkit for the rest of its
+          // quietly losing the whole `akeru` toolkit for the rest of its
           // session, with nothing on the server to explain why.
           yield* Effect.logWarning("rejected MCP request with an unusable credential", {
             reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",

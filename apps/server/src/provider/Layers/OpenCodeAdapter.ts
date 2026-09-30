@@ -62,7 +62,7 @@ const PROVIDER = ProviderDriverKind.make("opencode");
 /**
  * Version tag stamped into the OpenCode resume cursor. Bump if the cursor
  * shape changes so stale-shaped cursors written by older builds are ignored
- * rather than misread (mirrors GROK_RESUME_VERSION / CURSOR_RESUME_VERSION).
+ * rather than misread (mirrors GROK_RESUME_VERSION).
  */
 const OPENCODE_RESUME_VERSION = 1 as const;
 
@@ -1594,6 +1594,7 @@ export function makeOpenCodeAdapter(
                   serverConfig.secretsDir,
                   "opencode-go",
                   options?.environment,
+                  boundInstanceId,
                 ).pipe(
                   Effect.provideService(FileSystem.FileSystem, fileSystem),
                   Effect.provideService(Path.Path, path),
@@ -1632,7 +1633,7 @@ export function makeOpenCodeAdapter(
               if (mcpSession && !server.external) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
-                    name: "t3-code",
+                    name: "akeru",
                     config: {
                       type: "remote",
                       url: mcpSession.endpoint,
@@ -1875,7 +1876,7 @@ export function makeOpenCodeAdapter(
       const variant = getModelSelectionStringOptionValue(modelSelection, "variant");
 
       context.activeTurnId = turnId;
-      context.activeAgent = agent ?? (input.interactionMode === "plan" ? "plan" : undefined);
+      context.activeAgent = agent;
       context.activeVariant = variant;
       yield* updateProviderSession(
         context,

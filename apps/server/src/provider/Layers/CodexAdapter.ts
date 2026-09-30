@@ -1736,9 +1736,9 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                 },
                 appServerArgs: [
                   "-c",
-                  `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
+                  `mcp_servers.akeru.url=${mcpSession.endpoint}`,
                   "-c",
-                  'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                  'mcp_servers.akeru.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
                 ],
               }
             : {}),

@@ -61,7 +61,7 @@ describe("ProviderAccessSummary", () => {
     expect(checking).toContain("Wait for the health check to finish.");
   });
 
-  it("marks access ready only after a successful request and hides removed Cursor", () => {
+  it("marks access ready only after a successful request", () => {
     const markup = renderToStaticMarkup(
       <ProviderAccessSummary
         provider="anthropic"
@@ -70,8 +70,5 @@ describe("ProviderAccessSummary", () => {
     );
     expect(markup).toContain("Ready.");
     expect(markup).toContain("No action needed. A provider request succeeded.");
-    expect(
-      renderToStaticMarkup(<ProviderAccessSummary provider="cursor" status={undefined} />),
-    ).toBe("");
   });
 });

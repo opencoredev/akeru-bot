@@ -386,7 +386,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
         toastManager.add({
           type: "error",
           title: "Voice is unavailable",
-          description: "Add a project before you call a bot.",
+          description: "Your workspace is still loading. Try again in a moment.",
         });
         return;
       }

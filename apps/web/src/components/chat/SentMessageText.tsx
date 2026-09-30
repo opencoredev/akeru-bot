@@ -1,6 +1,6 @@
 import type { ServerProviderSkill } from "@t3tools/contracts";
 import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
-import { AtSignIcon, CornerDownRightIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
+import { AtSignIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
 import { useI18n } from "../../i18n";
@@ -12,6 +12,7 @@ import {
 } from "../composerInlineChip";
 import { useRosterStore } from "../roster/rosterStore";
 import { parseReplyPrompt } from "./MessageControls";
+import { ReplyReference } from "./ReplyReference";
 import { SkillInlineText } from "./SkillInlineText";
 
 /**
@@ -23,9 +24,12 @@ import { SkillInlineText } from "./SkillInlineText";
 export function SentMessageText({
   text,
   skills = NO_SKILLS,
+  replySourceMessageId = null,
 }: {
   readonly text: string;
   readonly skills?: ReadonlyArray<ServerProviderSkill> | undefined;
+  /** The answered message, when it is on screen, so the backlink can jump to it. */
+  readonly replySourceMessageId?: string | null;
 }) {
   const reply = parseReplyPrompt(text);
   if (!reply) {
@@ -38,13 +42,12 @@ export function SentMessageText({
 
   return (
     <>
-      <div
-        className="mb-1.5 flex min-w-0 items-center gap-1.5 border-s-2 border-current/25 ps-2 text-xs opacity-70"
-        data-testid="sent-reply-backlink"
-      >
-        <CornerDownRightIcon aria-hidden="true" className="size-3 shrink-0" />
-        <span className="shrink-0 font-medium">{reply.label}</span>
-        <span className="min-w-0 truncate">{reply.quotedText}</span>
+      <div className="mb-1.5" data-testid="sent-reply-backlink">
+        <ReplyReference
+          label={reply.label}
+          text={reply.quotedText}
+          sourceMessageId={replySourceMessageId}
+        />
       </div>
       {reply.body ? (
         <p className="whitespace-pre-wrap">

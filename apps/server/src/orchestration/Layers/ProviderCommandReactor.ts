@@ -6,6 +6,7 @@ import {
   type ChatAttachment,
   ComposioOperationError,
   CommandId,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
   MessageId,
   type ModelSelection,
@@ -87,11 +88,7 @@ import {
 import { forkParked, ServerActivation } from "../../serverActivation.ts";
 import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import { providerUnavailabilityFromDetail } from "../../provider/providerSnapshot.ts";
-import {
-  resolveSourceControlWriterModelSelection,
-  ServerSettingsService,
-} from "../../serverSettings.ts";
-import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { ComposioService } from "../../composio/ComposioService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
@@ -404,7 +401,6 @@ const make = Effect.gen(function* () {
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
-  const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const botUsageLedger = yield* BotUsageLedger;
@@ -816,7 +812,8 @@ const make = Effect.gen(function* () {
       threadId: thread.id,
       engine,
       fallback,
-      mode: thread.interactionMode,
+      // Plan mode is retired; threads that stored "plan" run in default mode.
+      mode: "default",
       botConversation: thread.botId != null || thread.groupId != null,
     });
     return { ...selection, configured: engine !== null };
@@ -1295,7 +1292,6 @@ const make = Effect.gen(function* () {
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
-    readonly interactionMode?: "default" | "plan";
     readonly hiddenWake?: boolean;
     readonly timezone?: string;
     readonly createdAt: string;
@@ -1355,7 +1351,7 @@ const make = Effect.gen(function* () {
       ...(normalizedInput ? { input: normalizedInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
-      ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       ...(input.hiddenWake !== undefined ? { hiddenWake: input.hiddenWake } : {}),
       ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
     };
@@ -1381,14 +1377,10 @@ const make = Effect.gen(function* () {
     const cwd = input.worktreePath;
     const attachments = input.attachments ?? [];
     yield* Effect.gen(function* () {
-      const settings = yield* serverSettingsService.getSettings;
-      const modelSelection =
-        settings.sourceControlWriterModelSelection === null
-          ? settings.textGenerationModelSelection
-          : resolveSourceControlWriterModelSelection(
-              settings,
-              yield* providerRegistry.getProviders,
-            );
+      // The branch-name model override retired with Settings > Source Control;
+      // generated branch names use the default text generation model.
+      const { textGenerationModelSelection: modelSelection } =
+        yield* serverSettingsService.getSettings;
 
       const generated = yield* textGeneration.generateBranchName({
         cwd,
@@ -1409,7 +1401,6 @@ const make = Effect.gen(function* () {
         branch: renamed.branch,
         worktreePath: cwd,
       });
-      yield* vcsStatusBroadcaster.refreshStatus(cwd).pipe(Effect.ignoreCause({ log: true }));
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("provider command reactor failed to generate or rename worktree branch", {
@@ -1849,7 +1840,6 @@ const make = Effect.gen(function* () {
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
-      interactionMode: event.payload.interactionMode,
       ...(event.payload.hiddenWake !== undefined ? { hiddenWake: event.payload.hiddenWake } : {}),
       ...(event.payload.timezone !== undefined ? { timezone: event.payload.timezone } : {}),
       createdAt: event.payload.createdAt,
@@ -2041,7 +2031,6 @@ const make = Effect.gen(function* () {
       messageText: input.messageText,
       ...(input.attachments ? { attachments: input.attachments } : {}),
       modelSelection: thread.modelSelection,
-      interactionMode: thread.interactionMode,
       createdAt: input.createdAt,
     }).pipe(Effect.flatMap(agentController.sendTurn));
   });
@@ -2698,45 +2687,61 @@ const make = Effect.gen(function* () {
           thread.session.status === "running" ||
           thread.session.activeTurnId !== null),
     );
-
-    for (const thread of interrupted) {
-      const recoveredAt = DateTime.formatIso(yield* DateTime.now);
-      const threadDetail = yield* projectionSnapshotQuery
-        .getThreadDetailById(thread.id)
-        .pipe(Effect.map(Option.getOrUndefined));
-      yield* settleStalePendingRequests({
-        threadId: thread.id,
-        activities: threadDetail?.activities ?? [],
-        createdAt: recoveredAt,
-      });
-      yield* resumeInterruptedTurn({
-        threadId: thread.id,
-        messageText: STARTUP_RECOVERY_INPUT,
-        createdAt: recoveredAt,
-      }).pipe(
-        Effect.tap(() =>
-          Effect.logInfo("provider command reactor resumed interrupted turn", {
+    const resumeInterrupted = Effect.forEach(
+      interrupted,
+      (thread) =>
+        Effect.gen(function* () {
+          const recoveredAt = DateTime.formatIso(yield* DateTime.now);
+          const threadDetail = yield* projectionSnapshotQuery
+            .getThreadDetailById(thread.id)
+            .pipe(Effect.map(Option.getOrUndefined));
+          yield* settleStalePendingRequests({
             threadId: thread.id,
-            previousTurnId: thread.latestTurn?.turnId,
-          }),
-        ),
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : setThreadSessionErrorOnTurnStartFailure({
+            activities: threadDetail?.activities ?? [],
+            createdAt: recoveredAt,
+          });
+          yield* resumeInterruptedTurn({
+            threadId: thread.id,
+            messageText: STARTUP_RECOVERY_INPUT,
+            createdAt: recoveredAt,
+          }).pipe(
+            Effect.tap(() =>
+              Effect.logInfo("provider command reactor resumed interrupted turn", {
                 threadId: thread.id,
-                detail: `Automatic recovery failed. Use Resume to continue. ${formatFailureDetail(cause)}`,
-                createdAt: recoveredAt,
-              }).pipe(
-                Effect.andThen(
-                  Effect.logWarning("provider command reactor could not resume interrupted turn", {
+                previousTurnId: thread.latestTurn?.turnId,
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.interrupt
+                : setThreadSessionErrorOnTurnStartFailure({
                     threadId: thread.id,
-                    cause: Cause.pretty(cause),
-                  }),
-                ),
-              ),
-        ),
-      );
+                    detail: `Automatic recovery failed. Use Resume to continue. ${formatFailureDetail(cause)}`,
+                    createdAt: recoveredAt,
+                  }).pipe(
+                    Effect.andThen(
+                      Effect.logWarning(
+                        "provider command reactor could not resume interrupted turn",
+                        {
+                          threadId: thread.id,
+                          cause: Cause.pretty(cause),
+                        },
+                      ),
+                    ),
+                  ),
+            ),
+          );
+        }),
+      { discard: true },
+    );
+
+    // A provider may wait indefinitely for a tool approval. Keep startup
+    // responsive while interrupted turns recover after activation.
+    const activation = yield* ServerActivation;
+    if (activation === undefined) {
+      yield* resumeInterrupted;
+    } else {
+      yield* forkParked(resumeInterrupted);
     }
   });
 

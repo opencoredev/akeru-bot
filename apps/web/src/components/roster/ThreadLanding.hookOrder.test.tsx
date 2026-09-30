@@ -49,9 +49,19 @@ vi.mock("./useBotEngineAvailability", () => ({
 }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
-    atom === "people" ? { current: null, host: null } : atom === "snapshot" ? mocks.snapshot : null,
+    atom === "people"
+      ? { current: null, host: null }
+      : atom === "snapshot"
+        ? mocks.snapshot
+        : atom === "bots"
+          ? []
+          : null,
 }));
-vi.mock("../../state/bots", () => ({ environmentPeopleAtom: () => "people" }));
+vi.mock("../../state/bots", () => ({
+  environmentPeopleAtom: () => "people",
+  environmentBotsAtom: () => "bots",
+  botEnvironment: { update: null },
+}));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
   useEnvironmentConnectionState: () => ({ data: null }),

@@ -205,53 +205,21 @@ function withFakeCodexEnv<A, E, R>(
 }
 
 it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
-  it.effect("generates and sanitizes commit messages without branch by default", () =>
-    withFakeCodexEnv(
-      {
-        output: JSON.stringify({
-          subject:
-            "  Add important change to the system with too much detail and a trailing period.\nsecondary line",
-          body: "\n- added migration\n- updated tests\n",
-        }),
-        stdinMustNotContain: "branch must be a short semantic git branch fragment",
-      },
-      (textGeneration) =>
-        Effect.gen(function* () {
-          const generated = yield* textGeneration.generateCommitMessage({
-            cwd: process.cwd(),
-            branch: "feature/codex-effect",
-            stagedSummary: "M README.md",
-            stagedPatch: "diff --git a/README.md b/README.md",
-            modelSelection: DEFAULT_TEST_MODEL_SELECTION,
-          });
-
-          expect(generated.subject.length).toBeLessThanOrEqual(72);
-          expect(generated.subject.endsWith(".")).toBe(false);
-          expect(generated.body).toBe("- added migration\n- updated tests");
-          expect(generated.branch).toBeUndefined();
-        }),
-    ),
-  );
-
   it.effect(
     "forwards codex service tier and non-default reasoning effort into codex exec config",
     () =>
       withFakeCodexEnv(
         {
           output: JSON.stringify({
-            subject: "Add important change",
-            body: "",
+            title: "Add important change",
           }),
           requireServiceTier: "priority",
           requireReasoningEffort: "xhigh",
-          stdinMustNotContain: "branch must be a short semantic git branch fragment",
         },
         (textGeneration) =>
-          textGeneration.generateCommitMessage({
+          textGeneration.generateThreadTitle({
             cwd: process.cwd(),
-            branch: "feature/codex-effect",
-            stagedSummary: "M README.md",
-            stagedPatch: "diff --git a/README.md b/README.md",
+            message: "Add important change",
             modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.4", [
               { id: "reasoningEffort", value: "xhigh" },
               { id: "serviceTier", value: "priority" },
@@ -264,19 +232,16 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
     withFakeCodexEnv(
       {
         output: JSON.stringify({
-          subject: "Add important change",
-          body: "",
+          title: "Add important change",
         }),
         launchArgs: "--strict-config --listen off",
         requireArg: "--strict-config",
         forbidArg: "--listen",
       },
       (textGeneration) =>
-        textGeneration.generateCommitMessage({
+        textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          branch: "feature/codex-effect",
-          stagedSummary: "M README.md",
-          stagedPatch: "diff --git a/README.md b/README.md",
+          message: "Add important change",
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         }),
     ),
@@ -286,8 +251,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
     withFakeCodexEnv(
       {
         output: JSON.stringify({
-          subject: "Add important change",
-          body: "",
+          title: "Add important change",
         }),
         launchArgs: "--enable settings-feature",
         environment: { T3CODE_CODEX_LAUNCH_ARGS: " --strict-config --listen off " },
@@ -295,11 +259,9 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
         forbidArg: "settings-feature",
       },
       (textGeneration) =>
-        textGeneration.generateCommitMessage({
+        textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          branch: "feature/codex-effect",
-          stagedSummary: "M README.md",
-          stagedPatch: "diff --git a/README.md b/README.md",
+          message: "Add important change",
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         }),
     ),
@@ -309,72 +271,15 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
     withFakeCodexEnv(
       {
         output: JSON.stringify({
-          subject: "Add important change",
-          body: "",
+          title: "Add important change",
         }),
         requireReasoningEffort: "low",
       },
       (textGeneration) =>
-        textGeneration.generateCommitMessage({
+        textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          branch: "feature/codex-effect",
-          stagedSummary: "M README.md",
-          stagedPatch: "diff --git a/README.md b/README.md",
+          message: "Add important change",
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
-        }),
-    ),
-  );
-
-  it.effect("generates commit message with branch when includeBranch is true", () =>
-    withFakeCodexEnv(
-      {
-        output: JSON.stringify({
-          subject: "Add important change",
-          body: "",
-          branch: "fix/important-system-change",
-        }),
-        stdinMustContain: "branch must be a short semantic git branch fragment",
-      },
-      (textGeneration) =>
-        Effect.gen(function* () {
-          const generated = yield* textGeneration.generateCommitMessage({
-            cwd: process.cwd(),
-            branch: "feature/codex-effect",
-            stagedSummary: "M README.md",
-            stagedPatch: "diff --git a/README.md b/README.md",
-            includeBranch: true,
-            modelSelection: DEFAULT_TEST_MODEL_SELECTION,
-          });
-
-          expect(generated.subject).toBe("Add important change");
-          expect(generated.branch).toBe("feature/fix/important-system-change");
-        }),
-    ),
-  );
-
-  it.effect("generates PR content and trims markdown body", () =>
-    withFakeCodexEnv(
-      {
-        output: JSON.stringify({
-          title: "  Improve orchestration flow\nwith ignored suffix",
-          body: "\n## Summary\n- improve flow\n\n## Testing\n- bun test\n\n",
-        }),
-      },
-      (textGeneration) =>
-        Effect.gen(function* () {
-          const generated = yield* textGeneration.generatePrContent({
-            cwd: process.cwd(),
-            baseBranch: "main",
-            headBranch: "feature/codex-effect",
-            commitSummary: "feat: improve orchestration flow",
-            diffSummary: "2 files changed",
-            diffPatch: "diff --git a/a.ts b/a.ts",
-            modelSelection: DEFAULT_TEST_MODEL_SELECTION,
-          });
-
-          expect(generated.title).toBe("Improve orchestration flow");
-          expect(generated.body.startsWith("## Summary")).toBe(true);
-          expect(generated.body.endsWith("\n\n")).toBe(false);
         }),
     ),
   );
@@ -644,18 +549,16 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
   it.effect("returns typed TextGenerationError when codex exits non-zero", () =>
     withFakeCodexEnv(
       {
-        output: JSON.stringify({ subject: "ignored", body: "" }),
+        output: JSON.stringify({ title: "ignored" }),
         exitCode: 1,
         stderr: "codex execution failed",
       },
       (textGeneration) =>
         Effect.gen(function* () {
           const result = yield* textGeneration
-            .generateCommitMessage({
+            .generateThreadTitle({
               cwd: process.cwd(),
-              branch: "feature/codex-error",
-              stagedSummary: "M README.md",
-              stagedPatch: "diff --git a/README.md b/README.md",
+              message: "Add important change",
               modelSelection: DEFAULT_TEST_MODEL_SELECTION,
             })
             .pipe(Effect.result);

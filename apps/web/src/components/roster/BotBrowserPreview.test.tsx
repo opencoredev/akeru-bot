@@ -53,7 +53,7 @@ describe("BotBrowserPreview", () => {
     expect(isLiveBrowserStatus("unsupported")).toBe(false);
   });
 
-  it("rests on the app surface until there is a page to show", () => {
+  it("stays hidden until the bot has a thread to show", () => {
     const markup = renderToStaticMarkup(
       <BotBrowserPreview
         botName="Akeru"
@@ -64,14 +64,8 @@ describe("BotBrowserPreview", () => {
       />,
     );
 
-    // An idle card that paints itself black reads as a broken screen.
-    expect(markup).not.toContain("bg-zinc-950");
-    expect(markup).toContain("bg-muted/40");
-    // A bot that has never run has no thread, so it waits instead of claiming a
-    // connection it can never finish.
-    expect(markup).toContain("The browser appears when the bot opens a page.");
-    expect(markup).not.toContain("Connecting");
-    expect(markup).not.toContain('aria-label="Expand Akeru browser"');
+    // A bot that has never run has no page yet, so the inline preview stays out of the way.
+    expect(markup).toBe("");
   });
 
   it("goes dark and offers Open once a page is live", () => {

@@ -34,6 +34,14 @@ A file that cannot be decoded does not look like a logout, and the UI and runtim
 
 Either way the damaged file stays on disk until the next successful write. That write builds on the served state (the last good credentials, or nothing), moves the damaged file to `subscription-auth.json.corrupt`, and writes the new file. A repaired file clears the error on the next read. A file the server cannot read at all reports reason `unreadable`, and updates refuse to overwrite it.
 
+The default instance for each provider keeps its historical provider key in this file. Added
+instances use `instance:<provider>:<instanceId>` keys. A pending login carries the instance ID
+through polling or code completion, and refresh uses the same key. This preserves existing
+single-account credentials without rewriting the file. `subscriptionAuth.logout` deletes only the
+selected instance's credential and health record.
+Removing a custom instance through the settings RPC also deletes its credential after the settings
+update succeeds. Removing a default instance override keeps the default account connected.
+
 Local desktop, a remote server, and a future hosted control plane use the same boundary. The storage adapter can move from the local file to an encrypted tenant secret store without changing the client contract.
 
 ## Access copy in Settings
@@ -59,11 +67,11 @@ This limits the lifetime of OAuth access in a sandbox. API keys do not have the 
 
 The client drives every login over RPC:
 
-- `subscriptionAuth.start` creates a pending login. An `authMode` of `api-key` selects key entry and accepts an optional `baseUrl`. OAuth remains the default for subscription providers.
+- `subscriptionAuth.start` creates a pending login. An optional `instanceId` binds it to a configured instance of that provider. An `authMode` of `api-key` selects key entry and accepts an optional `baseUrl`. OAuth remains the default for subscription providers.
 - `subscriptionAuth.poll` performs one upstream poll for a device or browser-poll flow.
 - `subscriptionAuth.complete` exchanges a pasted code for Anthropic OAuth or stores a key for an API-key login.
 - `subscriptionAuth.cancel` removes abandoned pending state.
-- `subscriptionAuth.logout` removes the stored credential.
+- `subscriptionAuth.logout` removes the selected instance's stored credential. Without `instanceId`, it removes the historical default account.
 
 OpenAI's localhost callback flow is intentionally not used. A callback on the server machine cannot complete from a phone or remote browser. The Codex device flow works across every Akeru surface.
 
@@ -81,9 +89,13 @@ Tests replace the client with `testUtils/scriptedHttpClient.ts` and drive timeou
 
 ## Runtime integration
 
-`SubscriptionAuthService.getAccessToken(provider)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests. `getApiKeyCredential(provider)` returns the current server-owned API key and its optional base URL for runtime use only. Both read through the store's stat check, so they see changes other writers made.
+`SubscriptionAuthService.getAccessToken(provider, instanceId)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests per account. `getApiKeyCredential(provider, instanceId)` returns the current server-owned API key and its optional base URL for runtime use only. Omitting `instanceId` selects the historical default account; other provider instances keep their own account under an `instance:<provider>:<instanceId>` key. Both read through the store's stat check, so they see changes other writers made.
 
 Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Claude, Grok, Kimi, and OpenCode Go resolve saved keys and custom endpoints through their Mastra model transports. Standard OpenCode receives saved API credentials when its adapter starts a provider process. The login, completion, and logout RPC paths stop affected sessions when the API key or endpoint changes. The next turn starts a new session with the current connection. Grok supports API keys at its default endpoint; its current transport rejects custom base URLs.
+
+The standard OpenCode CLI driver is no longer synthesized as a default instance. Explicit old
+OpenCode instances remain routable for existing settings and chats. OpenCode Go is the supported
+provider option in Settings.
 
 ## Post-login health check
 

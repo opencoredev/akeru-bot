@@ -11,12 +11,11 @@ import * as Schema from "effect/Schema";
 import { AkeruMemoryApprovalRequest } from "./akeruMemory.ts";
 import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const SubscriptionProviderId = Schema.Literals([
   "anthropic",
   "openai-codex",
-  /** Legacy Cursor subscription records still decode; Cursor auth is unavailable. */
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",
@@ -48,7 +47,10 @@ export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
 
 export const SubscriptionProviderStatus = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
   connected: Schema.Boolean,
+  /** Account identifier supplied by the provider, when available. Never a token. */
+  accountLabel: Schema.optional(TrimmedNonEmptyString),
   authMode: Schema.optional(SubscriptionAuthMode),
   baseUrl: Schema.optional(SubscriptionBaseUrl),
   /** ms epoch when the current access token expires. Absent when disconnected. */
@@ -184,6 +186,9 @@ export type BotInboxResolveInput = typeof BotInboxResolveInput.Type;
 
 export const SubscriptionAuthStatuses = Schema.Struct({
   providers: Schema.Array(SubscriptionProviderStatus),
+  accounts: Schema.Array(SubscriptionProviderStatus).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   inbox: Schema.Array(BotInboxItem).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
@@ -191,11 +196,13 @@ export type SubscriptionAuthStatuses = typeof SubscriptionAuthStatuses.Type;
 
 export const SubscriptionAuthHealthTestInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
 });
 export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestInput.Type;
 
 export const SubscriptionAuthStartInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
   authMode: Schema.optional(SubscriptionAuthMode),
   /** Custom endpoints apply to API-key authentication only. */
   baseUrl: Schema.optional(SubscriptionBaseUrl),
@@ -242,6 +249,7 @@ export type SubscriptionAuthLoginProgress = typeof SubscriptionAuthLoginProgress
 
 export const SubscriptionAuthLogoutInput = Schema.Struct({
   provider: SubscriptionProviderId,
+  instanceId: Schema.optional(ProviderInstanceId),
 });
 export type SubscriptionAuthLogoutInput = typeof SubscriptionAuthLogoutInput.Type;
 

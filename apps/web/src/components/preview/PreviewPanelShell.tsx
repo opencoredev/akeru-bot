@@ -39,7 +39,7 @@ if (typeof window !== "undefined") {
 const PREVIEW_PANEL_MAX_WIDTH_FRACTION = 0.7;
 const PREVIEW_PANEL_DEFAULT_WIDTH = 540;
 /**
- * Width reserved for the sibling column (chat, pull-request list) sharing the
+ * Width reserved for the sibling column (the chat) sharing the
  * panel's flex row. The viewport fraction alone is not enough: the app
  * sidebar sits outside the row, so on narrow windows (any MacBook, even
  * fullscreen) the remaining 30% of the viewport minus the sidebar left the
@@ -68,9 +68,8 @@ export function PreviewPanelShell(props: {
   maximized?: boolean;
   /**
    * Overrides the localStorage key used to persist the panel width. Callers
-   * embedding this shell for a different surface (e.g. the pull requests
-   * page) should pass their own key so resizing one panel doesn't clobber
-   * the other's remembered width.
+   * embedding this shell for a different surface should pass their own key so
+   * resizing one panel doesn't clobber the other's remembered width.
    */
   widthStorageKey?: string;
   /** Overrides the initial width (px) before the user has resized the panel. */

@@ -10,7 +10,6 @@ import {
 } from "@t3tools/client-runtime/state/threads";
 import type {
   OrchestrationMessage,
-  OrchestrationProposedPlan,
   OrchestrationSession,
   OrchestrationThreadActivity,
   ScopedProjectRef,
@@ -30,7 +29,6 @@ const EMPTY_PROJECT_REFS: ReadonlyArray<ScopedProjectRef> = Object.freeze([]);
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
 const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
 const EMPTY_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = Object.freeze([]);
-const EMPTY_PROPOSED_PLANS: ReadonlyArray<OrchestrationProposedPlan> = Object.freeze([]);
 
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("web-project:empty"),
@@ -58,9 +56,6 @@ const EMPTY_MESSAGES_ATOM = Atom.make(EMPTY_MESSAGES).pipe(
 );
 const EMPTY_ACTIVITIES_ATOM = Atom.make(EMPTY_ACTIVITIES).pipe(
   Atom.withLabel("web-thread-activities:empty"),
-);
-const EMPTY_PROPOSED_PLANS_ATOM = Atom.make(EMPTY_PROPOSED_PLANS).pipe(
-  Atom.withLabel("web-thread-proposed-plans:empty"),
 );
 const EMPTY_SESSION_ATOM = Atom.make<OrchestrationSession | null>(null).pipe(
   Atom.withLabel("web-thread-session:empty"),
@@ -224,14 +219,6 @@ export function useThreadActivities(
 ): ReadonlyArray<OrchestrationThreadActivity> {
   return useAtomValue(
     ref === null ? EMPTY_ACTIVITIES_ATOM : environmentThreadDetails.activitiesAtom(ref),
-  );
-}
-
-export function useThreadProposedPlans(
-  ref: ScopedThreadRef | null,
-): ReadonlyArray<OrchestrationProposedPlan> {
-  return useAtomValue(
-    ref === null ? EMPTY_PROPOSED_PLANS_ATOM : environmentThreadDetails.proposedPlansAtom(ref),
   );
 }
 

@@ -265,7 +265,7 @@ export function useGroupThreadRuntime(groupId: string) {
         return false;
       }
       if (!activeProject) {
-        setError(localFailure("Add a project before you message a group."));
+        setError(localFailure("Your workspace is still loading. Try again in a moment."));
         return false;
       }
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);

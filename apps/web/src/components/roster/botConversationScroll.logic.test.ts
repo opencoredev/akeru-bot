@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isConversationAtEnd, reduceConversationFollowState } from "./botConversationScroll.logic";
+import {
+  isConversationAtEnd,
+  didScrollAwayFromEnd,
+  reduceConversationFollowState,
+} from "./botConversationScroll.logic";
 
 describe("isConversationAtEnd", () => {
   it("treats underflowing and end-aligned conversations as live", () => {
@@ -23,31 +27,68 @@ describe("isConversationAtEnd", () => {
 describe("reduceConversationFollowState", () => {
   it("does not follow streaming growth after the user scrolls away", () => {
     const state = reduceConversationFollowState(
-      { followingEnd: true, programmaticScroll: false },
+      { followingEnd: true },
       { type: "user-navigation" },
     );
 
-    expect(state).toEqual({ followingEnd: false, programmaticScroll: false });
+    expect(state).toEqual({ followingEnd: false });
+  });
+
+  it("stays pinned when content growth moves the end away without user input", () => {
+    const state = reduceConversationFollowState(
+      { followingEnd: true },
+      { type: "scroll", isAtEnd: false, movedAway: false },
+    );
+
+    expect(state).toEqual({ followingEnd: true });
+  });
+
+  it("unpins when the reader scrolls toward older messages", () => {
+    const state = reduceConversationFollowState(
+      { followingEnd: true },
+      { type: "scroll", isAtEnd: false, movedAway: true },
+    );
+
+    expect(state).toEqual({ followingEnd: false });
   });
 
   it("re-enables live follow when the user returns to the end", () => {
     const state = reduceConversationFollowState(
-      { followingEnd: false, programmaticScroll: false },
-      { type: "scroll", isAtEnd: true },
+      { followingEnd: false },
+      { type: "scroll", isAtEnd: true, movedAway: true },
     );
 
-    expect(state).toEqual({ followingEnd: true, programmaticScroll: false });
+    expect(state).toEqual({ followingEnd: true });
   });
 
-  it("keeps a smooth scroll active until it reaches the end", () => {
+  it("keeps a smooth scroll to the end pinned while it is in flight", () => {
     const started = reduceConversationFollowState(
-      { followingEnd: false, programmaticScroll: false },
+      { followingEnd: false },
       { type: "scroll-to-end" },
     );
-    const inProgress = reduceConversationFollowState(started, { type: "scroll", isAtEnd: false });
-    const finished = reduceConversationFollowState(inProgress, { type: "scroll", isAtEnd: true });
+    const inProgress = reduceConversationFollowState(started, {
+      type: "scroll",
+      isAtEnd: false,
+      movedAway: false,
+    });
 
-    expect(inProgress).toEqual({ followingEnd: true, programmaticScroll: true });
-    expect(finished).toEqual({ followingEnd: true, programmaticScroll: false });
+    expect(inProgress).toEqual({ followingEnd: true });
+  });
+});
+
+describe("didScrollAwayFromEnd", () => {
+  const base = { scrollTop: 800, scrollHeight: 1400, clientHeight: 600 };
+
+  it("detects the reader scrolling up while layout is unchanged", () => {
+    expect(didScrollAwayFromEnd(base, { ...base, scrollTop: 500 })).toBe(true);
+  });
+
+  it("ignores scrolls caused by content or viewport size changes", () => {
+    expect(didScrollAwayFromEnd(base, { ...base, scrollTop: 700, scrollHeight: 1300 })).toBe(false);
+    expect(didScrollAwayFromEnd(base, { ...base, scrollTop: 700, clientHeight: 700 })).toBe(false);
+  });
+
+  it("ignores scrolling toward the end", () => {
+    expect(didScrollAwayFromEnd(base, { ...base, scrollTop: 810 })).toBe(false);
   });
 });

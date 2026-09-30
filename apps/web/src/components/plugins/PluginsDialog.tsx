@@ -5,29 +5,33 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   McpServerId,
-  type ComposioToolkit,
   type EnvironmentId,
   type McpServer,
   type ProviderAccessStatus,
 } from "@t3tools/contracts";
-import { SearchIcon } from "lucide-react";
-import { useDeferredValue, useEffect, useState } from "react";
+import { Cancel01Icon, PuzzleIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { useChangedSinceMount } from "../../hooks/useChangedSinceMount";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
+  integrationsShListing,
   isInstallablePlugin,
+  isListedIntegration,
   loadDirectoryCatalog,
   type PluginDirectoryDefinition,
   type PluginSkill,
 } from "../../../../../plugins";
+import { isElectron } from "../../env";
 import { ensureLocalApi } from "../../localApi";
 import { cn, randomUUID } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../workspaceTitlebar";
 import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcpServers";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -43,14 +47,10 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
+import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
-import {
-  CustomMcpServers,
-  ComposioToolkitResults,
-  PluginLogoImage,
-  PluginsCatalog,
-  RemovedBuiltinServers,
-} from "./PluginsCatalog";
+import { ComposioSection } from "./ComposioSection";
+import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
 import { runPluginEnablePlan } from "./pluginConnection";
 import {
@@ -67,15 +67,18 @@ import {
   type PluginFilter,
 } from "./pluginPresentation";
 
-const CATALOG = loadDirectoryCatalog();
-const gmailPlugin = CATALOG.find((plugin) => plugin.id === "gmail");
-if (!gmailPlugin) throw new TypeError("Gmail is missing from the plugin directory.");
-export const COMPOSIO_APPS = [gmailPlugin] as const;
+const ALL_CATEGORIES_VALUE = "all-categories";
+const PRIMARY_FILTERS = ["All", "Featured", "Installed"] as const satisfies readonly PluginFilter[];
+
+// The directory lists only integrations.sh entries, but an installed plugin that later
+// drops off that list (for example, pending vendor verification) must stay manageable.
+const FULL_CATALOG = loadDirectoryCatalog();
+const CATALOG = FULL_CATALOG.filter(isListedIntegration);
 export const PLUGIN_DIRECTORY_FILTERS = buildPluginFilters(CATALOG);
 
 export function resolvePluginDialogServers(
   servers: readonly McpServer[],
-  catalog: readonly PluginDirectoryDefinition[] = CATALOG,
+  catalog: readonly PluginDirectoryDefinition[] = FULL_CATALOG,
 ): {
   readonly installedPlugins: readonly PluginDirectoryDefinition[];
   readonly customServers: readonly McpServer[];
@@ -94,16 +97,170 @@ export function resolvePluginDialogServers(
 export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0 gap-3 px-6 pt-5 pb-4";
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
+export const PLUGIN_PAGE_COLUMN_CLASS_NAME =
+  "mx-auto flex w-full max-w-6xl flex-col px-4 pt-0 pb-16 sm:px-10 sm:pt-1";
 
-export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: readonly string[]) {
-  if (recoveryFailures.length === 0) return null;
-  return {
-    type: "warning" as const,
-    title: `${pluginTitle} connected with a session issue`,
-    description: `${recoveryFailures.join(" ")} Restart the affected bot session to retry.`,
-  };
+function isPrimaryFilter(filter: PluginFilter): filter is (typeof PRIMARY_FILTERS)[number] {
+  return (PRIMARY_FILTERS as readonly PluginFilter[]).includes(filter);
 }
 
+/** Toolbar search field: card fill with a leading icon. */
+function PluginSearchField({
+  query,
+  onQueryChange,
+}: {
+  readonly query: string;
+  readonly onQueryChange: (query: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <AppIcon
+        icon={Search01Icon}
+        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        aria-label="Search plugins"
+        autoComplete="off"
+        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
+        placeholder="Search plugins"
+        spellCheck={false}
+        type="search"
+        value={query}
+        onChange={(event) => onQueryChange(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && query) {
+            event.stopPropagation();
+            onQueryChange("");
+          }
+        }}
+      />
+      {query ? (
+        <button
+          aria-label="Clear search"
+          className="absolute end-1.5 top-1/2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-hidden transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          type="button"
+          onClick={() => onQueryChange("")}
+        >
+          <AppIcon icon={Cancel01Icon} className="size-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Moves the segmented control's pill under the pressed button. The first placement,
+ * resizes, and reappearing after a category was chosen skip the slide.
+ */
+function useSegmentPill(active: string | null) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    const pill = pillRef.current;
+    if (!bar || !pill) return;
+    const place = (instant: boolean) => {
+      const target = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!target) {
+        pill.style.opacity = "0";
+        shownRef.current = false;
+        return;
+      }
+      if (instant || !shownRef.current) pill.style.transition = "none";
+      pill.style.translate = `${target.offsetLeft}px 0`;
+      pill.style.width = `${target.offsetWidth}px`;
+      pill.style.opacity = "1";
+      if (pill.style.transition === "none") {
+        void pill.offsetWidth;
+        pill.style.transition = "";
+      }
+      shownRef.current = true;
+    };
+    place(false);
+    const observer = new ResizeObserver(() => place(true));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [active]);
+
+  return { barRef, pillRef };
+}
+
+/**
+ * Directory filters: a small segmented control for the three views plus one
+ * category menu, so eleven categories never crowd the page.
+ */
+function PluginFilterBar({
+  filter,
+  onFilterChange,
+}: {
+  readonly filter: PluginFilter;
+  readonly onFilterChange: (filter: PluginFilter) => void;
+}) {
+  const categories = PLUGIN_DIRECTORY_FILTERS.filter((item) => !isPrimaryFilter(item));
+  const category = isPrimaryFilter(filter) ? null : filter;
+  const { barRef, pillRef } = useSegmentPill(category ? null : filter);
+  return (
+    <div
+      aria-label="Plugin sections and categories"
+      className="flex flex-wrap items-center justify-between gap-2"
+      role="group"
+    >
+      <div className="relative inline-flex rounded-[10px] bg-muted/70 p-0.5" ref={barRef}>
+        <span
+          aria-hidden="true"
+          className="motion-segment-pill pointer-events-none absolute inset-y-0.5 left-0 rounded-lg bg-card opacity-0 shadow-xs ring-1 ring-border/60"
+          ref={pillRef}
+        />
+        {PRIMARY_FILTERS.map((item) => (
+          <button
+            aria-pressed={filter === item}
+            className={cn(
+              "relative h-7 cursor-pointer rounded-lg px-3 text-[13px] outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+              filter === item
+                ? "font-medium text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            key={item}
+            type="button"
+            onClick={() => onFilterChange(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+      {categories.length > 0 ? (
+        <Select
+          value={category ?? ALL_CATEGORIES_VALUE}
+          onValueChange={(value) => {
+            const next = PLUGIN_DIRECTORY_FILTERS.find((item) => item === value);
+            onFilterChange(next ?? "All");
+          }}
+        >
+          <SelectTrigger
+            aria-label="Plugin category"
+            className={cn("h-8 rounded-lg text-[13px]", category && "text-foreground")}
+            size="sm"
+            variant="ghost"
+          >
+            <SelectValue>{category ?? "All categories"}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            <SelectItem value={ALL_CATEGORIES_VALUE}>All categories</SelectItem>
+            {categories.map((item) => (
+              <SelectItem key={item} value={item}>
+                {item}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      ) : null}
+    </div>
+  );
+}
+
+/** The named blocker for a brokered plugin that cannot connect yet, or null when it can. */
 export function pluginBrokeredBlockerNotice(plugin: PluginDirectoryDefinition) {
   const blocker = pluginBlocker(plugin);
   if (plugin.connection.type !== "brokered" || blocker === null) return null;
@@ -111,6 +268,15 @@ export function pluginBrokeredBlockerNotice(plugin: PluginDirectoryDefinition) {
     type: "warning" as const,
     title: `${plugin.title} is not available yet`,
     description: blocker,
+  };
+}
+
+export function pluginRecoveryNotice(pluginTitle: string, recoveryFailures: readonly string[]) {
+  if (recoveryFailures.length === 0) return null;
+  return {
+    type: "warning" as const,
+    title: `${pluginTitle} connected with a session issue`,
+    description: `${recoveryFailures.join(" ")} Restart the affected bot session to retry.`,
   };
 }
 
@@ -166,6 +332,82 @@ export function validateMcpServerDraft(draft: McpServerDraft): string | null {
   }
 }
 
+/** Standalone page header shared by the directory and plugin details. */
+export function PluginsPageHeader({ children }: { readonly children?: ReactNode }) {
+  return (
+    <WorkspacePageHeader electron={isElectron}>
+      {children ?? (
+        <div className="flex min-w-0 items-center gap-2">
+          <AppIcon icon={PuzzleIcon} className="size-4 shrink-0 text-muted-foreground" />
+          <h1 className="truncate text-sm font-medium text-foreground">Plugins</h1>
+        </div>
+      )}
+    </WorkspacePageHeader>
+  );
+}
+
+/** Places search, filters, and results in either the dialog or the workspace page. */
+function PluginDirectoryLayout({
+  standalone,
+  search,
+  filters,
+  returning,
+  children,
+}: {
+  readonly standalone: boolean;
+  readonly search: ReactNode;
+  readonly filters: ReactNode;
+  /** True when the directory remounts after leaving plugin details. */
+  readonly returning: boolean;
+  readonly children: ReactNode;
+}) {
+  if (!standalone) {
+    return (
+      <>
+        <DialogHeader className={PLUGIN_DIRECTORY_HEADER_CLASS_NAME}>
+          <div className="pe-8">
+            <DialogTitle>Plugins</DialogTitle>
+          </div>
+          {search}
+          {filters}
+        </DialogHeader>
+        <DialogPanel
+          className={cn(PLUGIN_DIRECTORY_PANEL_CLASS_NAME, returning && "motion-page-back")}
+        >
+          {children}
+        </DialogPanel>
+      </>
+    );
+  }
+  return (
+    <>
+      <PluginsPageHeader>
+        <span />
+      </PluginsPageHeader>
+      <ScrollArea className="min-h-0 flex-1" scrollFade>
+        <div
+          className={cn(
+            PLUGIN_PAGE_COLUMN_CLASS_NAME,
+            returning ? "motion-page-back" : "motion-section-enter",
+          )}
+        >
+          <div className="px-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Plugins</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Connect a listed integration, or follow a setup guide from integrations.sh.
+            </p>
+          </div>
+          <div className="mt-6 mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="w-full sm:max-w-sm sm:flex-1">{search}</div>
+            <div className="min-w-0 flex-1">{filters}</div>
+          </div>
+          <div className="space-y-10">{children}</div>
+        </div>
+      </ScrollArea>
+    </>
+  );
+}
+
 function PluginsDialogForEnvironment({
   environmentId,
   standalone = false,
@@ -179,18 +421,6 @@ function PluginsDialogForEnvironment({
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
-  const composioStatus = useEnvironmentQuery(
-    serverEnvironment.composioStatus({ environmentId, input: {} }),
-  );
-  const configureComposio = useAtomCommand(serverEnvironment.configureComposio, {
-    reportFailure: false,
-  });
-  const authorizeComposio = useAtomCommand(serverEnvironment.authorizeComposio, {
-    reportFailure: false,
-  });
-  const disconnectComposio = useAtomCommand(serverEnvironment.disconnectComposio, {
-    reportFailure: false,
-  });
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
@@ -200,69 +430,26 @@ function PluginsDialogForEnvironment({
     reportFailure: false,
   });
   const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query.trim());
   const [filter, setFilter] = useState<PluginFilter>("All");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDirectoryDefinition | null>(null);
+  const leftDirectory = useChangedSinceMount(selectedPlugin === null);
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
   const [draft, setDraft] = useState(EMPTY_MCP_SERVER_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
-  const [composioSetupPlugin, setComposioSetupPlugin] = useState<PluginDirectoryDefinition | null>(
-    null,
-  );
-  const [composioApiKey, setComposioApiKey] = useState("");
-  const composioToolkits = useEnvironmentQuery(
-    composioStatus.data?.configured === true && deferredQuery.length >= 2
-      ? serverEnvironment.composioToolkits({
-          environmentId,
-          input: { query: deferredQuery, limit: 12 },
-        })
-      : null,
-  );
   const { customServers, installedPlugins, removedBuiltinServers } =
     resolvePluginDialogServers(servers);
-  const connectedComposioPluginIds = new Set(
-    (composioStatus.data?.connections ?? [])
-      .filter((connection) => connection.status === "ACTIVE")
-      .map((connection) => connection.toolkitSlug),
-  );
-  const composioViewServers: readonly McpServer[] = CATALOG.filter(
-    (plugin) => plugin.connection.type === "brokered" && connectedComposioPluginIds.has(plugin.id),
-  ).map((plugin) => ({
-    id: pluginMcpServerId(plugin),
-    name: plugin.title,
-    transport: "url" as const,
-    url: "https://composio.dev",
-    enabled: true,
-    createdAt: "1970-01-01T00:00:00.000Z",
-    updatedAt: "1970-01-01T00:00:00.000Z",
-  }));
-  const displayServers = [...servers, ...composioViewServers];
-  const brokeredCatalogIds = new Set(
-    CATALOG.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
-  );
-  const composioSearchResults = (composioToolkits.data ?? []).filter(
-    (toolkit) => !brokeredCatalogIds.has(toolkit.slug),
-  );
   const sections = buildPluginSections({
     plugins: CATALOG,
     query,
     filter,
-    installedPluginIds: new Set([
-      ...installedPlugins.map((plugin) => plugin.id),
-      ...connectedComposioPluginIds,
-    ]),
+    installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
   });
   const validationError = validateMcpServerDraft(draft);
   const selectedPluginServer = selectedPlugin
-    ? findPluginServer(selectedPlugin, displayServers)
+    ? findPluginServer(selectedPlugin, servers)
     : undefined;
 
-  useEffect(() => {
-    const refresh = () => composioStatus.refresh();
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [composioStatus.refresh]);
   useEffect(() => {
     if (requestedQuery !== null) setQuery(requestedQuery);
   }, [requestedQuery]);
@@ -302,71 +489,14 @@ function PluginsDialogForEnvironment({
   };
 
   const togglePlugin = async (plugin: PluginDirectoryDefinition, enabled: boolean) => {
-    if (plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio") {
-      // The catalog already disables this toggle; a direct caller still gets
-      // the named blocker instead of a dead click.
-      if (enabled) {
-        const notice = pluginBrokeredBlockerNotice(plugin);
-        if (notice) {
-          toastManager.add(notice);
-          return;
-        }
-      }
-      const mcpServerId = pluginMcpServerId(plugin);
-      if (enabled && composioStatus.data?.configured !== true) {
-        setComposioSetupPlugin(plugin);
+    // The catalog already disables this toggle; a direct caller still gets
+    // the named blocker instead of a dead click.
+    if (enabled) {
+      const notice = pluginBrokeredBlockerNotice(plugin);
+      if (notice) {
+        toastManager.add(notice);
         return;
       }
-      setPendingServerId(mcpServerId);
-      if (enabled) {
-        const result = await authorizeComposio({
-          environmentId,
-          input: { toolkitSlug: plugin.id },
-        });
-        setPendingServerId(null);
-        if (result._tag === "Failure") {
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            toastManager.add({
-              type: "error",
-              title: `Could not connect ${plugin.title}`,
-              description: error instanceof Error ? error.message : "The command failed.",
-            });
-          }
-          return;
-        }
-        openExternal(result.value.redirectUrl, `Could not open ${plugin.title} sign-in`);
-        return;
-      }
-      const connections = (composioStatus.data?.connections ?? []).filter(
-        (connection) => connection.toolkitSlug === plugin.id,
-      );
-      const confirmed = await ensureLocalApi().dialogs.confirm(
-        `Disconnect ${connections.length} ${plugin.title} account${connections.length === 1 ? "" : "s"}?`,
-        { variant: "destructive" },
-      );
-      if (!confirmed) {
-        setPendingServerId(null);
-        return;
-      }
-      for (const connection of connections) {
-        const result = await disconnectComposio({
-          environmentId,
-          input: { connectionId: connection.id },
-        });
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: `Could not disconnect ${plugin.title}`,
-            description: error instanceof Error ? error.message : "The command failed.",
-          });
-          break;
-        }
-      }
-      setPendingServerId(null);
-      composioStatus.refresh();
-      return;
     }
     if (!enabled) {
       const mcpServerId = pluginMcpServerId(plugin);
@@ -451,67 +581,6 @@ function PluginsDialogForEnvironment({
     }
   };
 
-  const connectComposioToolkit = async (toolkit: ComposioToolkit) => {
-    setPendingServerId(`composio:${toolkit.slug}`);
-    const result = await authorizeComposio({
-      environmentId,
-      input: { toolkitSlug: toolkit.slug },
-    });
-    setPendingServerId(null);
-    if (result._tag === "Failure") {
-      if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        toastManager.add({
-          type: "error",
-          title: `Could not connect ${toolkit.name}`,
-          description: error instanceof Error ? error.message : "The command failed.",
-        });
-      }
-      return;
-    }
-    openExternal(result.value.redirectUrl, `Could not open ${toolkit.name} sign-in`);
-  };
-
-  const saveComposioAndConnect = async () => {
-    const plugin = composioSetupPlugin;
-    const apiKey = composioApiKey.trim();
-    if (!plugin || !apiKey) return;
-    setPendingServerId(pluginMcpServerId(plugin));
-    const configured = await configureComposio({ environmentId, input: { apiKey } });
-    if (configured._tag === "Failure") {
-      setPendingServerId(null);
-      if (!isAtomCommandInterrupted(configured)) {
-        const error = squashAtomCommandFailure(configured);
-        toastManager.add({
-          type: "error",
-          title: "Could not connect Composio",
-          description: error instanceof Error ? error.message : "The command failed.",
-        });
-      }
-      return;
-    }
-    const authorized = await authorizeComposio({
-      environmentId,
-      input: { toolkitSlug: plugin.id },
-    });
-    setPendingServerId(null);
-    if (authorized._tag === "Failure") {
-      if (!isAtomCommandInterrupted(authorized)) {
-        const error = squashAtomCommandFailure(authorized);
-        toastManager.add({
-          type: "error",
-          title: `Could not connect ${plugin.title}`,
-          description: error instanceof Error ? error.message : "The command failed.",
-        });
-      }
-      return;
-    }
-    setComposioApiKey("");
-    setComposioSetupPlugin(null);
-    composioStatus.refresh();
-    openExternal(authorized.value.redirectUrl, `Could not open ${plugin.title} sign-in`);
-  };
-
   const toggleCustom = async (server: McpServer, enabled: boolean) => {
     setPendingServerId(server.id);
     const result = await (enabled ? enableServer : disableServer)({
@@ -581,122 +650,98 @@ function PluginsDialogForEnvironment({
   return (
     <>
       {selectedPlugin ? (
-        <PluginDetails
-          standalone={standalone}
-          plugin={selectedPlugin}
-          server={selectedPluginServer}
-          {...(selectedPluginAccess ? { accessStatus: selectedPluginAccess } : {})}
-          activeDependentBotNames={pluginActiveDependentBotNames(selectedPluginServer, bots)}
-          pending={pendingServerId === pluginMcpServerId(selectedPlugin)}
-          onBack={() => setSelectedPlugin(null)}
-          onToggle={(enabled) => void togglePlugin(selectedPlugin, enabled)}
-          onRemove={() => {
-            if (selectedPlugin.connection.type === "brokered") {
-              void togglePlugin(selectedPlugin, false);
-              return;
-            }
-            const server = findPluginServer(selectedPlugin, servers);
-            if (server) void removeServer(server);
-          }}
-          onViewDocumentation={() =>
-            openExternal(selectedPlugin.documentationUrl, "Could not open documentation")
-          }
-          onViewSource={() => openExternal(selectedPlugin.sourceUrl, "Could not open source")}
-          onOpenSkill={openPluginSkill}
-        />
-      ) : (
-        <>
-          <DialogHeader
-            className={cn(
-              PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
-              // The standalone page sits under the fixed sidebar trigger; without
-              // this the title disappears behind it once the sidebar collapses.
-              standalone && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-            )}
-          >
-            <div className="pe-8">
-              {standalone ? (
-                <h1 className="font-heading text-xl font-semibold leading-none">Plugins</h1>
-              ) : (
-                <DialogTitle>Plugins</DialogTitle>
-              )}
-            </div>
-            <div className="relative">
-              <SearchIcon
-                aria-hidden="true"
-                className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                aria-label="Search plugins"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="Search plugins"
-                className="h-9 ps-9"
-              />
-            </div>
-            {/* Full-bleed: the chips scroll to the panel edge so it is visible
-                that the row continues past it, instead of stopping short at a
-                padding boundary that reads as the end of the list. */}
-            <div
-              className="-mx-6 flex gap-1.5 overflow-x-auto px-6 pb-1.5 [scrollbar-width:thin]"
-              aria-label="Plugin sections and categories"
-            >
-              {PLUGIN_DIRECTORY_FILTERS.map((item) => (
-                <button
-                  aria-pressed={filter === item}
-                  className={cn(
-                    "shrink-0 cursor-pointer rounded-full border px-2.5 py-1 text-xs outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                    filter === item
-                      ? "border-transparent bg-accent text-accent-foreground"
-                      : "border-border/70 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                  )}
-                  key={item}
-                  type="button"
-                  onClick={() => setFilter(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </DialogHeader>
-          <DialogPanel className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}>
-            <PluginsCatalog
-              sections={sections}
-              servers={displayServers}
-              accessStatuses={subscriptionAuth.data?.access ?? []}
-              pendingServerId={pendingServerId}
-              onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
-              onOpen={openPlugin}
-            />
-            <ComposioToolkitResults
-              toolkits={composioSearchResults}
-              connectedToolkitIds={connectedComposioPluginIds}
-              pendingToolkitId={
-                pendingServerId?.startsWith("composio:")
-                  ? pendingServerId.slice("composio:".length)
-                  : null
+        <div className="motion-page-forward flex h-full min-h-0 flex-1 flex-col">
+          <PluginDetails
+            standalone={standalone}
+            plugin={selectedPlugin}
+            server={selectedPluginServer}
+            {...(selectedPluginAccess ? { accessStatus: selectedPluginAccess } : {})}
+            activeDependentBotNames={pluginActiveDependentBotNames(selectedPluginServer, bots)}
+            pending={pendingServerId === pluginMcpServerId(selectedPlugin)}
+            onBack={() => setSelectedPlugin(null)}
+            onToggle={(enabled) => void togglePlugin(selectedPlugin, enabled)}
+            onRemove={() => {
+              if (selectedPlugin.connection.type === "brokered") {
+                void togglePlugin(selectedPlugin, false);
+                return;
               }
-              onConnect={(toolkit) => void connectComposioToolkit(toolkit)}
+              const server = findPluginServer(selectedPlugin, servers);
+              if (server) void removeServer(server);
+            }}
+            onViewDocumentation={() =>
+              openExternal(
+                integrationsShListing(selectedPlugin.id) ?? selectedPlugin.documentationUrl,
+                "Could not open integration guide",
+              )
+            }
+            onViewSource={() => openExternal(selectedPlugin.sourceUrl, "Could not open source")}
+            onOpenSkill={openPluginSkill}
+          />
+        </div>
+      ) : (
+        <PluginDirectoryLayout
+          standalone={standalone}
+          returning={leftDirectory}
+          search={<PluginSearchField query={query} onQueryChange={setQuery} />}
+          filters={<PluginFilterBar filter={filter} onFilterChange={setFilter} />}
+        >
+          <section className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="max-w-xl">
+              <h2 className="text-base font-semibold">Find an integration</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Browse integrations.sh for MCP endpoints and setup instructions. Add the server here
+                once you have its URL or command.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={openCustomCreator}>
+                Add MCP server
+              </Button>
+              <a
+                className="inline-flex h-8 items-center rounded-lg bg-foreground px-3 text-sm font-medium text-background hover:opacity-85"
+                href="https://integrations.sh/"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Browse integrations.sh
+              </a>
+            </div>
+          </section>
+          <PluginsCatalog
+            sections={sections}
+            servers={servers}
+            accessStatuses={subscriptionAuth.data?.access ?? []}
+            pendingServerId={pendingServerId}
+            onToggle={(plugin, enabled) => void togglePlugin(plugin, enabled)}
+            onOpen={openPlugin}
+            nothingInstalled={filter === "Installed" && query.trim() === ""}
+          />
+          {filter === "All" || filter === "Installed" ? (
+            <ComposioSection
+              environmentId={environmentId}
+              query={query}
+              catalog={FULL_CATALOG}
+              installedOnly={filter === "Installed"}
             />
-            {filter === "Installed" ? (
-              <>
-                <RemovedBuiltinServers
-                  servers={removedBuiltinServers}
-                  pendingServerId={pendingServerId}
-                  onDelete={(server) => void removeServer(server)}
-                />
-                <CustomMcpServers
-                  servers={customServers}
-                  pendingServerId={pendingServerId}
-                  onCreate={openCustomCreator}
-                  onToggle={(server, enabled) => void toggleCustom(server, enabled)}
-                  onEdit={openCustomEditor}
-                  onDelete={(server) => void removeServer(server)}
-                />
-              </>
-            ) : null}
-          </DialogPanel>
-        </>
+          ) : null}
+          {filter === "Installed" ? (
+            <>
+              <RemovedBuiltinServers
+                servers={removedBuiltinServers}
+                pendingServerId={pendingServerId}
+                onDelete={(server) => void removeServer(server)}
+              />
+              <CustomMcpServers
+                servers={customServers}
+                pendingServerId={pendingServerId}
+                onCreate={openCustomCreator}
+                onToggle={(server, enabled) => void toggleCustom(server, enabled)}
+                onEdit={openCustomEditor}
+                onDelete={(server) => void removeServer(server)}
+              />
+            </>
+          ) : null}
+        </PluginDirectoryLayout>
       )}
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>
         <DialogPopup className="max-h-[min(36rem,90dvh)] max-w-lg flex-col overflow-hidden">
@@ -775,65 +820,6 @@ function PluginsDialogForEnvironment({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-      <Dialog
-        open={composioSetupPlugin !== null}
-        onOpenChange={(open) => {
-          if (!open) setComposioSetupPlugin(null);
-        }}
-      >
-        <DialogPopup className="max-w-md">
-          <DialogHeader className="pb-4">
-            <div className="flex items-center gap-3 pe-8">
-              {composioSetupPlugin ? (
-                <PluginLogoImage className="size-11 rounded-xl" plugin={composioSetupPlugin} />
-              ) : null}
-              <div className="min-w-0">
-                <DialogTitle>Connect {composioSetupPlugin?.title}</DialogTitle>
-                <DialogDescription>Sign-in handled by Composio</DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="space-y-4 border-t px-6 py-5">
-            <Field>
-              <FieldLabel>Composio API key</FieldLabel>
-              <Input
-                autoFocus
-                autoComplete="off"
-                type="password"
-                value={composioApiKey}
-                onChange={(event) => setComposioApiKey(event.currentTarget.value)}
-              />
-              <p className="text-xs leading-5 text-muted-foreground">
-                Stored only on this Akeru Bot server.
-              </p>
-            </Field>
-            <Button
-              className="px-0"
-              size="sm"
-              variant="link"
-              onClick={() =>
-                openExternal(
-                  "https://app.composio.dev/settings/api-keys",
-                  "Could not open Composio",
-                )
-              }
-            >
-              Create a Composio API key
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setComposioSetupPlugin(null)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={!composioApiKey.trim() || pendingServerId !== null}
-              onClick={() => void saveComposioAndConnect()}
-            >
-              Connect
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
     </>
   );
 }
@@ -861,19 +847,18 @@ export function PluginsPage() {
   const environmentId = usePrimaryEnvironmentId();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
-      <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground"
-        data-slot="dialog-popup"
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
         {environmentId ? (
           <PluginsDialogForEnvironment environmentId={environmentId} standalone />
         ) : (
-          <div className="p-6">
-            <h1 className="font-heading text-xl font-semibold">Plugins</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Connect an environment to manage plugins.
-            </p>
-          </div>
+          <>
+            <PluginsPageHeader />
+            <div className={PLUGIN_PAGE_COLUMN_CLASS_NAME}>
+              <p className="px-2.5 text-[15px] leading-6 text-muted-foreground">
+                Connect an environment to manage plugins.
+              </p>
+            </div>
+          </>
         )}
       </div>
     </SidebarInset>

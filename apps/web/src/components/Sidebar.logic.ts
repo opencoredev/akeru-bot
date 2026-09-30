@@ -12,7 +12,6 @@ import {
 import type { SidebarThreadSummary, Thread } from "../types";
 import type { ThreadRouteTarget } from "../threadRoutes";
 import { cn } from "../lib/utils";
-import { isLatestTurnSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
@@ -132,35 +131,26 @@ export interface ThreadStatusPill {
     | "Connecting"
     | "Completed"
     | "Pending Approval"
-    | "Awaiting Input"
-    | "Plan Ready";
+    | "Awaiting Input";
   colorClass: string;
   dotClass: string;
   pulse: boolean;
 }
 
 // Rollup order mirrors the per-thread resolver exactly: attention states,
-// then active work, then the actionable plan prompt, then passive
-// monitoring. A Monitoring sibling must never hide a Plan Ready thread.
+// then active work, then passive monitoring.
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
   "Pending Approval": 6,
   "Awaiting Input": 5,
   Working: 4,
   Connecting: 4,
-  "Plan Ready": 3,
   Monitoring: 2,
   Completed: 1,
 };
 
 type ThreadStatusInput = Pick<
   SidebarThreadSummary,
-  | "hasActionableProposedPlan"
-  | "hasPendingApprovals"
-  | "hasPendingUserInput"
-  | "interactionMode"
-  | "latestTurn"
-  | "session"
-  | "backgroundLiveness"
+  "hasPendingApprovals" | "hasPendingUserInput" | "latestTurn" | "session" | "backgroundLiveness"
 > & {
   lastVisitedAt?: string | undefined;
 };
@@ -746,22 +736,6 @@ export function resolveThreadStatusPill(input: {
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,
-    };
-  }
-
-  // An actionable plan prompt outranks lingering background work: it needs
-  // the user's decision, while liveness merely reports (review finding).
-  const hasPlanReadyPrompt =
-    !thread.hasPendingUserInput &&
-    thread.interactionMode === "plan" &&
-    isLatestTurnSettled(thread.latestTurn, thread.session) &&
-    thread.hasActionableProposedPlan;
-  if (hasPlanReadyPrompt) {
-    return {
-      label: "Plan Ready",
-      colorClass: "text-violet-600 dark:text-violet-300/90",
-      dotClass: "bg-violet-500 dark:bg-violet-300/90",
-      pulse: false,
     };
   }
 

@@ -9,28 +9,28 @@ import type { ChannelProvider, EnvironmentId } from "@t3tools/contracts";
 import { usePrimaryEnvironmentId } from "./state/environments";
 
 /**
- * Every panel the dialog can render. Some sections are reachable only from a
- * link inside another panel, so this is wider than the visible nav.
+ * Every settings page. `diagnostics` has no nav row and is reached from
+ * links, so this is wider than the visible nav.
  */
 export const SETTINGS_SECTIONS = [
   "general",
-  "inbox",
   "appearance",
+  "keybindings",
+  "connections",
+  "privacy",
+  "advanced",
   "providers",
-  "browser",
-  "plugins",
   "channels",
   "sandbox",
-  "voice",
+  "browser",
   "image-generation",
-  "privacy",
-  "connections",
-  "keybindings",
-  "source-control",
   "diagnostics",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
+/** The page bare `/settings`, `openSettings()`, and unknown slugs land on. */
+export const DEFAULT_SETTINGS_SECTION: SettingsSection = "general";
 
 interface SettingsDialogState {
   /** The open section, or null while the dialog is closed. */
@@ -57,7 +57,7 @@ export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   environmentId: null,
   channelProvider: "imessage",
   setChannelProvider: (channelProvider) => set({ channelProvider }),
-  openSettings: (section = "general", targetId = null, environmentId) =>
+  openSettings: (section = DEFAULT_SETTINGS_SECTION, targetId = null, environmentId) =>
     set((state) => ({
       section,
       targetId,
@@ -100,18 +100,29 @@ export function clearSettingsEnvironment(): void {
   useSettingsDialogStore.getState().clearEnvironment();
 }
 
-/** Map a legacy `/settings/...` pathname onto a dialog section. */
+/**
+ * Retired section slugs and the page (plus anchor) that now owns them, so old
+ * links and bookmarks keep working.
+ */
+export const LEGACY_SETTINGS_SECTIONS: Readonly<
+  Record<string, { readonly section: SettingsSection; readonly targetId?: string }>
+> = {
+  bots: { section: "channels" },
+  inbox: { section: "advanced", targetId: "errors" },
+  errors: { section: "advanced", targetId: "errors" },
+  voice: { section: "providers", targetId: "voice" },
+  archived: { section: "general" },
+  "source-control": { section: "general" },
+};
+
+/** Map a `/settings/...` pathname, current or legacy, onto a settings page. */
 export function settingsSectionFromPathname(pathname: string): SettingsSection {
   const slug = pathname.replace(/^\/settings\/?/, "").split("/")[0] ?? "";
-  if (slug === "bots") return "channels";
+  const legacy = LEGACY_SETTINGS_SECTIONS[slug];
+  if (legacy) return legacy.section;
   return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
     ? (slug as SettingsSection)
-    : "general";
-}
-
-/** Select the Bot channels tab from outside React. */
-export function setSettingsChannelProvider(provider: ChannelProvider): void {
-  useSettingsDialogStore.getState().setChannelProvider(provider);
+    : DEFAULT_SETTINGS_SECTION;
 }
 
 /** The selected Bot channels tab and its setter. */

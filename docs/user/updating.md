@@ -8,7 +8,7 @@ the server. Connections still shows the mismatch.
 
 ## Before an update
 
-Let active bot work and terminal commands finish. A server update interrupts the connection and can
+Let active bot work finish. A server update interrupts the connection and can
 stop bot work that is still running. It does not remove chats, settings, or project files.
 
 ## Update the environment

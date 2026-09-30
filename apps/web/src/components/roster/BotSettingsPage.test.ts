@@ -39,10 +39,11 @@ describe("bot settings page", () => {
   it("groups the bot's own settings into named sections", () => {
     const source = read("./BotSettingsPage.tsx");
 
-    expect(source).toContain('title={t("Bot")}');
-    expect(source).toContain('title={t("Voice and personality")}');
-    expect(source).toContain('title={t("Model")}');
-    expect(source).toContain('title={t("Workspace")}');
+    expect(source).toContain('id="identity" title="Identity"');
+    expect(source).toContain('id="behavior" title="Behavior"');
+    expect(source).toContain('id="model" title="Model & usage"');
+    expect(source).toContain('title="Workspace"');
+    expect(source).toContain('aria-label="Bot settings sections"');
   });
 
   it("saves through the shared bot update command", () => {
@@ -84,6 +85,21 @@ describe("bot settings page", () => {
     expect(source).toContain("draft.setPersonalityTone(tone)");
     // The baseline promise has to be on the page, not only in this test.
     expect(source).toContain("It is a baseline, not a costume.");
+  });
+
+  it("lists tools inline with per-bot switches that save with the page", () => {
+    const page = read("./BotSettingsPage.tsx");
+    const section = read("./BotToolsSection.tsx");
+
+    expect(page).toContain("<BotToolsSection");
+    expect(page).toContain('["tools", "Tools"]');
+    expect(page).toContain("draft.setDisabledMcpServerIds(ids)");
+    // Tools used to open an overlay sheet; they now live on the page.
+    expect(page).not.toContain("BotToolsSheet");
+    expect(section).toContain('id="tools"');
+    expect(section).toContain("<Switch");
+    expect(section).toContain("No tools yet");
+    expect(section).not.toContain("BotSideSheet");
   });
 
   it("handles a bot that is gone instead of rendering an empty form", () => {
@@ -139,7 +155,7 @@ describe("bot settings entry points", () => {
     // Per-bot settings are reached from the bot, not from a global nav entry.
     // The legacy `/settings/bots` deep link still redirects, and stays.
     expect(sections).not.toContain("bots");
-    expect(settingsStore).toContain('if (slug === "bots") return "channels";');
+    expect(settingsStore).toContain('bots: { section: "channels" }');
   });
 });
 

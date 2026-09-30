@@ -35,7 +35,6 @@ const destinations: Readonly<Record<SettingsDeepLinkId, MobileSettingsDestinatio
   sandbox: HOME,
   privacy: HOME,
   connections: { kind: "screen", screen: "SettingsEnvironments" },
-  "source-control": HOME,
   "bot-inbox": { kind: "health", target: "bot-inbox" },
   diagnostics: HOME,
 };

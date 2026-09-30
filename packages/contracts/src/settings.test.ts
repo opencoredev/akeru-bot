@@ -243,25 +243,17 @@ describe("ClientSettings environment identification", () => {
 });
 
 describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar", () => {
-    const settings = decodeClientSettings({});
-    expect(settings.legacySidebarEnabled).toBe(false);
-  });
-
-  it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
+  it("drops the retired sidebar keys", () => {
     const decoded = decodeClientSettings({
       sidebarV2Enabled: false,
       sidebarV2ConfiguredByUser: true,
+      legacySidebarEnabled: true,
     });
-    expect(decoded.legacySidebarEnabled).toBe(false);
     expect(decoded).not.toHaveProperty("sidebarV2Enabled");
     expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
-  });
-
-  it("preserves an explicit legacy sidebar opt-in", () => {
-    expect(decodeClientSettings({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(true);
-    expect(decodeClientSettingsPatch({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(
-      true,
+    expect(decoded).not.toHaveProperty("legacySidebarEnabled");
+    expect(decodeClientSettingsPatch({ legacySidebarEnabled: true })).not.toHaveProperty(
+      "legacySidebarEnabled",
     );
   });
 
@@ -272,6 +264,21 @@ describe("ClientSettings sidebar", () => {
     });
     expect(settings).not.toHaveProperty("sidebarAutoSettleAfterDays");
     expect(settings).not.toHaveProperty("sidebarAutoSettleOnMerge");
+  });
+
+  it("drops the retired floating preview setting", () => {
+    expect(decodeClientSettings({ browserAutoShowFloatingPreview: false })).not.toHaveProperty(
+      "browserAutoShowFloatingPreview",
+    );
+  });
+});
+
+describe("ClientSettings plan mode", () => {
+  it("drops the retired plan mode flag from settings files and patches", () => {
+    expect(decodeClientSettings({ planModeEnabled: true })).not.toHaveProperty("planModeEnabled");
+    expect(decodeClientSettingsPatch({ planModeEnabled: true })).not.toHaveProperty(
+      "planModeEnabled",
+    );
   });
 });
 
@@ -416,13 +423,41 @@ describe("provider enabled defaults", () => {
     expect(decoded.providers.opencodeGo.enabled).toBe(true);
   });
 
+  it("decodes ACP protocol logging opt-ins for Grok", () => {
+    const decoded = decodeServerSettings({
+      providers: {
+        grok: { verboseProtocolLogging: true },
+      },
+    });
+
+    expect(decoded.providers.grok.verboseProtocolLogging).toBe(true);
+  });
+
   it("derives per-driver defaults from the settings schemas", () => {
     expect(defaultEnabledForDriver(ProviderDriverKind.make("codex"))).toBe(true);
-    expect(defaultEnabledForDriver(ProviderDriverKind.make("cursor"))).toBe(false);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("grok"))).toBe(false);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("opencodeGo"))).toBe(true);
     // Unknown fork drivers stay enabled; their own build decides otherwise.
     expect(defaultEnabledForDriver(ProviderDriverKind.make("ollama"))).toBe(true);
+  });
+
+  it("still decodes settings that name the retired Cursor provider", () => {
+    const cursor = ProviderDriverKind.make("cursor");
+    const cursorId = ProviderInstanceId.make("cursor");
+    const decoded = decodeServerSettings({
+      providers: { cursor: { enabled: true, binaryPath: "cursor-agent" } },
+      providerInstances: {
+        [cursorId]: { driver: cursor, enabled: true, config: { binaryPath: "cursor-agent" } },
+      },
+    });
+
+    // The legacy map drops the key; the instance envelope survives opaquely and
+    // the registry reports it as an unavailable driver.
+    expect(decoded.providers).not.toHaveProperty("cursor");
+    expect(decoded.providerInstances[cursorId]?.driver).toBe(cursor);
+    expect(decodeServerSettingsPatch({ providers: { cursor: { enabled: false } } })).toEqual({
+      providers: {},
+    });
   });
 
   it("resolves instance enabled state with explicit false winning", () => {
@@ -576,18 +611,5 @@ describe("ServerSettingsPatch string normalization", () => {
     expect(encoded.addProjectBaseDirectory).toBe("~/Development");
     expect(encoded.providers?.codex?.binaryPath).toBe("/opt/homebrew/bin/codex");
     expect(encoded.providers?.codex?.launchArgs).toBe("--strict-config");
-  });
-});
-
-describe("removed provider compatibility", () => {
-  it("decodes stale Cursor settings and preserves them as opaque data", () => {
-    const decoded = decodeServerSettings({
-      providers: { cursor: { enabled: true, binaryPath: "cursor-agent" } },
-      providerInstances: {
-        cursor: { driver: "cursor", enabled: true, config: { binaryPath: "cursor-agent" } },
-      },
-    });
-    expect(decoded.providers.cursor).toMatchObject({ enabled: true, binaryPath: "cursor-agent" });
-    expect(decoded.providerInstances[ProviderInstanceId.make("cursor")]?.driver).toBe("cursor");
   });
 });

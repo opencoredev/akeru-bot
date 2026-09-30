@@ -49,11 +49,6 @@ import {
   HostPowerSnapshot,
 } from "./background.ts";
 import {
-  FilesystemBrowseInput,
-  FilesystemBrowseResult,
-  FilesystemBrowseError,
-} from "./filesystem.ts";
-import {
   AssetAccessError,
   AssetCreateUrlInput,
   AssetCreateUrlResult,
@@ -64,38 +59,6 @@ import {
   AttachmentRevealInput,
   AttachmentUploadSigningKeyError,
 } from "./assets.ts";
-import {
-  GitActionProgressEvent,
-  VcsSwitchRefInput,
-  VcsSwitchRefResult,
-  GitCommandError,
-  VcsCreateRefInput,
-  VcsCreateRefResult,
-  VcsCreateWorktreeInput,
-  VcsCreateWorktreeResult,
-  VcsInitInput,
-  VcsListRefsInput,
-  VcsListRefsResult,
-  GitManagerServiceError,
-  GitPreparePullRequestThreadInput,
-  GitPreparePullRequestThreadResult,
-  VcsPullInput,
-  GitPullRequestRefInput,
-  VcsPullResult,
-  VcsRemoveWorktreeInput,
-  GitResolvePullRequestResult,
-  GitRunStackedActionInput,
-  VcsStatusInput,
-  VcsStatusResult,
-  VcsStatusStreamEvent,
-} from "./git.ts";
-import {
-  ReviewDiffFileContentsInput,
-  ReviewDiffFileContentsResult,
-  ReviewDiffPreviewError,
-  ReviewDiffPreviewInput,
-  ReviewDiffPreviewResult,
-} from "./review.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
   ClientOrchestrationCommand,
@@ -124,9 +87,6 @@ import {
   ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
-  ProjectSearchContentsError,
-  ProjectSearchContentsInput,
-  ProjectSearchContentsResult,
   ProjectSearchEntriesError,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
@@ -134,20 +94,6 @@ import {
   ProjectWriteFileInput,
   ProjectWriteFileResult,
 } from "./project.ts";
-import {
-  TerminalAttachInput,
-  TerminalAttachStreamEvent,
-  TerminalClearInput,
-  TerminalCloseInput,
-  TerminalError,
-  TerminalEvent,
-  TerminalMetadataStreamEvent,
-  TerminalOpenInput,
-  TerminalResizeInput,
-  TerminalRestartInput,
-  TerminalSessionSnapshot,
-  TerminalWriteInput,
-} from "./terminal.ts";
 import {
   DiscoveredLocalServerList,
   ConfiguredLocalServerUrls,
@@ -228,17 +174,6 @@ import {
   ImageProviderListResult,
 } from "./imageGeneration.ts";
 import {
-  SourceControlCloneRepositoryInput,
-  SourceControlCloneRepositoryResult,
-  SourceControlDiscoveryResult,
-  SourceControlPublishRepositoryInput,
-  SourceControlPublishRepositoryResult,
-  SourceControlRepositoryError,
-  SourceControlRepositoryInfo,
-  SourceControlRepositoryLookupInput,
-} from "./sourceControl.ts";
-import { VcsError } from "./vcs.ts";
-import {
   VoiceCallError,
   VoiceCallHangupInput,
   VoiceCallSnapshot,
@@ -291,7 +226,6 @@ export const WS_METHODS = {
   projectsRemove: "projects.remove",
   projectsListEntries: "projects.listEntries",
   projectsReadFile: "projects.readFile",
-  projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
 
@@ -300,41 +234,12 @@ export const WS_METHODS = {
   shellRevealAttachment: "shell.revealAttachment",
 
   // Filesystem methods
-  filesystemBrowse: "filesystem.browse",
   assetsCreateUrl: "assets.createUrl",
   attachmentsCreateUploadUrl: "attachments.createUploadUrl",
   attachmentsDelete: "attachments.delete",
 
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
-
-  // VCS methods
-  vcsPull: "vcs.pull",
-  vcsRefreshStatus: "vcs.refreshStatus",
-  vcsListRefs: "vcs.listRefs",
-  vcsCreateWorktree: "vcs.createWorktree",
-  vcsRemoveWorktree: "vcs.removeWorktree",
-  vcsCreateRef: "vcs.createRef",
-  vcsSwitchRef: "vcs.switchRef",
-  vcsInit: "vcs.init",
-
-  // Git workflow methods
-  gitRunStackedAction: "git.runStackedAction",
-  gitResolvePullRequest: "git.resolvePullRequest",
-  gitPreparePullRequestThread: "git.preparePullRequestThread",
-
-  // Review methods
-  reviewGetDiffPreview: "review.getDiffPreview",
-  reviewGetDiffFileContents: "review.getDiffFileContents",
-
-  // Terminal methods
-  terminalOpen: "terminal.open",
-  terminalAttach: "terminal.attach",
-  terminalWrite: "terminal.write",
-  terminalResize: "terminal.resize",
-  terminalClear: "terminal.clear",
-  terminalRestart: "terminal.restart",
-  terminalClose: "terminal.close",
 
   computerGetState: "computer.getState",
   computerOpen: "computer.open",
@@ -399,7 +304,6 @@ export const WS_METHODS = {
   voiceCallGet: "voiceCall.get",
   voiceCallStart: "voiceCall.start",
   voiceCallHangup: "voiceCall.hangup",
-  serverDiscoverSourceControl: "server.discoverSourceControl",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
@@ -430,15 +334,7 @@ export const WS_METHODS = {
   routinesListRuns: "routines.listRuns",
   routinesListThreadRuns: "routines.listThreadRuns",
 
-  // Source control methods
-  sourceControlLookupRepository: "sourceControl.lookupRepository",
-  sourceControlCloneRepository: "sourceControl.cloneRepository",
-  sourceControlPublishRepository: "sourceControl.publishRepository",
-
   // Streaming subscriptions
-  subscribeVcsStatus: "subscribeVcsStatus",
-  subscribeTerminalEvents: "subscribeTerminalEvents",
-  subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribePreviewEvents: "subscribePreviewEvents",
   subscribeDiscoveredLocalServers: "subscribeDiscoveredLocalServers",
   subscribeServerConfig: "subscribeServerConfig",
@@ -689,12 +585,6 @@ export const WsVoiceCallHangupRpc = Rpc.make(WS_METHODS.voiceCallHangup, {
   error: Schema.Union([VoiceCallError, EnvironmentAuthorizationError]),
 });
 
-export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
-  payload: Schema.Struct({}),
-  success: SourceControlDiscoveryResult,
-  error: EnvironmentAuthorizationError,
-});
-
 export const WsServerGetTraceDiagnosticsRpc = Rpc.make(WS_METHODS.serverGetTraceDiagnostics, {
   payload: Schema.Struct({}),
   success: ServerTraceDiagnosticsResult,
@@ -872,40 +762,10 @@ export const WsRoutinesListThreadRunsRpc = Rpc.make(WS_METHODS.routinesListThrea
   error: Schema.Union([RoutineThreadReadError, EnvironmentAuthorizationError]),
 });
 
-export const WsSourceControlLookupRepositoryRpc = Rpc.make(
-  WS_METHODS.sourceControlLookupRepository,
-  {
-    payload: SourceControlRepositoryLookupInput,
-    success: SourceControlRepositoryInfo,
-    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
-  },
-);
-
-export const WsSourceControlCloneRepositoryRpc = Rpc.make(WS_METHODS.sourceControlCloneRepository, {
-  payload: SourceControlCloneRepositoryInput,
-  success: SourceControlCloneRepositoryResult,
-  error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
-});
-
-export const WsSourceControlPublishRepositoryRpc = Rpc.make(
-  WS_METHODS.sourceControlPublishRepository,
-  {
-    payload: SourceControlPublishRepositoryInput,
-    success: SourceControlPublishRepositoryResult,
-    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
-  },
-);
-
 export const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
   payload: ProjectSearchEntriesInput,
   success: ProjectSearchEntriesResult,
   error: Schema.Union([ProjectSearchEntriesError, EnvironmentAuthorizationError]),
-});
-
-export const WsProjectsSearchContentsRpc = Rpc.make(WS_METHODS.projectsSearchContents, {
-  payload: ProjectSearchContentsInput,
-  success: ProjectSearchContentsResult,
-  error: Schema.Union([ProjectSearchContentsError, EnvironmentAuthorizationError]),
 });
 
 export const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries, {
@@ -940,12 +800,6 @@ export const WsShellRevealAttachmentRpc = Rpc.make(WS_METHODS.shellRevealAttachm
   ]),
 });
 
-export const WsFilesystemBrowseRpc = Rpc.make(WS_METHODS.filesystemBrowse, {
-  payload: FilesystemBrowseInput,
-  success: FilesystemBrowseResult,
-  error: Schema.Union([FilesystemBrowseError, EnvironmentAuthorizationError]),
-});
-
 export const WsAssetsCreateUrlRpc = Rpc.make(WS_METHODS.assetsCreateUrl, {
   payload: AssetCreateUrlInput,
   success: AssetCreateUrlResult,
@@ -967,134 +821,6 @@ export const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFee
   payload: ProviderUploadFeedbackInput,
   success: ProviderUploadFeedbackResult,
   error: Schema.Union([ProviderUploadFeedbackError, EnvironmentAuthorizationError]),
-});
-
-export const WsSubscribeVcsStatusRpc = Rpc.make(WS_METHODS.subscribeVcsStatus, {
-  payload: VcsStatusInput,
-  success: VcsStatusStreamEvent,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
-export const WsVcsPullRpc = Rpc.make(WS_METHODS.vcsPull, {
-  payload: VcsPullInput,
-  success: VcsPullResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsRefreshStatusRpc = Rpc.make(WS_METHODS.vcsRefreshStatus, {
-  payload: VcsStatusInput,
-  success: VcsStatusResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsGitRunStackedActionRpc = Rpc.make(WS_METHODS.gitRunStackedAction, {
-  payload: GitRunStackedActionInput,
-  success: GitActionProgressEvent,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
-export const WsGitResolvePullRequestRpc = Rpc.make(WS_METHODS.gitResolvePullRequest, {
-  payload: GitPullRequestRefInput,
-  success: GitResolvePullRequestResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsGitPreparePullRequestThreadRpc = Rpc.make(WS_METHODS.gitPreparePullRequestThread, {
-  payload: GitPreparePullRequestThreadInput,
-  success: GitPreparePullRequestThreadResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsListRefsRpc = Rpc.make(WS_METHODS.vcsListRefs, {
-  payload: VcsListRefsInput,
-  success: VcsListRefsResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsCreateWorktreeRpc = Rpc.make(WS_METHODS.vcsCreateWorktree, {
-  payload: VcsCreateWorktreeInput,
-  success: VcsCreateWorktreeResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsRemoveWorktreeRpc = Rpc.make(WS_METHODS.vcsRemoveWorktree, {
-  payload: VcsRemoveWorktreeInput,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsCreateRefRpc = Rpc.make(WS_METHODS.vcsCreateRef, {
-  payload: VcsCreateRefInput,
-  success: VcsCreateRefResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsSwitchRefRpc = Rpc.make(WS_METHODS.vcsSwitchRef, {
-  payload: VcsSwitchRefInput,
-  success: VcsSwitchRefResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsInitRpc = Rpc.make(WS_METHODS.vcsInit, {
-  payload: VcsInitInput,
-  error: Schema.Union([VcsError, EnvironmentAuthorizationError]),
-});
-
-/**
- * Ephemeral live diff preview for compact/mobile surfaces.
- * Not the persisted T3 Review model. Future review sessions should use
- * review.open* + review.getSnapshot.
- */
-export const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPreview, {
-  payload: ReviewDiffPreviewInput,
-  success: ReviewDiffPreviewResult,
-  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
-});
-
-export const WsReviewGetDiffFileContentsRpc = Rpc.make(WS_METHODS.reviewGetDiffFileContents, {
-  payload: ReviewDiffFileContentsInput,
-  success: ReviewDiffFileContentsResult,
-  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
-  payload: TerminalOpenInput,
-  success: TerminalSessionSnapshot,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalAttachRpc = Rpc.make(WS_METHODS.terminalAttach, {
-  payload: TerminalAttachInput,
-  success: TerminalAttachStreamEvent,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
-export const WsTerminalWriteRpc = Rpc.make(WS_METHODS.terminalWrite, {
-  payload: TerminalWriteInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalResizeRpc = Rpc.make(WS_METHODS.terminalResize, {
-  payload: TerminalResizeInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalClearRpc = Rpc.make(WS_METHODS.terminalClear, {
-  payload: TerminalClearInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalRestartRpc = Rpc.make(WS_METHODS.terminalRestart, {
-  payload: TerminalRestartInput,
-  success: TerminalSessionSnapshot,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalCloseRpc = Rpc.make(WS_METHODS.terminalClose, {
-  payload: TerminalCloseInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
 });
 
 const computerError = Schema.Union([ComputerError, EnvironmentAuthorizationError]);
@@ -1280,20 +1006,6 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
-export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
-  payload: Schema.Struct({}),
-  success: TerminalEvent,
-  error: EnvironmentAuthorizationError,
-  stream: true,
-});
-
-export const WsSubscribeTerminalMetadataRpc = Rpc.make(WS_METHODS.subscribeTerminalMetadata, {
-  payload: Schema.Struct({}),
-  success: TerminalMetadataStreamEvent,
-  error: EnvironmentAuthorizationError,
-  stream: true,
-});
-
 export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerConfig, {
   payload: Schema.Struct({}),
   success: ServerConfigStreamEvent,
@@ -1369,7 +1081,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsVoiceCallGetRpc,
   WsVoiceCallStartRpc,
   WsVoiceCallHangupRpc,
-  WsServerDiscoverSourceControlRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
@@ -1399,44 +1110,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsPortabilityApplyImportRpc,
   WsRoutinesListRunsRpc,
   WsRoutinesListThreadRunsRpc,
-  WsSourceControlLookupRepositoryRpc,
-  WsSourceControlCloneRepositoryRpc,
-  WsSourceControlPublishRepositoryRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
-  WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
   WsShellRevealAttachmentRpc,
-  WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,
   WsAttachmentsCreateUploadUrlRpc,
   WsAttachmentsDeleteRpc,
   WsProviderUploadFeedbackRpc,
-  WsSubscribeVcsStatusRpc,
-  WsVcsPullRpc,
-  WsVcsRefreshStatusRpc,
-  WsGitRunStackedActionRpc,
-  WsGitResolvePullRequestRpc,
-  WsGitPreparePullRequestThreadRpc,
-  WsVcsListRefsRpc,
-  WsVcsCreateWorktreeRpc,
-  WsVcsRemoveWorktreeRpc,
-  WsVcsCreateRefRpc,
-  WsVcsSwitchRefRpc,
-  WsVcsInitRpc,
-  WsReviewGetDiffPreviewRpc,
-  WsReviewGetDiffFileContentsRpc,
-  WsTerminalOpenRpc,
-  WsTerminalAttachRpc,
-  WsTerminalWriteRpc,
-  WsTerminalResizeRpc,
-  WsTerminalClearRpc,
-  WsTerminalRestartRpc,
-  WsTerminalCloseRpc,
-  WsSubscribeTerminalEventsRpc,
-  WsSubscribeTerminalMetadataRpc,
   WsComputerGetStateRpc,
   WsComputerOpenRpc,
   WsComputerAcquireRpc,

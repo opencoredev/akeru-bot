@@ -61,3 +61,29 @@ export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promis
     [bots, environmentId, updateBot],
   );
 }
+
+/**
+ * Moves a bot to Auto Review after the user picks "Enable Auto Review" on an
+ * approval. The server already switched the live session; this keeps later turns there.
+ */
+export function useEnableBotAutoReview(): (botId: string) => Promise<boolean> {
+  const environmentId = usePrimaryEnvironmentId();
+  const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
+  const updateBot = useAtomCommand(botEnvironment.update, {
+    reportFailure: false,
+  });
+
+  return useCallback(
+    async (botId: string) => {
+      const serverBot = bots.find((candidate) => candidate.id === botId);
+      if (environmentId === null || serverBot === undefined) return false;
+      if (serverBot.runtimeMode === "auto") return true;
+      const result = await updateBot({
+        environmentId,
+        input: { botId: serverBot.id, runtimeMode: "auto" },
+      });
+      return result._tag === "Success";
+    },
+    [bots, environmentId, updateBot],
+  );
+}

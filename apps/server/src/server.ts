@@ -38,14 +38,9 @@ import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReap
 import * as OpenCodeRuntime from "./provider/opencodeRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
-import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
-import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
-import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as ProviderUsageHistory from "./usage/ProviderUsageHistory.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
-import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -53,7 +48,6 @@ import * as PreviewAutomationServerHost from "./mcp/PreviewAutomationServerHost.
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
-import * as GitManager from "./git/GitManager.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import { OrchestrationReactorLive } from "./orchestration/Layers/OrchestrationReactor.ts";
@@ -64,8 +58,6 @@ import { CheckpointReactorLive } from "./orchestration/Layers/CheckpointReactor.
 import { ThreadDeletionReactorLive } from "./orchestration/Layers/ThreadDeletionReactor.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
 import * as ServerSettings from "./serverSettings.ts";
-import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
-import * as T3ProjectFileLoader from "./project/T3ProjectFileLoader.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -74,13 +66,7 @@ import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
-import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
-import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
-import * as ReviewService from "./review/ReviewService.ts";
-import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
-import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
-import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import { ObservabilityLive } from "./observability/Layers/Observability.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
@@ -124,18 +110,6 @@ const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
 const ResourceAttributionLayerLive = ResourceAttribution.layer;
 const ApplicationObservabilityLive = ObservabilityLive.pipe(
   Layer.provideMerge(ResourceAttributionLayerLive),
-);
-
-const PtyAdapterLive = Layer.unwrap(
-  Effect.gen(function* () {
-    if (typeof Bun !== "undefined") {
-      const BunPtyAdapter = yield* Effect.promise(() => import("./terminal/BunPtyAdapter.ts"));
-      return BunPtyAdapter.layer;
-    } else {
-      const NodePtyAdapter = yield* Effect.promise(() => import("./terminal/NodePtyAdapter.ts"));
-      return NodePtyAdapter.layer;
-    }
-  }),
 );
 
 const ServerSettingsLayerLive = ServerSettings.layer.pipe(
@@ -297,24 +271,9 @@ const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProjectConfig.layer),
 );
 
-const SourceControlProviderRegistryLayerLive = SourceControlProviderRegistry.layer.pipe(
-  Layer.provide(
-    Layer.mergeAll(AzureDevOpsCli.layer, BitbucketApi.layer, GitHubCli.layer, GitLabCli.layer),
-  ),
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(VcsDriverRegistryLayerLive),
-);
-
-const GitManagerLayerLive = GitManager.layer.pipe(
-  Layer.provideMerge(ProjectSetupScriptRunner.layer),
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(SourceControlProviderRegistryLayerLive),
-  Layer.provideMerge(TextGeneration.layer),
-);
-
 const GitLayerLive = Layer.empty.pipe(
-  Layer.provideMerge(GitManagerLayerLive),
   Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(TextGeneration.layer),
 );
 
 const GitWorkflowLayerLive = GitWorkflowService.layer.pipe(
@@ -322,24 +281,10 @@ const GitWorkflowLayerLive = GitWorkflowService.layer.pipe(
   Layer.provideMerge(GitLayerLive),
 );
 
-const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.layer.pipe(
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(SourceControlProviderRegistryLayerLive),
-);
-
-const ReviewLayerLive = ReviewService.layer.pipe(
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(VcsDriverRegistryLayerLive),
-);
-
 const VcsLayerLive = Layer.empty.pipe(
   Layer.provideMerge(VcsProjectConfig.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
-  Layer.provideMerge(VcsProvisioningService.layer.pipe(Layer.provide(VcsDriverRegistryLayerLive))),
   Layer.provideMerge(GitWorkflowLayerLive),
-  Layer.provideMerge(ReviewLayerLive),
-  Layer.provideMerge(SourceControlRepositoryServiceLayerLive),
-  Layer.provideMerge(VcsStatusBroadcaster.layer.pipe(Layer.provide(GitWorkflowLayerLive))),
 );
 
 const CheckpointingLayerLive = Layer.empty.pipe(
@@ -348,12 +293,6 @@ const CheckpointingLayerLive = Layer.empty.pipe(
 );
 
 const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.layer));
-
-const TerminalLayerLive = TerminalManager.layer.pipe(
-  Layer.provide(PtyAdapterLive),
-  Layer.provide(PortScannerLayerLive),
-  Layer.provide(NativeTelemetryLayerLive),
-);
 
 const PreviewLayerLive = Layer.empty.pipe(
   Layer.provideMerge(PreviewManager.layer),
@@ -371,11 +310,6 @@ const WorkspaceLayerLive = Layer.mergeAll(
   WorkspacePaths.layer,
   WorkspaceEntriesLayerLive,
   WorkspaceFileSystemLayerLive,
-);
-
-const ProjectFaviconResolverLayerLive = ProjectFaviconResolver.layer.pipe(
-  Layer.provide(WorkspacePaths.layer),
-  Layer.provide(T3ProjectFileLoader.layer),
 );
 
 const ServerEnvironmentLayerLive = ServerEnvironment.layer;
@@ -398,11 +332,10 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(McpSessionRegistryLayerLive),
   Layer.provideMerge(ServerSettingsLayerLive),
   Layer.provideMerge(CheckpointingLayerLive),
-  Layer.provideMerge(SourceControlProviderRegistryLayerLive),
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
-  Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
+  Layer.provideMerge(PreviewLayerLive),
   Layer.provideMerge(RuntimeMemoryRepositoriesWithPersistenceLive),
   Layer.provideMerge(Keybindings.layer),
   Layer.provideMerge(ProviderRegistryLive),
@@ -428,7 +361,6 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // keeps a single Live for all opencode consumers.
   Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
   Layer.provideMerge(WorkspaceLayerLive),
-  Layer.provideMerge(ProjectFaviconResolverLayerLive),
   Layer.provideMerge(RepositoryIdentityResolver.layer),
   Layer.provideMerge(ServerEnvironmentLayerLive),
   Layer.provideMerge(AuthLayerLive),

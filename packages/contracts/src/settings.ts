@@ -189,7 +189,6 @@ export type ProductFeedbackEndpoint = typeof ProductFeedbackEndpoint.Type;
  * because the Chromium guest they configure is desktop-local.
  */
 export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIEWPORT;
-export const DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW = true;
 
 export const ClientSettingsSchema = Schema.Struct({
   language: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("system"))),
@@ -206,15 +205,6 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   browserDefaultAppearance: PreviewAppearancePreference.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PREVIEW_APPEARANCE)),
-  ),
-  /**
-   * Whether an agent opening a preview pops the floating mini player into
-   * view. Only applies when the agent didn't ask either way — an explicit
-   * `open`/`show` on `preview_open` still wins, since that is the agent
-   * deliberately showing or hiding its work.
-   */
-  browserAutoShowFloatingPreview: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW)),
   ),
   // Desktop-only. Boolean values from older settings files decode to their
   // equivalent mode and encode back as the canonical string value.
@@ -277,16 +267,7 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  // Legacy plan mode. The composer's Build/Plan toggle was removed from the
-  // default UI; this beta flag restores it (plus the /plan and /default slash
-  // commands) for users who still rely on the old workflow.
-  planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  // Legacy sidebar (the original per-project tree). Deliberately a fresh key
-  // (was `sidebarV2Enabled` + `sidebarV2ConfiguredByUser`): decoding drops the
-  // old keys, so everyone, including prior beta opt-outs, resets to the new
-  // default sidebar.
-  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -490,54 +471,6 @@ export const ClaudeSettings = makeProviderSettingsSchema(
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
-
-/**
- * Legacy Cursor settings are retained for decoding old settings files. The
- * provider is no longer registered, so runtime hydration exposes it as unavailable.
- */
-export const CursorSettings = makeProviderSettingsSchema(
-  {
-    // Off by default like Grok and OpenCode. Users opt in from Settings.
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("cursor-agent").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Cursor agent binary.",
-        providerSettingsForm: { placeholder: "cursor-agent", clearWhenEmpty: "omit" },
-      }),
-    ),
-    apiEndpoint: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "API endpoint",
-        description: "Override the Cursor API endpoint for this instance.",
-        providerSettingsForm: {
-          placeholder: "https://...",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    verboseProtocolLogging: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({
-        title: "Verbose protocol logging",
-        description: "Record full ACP protocol diagnostics in provider event logs.",
-        providerSettingsForm: { control: "switch" },
-      }),
-    ),
-  },
-  {
-    order: ["binaryPath", "apiEndpoint", "verboseProtocolLogging"],
-  },
-);
-export type CursorSettings = typeof CursorSettings.Type;
 
 export const GrokSettings = makeProviderSettingsSchema(
   {
@@ -895,7 +828,6 @@ export const ServerSettings = Schema.Struct({
   providers: Schema.Struct({
     codex: CodexSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -1040,14 +972,6 @@ const ClaudeSettingsPatch = Schema.Struct({
   ),
 });
 
-const CursorSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  apiEndpoint: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-  verboseProtocolLogging: Schema.optionalKey(Schema.Boolean),
-});
-
 const GrokSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1154,7 +1078,6 @@ const ServerSettingsPatchFields = {
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
-      cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
       kimi: Schema.optionalKey(KimiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
@@ -1184,7 +1107,6 @@ export const ClientSettingsPatch = Schema.Struct({
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
   browserDefaultAppearance: Schema.optionalKey(PreviewAppearancePreference),
-  browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   confirmQuit: Schema.optionalKey(QuitConfirmationMode),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
@@ -1221,9 +1143,7 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
-  planModeEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
-  legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

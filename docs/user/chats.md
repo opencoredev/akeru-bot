@@ -1,12 +1,23 @@
 # Organize chats
 
+## Chat activity and replies
+
+While a bot works, its status names the current step when the provider reports it, such as thinking,
+running a command, or adding a routine. The timer shows how long the current turn has been running.
+
+To reply to a specific message, use **Reply** on that message. The sent reply keeps a short reference
+above your text. Select the referenced person's name to jump back to the original message when it
+can be identified.
+
+## Chat list actions
+
 Use a chat's menu to settle, snooze, wake, archive, delete, pin, or unpin it.
 Date labels in bot and group chats follow your device's local day and update when the day changes.
 
 ## Active and settled chats
 
-Akeru settles a chat only when you select **Settle chat**. Inactivity and pull request state do not
-move chats to the settled list.
+Akeru settles a chat only when you select **Settle chat**. Inactivity does not move chats to the
+settled list.
 
 Settling a pinned chat also removes its pin. **Un-settle chat** returns the chat to the top of the
 active list without changing its timestamps.
@@ -137,11 +148,6 @@ has no matching screen.
 A provider that stops sending output does not stall the chat silently. See
 [When a bot goes quiet](silence-watchdog.md) for the notice, the inbox item,
 and what you can do.
-
-## Link a pull request
-
-Right-click a pull-request link and select **Link to chat**. Select **Unlink from chat** from the same
-menu to remove it. Linked review state appears with the chat.
 
 ## Regenerate a title
 

@@ -50,7 +50,6 @@ describe("provider API key forms", () => {
 
   it("does not send an unsupported Grok endpoint", () => {
     expect(providerSupportsBaseUrl("xai")).toBe(false);
-    expect(providerSupportsBaseUrl("cursor")).toBe(false);
     expect(providerSupportsBaseUrl("anthropic")).toBe(true);
     expect(apiKeyStartInput("xai", "https://proxy.example/v1")).toEqual({
       provider: "xai",

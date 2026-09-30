@@ -11,7 +11,6 @@ const fixtures = vi.hoisted(() => ({
   scopes: [] as string[],
   toast: vi.fn(),
   openSettings: vi.fn(),
-  setSettingsChannelProvider: vi.fn(),
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   commands: {
     attach: vi.fn(),
@@ -52,7 +51,6 @@ vi.mock("../../hooks/useSettings", () => ({
 }));
 vi.mock("../../settingsDialogStore", () => ({
   openSettings: fixtures.openSettings,
-  setSettingsChannelProvider: fixtures.setSettingsChannelProvider,
 }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
 vi.mock("../../state/session", () => ({
@@ -63,7 +61,15 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../ui/sheet", () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
-  return { Sheet: Pass, SheetHeader: Pass, SheetPanel: Pass, SheetPopup: Pass, SheetTitle: Pass };
+  return {
+    Sheet: Pass,
+    SheetDescription: Pass,
+    SheetFooter: Pass,
+    SheetHeader: Pass,
+    SheetPanel: Pass,
+    SheetPopup: Pass,
+    SheetTitle: Pass,
+  };
 });
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
@@ -103,7 +109,6 @@ describe("BotChannelsSheet project selection", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
-    fixtures.setSettingsChannelProvider.mockReset();
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
@@ -171,7 +176,6 @@ describe("BotChannelsSheet health and repair", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
-    fixtures.setSettingsChannelProvider.mockReset();
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
@@ -202,7 +206,6 @@ describe("BotChannelsSheet health and repair", () => {
     expect(html).not.toContain("Fixed server copy.");
     expect(fixtures.buttons.has("Disconnect")).toBe(true);
     fixtures.buttons.get("Update credentials")?.onClick?.();
-    expect(fixtures.setSettingsChannelProvider).toHaveBeenCalledWith("telegram");
     expect(fixtures.openSettings).toHaveBeenCalledWith(
       "channels",
       "channel-telegram",
@@ -283,7 +286,7 @@ describe("BotChannelsSheet health and repair", () => {
     fixtures.scopes = [];
     own("failed", "credentials");
     const html = render();
-    expect(html).toContain("This client does not have permission to manage channels.");
+    expect(html).toContain("Channels are managed on the host");
     expect(html).not.toContain("Fixture line");
   });
 });

@@ -1,14 +1,7 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect } from "react";
 
-export type HardwareKeyboardCommand =
-  | "newTask"
-  | "focusSearch"
-  | "back"
-  | "files"
-  | "terminal"
-  | "review"
-  | "toggleSidebar";
+export type HardwareKeyboardCommand = "newTask" | "focusSearch" | "back" | "toggleSidebar";
 
 type CommandHandler = () => boolean | void;
 

@@ -45,7 +45,7 @@ describe("providerAccessState", () => {
 });
 
 describe("providerAccessGuide", () => {
-  it("explains every connectable provider and has no guide for removed Cursor", () => {
+  it("explains every connectable provider", () => {
     for (const { id } of PROVIDER_CONNECTIONS) {
       const guide = providerAccessGuide(id, undefined);
       expect(guide?.unlockedBy, id).toBeTruthy();
@@ -53,7 +53,6 @@ describe("providerAccessGuide", () => {
       expect(guide?.limits, id).toBeTruthy();
       expect(guide?.state, id).toBe("not-connected");
     }
-    expect(providerAccessGuide("cursor", undefined)).toBeNull();
   });
 
   it("does not claim that a consumer subscription includes API access", () => {

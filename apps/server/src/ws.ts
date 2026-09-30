@@ -21,7 +21,6 @@ import {
   AkeruMemoryOperationError,
   type AkeruMemoryMutationResult,
   type AkeruMemoryThreadAccess,
-  DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   AuthAccessWriteScope,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
@@ -33,15 +32,12 @@ import {
   ClientSurface,
   CommandId,
   type DiscoveredLocalServerList,
-  EventId,
   type EditorId,
   GroupId,
   type FileManagerRevealKind,
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-  type GitActionProgressEvent,
-  type GitManagerServiceError,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
   type OrchestrationShellStreamEvent,
@@ -61,7 +57,6 @@ import {
   type ProjectFileOperation,
   ProjectListEntriesError,
   ProjectReadFileError,
-  ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   ProviderInstanceId,
@@ -72,8 +67,6 @@ import {
   type ServerSelfUpdateProgressEvent,
   type ServerProvider,
   type SubscriptionProviderId,
-  type FilesystemBrowseFailure,
-  FilesystemBrowseError,
   isProviderAvailable,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
@@ -85,14 +78,9 @@ import {
   ImageGenerationError,
   SubscriptionAuthError,
   ThreadId,
-  type TerminalAttachStreamEvent,
-  type TerminalError,
-  type TerminalEvent,
-  type TerminalMetadataStreamEvent,
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
 import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
@@ -165,7 +153,6 @@ import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { RoutineRepository } from "./routines/Repository.ts";
 import { RoutineRuntime } from "./routines/Runtime.ts";
-import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
@@ -176,11 +163,7 @@ import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import { readWorkflowScript } from "./orchestration/workflowScriptQuery.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
-import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
-import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
-import * as ReviewService from "./review/ReviewService.ts";
-import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
@@ -197,17 +180,6 @@ import * as UsageService from "./usage/UsageService.ts";
 import * as Portability from "./portability.ts";
 import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
-import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
-import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
-import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
-import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
-import * as GitHubCli from "./sourceControl/GitHubCli.ts";
-import * as GitLabCli from "./sourceControl/GitLabCli.ts";
-import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
-import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
-import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
-import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
@@ -215,6 +187,17 @@ import { preflightProvider } from "./provider/providerPreflight.ts";
 import { tryAdmitTurnStart, type TurnStartAdmission } from "./remote/updateGate.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const isMcpServerAuthenticationError = Schema.is(McpServerAuthenticationError);
+const subscriptionDriverByProvider: Record<SubscriptionProviderId, string> = {
+  anthropic: "claudeAgent",
+  "openai-codex": "codex",
+  xai: "grok",
+  "kimi-for-coding": "kimi",
+  "opencode-go": "opencodeGo",
+};
+const subscriptionProviderForDriver = (driver: string): SubscriptionProviderId | undefined =>
+  Object.entries(subscriptionDriverByProvider).find(
+    ([, candidate]) => candidate === driver,
+  )?.[0] as SubscriptionProviderId | undefined;
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -300,19 +283,6 @@ function unexpectedCompatibilityError(error: never): never {
   throw new Error(`Unhandled compatibility error: ${String(error)}`);
 }
 
-/** Preserve the setup runner's broader pre-refactor message normalization. */
-function legacySetupFailureDescription(cause: unknown): string {
-  if (
-    typeof cause === "object" &&
-    cause !== null &&
-    "message" in cause &&
-    typeof cause.message === "string"
-  ) {
-    return cause.message;
-  }
-  return String(cause);
-}
-
 function projectEntriesFailureContext(error: WorkspaceEntries.WorkspaceEntriesError): {
   readonly failure: ProjectEntriesFailure;
   readonly normalizedCwd?: string;
@@ -364,23 +334,6 @@ function projectEntriesFailureContext(error: WorkspaceEntries.WorkspaceEntriesEr
   }
 }
 
-function filesystemBrowseFailureContext(error: WorkspaceEntries.WorkspaceEntriesBrowseError): {
-  readonly failure: FilesystemBrowseFailure;
-  readonly parentPath?: string;
-  readonly platform?: string;
-} {
-  switch (error._tag) {
-    case "WorkspaceEntriesWindowsPathUnsupportedError":
-      return { failure: "windows_path_unsupported", platform: error.platform };
-    case "WorkspaceEntriesCurrentProjectRequiredError":
-      return { failure: "current_project_required" };
-    case "WorkspaceEntriesReadDirectoryError":
-      return { failure: "read_directory_failed", parentPath: error.parentPath };
-    default:
-      return unexpectedCompatibilityError(error);
-  }
-}
-
 function projectFileFailureContext(
   error:
     | WorkspaceFileSystem.WorkspaceFileSystemError
@@ -412,19 +365,6 @@ function projectFileFailureContext(
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
     case "WorkspaceBinaryFileError":
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
-    default:
-      return unexpectedCompatibilityError(error);
-  }
-}
-
-function projectSetupScriptCompatibilityDetail(
-  error: ProjectSetupScriptRunner.ProjectSetupScriptRunnerError,
-): string {
-  switch (error._tag) {
-    case "ProjectSetupScriptOperationError":
-      return legacySetupFailureDescription(error.cause);
-    case "ProjectSetupScriptProjectNotFoundError":
-      return "Project was not found for setup script execution.";
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -729,10 +669,6 @@ const makeWsRpcLayer = (
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
-      const review = yield* ReviewService.ReviewService;
-      const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
-      const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
-      const terminalManager = yield* TerminalManager.TerminalManager;
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const agentController = yield* AgentController.AgentController;
@@ -780,10 +716,25 @@ const makeWsRpcLayer = (
           Effect.orElseSucceed(() => ({})),
         ),
       );
+      const validateAccountInstance = Effect.fn("validateAccountInstance")(function* (
+        provider: SubscriptionProviderId,
+        instanceId: ProviderInstanceId | undefined,
+      ) {
+        if (!instanceId) return;
+        const settings = yield* serverSettings.getSettings.pipe(
+          Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message })),
+        );
+        const instance = deriveProviderInstanceConfigMap(settings)[instanceId];
+        const driver = subscriptionDriverByProvider[provider];
+        if (instance?.driver !== driver) {
+          return yield* new SubscriptionAuthError({
+            reason: `Provider instance '${instanceId}' does not belong to ${provider}.`,
+          });
+        }
+      });
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
-      const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -816,19 +767,6 @@ const makeWsRpcLayer = (
           onNone: () => ChannelRuntime.channelBindingsForRuntime(bindings, () => false),
           onSome: (runtime) => runtime.channelBindingsForRuntime(bindings),
         });
-      const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
-      const automaticGitFetchInterval = serverSettings.getSettings.pipe(
-        Effect.map(
-          (settings) => resolveServerBackgroundActivitySettings(settings).automaticGitFetchInterval,
-        ),
-        Effect.catch((cause) =>
-          Effect.logWarning("Failed to read automatic Git fetch interval setting", {
-            detail: cause.message,
-          }).pipe(Effect.as(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
-        ),
-      );
-      const sourceControlRepositories =
-        yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -958,7 +896,7 @@ const makeWsRpcLayer = (
         yield* subscriptionAuth.reload();
         botInbox.reload();
         yield* syncSubscriptionProviderSettings;
-        const [providers, bots, snapshot] = yield* Effect.all([
+        const [providers, bots, snapshot, settings] = yield* Effect.all([
           providerRegistry.getProviders,
           projectionBots
             .listAll()
@@ -966,6 +904,9 @@ const makeWsRpcLayer = (
           projectionSnapshotQuery
             .getShellSnapshot()
             .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message }))),
+          serverSettings.getSettings.pipe(
+            Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message })),
+          ),
         ]);
         const dependentBots = subscriptionDependentBots(
           bots.map((bot) => ({ id: bot.botId, name: bot.name, engine: bot.engine })),
@@ -990,7 +931,36 @@ const makeWsRpcLayer = (
         syncAccessIncidents(botInbox, access);
 
         return {
-          providers: subscriptionStatuses,
+          providers: subscriptionStatuses.map((status) => ({
+            ...status,
+            dependentBots: status.dependentBots.filter((dependent) =>
+              bots.some(
+                (bot) =>
+                  bot.botId === dependent.id &&
+                  bot.engine?.provider === subscriptionDriverByProvider[status.provider],
+              ),
+            ),
+          })),
+          accounts: Object.entries(deriveProviderInstanceConfigMap(settings)).flatMap(
+            ([instanceId, instance]) => {
+              const provider = subscriptionProviderForDriver(instance.driver);
+              return provider && instanceId !== subscriptionDriverByProvider[provider]
+                ? [
+                    subscriptionAuth.accountStatus(
+                      provider,
+                      ProviderInstanceId.make(instanceId),
+                      bots
+                        .filter((bot) => bot.engine?.provider === instanceId)
+                        .map((bot) => ({
+                          id: bot.botId,
+                          name: bot.name,
+                          provider,
+                        })),
+                    ),
+                  ]
+                : [];
+            },
+          ),
           access,
           inbox: botInbox.list(),
         };
@@ -1070,7 +1040,6 @@ const makeWsRpcLayer = (
           toDispatchCommandError(cause, "Failed to generate orchestration command identifier."),
         ),
       );
-      const serverEventId = randomUUID.pipe(Effect.map(EventId.make));
       const serverCommandId = (tag: string) =>
         randomUUID.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
 
@@ -1111,37 +1080,6 @@ const makeWsRpcLayer = (
               new AuthAccessStreamError({
                 message: error.message,
               }),
-          ),
-        );
-
-      const appendSetupScriptActivity = (input: {
-        readonly threadId: ThreadId;
-        readonly kind: "setup-script.requested" | "setup-script.started" | "setup-script.failed";
-        readonly summary: string;
-        readonly createdAt: string;
-        readonly payload: Record<string, unknown>;
-        readonly tone: "info" | "error";
-      }) =>
-        Effect.all({
-          commandId: serverCommandId("setup-script-activity"),
-          activityId: serverEventId,
-        }).pipe(
-          Effect.flatMap(({ commandId, activityId }) =>
-            dispatchFromClient({
-              type: "thread.activity.append",
-              commandId,
-              threadId: input.threadId,
-              activity: {
-                id: activityId,
-                tone: input.tone,
-                kind: input.kind,
-                summary: input.summary,
-                payload: input.payload,
-                turnId: null,
-                createdAt: input.createdAt,
-              },
-              createdAt: input.createdAt,
-            }),
           ),
         );
 
@@ -1541,8 +1479,6 @@ const makeWsRpcLayer = (
           const bootstrap = command.bootstrap;
           const { bootstrap: _bootstrap, ...finalTurnStartCommand } = command;
           let createdThread = false;
-          let targetProjectId = bootstrap?.createThread?.projectId;
-          let targetProjectCwd = bootstrap?.prepareWorktree?.projectCwd;
           let targetWorktreePath = bootstrap?.createThread?.worktreePath ?? null;
 
           const cleanupCreatedThread = () =>
@@ -1558,121 +1494,6 @@ const makeWsRpcLayer = (
                   Effect.as(true),
                 )
               : Effect.succeed(false);
-
-          const recordSetupScriptLaunchFailure = (input: {
-            readonly error: ProjectSetupScriptRunner.ProjectSetupScriptRunnerError;
-            readonly requestedAt: string;
-            readonly worktreePath: string;
-          }) => {
-            const detail = projectSetupScriptCompatibilityDetail(input.error);
-            return appendSetupScriptActivity({
-              threadId: command.threadId,
-              kind: "setup-script.failed",
-              summary: "Setup script failed to start",
-              createdAt: input.requestedAt,
-              payload: {
-                detail,
-                worktreePath: input.worktreePath,
-              },
-              tone: "error",
-            }).pipe(
-              Effect.ignoreCause({ log: false }),
-              Effect.flatMap(() =>
-                Effect.logWarning("bootstrap turn start failed to launch setup script", {
-                  threadId: command.threadId,
-                  worktreePath: input.worktreePath,
-                  detail,
-                }),
-              ),
-            );
-          };
-
-          const recordSetupScriptStarted = (input: {
-            readonly requestedAt: string;
-            readonly worktreePath: string;
-            readonly scriptId: string;
-            readonly scriptName: string;
-            readonly terminalId: string;
-          }) =>
-            Effect.gen(function* () {
-              const startedAt = yield* nowIso;
-              const payload = {
-                scriptId: input.scriptId,
-                scriptName: input.scriptName,
-                terminalId: input.terminalId,
-                worktreePath: input.worktreePath,
-              };
-              yield* Effect.all([
-                appendSetupScriptActivity({
-                  threadId: command.threadId,
-                  kind: "setup-script.requested",
-                  summary: "Starting setup script",
-                  createdAt: input.requestedAt,
-                  payload,
-                  tone: "info",
-                }),
-                appendSetupScriptActivity({
-                  threadId: command.threadId,
-                  kind: "setup-script.started",
-                  summary: "Setup script started",
-                  createdAt: startedAt,
-                  payload,
-                  tone: "info",
-                }),
-              ]).pipe(
-                Effect.asVoid,
-                Effect.catch((error) =>
-                  Effect.logWarning(
-                    "bootstrap turn start launched setup script but failed to record setup activity",
-                    {
-                      threadId: command.threadId,
-                      worktreePath: input.worktreePath,
-                      scriptId: input.scriptId,
-                      terminalId: input.terminalId,
-                      detail: error.message,
-                    },
-                  ),
-                ),
-              );
-            });
-
-          const runSetupProgram = () =>
-            Effect.gen(function* () {
-              if (!bootstrap?.runSetupScript || !targetWorktreePath) {
-                return;
-              }
-              const worktreePath = targetWorktreePath;
-              const requestedAt = yield* nowIso;
-              yield* projectSetupScriptRunner
-                .runForThread({
-                  threadId: command.threadId,
-                  ...(targetProjectId ? { projectId: targetProjectId } : {}),
-                  ...(targetProjectCwd ? { projectCwd: targetProjectCwd } : {}),
-                  worktreePath,
-                })
-                .pipe(
-                  Effect.matchEffect({
-                    onFailure: (error) =>
-                      recordSetupScriptLaunchFailure({
-                        error,
-                        requestedAt,
-                        worktreePath,
-                      }),
-                    onSuccess: (setupResult) => {
-                      if (setupResult.status !== "started") {
-                        return Effect.void;
-                      }
-                      return recordSetupScriptStarted({
-                        requestedAt,
-                        worktreePath,
-                        scriptId: setupResult.scriptId,
-                        scriptName: setupResult.scriptName,
-                        terminalId: setupResult.terminalId,
-                      });
-                    },
-                  }),
-                );
-            });
 
           const bootstrapProgram = Effect.gen(function* () {
             if (bootstrap?.createThread) {
@@ -1737,10 +1558,7 @@ const makeWsRpcLayer = (
                 branch: worktree.worktree.refName,
                 worktreePath: targetWorktreePath,
               });
-              yield* refreshGitStatus(targetWorktreePath);
             }
-
-            yield* runSetupProgram();
 
             return yield* orchestrationEngine.dispatch(finalTurnStartCommand, {
               actor: dispatchActor,
@@ -1923,11 +1741,6 @@ const makeWsRpcLayer = (
           threadSnapshotPagination: true,
         };
       });
-
-      const refreshGitStatus = (cwd: string) =>
-        vcsStatusBroadcaster
-          .refreshStatus(cwd)
-          .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
@@ -2183,21 +1996,6 @@ const makeWsRpcLayer = (
                       Effect.logWarning(`failed to stop provider session during ${parkingKind}`, {
                         threadId: parkingCommand.threadId,
                         cause,
-                      }),
-                    ),
-                  );
-                }
-
-                // Terminals are user-opened panes, not thread background
-                // work: archive removes the thread from view so they close
-                // with it, but a settled thread stays reachable and may be
-                // un-settled, so its terminals stay up.
-                if (parkingCommand.type === "thread.archive") {
-                  yield* terminalManager.close({ threadId: parkingCommand.threadId }).pipe(
-                    Effect.catch((error) =>
-                      Effect.logWarning("failed to close thread terminals after archive", {
-                        threadId: parkingCommand.threadId,
-                        error: error.message,
                       }),
                     ),
                   );
@@ -2731,9 +2529,21 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverUpdateSettings]: ({ patch }) =>
           observeRpcEffect(
             WS_METHODS.serverUpdateSettings,
-            serverSettings
-              .updateSettings(patch)
-              .pipe(Effect.map(ServerSettings.redactServerSettingsForClient)),
+            Effect.gen(function* () {
+              const current = patch.providerInstances
+                ? yield* serverSettings.getSettings
+                : undefined;
+              const updated = yield* serverSettings.updateSettings(patch);
+              if (patch.providerInstances && current) {
+                yield* Effect.promise(() =>
+                  subscriptionAuth.pruneDeletedInstanceCredentials(
+                    current.providerInstances,
+                    updated.providerInstances,
+                  ),
+                );
+              }
+              return ServerSettings.redactServerSettingsForClient(updated);
+            }),
             {
               "rpc.aggregate": "server",
             },
@@ -3020,12 +2830,15 @@ const makeWsRpcLayer = (
         [WS_METHODS.subscriptionAuthStart]: ({ provider, ...options }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthStart,
-            Effect.tryPromise({
-              try: () => subscriptionAuth.startLogin(provider, options),
-              catch: (cause) =>
-                new SubscriptionAuthError({
-                  reason: cause instanceof Error ? cause.message : String(cause),
-                }),
+            Effect.gen(function* () {
+              yield* validateAccountInstance(provider, options.instanceId);
+              return yield* Effect.tryPromise({
+                try: () => subscriptionAuth.startLogin(provider, options),
+                catch: (cause) =>
+                  new SubscriptionAuthError({
+                    reason: cause instanceof Error ? cause.message : String(cause),
+                  }),
+              });
             }),
             { "rpc.aggregate": "server" },
           ),
@@ -3068,11 +2881,11 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "server" },
           ),
-        [WS_METHODS.subscriptionAuthLogout]: ({ provider }) =>
+        [WS_METHODS.subscriptionAuthLogout]: ({ provider, instanceId }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthLogout,
             Effect.tryPromise({
-              try: () => subscriptionAuth.logout(provider),
+              try: () => subscriptionAuth.logout(provider, instanceId),
               catch: (cause) =>
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
@@ -3080,11 +2893,11 @@ const makeWsRpcLayer = (
             }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
             { "rpc.aggregate": "server" },
           ),
-        [WS_METHODS.subscriptionAuthHealthTest]: ({ provider }) =>
+        [WS_METHODS.subscriptionAuthHealthTest]: ({ provider, instanceId }) =>
           observeRpcEffect(
             WS_METHODS.subscriptionAuthHealthTest,
             Effect.tryPromise({
-              try: () => subscriptionAuth.testHealth(provider),
+              try: () => subscriptionAuth.testHealth(provider, instanceId),
               catch: (cause) =>
                 new SubscriptionAuthError({
                   reason: cause instanceof Error ? cause.message : String(cause),
@@ -3131,14 +2944,6 @@ const makeWsRpcLayer = (
             WS_METHODS.voiceCallHangup,
             voiceCalls.hangup(callId, voiceCallOwnerId),
             { "rpc.aggregate": "voice-call" },
-          ),
-        [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
-          observeRpcEffect(
-            WS_METHODS.serverDiscoverSourceControl,
-            sourceControlDiscovery.discover,
-            {
-              "rpc.aggregate": "server",
-            },
           ),
         [WS_METHODS.serverGetTraceDiagnostics]: (_input) =>
           observeRpcEffect(
@@ -3802,32 +3607,6 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "bot" },
           ),
-        [WS_METHODS.sourceControlLookupRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlLookupRepository,
-            sourceControlRepositories.lookupRepository(input),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
-        [WS_METHODS.sourceControlCloneRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlCloneRepository,
-            sourceControlRepositories.cloneRepository(input),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
-        [WS_METHODS.sourceControlPublishRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlPublishRepository,
-            sourceControlRepositories
-              .publishRepository(input)
-              .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
         [WS_METHODS.projectsSearchEntries]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectsSearchEntries,
@@ -3835,23 +3614,6 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new ProjectSearchEntriesError({
-                    cwd: input.cwd,
-                    queryLength: input.query.length,
-                    limit: input.limit,
-                    ...projectEntriesFailureContext(cause),
-                    cause,
-                  }),
-              ),
-            ),
-            { "rpc.aggregate": "workspace" },
-          ),
-        [WS_METHODS.projectsSearchContents]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectsSearchContents,
-            workspaceEntries.searchContents(input).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ProjectSearchContentsError({
                     cwd: input.cwd,
                     queryLength: input.query.length,
                     limit: input.limit,
@@ -3931,21 +3693,6 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "workspace" },
           ),
-        [WS_METHODS.filesystemBrowse]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.filesystemBrowse,
-            workspaceEntries.browse(input).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new FilesystemBrowseError({
-                    ...input,
-                    ...filesystemBrowseFailureContext(cause),
-                    cause,
-                  }),
-              ),
-            ),
-            { "rpc.aggregate": "workspace" },
-          ),
         [WS_METHODS.attachmentsCreateUploadUrl]: (input) =>
           observeRpcEffect(WS_METHODS.attachmentsCreateUploadUrl, issueAttachmentUploadUrl(input), {
             "rpc.aggregate": "workspace",
@@ -3962,30 +3709,6 @@ const makeWsRpcLayer = (
             Effect.gen(function* () {
               if (input.resource._tag === "attachment") {
                 return yield* issueAssetUrl({ resource: input.resource });
-              }
-              if (input.resource._tag === "project-favicon") {
-                const project = yield* projectionSnapshotQuery
-                  .getActiveProjectByWorkspaceRoot(input.resource.cwd)
-                  .pipe(
-                    Effect.mapError(
-                      (cause) =>
-                        new AssetWorkspaceContextResolutionError({
-                          resource: input.resource,
-                          cause,
-                        }),
-                    ),
-                  );
-                if (Option.isNone(project)) {
-                  return yield* new AssetWorkspaceContextNotFoundError({
-                    resource: input.resource,
-                  });
-                }
-                return yield* issueAssetUrl({
-                  resource: input.resource,
-                  ...(project.value.faviconPath
-                    ? { projectFaviconPath: project.value.faviconPath }
-                    : {}),
-                });
               }
               const thread = yield* projectionSnapshotQuery
                 .getThreadShellById(input.resource.threadId)
@@ -4025,178 +3748,6 @@ const makeWsRpcLayer = (
               });
             }),
             { "rpc.aggregate": "workspace" },
-          ),
-        [WS_METHODS.subscribeVcsStatus]: (input) =>
-          observeRpcStream(
-            WS_METHODS.subscribeVcsStatus,
-            vcsStatusBroadcaster.streamStatus(input, {
-              automaticRemoteRefreshInterval: automaticGitFetchInterval,
-            }),
-            {
-              "rpc.aggregate": "vcs",
-            },
-          ),
-        [WS_METHODS.vcsRefreshStatus]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsRefreshStatus,
-            vcsStatusBroadcaster.refreshStatus(input.cwd),
-            {
-              "rpc.aggregate": "vcs",
-            },
-          ),
-        [WS_METHODS.vcsPull]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsPull,
-            gitWorkflow.pullCurrentBranch(input.cwd).pipe(
-              Effect.matchCauseEffect({
-                onFailure: (cause) => Effect.failCause(cause),
-                onSuccess: (result) =>
-                  refreshGitStatus(input.cwd).pipe(Effect.ignore({ log: true }), Effect.as(result)),
-              }),
-            ),
-            { "rpc.aggregate": "git" },
-          ),
-        [WS_METHODS.gitRunStackedAction]: (input) =>
-          observeRpcStream(
-            WS_METHODS.gitRunStackedAction,
-            Stream.callback<GitActionProgressEvent, GitManagerServiceError>((queue) =>
-              gitWorkflow
-                .runStackedAction(input, {
-                  actionId: input.actionId,
-                  progressReporter: {
-                    publish: (event) => Queue.offer(queue, event).pipe(Effect.asVoid),
-                  },
-                })
-                .pipe(
-                  Effect.matchCauseEffect({
-                    onFailure: (cause) => Queue.failCause(queue, cause),
-                    onSuccess: () =>
-                      refreshGitStatus(input.cwd).pipe(
-                        Effect.andThen(Queue.end(queue).pipe(Effect.asVoid)),
-                      ),
-                  }),
-                ),
-            ),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.gitResolvePullRequest]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.gitResolvePullRequest,
-            gitWorkflow.resolvePullRequest(input),
-            {
-              "rpc.aggregate": "git",
-            },
-          ),
-        [WS_METHODS.gitPreparePullRequestThread]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.gitPreparePullRequestThread,
-            gitWorkflow
-              .preparePullRequestThread(input)
-              .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "git" },
-          ),
-        [WS_METHODS.vcsListRefs]: (input) =>
-          observeRpcEffect(WS_METHODS.vcsListRefs, gitWorkflow.listRefs(input), {
-            "rpc.aggregate": "vcs",
-          }),
-        [WS_METHODS.vcsCreateWorktree]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsCreateWorktree,
-            gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.vcsRemoveWorktree]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsRemoveWorktree,
-            gitWorkflow.removeWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.vcsCreateRef]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsCreateRef,
-            gitWorkflow.createRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.vcsSwitchRef]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsSwitchRef,
-            gitWorkflow.switchRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.vcsInit]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.vcsInit,
-            vcsProvisioning
-              .initRepository(input)
-              .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-            { "rpc.aggregate": "vcs" },
-          ),
-        [WS_METHODS.reviewGetDiffPreview]: (input) =>
-          observeRpcEffect(WS_METHODS.reviewGetDiffPreview, review.getDiffPreview(input), {
-            "rpc.aggregate": "review",
-          }),
-        [WS_METHODS.reviewGetDiffFileContents]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.reviewGetDiffFileContents,
-            review.getDiffFileContents(input),
-            { "rpc.aggregate": "review" },
-          ),
-        [WS_METHODS.terminalOpen]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.terminalAttach]: (input) =>
-          observeRpcStream(
-            WS_METHODS.terminalAttach,
-            Stream.callback<TerminalAttachStreamEvent, TerminalError>((queue) =>
-              Effect.acquireRelease(
-                terminalManager.attachStream(input, (event) => Queue.offer(queue, event)),
-                (unsubscribe) => Effect.sync(unsubscribe),
-              ),
-            ),
-            { "rpc.aggregate": "terminal" },
-          ),
-        [WS_METHODS.terminalWrite]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalWrite, terminalManager.write(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.terminalResize]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalResize, terminalManager.resize(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.terminalClear]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalClear, terminalManager.clear(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.terminalRestart]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalRestart, terminalManager.restart(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.terminalClose]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalClose, terminalManager.close(input), {
-            "rpc.aggregate": "terminal",
-          }),
-        [WS_METHODS.subscribeTerminalEvents]: (_input) =>
-          observeRpcStream(
-            WS_METHODS.subscribeTerminalEvents,
-            Stream.callback<TerminalEvent>((queue) =>
-              Effect.acquireRelease(
-                terminalManager.subscribe((event) => Queue.offer(queue, event)),
-                (unsubscribe) => Effect.sync(unsubscribe),
-              ),
-            ),
-            { "rpc.aggregate": "terminal" },
-          ),
-        [WS_METHODS.subscribeTerminalMetadata]: (_input) =>
-          observeRpcStream(
-            WS_METHODS.subscribeTerminalMetadata,
-            Stream.callback<TerminalMetadataStreamEvent>((queue) =>
-              Effect.acquireRelease(
-                terminalManager.subscribeMetadata((event) => Queue.offer(queue, event)),
-                (unsubscribe) => Effect.sync(unsubscribe),
-              ),
-            ),
-            { "rpc.aggregate": "terminal" },
           ),
         [WS_METHODS.computerGetState]: (input) =>
           Effect.sync(() => computerRegistry.state(input.threadId)),
@@ -4501,27 +4052,6 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
-              Layer.provide(
-                SourceControlDiscovery.layer.pipe(
-                  Layer.provide(
-                    SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(
-                        Layer.mergeAll(
-                          AzureDevOpsCli.layer,
-                          BitbucketApi.layer,
-                          GitHubCli.layer,
-                          GitLabCli.layer,
-                        ),
-                      ),
-                      Layer.provideMerge(GitVcsDriver.layer),
-                      Layer.provide(
-                        VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
-                      ),
-                    ),
-                  ),
-                  Layer.provide(VcsProcess.layer),
-                ),
-              ),
             ),
           ),
         );

@@ -10,9 +10,9 @@ import {
   globalDefaultOptionLabel,
 } from "@t3tools/client-runtime/image-generation";
 import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
-import { Brain02Icon, Edit02Icon, Link02Icon, WrenchIcon } from "@hugeicons/core-free-icons";
+import { Brain02Icon, Edit02Icon, Link02Icon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
@@ -22,10 +22,10 @@ import { openSettings } from "../../settingsDialogStore";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { botEnvironment } from "../../state/bots";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { SidebarInset } from "../ui/sidebar";
 import {
   WorkspaceBreadcrumb,
@@ -48,7 +48,7 @@ import { BotChannelsSheet } from "./BotChannelsSheet";
 import { BotMemorySheet } from "./BotMemorySheet";
 import { BotModelPicker } from "./BotModelPicker";
 import { BotPersonalityToneField } from "./BotPersonalityToneField";
-import { BotToolsSheet, buildBotToolItems } from "./BotToolsSheet";
+import { BotToolsSection } from "./BotToolsSection";
 import { BotUsageSection } from "./BotUsageSection";
 import { BOT_SANDBOX_OPTIONS, botSandboxLabel } from "./botSandbox";
 import { useRosterStore } from "./rosterStore";
@@ -168,9 +168,13 @@ function BotSettingsForm({
       imageProviders.data?.providers.find((status) => status.provider === provider),
     );
   const threadRef = useBotThreadRef(bot.id);
+  const accessQuery = useEnvironmentQuery(
+    environmentId === null
+      ? null
+      : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
+  );
   const draft = useBotProfileDraft(bot, onSave);
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
 
@@ -188,11 +192,6 @@ function BotSettingsForm({
     disabled: !draft.dirty,
   });
 
-  // Memoized because this walks the plugin catalog and does not depend on the form draft.
-  const tools = useMemo(() => buildBotToolItems(mcpServers), [mcpServers]);
-  const enabledToolCount = tools.filter(
-    (tool) => tool.workspaceEnabled && !draft.disabledMcpServerIds.includes(tool.id),
-  ).length;
   const assignedChannels = (bot.channelBindings ?? []).filter(
     (binding) => binding.connectionId || binding.projectId || binding.status !== "disconnected",
   );
@@ -203,7 +202,40 @@ function BotSettingsForm({
   return (
     <>
       <SettingsPageContainer>
-        <SettingsSection title={t("Bot")}>
+        <div className="flex items-center gap-4 px-3 pb-1 sm:px-4">
+          <BotAvatarView avatar={bot.avatar} name={draft.name || bot.name} className="size-14" />
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold tracking-tight">
+              {draft.name || bot.name}
+            </h1>
+            <p className="text-sm text-muted-foreground">Set up how this bot works with you.</p>
+          </div>
+        </div>
+        <nav aria-label="Bot settings sections" className="flex gap-1 overflow-x-auto px-2 sm:px-3">
+          {(
+            [
+              ["identity", "Identity"],
+              ["behavior", "Behavior"],
+              ["model", "Model & usage"],
+              ["workspace", "Workspace"],
+              ["tools", "Tools"],
+            ] as const
+          ).map(([id, label]) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className="shrink-0 rounded-lg px-3 py-2 text-sm text-muted-foreground outline-none hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={(event) => {
+                event.preventDefault();
+                document.getElementById(id)?.scrollIntoView({ block: "start" });
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <SettingsSection id="identity" title="Identity">
           <SettingsRow
             title={t("Avatar")}
             description={t("Shown in the roster, the chat header, and anywhere this bot speaks.")}
@@ -281,7 +313,7 @@ function BotSettingsForm({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title={t("Voice and personality")}>
+        <SettingsSection id="behavior" title="Behavior">
           <SettingsRow
             id="personality"
             title={t("Personality")}
@@ -323,7 +355,7 @@ function BotSettingsForm({
           />
         </SettingsSection>
 
-        <SettingsSection title={t("Model")}>
+        <SettingsSection id="model" title="Model & usage">
           <SettingsRow
             title={t("Model")}
             description={t("The provider and model this bot runs on.")}
@@ -364,7 +396,6 @@ function BotSettingsForm({
                   onPromptChange={() => {}}
                   modelOptions={draft.modelOptions}
                   allowPromptInjectedEffort={false}
-                  planModeEnabled={draft.settings.planModeEnabled}
                   onModelOptionsChange={draft.selectModelOptions}
                 />
               }
@@ -411,7 +442,7 @@ function BotSettingsForm({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title={t("Workspace")}>
+        <SettingsSection id="workspace" title="Workspace">
           <SettingsRow
             title={t("Sandbox")}
             description={t("Where this bot runs commands and edits files.")}
@@ -436,29 +467,6 @@ function BotSettingsForm({
                   ))}
                 </SelectPopup>
               </Select>
-            }
-          />
-
-          <SettingsRow
-            title={t("Tools")}
-            description={t("Which workspace tools this bot may reach.")}
-            control={
-              <Button
-                variant="outline"
-                size="xs"
-                type="button"
-                aria-label={t("Manage bot tools")}
-                aria-expanded={toolsOpen}
-                onClick={() => setToolsOpen(true)}
-              >
-                <AppIcon className="size-3.5" icon={WrenchIcon} />
-                {tools.length === 0
-                  ? t("No workspace tools")
-                  : t("{enabled} of {total} enabled", {
-                      enabled: enabledToolCount,
-                      total: tools.length,
-                    })}
-              </Button>
             }
           />
 
@@ -548,6 +556,19 @@ function BotSettingsForm({
             }
           />
         </SettingsSection>
+
+        <BotToolsSection
+          servers={mcpServers}
+          accessStatuses={accessQuery.data?.access ?? []}
+          disabledIds={draft.disabledMcpServerIds}
+          onDisabledIdsChange={(ids) => {
+            draft.setDisabledMcpServerIds(ids);
+            draft.markChanged();
+          }}
+          canDelegate={
+            draft.activeEntry ? driverSupportsDelegation(draft.activeEntry.driverKind) : true
+          }
+        />
       </SettingsPageContainer>
 
       <div
@@ -567,19 +588,6 @@ function BotSettingsForm({
       </div>
 
       <AvatarPickerDialog bot={bot} open={avatarOpen} onOpenChange={setAvatarOpen} />
-      <BotToolsSheet
-        open={toolsOpen}
-        onOpenChange={setToolsOpen}
-        servers={mcpServers}
-        disabledIds={draft.disabledMcpServerIds}
-        onDisabledIdsChange={(ids) => {
-          draft.setDisabledMcpServerIds(ids);
-          draft.markChanged();
-        }}
-        canDelegate={
-          draft.activeEntry ? driverSupportsDelegation(draft.activeEntry.driverKind) : true
-        }
-      />
       <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
       <BotChannelsSheet bot={bot} open={channelsOpen} onOpenChange={setChannelsOpen} />
     </>

@@ -3,6 +3,7 @@ import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ChatAttachment,
   AkeruCreateRoutineInput,
+  RoutineTimeZone,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -144,9 +145,15 @@ function runtimeChatAttachment(event: ProviderRuntimeEvent) {
   const data = decodeRuntimeChatAttachment(event.payload.data);
   return Option.isSome(data) ? data.value.chatAttachment : undefined;
 }
-const decodeCreateRoutineInput = Schema.decodeUnknownExit(AkeruCreateRoutineInput, {
-  onExcessProperty: "error",
-});
+const decodeCreateRoutineInput = Schema.decodeUnknownExit(
+  Schema.Struct({
+    ...AkeruCreateRoutineInput.fields,
+    timezone: Schema.optional(RoutineTimeZone),
+  }),
+  {
+    onExcessProperty: "error",
+  },
+);
 
 function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
   if (args === undefined) return undefined;

@@ -25,15 +25,15 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 
 #### Project
 
-The top-level workspace record in the app. In [the orchestration contracts][1], a project has a `workspaceRoot` and a title. It does not contain threads: `OrchestrationProject` and `OrchestrationThread` are separate arrays on the read model, and a project can have zero threads. See [workspace-layout.md][2].
+The workspace record behind a bot's chats. Users do not manage projects directly: they are an internal workspace detail of each bot, and clients no longer show project icons or read a project file. In [the orchestration contracts][1], a project has a `workspaceRoot` and a title. It does not contain threads: `OrchestrationProject` and `OrchestrationThread` are separate arrays on the read model, and a project can have zero threads. See [workspace-layout.md][2].
 
 #### Workspace root
 
-The root filesystem path for a project. In [the orchestration model][1], it is the base directory for branches and optional worktrees. See [workspace-layout.md][2].
+The root filesystem path for a project. In [the orchestration model][1], it is the project checkout where new threads run, and the base directory for optional worktrees. See [workspace-layout.md][2].
 
 #### Worktree
 
-A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
+A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Clients no longer offer the local/worktree choice or the `defaultThreadEnvMode` setting, so new threads start in the project checkout. The server still honors a thread that was created with a worktree, and names its branch with the default text generation model (`textGenerationModelSelection`). Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
 
 ### Thread timeline
 
@@ -208,7 +208,7 @@ The safety/access mode for a thread or session. [The contracts][1] define four v
 
 #### Interaction mode
 
-The agent interaction style for a thread. In [the contracts][1], the values are `default` and `plan`.
+The agent interaction style for a thread. Only `default` is in use. [The contracts][1] still accept the retired `plan` value so older stored threads, commands, and proposed plans decode, but clients no longer offer plan mode.
 
 #### Assistant delivery mode
 
@@ -242,7 +242,7 @@ The per-driver list of current model slugs that decides which models land in the
 
 ### Checkpointing
 
-Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
+Checkpointing captures workspace state over time so the server can diff turns and restore earlier points. Clients no longer include a diff review panel; the server still captures checkpoints and turn summaries. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
 
 #### Checkpoint
 

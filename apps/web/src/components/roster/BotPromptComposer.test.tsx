@@ -180,13 +180,12 @@ describe("bot prompt composer", () => {
     expect(restoreBotStashPrompt("Current draft", "")).toBe("Current draft");
   });
 
-  it("uses the available chat width", () => {
+  it("centers on the same 48rem reading column as the conversation", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
-    expect(markup).toContain('class="w-full px-4');
-    expect(markup).not.toContain("max-w-4xl");
+    expect(markup).toContain("px-[max(1rem,calc((100%-48rem)/2))]");
   });
 
   it("attaches a pending question above the custom answer field", () => {
@@ -258,6 +257,28 @@ describe("bot prompt composer", () => {
     expect(markup).toContain('tabindex="-1"');
     expect(markup).toContain('aria-label="Send message"');
     expect(markup).toContain('aria-label="Attach files"');
+  });
+
+  it("opens the file picker directly when attaching is the only prompt action", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
+    );
+
+    expect(markup).toContain('aria-label="Attach file"');
+    expect(markup).not.toContain('aria-label="Add to prompt"');
+  });
+
+  it("keeps the add menu when a group chat can mention other bots", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Group"
+        disabled={false}
+        mentionBots={[{ id: "bot-2", name: "Nova" }]}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="Add to prompt"');
   });
 
   it("does not render model or reasoning controls", () => {

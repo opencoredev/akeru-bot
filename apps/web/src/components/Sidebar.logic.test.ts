@@ -274,10 +274,8 @@ describe("hasUnseenCompletion", () => {
   it("returns true when a thread completed after its last visit", () => {
     expect(
       hasUnseenCompletion({
-        hasActionableProposedPlan: false,
         hasPendingApprovals: false,
         hasPendingUserInput: false,
-        interactionMode: "default",
         latestTurn: makeLatestTurn(),
         lastVisitedAt: "2026-03-09T10:04:00.000Z",
         session: null,
@@ -288,10 +286,8 @@ describe("hasUnseenCompletion", () => {
   it("treats a missing client visit marker as read", () => {
     expect(
       hasUnseenCompletion({
-        hasActionableProposedPlan: false,
         hasPendingApprovals: false,
         hasPendingUserInput: false,
-        interactionMode: "default",
         latestTurn: makeLatestTurn(),
         lastVisitedAt: undefined,
         session: null,
@@ -498,42 +494,6 @@ describe("orderItemsByPreferredIds", () => {
     expect(ordered.map((project) => project.id)).toEqual([
       ProjectId.make("project-2"),
       ProjectId.make("project-1"),
-    ]);
-  });
-
-  it("honors projectOrder physical keys via getProjectOrderKey", async () => {
-    // Regression guard for #1904 / the regression introduced by #2055:
-    // `projectOrder` is populated with physical keys (envId + cwd-derived)
-    // by the store and by drag-end handlers. Readers must identify projects
-    // with the same key format, or manual sort silently snaps back.
-    const { getProjectOrderKey } = await import("../logicalProject");
-    const projects = [
-      {
-        environmentId: EnvironmentId.make("environment-local"),
-        id: ProjectId.make("id-alpha"),
-        workspaceRoot: "/work/alpha",
-      },
-      {
-        environmentId: EnvironmentId.make("environment-local"),
-        id: ProjectId.make("id-beta"),
-        workspaceRoot: "/work/beta",
-      },
-      {
-        environmentId: EnvironmentId.make("environment-local"),
-        id: ProjectId.make("id-gamma"),
-        workspaceRoot: "/work/gamma",
-      },
-    ];
-    const ordered = orderItemsByPreferredIds({
-      items: projects,
-      preferredIds: [getProjectOrderKey(projects[2]!), getProjectOrderKey(projects[0]!)],
-      getId: getProjectOrderKey,
-    });
-
-    expect(ordered.map((project) => project.workspaceRoot)).toEqual([
-      "/work/gamma",
-      "/work/alpha",
-      "/work/beta",
     ]);
   });
 
@@ -1085,10 +1045,8 @@ describe("formatWorkingDurationLabel", () => {
 
 describe("resolveThreadStatusPill", () => {
   const baseThread = {
-    hasActionableProposedPlan: false,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
-    interactionMode: "plan" as const,
     latestTurn: null,
     lastVisitedAt: undefined,
     session: {
@@ -1115,7 +1073,7 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({ label: "Pending Approval", pulse: false });
   });
 
-  it("shows awaiting input when plan mode is blocked on user answers", () => {
+  it("shows awaiting input when the thread is blocked on user answers", () => {
     expect(
       resolveThreadStatusPill({
         thread: {
@@ -1132,23 +1090,6 @@ describe("resolveThreadStatusPill", () => {
         thread: baseThread,
       }),
     ).toMatchObject({ label: "Working", pulse: true });
-  });
-
-  it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
-    expect(
-      resolveThreadStatusPill({
-        thread: {
-          ...baseThread,
-          hasActionableProposedPlan: true,
-          latestTurn: makeLatestTurn(),
-          session: {
-            ...baseThread.session,
-            status: "ready",
-            activeTurnId: null,
-          },
-        },
-      }),
-    ).toMatchObject({ label: "Plan Ready", pulse: false });
   });
 
   it("does not manufacture completed state without a client visit marker", () => {
@@ -1172,7 +1113,6 @@ describe("resolveThreadStatusPill", () => {
       resolveThreadStatusPill({
         thread: {
           ...baseThread,
-          interactionMode: "default",
           latestTurn: makeLatestTurn(),
           lastVisitedAt: "2026-03-09T10:04:00.000Z",
           session: {
@@ -1238,7 +1178,7 @@ describe("resolveProjectStatusIndicator", () => {
     ).toMatchObject({ label: "Pending Approval", dotClass: "bg-amber-500" });
   });
 
-  it("prefers plan-ready over completed when no stronger action is needed", () => {
+  it("prefers monitoring over completed when no stronger action is needed", () => {
     expect(
       resolveProjectStatusIndicator([
         {
@@ -1248,13 +1188,13 @@ describe("resolveProjectStatusIndicator", () => {
           pulse: false,
         },
         {
-          label: "Plan Ready",
-          colorClass: "text-violet-600",
-          dotClass: "bg-violet-500",
+          label: "Monitoring",
+          colorClass: "text-sky-600",
+          dotClass: "bg-sky-500",
           pulse: false,
         },
       ]),
-    ).toMatchObject({ label: "Plan Ready", dotClass: "bg-violet-500" });
+    ).toMatchObject({ label: "Monitoring", dotClass: "bg-sky-500" });
   });
 });
 

@@ -17,18 +17,12 @@ vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
-vi.mock("../remoteOpen", () => ({
-  useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }),
+vi.mock("../localShellAccess", () => ({
+  useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
-}));
-vi.mock("~/lib/openPullRequestLink", () => ({
-  findProjectForChangeRequest: () => undefined,
-  matchesLinkedPullRequestUrl: () => false,
-  parseChangeRequestUrl: () => null,
-  useOpenChangeRequestLink: () => vi.fn(),
 }));
 
 import ChatMarkdown, {
@@ -66,44 +60,40 @@ describe("canUseMarkdownFileShellActions", () => {
   const environmentId = EnvironmentId.make("environment-1");
 
   it("allows editor and file manager actions for local environments", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "local-exec", true)).toBe(true);
+    expect(canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: true })).toBe(
+      true,
+    );
   });
 
   it("hides shell actions until the environment mode is resolved", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "local-exec", false)).toBe(false);
+    expect(
+      canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: false }),
+    ).toBe(false);
   });
 
   it("hides editor and file manager actions for remote environments", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "remote-links", true)).toBe(false);
-    expect(canUseMarkdownFileShellActions(environmentId, "remote-unavailable", true)).toBe(false);
+    expect(
+      canUseMarkdownFileShellActions(environmentId, { isLocal: false, isResolved: true }),
+    ).toBe(false);
   });
 
   it("hides shell actions when no environment owns the markdown", () => {
-    expect(canUseMarkdownFileShellActions(null, "local-exec", true)).toBe(false);
+    expect(canUseMarkdownFileShellActions(null, { isLocal: true, isResolved: true })).toBe(false);
   });
 });
 
 describe("hasMarkdownFilePrimaryAction", () => {
-  it("keeps the chip interactive when an editor, browser, or panel can open it", () => {
+  it("keeps the chip interactive when an editor or browser can open it", () => {
     expect(
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: true,
         canOpenInBrowser: false,
-        canOpenInPanel: false,
       }),
     ).toBe(true);
     expect(
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: false,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
-      }),
-    ).toBe(true);
-    expect(
-      hasMarkdownFilePrimaryAction({
-        canOpenInEditor: false,
-        canOpenInBrowser: false,
-        canOpenInPanel: true,
       }),
     ).toBe(true);
   });
@@ -113,7 +103,6 @@ describe("hasMarkdownFilePrimaryAction", () => {
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: false,
         canOpenInBrowser: false,
-        canOpenInPanel: false,
       }),
     ).toBe(false);
   });
@@ -138,7 +127,7 @@ describe("ChatMarkdown settings chips", () => {
     );
 
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Bot inbox");
+    expect(html).toContain("Open Settings &gt; Advanced &gt; Bot inbox");
     expect(html).not.toContain('target="_blank"');
   });
 });
@@ -150,26 +139,16 @@ describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
         iconPath: "/tmp/report.html",
         canOpenInEditor: false,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
       }),
     ).toBe(true);
   });
 
-  it("preserves the normal editor and panel defaults for HTML files", () => {
+  it("prefers the editor for HTML files when one is available", () => {
     expect(
       shouldUseMarkdownFileBrowserPrimaryAction({
         iconPath: "/tmp/report.html",
         canOpenInEditor: true,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldUseMarkdownFileBrowserPrimaryAction({
-        iconPath: "/tmp/report.html",
-        canOpenInEditor: false,
-        canOpenInBrowser: true,
-        canOpenInPanel: true,
       }),
     ).toBe(false);
   });
@@ -180,7 +159,6 @@ describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
         iconPath: "/tmp/report.pdf",
         canOpenInEditor: true,
         canOpenInBrowser: true,
-        canOpenInPanel: true,
       }),
     ).toBe(true);
   });
@@ -500,15 +478,15 @@ describe("ChatMarkdown bot chat forms", () => {
     const html = render(ALL_FORMS);
     expect(html).toContain('href="https://example.com/docs"');
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Voice");
+    expect(html).toContain("Open Settings &gt; Providers &gt; Voice");
   });
 
   it.each([
-    ["channels", "Bot channels"],
+    ["channels", "Channels"],
     ["browser", "Browser"],
     ["plugins", "Plugins"],
     ["sandbox", "Sandbox"],
-    ["privacy", "Privacy"],
+    ["privacy", "Privacy &amp; data"],
   ])("renders a Settings chip for %s", (id, label) => {
     const html = render(`[Open](grokbot://app/v1/settings?id=${id})`);
     expect(html).toContain("chat-markdown-settings-link");

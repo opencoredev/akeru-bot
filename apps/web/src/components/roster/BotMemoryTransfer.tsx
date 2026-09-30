@@ -20,6 +20,7 @@ import {
 import * as Schema from "effect/Schema";
 import { useMemo, useRef, useState } from "react";
 
+import { BotSideSheetSection } from "./BotSideSheet";
 import { DurableImportReview, DurableScopePicker } from "./DurableMemoryPanels";
 
 import { useI18n } from "../../i18n";
@@ -133,13 +134,13 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
   };
 
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-medium">{t("Transfer memory")}</h3>
-      <p className="text-xs text-muted-foreground">
-        {t(
-          "Export bot notes and chat observations, or durable facts for one scope. Review an import before anything changes.",
-        )}
-      </p>
+    <BotSideSheetSection
+      className="border-t pt-6"
+      title={t("Backup")}
+      description={t(
+        "Export bot notes and chat observations, or durable facts for one scope. Review an import before anything changes.",
+      )}
+    >
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -340,6 +341,6 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
           }}
         />
       ) : null}
-    </section>
+    </BotSideSheetSection>
   );
 }

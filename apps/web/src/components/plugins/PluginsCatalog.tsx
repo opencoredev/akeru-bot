@@ -1,15 +1,30 @@
+import {
+  Delete02Icon,
+  PencilEdit02Icon,
+  PlusSignIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
 import type { ComposioToolkit, McpServer, ProviderAccessStatus } from "@t3tools/contracts";
-import { CheckIcon, ChevronRightIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import type { ReactNode } from "react";
 import type { PluginDirectoryDefinition } from "../../../../../plugins";
-import { Badge } from "../ui/badge";
+import { cn } from "../../lib/utils";
+import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { findPluginServer, pluginMcpServerId } from "./pluginRegistry";
 import {
   pluginBrokerName,
   pluginConnectionLabel,
   pluginPrimaryAction,
+  type PluginPrimaryAction,
   type PluginSection,
 } from "./pluginPresentation";
+
+const LOGO_TILE_CLASS_NAME =
+  "flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-muted/70 p-2 ring-1 ring-border/50 ring-inset";
+const ROW_CLASS_NAME =
+  "group flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/50";
+const ACTION_CLASS_NAME = "h-8 min-w-[4.5rem] shrink-0 rounded-full px-3.5 text-[13px]";
+const LOGO_SIZE_CLASS_NAME = "size-11 rounded-xl";
 
 export function PluginLogoImage({
   plugin,
@@ -19,10 +34,7 @@ export function PluginLogoImage({
   readonly className?: string;
 }) {
   return (
-    <span
-      aria-hidden="true"
-      className={`${className} flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-2`}
-    >
+    <span aria-hidden="true" className={cn(LOGO_TILE_CLASS_NAME, className)}>
       <img
         alt=""
         className={`size-full object-contain ${plugin.logo.darkSrc ? "dark:hidden" : ""}`}
@@ -39,6 +51,143 @@ export function PluginLogoImage({
   );
 }
 
+function McpLogo() {
+  return (
+    <span aria-hidden="true" className={cn(LOGO_TILE_CLASS_NAME, "size-10")}>
+      <img alt="" className="size-full object-contain dark:hidden" src="/plugin-logos/mcp.svg" />
+      <img
+        alt=""
+        className="hidden size-full object-contain dark:block"
+        src="/plugin-logos/mcp-dark.svg"
+      />
+    </span>
+  );
+}
+
+/** Name, quiet meta, and a short description for one directory row. */
+function RowText({
+  title,
+  meta,
+  description,
+}: {
+  readonly title: string;
+  readonly meta?: readonly (string | null | false | undefined)[];
+  readonly description: string;
+}) {
+  const metaText = (meta ?? []).filter(Boolean).join(" · ");
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <h3 className="truncate text-sm font-medium leading-5 text-foreground">{title}</h3>
+        {metaText ? (
+          <span className="shrink-0 truncate text-xs text-muted-foreground/80">{metaText}</span>
+        ) : null}
+      </div>
+      <p className="line-clamp-2 text-[13px] leading-5 text-muted-foreground sm:line-clamp-1">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+const CARD_GRID_CLASS_NAME = {
+  grid: "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3",
+  // Featured holds a handful of picks, so it runs one column wider.
+  featured: "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4",
+  list: "flex flex-col gap-0.5",
+};
+
+/** Groups cards (or rows) under a section heading with a quiet count. */
+function DirectorySection({
+  label,
+  labelId,
+  count,
+  trailing,
+  layout = "grid",
+  children,
+}: {
+  readonly label: string;
+  readonly labelId?: string;
+  readonly count?: number;
+  readonly trailing?: ReactNode;
+  readonly layout?: keyof typeof CARD_GRID_CLASS_NAME;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section {...(labelId ? { "aria-labelledby": labelId } : { "aria-label": label })}>
+      <div className="mb-3 flex h-7 items-center justify-between gap-3 px-1">
+        <h2
+          className="flex items-baseline gap-2 text-[15px] font-semibold text-foreground"
+          id={labelId}
+        >
+          {label}
+          {count !== undefined ? (
+            <span className="text-xs font-normal tabular-nums text-muted-foreground/70">
+              {count}
+            </span>
+          ) : null}
+        </h2>
+        {trailing}
+      </div>
+      <div className={CARD_GRID_CLASS_NAME[layout]}>{children}</div>
+    </section>
+  );
+}
+
+const CARD_CLASS_NAME =
+  "group relative flex min-h-34 min-w-0 flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgb(0_0_0/3%)] transition-[border-color,background-color,box-shadow] duration-(--duration-fast) ease-(--ease-smooth-out) hover:border-border hover:shadow-[0_1px_2px_rgb(0_0_0/4%),0_6px_16px_-8px_rgb(0_0_0/12%)] motion-reduce:transition-none has-[[data-card-open]:focus-visible]:ring-2 has-[[data-card-open]:focus-visible]:ring-ring";
+
+/** One directory card. The whole card opens details; the action sits above that hit area. */
+function DirectoryCard({
+  id,
+  logo,
+  title,
+  description,
+  status,
+  openLabel,
+  onOpen,
+  action,
+}: {
+  readonly id: { readonly [key: `data-${string}`]: string };
+  readonly logo: ReactNode;
+  readonly title: string;
+  readonly description: string;
+  readonly status: readonly (string | null | false | undefined)[];
+  readonly openLabel?: string;
+  readonly onOpen?: () => void;
+  readonly action: ReactNode;
+}) {
+  const statusText = status.filter(Boolean).join(" · ");
+  return (
+    <article className={CARD_CLASS_NAME} {...id}>
+      {onOpen ? (
+        <button
+          aria-label={openLabel}
+          className="absolute inset-0 cursor-pointer rounded-2xl outline-hidden"
+          data-card-open=""
+          type="button"
+          onClick={onOpen}
+        />
+      ) : null}
+      <div className="pointer-events-none flex min-w-0 items-start gap-3">
+        {logo}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <h3 className="truncate text-sm font-semibold leading-5 text-foreground">{title}</h3>
+          <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+      <div className="mt-auto flex min-h-8 items-end justify-between gap-3 pt-4">
+        <span className="pointer-events-none min-w-0 truncate text-xs text-muted-foreground/80">
+          {statusText}
+        </span>
+        <div className="relative">{action}</div>
+      </div>
+    </article>
+  );
+}
+
 interface PluginsCatalogProps {
   readonly sections: readonly PluginSection[];
   readonly servers: readonly McpServer[];
@@ -46,34 +195,21 @@ interface PluginsCatalogProps {
   readonly pendingServerId: string | null;
   readonly onToggle: (plugin: PluginDirectoryDefinition, enabled: boolean) => void;
   readonly onOpen: (plugin: PluginDirectoryDefinition) => void;
+  /** An empty Installed view with no search means nothing is connected yet. */
+  readonly nothingInstalled?: boolean;
 }
 
 const EMPTY_PROVIDER_ACCESS_STATUSES: readonly ProviderAccessStatus[] = [];
 
-/** The two or three verbs a plugin actually gives a bot, so a row reads as a capability. */
-function PluginCapabilities({ plugin }: { readonly plugin: PluginDirectoryDefinition }) {
-  const capabilities = plugin.capabilities.slice(0, 3);
-  if (capabilities.length === 0) return null;
-  return (
-    <ul className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-      {capabilities.map((capability) => (
-        <li
-          className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground"
-          key={capability}
-        >
-          {capability}
-        </li>
-      ))}
-    </ul>
-  );
+function actionVariant(action: PluginPrimaryAction) {
+  return action.enable === true ? "outline" : "ghost-muted";
 }
 
-function PluginRow({
+function PluginCard({
   plugin,
   server,
   accessStatus,
   pending,
-  featured = false,
   onToggle,
   onOpen,
 }: {
@@ -81,95 +217,42 @@ function PluginRow({
   readonly server: McpServer | undefined;
   readonly accessStatus: ProviderAccessStatus | undefined;
   readonly pending: boolean;
-  readonly featured?: boolean;
   readonly onToggle: (enabled: boolean) => void;
   readonly onOpen: () => void;
 }) {
   const action = pluginPrimaryAction(plugin, server, accessStatus);
   const brokerName = pluginBrokerName(plugin);
-  const installed = server?.enabled === true;
+  const awaitingVendor =
+    plugin.connection.type === "approval-pending" ||
+    plugin.connection.type === "verification-pending";
+  const connected = server?.enabled === true && action.enable === false;
   return (
-    <article
-      className={
-        featured
-          ? "group flex min-w-0 flex-col rounded-xl border border-border/70 p-3 transition-colors hover:bg-muted/45"
-          : "group flex min-w-0 items-center rounded-xl pe-2.5 transition-colors hover:bg-muted/45"
+    <DirectoryCard
+      id={{ "data-plugin-id": plugin.id }}
+      logo={<PluginLogoImage plugin={plugin} className={LOGO_SIZE_CLASS_NAME} />}
+      title={plugin.title}
+      description={plugin.description}
+      status={[
+        connected && "Connected",
+        awaitingVendor && pluginConnectionLabel(plugin),
+        brokerName && `via ${brokerName}`,
+      ]}
+      openLabel={`Open ${plugin.title}`}
+      onOpen={onOpen}
+      action={
+        <Button
+          aria-label={`${action.label} ${plugin.title}`}
+          className={ACTION_CLASS_NAME}
+          size="sm"
+          variant={actionVariant(action)}
+          disabled={pending || action.enable === null}
+          title={action.blocker}
+          onClick={() => action.enable !== null && onToggle(action.enable)}
+        >
+          {action.label}
+        </Button>
       }
-      data-plugin-id={plugin.id}
-    >
-      <button
-        aria-label={`Open ${plugin.title}`}
-        className={
-          featured
-            ? "flex min-w-0 cursor-pointer items-start gap-3 rounded-lg text-start outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-            : "flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 text-start outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-        }
-        type="button"
-        onClick={onOpen}
-      >
-        <PluginLogoImage plugin={plugin} />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <h3 className="truncate text-sm font-medium leading-5">{plugin.title}</h3>
-            {featured ? null : (
-              <span className="shrink-0 text-[11px] text-muted-foreground">{plugin.category}</span>
-            )}
-            {installed ? (
-              <CheckIcon
-                aria-label={`${plugin.title} is connected`}
-                className="size-3.5 shrink-0 text-success"
-              />
-            ) : null}
-            {brokerName ? (
-              <Badge
-                className="border-border/60 bg-background/60 px-1.5 text-muted-foreground"
-                size="sm"
-                variant="outline"
-              >
-                {brokerName}
-              </Badge>
-            ) : null}
-            {plugin.connection.type === "approval-pending" ||
-            plugin.connection.type === "verification-pending" ? (
-              <span className="shrink-0 text-[11px] text-warning-foreground">
-                {pluginConnectionLabel(plugin)}
-              </span>
-            ) : null}
-          </div>
-          <p
-            className={
-              featured
-                ? "line-clamp-2 text-xs leading-5 text-muted-foreground"
-                : "truncate text-xs leading-5 text-muted-foreground"
-            }
-          >
-            {plugin.description}
-          </p>
-          {featured ? <PluginCapabilities plugin={plugin} /> : null}
-        </div>
-        {featured ? null : (
-          <ChevronRightIcon
-            aria-hidden="true"
-            className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
-          />
-        )}
-      </button>
-      <Button
-        aria-label={`${action.label} ${plugin.title}`}
-        className={
-          featured
-            ? "mt-3 h-7 w-full rounded-full px-3 text-xs"
-            : "h-7 min-w-14 rounded-full px-3 text-xs"
-        }
-        size="sm"
-        variant="secondary"
-        disabled={pending || action.enable === null}
-        title={action.blocker}
-        onClick={() => action.enable !== null && onToggle(action.enable)}
-      >
-        {action.label}
-      </Button>
-    </article>
+    />
   );
 }
 
@@ -180,51 +263,48 @@ export function PluginsCatalog({
   pendingServerId,
   onToggle,
   onOpen,
+  nothingInstalled = false,
 }: PluginsCatalogProps) {
   const resultCount = sections.reduce((count, section) => count + section.plugins.length, 0);
   if (resultCount === 0) {
     return (
-      <p className="py-14 text-center text-sm text-muted-foreground">No directory plugins match.</p>
+      <div className="py-16 text-center">
+        <p className="text-sm font-medium text-foreground">
+          {nothingInstalled ? "No plugins connected yet" : "No plugins match"}
+        </p>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          {nothingInstalled
+            ? "Connect one from All and it shows up here."
+            : "Try another name or clear the filter."}
+        </p>
+      </div>
     );
   }
   return (
-    <div className="space-y-7">
-      {sections.map((section) => {
-        // Featured leads the directory, so it gets cards that show what each
-        // plugin does; the categories below stay scannable rows.
-        const featured = section.title === "Featured";
-        return (
-          <section aria-label={section.title} key={section.title}>
-            <div className="mb-2 flex items-center justify-between px-2">
-              <h2 className="text-xs font-medium text-muted-foreground">{section.title}</h2>
-              <span className="text-xs text-muted-foreground">{section.plugins.length}</span>
-            </div>
-            <div
-              className={
-                featured
-                  ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  : "grid grid-cols-1 gap-x-7 md:grid-cols-2"
-              }
-            >
-              {section.plugins.map((plugin) => {
-                const server = findPluginServer(plugin, servers);
-                return (
-                  <PluginRow
-                    key={`${section.title}:${plugin.id}`}
-                    plugin={plugin}
-                    server={server}
-                    accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
-                    pending={pendingServerId === pluginMcpServerId(plugin)}
-                    featured={featured}
-                    onToggle={(enabled) => onToggle(plugin, enabled)}
-                    onOpen={() => onOpen(plugin)}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+    <div className="space-y-10">
+      {sections.map((section) => (
+        <DirectorySection
+          count={section.plugins.length}
+          key={section.title}
+          label={section.title}
+          layout={section.title === "Featured" ? "featured" : "grid"}
+        >
+          {section.plugins.map((plugin) => {
+            const server = findPluginServer(plugin, servers);
+            return (
+              <PluginCard
+                key={`${section.title}:${plugin.id}`}
+                plugin={plugin}
+                server={server}
+                accessStatus={accessStatuses.find((status) => status.pluginId === plugin.id)}
+                pending={pendingServerId === pluginMcpServerId(plugin)}
+                onToggle={(enabled) => onToggle(plugin, enabled)}
+                onOpen={() => onOpen(plugin)}
+              />
+            );
+          })}
+        </DirectorySection>
+      ))}
     </div>
   );
 }
@@ -242,21 +322,15 @@ export function ComposioToolkitResults({
 }) {
   if (toolkits.length === 0) return null;
   return (
-    <section aria-label="From Composio">
-      <div className="mb-2 flex items-center justify-between px-2">
-        <h2 className="text-xs font-medium text-muted-foreground">From Composio</h2>
-        <span className="text-xs text-muted-foreground">{toolkits.length}</span>
-      </div>
-      <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
-        {toolkits.map((toolkit) => {
-          const connected = connectedToolkitIds.has(toolkit.slug);
-          return (
-            <article
-              className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/45"
-              data-composio-toolkit={toolkit.slug}
-              key={toolkit.slug}
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-2">
+    <DirectorySection count={toolkits.length} label="From Composio">
+      {toolkits.map((toolkit) => {
+        const connected = connectedToolkitIds.has(toolkit.slug);
+        return (
+          <DirectoryCard
+            key={toolkit.slug}
+            id={{ "data-composio-toolkit": toolkit.slug }}
+            logo={
+              <span className={cn(LOGO_TILE_CLASS_NAME, LOGO_SIZE_CLASS_NAME)}>
                 {toolkit.logoUrl ? (
                   <img alt="" className="size-full object-contain" src={toolkit.logoUrl} />
                 ) : (
@@ -265,36 +339,26 @@ export function ComposioToolkitResults({
                   </span>
                 )}
               </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <h3 className="truncate text-sm font-medium leading-5">{toolkit.name}</h3>
-                  <Badge
-                    className="border-border/60 bg-background/60 px-1.5 text-muted-foreground"
-                    size="sm"
-                    variant="outline"
-                  >
-                    Composio
-                  </Badge>
-                </div>
-                <p className="truncate text-xs leading-5 text-muted-foreground">
-                  {toolkit.description ?? `${toolkit.toolsCount} tools`}
-                </p>
-              </div>
+            }
+            title={toolkit.name}
+            description={toolkit.description ?? `${toolkit.toolsCount} tools`}
+            status={["via Composio"]}
+            action={
               <Button
                 aria-label={`${connected ? "Connected" : "Connect"} ${toolkit.name}`}
-                className="h-7 min-w-14 rounded-full px-3 text-xs"
+                className={ACTION_CLASS_NAME}
                 disabled={connected || pendingToolkitId === toolkit.slug}
                 size="sm"
-                variant="secondary"
+                variant={connected ? "ghost-muted" : "outline"}
                 onClick={() => onConnect(toolkit)}
               >
                 {connected ? "Connected" : "Connect"}
               </Button>
-            </article>
-          );
-        })}
-      </div>
-    </section>
+            }
+          />
+        );
+      })}
+    </DirectorySection>
   );
 }
 
@@ -309,42 +373,32 @@ export function RemovedBuiltinServers({
 }) {
   if (servers.length === 0) return null;
   return (
-    <section aria-labelledby="removed-plugins-title">
-      <div className="mb-2 flex items-center justify-between px-2">
-        <h2 className="text-xs font-medium text-muted-foreground" id="removed-plugins-title">
-          Removed plugins
-        </h2>
-        <span className="text-xs text-muted-foreground">{servers.length}</span>
-      </div>
-      <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
-        {servers.map((server) => (
-          <div className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5" key={server.id}>
-            <span
-              aria-hidden="true"
-              className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-2"
-            >
-              <img alt="" className="size-full object-contain" src="/plugin-logos/mcp.svg" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{server.name}</p>
-              <p className="truncate text-xs leading-5 text-muted-foreground">
-                No longer in the directory · {server.enabled ? "Enabled" : "Disabled"}
-              </p>
-            </div>
-            <Button
-              aria-label={`Remove ${server.name}`}
-              className="h-7 rounded-full px-3 text-xs"
-              size="sm"
-              variant="secondary"
-              disabled={pendingServerId === server.id}
-              onClick={() => onDelete(server)}
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
-      </div>
-    </section>
+    <DirectorySection
+      count={servers.length}
+      label="Removed plugins"
+      labelId="removed-plugins-title"
+      layout="list"
+    >
+      {servers.map((server) => (
+        <div className={ROW_CLASS_NAME} key={server.id}>
+          <McpLogo />
+          <RowText
+            title={server.name}
+            description={`No longer in the directory · ${server.enabled ? "Enabled" : "Disabled"}`}
+          />
+          <Button
+            aria-label={`Remove ${server.name}`}
+            className={ACTION_CLASS_NAME}
+            size="sm"
+            variant="ghost-muted"
+            disabled={pendingServerId === server.id}
+            onClick={() => onDelete(server)}
+          >
+            Remove
+          </Button>
+        </div>
+      ))}
+    </DirectorySection>
   );
 }
 
@@ -372,83 +426,67 @@ export function CustomMcpServers({
   onDelete,
 }: CustomMcpServersProps) {
   return (
-    <section aria-labelledby="custom-mcp-title">
-      <div className="mb-2 flex items-center justify-between px-2">
-        <h2 className="text-xs font-medium text-muted-foreground" id="custom-mcp-title">
-          Custom MCP servers
-        </h2>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{servers.length}</span>
-          <Button size="sm" variant="ghost-muted" onClick={onCreate}>
-            <PlusIcon className="size-3.5" />
-            Add server
-          </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-x-7 md:grid-cols-2">
-        {servers.map((server) => {
-          const pending = pendingServerId === server.id;
-          return (
-            <div
-              className="group flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/45"
-              key={server.id}
+    <DirectorySection
+      count={servers.length}
+      label="Custom MCP servers"
+      labelId="custom-mcp-title"
+      layout="list"
+      trailing={
+        <Button className="h-7 rounded-full" size="sm" variant="ghost-muted" onClick={onCreate}>
+          <AppIcon icon={PlusSignIcon} className="size-3.5" />
+          Add server
+        </Button>
+      }
+    >
+      {servers.length === 0 ? (
+        <p className="px-2.5 py-3 text-[13px] text-muted-foreground">
+          Add a local command or remote URL to use your own MCP server.
+        </p>
+      ) : null}
+      {servers.map((server) => {
+        const pending = pendingServerId === server.id;
+        return (
+          <div className={ROW_CLASS_NAME} key={server.id}>
+            <McpLogo />
+            <RowText
+              title={server.name}
+              meta={[server.enabled && "Connected"]}
+              description={serverDescription(server)}
+            />
+            <Button
+              aria-label={`Edit ${server.name}`}
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+              size="icon-sm"
+              variant="ghost-muted"
+              disabled={pending}
+              onClick={() => onEdit(server)}
             >
-              <span
-                aria-hidden="true"
-                className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-2"
-              >
-                <img
-                  alt=""
-                  className="size-full object-contain dark:hidden"
-                  src="/plugin-logos/mcp.svg"
-                />
-                <img
-                  alt=""
-                  className="hidden size-full object-contain dark:block"
-                  src="/plugin-logos/mcp-dark.svg"
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{server.name}</p>
-                <p className="truncate text-xs leading-5 text-muted-foreground">
-                  {serverDescription(server)}
-                </p>
-              </div>
-              <Button
-                aria-label={`Edit ${server.name}`}
-                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
-                size="icon-sm"
-                variant="ghost-muted"
-                disabled={pending}
-                onClick={() => onEdit(server)}
-              >
-                <PencilIcon className="size-3.5" />
-              </Button>
-              <Button
-                aria-label={`Delete ${server.name}`}
-                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
-                size="icon-sm"
-                variant="ghost-muted"
-                disabled={pending}
-                onClick={() => onDelete(server)}
-              >
-                <Trash2Icon className="size-3.5" />
-              </Button>
-              <Button
-                aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
-                className="h-7 min-w-14 rounded-full px-3 text-xs"
-                size="sm"
-                variant="secondary"
-                disabled={pending}
-                onClick={() => onToggle(server, !server.enabled)}
-              >
-                {server.enabled ? <CheckIcon className="size-3.5" /> : null}
-                {server.enabled ? "Added" : "Add"}
-              </Button>
-            </div>
-          );
-        })}
-      </div>
-    </section>
+              <AppIcon icon={PencilEdit02Icon} className="size-4" />
+            </Button>
+            <Button
+              aria-label={`Delete ${server.name}`}
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+              size="icon-sm"
+              variant="ghost-muted"
+              disabled={pending}
+              onClick={() => onDelete(server)}
+            >
+              <AppIcon icon={Delete02Icon} className="size-4" />
+            </Button>
+            <Button
+              aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
+              className={ACTION_CLASS_NAME}
+              size="sm"
+              variant={server.enabled ? "ghost-muted" : "outline"}
+              disabled={pending}
+              onClick={() => onToggle(server, !server.enabled)}
+            >
+              {server.enabled ? <AppIcon icon={Tick02Icon} className="size-3.5" /> : null}
+              {server.enabled ? "Added" : "Add"}
+            </Button>
+          </div>
+        );
+      })}
+    </DirectorySection>
   );
 }

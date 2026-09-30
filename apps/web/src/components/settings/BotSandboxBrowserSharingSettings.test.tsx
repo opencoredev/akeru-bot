@@ -83,28 +83,6 @@ describe("BotSandboxBrowserSharingSettings", () => {
     expect(onChange).toHaveBeenCalledWith("shared");
   });
 
-  it("asks in Chinese before changing the workspace mode", () => {
-    i18nLocale.current = "zh-CN";
-    const onChange = vi.fn();
-    let tree = renderSetting("shared", onChange);
-    call(
-      findElement(tree, (props) => props.onValueChange !== undefined).props.onValueChange,
-      "separate",
-    );
-    tree = renderSetting("shared", onChange);
-
-    findElement(tree, (props) => props.children === "更改机器人工作区模式？");
-    findElement(
-      tree,
-      (props) =>
-        typeof props.children === "string" &&
-        props.children.includes("会为每个机器人创建独立的工作区和浏览器"),
-    );
-    findElement(tree, (props) => props.children === "取消");
-    call(findElement(tree, (props) => props.children === "更改模式").props.onClick);
-    expect(onChange).toHaveBeenCalledWith("separate");
-  });
-
   it("ignores invalid values", () => {
     const onChange = vi.fn();
     const tree = renderSetting("separate", onChange);

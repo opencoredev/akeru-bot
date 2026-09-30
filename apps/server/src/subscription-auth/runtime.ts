@@ -94,12 +94,17 @@ export const subscriptionRuntimeEnvironment = Effect.fn("subscriptionRuntimeEnvi
     secretsDir: string,
     provider: SubscriptionProviderId,
     environment: SubscriptionEnvironment = process.env,
+    instanceId?: string,
   ) {
     const connectionKeys = SUBSCRIPTION_CONNECTION_ENV_KEYS[provider] ?? [];
     if (connectionKeys.some((key) => hasExplicitEnvironmentKey(environment, key)))
       return environment;
     const auth = yield* SubscriptionAuthService.forSecretsDir(secretsDir);
-    return withApiKeyCredential(provider, environment, auth.getApiKeyCredential(provider));
+    return withApiKeyCredential(
+      provider,
+      environment,
+      auth.getApiKeyCredential(provider, instanceId),
+    );
   },
 );
 

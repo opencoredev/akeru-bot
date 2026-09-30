@@ -1,19 +1,17 @@
 import { isElectron } from "~/env";
 
 export type SettingsPath =
+  | "/settings/providers"
+  | "/settings/channels"
+  | "/settings/sandbox"
+  | "/settings/browser"
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
-  | "/settings/providers"
-  | "/settings/browser"
-  | "/settings/channels"
-  | "/settings/sandbox"
-  | "/settings/voice"
   | "/settings/image-generation"
-  | "/settings/privacy"
-  | "/settings/source-control"
   | "/settings/connections"
-  | "/settings/archived";
+  | "/settings/privacy"
+  | "/settings/advanced";
 
 export interface SettingsSearchItem {
   readonly id: string;
@@ -25,26 +23,6 @@ export interface SettingsSearchItem {
   // an anchor that isn't there.
   readonly desktopOnly?: boolean;
 }
-
-/**
- * Section labels in sidebar order. The sidebar nav and the search-result
- * subtitles both render from this record, so each label exists once.
- */
-export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  "/settings/general": "General",
-  "/settings/appearance": "Appearance",
-  "/settings/keybindings": "Keybindings",
-  "/settings/providers": "Providers",
-  "/settings/browser": "Browser",
-  "/settings/channels": "Channels",
-  "/settings/sandbox": "Sandbox",
-  "/settings/voice": "Voice",
-  "/settings/image-generation": "Image generation",
-  "/settings/privacy": "Privacy",
-  "/settings/source-control": "Source control",
-  "/settings/connections": "Connections",
-  "/settings/archived": "Archive",
-};
 
 /**
  * Every searchable setting, in result order. This catalog is the single
@@ -72,16 +50,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "color-scheme",
     title: "Color scheme",
     to: "/settings/appearance",
-    // The scheme tiles sit at the top of the Appearance section.
+    // The Color scheme section carries the page's `appearance` anchor.
     targetId: "appearance",
   },
   {
+    // The Themes section itself carries this id.
     id: "theme",
     title: "Themes",
     to: "/settings/appearance",
-    // Theme cards live directly under the scheme tiles; the section is the
-    // stable scroll destination for both.
-    targetId: "appearance",
   },
   {
     // Prefixed because the slider control already owns the `appearance-contrast` id.
@@ -100,7 +76,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Environment identification",
     to: "/settings/appearance",
     // The setting is stage-dependent, so its parent section is the stable destination.
-    targetId: "appearance",
+    targetId: "display",
   },
   {
     id: "interface-font",
@@ -135,7 +111,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "sandbox-browser-sharing",
     title: "Sandbox and browser sharing",
-    to: "/settings/general",
+    to: "/settings/sandbox",
   },
   {
     id: "time-format",
@@ -145,16 +121,6 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "usage-refresh",
     title: "Usage refresh",
-    to: "/settings/general",
-  },
-  {
-    id: "hide-whitespace-changes",
-    title: "Hide whitespace changes",
-    to: "/settings/general",
-  },
-  {
-    id: "skills-in-slash-menu",
-    title: "Show skills in slash menu",
     to: "/settings/general",
   },
   {
@@ -178,11 +144,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/privacy",
   },
   {
-    id: "privacy-provider-update-checks",
-    title: "Provider update checks",
-    to: "/settings/privacy",
-  },
-  {
     id: "memory-enabled",
     title: "Memory",
     to: "/settings/privacy",
@@ -203,50 +164,50 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "local-execution",
     title: "Local execution",
-    to: "/settings/general",
+    to: "/settings/sandbox",
   },
   {
     id: "voice-enabled",
     title: "Voice",
-    to: "/settings/voice",
+    to: "/settings/providers",
   },
   {
     id: "voice-provider",
     title: "Voice provider",
-    to: "/settings/voice",
+    to: "/settings/providers",
   },
   {
     id: "voice-selection",
     title: "Voice selection",
-    to: "/settings/voice",
+    to: "/settings/providers",
   },
   {
     id: "voice-openai-voice",
     title: "OpenAI API voice",
-    to: "/settings/voice",
+    to: "/settings/providers",
     keywords: ["realtime", "interrupt"],
   },
   {
     id: "voice-transcription-provider",
     title: "Transcription provider",
-    to: "/settings/voice",
+    to: "/settings/providers",
     keywords: ["speech to text", "OpenAI", "ElevenLabs", "Cartesia"],
   },
   {
     id: "voice-synthesis-provider",
     title: "Speech provider",
-    to: "/settings/voice",
+    to: "/settings/providers",
     keywords: ["text to speech", "OpenAI", "ElevenLabs", "Cartesia", "Fish Audio"],
   },
   {
     id: "voice-synthesis-voice",
     title: "Speech voice",
-    to: "/settings/voice",
+    to: "/settings/providers",
   },
   {
     id: "voice-api-connections",
     title: "Voice API connections",
-    to: "/settings/voice",
+    to: "/settings/providers",
     keywords: ["API key", "OpenAI", "ElevenLabs", "Cartesia", "Fish Audio", "billing"],
   },
   {
@@ -281,13 +242,8 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "voice-read-aloud",
     title: "Read new replies aloud",
-    to: "/settings/voice",
+    to: "/settings/providers",
     keywords: ["read aloud", "speech", "playback", "automatic readout"],
-  },
-  {
-    id: "add-project-starts-in",
-    title: "Add project starts in",
-    to: "/settings/general",
   },
   {
     id: "quit-confirmation",
@@ -297,39 +253,26 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
-    id: "text-generation-model",
-    title: "Fallback model",
-    to: "/settings/general",
-  },
-  {
     id: "data-portability",
     title: "Data portability",
-    to: "/settings/general",
+    to: "/settings/privacy",
   },
   {
-    id: "analytics",
-    title: "Analytics",
-    to: "/settings/general",
+    id: "background-activity",
+    title: "Background work",
+    to: "/settings/advanced",
+    keywords: ["background activity", "battery", "performance"],
   },
   {
     id: "diagnostics",
     title: "Diagnostics",
-    to: "/settings/general",
-  },
-  {
-    id: "legacy-plan-mode",
-    title: "Plan mode (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
+    keywords: ["errors", "failures", "troubleshooting", "logs"],
   },
   {
     id: "legacy-token-streaming",
     title: "Stream token by token (legacy)",
-    to: "/settings/general",
-  },
-  {
-    id: "legacy-sidebar",
-    title: "Sidebar (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "keybindings",
@@ -340,6 +283,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "providers",
     title: "Providers",
     to: "/settings/providers",
+    keywords: ["ChatGPT", "Codex", "Claude", "Grok", "Kimi", "OpenCode", "API key", "Subscription"],
   },
   {
     id: "sandbox",
@@ -381,12 +325,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "browser",
   },
   {
-    id: "browser-auto-show-floating-preview",
-    title: "Auto-show floating preview",
-    to: "/settings/browser",
-    targetId: "browser",
-  },
-  {
     id: "bot-channels",
     title: "Bot channels",
     to: "/settings/channels",
@@ -404,19 +342,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "source-control",
-    title: "Source control",
-    to: "/settings/source-control",
-  },
-  {
     id: "remote-environments",
     title: "Remote environments",
     to: "/settings/connections",
-  },
-  {
-    id: "archive",
-    title: "Archived chats",
-    to: "/settings/archived",
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 

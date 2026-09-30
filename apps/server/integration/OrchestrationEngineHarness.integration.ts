@@ -87,7 +87,7 @@ import { deriveServerPaths, ServerConfig } from "../src/config.ts";
 import * as WorkspaceEntries from "../src/workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../src/workspace/WorkspacePaths.ts";
 import * as VcsDriverRegistry from "../src/vcs/VcsDriverRegistry.ts";
-import { VcsStatusBroadcaster } from "../src/vcs/VcsStatusBroadcaster.ts";
+import * as GitVcsDriver from "../src/vcs/GitVcsDriver.ts";
 import { GitWorkflowService } from "../src/git/GitWorkflowService.ts";
 import * as VcsProcess from "../src/vcs/VcsProcess.ts";
 import { BotUsageLedgerLive } from "../src/usage/BotUsageLedger.ts";
@@ -374,19 +374,21 @@ export const makeOrchestrationIntegrationHarness = (
     const checkpointReactorLayer = CheckpointReactorLive.pipe(
       Layer.provideMerge(runtimeServicesLayer),
       Layer.provideMerge(
-        Layer.succeed(VcsStatusBroadcaster, {
-          getStatus: () => Effect.die("getStatus should not be called in this test"),
-          refreshLocalStatus: () =>
+        Layer.mock(GitVcsDriver.GitVcsDriver)({
+          statusDetailsLocal: () =>
             Effect.succeed({
               isRepo: true,
-              hasPrimaryRemote: false,
-              isDefaultRef: true,
-              refName: "main",
+              hasOriginRemote: false,
+              isDefaultBranch: true,
+              branch: "main",
+              upstreamRef: null,
               hasWorkingTreeChanges: false,
               workingTree: { files: [], insertions: 0, deletions: 0 },
+              hasUpstream: false,
+              aheadCount: 0,
+              behindCount: 0,
+              aheadOfDefaultCount: 0,
             }),
-          refreshStatus: () => Effect.die("refreshStatus should not be called in this test"),
-          streamStatus: () => Stream.empty,
         }),
       ),
       Layer.provideMerge(

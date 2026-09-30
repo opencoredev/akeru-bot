@@ -1,11 +1,10 @@
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthAdministrativeScopes,
+  AuthEnvironmentScope,
+  AuthRetiredEnvironmentScopes,
   AuthStandardClientScopes,
-  AuthOrchestrationOperateScope,
-  AuthOrchestrationReadScope,
-  AuthReviewWriteScope,
-  AuthTerminalOperateScope,
   EnvironmentAuthInvalidError,
   type EnvironmentAuthInvalidReason,
   EnvironmentHttpApi,
@@ -21,8 +20,8 @@ import {
   EnvironmentAuthenticatedAuth,
   EnvironmentAuthenticatedPrincipal,
 } from "@t3tools/contracts";
-import type { AuthEnvironmentScope } from "@t3tools/contracts";
 import { parseAllowedOAuthScope } from "@t3tools/shared/oauthScope";
+import * as Schema from "effect/Schema";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -103,6 +102,24 @@ export function failEnvironmentInvalidRequest(
       ),
     ),
   );
+}
+
+const isAuthEnvironmentScope = Schema.is(AuthEnvironmentScope);
+const REQUESTABLE_ENVIRONMENT_SCOPES = new Set<string>([
+  ...AuthAdministrativeScopes,
+  ...AuthRetiredEnvironmentScopes,
+]);
+
+/**
+ * Parses an OAuth `scope` request. Older clients may still ask for retired
+ * scopes; those are accepted and dropped so the exchange keeps working.
+ */
+export function parseRequestedEnvironmentScopes(
+  value: string,
+): ReadonlyArray<AuthEnvironmentScope> | null {
+  const scopes = parseAllowedOAuthScope({ value, allowedScopes: REQUESTABLE_ENVIRONMENT_SCOPES });
+  const currentScopes = scopes?.filter(isAuthEnvironmentScope) ?? [];
+  return currentScopes.length === 0 ? null : currentScopes;
 }
 
 export function failEnvironmentScopeRequired(requiredScope: AuthEnvironmentScope) {
@@ -278,17 +295,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             const requestedScopes =
               args.payload.scope === undefined
                 ? undefined
-                : parseAllowedOAuthScope({
-                    value: args.payload.scope,
-                    allowedScopes: new Set<AuthEnvironmentScope>([
-                      AuthOrchestrationReadScope,
-                      AuthOrchestrationOperateScope,
-                      AuthTerminalOperateScope,
-                      AuthReviewWriteScope,
-                      AuthAccessReadScope,
-                      AuthAccessWriteScope,
-                    ]),
-                  });
+                : parseRequestedEnvironmentScopes(args.payload.scope);
             if (requestedScopes === null) {
               return yield* failEnvironmentInvalidRequest("invalid_scope");
             }

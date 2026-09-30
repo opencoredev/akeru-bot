@@ -60,13 +60,9 @@ describe("mobile bot step usage", () => {
   it("clears hard stops for occupancy-only providers", () => {
     const botId = BotId.make("bot-1");
 
-    expect(resolveBotUsageCapForProvider("50000", "cursor")).toEqual({
+    expect(resolveBotUsageCapForProvider("50000", "grok")).toEqual({
       available: false,
       limit: null,
-    });
-    expect(buildBotUsageCapPatch(botId, "50000", "cursor")).toEqual({
-      botId,
-      usageCap: null,
     });
     expect(buildBotUsageCapPatch(botId, "50000", "grok")).toEqual({
       botId,

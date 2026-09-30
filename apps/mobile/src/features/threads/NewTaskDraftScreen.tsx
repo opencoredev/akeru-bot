@@ -36,7 +36,6 @@ import {
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
 import { ProviderIcon } from "../../components/ProviderIcon";
-import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { ComposerSurface } from "./ThreadComposer";
 import {
@@ -60,34 +59,9 @@ import { resolveSelectableModelSelection } from "../../lib/modelOptions";
 import { enqueueThreadOutboxMessage, removeThreadOutboxMessage } from "../../state/thread-outbox";
 import { useRemoteConnectionStatus } from "../../state/use-remote-environment-registry";
 import { useNewTaskFlow } from "./new-task-flow-provider";
-import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
 import { useCreateProjectThread } from "./use-project-actions";
 import { resolveDraftProjectSelection } from "./new-task-project-selection";
-import {
-  resolveNewTaskBranchLabel,
-  resolveNewTaskWorkspaceLabel,
-} from "./new-task-context-presentation";
 import { useIncomingShare } from "../sharing/IncomingShareProvider";
-
-function NewTaskWorkspaceIcon(props: {
-  readonly workspaceMode: "local" | "worktree";
-  readonly worktreePath: string | null;
-}) {
-  const iconColor = useThemeColor("--color-icon-muted");
-
-  if (props.workspaceMode === "local" && props.worktreePath === null) {
-    return <SymbolView name="folder" size={16} tintColor={iconColor} type="monochrome" />;
-  }
-
-  return (
-    <View className="size-4">
-      <SymbolView name="folder" size={16} tintColor={iconColor} type="monochrome" />
-      <View className="absolute -right-1 -bottom-1">
-        <SymbolView name="arrow.triangle.branch" size={9} tintColor={iconColor} type="monochrome" />
-      </View>
-    </View>
-  );
-}
 
 export function NewTaskDraftScreen(props: {
   readonly initialProjectRef?: {
@@ -153,7 +127,6 @@ export function NewTaskDraftScreen(props: {
     hasDraft: flow.prompt.trim().length > 0 || flow.attachments.length > 0,
     status: dictation.status,
   });
-  const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const settingsSheetPresentation = useThreadSettingsSheetPresentation({
     editorRef: promptInputRef,
@@ -404,19 +377,6 @@ export function NewTaskDraftScreen(props: {
   ]);
 
   useEffect(() => {
-    if (!selectedProject) {
-      loadedBranchesProjectKeyRef.current = null;
-      return;
-    }
-    const projectKey = `${selectedProject.environmentId}:${selectedProject.id}`;
-    if (loadedBranchesProjectKeyRef.current === projectKey) {
-      return;
-    }
-    loadedBranchesProjectKeyRef.current = projectKey;
-    flow.loadBranches();
-  }, [flow.loadBranches, selectedProject]);
-
-  useEffect(() => {
     const shareId = props.incomingShareId;
     const draftKey = flow.draftKey;
     const destinationProject = selectedProject;
@@ -625,28 +585,6 @@ export function NewTaskDraftScreen(props: {
     flow.environments.find(
       (environment) => environment.environmentId === flow.selectedEnvironmentId,
     )?.environmentLabel ?? "Environment";
-  const availableCurrentBranchName =
-    flow.availableBranches.find((branch) => branch.current)?.name ??
-    flow.availableBranches.find((branch) => branch.isDefault)?.name ??
-    null;
-  const selectedBranchName = resolveProjectThreadCreationBranch({
-    workspaceMode: flow.workspaceMode,
-    selectedBranch:
-      flow.selectedBranchName ??
-      (flow.workspaceMode === "worktree" ? availableCurrentBranchName : null),
-    currentCheckoutBranch: flow.currentCheckoutBranchName,
-  });
-  const selectedBranchLabel = resolveNewTaskBranchLabel({
-    branchName: selectedBranchName,
-    startFromOrigin: flow.startFromOrigin,
-    workspaceMode: flow.workspaceMode,
-  });
-  const workspaceLabel = resolveNewTaskWorkspaceLabel({
-    workspaceMode: flow.workspaceMode,
-    worktreePath: flow.selectedWorktreePath,
-  });
-  const showBranchLoading = flow.branchesLoading && flow.availableBranches.length === 0;
-
   async function handlePickImages(): Promise<void> {
     if (isIncomingShareTransferPending) {
       return;
@@ -690,27 +628,17 @@ export function NewTaskDraftScreen(props: {
         draft.modelSelection ?? null,
         flow.subscriptionStatuses,
       ) ?? flow.selectedModel;
-    const workspaceMode = draft.workspaceSelection?.mode ?? flow.workspaceMode;
-    const selectedBranchName = draft.workspaceSelection?.branch ?? flow.selectedBranchName;
-    const selectedWorktreePath =
-      draft.workspaceSelection?.worktreePath ?? flow.selectedWorktreePath;
-    const startFromOrigin = draft.workspaceSelection?.startFromOrigin ?? flow.startFromOrigin;
     const runtimeMode = draft.runtimeMode ?? flow.runtimeMode;
-    const interactionMode = flow.planModeEnabled
-      ? (draft.interactionMode ?? flow.interactionMode)
-      : "default";
     const initialMessageText = draft.text.trim();
 
-    if (
-      !modelSelection ||
-      initialMessageText.length === 0 ||
-      flow.submitting ||
-      (workspaceMode === "worktree" && !selectedBranchName)
-    ) {
+    if (!modelSelection || initialMessageText.length === 0 || flow.submitting) {
       return;
     }
 
     const editingPendingTask = flow.editingPendingTask;
+    // New chats run in the project checkout; a task queued before the
+    // worktree choice was retired keeps the workspace it was queued with.
+    const queuedCreation = editingPendingTask?.creation;
 
     if (!environmentConnected) {
       // Offline: park the task in the outbox; the drain sends it when the
@@ -743,9 +671,6 @@ export function NewTaskDraftScreen(props: {
       if (editingPendingTask) {
         flow.finishEditingPendingTask();
       } else {
-        // Drop the workspace selection with the content: the next task should
-        // re-resolve mode/branch/origin from the server's configured defaults
-        // instead of resurrecting this task's picks.
         setDictationGeneration((generation) => generation + 1);
         clearComposerDraftContent(draftKey, { clearWorkspaceSelection: true });
       }
@@ -754,20 +679,15 @@ export function NewTaskDraftScreen(props: {
     }
 
     flow.setSubmitting(true);
-    const creationBranch = resolveProjectThreadCreationBranch({
-      workspaceMode,
-      selectedBranch: selectedBranchName,
-      currentCheckoutBranch: flow.currentCheckoutBranchName,
-    });
     const result = await createProjectThread({
       project: selectedProject,
       modelSelection,
-      envMode: workspaceMode,
-      branch: creationBranch,
-      worktreePath: workspaceMode === "worktree" ? null : selectedWorktreePath,
-      startFromOrigin,
+      envMode: queuedCreation?.workspaceMode ?? "local",
+      branch: queuedCreation?.branch ?? null,
+      worktreePath: queuedCreation?.worktreePath ?? null,
+      startFromOrigin: queuedCreation?.startFromOrigin ?? false,
       runtimeMode,
-      interactionMode,
+      interactionMode: "default",
       initialMessageText,
       initialAttachments: draft.attachments,
       ...(editingPendingTask
@@ -836,8 +756,7 @@ export function NewTaskDraftScreen(props: {
     flow.prompt.trim().length > 0 &&
     isIncomingShareReady &&
     !isImportingShare &&
-    !flow.submitting &&
-    !(flow.workspaceMode === "worktree" && !flow.selectedBranchName);
+    !flow.submitting;
   const promptEditor = (
     <ComposerEditor
       ref={promptInputRef}
@@ -886,13 +805,13 @@ export function NewTaskDraftScreen(props: {
     void KeyboardController.dismiss({ animated: true });
     navigation.dispatch(StackActions.push("NewTask", { incomingShareId: props.incomingShareId }));
   };
-  const openContextPicker = (routeName: "NewTaskBranch" | "NewTaskEnvironment") => {
+  const openEnvironmentPicker = () => {
     if (isIncomingShareTransferPending) {
       return;
     }
     promptInputRef.current?.blur();
     void KeyboardController.dismiss({ animated: true });
-    navigation.dispatch(StackActions.push(routeName));
+    navigation.dispatch(StackActions.push("NewTaskEnvironment"));
   };
 
   // The project title is a pressable, so the translated line is split around its placeholder.
@@ -945,9 +864,7 @@ export function NewTaskDraftScreen(props: {
         icon="desktopcomputer"
         label={t("on {environment}", { environment: selectedEnvironmentLabel })}
         maxWidth={260}
-        onPress={
-          flow.environments.length > 1 ? () => openContextPicker("NewTaskEnvironment") : undefined
-        }
+        onPress={flow.environments.length > 1 ? openEnvironmentPicker : undefined}
         showChevron={flow.environments.length > 1}
         static={flow.environments.length <= 1}
       />
@@ -971,40 +888,8 @@ export function NewTaskDraftScreen(props: {
     </View>
   );
 
-  const workspaceControls = (
-    <View className="flex-row items-center gap-1 px-2">
-      <ComposerInlineControl
-        accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}
-        accessibilityLabel={workspaceLabel}
-        disabled={isIncomingShareTransferPending}
-        iconNode={
-          <NewTaskWorkspaceIcon
-            workspaceMode={flow.workspaceMode}
-            worktreePath={flow.selectedWorktreePath}
-          />
-        }
-        label={workspaceLabel}
-        maxWidth={flow.workspaceMode === "local" ? 220 : 148}
-        onPress={() => flow.setWorkspaceMode(flow.workspaceMode === "local" ? "worktree" : "local")}
-        showChevron={false}
-      />
-
-      <ComposerInlineControl
-        accessibilityLabel={`${flow.workspaceMode === "worktree" ? "Base branch" : "Branch"}: ${selectedBranchLabel}`}
-        chevronDirection="right"
-        disabled={isIncomingShareTransferPending}
-        icon="arrow.triangle.branch"
-        label={showBranchLoading ? t("Loading branches…") : selectedBranchLabel}
-        maxWidth={190}
-        onPress={() => openContextPicker("NewTaskBranch")}
-      />
-    </View>
-  );
-
   const composerDock = (
     <View className="bg-sheet px-4 pt-1" style={{ paddingBottom: controlsBottomPadding }}>
-      <View className="pb-1">{workspaceControls}</View>
-
       <ComposerSurface
         animateLayout={false}
         isDarkMode={isDarkMode}
@@ -1054,24 +939,6 @@ export function NewTaskDraftScreen(props: {
               maxWidth={152}
               onPress={settingsSheetPresentation.open}
             />
-            {flow.planModeEnabled ? (
-              <ComposerInlineControl
-                accessibilityHint={`Switches to ${flow.interactionMode === "plan" ? "Build" : "Plan"} mode`}
-                accessibilityLabel={`Interaction mode: ${flow.interactionMode === "plan" ? "Plan" : "Build"}`}
-                disabled={isIncomingShareTransferPending}
-                emphasized
-                icon={
-                  flow.interactionMode === "plan"
-                    ? { ios: "list.bullet.clipboard", android: "auto_awesome" }
-                    : { ios: "hammer", android: "construction" }
-                }
-                label={flow.interactionMode === "plan" ? t("Plan") : t("Build")}
-                onPress={() =>
-                  flow.setInteractionMode(flow.interactionMode === "plan" ? "default" : "plan")
-                }
-                showChevron={false}
-              />
-            ) : null}
           </ComposerToolbarScroller>
           {showDictation ? (
             <DictationControls appearance="send-slot" {...dictation} />

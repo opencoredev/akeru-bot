@@ -7,8 +7,6 @@ import type {
   VcsInitInput,
   VcsListRemotesResult,
   VcsListWorkspaceFilesResult,
-  ReviewDiffPreviewInput,
-  ReviewDiffPreviewResult,
   VcsRepositoryIdentity,
 } from "@t3tools/contracts";
 import { CheckpointRef } from "@t3tools/contracts";
@@ -74,8 +72,5 @@ export class VcsDriver extends Context.Service<
       relativePaths: ReadonlyArray<string>,
     ) => Effect.Effect<ReadonlyArray<string>, VcsError>;
     readonly initRepository: (input: VcsInitInput) => Effect.Effect<void, VcsError>;
-    readonly getDiffPreview?: (
-      input: ReviewDiffPreviewInput,
-    ) => Effect.Effect<ReviewDiffPreviewResult, VcsError>;
   }
 >()("akeru-bot/vcs/VcsDriver") {}

@@ -62,18 +62,21 @@ function SheetPopup({
   children,
   showCloseButton = true,
   keepMounted = false,
+  forceBackdrop = false,
   side = "right",
   variant = "default",
   ...props
 }: SheetPrimitive.Popup.Props & {
   showCloseButton?: boolean;
   keepMounted?: boolean;
+  /** Render the backdrop even when Base UI treats this sheet as nested in another dialog. */
+  forceBackdrop?: boolean;
   side?: "right" | "left" | "top" | "bottom";
   variant?: "default" | "inset";
 }) {
   return (
     <SheetPortal keepMounted={keepMounted}>
-      <SheetBackdrop />
+      <SheetBackdrop forceRender={forceBackdrop} />
       <SheetViewport side={side} variant={variant}>
         <SheetPrimitive.Popup
           className={cn(

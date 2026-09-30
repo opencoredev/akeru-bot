@@ -7,18 +7,20 @@ export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | und
   const { t } = useI18n();
   if (!meter) return null;
 
+  // Unknown usage is left out rather than shown as a placeholder.
+  const parts = [
+    formatBotStepEngine(meter.engine),
+    meter.tokens === null ? null : `${formatTokens(meter.tokens)} tokens`,
+    meter.costUsd === null ? null : formatUsd(meter.costUsd),
+    meter.hardStopReached ? "Hard stop" : null,
+  ].filter((part) => part !== null);
+
   return (
     <div
-      className="mt-0.5 truncate font-mono text-[0.7rem] tabular-nums text-muted-foreground/70"
+      className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground/70"
       data-testid="bot-step-meter"
     >
-      {formatBotStepEngine(meter.engine)} ·{" "}
-      {t("{tokens} tokens", {
-        tokens: meter.tokens === null ? "—" : formatTokens(meter.tokens),
-      })}
-      {" · "}
-      {meter.costUsd === null ? "$—" : formatUsd(meter.costUsd)}
-      {meter.hardStopReached ? ` · ${t("Hard stop")}` : null}
+      {parts.join(" · ")}
     </div>
   );
 }

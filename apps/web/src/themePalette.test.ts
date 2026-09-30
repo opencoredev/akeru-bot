@@ -448,16 +448,16 @@ describe("theme files", () => {
       [...THEME_COLOR_ROLES].sort(),
     );
     expectThemeColors(AKERU_PAPER_THEME.colors, {
-      canvas: "#f4f1ea",
-      text: "#2a2724",
+      canvas: "#fafaf9",
+      text: "#1f1e1d",
       accent: "#8b6fc9",
       focus: "#8b6fc9",
       update: "#8b6fc9",
       messageAction: "#8b6fc9",
       terminalCursor: "#8b6fc9",
       messageSurface: "#f0eaf8",
-      codeBackground: "#ece8e0",
-      sidebar: "#ece8df",
+      codeBackground: "#f4f4f3",
+      sidebar: "#f3f2f1",
     });
     expectThemeColors(AKERU_PAPER_THEME.variants!.dark!, {
       canvas: "#050505",

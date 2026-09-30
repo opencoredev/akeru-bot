@@ -465,7 +465,12 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
     isMemoryToolId(toolId)
       ? MEMORY_TOOL_INPUT_DECODERS[toolId](input, { onExcessProperty: "error" })
-      : decodeAkeruToolInput(toolId, input);
+      : decodeAkeruToolInput(
+          toolId,
+          input && typeof input === "object" && !Array.isArray(input)
+            ? Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null))
+            : input,
+        );
 
   const requiresApproval = async (
     session: AkeruToolSession,

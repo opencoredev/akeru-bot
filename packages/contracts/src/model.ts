@@ -134,7 +134,7 @@ const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 const OPENCODE_GO_DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
-export const DEFAULT_MODEL = "gpt-5.6-sol";
+export const DEFAULT_MODEL = "gpt-6-sol";
 
 /**
  * Codex default-model preference, most preferred first. The provider snapshot
@@ -142,6 +142,7 @@ export const DEFAULT_MODEL = "gpt-5.6-sol";
  * default; when none are available, Codex's own `isDefault` flag wins.
  */
 export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
+  "gpt-6-sol",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
 ];

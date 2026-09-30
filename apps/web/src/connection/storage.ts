@@ -22,7 +22,6 @@ import {
   OrchestrationThreadDetailSnapshot,
   ServerConfig,
   ThreadId,
-  VcsListRefsResult,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -37,12 +36,13 @@ const DATABASE_NAME = "akeru:connection-runtime";
 // Database used before the rebrand; its stores are copied forward once and the
 // legacy database is retired only after the copy succeeds.
 const LEGACY_DATABASE_NAME = "t3code:connection-runtime";
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 const CATALOG_STORE_NAME = "catalog";
 const SHELL_STORE_NAME = "shell";
 const THREAD_STORE_NAME = "thread";
 const SERVER_CONFIG_STORE_NAME = "server-config";
-const VCS_REFS_STORE_NAME = "vcs-refs";
+// Retired with the branch picker; version 5 drops the store from older databases.
+const RETIRED_VCS_REFS_STORE_NAME = "vcs-refs";
 // Written with the copied records so a legacy database that survives a blocked
 // deletion is never copied again over later removals.
 const LEGACY_MIGRATED_KEY = "legacy-migrated";
@@ -74,13 +74,6 @@ const StoredServerConfig = Schema.Struct({
   config: ServerConfig,
 });
 const StoredServerConfigJson = Schema.fromJsonString(StoredServerConfig);
-const StoredVcsRefs = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
-  environmentId: EnvironmentId,
-  cwd: Schema.String,
-  refs: VcsListRefsResult,
-});
-const StoredVcsRefsJson = Schema.fromJsonString(StoredVcsRefs);
 const ConnectionCatalogDocumentJson = Schema.fromJsonString(ConnectionCatalogDocument);
 const decodeConnectionCatalogDocument = Schema.decodeUnknownEffect(ConnectionCatalogDocumentJson);
 const encodeConnectionCatalogDocument = Schema.encodeEffect(ConnectionCatalogDocumentJson);
@@ -90,8 +83,6 @@ const decodeStoredThreadSnapshot = Schema.decodeUnknownEffect(StoredThreadSnapsh
 const encodeStoredThreadSnapshot = Schema.encodeEffect(StoredThreadSnapshotJson);
 const decodeStoredServerConfig = Schema.decodeUnknownEffect(StoredServerConfigJson);
 const encodeStoredServerConfig = Schema.encodeEffect(StoredServerConfigJson);
-const decodeStoredVcsRefs = Schema.decodeUnknownEffect(StoredVcsRefsJson);
-const encodeStoredVcsRefs = Schema.encodeEffect(StoredVcsRefsJson);
 
 function catalogError(operation: string, cause: unknown) {
   return new ConnectionTransientError({
@@ -112,10 +103,6 @@ function persistenceError(
     | "remove-thread"
     | "load-server-config"
     | "save-server-config"
-    | "load-vcs-refs"
-    | "save-vcs-refs"
-    | "remove-vcs-refs"
-    | "clear-vcs-refs"
     | "clear-environment",
   cause: unknown,
 ) {
@@ -130,7 +117,6 @@ const OBJECT_STORE_NAMES = [
   SHELL_STORE_NAME,
   THREAD_STORE_NAME,
   SERVER_CONFIG_STORE_NAME,
-  VCS_REFS_STORE_NAME,
 ] as const;
 
 const openDatabaseAt = (name: string) =>
@@ -147,6 +133,9 @@ const openDatabaseAt = (name: string) =>
         if (!request.result.objectStoreNames.contains(storeName)) {
           request.result.createObjectStore(storeName);
         }
+      }
+      if (request.result.objectStoreNames.contains(RETIRED_VCS_REFS_STORE_NAME)) {
+        request.result.deleteObjectStore(RETIRED_VCS_REFS_STORE_NAME);
       }
     });
     request.addEventListener("error", () => {
@@ -337,10 +326,6 @@ function removeDatabaseValuesInRange(database: IDBDatabase, storeName: string, r
 
 function threadCacheKey(environmentId: EnvironmentId, threadId: ThreadId) {
   return `${environmentId}:${threadId}`;
-}
-
-function vcsRefsCacheKey(environmentId: EnvironmentId, cwd: string) {
-  return `${environmentId}:${cwd}`;
 }
 
 const decodeCatalog = Effect.fn("web.connectionStorage.decodeCatalog")(function* (raw: string) {
@@ -667,60 +652,6 @@ export const connectionStorageLayer = Layer.effectContext(
               : persistenceError("save-thread", cause),
           ),
         ),
-      loadVcsRefs: (environmentId, cwd) =>
-        readDatabaseValue(database, VCS_REFS_STORE_NAME, vcsRefsCacheKey(environmentId, cwd)).pipe(
-          Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
-              return Effect.succeed(Option.none());
-            }
-            return decodeStoredVcsRefs(raw).pipe(
-              Effect.mapError((cause) => persistenceError("load-vcs-refs", cause)),
-              Effect.map((stored) =>
-                stored.environmentId === environmentId && stored.cwd === cwd
-                  ? Option.some(stored.refs)
-                  : Option.none(),
-              ),
-            );
-          }),
-          Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
-              ? cause
-              : persistenceError("load-vcs-refs", cause),
-          ),
-        ),
-      saveVcsRefs: (environmentId, cwd, refs) =>
-        Effect.gen(function* () {
-          const encoded = yield* encodeStoredVcsRefs({
-            schemaVersion: 1,
-            environmentId,
-            cwd,
-            refs,
-          }).pipe(Effect.mapError((cause) => persistenceError("save-vcs-refs", cause)));
-          yield* writeDatabaseValue(
-            database,
-            VCS_REFS_STORE_NAME,
-            vcsRefsCacheKey(environmentId, cwd),
-            encoded,
-          );
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
-              ? cause
-              : persistenceError("save-vcs-refs", cause),
-          ),
-        ),
-      removeVcsRefs: (environmentId, cwd) =>
-        removeDatabaseValue(
-          database,
-          VCS_REFS_STORE_NAME,
-          vcsRefsCacheKey(environmentId, cwd),
-        ).pipe(Effect.mapError((cause) => persistenceError("remove-vcs-refs", cause))),
-      clearVcsRefs: (environmentId) =>
-        removeDatabaseValuesInRange(
-          database,
-          VCS_REFS_STORE_NAME,
-          IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
-        ).pipe(Effect.mapError((cause) => persistenceError("clear-vcs-refs", cause))),
       removeThread: (environmentId, threadId) =>
         removeDatabaseValue(
           database,
@@ -737,11 +668,6 @@ export const connectionStorageLayer = Layer.effectContext(
               IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
             ),
             removeDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId),
-            removeDatabaseValuesInRange(
-              database,
-              VCS_REFS_STORE_NAME,
-              IDBKeyRange.bound(`${environmentId}:`, `${environmentId}:\uffff`),
-            ),
           ],
           { concurrency: "unbounded", discard: true },
         ).pipe(Effect.mapError((cause) => persistenceError("clear-environment", cause))),

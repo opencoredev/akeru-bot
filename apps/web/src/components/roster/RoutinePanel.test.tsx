@@ -17,6 +17,7 @@ import {
   focusTargetAfterRoutineDelete,
   RoutineDetail,
   RoutinePanel,
+  showsWorkspacePicker,
   routineFormClosesOnOpenChange,
   runStatusPresentation,
 } from "./RoutinePanel";
@@ -405,8 +406,20 @@ describe("RoutinePanel", () => {
     expect(
       renderToStaticMarkup(<RoutinePanel botName="Akeru" status="error" error="Request failed" />),
     ).toContain("Request failed");
-    expect(renderToStaticMarkup(<RoutinePanel botName="Akeru" status="unavailable" />)).toContain(
-      "Routines are not available for this environment.",
-    );
+    // An environment that cannot run routines shows nothing to act on.
+    expect(renderToStaticMarkup(<RoutinePanel botName="Akeru" status="unavailable" />)).toBe("");
+  });
+});
+
+describe("showsWorkspacePicker", () => {
+  it("only offers the workspace picker when there is more than one workspace", () => {
+    expect(showsWorkspacePicker([])).toBe(false);
+    expect(showsWorkspacePicker([{ id: "project-1", name: "Workspace" }])).toBe(false);
+    expect(
+      showsWorkspacePicker([
+        { id: "project-1", name: "Workspace" },
+        { id: "project-2", name: "Research" },
+      ]),
+    ).toBe(true);
   });
 });

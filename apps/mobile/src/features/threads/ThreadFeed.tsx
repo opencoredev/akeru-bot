@@ -82,18 +82,7 @@ import {
 } from "../replyPlayback/useReplyPlaybackThread";
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import { useEnvironmentPresentation } from "../../state/presentation";
-import {
-  parseReviewCommentMessageSegments,
-  type ReviewInlineComment,
-} from "../review/reviewCommentSelection";
-import type { ReviewDiffTheme } from "../review/shikiReviewHighlighter";
-import { resolveNativeReviewDiffView } from "../diffs/nativeReviewDiffSurface";
-import {
-  buildNativeReviewDiffData,
-  createNativeReviewDiffTheme,
-  NATIVE_REVIEW_DIFF_CONTENT_WIDTH,
-} from "../review/nativeReviewDiffAdapter";
-import { buildReviewParsedDiff } from "../review/reviewModel";
+import type { CodeHighlightTheme } from "./codeHighlighter";
 import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
 import { cn } from "../../lib/cn";
 import {
@@ -108,7 +97,6 @@ import {
 } from "../../lib/appearancePreferences";
 import { MOBILE_TYPOGRAPHY } from "../../lib/typography";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { useAppearanceCodeSurface } from "../settings/appearance/useAppearanceCodeSurface";
 import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
 import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
 import {
@@ -133,7 +121,6 @@ import {
 } from "./thread-work-log";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import { useAssetUrl, useAssetUrlState } from "../../state/assets";
-import { resolveWorkspaceRelativeFilePath } from "../files/filePath";
 import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
 import { isAppDeepLink } from "@t3tools/client-runtime/settings-deep-link";
 import { resolveMobileSettingsDestination } from "../settings/settingsDeepLink";
@@ -443,15 +430,6 @@ interface MarkdownStyleSet {
   readonly nativeTextStyle: NativeMarkdownTextStyle;
 }
 
-interface ReviewCommentColors {
-  readonly background: ColorValue;
-  readonly border: ColorValue;
-  readonly mutedBackground: ColorValue;
-  readonly text: ColorValue;
-  readonly mutedText: ColorValue;
-  readonly codeBackground: ColorValue;
-}
-
 const failedMarkdownFaviconHosts = new Set<string>();
 const markdownLinkStyles = StyleSheet.create({
   inlineIcon: {
@@ -517,7 +495,7 @@ function MarkdownCodeBlock(props: {
   readonly language?: string | null;
   readonly lineHeight: number;
   readonly textColor: string;
-  readonly theme: ReviewDiffTheme;
+  readonly theme: CodeHighlightTheme;
 }) {
   const { t } = useMobileI18n();
   const content = props.content.replace(/\n$/, "");
@@ -620,27 +598,6 @@ function MarkdownCodeBlock(props: {
         </NativeText>
       </ScrollView>
     </View>
-  );
-}
-
-function useReviewCommentColors(): ReviewCommentColors {
-  const background = useThemeColor("--color-card");
-  const border = useThemeColor("--color-border");
-  const mutedBackground = useThemeColor("--color-subtle");
-  const text = useThemeColor("--color-foreground");
-  const mutedText = useThemeColor("--color-foreground-muted");
-  const codeBackground = useThemeColor("--color-md-code-bg");
-
-  return useMemo(
-    () => ({
-      background,
-      border,
-      mutedBackground,
-      text,
-      mutedText,
-      codeBackground,
-    }),
-    [background, border, codeBackground, mutedBackground, mutedText, text],
   );
 }
 
@@ -1071,8 +1028,6 @@ function renderFeedEntry(
     readonly iconSubtleColor: string | import("react-native").ColorValue;
     readonly userBubbleColor: string | import("react-native").ColorValue;
     readonly markdownStyles: MarkdownStyleSets;
-    readonly reviewCommentColors: ReviewCommentColors;
-    readonly reviewCommentBubbleWidth: number;
     readonly userBubbleMaxWidth: number;
     readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
     readonly formatDate: (value: number, options: Intl.DateTimeFormatOptions) => string;
@@ -1142,7 +1097,6 @@ function renderFeedEntry(
       props.formatDate,
     );
     const attachments = message.attachments ?? [];
-    const hasReviewCommentContext = message.text.includes("<review_comment");
     // A bubble that sizes itself from its content cannot lay out a block whose
     // intrinsic width overflows `maxWidth`: Android positions the bubble's
     // children during the unclamped pass and never moves them once the width
@@ -1171,11 +1125,7 @@ function renderFeedEntry(
             style={{
               backgroundColor: userBubbleColor,
               maxWidth: props.userBubbleMaxWidth,
-              ...(hasReviewCommentContext
-                ? { width: props.reviewCommentBubbleWidth }
-                : hasWideBlock
-                  ? { width: props.userBubbleMaxWidth }
-                  : null),
+              ...(hasWideBlock ? { width: props.userBubbleMaxWidth } : null),
             }}
           >
             {message.channelOrigin ? (
@@ -1187,7 +1137,6 @@ function renderFeedEntry(
               <UserMessageContent
                 text={message.text}
                 markdownStyles={styles}
-                reviewCommentColors={props.reviewCommentColors}
                 skills={props.skills}
                 onLinkPress={props.onMarkdownLinkPress}
                 renderImage={props.renderMarkdownImage}
@@ -1413,242 +1362,33 @@ const WorkingTimelineRow = memo(function WorkingTimelineRow(props: {
 function UserMessageContent(props: {
   readonly text: string;
   readonly markdownStyles: MarkdownStyleSet;
-  readonly reviewCommentColors: ReviewCommentColors;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
   readonly onLinkPress: (href: string) => void;
   readonly renderImage: MarkdownImageRenderer;
 }) {
   const mentions = useSentMessageMentions(props.text, props.skills);
-  const segments = parseReviewCommentMessageSegments(props.text);
-  const hasReviewComment = segments.some((segment) => segment.kind === "review-comment");
-  if (!hasReviewComment) {
-    if (hasNativeSelectableMarkdownText()) {
-      return (
-        <SelectableMarkdownText
-          markdown={props.text}
-          skills={mentions.skills}
-          textStyle={props.markdownStyles.nativeTextStyle}
-          preserveSoftBreaks
-          onLinkPress={props.onLinkPress}
-          renderImage={props.renderImage}
-        />
-      );
-    }
+  if (hasNativeSelectableMarkdownText()) {
     return (
-      <Markdown
-        options={{ gfm: true }}
-        renderers={props.markdownStyles.renderers}
-        styles={props.markdownStyles.styles}
-        theme={props.markdownStyles.theme}
-      >
-        {labelSentMessageMentions(props.text, mentions.displays)}
-      </Markdown>
+      <SelectableMarkdownText
+        markdown={props.text}
+        skills={mentions.skills}
+        textStyle={props.markdownStyles.nativeTextStyle}
+        preserveSoftBreaks
+        onLinkPress={props.onLinkPress}
+        renderImage={props.renderImage}
+      />
     );
   }
-
   return (
-    <View className="w-full gap-2">
-      {segments.map((segment) => {
-        if (segment.kind === "review-comment") {
-          return (
-            <ReviewCommentCard
-              key={segment.comment.id}
-              comment={segment.comment}
-              colors={props.reviewCommentColors}
-            />
-          );
-        }
-
-        const text = segment.text.trim();
-        if (text.length === 0) {
-          return null;
-        }
-
-        return hasNativeSelectableMarkdownText() ? (
-          <SelectableMarkdownText
-            key={segment.id}
-            markdown={text}
-            skills={mentions.skills}
-            textStyle={props.markdownStyles.nativeTextStyle}
-            preserveSoftBreaks
-            onLinkPress={props.onLinkPress}
-            renderImage={props.renderImage}
-          />
-        ) : (
-          <Markdown
-            key={segment.id}
-            options={{ gfm: true }}
-            renderers={props.markdownStyles.renderers}
-            styles={props.markdownStyles.styles}
-            theme={props.markdownStyles.theme}
-          >
-            {labelSentMessageMentions(text, mentions.displays)}
-          </Markdown>
-        );
-      })}
-    </View>
-  );
-}
-
-const ReviewCommentCard = memo(function ReviewCommentCard(props: {
-  readonly comment: ReviewInlineComment;
-  readonly colors: ReviewCommentColors;
-}) {
-  const { codeSurface, nativeReviewDiffStyle } = useAppearanceCodeSurface();
-  const { themeAppearance: appearanceScheme, themeId } = useAppearancePreferences();
-  const NativeReviewDiffView = resolveNativeReviewDiffView();
-  const patch = useMemo(() => buildReviewCommentPatch(props.comment), [props.comment]);
-  const parsedDiff = useMemo(
-    () => buildReviewParsedDiff(patch, `thread-review-comment:${props.comment.id}`),
-    [patch, props.comment.id],
-  );
-  const nativeReviewDiffData = useMemo(() => buildNativeReviewDiffData(parsedDiff), [parsedDiff]);
-  const compactNativeRows = useMemo(
-    () => nativeReviewDiffData.rows.filter((row) => row.kind !== "file"),
-    [nativeReviewDiffData.rows],
-  );
-  const nativeReviewDiffTheme = useMemo(
-    () => createNativeReviewDiffTheme(appearanceScheme, themeId),
-    [appearanceScheme, themeId],
-  );
-  const nativeRowsJson = useMemo(() => JSON.stringify(compactNativeRows), [compactNativeRows]);
-  const nativeThemeJson = useMemo(
-    () => JSON.stringify(nativeReviewDiffTheme),
-    [nativeReviewDiffTheme],
-  );
-  const nativeStyleJson = useMemo(
-    () => JSON.stringify(nativeReviewDiffStyle),
-    [nativeReviewDiffStyle],
-  );
-  const nativeDiffHeight = useMemo(
-    () =>
-      Math.min(
-        360,
-        Math.max(
-          112,
-          compactNativeRows.length * nativeReviewDiffStyle.rowHeight +
-            nativeReviewDiffStyle.fileHeaderVerticalMargin,
-        ),
-      ),
-    [compactNativeRows.length, nativeReviewDiffStyle],
-  );
-  const shouldRenderNativeDiff = NativeReviewDiffView != null && compactNativeRows.length > 0;
-
-  return (
-    <View
-      className="w-full overflow-hidden rounded-[16px] border border-continuous"
-      style={{
-        backgroundColor: props.colors.background,
-        borderColor: props.colors.border,
-      }}
+    <Markdown
+      options={{ gfm: true }}
+      renderers={props.markdownStyles.renderers}
+      styles={props.markdownStyles.styles}
+      theme={props.markdownStyles.theme}
     >
-      <View
-        className="flex-row items-center gap-2 border-b px-3 py-2"
-        style={{ borderColor: props.colors.border }}
-      >
-        <View
-          className="size-6 items-center justify-center rounded-[7px] border-continuous"
-          style={{ backgroundColor: props.colors.mutedBackground }}
-        >
-          <SymbolView
-            name="doc.text"
-            size={13}
-            tintColor={props.colors.mutedText}
-            type="monochrome"
-          />
-        </View>
-        <View className="min-w-0 flex-1">
-          <Text
-            className="font-mono text-xs"
-            numberOfLines={1}
-            style={{ color: props.colors.text }}
-          >
-            {compactFileName(props.comment.filePath)}
-          </Text>
-        </View>
-      </View>
-      {shouldRenderNativeDiff ? (
-        <View
-          className="border-t"
-          collapsable={false}
-          style={{
-            backgroundColor: nativeReviewDiffTheme.background,
-            borderColor: props.colors.border,
-            height: nativeDiffHeight,
-          }}
-        >
-          <NativeReviewDiffView
-            collapsable={false}
-            style={StyleSheet.absoluteFill}
-            appearanceScheme={appearanceScheme}
-            contentWidth={NATIVE_REVIEW_DIFF_CONTENT_WIDTH}
-            rowHeight={nativeReviewDiffStyle.rowHeight}
-            rowsJson={nativeRowsJson}
-            styleJson={nativeStyleJson}
-            themeJson={nativeThemeJson}
-          />
-        </View>
-      ) : props.comment.diff.trim().length > 0 ? (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          directionalLockEnabled
-          showsHorizontalScrollIndicator={false}
-          bounces={false}
-          className="border-t"
-          style={{ backgroundColor: props.colors.codeBackground, borderColor: props.colors.border }}
-          contentContainerStyle={{ padding: 10 }}
-        >
-          <NativeText
-            selectable
-            className="font-mono"
-            style={{
-              color: props.colors.text,
-              fontSize: codeSurface.fontSize,
-              lineHeight: codeSurface.rowHeight,
-            }}
-          >
-            {props.comment.diff.trim()}
-          </NativeText>
-        </ScrollView>
-      ) : null}
-      {props.comment.text.length > 0 ? (
-        <View className="border-t px-3 py-3" style={{ borderColor: props.colors.border }}>
-          <Text selectable className="text-base leading-snug" style={{ color: props.colors.text }}>
-            {props.comment.text}
-          </Text>
-        </View>
-      ) : null}
-    </View>
+      {labelSentMessageMentions(props.text, mentions.displays)}
+    </Markdown>
   );
-});
-
-function buildReviewCommentPatch(comment: ReviewInlineComment): string {
-  if ((comment.fenceLanguage ?? "diff") !== "diff") {
-    return "";
-  }
-  const diff = comment.diff.trim();
-  if (!diff) {
-    return "";
-  }
-
-  if (diff.startsWith("diff --git ")) {
-    return diff;
-  }
-
-  const normalizedPath = comment.filePath.replaceAll("\\", "/");
-  return [
-    `diff --git a/${normalizedPath} b/${normalizedPath}`,
-    `--- a/${normalizedPath}`,
-    `+++ b/${normalizedPath}`,
-    diff,
-  ].join("\n");
-}
-
-function compactFileName(filePath: string): string {
-  const normalized = filePath.replaceAll("\\", "/");
-  const lastSlashIndex = normalized.lastIndexOf("/");
-  return lastSlashIndex >= 0 ? normalized.slice(lastSlashIndex + 1) : normalized;
 }
 
 function ThreadFeedPlaceholder(props: {
@@ -1786,7 +1526,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   });
   const contentWidth = Math.max(0, viewportWidth - contentHorizontalPadding * 2);
   const userBubbleMaxWidth = contentWidth * 0.85;
-  const reviewCommentBubbleWidth = Math.min(Math.max(280, contentWidth * 0.85), contentWidth);
   const insets = useSafeAreaInsets();
   const topContentInset = props.contentTopInset ?? insets.top + IOS_NAV_BAR_HEIGHT;
   const bottomContentInset = props.contentBottomInset ?? 18;
@@ -1837,28 +1576,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         return;
       }
       const presentation = resolveMarkdownLinkPresentation(href);
-      if (presentation.kind === "file") {
-        const relativePath = resolveWorkspaceRelativeFilePath(
-          props.workspaceRoot,
-          presentation.path,
-        );
-        if (relativePath) {
-          void Haptics.selectionAsync();
-          navigation.navigate("ThreadFile", {
-            environmentId: String(props.environmentId),
-            threadId: String(props.threadId),
-            path: relativePath.split("/").filter((segment) => segment.length > 0),
-            ...(presentation.line ? { line: String(presentation.line) } : {}),
-          });
-        }
-        return;
-      }
+      // Mobile has no workspace file viewer; file links stay inert.
+      if (presentation.kind === "file") return;
 
       if (presentation.href) {
         void tryOpenExternalUrl(presentation.href, "markdown-link");
       }
     },
-    [props.environmentId, props.threadId, props.workspaceRoot, navigation],
+    [props.environmentId, navigation],
   );
   const renderMarkdownImage = useCallback<MarkdownImageRenderer>(
     (image) => {
@@ -1890,7 +1615,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     [props.environmentId, props.threadId, props.workspaceRoot],
   );
   const markdownStyles = useMarkdownStyles(onMarkdownLinkPress, renderMarkdownImage);
-  const reviewCommentColors = useReviewCommentColors();
   const reportHeaderMaterialVisibility = useCallback(
     (visible: boolean) => {
       if (headerMaterialVisibleRef.current === visible) {
@@ -2275,8 +1999,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       iconSubtleColor,
       userBubbleColor,
       markdownStyles,
-      reviewCommentColors,
-      reviewCommentBubbleWidth,
       userBubbleMaxWidth,
       skills: props.skills,
       silentRun: props.silentRun,
@@ -2297,8 +2019,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       iconSubtleColor,
       userBubbleColor,
       markdownStyles,
-      reviewCommentColors,
-      reviewCommentBubbleWidth,
       userBubbleMaxWidth,
       onCopyWorkRow,
       onMarkdownLinkPress,

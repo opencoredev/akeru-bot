@@ -79,16 +79,11 @@ function finiteLabelSources(): Record<string, string[]> {
   const settings = read("apps/web/src/components/settings/settingsSearch.ts");
   const dialog = read("apps/web/src/components/settings/SettingsDialog.tsx");
   const pairing = read("apps/web/src/components/auth/PairingRouteSurface.tsx");
-  const composer = read("apps/web/src/components/chat/ComposerPrimaryActions.tsx");
   const dictation = read("apps/mobile/src/components/DictationControls.tsx");
   return {
     "SettingsDialog: item.title (SETTINGS_SEARCH_ITEMS)": literals(
       between(settings, "export const SETTINGS_SEARCH_ITEMS = [", "] as const"),
       /\btitle:\s*("(?:[^"\\]|\\.)*")/g,
-    ),
-    "SettingsDialog: SETTINGS_SECTION_LABELS[item.to]": literals(
-      between(settings, "export const SETTINGS_SECTION_LABELS:", "\n};"),
-      /:\s*("(?:[^"\\]|\\.)*")/g,
     ),
     "SettingsDialog: group.label and item.label (SETTINGS_NAV_GROUPS)": literals(
       between(dialog, "export const SETTINGS_NAV_GROUPS:", "\n];"),
@@ -101,10 +96,6 @@ function finiteLabelSources(): Record<string, string[]> {
     "DictationControls (mobile): announcements[status]": literals(
       between(dictation, "const announcements = {", "\n};"),
       /:\s*("(?:[^"\\]|\\.)*")/g,
-    ),
-    "ComposerPrimaryActions: formatPendingPrimaryActionLabel": literals(
-      between(composer, "export const formatPendingPrimaryActionLabel", "\n};"),
-      /("(?:[^"\\]|\\.)*")/g,
     ),
   };
 }

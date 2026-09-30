@@ -18,10 +18,6 @@ import {
   type VcsCreateRefResult,
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
-  type ReviewDiffPreviewInput,
-  type ReviewDiffPreviewResult,
-  type ReviewDiffFileContentsInput,
-  type ReviewDiffFileContentsResult,
   type VcsInitInput,
   type VcsListRefsInput,
   type VcsListRefsResult,
@@ -83,11 +79,6 @@ export interface GitRemoteStatusDetails {
   aheadOfDefaultCount: number;
 }
 
-export interface GitPreparedCommitContext {
-  stagedSummary: string;
-  stagedPatch: string;
-}
-
 export interface ExecuteGitProgress {
   readonly onStdoutLine?: (line: string) => Effect.Effect<void, never>;
   readonly onStderrLine?: (line: string) => Effect.Effect<void, never>;
@@ -99,35 +90,11 @@ export interface ExecuteGitProgress {
   }) => Effect.Effect<void, never>;
 }
 
-export interface GitCommitProgress {
-  readonly onOutputLine?: (input: {
-    stream: "stdout" | "stderr";
-    text: string;
-  }) => Effect.Effect<void, never>;
-  readonly onHookStarted?: (hookName: string) => Effect.Effect<void, never>;
-  readonly onHookFinished?: (input: {
-    hookName: string;
-    exitCode: number | null;
-    durationMs: number | null;
-  }) => Effect.Effect<void, never>;
-}
-
-export interface GitCommitOptions {
-  readonly timeoutMs?: number;
-  readonly progress?: GitCommitProgress;
-}
-
 export interface GitPushResult {
   status: "pushed" | "skipped_up_to_date";
   branch: string;
   upstreamBranch?: string | undefined;
   setUpstream?: boolean | undefined;
-}
-
-export interface GitRangeContext {
-  commitSummary: string;
-  diffSummary: string;
-  diffPatch: string;
 }
 
 export interface GitRenameBranchInput {
@@ -138,42 +105,6 @@ export interface GitRenameBranchInput {
 
 export interface GitRenameBranchResult {
   branch: string;
-}
-
-export interface GitFetchPullRequestBranchInput {
-  cwd: string;
-  prNumber: number;
-  branch: string;
-}
-
-export interface GitFetchPullRequestHeadCommitInput {
-  cwd: string;
-  prNumber: number;
-}
-
-export interface GitResolveCommitInput {
-  cwd: string;
-  revision: string;
-}
-
-export interface GitResolveCommitResult {
-  commitSha: string;
-}
-
-export interface GitRefreshCheckedOutBranchInput {
-  cwd: string;
-  targetCommit: string;
-  /**
-   * Commit the checkout is allowed to be hard-reset away from: the upstream commit read before
-   * the fetch. HEAD sitting there means the checkout holds no work of its own.
-   */
-  resetWhenHeadCommit?: string | null | undefined;
-}
-
-export interface GitRefreshCheckedOutBranchResult {
-  headCommit: string;
-  moved: boolean;
-  onTarget: boolean;
 }
 
 export interface GitEnsureRemoteInput {
@@ -238,31 +169,11 @@ export class GitVcsDriver extends Context.Service<
       cwd: string,
       options?: GitRemoteStatusOptions,
     ) => Effect.Effect<GitRemoteStatusDetails, GitCommandError>;
-    readonly prepareCommitContext: (
-      cwd: string,
-      filePaths?: readonly string[],
-    ) => Effect.Effect<GitPreparedCommitContext | null, GitCommandError>;
-    readonly commit: (
-      cwd: string,
-      subject: string,
-      body: string,
-      options?: GitCommitOptions,
-    ) => Effect.Effect<{ commitSha: string }, GitCommandError>;
     readonly pushCurrentBranch: (
       cwd: string,
       fallbackBranch: string | null,
       options?: { readonly remoteName?: string | null },
     ) => Effect.Effect<GitPushResult, GitCommandError>;
-    readonly readRangeContext: (
-      cwd: string,
-      baseRef: string,
-    ) => Effect.Effect<GitRangeContext, GitCommandError>;
-    readonly getReviewDiffPreview: (
-      input: ReviewDiffPreviewInput,
-    ) => Effect.Effect<ReviewDiffPreviewResult, GitCommandError>;
-    readonly getReviewDiffFileContents: (
-      input: ReviewDiffFileContentsInput,
-    ) => Effect.Effect<ReviewDiffFileContentsResult, GitCommandError>;
     readonly readConfigValue: (
       cwd: string,
       key: string,
@@ -274,20 +185,6 @@ export class GitVcsDriver extends Context.Service<
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
-    readonly fetchPullRequestBranch: (
-      input: GitFetchPullRequestBranchInput,
-    ) => Effect.Effect<void, GitCommandError>;
-    /** Fetches `refs/pull/<n>/head` without writing a branch, for heads that exist nowhere else. */
-    readonly fetchPullRequestHeadCommit: (
-      input: GitFetchPullRequestHeadCommitInput,
-    ) => Effect.Effect<GitResolveCommitResult, GitCommandError>;
-    readonly resolveCommit: (
-      input: GitResolveCommitInput,
-    ) => Effect.Effect<GitResolveCommitResult, GitCommandError>;
-    /** Moves the branch checked out in `cwd` onto `targetCommit`, from inside that worktree. */
-    readonly refreshCheckedOutBranch: (
-      input: GitRefreshCheckedOutBranchInput,
-    ) => Effect.Effect<GitRefreshCheckedOutBranchResult, GitCommandError>;
     readonly ensureRemote: (input: GitEnsureRemoteInput) => Effect.Effect<string, GitCommandError>;
     readonly resolvePrimaryRemoteName: (cwd: string) => Effect.Effect<string, GitCommandError>;
     readonly resolveDefaultBranchName: (

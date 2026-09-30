@@ -24,6 +24,11 @@ export function resolveBotBrowserPreviewStatus(input: {
   return "ready";
 }
 
+/** The inline preview stays hidden until the bot has opened a page. */
+export function hasBotBrowserPage(status: BotBrowserPreviewStatus): boolean {
+  return status === "loading" || status === "ready" || status === "failed";
+}
+
 export function botBrowserPreviewRuntimeTabId(
   threadRef: ScopedThreadRef,
   serverEpoch: string | null,

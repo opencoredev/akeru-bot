@@ -3,6 +3,7 @@ import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ProviderApprovalDecision,
 } from "@t3tools/contracts";
+import { cn } from "~/lib/utils";
 
 import { useI18n } from "../../i18n";
 import type { PendingApproval } from "../../session-logic";
@@ -50,12 +51,13 @@ export function BotApprovalPrompt({
   return (
     <section
       aria-label={t("Approval required")}
-      className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-white/10 border-b-transparent bg-foreground/[0.12] px-3.5 pt-3 pb-2.5 dark:bg-white/[0.16]"
+      className={cn(
+        "mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-border/70 border-b-transparent bg-card px-3.5 pt-3 pb-2.5",
+      )}
       data-testid="bot-approval-prompt"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-amber-400" />
-        <p className="text-sm font-semibold text-foreground">{heading}</p>
+        <p className="text-xs font-medium text-muted-foreground">{heading}</p>
         {approval.appName ? (
           <span className="max-w-32 truncate text-xs text-muted-foreground">
             {approval.appName}
@@ -63,7 +65,7 @@ export function BotApprovalPrompt({
         ) : null}
         {oneUse ? <span className="text-xs text-muted-foreground">{t("Runs once")}</span> : null}
         {pendingCount > 1 ? (
-          <span className="ml-auto text-[11px] font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {t("1 of {count}", { count: pendingCount })}
           </span>
         ) : null}

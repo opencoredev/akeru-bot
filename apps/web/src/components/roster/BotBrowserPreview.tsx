@@ -15,6 +15,7 @@ import { isPreviewSupportedInRuntime, useThreadPreviewState } from "../../previe
 import { cn } from "~/lib/utils";
 import {
   botBrowserPreviewRuntimeTabId,
+  hasBotBrowserPage,
   resolveBotBrowserPreviewStatus,
   type BotBrowserPreviewStatus,
 } from "./botBrowserPreview.logic";
@@ -73,19 +74,11 @@ export function BotBrowserPreview({
   onExpandedChange,
   trailingAction,
 }: BotBrowserPreviewProps) {
-  const status = resolveBotBrowserPreviewStatus({
-    supported: true,
-    hasThread: threadRef !== null,
-    hasSession: false,
-    hasWebContents: false,
-    loading: false,
-    failed: false,
-  });
-
   if (!threadRef) {
-    return (
-      <BotBrowserPreviewFrame botName={botName} status={status} trailingAction={trailingAction} />
-    );
+    // Keep the panel's close action reachable if the thread drops while expanded.
+    return expanded ? (
+      <BotBrowserPreviewFrame botName={botName} status="waiting" trailingAction={trailingAction} />
+    ) : null;
   }
 
   return (
@@ -205,6 +198,8 @@ function ConnectedBotBrowserPreview({
       </section>
     );
   }
+
+  if (!hasBotBrowserPage(status)) return null;
 
   return (
     <BotBrowserPreviewFrame

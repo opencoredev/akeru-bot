@@ -83,7 +83,7 @@ describe("Akeru Remote administration", () => {
         encoding: "utf8",
       }).stdout;
 
-    expect(logs()).toContain("-u t3code.service");
+    expect(logs()).toContain("-u akeru-bot.service");
     const logDir = NodePath.join(root, "home", "userdata", "logs");
     NodeFS.mkdirSync(logDir, { recursive: true });
     NodeFS.writeFileSync(NodePath.join(logDir, "boot-service.log"), "Admin pairing link\n");

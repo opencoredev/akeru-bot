@@ -560,7 +560,7 @@ describe("DelegationCard", () => {
     mocks.thread = null;
     const markup = renderCard("running", null);
     expect(markup).toContain("Unknown bot");
-    expect(markup).toContain("Usage unavailable");
+    expect(markup).not.toContain("tokens billed");
     expect(findByLabel(detailElement(null), "Open Unknown bot chat")?.props.disabled).toBe(true);
   });
 

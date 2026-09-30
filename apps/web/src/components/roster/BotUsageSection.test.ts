@@ -101,6 +101,8 @@ describe("formatUsageMeasurement", () => {
     expect(markup).toContain("Reserved");
     expect(markup).toContain("750");
     expect(markup).not.toContain("Some provider usage is unavailable.");
+    // The settings row that hosts this section already carries the "Usage" title.
+    expect(markup).not.toContain(">Usage</div>");
   });
 
   it("renders token-unit subscription pools as counts", () => {

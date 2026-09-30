@@ -136,6 +136,10 @@ the routine's name, schedule, and instructions before you allow it. For a routin
 the built-in create-routine tool, an unanswered review closes after an hour. No routine is created,
 and the bot learns that the review expired.
 
+If you ask a bot to create a routine in chat, review its proposed name, schedule, timezone, and
+instructions before selecting **Create routine**. If those details are missing, the review card says
+so instead of guessing a name or schedule.
+
 If a required connector, provider, bot, or workspace is unavailable, Akeru pauses the routine and
 adds one item to the bot inbox, which you can open from **Settings > Bot inbox**. The routine card
 says it was paused and points you to the bot inbox. Fix the dependency, then resume the routine. Restoring an archived bot does not resume its routines.
@@ -183,7 +187,8 @@ On this device the layout is stored in the browser for the connected environment
 ## Conversation panel
 
 Use the panel button to collapse or reopen the bot editor. The default shortcut is `Mod+Alt+B`. You
-can change **Right Panel: Toggle** in keybinding settings. Narrow screens open the editor as a sheet.
+can change **Toggle right panel** in **Settings > Keyboard**. Narrow screens open the editor as a
+sheet.
 
 Bot replies support headings, links, tables, task lists, code blocks, math, and Mermaid diagrams.
 While a bot works, a small pixel meter sits under the latest message with the bot's current step and

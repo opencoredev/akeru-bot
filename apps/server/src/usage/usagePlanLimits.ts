@@ -2,8 +2,8 @@
 /**
  * Live plan windows from Settings → Providers logins.
  *
- * Claude and Codex follow OpenUsage. Grok uses the CLI billing credits endpoint.
- * Kimi is attempted last.
+ * Claude and Codex follow OpenUsage.
+ * Grok uses the CLI billing credits endpoint. Kimi is attempted last.
  *
  * @module usagePlanLimits
  */
@@ -28,7 +28,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 const SESSION_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-type LiveSubscriptionProviderId = Exclude<SubscriptionProviderId, "cursor">;
+type LiveSubscriptionProviderId = SubscriptionProviderId;
 
 const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "openai-codex",
@@ -86,7 +86,7 @@ function isoFromUnknown(value: unknown): string | null {
   return number === null ? null : isoFromEpoch(number);
 }
 
-/** Codex often sends seconds; some providers send epoch milliseconds. */
+/** Accepts epoch milliseconds or seconds (Codex often sends seconds). */
 function isoFromEpoch(value: number): string {
   const millis = Math.abs(value) < 1e11 ? value * 1000 : value;
   return DateTime.formatIso(DateTime.makeUnsafe(millis));
@@ -590,12 +590,9 @@ export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
     makePlanLimitCache(getPlanAccess),
     (cache) => (provider?: SubscriptionProviderId) =>
       Effect.all(
-        (provider === undefined
-          ? PLAN_PROVIDER_ORDER
-          : provider === "cursor"
-            ? []
-            : [provider]
-        ).map((selected) => cache.read(selected)),
+        (provider === undefined ? PLAN_PROVIDER_ORDER : [provider]).map((selected) =>
+          cache.read(selected),
+        ),
 
         { concurrency: "unbounded" },
       ).pipe(

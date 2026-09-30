@@ -29,7 +29,6 @@ import {
   reconcilePreviewServerSessions,
   updatePreviewServerSnapshot,
 } from "~/previewStateStore";
-import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";
 import { resolveBrowserNavigationTarget } from "~/browser/browserTargetResolver";
 import {
   readActiveBrowserRecordingTargets,
@@ -61,7 +60,6 @@ import {
 import {
   previewAutomationDefaultViewport,
   previewAutomationOpenNeedsOverlay,
-  shouldOpenPreviewMiniPlayer,
 } from "./previewAutomationOpenReadiness";
 import {
   assertPreviewRuntimeCurrent,
@@ -76,16 +74,6 @@ import {
 } from "./previewAutomationTarget";
 import { isPreviewViewportReady } from "./previewViewportReadiness";
 import { shouldRollbackPreviewViewport } from "./previewViewportRollback";
-
-const PREVIEW_PRESENTATION_SETTLE_TIMEOUT_MS = 500;
-
-const waitForPreviewPresentation = async (runtimeTabId: string): Promise<void> => {
-  const deadline = Date.now() + PREVIEW_PRESENTATION_SETTLE_TIMEOUT_MS;
-  while (Date.now() <= deadline) {
-    if (useBrowserSurfaceStore.getState().byTabId[runtimeTabId]?.visible) return;
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 16));
-  }
-};
 
 const waitForDesktopOverlay = async (
   threadRef: ScopedThreadRef,
@@ -446,22 +434,8 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 updatePreviewServerSnapshot(threadRef, resizeResult.value);
               }
             }
-            const shouldPresentPreview = shouldOpenPreviewMiniPlayer(
-              input,
-              (await resolveBrowserDefaults()).autoShowFloatingPreview,
-            );
-            if (shouldPresentPreview) {
-              usePreviewMiniPlayerStore.getState().open(threadRef, activeTabId);
-            }
             if (activeSnapshot && previewAutomationOpenNeedsOverlay(input, activeSnapshot)) {
               await requireReadyTab();
-            }
-            if (shouldPresentPreview) {
-              // React commits the thread-bound surface asynchronously. Settle
-              // briefly so active-thread opens report visible=true, without
-              // turning a background thread's offscreen mini player into an
-              // operation failure.
-              await waitForPreviewPresentation(activeRuntimeTabId);
             }
             if (reusedExistingTab && resolvedInputUrl && previewBridge) {
               assertPreviewRuntimeCurrent(threadRef, activeTabId, activeRuntimeTabId, request);

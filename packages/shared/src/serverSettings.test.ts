@@ -2,7 +2,6 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
-  type ServerProvider,
 } from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
@@ -11,10 +10,8 @@ import { createModelSelection } from "./model.ts";
 import {
   applyServerSettingsPatch,
   extractPersistedServerObservabilitySettings,
-  isModelSelectionProviderEnabled,
   normalizePersistedServerSettingString,
   parsePersistedServerObservabilitySettings,
-  resolveSourceControlWriterModelSelection,
   textGenerationSelectionForTarget,
 } from "./serverSettings.ts";
 
@@ -204,65 +201,6 @@ describe("serverSettings helpers", () => {
         sourceControlWriterModelSelection: null,
       }).sourceControlWriterModelSelection,
     ).toBeNull();
-  });
-
-  it("falls back from a disabled source control writer provider without clearing its selection", () => {
-    const instanceId = ProviderInstanceId.make("codex_writer");
-    const sourceControlWriterModelSelection = createModelSelection(instanceId, "gpt-5.4-mini");
-    const settings = {
-      ...DEFAULT_SERVER_SETTINGS,
-      providerInstances: {
-        [instanceId]: {
-          driver: ProviderDriverKind.make("codex"),
-          enabled: false,
-          config: {},
-        },
-      },
-      sourceControlWriterModelSelection,
-    };
-
-    expect(isModelSelectionProviderEnabled(settings, sourceControlWriterModelSelection)).toBe(
-      false,
-    );
-    expect(resolveSourceControlWriterModelSelection(settings)).toBe(
-      settings.textGenerationModelSelection,
-    );
-    expect(settings.sourceControlWriterModelSelection).toBe(sourceControlWriterModelSelection);
-  });
-
-  it("falls back from an unavailable source control writer provider", () => {
-    const instanceId = ProviderInstanceId.make("missing_writer");
-    const sourceControlWriterModelSelection = createModelSelection(instanceId, "missing-model");
-    const settings = {
-      ...DEFAULT_SERVER_SETTINGS,
-      providerInstances: {
-        [instanceId]: {
-          driver: ProviderDriverKind.make("missing-driver"),
-          config: {},
-        },
-      },
-      sourceControlWriterModelSelection,
-    };
-    const unavailableProvider = {
-      instanceId,
-      driver: ProviderDriverKind.make("missing-driver"),
-      enabled: false,
-      installed: false,
-      version: null,
-      status: "disabled",
-      auth: { status: "unknown" },
-      checkedAt: "2026-07-27T00:00:00.000Z",
-      availability: "unavailable",
-      unavailableReason: "This provider driver is not available in this build.",
-      models: [],
-      slashCommands: [],
-      skills: [],
-    } satisfies ServerProvider;
-
-    expect(resolveSourceControlWriterModelSelection(settings, [unavailableProvider])).toBe(
-      settings.textGenerationModelSelection,
-    );
-    expect(settings.sourceControlWriterModelSelection).toBe(sourceControlWriterModelSelection);
   });
 
   it("replaces providerInstances maps so omitted instance fields are cleared", () => {

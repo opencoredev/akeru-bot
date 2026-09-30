@@ -23,9 +23,10 @@ import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/qu
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-export function InboxPanel() {
+/** Open bot errors and approval requests for surfaces that still use the inbox. */
+export function InboxSection() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   const inboxQuery = useEnvironmentQuery(
@@ -36,72 +37,71 @@ export function InboxPanel() {
   const openItems = selectOpenBotInboxItems(inboxQuery.data ?? []);
 
   return (
-    <SettingsPageContainer>
-      <SettingsSection
-        title={t("Bot inbox")}
-        headerAction={
-          openItems.length > 0 ? (
-            <Badge variant="error">{t("{count} open", { count: openItems.length })}</Badge>
-          ) : null
-        }
-      >
-        {inboxQuery.isPending ? (
-          <SettingsRow title={t("Loading inbox")} />
-        ) : inboxQuery.error ? (
-          <SettingsRow title={t("Could not load the inbox")} description={inboxQuery.error} />
-        ) : openItems.length === 0 ? (
-          <SettingsRow
-            title={t("Nothing open")}
-            description={t("Bot failures and memory approvals appear here.")}
-          />
-        ) : (
-          openItems.map((item) => {
-            const approval = item.memoryApproval;
-            return (
-              <InboxIncidentRow
-                key={item.id}
-                item={item}
-                environmentId={environmentId}
-                onResolve={
-                  environmentId === null
-                    ? null
-                    : async () => {
-                        const result = await resolveIncident({
-                          environmentId,
-                          input: { id: item.id },
-                        });
-                        return result._tag === "Failure"
-                          ? formatEnvironmentQueryError(result.cause)
-                          : null;
+    <SettingsSection
+      id="errors"
+      title={t("Bot inbox")}
+      headerAction={
+        openItems.length > 0 ? (
+          <Badge variant="error">{t("{count} open", { count: openItems.length })}</Badge>
+        ) : null
+      }
+    >
+      {inboxQuery.isPending ? (
+        <SettingsRow title={t("Loading inbox")} />
+      ) : inboxQuery.error ? (
+        <SettingsRow title={t("Could not load the inbox")} description={inboxQuery.error} />
+      ) : openItems.length === 0 ? (
+        <SettingsRow
+          title={t("Nothing open")}
+          description={t("Bot failures and memory approvals appear here.")}
+        />
+      ) : (
+        openItems.map((item) => {
+          const approval = item.memoryApproval;
+          return (
+            <InboxIncidentRow
+              key={item.id}
+              item={item}
+              environmentId={environmentId}
+              onResolve={
+                environmentId === null
+                  ? null
+                  : async () => {
+                      const result = await resolveIncident({
+                        environmentId,
+                        input: { id: item.id },
+                      });
+                      return result._tag === "Failure"
+                        ? formatEnvironmentQueryError(result.cause)
+                        : null;
+                    }
+              }
+              onDecideMemory={
+                environmentId === null || approval === undefined
+                  ? null
+                  : async (intent) => {
+                      const result = await mutateFact({
+                        environmentId,
+                        input: {
+                          threadId: approval.sourceThreadId,
+                          mutation: memoryApprovalMutation(approval, intent),
+                        },
+                      });
+                      if (result._tag === "Failure") {
+                        return t(
+                          describeDurableFactFailure(squashAtomCommandFailure(result)).message,
+                        );
                       }
-                }
-                onDecideMemory={
-                  environmentId === null || approval === undefined
-                    ? null
-                    : async (intent) => {
-                        const result = await mutateFact({
-                          environmentId,
-                          input: {
-                            threadId: approval.sourceThreadId,
-                            mutation: memoryApprovalMutation(approval, intent),
-                          },
-                        });
-                        if (result._tag === "Failure") {
-                          return t(
-                            describeDurableFactFailure(squashAtomCommandFailure(result)).message,
-                          );
-                        }
-                        // The server closes the inbox item when it records the decision.
-                        inboxQuery.refresh();
-                        return null;
-                      }
-                }
-              />
-            );
-          })
-        )}
-      </SettingsSection>
-    </SettingsPageContainer>
+                      // The server closes the inbox item when it records the decision.
+                      inboxQuery.refresh();
+                      return null;
+                    }
+              }
+            />
+          );
+        })
+      )}
+    </SettingsSection>
   );
 }
 

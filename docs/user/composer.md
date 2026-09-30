@@ -95,5 +95,4 @@ The excerpt is read when the bot starts the turn, so it reflects the chat at tha
 From a new chat on desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux. Akeru
 starts the chat, opens another new chat, and shows an **Open** action for the bot work in progress.
 
-The background chat keeps the selected workspace mode and base branch. If **New worktree** is
-selected, each background chat creates a separate worktree.
+Like any new chat, the background chat works in the bot's project checkout.

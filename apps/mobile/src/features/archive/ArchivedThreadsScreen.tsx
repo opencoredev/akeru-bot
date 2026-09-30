@@ -24,7 +24,6 @@ import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSw
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { EmptyState } from "../../components/EmptyState";
-import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileI18n } from "../../lib/i18n";
 import { relativeTime } from "../../lib/time";
@@ -368,13 +367,6 @@ function ProjectGroupLabel(props: {
 }) {
   return (
     <View className="flex-row items-center gap-2.5 px-1 pb-2">
-      <ProjectFavicon
-        environmentId={props.project.environmentId}
-        faviconPath={props.project.faviconPath}
-        projectTitle={props.project.title}
-        size={18}
-        workspaceRoot={props.project.workspaceRoot}
-      />
       <Text
         className="flex-1 text-xs font-t3-medium tracking-[0.5px] uppercase text-foreground-muted"
         numberOfLines={1}
