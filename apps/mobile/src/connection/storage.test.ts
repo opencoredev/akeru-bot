@@ -13,7 +13,10 @@ vi.mock("expo-secure-store", () => ({
 }));
 
 import { CONNECTION_CATALOG_KEY, LEGACY_CONNECTIONS_KEY, make } from "./catalog-store";
-import { MobileSecureStorage } from "../persistence/mobile-secure-storage";
+import {
+  MobileSecureStorage,
+  MobileSecureStorageError,
+} from "../persistence/mobile-secure-storage";
 
 function makeStorage(initial: Readonly<Record<string, string>>) {
   const values = new Map(Object.entries(initial));
@@ -63,6 +66,22 @@ describe("mobile connection catalog storage", () => {
     }),
   );
 
+  it.effect("keeps a migrated catalog readable when legacy deletion fails", () =>
+    Effect.gen(function* () {
+      const raw = JSON.stringify({ schemaVersion: 1, targets: [], profiles: [], credentials: [] });
+      const memory = makeStorage({ "t3code.connection-catalog.v1": raw });
+      const storage = MobileSecureStorage.of({
+        ...memory.storage,
+        removeItem: (key) =>
+          Effect.fail(new MobileSecureStorageError({ operation: "delete", key, cause: "locked" })),
+      });
+      const catalog = yield* make().pipe(Effect.provideService(MobileSecureStorage, storage));
+
+      expect((yield* catalog.read).targets).toEqual([]);
+      expect(memory.values.get(CONNECTION_CATALOG_KEY)).toBe(raw);
+    }),
+  );
+
   it.effect("falls back to valid legacy data when the current catalog is corrupt", () =>
     Effect.gen(function* () {
       const memory = makeStorage({
@@ -92,6 +111,35 @@ describe("mobile connection catalog storage", () => {
       yield* catalog.update((document) => document);
       expect(memory.values.has(CONNECTION_CATALOG_KEY)).toBe(true);
       expect(memory.values.has(LEGACY_CONNECTIONS_KEY)).toBe(false);
+    }),
+  );
+
+  it.effect("migrates flat connections when the old catalog is malformed", () =>
+    Effect.gen(function* () {
+      const memory = makeStorage({
+        "t3code.connection-catalog.v1": "{not-json",
+        [LEGACY_CONNECTIONS_KEY]: JSON.stringify({
+          connections: [
+            {
+              environmentId: "legacy-environment",
+              environmentLabel: "Legacy",
+              pairingUrl: "https://legacy.example.test/pair",
+              displayUrl: "https://legacy.example.test",
+              httpBaseUrl: "https://legacy.example.test",
+              wsBaseUrl: "wss://legacy.example.test",
+              bearerToken: "legacy-token",
+              authenticationMethod: "bearer",
+            },
+          ],
+        }),
+      });
+      const catalog = yield* make().pipe(
+        Effect.provideService(MobileSecureStorage, memory.storage),
+      );
+
+      expect((yield* catalog.read).targets).toHaveLength(1);
+      expect(memory.deleted).toEqual(["t3code.connection-catalog.v1", LEGACY_CONNECTIONS_KEY]);
+      expect(memory.values.has(CONNECTION_CATALOG_KEY)).toBe(true);
     }),
   );
 });

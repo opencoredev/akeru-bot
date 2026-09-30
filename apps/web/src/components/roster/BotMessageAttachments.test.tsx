@@ -37,8 +37,8 @@ describe("sent bot message attachments", () => {
       ),
     ).toEqual({
       images: [
-        { src: "http://example.test/first", name: "first.png" },
-        { src: "http://example.test/second", name: "second.png" },
+        { id: "attachment-first", src: "http://example.test/first", name: "first.png" },
+        { id: "attachment-second", src: "http://example.test/second", name: "second.png" },
       ],
       index: 1,
     });

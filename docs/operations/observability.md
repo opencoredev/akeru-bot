@@ -113,16 +113,16 @@ Default Grafana login:
 #### 2. Export OTLP env vars
 
 ```bash
-export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
-export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_SERVICE_NAME=t3-local
+export AKERU_OTLP_TRACES_URL=http://localhost:4318/v1/traces
+export AKERU_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
+export AKERU_OTLP_SERVICE_NAME=akeru-local
 ```
 
 Optional:
 
 ```bash
-export T3CODE_TRACE_MIN_LEVEL=Info
-export T3CODE_TRACE_TIMING_ENABLED=true
+export AKERU_TRACE_MIN_LEVEL=Info
+export AKERU_TRACE_TIMING_ENABLED=true
 ```
 
 #### 3. Launch the app from that same shell
@@ -147,23 +147,23 @@ node --run dev:desktop
 
 Packaged desktop app:
 
-Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `T3CODE_OTLP_*`.
+Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `AKERU_OTLP_*`.
 
 macOS app bundle example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+AKERU_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+AKERU_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+AKERU_OTLP_SERVICE_NAME=akeru-desktop \
 "/Applications/Akeru Bot (Alpha).app/Contents/MacOS/Akeru Bot (Alpha)"
 ```
 
 Direct binary example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+AKERU_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+AKERU_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+AKERU_OTLP_SERVICE_NAME=akeru-desktop \
 ./path/to/your/desktop-app-binary
 ```
 
@@ -183,7 +183,7 @@ Resolve the path for the launch mode once. Production and explicitly configured 
 state under the base directory's `userdata` folder:
 
 ```bash
-TRACE_FILE="${T3CODE_HOME:-$HOME/.akeru}/userdata/logs/server.trace.ndjson"
+TRACE_FILE="${AKERU_HOME:-$HOME/.akeru}/userdata/logs/server.trace.ndjson"
 ```
 
 A dev server started from a linked worktree defaults to that worktree's local home:
@@ -299,7 +299,7 @@ Recommended flow in Grafana:
 
 Good first searches:
 
-- service name such as `t3-local`, `t3-dev`, or `t3-desktop`
+- service name such as `akeru-local`, `akeru-dev`, or `akeru-desktop`
 - span names like `sendTurn` or a Git operation such as `GitVcsDriver.statusDetails.status`
 - Git spans whose `git.operation` attribute identifies the operation
 - orchestration spans with attributes like `orchestration.command_type`
@@ -366,7 +366,7 @@ If you need those later, add client-side instrumentation or a dedicated server f
 ### "Why is the UI feeling slow?"
 
 1. Search for slow top-level spans in the trace file or Tempo.
-2. Check child spans for sqlite, git, provider, or terminal work.
+2. Check child spans for sqlite, git, or provider work.
 3. Look at the matching duration metrics to see whether the slowness is systemic.
 
 ### "Did this command take too long to acknowledge?"
@@ -385,7 +385,7 @@ If you need those later, add client-side instrumentation or a dedicated server f
 
 Usually one of these is true:
 
-- `T3CODE_OTLP_TRACES_URL` was not set
+- `AKERU_OTLP_TRACES_URL` was not set
 - the app was launched from a different environment than the one where you exported the vars
 - the app was not fully restarted after changing env
 - Grafana is looking at the wrong time range or service name
@@ -507,21 +507,24 @@ It provides:
 
 ### Env Vars
 
+Each variable also accepts its older `T3CODE_` name, for example `T3CODE_OTLP_TRACES_URL`. The
+`AKERU_` name wins when both are set.
+
 Local trace file:
 
-- `T3CODE_TRACE_FILE`: override trace file path
-- `T3CODE_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
-- `T3CODE_TRACE_MAX_FILES`: rotated file count, default `10`
-- `T3CODE_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
-- `T3CODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
-- `T3CODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
+- `AKERU_TRACE_FILE`: override trace file path
+- `AKERU_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
+- `AKERU_TRACE_MAX_FILES`: rotated file count, default `10`
+- `AKERU_TRACE_BATCH_WINDOW_MS`: flush window, default `1000`
+- `AKERU_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
+- `AKERU_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
 
 OTLP export:
 
-- `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
-- `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
-- `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server`
+- `AKERU_OTLP_TRACES_URL`: OTLP trace endpoint
+- `AKERU_OTLP_METRICS_URL`: OTLP metric endpoint
+- `AKERU_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
+- `AKERU_OTLP_SERVICE_NAME`: service name, default `akeru-server`
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 
@@ -536,7 +539,6 @@ Current high-value span and metric boundaries include:
 - orchestration command acknowledgment latency
 - provider session and turn operations
 - git command execution and git hook events
-- terminal session lifecycle
 - sqlite query execution
 
 ### Current Constraints

@@ -23,7 +23,8 @@
   "transport": { "type": "unavailable" },
   "connection": {
     "type": "brokered",
-    "broker": { "name": "Composio", "url": "https://composio.dev" }
+    "broker": { "name": "Composio", "url": "https://composio.dev" },
+    "pendingBlocker": "A Composio API key and a connected Gmail account are required before the connect, use, disconnect, and reconnect lifecycle can be verified."
   },
   "authentication": "oauth",
   "requiredCredentials": [],
@@ -39,5 +40,5 @@
     }
   ],
   "approvals": ["send", "delete", "account-wide"],
-  "catalogStatus": "available"
+  "catalogStatus": "verification-pending"
 }

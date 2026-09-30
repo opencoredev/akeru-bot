@@ -10,7 +10,9 @@ import {
   createNativeStackScreen,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useMobileI18n } from "./lib/i18n";
+import { NativeStackScreenOptions } from "./native/StackHeader";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useResolveClassNames } from "uniwind";
 
@@ -18,29 +20,14 @@ import { AppText as Text } from "./components/AppText";
 import { getCompactBrandHeaderOptions } from "./components/CompactBrandTitle";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
-import { ThreadFilesTreeScreen, ThreadFileScreen } from "./features/files/ThreadFilesRouteScreen";
 import { AdaptiveWorkspaceLayout } from "./features/layout/AdaptiveWorkspaceLayout";
 import { HardwareKeyboardCommandProvider } from "./features/keyboard/HardwareKeyboardCommandProvider";
-import { ReviewCommentComposerSheet } from "./features/review/ReviewCommentComposerSheet";
-import { ReviewSheet } from "./features/review/ReviewSheet";
-import { ThreadTerminalRouteScreen } from "./features/terminal/ThreadTerminalRouteScreen";
-import { GitBranchesSheet } from "./features/threads/git/GitBranchesSheet";
-import { GitCommitSheet } from "./features/threads/git/GitCommitSheet";
-import { GitConfirmSheet } from "./features/threads/git/GitConfirmSheet";
-import { GitOverviewSheet } from "./features/threads/git/GitOverviewSheet";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
-import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
-import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
-import { AddProjectRepositoryRoute } from "./features/projects/AddProjectRepositoryRoute";
-import { AddProjectSourceRoute } from "./features/projects/AddProjectSourceRoute";
 import { NewTaskDraftRouteScreen } from "./features/threads/NewTaskDraftRouteScreen";
-import {
-  NewTaskBranchPickerRouteScreen,
-  NewTaskEnvironmentPickerRouteScreen,
-} from "./features/threads/NewTaskContextPickerScreens";
+import { NewTaskEnvironmentPickerRouteScreen } from "./features/threads/NewTaskContextPickerScreens";
 import {
   ExistingThreadSettingsRouteProvider,
   ExistingThreadSettingsRouteScreen,
@@ -53,6 +40,7 @@ import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsCl
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
 import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
+import { BotUsageRouteScreen } from "./features/usage/BotUsageRouteScreen";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsProviderHealthRouteScreen } from "./features/settings/SettingsProviderHealthRouteScreen";
@@ -98,7 +86,7 @@ const GLASS_HEADER_OPTIONS: AppScreenOptions = {
 };
 
 // SOLID: opaque sheet-colored header for surfaces whose content scrolls internally
-// (file viewer, terminal, review) — there is nothing for glass to sample there.
+// — there is nothing for glass to sample there.
 const SOLID_HEADER_OPTIONS: AppScreenOptions = {
   headerBackButtonDisplayMode: "minimal",
   headerBackTitle: "",
@@ -132,8 +120,40 @@ const LEGAL_DOCUMENT_HEADER_OPTIONS: AppScreenOptions = {
   presentation: "fullScreenModal",
 };
 
+function SettingsNavigationLayout({
+  children,
+  routeName,
+}: {
+  readonly children: ReactNode;
+  readonly routeName: string;
+}) {
+  const { t } = useMobileI18n();
+  const titles: Readonly<Record<string, string | undefined>> = {
+    Settings: t("Settings"),
+    SettingsEnvironments: t("Environments"),
+    SettingsEnvironmentNew: t("Add Environment"),
+    SettingsArchive: t("Archived chats"),
+    SettingsAppearance: t("Appearance"),
+    SettingsProjectGrouping: t("Project Grouping"),
+    SettingsClientStorage: t("Client Storage"),
+    SettingsUsage: t("Usage"),
+    SettingsBotUsage: t("Bot usage"),
+    SettingsProviderHealth: undefined,
+  };
+  const title = titles[routeName];
+  return (
+    <>
+      {title === undefined ? null : <NativeStackScreenOptions options={{ title }} />}
+      {children}
+    </>
+  );
+}
+
 const SettingsContentStack = createNativeStackNavigator({
   initialRouteName: "Settings",
+  screenLayout: ({ children, route }) => (
+    <SettingsNavigationLayout routeName={route.name}>{children}</SettingsNavigationLayout>
+  ),
   screenOptions: {
     ...GLASS_HEADER_OPTIONS,
     // Sheets read better with the iOS-default centered title (no editor style).
@@ -165,7 +185,7 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: ArchivedThreadsRouteScreen,
       linking: "archive",
       options: {
-        title: "Archived conversations",
+        title: "Archived chats",
       },
     }),
     SettingsAppearance: createNativeStackScreen({
@@ -194,6 +214,13 @@ const SettingsContentStack = createNativeStackNavigator({
       linking: "usage",
       options: {
         title: "Usage",
+      },
+    }),
+    SettingsBotUsage: createNativeStackScreen({
+      screen: BotUsageRouteScreen,
+      linking: "usage/bot",
+      options: {
+        title: "Bot usage",
       },
     }),
     SettingsProviderHealth: createNativeStackScreen({
@@ -228,7 +255,7 @@ const SettingsSheetStack = createNativeStackNavigator({
 // the same deep-link URLs the nested config produced.
 const THREAD_LINKING_PREFIX = "threads/:environmentId/:threadId";
 
-// New-task / add-project flow: nested navigator inside the formSheet (Settings-sheet
+// New-task flow: nested navigator inside the formSheet (Settings-sheet
 // pattern — a plain formSheet screen cannot render a stack header; the header and
 // in-sheet pushes come from this nested stack).
 const NewTaskSheetStack = createNativeStackNavigator({
@@ -268,13 +295,6 @@ const NewTaskSheetStack = createNativeStackNavigator({
         title: "Environment",
       },
     }),
-    NewTaskBranch: createNativeStackScreen({
-      screen: NewTaskBranchPickerRouteScreen,
-      linking: "draft/branch",
-      options: {
-        title: "Branch",
-      },
-    }),
     ThreadSettings: createNativeStackScreen({
       screen: NewTaskThreadSettingsRouteScreen,
       linking: "draft/settings",
@@ -290,25 +310,6 @@ const NewTaskSheetStack = createNativeStackNavigator({
             }),
       },
     }),
-    AddProject: createNativeStackScreen({
-      screen: AddProjectSourceRoute,
-      linking: "add-project",
-      options: {
-        title: "Add Project",
-      },
-    }),
-    AddProjectRepository: createNativeStackScreen({
-      screen: AddProjectRepositoryRoute,
-      linking: "add-project/repository",
-    }),
-    AddProjectDestination: createNativeStackScreen({
-      screen: AddProjectDestinationRoute,
-      linking: "add-project/destination",
-    }),
-    AddProjectLocal: createNativeStackScreen({
-      screen: AddProjectLocalRoute,
-      linking: "add-project/local",
-    }),
   },
 });
 
@@ -318,14 +319,9 @@ const NewTaskSheetStack = createNativeStackNavigator({
 const WORKSPACE_OVERLAY_ROUTES = new Set([
   "Connections",
   "ConnectionsNew",
-  "GitBranches",
-  "GitCommit",
-  "GitConfirm",
-  "GitOverview",
   "NewTaskSheet",
   "SettingsLegal",
   "SettingsSheet",
-  "ThreadReviewComment",
   "ThreadSettingsSheet",
 ]);
 
@@ -457,42 +453,6 @@ export const RootStack = createNativeStackNavigator({
       linking: THREAD_LINKING_PREFIX,
       options: GLASS_HEADER_OPTIONS,
     }),
-    ThreadTerminal: createNativeStackScreen({
-      screen: ThreadTerminalRouteScreen,
-      linking: `${THREAD_LINKING_PREFIX}/terminal`,
-      options: SOLID_HEADER_OPTIONS,
-    }),
-    ThreadReview: createNativeStackScreen({
-      screen: ReviewSheet,
-      linking: `${THREAD_LINKING_PREFIX}/review`,
-      options: SOLID_HEADER_OPTIONS,
-    }),
-    ThreadReviewComment: createNativeStackScreen({
-      screen: ReviewCommentComposerSheet,
-      linking: `${THREAD_LINKING_PREFIX}/review-comment`,
-      options: {
-        // Android cannot host the keyboard-driven comment composer inside a
-        // formSheet; use a full-screen modal there instead.
-        ...(Platform.OS === "android"
-          ? { presentation: "fullScreenModal" as const }
-          : FORM_SHEET_PRESENTATION_OPTIONS),
-        sheetAllowedDetents: Platform.OS === "android" ? undefined : [0.55, 0.92],
-        sheetGrabberVisible: Platform.OS !== "android",
-      },
-    }),
-    ThreadFiles: createNativeStackScreen({
-      screen: ThreadFilesTreeScreen,
-      linking: `${THREAD_LINKING_PREFIX}/files`,
-      options: {
-        ...GLASS_HEADER_OPTIONS,
-        title: "Files",
-      },
-    }),
-    ThreadFile: createNativeStackScreen({
-      screen: ThreadFileScreen,
-      linking: `${THREAD_LINKING_PREFIX}/files/:path*`,
-      options: SOLID_HEADER_OPTIONS,
-    }),
     ThreadSettingsSheet: createNativeStackScreen({
       screen: ExistingThreadSettingsRouteScreen,
       options: {
@@ -505,42 +465,6 @@ export const RootStack = createNativeStackNavigator({
               sheetAllowedDetents: [1],
               sheetGrabberVisible: true,
             }),
-      },
-    }),
-    GitOverview: createNativeStackScreen({
-      screen: GitOverviewSheet,
-      linking: `${THREAD_LINKING_PREFIX}/git`,
-      options: {
-        ...FORM_SHEET_PRESENTATION_OPTIONS,
-        sheetAllowedDetents: [0.55, 0.92],
-        sheetGrabberVisible: true,
-      },
-    }),
-    GitCommit: createNativeStackScreen({
-      screen: GitCommitSheet,
-      linking: `${THREAD_LINKING_PREFIX}/git/commit`,
-      options: {
-        ...FORM_SHEET_PRESENTATION_OPTIONS,
-        sheetAllowedDetents: [0.55, 0.92],
-        sheetGrabberVisible: true,
-      },
-    }),
-    GitBranches: createNativeStackScreen({
-      screen: GitBranchesSheet,
-      linking: `${THREAD_LINKING_PREFIX}/git/branches`,
-      options: {
-        ...FORM_SHEET_PRESENTATION_OPTIONS,
-        sheetAllowedDetents: [0.55, 0.92],
-        sheetGrabberVisible: true,
-      },
-    }),
-    GitConfirm: createNativeStackScreen({
-      screen: GitConfirmSheet,
-      linking: `${THREAD_LINKING_PREFIX}/git-confirm`,
-      options: {
-        ...FORM_SHEET_PRESENTATION_OPTIONS,
-        sheetAllowedDetents: [0.45, 0.7],
-        sheetGrabberVisible: true,
       },
     }),
     SettingsSheet: createNativeStackScreen({
@@ -596,7 +520,7 @@ export const RootStack = createNativeStackNavigator({
     NewTaskSheet: createNativeStackScreen({
       screen: NewTaskSheetStack,
       linking: "new",
-      // The whole new-task flow (choose project → draft → add project) shares
+      // The whole new-task flow (choose project → draft) shares
       // draft state via NewTaskFlowProvider. The expo-router era mounted it in
       // app/new/_layout.tsx; this layout wrapper is the native-stack equivalent.
       layout: ({ children }) => (

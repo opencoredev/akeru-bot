@@ -28,7 +28,7 @@ Stop it and remove it from startup:
 npx akeru-bot@latest service uninstall
 ```
 
-An update restarts Akeru. Let active bot work and terminal commands finish first. Wait when another
+An update restarts Akeru. Let active bot work finish first. Wait when another
 local or remote update is already running.
 
 ## Updates and rollback
@@ -41,13 +41,13 @@ An older launcher can require one local `service update` before remote rollback 
 
 ## Linux
 
-Linux installs a systemd user unit at `~/.config/systemd/user/t3code.service`. Installation enables
+Linux installs a systemd user unit at `~/.config/systemd/user/akeru-bot.service`. Installation enables
 lingering, so the service starts at boot and remains available after you log out.
 
 ## macOS
 
 macOS installs a launch agent at
-`~/Library/LaunchAgents/com.t3tools.t3code.service.plist`. It starts when you log in and stops when
+`~/Library/LaunchAgents/dev.leodoes.akeru.service.plist`. It starts when you log in and stops when
 you log out.
 
 For an unattended Mac, keep the Mac awake and configure an account to log in after restart. FileVault
@@ -59,5 +59,15 @@ that session, installation can finish but the agent starts at the next login.
 If bot work cannot read Desktop, Documents, or Downloads, grant Full Disk Access to the Node.js
 binary listed in the launch agent's `ProgramArguments`. Also check **System Settings > General >
 Login Items** if the launch agent does not start.
+
+## Services installed by older versions
+
+Older Akeru versions installed the service as `t3code.service` on Linux and
+`com.t3tools.t3code.service` on macOS. `service status` reports such a service as needing an update.
+Run `service install` or `service update` to move it to the new name. Akeru stops the old service,
+starts the renamed one, and removes the old unit file. `service uninstall` removes it too.
+
+Akeru only touches an old-named service that runs this Akeru installation's launcher. A T3 Code
+service with the same name stays as it is.
 
 Windows does not support the background service yet.

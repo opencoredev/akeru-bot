@@ -31,7 +31,7 @@ authenticated.
   `T3CODE_NO_BROWSER` itself from this flag, so setting `T3CODE_NO_BROWSER=0` in your environment has
   no effect; use `--browser`.
 - `vp run dev:server`: Starts just the server. It runs on Node (`node --watch src/bin.ts`), so
-  without Bun present it selects `NodePtyAdapter` and `NodeHttpServer`.
+  without Bun present it selects `NodeHttpServer`.
 - `vp run dev:web`: Starts just the Vite dev server for the web app.
 - `vp run dev:desktop`: Starts the Electron shell against the dev server.
 - `vp run dev:marketing`: Starts the Astro marketing site.

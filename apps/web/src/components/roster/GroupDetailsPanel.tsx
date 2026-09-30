@@ -1,15 +1,18 @@
 import { useAtomValue } from "@effect/atom-react";
+import { createTranslator } from "@t3tools/client-runtime/i18n";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@t3tools/contracts";
 import { Cancel01Icon, PanelRightCloseIcon, PanelRightIcon } from "@hugeicons/core-free-icons";
-import { BotIcon, Trash2Icon } from "lucide-react";
-import { useEffect, useReducer, useState, type ReactNode } from "react";
+import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
+import { useEffect, useId, useReducer, useState, type ReactNode } from "react";
 
+import { useI18n } from "../../i18n";
+import { cn } from "../../lib/utils";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
+import { ensureLocalApi } from "../../localApi";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../../rightPanelLayout";
-import { botEnvironment } from "../../state/bots";
+import { botEnvironment, environmentPeopleAtom } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { primaryServerKeybindingsAtom } from "../../state/server";
-import { SettingsRow } from "../settings/settingsLayout";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -18,22 +21,44 @@ import { Sheet, SheetClose, SheetPopup, SheetTitle } from "../ui/sheet";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { GroupMemberStack } from "./GroupMemberStack";
-import { groupBotMembers, groupContainsBot } from "./roster.logic";
+import { groupBotMembers, groupContainsBot, groupPersonMembers } from "./roster.logic";
 import type { Bot, Group } from "./types";
+import { useDetailsPanelState } from "./useDetailsPanelState";
+import { useGroupDetailsOpen } from "./detailsPanelOpen";
 
-type PanelState = {
-  readonly desktopOpen: boolean;
-  readonly mobileOpen: boolean;
-};
-type PanelAction =
-  | { readonly type: "toggle-desktop" }
-  | { readonly type: "toggle-mobile" }
-  | { readonly type: "set-mobile"; readonly open: boolean };
+type Translate = (message: string, params?: Record<string, string | number>) => string;
 
-function reducePanelState(state: PanelState, action: PanelAction): PanelState {
-  if (action.type === "toggle-desktop") return { ...state, desktopOpen: !state.desktopOpen };
-  if (action.type === "toggle-mobile") return { ...state, mobileOpen: !state.mobileOpen };
-  return { ...state, mobileOpen: action.open };
+const englishTranslate: Translate = createTranslator("en").translate;
+
+/**
+ * Explains why the member list blocks removal, so the way back out of a group
+ * change is always visible. Returns null when every specialist can be removed.
+ */
+export function groupMemberRemovalHint(
+  input: {
+    readonly memberCount: number;
+    readonly bossName: string | null;
+    readonly canAddBot: boolean;
+  },
+  t: Translate = englishTranslate,
+): string | null {
+  if (input.memberCount <= 2) {
+    return input.canAddBot
+      ? t("A group needs at least two bots. Add another bot before you remove one.")
+      : t("A group needs at least two bots. Create a new bot in the roster before you remove one.");
+  }
+  if (input.bossName !== null) {
+    return t("To remove {name}, make another bot the boss first.", { name: input.bossName });
+  }
+  return null;
+}
+
+/** True when the removal hint explains why this row's remove button is disabled. */
+export function isGroupMemberRemovalBlocked(input: {
+  readonly memberCount: number;
+  readonly isBoss: boolean;
+}): boolean {
+  return input.memberCount <= 2 || input.isBoss;
 }
 
 function GroupEditor({
@@ -47,6 +72,7 @@ function GroupEditor({
   readonly bots: readonly Bot[];
   readonly onDeleted: () => void;
 }) {
+  const { t, plural } = useI18n();
   const renameGroup = useAtomCommand(botEnvironment.groups.rename, {
     reportFailure: false,
   });
@@ -62,12 +88,28 @@ function GroupEditor({
   const setBoss = useAtomCommand(botEnvironment.groups.setBoss, {
     reportFailure: false,
   });
+  const unassignPerson = useAtomCommand(botEnvironment.groups.unassignPerson, {
+    reportFailure: false,
+  });
+  const leaveGroup = useAtomCommand(botEnvironment.groups.leave, { reportFailure: false });
+  const currentPersonId = useAtomValue(environmentPeopleAtom(environmentId)).current?.id;
   const [name, setName] = useState(group.name);
   const [newMemberId, setNewMemberId] = useState("");
   const [busy, setBusy] = useState(false);
   const activeBots = bots.filter((bot) => bot.archivedAt === null);
   const members = groupBotMembers(group, activeBots);
+  const people = groupPersonMembers(group);
   const availableBots = activeBots.filter((bot) => !groupContainsBot(group, bot.id));
+  const removalHintId = useId();
+  const addHintId = useId();
+  const removalHint = groupMemberRemovalHint(
+    {
+      memberCount: members.length,
+      bossName: members.find((bot) => bot.id === group.bossBotId)?.name ?? null,
+      canAddBot: availableBots.length > 0,
+    },
+    t,
+  );
 
   useEffect(() => setName(group.name), [group.name]);
   useEffect(() => {
@@ -89,14 +131,16 @@ function GroupEditor({
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
       <div className="flex flex-col items-center gap-3 pb-7 pt-6">
         <GroupMemberStack group={group} bots={bots} sizeClassName="size-16" />
-        <span className="text-sm text-muted-foreground">{members.length} bots</span>
+        <span className="text-sm text-muted-foreground">
+          {plural(members.length, { one: "{count} bot", other: "{count} bots" })}
+        </span>
       </div>
       <div className="space-y-5">
         <label className="block space-y-2 text-sm font-medium">
-          Name
+          {t("Name")}
           <div className="flex gap-2">
             <Input
-              aria-label="Group name"
+              aria-label={t("Group name")}
               className="w-0 min-w-0 flex-1"
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
@@ -114,16 +158,16 @@ function GroupEditor({
                         name: name.trim(),
                       },
                     }),
-                  "Could not rename group",
+                  t("Could not rename group"),
                 )
               }
             >
-              Save
+              {t("Save")}
             </Button>
           </div>
         </label>
         <label className="block space-y-2 text-sm font-medium">
-          Boss
+          {t("Boss")}
           <Select
             value={group.bossBotId ?? ""}
             onValueChange={(botId) => {
@@ -138,13 +182,13 @@ function GroupEditor({
                       unassignPreviousBoss: false,
                     },
                   }),
-                "Could not change group boss",
+                t("Could not change group boss"),
               );
             }}
           >
-            <SelectTrigger aria-label="Group boss" className="w-full">
+            <SelectTrigger aria-label={t("Group boss")} className="w-full">
               <SelectValue>
-                {members.find((bot) => bot.id === group.bossBotId)?.name ?? "Choose boss"}
+                {members.find((bot) => bot.id === group.bossBotId)?.name ?? t("Choose boss")}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
@@ -158,24 +202,30 @@ function GroupEditor({
         </label>
         <section className="space-y-2" aria-labelledby="group-bots-heading">
           <h3 id="group-bots-heading" className="text-sm font-medium">
-            Bots
+            {t("Bots")}
           </h3>
           <div className="space-y-1 rounded-lg border p-2">
             {members.map((bot) => {
               const role = group.members.find(
                 (member) => isGroupBotMember(member) && member.botId === bot.id,
               );
+              const blockedByRule = isGroupMemberRemovalBlocked({
+                memberCount: members.length,
+                isBoss: role?.kind === "bot" && role.role === "boss",
+              });
               return (
                 <div key={bot.id} className="flex min-h-9 items-center gap-2 rounded-md px-1">
                   <span className="min-w-0 flex-1 truncate text-sm">{bot.name}</span>
                   <span className="text-xs capitalize text-muted-foreground">
-                    {role?.kind === "bot" ? role.role : "specialist"}
+                    {role?.kind === "bot" && role.role === "boss" ? t("Boss") : t("Specialist")}
                   </span>
                   <Button
-                    aria-label={`Remove ${bot.name} from ${group.name}`}
-                    disabled={
-                      busy || role?.kind !== "bot" || role.role === "boss" || members.length <= 2
-                    }
+                    aria-describedby={removalHint && blockedByRule ? removalHintId : undefined}
+                    aria-label={t("Remove {bot} from {group}", {
+                      bot: bot.name,
+                      group: group.name,
+                    })}
+                    disabled={busy || role?.kind !== "bot" || blockedByRule}
                     size="icon-sm"
                     variant="ghost"
                     onClick={() =>
@@ -188,7 +238,7 @@ function GroupEditor({
                               botId: BotId.make(bot.id),
                             },
                           }),
-                        `Could not remove ${bot.name}`,
+                        t("Could not remove {name}", { name: bot.name }),
                       )
                     }
                   >
@@ -198,10 +248,23 @@ function GroupEditor({
               );
             })}
           </div>
+          {removalHint ? (
+            <p id={removalHintId} className="text-xs text-muted-foreground">
+              {removalHint}
+            </p>
+          ) : null}
           <div className="flex gap-2">
-            <Select value={newMemberId} onValueChange={(value) => value && setNewMemberId(value)}>
-              <SelectTrigger aria-label="Add bot" className="min-w-0 flex-1">
-                <SelectValue placeholder="Choose bot" />
+            <Select
+              disabled={availableBots.length === 0}
+              value={newMemberId}
+              onValueChange={(value) => value && setNewMemberId(value)}
+            >
+              <SelectTrigger
+                aria-label={t("Add bot")}
+                aria-describedby={availableBots.length === 0 ? addHintId : undefined}
+                className="min-w-0 flex-1"
+              >
+                <SelectValue placeholder={t("Choose bot")} />
               </SelectTrigger>
               <SelectPopup>
                 {availableBots.map((bot) => (
@@ -212,7 +275,7 @@ function GroupEditor({
               </SelectPopup>
             </Select>
             <Button
-              aria-label="Add bot to group"
+              aria-label={t("Add bot to group")}
               disabled={busy || !newMemberId}
               size="icon"
               variant="outline"
@@ -227,38 +290,100 @@ function GroupEditor({
                         role: "specialist",
                       },
                     }),
-                  "Could not add bot",
+                  t("Could not add bot"),
                 ).then((success) => success && setNewMemberId(""))
               }
             >
               <BotIcon />
             </Button>
           </div>
+          {availableBots.length === 0 ? (
+            <p id={addHintId} className="text-xs text-muted-foreground">
+              {t("Every bot is already in this group.")}
+            </p>
+          ) : null}
         </section>
+        {people.length > 0 ? (
+          <section className="space-y-2" aria-labelledby="group-people-heading">
+            <h3 id="group-people-heading" className="text-sm font-medium">
+              People
+            </h3>
+            <div className="space-y-1 rounded-lg border p-2">
+              {people.map((person) => {
+                const current = person.personId === currentPersonId;
+                return (
+                  <div
+                    key={person.personId}
+                    className="flex min-h-9 items-center gap-2 rounded-md px-1"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {current ? "You" : person.displayName}
+                    </span>
+                    <Button
+                      aria-label={
+                        current
+                          ? `Leave ${group.name}`
+                          : `Remove ${person.displayName} from ${group.name}`
+                      }
+                      disabled={busy}
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void run(
+                          () =>
+                            current
+                              ? leaveGroup({
+                                  environmentId,
+                                  input: {
+                                    groupId: GroupId.make(group.id),
+                                    personId: person.personId,
+                                  },
+                                })
+                              : unassignPerson({
+                                  environmentId,
+                                  input: {
+                                    groupId: GroupId.make(group.id),
+                                    personId: person.personId,
+                                  },
+                                }),
+                          current
+                            ? "Could not leave group"
+                            : `Could not remove ${person.displayName}`,
+                        )
+                      }
+                    >
+                      {current ? <LogOutIcon /> : <Trash2Icon />}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
       </div>
-      <div className="mt-6 -mx-2">
-        <SettingsRow
-          title="Delete group"
-          control={
-            <Button
-              disabled={busy}
-              variant="destructive"
-              onClick={() =>
-                void run(
-                  () =>
-                    deleteGroup({
-                      environmentId,
-                      input: { groupId: GroupId.make(group.id) },
-                    }),
-                  "Could not delete group",
-                ).then((success) => success && onDeleted())
-              }
-            >
-              Delete
-            </Button>
-          }
-        />
-      </div>
+      <Button
+        className="mt-6 w-full"
+        disabled={busy}
+        variant="destructive-outline"
+        onClick={async () => {
+          const confirmed = await ensureLocalApi().dialogs.confirm(
+            t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
+            { variant: "destructive", confirmLabel: t("Delete group") },
+          );
+          if (!confirmed) return;
+          const success = await run(
+            () =>
+              deleteGroup({
+                environmentId,
+                input: { groupId: GroupId.make(group.id) },
+              }),
+            t("Could not delete group"),
+          );
+          if (success) onDeleted();
+        }}
+      >
+        {t("Delete group")}
+      </Button>
     </div>
   );
 }
@@ -269,11 +394,11 @@ export function GroupDetailsPanel(props: {
   readonly bots: readonly Bot[];
   readonly onDeleted: () => void;
 }) {
+  const { t } = useI18n();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const [panelState, dispatchPanel] = useReducer(reducePanelState, {
-    desktopOpen: true,
-    mobileOpen: false,
-  });
+  const [desktopOpen, setDesktopOpen] = useGroupDetailsOpen();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const desktopPanel = useDetailsPanelState(desktopOpen);
   const shortcutLabel = shortcutLabelForCommand(keybindings, "rightPanel.toggle");
 
   useEffect(() => {
@@ -288,20 +413,20 @@ export function GroupDetailsPanel(props: {
       if (resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle") return;
       event.preventDefault();
       event.stopPropagation();
-      dispatchPanel({
-        type: window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches
-          ? "toggle-mobile"
-          : "toggle-desktop",
-      });
+      if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
+        setMobileOpen((open) => !open);
+      } else {
+        setDesktopOpen((open) => !open);
+      }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings]);
+  }, [keybindings, setDesktopOpen]);
 
   const content = (closeButton?: ReactNode) => (
     <>
       <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4">
-        <h2 className="text-sm font-medium">Group</h2>
+        <h2 className="text-sm font-medium">{t("Group")}</h2>
         <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
           {closeButton}
         </div>
@@ -313,43 +438,51 @@ export function GroupDetailsPanel(props: {
   return (
     <>
       <aside
-        aria-hidden={!panelState.desktopOpen}
-        aria-label={`${props.group.name} group sidebar`}
+        aria-hidden={!desktopOpen}
+        aria-label={t("{name} group sidebar", { name: props.group.name })}
         data-testid="group-details-panel"
-        className={
-          panelState.desktopOpen
-            ? "hidden h-full w-88 shrink-0 flex-col border-l border-border bg-background min-[981px]:flex"
-            : "hidden"
-        }
+        data-details-panel=""
+        data-state={desktopPanel.state}
+        onTransitionEnd={desktopPanel.onTransitionEnd}
+        className="hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background [--details-width:22rem] min-[981px]:flex"
       >
-        {content(
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-expanded="true"
-                  aria-label={`Collapse ${props.group.name} group sidebar`}
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => dispatchPanel({ type: "toggle-desktop" })}
-                >
-                  <AppIcon icon={PanelRightCloseIcon} />
-                </Button>
-              }
-            />
-            <TooltipPopup side="left">
-              Collapse{shortcutLabel ? ` (${shortcutLabel})` : ""}
-            </TooltipPopup>
-          </Tooltip>,
-        )}
+        <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
+          {content(
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-expanded="true"
+                    aria-label={t("Collapse {name} group sidebar", { name: props.group.name })}
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => setDesktopOpen((open) => !open)}
+                  >
+                    <AppIcon icon={PanelRightCloseIcon} />
+                  </Button>
+                }
+              />
+              <TooltipPopup side="left">
+                {shortcutLabel
+                  ? t("Collapse ({shortcut})", { shortcut: shortcutLabel })
+                  : t("Collapse")}
+              </TooltipPopup>
+            </Tooltip>,
+          )}
+        </div>
       </aside>
-      {!panelState.desktopOpen ? (
-        <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex">
+      {!desktopOpen ? (
+        <div
+          className={cn(
+            "fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex",
+            desktopPanel.toggled && "motion-fade-in",
+          )}
+        >
           <Button
-            aria-label={`Open ${props.group.name} group sidebar`}
+            aria-label={t("Open {name} group sidebar", { name: props.group.name })}
             size="icon-sm"
             variant="ghost"
-            onClick={() => dispatchPanel({ type: "toggle-desktop" })}
+            onClick={() => setDesktopOpen((open) => !open)}
           >
             <AppIcon icon={PanelRightIcon} />
           </Button>
@@ -357,27 +490,26 @@ export function GroupDetailsPanel(props: {
       ) : null}
       <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 flex h-[var(--workspace-topbar-height)] items-center min-[981px]:hidden">
         <Button
-          aria-label={`Open ${props.group.name} group sidebar`}
+          aria-label={t("Open {name} group sidebar", { name: props.group.name })}
           size="icon-sm"
           variant="ghost"
-          onClick={() => dispatchPanel({ type: "set-mobile", open: true })}
+          onClick={() => setMobileOpen(true)}
         >
           <AppIcon icon={PanelRightIcon} />
         </Button>
       </div>
-      <Sheet
-        open={panelState.mobileOpen}
-        onOpenChange={(open) => dispatchPanel({ type: "set-mobile", open })}
-      >
+      <Sheet open={mobileOpen} onOpenChange={(open) => setMobileOpen(open)}>
         <SheetPopup
           className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
           showCloseButton={false}
           side="right"
         >
-          <SheetTitle className="sr-only">Edit {props.group.name}</SheetTitle>
+          <SheetTitle className="sr-only">
+            {t("Edit {name}", { name: props.group.name })}
+          </SheetTitle>
           {content(
             <SheetClose
-              aria-label="Close group sidebar"
+              aria-label={t("Close group sidebar")}
               render={<Button size="icon-sm" variant="ghost" />}
             >
               <AppIcon icon={Cancel01Icon} />

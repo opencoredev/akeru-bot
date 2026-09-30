@@ -10,9 +10,13 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Thread timeline](#thread-timeline)
 - [Roster organization](#roster-organization)
 - [Orchestration](#orchestration)
+- [Channels](#channels)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
+- [Image provider](#image-provider)
+- [Interface language](#interface-language)
 - [Checkpointing](#checkpointing)
+- [Dictation](#dictation)
 - [Stored-reply playback](#stored-reply-playback)
 
 ## Concepts
@@ -21,15 +25,15 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 
 #### Project
 
-The top-level workspace record in the app. In [the orchestration contracts][1], a project has a `workspaceRoot` and a title. It does not contain threads: `OrchestrationProject` and `OrchestrationThread` are separate arrays on the read model, and a project can have zero threads. See [workspace-layout.md][2].
+The workspace record behind a bot's chats. Users do not manage projects directly: they are an internal workspace detail of each bot, and clients no longer show project icons or read a project file. In [the orchestration contracts][1], a project has a `workspaceRoot` and a title. It does not contain threads: `OrchestrationProject` and `OrchestrationThread` are separate arrays on the read model, and a project can have zero threads. See [workspace-layout.md][2].
 
 #### Workspace root
 
-The root filesystem path for a project. In [the orchestration model][1], it is the base directory for branches and optional worktrees. See [workspace-layout.md][2].
+The root filesystem path for a project. In [the orchestration model][1], it is the project checkout where new threads run, and the base directory for optional worktrees. See [workspace-layout.md][2].
 
 #### Worktree
 
-A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
+A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Clients no longer offer the local/worktree choice or the `defaultThreadEnvMode` setting, so new threads start in the project checkout. The server still honors a thread that was created with a worktree, and names its branch with the default text generation model (`textGenerationModelSelection`). Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
 
 ### Thread timeline
 
@@ -40,6 +44,14 @@ The internal durable record for one user-facing chat and its workspace history. 
 #### Turn
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
+
+#### Silent run
+
+A running turn whose provider has sent no output for `SILENCE_WATCHDOG_SILENT_MS` (90 seconds). Ingestion records it as a `turn.silent` activity and clears it with `turn.silent.cleared` or the end of the turn. It is a status, not a failure: nothing interrupts the turn. See [silence-watchdog.md](./silence-watchdog.md).
+
+#### Temporary worker
+
+A short-lived helper a bot starts with the Task tool during its own turn. It runs in a hidden child thread under a narrower grant, cannot start workers of its own, and is canceled when the parent turn ends. It is not a bot and is separate from bot-to-bot delegation. See [providers.md](./providers.md#temporary-workers).
 
 ### Roster organization
 
@@ -54,6 +66,12 @@ A user-visible log item attached to a thread. In [the contracts][1], activities 
 Small, server-owned Markdown context attached to one named bot: `USER.md`, `MEMORY.md`, and one
 bot-specific `GROUP.md` per group. It is distinct from bot instructions and thread observational
 memory. See [memory architecture](memory.md).
+
+#### Memory approval
+
+A pending request from a bot to save a shared durable fact at project, group, or workspace scope.
+It appears as a chat card and a bot inbox item, and either one decides it through
+`candidate.decide`. See [shared memory approvals](memory.md#shared-memory-approvals).
 
 #### Observational memory
 
@@ -107,6 +125,51 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 
 "Quiesced" means a turn has gone quiet and stable: follow-up work such as [CheckpointReactor.ts][6] has settled. It appears in [the receipt schema][13], so in practice it is something tests wait on rather than a production signal.
 
+#### Delegation
+
+Work one bot sends to another with `SendToAgent`. It runs in a child thread and returns a handle at once. Its finished result is acknowledged exactly once, when the parent's next turn starts or when `CheckAgent` reads it. See [delegation.md](delegation.md).
+
+#### Waiting on children
+
+A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
+
+### Channels
+
+External channels connect a messaging conversation (Telegram, Slack, Discord, iMessage, or WhatsApp) to normal Akeru orchestration. See [channels.md](./channels.md) and the [user guide](../user/channels.md).
+
+#### Channel connection profile
+
+A reusable record for one set of provider credentials, holding only safe display data such as the provider, a name, the external identity, and optional `managementUrl` and `webhookUrl`. Credentials live in the environment secret store, never on the profile. A profile can be saved unassigned and attached later.
+
+#### Channel binding
+
+The assignment of a channel connection profile to a bot and a project, carried on the bot record. It reports health through `status`, `lastError`, `failureCategory`, and `lastSucceededAt`. Statuses are `connecting`, `connected`, `needs-reconnect`, `failed`, `blocked` (project unavailable), `not-live` (WhatsApp without a public origin), and `disconnected`. See the health section of [channels.md](./channels.md).
+
+#### Channel origin
+
+The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives thread subscriptions restored on startup and the origin label clients render.
+
+#### Channel delivery
+
+The per-reply delivery state (`pending`, `sent`, `failed`, `unknown`) mirrored from the durable delivery store onto each channel-originated assistant message. `unknown` means provider acceptance could not be proven; Akeru never reposts it automatically.
+
+### Dictation
+
+Hold-to-talk capture on the active client that transcribes into the current composer draft. The
+session, identity binding, and draft merging live in `packages/client-runtime/src/dictation`, which
+also binds transcription to the environment's `voice.transcribe` RPC. Browser capture lives in
+`apps/web/src/lib/dictationCapture.ts` and native capture in
+`apps/mobile/src/lib/expoDictationCapture.ts`. A transcript is applied only while the environment,
+thread, draft, and draft generation still match the ones captured at start.
+
+### Computer viewer
+
+The client window that shows a bot's Daytona computer and hands input control between the bot and one
+person. The state machine and the controller that serializes RPC calls live in
+`packages/client-runtime/src/state/computerViewer.ts` and `computerViewerController.ts`. The web
+client renders it; mobile only points to desktop or web. See
+[computer-control.md](./computer-control.md#client-lifecycle).
+
 ### Stored-reply playback
 
 Reading an existing assistant message on the current client speaker. Identity, spoken-text conversion, playback ownership, and the client-local automatic-readout preference live in `packages/client-runtime/src/replyPlayback`. Synthesis credentials and the speech operation belong to the live-call voice work, not this module. See [reply-playback.md](./reply-playback.md).
@@ -114,6 +177,14 @@ Reading an existing assistant message on the current client speaker. Identity, s
 ### Subscription provider
 
 A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. OpenCode Go uses an API key instead of OAuth. The environment server stores the credential and gives a run only the access token it needs. See [subscription authentication](./subscription-auth.md).
+
+### Image provider
+
+The subscription that creates images for a bot, ChatGPT or Grok, chosen per bot or by the global default and independent of the bot's chat provider. Bots reach it through the `generate_image` tool, and each finished image is saved as an ordinary chat attachment. See [image-generation.md](./image-generation.md).
+
+### Interface language
+
+A client-local preference for interface copy. Web, Electron, and native mobile each store their own selection. It never rewrites stored messages, bot names, instructions, paths, or protocol identifiers. See [interface-translations.md](./interface-translations.md) and [app language](../user/language.md).
 
 ## Provider runtime
 
@@ -127,13 +198,17 @@ The backend agent runtime that actually performs work. Six drivers ship built in
 
 The live provider-backed runtime attached to a thread. Session shape is in [the orchestration contracts][1], and lifecycle is managed in [ProviderService.ts][14].
 
+#### Runtime seam
+
+The single bridge where Promise-based code (Mastra callbacks, tool handlers, library promises) re-enters AgentController's Effect runtime. Its fibers belong to the controller's layer scope, so background failures are logged and shutdown interrupts in-flight work. See the runtime seam section of [providers.md][16].
+
 #### Runtime mode
 
 The safety/access mode for a thread or session. [The contracts][1] define four values: `approval-required`, `auto-accept-edits`, `auto`, and `full-access`. See [permission modes][18].
 
 #### Interaction mode
 
-The agent interaction style for a thread. In [the contracts][1], the values are `default` and `plan`.
+The agent interaction style for a thread. Only `default` is in use. [The contracts][1] still accept the retired `plan` value so older stored threads, commands, and proposed plans decode, but clients no longer offer plan mode.
 
 #### Assistant delivery mode
 
@@ -143,13 +218,31 @@ Controls how assistant text reaches the thread timeline. In [the contracts][1], 
 
 A point-in-time view of state. The word is used in multiple layers, including orchestration, provider, and checkpointing. See [ProjectionSnapshotQuery.ts][10], [ProviderAdapter.ts][15], and [CheckpointStore.ts][19].
 
+#### Model routing
+
+The path a bot's saved model takes to its provider. On `thread.turn.start` the decider rewrites the
+command's `modelSelection` from the responding bot's engine, Mastra drivers map the slug to a wire
+id such as `openai/<model>` or `anthropic/<model>` and call `session.model.switch`, and standard
+OpenCode re-sends `modelSelection` per turn through the legacy bridge. Validation fails closed at
+`bot.create`/`bot.update`, at turn-start preflight in `ws.ts`, and at `AgentController.inspectEngine`,
+and all three only trust a provider snapshot that reports `status === "ready"`. See
+[providers.md](./providers.md#model-routing) and
+[provider-model-routing.md](../operations/provider-model-routing.md).
+
+#### Model reroute
+
+A runtime report that the provider served a different model than the one requested. Adapters emit
+the `model.rerouted` runtime event and ingestion projects a `model.rerouted` activity line so the
+change is visible. Today only the Codex adapter emits it. See
+[providers.md](./providers.md#model-routing).
+
 #### Model manifest
 
 The per-driver list of current model slugs that decides which models land in the model picker's legacy section. Bundled at `apps/server/src/provider/model-manifest.json` and refreshed at runtime from the same file on `main`, so classification updates ship as commits instead of releases. See the [provider architecture][16] model manifest section.
 
 ### Checkpointing
 
-Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
+Checkpointing captures workspace state over time so the server can diff turns and restore earlier points. Clients no longer include a diff review panel; the server still captures checkpoints and turn summaries. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
 
 #### Checkpoint
 

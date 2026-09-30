@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, View } from "react-native";
 
+import { useMobileI18n } from "../lib/i18n";
 import { useThemeColor } from "../lib/useThemeColor";
 import { cn } from "../lib/cn";
 import { AppText } from "./AppText";
@@ -35,6 +36,7 @@ export function showConfirmDialog(request: ConfirmDialogRequest): void {
  */
 export function ConfirmDialogHost() {
   const [request, setRequest] = useState<ConfirmDialogRequest | null>(null);
+  const { t } = useMobileI18n();
   const pressedOverlay = useThemeColor("--color-subtle");
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export function ConfirmDialogHost() {
                   onPress={handleCancel}
                 >
                   <AppText className="text-base font-t3-medium">
-                    {request.cancelText ?? "Cancel"}
+                    {request.cancelText ?? t("Cancel")}
                   </AppText>
                 </Pressable>
               </View>

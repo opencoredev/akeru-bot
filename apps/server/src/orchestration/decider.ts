@@ -1,8 +1,13 @@
 import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
+  AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_DELEGATION_MAX_DEPTH,
+  AKERU_DELEGATION_TRANSITIONS,
+  acknowledgeAkeruDelegation,
+  isAkeruDelegationResultPending,
+  releaseAkeruDelegationAcknowledgement,
+  type AkeruDelegationPhase,
   type AkeruDelegationRecord,
-  type AkeruDelegationState,
   BALANCED_BOT_PERSONALITY_TONE,
   BotId,
   DEFAULT_LOCAL_EXECUTION_MODE,
@@ -15,6 +20,8 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
+  type ThreadId,
+  type TurnId,
 } from "@t3tools/contracts";
 import * as NodeUtil from "node:util";
 import * as DateTime from "effect/DateTime";
@@ -22,6 +29,7 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
 
+import { resolveGroupResponderBotId } from "./groupResponder.ts";
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 import {
@@ -71,78 +79,38 @@ function userInputAnswerText(answers: Record<string, unknown>): string | null {
 // window is a failed/stale start, not pending work. Mirrors the client's
 // QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts.
 const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
-const TERMINAL_DELEGATION_STATES = new Set<AkeruDelegationState>([
-  "failed",
-  "canceled",
-  "completed",
+const TERMINAL_DELEGATION_PHASES = new Set<AkeruDelegationPhase["_tag"]>([
+  "Failed",
+  "Canceled",
+  "Completed",
 ]);
-const DELEGATION_STATE_TRANSITIONS: Record<
-  Exclude<AkeruDelegationState, "failed" | "canceled" | "completed">,
-  ReadonlySet<AkeruDelegationState>
-> = {
-  queued: new Set(["running", "failed"]),
-  running: new Set(["blocked", "failed", "completed"]),
-  blocked: new Set(["running", "failed"]),
+
+const isDelegationTransitionAllowed = (
+  from: AkeruDelegationPhase["_tag"],
+  to: AkeruDelegationPhase["_tag"],
+): boolean => {
+  switch (from) {
+    case "Queued":
+    case "Running":
+    case "Blocked":
+      return AKERU_DELEGATION_TRANSITIONS[from].has(to);
+    default:
+      return false;
+  }
 };
 
-function delegationStateError(delegation: AkeruDelegationRecord): string | null {
-  switch (delegation.state) {
-    case "queued":
-      return delegation.startedAt === null &&
-        delegation.completedAt === null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : "Queued delegations cannot have start, completion, result, or failure data.";
-    case "running":
-    case "blocked":
-      return delegation.childThreadId !== null &&
-        delegation.startedAt !== null &&
-        delegation.completedAt === null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : `${delegation.state} delegations require childThreadId and startedAt without completion data.`;
-    case "failed":
-      return delegation.completedAt !== null &&
-        delegation.result === null &&
-        delegation.failure !== null
-        ? null
-        : "Failed delegations require completedAt and failure without a result.";
-    case "canceled":
-      return delegation.completedAt !== null &&
-        delegation.result === null &&
-        delegation.failure === null
-        ? null
-        : "Canceled delegations require completedAt without result or failure data.";
-    case "completed":
-      return delegation.childThreadId !== null &&
-        delegation.startedAt !== null &&
-        delegation.completedAt !== null &&
-        delegation.result !== null &&
-        delegation.result.childThreadId === delegation.childThreadId &&
-        delegation.result.childTurnId === delegation.childTurnId &&
-        delegation.failure === null
-        ? null
-        : "Completed delegations require start, completion, and result data without a failure.";
-  }
-}
+const delegationChildThreadId = (phase: AkeruDelegationPhase): ThreadId | null =>
+  phase._tag === "Queued" ? null : phase.childThreadId;
+const delegationChildTurnId = (phase: AkeruDelegationPhase): TurnId | null =>
+  phase._tag === "Queued" ? null : phase.childTurnId;
 
 function hasSameDelegationOwnership(
   current: AkeruDelegationRecord,
   next: AkeruDelegationRecord,
 ): boolean {
-  return NodeUtil.isDeepStrictEqual(current, {
-    ...next,
-    childThreadId: current.childThreadId,
-    childTurnId: current.childTurnId,
-    state: current.state,
-    result: current.result,
-    failure: current.failure,
-    updatedAt: current.updatedAt,
-    startedAt: current.startedAt,
-    completedAt: current.completedAt,
-  });
+  const { phase: _currentPhase, updatedAt: _currentUpdatedAt, ...currentOwnership } = current;
+  const { phase: _nextPhase, updatedAt: _nextUpdatedAt, ...nextOwnership } = next;
+  return NodeUtil.isDeepStrictEqual(currentOwnership, nextOwnership);
 }
 
 /**
@@ -272,6 +240,49 @@ function activeGroupBotIds(
       .filter((botId) => activeBotIds.has(botId)),
   );
 }
+
+// Checks that the bot a chat would answer with is still active: any bot for a
+// direct chat, an active member for a group chat. A chat with no bot passes.
+function requireActiveResponder(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly groupId: GroupId | null | undefined;
+  readonly botId: BotId | null | undefined;
+}) {
+  if (input.botId === null || input.botId === undefined) return Effect.void;
+  const botId = input.botId;
+  return input.groupId === null || input.groupId === undefined
+    ? Effect.asVoid(requireBotNotArchived({ ...input, botId }))
+    : Effect.asVoid(requireActiveGroupMember({ ...input, groupId: input.groupId, botId }));
+}
+
+// The bot an assistant message is attributed to. A server-authored message may
+// name a bot explicitly: an active member of a group chat, or the chat's own bot
+// in a direct chat. Otherwise the thread's current responder answers.
+const resolveAssistantMessageBot = Effect.fn("resolveAssistantMessageBot")(function* (input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: Extract<
+    OrchestrationCommand,
+    { type: "thread.message.assistant.delta" | "thread.message.assistant.complete" }
+  >;
+  readonly thread: OrchestrationReadModel["threads"][number];
+}) {
+  const botId = input.command.respondingBotId;
+  if (botId === undefined) return input.thread.respondingBotId ?? null;
+  if (input.thread.groupId === null && input.thread.botId !== botId) {
+    return yield* new OrchestrationCommandInvariantError({
+      commandType: input.command.type,
+      detail: `Bot '${botId}' cannot post in thread '${input.thread.id}'.`,
+    });
+  }
+  yield* requireActiveResponder({
+    readModel: input.readModel,
+    command: input.command,
+    groupId: input.thread.groupId,
+    botId,
+  });
+  return botId;
+});
 
 function botGroupUpdatedEvent(input: {
   readonly botId: BotId;
@@ -567,6 +578,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               ? DEFAULT_LOCAL_EXECUTION_MODE
               : DEFAULT_RUNTIME_MODE),
           usageCap: command.usageCap,
+          imageProvider: command.imageProvider ?? null,
           personalityTone: command.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
           voiceEnabled: command.voiceEnabled ?? false,
           channelBindings: [],
@@ -694,6 +706,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.sandbox !== undefined ? { sandbox: command.sandbox } : {}),
           ...(command.runtimeMode !== undefined ? { runtimeMode: command.runtimeMode } : {}),
           ...(command.usageCap !== undefined ? { usageCap: command.usageCap } : {}),
+          ...(command.imageProvider !== undefined ? { imageProvider: command.imageProvider } : {}),
           ...(command.personalityTone !== undefined
             ? { personalityTone: command.personalityTone }
             : {}),
@@ -1177,6 +1190,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               transport: command.transport,
               command: command.command,
               ...(command.args !== undefined ? { args: command.args } : {}),
+              ...(existing.instructions !== undefined
+                ? { instructions: existing.instructions }
+                : {}),
               enabled: existing.enabled,
               createdAt: existing.createdAt,
               updatedAt: occurredAt,
@@ -1186,6 +1202,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               name: command.name,
               transport: command.transport,
               url: command.url,
+              ...(existing.instructions !== undefined
+                ? { instructions: existing.instructions }
+                : {}),
               enabled: existing.enabled,
               createdAt: existing.createdAt,
               updatedAt: occurredAt,
@@ -1200,6 +1219,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         })),
         type: "mcp-server.updated",
         payload: { mcpServer },
+      };
+    }
+
+    case "mcp-server.instructions.set": {
+      const existing = yield* requireMcpServer({
+        readModel,
+        command,
+        mcpServerId: command.mcpServerId,
+      });
+      const occurredAt = yield* nowIso;
+      const { instructions: _previous, ...rest } = existing;
+      const instructions = command.instructions.trim();
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "mcp-server",
+          aggregateId: command.mcpServerId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "mcp-server.updated",
+        payload: {
+          mcpServer: {
+            ...rest,
+            ...(instructions ? { instructions } : {}),
+            updatedAt: occurredAt,
+          },
+        },
       };
     }
 
@@ -1262,8 +1308,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       yield* requireBotNotArchived({ readModel, command, botId: delegation.parentBotId });
       yield* requireBotNotArchived({ readModel, command, botId: delegation.childBotId });
       yield* requireThread({ readModel, command, threadId: delegation.parentThreadId });
-      if (delegation.childThreadId !== null) {
-        yield* requireThread({ readModel, command, threadId: delegation.childThreadId });
+      const createdChildThreadId = delegationChildThreadId(delegation.phase);
+      if (createdChildThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: createdChildThreadId });
       }
 
       if (delegation.billedBotId !== delegation.childBotId) {
@@ -1313,7 +1360,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       const activeDelegationCount = readModel.delegations.filter(
         (candidate) =>
           candidate.parentBotId === delegation.parentBotId &&
-          !TERMINAL_DELEGATION_STATES.has(candidate.state),
+          !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
       ).length;
       if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
         return yield* new OrchestrationCommandInvariantError({
@@ -1321,11 +1368,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Bot '${delegation.parentBotId}' already has ${activeDelegationCount} active delegations.`,
         });
       }
-      const stateError = delegationStateError(delegation);
-      if (delegation.state !== "queued" || stateError !== null) {
+      if (delegation.phase._tag !== "Queued") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: stateError ?? "New delegations must start queued.",
+          detail: "New delegations must start queued.",
         });
       }
 
@@ -1354,17 +1400,31 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Delegation '${next.delegationId}' ownership and access fields are immutable.`,
         });
       }
+      const currentChildThreadId = delegationChildThreadId(current.phase);
+      const currentChildTurnId = delegationChildTurnId(current.phase);
+      const nextChildThreadId = delegationChildThreadId(next.phase);
+      const nextChildTurnId = delegationChildTurnId(next.phase);
       if (
-        (current.childThreadId !== null && next.childThreadId !== current.childThreadId) ||
-        (current.childTurnId !== null && next.childTurnId !== current.childTurnId)
+        (currentChildThreadId !== null && nextChildThreadId !== currentChildThreadId) ||
+        (currentChildTurnId !== null && nextChildTurnId !== currentChildTurnId)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Delegation '${next.delegationId}' child ownership is immutable once assigned.`,
         });
       }
-      if (next.childThreadId !== null) {
-        yield* requireThread({ readModel, command, threadId: next.childThreadId });
+      if (
+        next.phase._tag === "Completed" &&
+        (next.phase.result.childThreadId !== next.phase.childThreadId ||
+          next.phase.result.childTurnId !== next.phase.childTurnId)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${next.delegationId}' result must come from its child thread and turn.`,
+        });
+      }
+      if (nextChildThreadId !== null) {
+        yield* requireThread({ readModel, command, threadId: nextChildThreadId });
       }
       if (!(Date.parse(next.updatedAt) >= Date.parse(current.updatedAt))) {
         return yield* new OrchestrationCommandInvariantError({
@@ -1372,18 +1432,40 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Delegation '${next.delegationId}' cannot move updatedAt backward.`,
         });
       }
-      if (current.state === next.state) {
+      if (current.phase._tag === next.phase._tag) {
         const assignsChildOwnership =
-          (current.childThreadId === null && next.childThreadId !== null) ||
-          (current.childTurnId === null && next.childTurnId !== null);
+          (currentChildThreadId === null && nextChildThreadId !== null) ||
+          (currentChildTurnId === null && nextChildTurnId !== null);
         const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
           ...next,
-          childThreadId: current.childThreadId,
-          childTurnId: current.childTurnId,
+          phase:
+            next.phase._tag === "Queued"
+              ? next.phase
+              : {
+                  ...next.phase,
+                  childThreadId: currentChildThreadId,
+                  childTurnId: currentChildTurnId,
+                },
           updatedAt: current.updatedAt,
         });
+        // CheckAgent delivers a finished result by stamping acknowledgedAt.
+        // That stamp is the only other same-phase change allowed.
+        const acknowledgesOnly =
+          isAkeruDelegationResultPending(current) &&
+          (next.phase._tag === "Completed" || next.phase._tag === "Failed") &&
+          next.phase.acknowledgedAt !== null &&
+          NodeUtil.isDeepStrictEqual(
+            acknowledgeAkeruDelegation(current, next.phase.acknowledgedAt),
+            next,
+          );
+        // A turn start that fails before its provider reads the results
+        // hands them back, clearing only the stamp.
+        const released = releaseAkeruDelegationAcknowledgement(current);
+        const releasesOnly = released !== current && NodeUtil.isDeepStrictEqual(released, next);
         if (
           !NodeUtil.isDeepStrictEqual(current, next) &&
+          !acknowledgesOnly &&
+          !releasesOnly &&
           (!assignsChildOwnership || !changesOnlyChildOwnership)
         ) {
           return yield* new OrchestrationCommandInvariantError({
@@ -1391,25 +1473,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: `Delegation '${next.delegationId}' cannot change data without a state transition.`,
           });
         }
-      } else if (
-        TERMINAL_DELEGATION_STATES.has(current.state) ||
-        !DELEGATION_STATE_TRANSITIONS[
-          current.state as keyof typeof DELEGATION_STATE_TRANSITIONS
-        ].has(next.state)
-      ) {
+      } else if (!isDelegationTransitionAllowed(current.phase._tag, next.phase._tag)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Delegation '${next.delegationId}' cannot transition from '${current.state}' to '${next.state}'.`,
+          detail: `Delegation '${next.delegationId}' cannot transition from '${current.phase._tag}' to '${next.phase._tag}'.`,
         });
       }
-      const stateError = delegationStateError(next);
-      if (stateError !== null) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: stateError,
-        });
-      }
-
       return {
         ...(yield* withEventBase({
           aggregateKind: "delegation",
@@ -1432,17 +1501,21 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         Date.parse(command.createdAt) >= Date.parse(current.updatedAt)
           ? command.createdAt
           : current.updatedAt;
-      const delegation = command.keep
+      const delegation: AkeruDelegationRecord = command.keep
         ? { ...current, keep: true, updatedAt: canceledAt }
-        : TERMINAL_DELEGATION_STATES.has(current.state)
+        : TERMINAL_DELEGATION_PHASES.has(current.phase._tag)
           ? current
           : {
               ...current,
-              state: "canceled" as const,
-              result: null,
-              failure: null,
+              phase: {
+                _tag: "Canceled",
+                childThreadId: delegationChildThreadId(current.phase),
+                childTurnId: delegationChildTurnId(current.phase),
+                startedAt: current.phase._tag === "Queued" ? null : current.phase.startedAt,
+                completedAt: canceledAt,
+                canceledBy: "user",
+              },
               updatedAt: canceledAt,
-              completedAt: canceledAt,
             };
 
       return {
@@ -1454,6 +1527,59 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         })),
         type: "delegation.updated",
         payload: { delegation },
+      };
+    }
+
+    case "delegation.retry": {
+      const original = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: command.delegationId,
+      });
+      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only failed or canceled bot work can be retried.",
+        });
+      }
+      if (
+        readModel.delegations.some(
+          (candidate) => candidate.retryOfDelegationId === original.delegationId,
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "This bot work was already retried. Use the newer card instead.",
+        });
+      }
+      yield* requireThread({ readModel, command, threadId: original.parentThreadId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.parentBotId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.childBotId });
+      const activeDelegationCount = readModel.delegations.filter(
+        (candidate) =>
+          candidate.parentBotId === original.parentBotId &&
+          !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
+      ).length;
+      if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `This bot already has ${activeDelegationCount} bot work items running. Wait for one to finish, then retry.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.retry-requested",
+        payload: {
+          delegationId: command.delegationId,
+          parentThreadId: original.parentThreadId,
+          createdAt: command.createdAt,
+        },
       };
     }
 
@@ -1480,6 +1606,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
         sandbox: command.sandbox,
         approvalPolicy: command.approvalPolicy,
+        delegateToBotId: command.delegateToBotId,
         procedureVersion: 1,
         approvalVersion: 1,
         enabled: false as const,
@@ -1538,6 +1665,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
         sandbox: command.sandbox,
         approvalPolicy: command.approvalPolicy,
+        delegateToBotId: command.delegateToBotId,
         procedureVersion,
         approvalVersion: null,
         enabled: false as const,
@@ -1744,6 +1872,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' does not exist.`,
+        });
+      }
+      // A run canceled or settled before it started stays ended, and a
+      // cancellation never overwrites a run that already ended.
+      if (
+        (command.type === "routine.run.start" || command.type === "routine.run.cancel") &&
+        existingRun.status !== "queued" &&
+        existingRun.status !== "waiting-for-approval" &&
+        existingRun.status !== "running"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Routine run '${command.runId}' already ended with status '${existingRun.status}'.`,
         });
       }
       const occurredAt =
@@ -1971,6 +2112,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           projectId: command.projectId,
           botId: command.botId ?? null,
           groupId: command.groupId ?? null,
+          parentThreadId: command.parentThreadId ?? null,
+          parentDelegationId: command.parentDelegationId ?? null,
           title: command.title,
           modelSelection: command.modelSelection,
           runtimeMode: command.runtimeMode,
@@ -2406,12 +2549,39 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.voice-transcript.append": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      if (command.respondingBotId !== undefined) {
+      // An archived bot takes no new speech, but the tail of a reply already in
+      // flight when it was archived still lands in the transcript. The web client
+      // omits respondingBotId for user speech, so resolve it the way a turn would.
+      if (command.role === "user") {
+        const group =
+          thread.groupId === null || thread.groupId === undefined
+            ? null
+            : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+        if (
+          group === null &&
+          thread.botId !== null &&
+          command.respondingBotId !== undefined &&
+          command.respondingBotId !== thread.botId
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Chat '${thread.id}' cannot address a different bot.`,
+          });
+        }
+        yield* requireActiveResponder({
+          readModel,
+          command,
+          groupId: group?.id,
+          botId: group
+            ? (command.respondingBotId ?? group.bossBotId)
+            : (thread.botId ?? command.respondingBotId),
+        });
+      } else if (command.respondingBotId !== undefined) {
         yield* requireBot({ readModel, command, botId: command.respondingBotId });
       }
       return {
@@ -2565,6 +2735,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      // Channel replies are sent only from the parent thread's turn, so a delegated child
+      // thread must never carry an inbound channel message. See resolveCompletedChannelReply.
+      if (targetThread.parentThreadId && command.message.channelOrigin !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegated thread '${command.threadId}' cannot receive channel messages.`,
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
@@ -2591,10 +2769,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       }
 
       let respondingBotId = targetThread.botId ?? null;
+      const isGroupThread = targetThread.groupId !== null && targetThread.groupId !== undefined;
+      // Direct chats refuse archived bots here so a stale client or queued send cannot
+      // wake one. Group chats check the responding member below instead.
       let respondingBot =
         respondingBotId === null
           ? null
-          : yield* requireBot({ readModel, command, botId: respondingBotId });
+          : isGroupThread
+            ? yield* requireBot({ readModel, command, botId: respondingBotId })
+            : yield* requireBotNotArchived({ readModel, command, botId: respondingBotId });
       let personAssignedEvent: Omit<OrchestrationEvent, "sequence"> | null = null;
       if (targetThread.groupId !== null && targetThread.groupId !== undefined) {
         const group = yield* requireGroup({
@@ -2602,7 +2785,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           command,
           groupId: targetThread.groupId,
         });
-        const selectedBotId = command.respondingBotId ?? group.bossBotId;
+        const activeMemberIds = activeGroupBotIds(readModel, group);
+        const selectedBotId = yield* resolveGroupResponderBotId({
+          group,
+          respondingBotId: command.respondingBotId,
+          text: command.message.text,
+          isActive: (botId) => Effect.succeed(activeMemberIds.has(botId)),
+        });
         if (selectedBotId === null) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({
@@ -2668,6 +2857,31 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         );
       }
 
+      // Finished child work this bot has not seen yet rides into this turn as
+      // context. Stamping acknowledgedAt in the same command makes delivery
+      // exactly once: the next turn start finds nothing pending.
+      const acknowledgedDelegations = readModel.delegations
+        .filter(
+          (delegation) =>
+            delegation.parentThreadId === command.threadId &&
+            (respondingBotId === null || delegation.parentBotId === respondingBotId) &&
+            isAkeruDelegationResultPending(delegation),
+        )
+        .map((delegation) => acknowledgeAkeruDelegation(delegation, command.createdAt));
+      const acknowledgementEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      for (const delegation of acknowledgedDelegations) {
+        acknowledgementEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "delegation",
+            aggregateId: delegation.delegationId,
+            occurredAt: delegation.updatedAt,
+            commandId: command.commandId,
+          })),
+          type: "delegation.updated",
+          payload: { delegation },
+        });
+      }
+
       const userMessageEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -2723,6 +2937,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           respondingBotId,
           ...(command.timezone !== undefined ? { timezone: command.timezone } : {}),
+          ...(acknowledgedDelegations.length > 0
+            ? {
+                acknowledgedDelegationIds: acknowledgedDelegations.map(
+                  (delegation) => delegation.delegationId,
+                ),
+              }
+            : {}),
           createdAt: command.createdAt,
         },
       };
@@ -2766,6 +2987,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       return [
         ...(personAssignedEvent === null ? [] : [personAssignedEvent]),
         ...lifecycleResetEvents,
+        ...acknowledgementEvents,
         userMessageEvent,
         turnStartRequestedEvent,
       ];
@@ -2800,6 +3022,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Chat '${command.threadId}' is already active.`,
         });
       }
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+      // Resume answers with the same bot the provider reactor picks.
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
+      });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -2838,10 +3071,20 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.approval.respond": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
+      });
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
       return {
         ...(yield* withEventBase({
@@ -2868,6 +3111,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      const group =
+        thread.groupId === null || thread.groupId === undefined
+          ? null
+          : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+      yield* requireActiveResponder({
+        readModel,
+        command,
+        groupId: thread.groupId,
+        botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
       const responseRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
@@ -3037,6 +3290,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3052,7 +3306,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           text: command.delta,
           ...(command.attachments !== undefined ? { attachments: command.attachments } : {}),
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: true,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -3066,6 +3320,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3080,7 +3335,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "assistant",
           text: "",
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: false,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -3146,6 +3401,43 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           emoji: command.emoji,
           present: command.present,
           updatedAt: command.updatedAt,
+        },
+      };
+    }
+
+    case "thread.channel-delivery.set": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Messages hydrate into the command model empty after a restart, so a
+      // message missing here is not proof the id is wrong; the projector and
+      // pipeline already no-op on unknown ids. Only reject a message the model
+      // can actually see and that is not an assistant reply.
+      const message = thread.messages.find((entry) => entry.id === command.messageId);
+      if (message && message.role !== "assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Channel delivery can only mark an assistant message in thread '${command.threadId}'.`,
+        });
+      }
+      if (message?.channelDelivery === command.delivery) {
+        return [];
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.channel-delivery-set",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          delivery: command.delivery,
+          updatedAt: command.createdAt,
         },
       };
     }
@@ -3251,7 +3543,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // never stay hidden inside a settled slim row.
       const wakesSettledThread =
         command.activity.kind === "approval.requested" ||
-        command.activity.kind === "user-input.requested";
+        command.activity.kind === "user-input.requested" ||
+        command.activity.kind === AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY;
       // Real activity resets ANY override (settled wakes, active unpins).
       if (thread.settledOverride === null || !wakesSettledThread) {
         return activityAppendedEvent;

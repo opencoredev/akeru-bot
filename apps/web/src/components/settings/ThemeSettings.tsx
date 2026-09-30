@@ -33,6 +33,8 @@ import {
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 import { ThemeImportDialog } from "./ThemeImportDialog";
 import { useThemeEditorStore } from "./themeEditorStore";
 import {
@@ -158,8 +160,8 @@ function ThemeLibraryCard({
         render={
           <div
             className={cn(
-              "cursor-pointer overflow-hidden rounded-xl border border-border/70 bg-card/60 transition-colors hover:bg-accent/10",
-              isActive && "bg-accent/30",
+              "cursor-pointer overflow-hidden rounded-xl border bg-settings-surface transition-colors",
+              isActive ? "border-transparent" : "border-border/70 hover:border-foreground/15",
             )}
             data-theme-library-card={theme.id}
             onClick={onUse}
@@ -224,7 +226,7 @@ function ThemeLibraryCard({
                               />
                             ) : null}
                             {isActive ? (
-                              <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-border/70 bg-background text-foreground shadow-sm">
+                              <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-border/70 bg-card text-foreground shadow-sm">
                                 {mode === "light" ? (
                                   <SunIcon className="size-2.5" />
                                 ) : (
@@ -240,7 +242,7 @@ function ThemeLibraryCard({
                         >
                           <span className="truncate">{selected.option.label}</span>
                           {options.length > 1 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-1 text-[9px] text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-settings-control px-1 text-[9px] text-muted-foreground">
                               +{options.length - 1}
                             </span>
                           ) : null}
@@ -260,7 +262,7 @@ function ThemeLibraryCard({
                                     aria-label={`Use ${option.label} for ${mode} mode${optionIsActive ? ", currently active" : ""}`}
                                     aria-pressed={optionIsActive}
                                     className={cn(
-                                      "absolute left-1/2 top-1 z-30 flex size-7 items-center justify-center rounded-full bg-background shadow-sm outline-none transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                                      "absolute left-1/2 top-1 z-30 flex size-7 items-center justify-center rounded-full bg-card shadow-sm outline-none transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
                                       optionIsActive ? "ring-2 ring-ring" : "ring-1 ring-border/70",
                                     )}
                                     style={{
@@ -724,11 +726,7 @@ export function ThemeLibrary({
   );
 
   const renderModeTiles = () => (
-    <div
-      aria-label="Appearance mode"
-      className="mx-auto grid w-full max-w-[56rem] grid-cols-3 gap-3 px-3 sm:px-4"
-      role="group"
-    >
+    <div aria-label="Appearance mode" className="grid w-full grid-cols-3 gap-3" role="group">
       {(["system", "light", "dark"] as const).map((mode) => {
         const isActive = appearanceMode === mode;
         return (
@@ -736,10 +734,8 @@ export function ThemeLibrary({
             aria-label={mode === "system" ? "Follow the system appearance" : `Use ${mode} mode`}
             aria-pressed={isActive}
             className={cn(
-              "flex cursor-pointer flex-col items-stretch gap-1.5 rounded-xl border p-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-              isActive
-                ? "border-transparent bg-accent/30"
-                : "border-border/70 bg-card/60 hover:bg-accent/10",
+              "flex cursor-pointer flex-col items-stretch gap-2 rounded-xl border bg-settings-surface p-2 pb-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              isActive ? "border-transparent" : "border-border/70 hover:border-foreground/15",
             )}
             key={mode}
             style={isActive ? { boxShadow: "inset 0 0 0 1px var(--ring)" } : undefined}
@@ -782,8 +778,8 @@ export function ThemeLibrary({
     // accepted — scoping the group tighter makes the handoffs feel sluggish.
     <TooltipProvider>
       <div
-        className="mx-auto grid w-full max-w-[56rem] gap-2 px-3 sm:px-4"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))" }}
+        className="grid w-full gap-3"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" }}
       >
         {STANDARD_THEME_CARDS.map((standardTheme) => (
           <ThemeLibraryCard
@@ -862,39 +858,38 @@ export function ThemeLibrary({
   );
 
   return (
-    <div className="space-y-3">
-      <p className="px-3 text-[13px] leading-[1.45] text-muted-foreground/80 sm:px-4">
-        Choose how Akeru Bot looks. Use a built-in theme or make your own.
-      </p>
-      <h3 className="px-3 text-sm font-medium tracking-[-0.005em] text-foreground sm:px-4">
-        Color scheme
-      </h3>
-      {renderModeTiles()}
-      <div className="flex min-h-8 flex-wrap items-center justify-between gap-3 px-3 pt-2 sm:px-4">
-        <h3 className="text-sm font-medium tracking-[-0.005em] text-foreground">Themes</h3>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() =>
-              openThemeEditor({
-                editingThemeId: null,
-                seedThemeId: activeThemeForAppearance?.id ?? null,
-                seedName: null,
-                initialAppearance,
-              })
-            }
-          >
-            <PaintbrushIcon />
-            Create theme
-          </Button>
-          <Button size="xs" variant="outline" onClick={() => onImportOpenChange(true)}>
-            <PlusIcon />
-            Add theme
-          </Button>
-        </div>
-      </div>
-      {renderPairGrid()}
+    <>
+      <SettingsSection id="appearance" title="Color scheme">
+        {renderModeTiles()}
+      </SettingsSection>
+      <SettingsSection
+        {...searchableSetting("theme")}
+        headerAction={
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() =>
+                openThemeEditor({
+                  editingThemeId: null,
+                  seedThemeId: activeThemeForAppearance?.id ?? null,
+                  seedName: null,
+                  initialAppearance,
+                })
+              }
+            >
+              <PaintbrushIcon />
+              Create theme
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => onImportOpenChange(true)}>
+              <PlusIcon />
+              Add theme
+            </Button>
+          </div>
+        }
+      >
+        {renderPairGrid()}
+      </SettingsSection>
       <ThemeImportDialog
         onImportedMany={(importedThemes, { updated }) => {
           // Re-apply after collection updates. The update may remove the
@@ -1018,6 +1013,6 @@ export function ThemeLibrary({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
-    </div>
+    </>
   );
 }

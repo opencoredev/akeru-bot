@@ -5,13 +5,14 @@ import { useMemo } from "react";
 import { useLatestGroupThreadId, useThreadShell } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { resolveBotPresence, type RosterPresence } from "./roster.logic";
-import { useBotThreadCandidate } from "./useBotThreadRef";
+import { useBotChatTarget, useBotThreadCandidate } from "./useBotThreadRef";
 
 /**
- * Live presence for one bot, derived from its latest durable server thread.
+ * Live presence for one bot, derived from its own chat thread.
  */
 export function useBotPresence(botId: string): RosterPresence {
-  return resolveBotPresence(useThreadShell(useBotThreadCandidate(botId)));
+  const candidate = useBotThreadCandidate(botId);
+  return resolveBotPresence(useBotChatTarget(botId, candidate).shell);
 }
 
 /** Live presence for a group, derived from its latest durable server thread. */

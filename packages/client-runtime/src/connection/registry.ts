@@ -83,7 +83,14 @@ export class EnvironmentRegistry extends Context.Service<
       | EnvironmentNotRegisteredError
       | PlatformEnvironmentRemovalError
     >;
-    readonly retryNow: (environmentId: EnvironmentId) => Effect.Effect<void>;
+    /**
+     * Reconnects now. Retry restores connection intent, so an automatic caller
+     * passes `onlyIfDesired` to leave an environment the user disconnected alone.
+     */
+    readonly retryNow: (
+      environmentId: EnvironmentId,
+      options?: { readonly onlyIfDesired?: boolean },
+    ) => Effect.Effect<void>;
     readonly state: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<SupervisorConnectionState, EnvironmentNotRegisteredError>;
@@ -596,9 +603,11 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const retryNow = (environmentId: EnvironmentId) =>
+  const retryNow = (environmentId: EnvironmentId, options?: { readonly onlyIfDesired?: boolean }) =>
     acquireSupervisor(environmentId).pipe(
-      Effect.flatMap((supervisor) => supervisor.retryNow),
+      Effect.flatMap((supervisor) =>
+        options?.onlyIfDesired === true ? supervisor.retryIfDesired : supervisor.retryNow,
+      ),
       Effect.catchTag("EnvironmentNotRegisteredError", () => Effect.void),
       Effect.withSpan("EnvironmentRegistry.retryNow"),
     );

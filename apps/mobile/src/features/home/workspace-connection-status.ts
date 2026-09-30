@@ -1,5 +1,10 @@
 import type { WorkspaceState } from "../../state/workspaceModel";
 
+export type TranslateMessage = (
+  message: string,
+  params?: Readonly<Record<string, string | number>>,
+) => string;
+
 export interface WorkspaceConnectionStatusPresentation {
   readonly label: string;
   /** True while actively working (connecting/syncing) — render a spinner. False for offline/error/idle states — render a wifi-slash icon. */
@@ -7,40 +12,53 @@ export interface WorkspaceConnectionStatusPresentation {
 }
 
 export function shouldShowWorkspaceConnectionStatus(state: WorkspaceState): boolean {
+  // The title slot only reports states that make the list unusable: the
+  // device offline, a shell still catching up, or no usable environment.
+  // A reconnecting environment behind a connected one stays quiet — its row
+  // in Settings → Environments carries the per-environment state, and the
+  // banner would just replace the header menu with an indefinite spinner.
   return (
-    state.networkStatus === "offline" ||
-    state.connectionError !== null ||
-    state.hasConnectingEnvironment ||
+    (state.hasConnections && state.networkStatus === "offline") ||
     state.hasPendingShellSnapshot ||
-    (state.hasLoadedShellSnapshot && !state.hasReadyEnvironment)
+    (state.hasConnections && !state.isLoadingConnections && !state.hasReadyEnvironment)
   );
 }
 
-export function workspaceConnectionStatusLabel(state: WorkspaceState): string {
-  if (state.networkStatus === "offline") return "You are offline";
-  if (state.connectingEnvironments.length === 1) {
-    return `Reconnecting to ${state.connectingEnvironments[0]!.environmentLabel}`;
+export function workspaceConnectionStatusLabel(state: WorkspaceState, t: TranslateMessage): string {
+  if (state.networkStatus === "offline") return t("You are offline");
+  // A connected environment's sync outranks another environment reconnecting.
+  if (state.hasPendingShellSnapshot && state.hasReadyEnvironment) {
+    return shellSyncLabel(state, t);
   }
-  if (state.connectingEnvironments.length > 1) {
-    return `Reconnecting ${state.connectingEnvironments.length} environments`;
+  const connectingCount = state.connectingEnvironments.length;
+  if (connectingCount === 1) {
+    return t("Reconnecting to {environment}…", {
+      environment: state.connectingEnvironments[0]!.environmentLabel,
+    });
   }
+  if (connectingCount > 1) {
+    return t("Reconnecting {count} environments…", { count: connectingCount });
+  }
+  // A syncing shell outranks an error that may belong to another environment.
+  if (state.hasPendingShellSnapshot) return shellSyncLabel(state, t);
   if (state.connectionError !== null) return state.connectionError;
-  if (state.hasPendingShellSnapshot) {
-    return state.hasLoadedShellSnapshot ? "Syncing chats..." : "Loading chats...";
-  }
-  return "Not connected";
+  return t("Not connected");
+}
+
+function shellSyncLabel(state: WorkspaceState, t: TranslateMessage): string {
+  return state.hasLoadedShellSnapshot ? t("Syncing chats…") : t("Loading chats…");
 }
 
 /** Header-title presentation of the connection state, or null while connected. */
 export function workspaceConnectionStatusPresentation(
   state: WorkspaceState,
+  t: TranslateMessage,
 ): WorkspaceConnectionStatusPresentation | null {
   if (!shouldShowWorkspaceConnectionStatus(state)) return null;
   return {
-    label: workspaceConnectionStatusLabel(state),
+    label: workspaceConnectionStatusLabel(state, t),
     showsProgress:
       state.networkStatus !== "offline" &&
-      state.connectionError === null &&
       (state.connectingEnvironments.length > 0 || state.hasPendingShellSnapshot),
   };
 }

@@ -22,6 +22,7 @@ function runKeySignature(run: NativeMarkdownTextRun): string {
     run.fileIcon,
     run.skillName,
     run.skillLabel,
+    run.skillIcon,
     run.role,
     run.headingLevel,
     run.depth,
@@ -202,7 +203,7 @@ export function NativeMarkdownSelectableText(props: {
               run.fileIcon
                 ? `t3-file:${Image.resolveAssetSource(markdownFileIconSource(run.fileIcon)).uri}`
                 : run.skillName
-                  ? "t3-skill:sf:cube"
+                  ? `t3-skill:sf:${run.skillIcon ?? "cube"}`
                   : undefined
             }
             style={runStyle(run, props.textStyle)}

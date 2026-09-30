@@ -10,13 +10,13 @@ import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
 
-export const WORKTREE_BRANCH_PREFIX = "t3code";
-// Canonical form is `t3code/<8 hex>`. Older mobile builds generated `t3code/<uuid>`
+export const WORKTREE_BRANCH_PREFIX = "akeru";
+// Canonical form is `akeru/<8 hex>`. Older builds generated `t3code/<8 hex>` and `t3code/<uuid>`
 // via Crypto.randomUUID() (always RFC 4122 v4), so the matcher also accepts exactly
 // that shape — version nibble `4`, variant nibble `[89ab]` — to keep those threads
 // eligible for branch regeneration without loosening beyond what was ever generated.
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(
-  `^${WORKTREE_BRANCH_PREFIX}\\/(?:[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$`,
+  `^(?:${WORKTREE_BRANCH_PREFIX}|t3code)\\/(?:[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$`,
 );
 
 /**
@@ -106,6 +106,50 @@ export function buildTemporaryWorktreeBranchName(
 
 export function isTemporaryWorktreeBranch(refName: string): boolean {
   return TEMP_WORKTREE_BRANCH_PATTERN.test(refName.trim().toLowerCase());
+}
+
+/**
+ * Strip one app-managed worktree branch prefix (`akeru/` or the legacy
+ * `t3code/`) from a refName. Returns the branch unchanged when it carries no
+ * recognized prefix, so generated names never end up nested as
+ * `akeru/t3code/...`.
+ */
+export function stripWorktreeBranchPrefix(refName: string): string {
+  for (const prefix of [WORKTREE_BRANCH_PREFIX, "t3code"]) {
+    const marker = `${prefix}/`;
+    if (refName.startsWith(marker)) {
+      return refName.slice(marker.length);
+    }
+  }
+  return refName;
+}
+
+/**
+ * Local branch name for a pull request worktree, e.g. `akeru/pr-42/feature`.
+ * Pre-rebrand builds generated `t3code/pr-42/feature`; pass `legacy: true` to
+ * get that form so existing branches and worktrees can be found and reused.
+ */
+export function buildPullRequestWorktreeBranchName(
+  pullRequestNumber: number,
+  headBranch: string,
+  options?: { readonly legacy?: boolean },
+): string {
+  const sanitizedHeadBranch = sanitizeBranchFragment(headBranch).trim();
+  const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
+  const prefix = options?.legacy ? "t3code" : WORKTREE_BRANCH_PREFIX;
+  return `${prefix}/pr-${pullRequestNumber}/${suffix}`;
+}
+
+/** Candidate local branch names for a PR worktree, newest first. Includes the
+ * legacy `t3code/` alias so pre-rename worktrees are reused, not orphaned. */
+export function pullRequestWorktreeBranchCandidates(
+  pullRequestNumber: number,
+  headBranch: string,
+): readonly string[] {
+  return [
+    buildPullRequestWorktreeBranchName(pullRequestNumber, headBranch),
+    buildPullRequestWorktreeBranchName(pullRequestNumber, headBranch, { legacy: true }),
+  ];
 }
 
 /**
@@ -220,7 +264,6 @@ const EMPTY_GIT_STATUS_REMOTE: VcsStatusRemoteResult = {
   aheadCount: 0,
   behindCount: 0,
   aheadOfDefaultCount: 0,
-  pr: null,
 };
 
 export function mergeGitStatusParts(
@@ -241,7 +284,6 @@ function toRemoteStatusPart(status: VcsStatusResult): VcsStatusRemoteResult {
     ...(status.aheadOfDefaultCount === undefined
       ? {}
       : { aheadOfDefaultCount: status.aheadOfDefaultCount }),
-    pr: status.pr,
   };
 }
 

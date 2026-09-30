@@ -1,6 +1,9 @@
 import type { McpServer, ProviderAccessStatus } from "@t3tools/contracts";
-import { ArrowUpRightIcon, ChevronLeftIcon } from "lucide-react";
+import { ArrowLeft01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import type { PluginDirectoryDefinition, PluginSkill } from "../../../../../plugins";
+import { isElectron } from "../../env";
+import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { AppIcon } from "../ui/app-icon";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { DialogHeader, DialogPanel, DialogTitle } from "../ui/dialog";
@@ -123,18 +126,18 @@ export function PluginDetailsContent({
             </div>
           </div>
           {blocker ? (
-            <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+            <p className="mt-4 rounded-lg bg-muted/60 px-3 py-2 text-[13px] leading-5 text-muted-foreground">
               {blocker}
             </p>
           ) : null}
           <div className="mt-4 flex items-center gap-1 border-t pt-3">
             <Button size="sm" variant="ghost-muted" onClick={onViewDocumentation}>
               Documentation
-              <ArrowUpRightIcon className="size-3.5" />
+              <AppIcon icon={ArrowUpRight01Icon} className="size-3.5" />
             </Button>
             <Button size="sm" variant="ghost-muted" onClick={onViewSource}>
               Source
-              <ArrowUpRightIcon className="size-3.5" />
+              <AppIcon icon={ArrowUpRight01Icon} className="size-3.5" />
             </Button>
           </div>
         </section>
@@ -241,7 +244,10 @@ export function PluginDetailsContent({
                       {skill.description}
                     </p>
                   </div>
-                  <ArrowUpRightIcon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+                  <AppIcon
+                    icon={ArrowUpRight01Icon}
+                    className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                  />
                 </button>
               ))}
             </div>
@@ -268,18 +274,40 @@ export function PluginDetails({
 }: PluginDetailsContentProps & { readonly onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-plugin-details="">
-      <DialogHeader className="border-b px-5 py-4">
-        <div className="flex items-center gap-2 pe-8">
-          <Button aria-label="Back to plugins" size="icon-sm" variant="ghost" onClick={onBack}>
-            <ChevronLeftIcon className="size-4" />
-          </Button>
-          {standalone ? (
-            <h1 className="text-base font-semibold">Plugin details</h1>
-          ) : (
+      {standalone ? (
+        <WorkspacePageHeader electron={isElectron}>
+          <div className="-ms-1.5 flex min-w-0 items-center gap-1">
+            <Button
+              aria-label="Back to plugins"
+              size="icon-sm"
+              variant="ghost-muted"
+              onClick={onBack}
+            >
+              <AppIcon icon={ArrowLeft01Icon} className="size-4" />
+            </Button>
+            <button
+              className="cursor-pointer rounded-md px-1 text-sm text-muted-foreground outline-hidden transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              type="button"
+              onClick={onBack}
+            >
+              Plugins
+            </button>
+            <span aria-hidden="true" className="text-sm text-muted-foreground/60">
+              /
+            </span>
+            <h1 className="truncate px-1 text-sm font-medium text-foreground">{plugin.title}</h1>
+          </div>
+        </WorkspacePageHeader>
+      ) : (
+        <DialogHeader className="border-b px-5 py-4">
+          <div className="flex items-center gap-2 pe-8">
+            <Button aria-label="Back to plugins" size="icon-sm" variant="ghost" onClick={onBack}>
+              <AppIcon icon={ArrowLeft01Icon} className="size-4" />
+            </Button>
             <DialogTitle className="text-base">Plugin details</DialogTitle>
-          )}
-        </div>
-      </DialogHeader>
+          </div>
+        </DialogHeader>
+      )}
       <PluginDetailsContent
         plugin={plugin}
         server={server}

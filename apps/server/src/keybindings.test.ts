@@ -187,53 +187,65 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
-  it.effect("ships configurable thread navigation defaults", () =>
+  it.effect("ships only defaults with a live handler", () =>
     Effect.sync(() => {
       const defaultsByCommand = new Map(
         Keybindings.DEFAULT_KEYBINDINGS.map((binding) => [binding.command, binding.key] as const),
       );
 
-      assert.equal(defaultsByCommand.get("thread.previous"), "mod+shift+[");
-      assert.equal(defaultsByCommand.get("thread.next"), "mod+shift+]");
-      assert.equal(defaultsByCommand.get("thread.settle"), "mod+shift+s");
       assert.equal(defaultsByCommand.get("thread.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("thread.jump.9"), "mod+9");
-      assert.equal(defaultsByCommand.get("modelPicker.toggle"), "mod+shift+m");
       assert.equal(defaultsByCommand.get("themeEditor.toggle"), "mod+alt+shift+t");
-      assert.equal(defaultsByCommand.get("filePicker.toggle"), "mod+p");
-      assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+shift+f");
+      assert.equal(defaultsByCommand.get("commandPalette.toggle"), "mod+k");
+      assert.equal(defaultsByCommand.get("composer.stash"), "mod+s");
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
-      assert.isFalse(
-        Keybindings.DEFAULT_KEYBINDINGS.some(
-          (binding) =>
-            binding.key === "mod+n" &&
-            binding.command === "chat.new" &&
-            binding.when === "!terminalFocus",
-        ),
-      );
-      assert.isTrue(
-        Keybindings.DEFAULT_KEYBINDINGS.some(
-          (binding) =>
-            binding.key === "mod+n" &&
-            binding.command === "terminal.new" &&
-            binding.when === "terminalFocus",
-        ),
-      );
-      assert.equal(defaultsByCommand.get("chat.new"), "mod+shift+o");
       assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
-      assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("modelPicker.jump.9"), "mod+9");
+      for (const retiredCommand of [
+        "terminal.toggle",
+        "terminal.split",
+        "terminal.splitVertical",
+        "terminal.new",
+        "terminal.close",
+        "diff.toggle",
+        "filePicker.toggle",
+        "projectSearch.toggle",
+        "chat.new",
+        "chat.newLocal",
+        "modelPicker.toggle",
+        "editor.openFavorite",
+        "thread.previous",
+        "thread.next",
+        "thread.settle",
+        "preview.toggle",
+        "preview.refresh",
+        "preview.focusUrl",
+        "preview.zoomIn",
+        "preview.zoomOut",
+        "preview.resetZoom",
+      ] as const) {
+        assert.isFalse(defaultsByCommand.has(retiredCommand), `unexpected ${retiredCommand}`);
+      }
+      // The terminal is gone, so no default may depend on its focus state.
+      for (const binding of Keybindings.DEFAULT_KEYBINDINGS) {
+        assert.isFalse(
+          binding.when?.includes("terminal") ?? false,
+          `${binding.command} still depends on the terminal`,
+        );
+      }
     }),
   );
 
-  it.effect("removes the retired Command+N chat default without removing user shortcuts", () =>
+  it.effect("replaces former terminal-conditioned defaults on startup", () =>
     Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
       yield* writeKeybindingsConfig(keybindingsConfigPath, [
-        { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
-        { key: "mod+alt+n", command: "chat.new", when: "!terminalFocus" },
+        { key: "mod+k", command: "commandPalette.toggle", when: "!terminalFocus" },
+        { key: "mod+s", command: "composer.stash", when: "!terminalFocus" },
+        { key: "mod+shift+j", command: "preview.toggle" },
+        { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
       ]);
 
       yield* Effect.gen(function* () {
@@ -242,16 +254,52 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      assert.isFalse(
-        persisted.some(
+      assert.deepEqual(
+        persisted.filter(
           (binding) =>
-            binding.key === "mod+n" &&
-            binding.command === "chat.new" &&
-            binding.when === "!terminalFocus",
+            binding.command === "commandPalette.toggle" || binding.command === "composer.stash",
         ),
+        [
+          { key: "mod+k", command: "commandPalette.toggle" },
+          { key: "mod+s", command: "composer.stash" },
+        ],
       );
+      assert.isFalse(persisted.some((binding) => binding.command.startsWith("preview.")));
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("removes retired defaults on startup without removing user shortcuts", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
+        { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" },
+        { key: "mod+j", command: "terminal.toggle" },
+        { key: "mod+p", command: "filePicker.toggle", when: "!terminalFocus" },
+        { key: "mod+alt+n", command: "chat.new", when: "!terminalFocus" },
+        { key: "mod+shift+j", command: "terminal.toggle" },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const keybindings = yield* Keybindings.Keybindings;
+        yield* keybindings.syncDefaultKeybindingsOnStartup;
+      });
+
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      const retiredStillPresent = persisted.filter(
+        (binding) =>
+          (binding.command === "chat.new" && binding.key !== "mod+alt+n") ||
+          (binding.command === "terminal.toggle" && binding.key === "mod+j") ||
+          binding.command === "filePicker.toggle",
+      );
+      assert.deepEqual(retiredStillPresent, []);
       assert.isTrue(
         persisted.some((binding) => binding.key === "mod+alt+n" && binding.command === "chat.new"),
+      );
+      assert.isTrue(
+        persisted.some(
+          (binding) => binding.key === "mod+shift+j" && binding.command === "terminal.toggle",
+        ),
       );
     }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
@@ -325,7 +373,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       Effect.gen(function* () {
         const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
         yield* writeKeybindingsConfig(keybindingsConfigPath, [
-          { key: "mod+shift+t", command: "terminal.toggle" },
+          { key: "mod+shift+b", command: "sidebar.toggle" },
           { key: "mod+shift+r", command: "script.run-tests.run" },
         ]);
 
@@ -337,11 +385,11 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
         const byCommand = new Map(persisted.map((entry) => [entry.command, entry]));
 
-        const persistedToggle = byCommand.get("terminal.toggle");
+        const persistedToggle = byCommand.get("sidebar.toggle");
         assert.isNotNull(persistedToggle);
-        assert.equal(persistedToggle?.key, "mod+shift+t");
+        assert.equal(persistedToggle?.key, "mod+shift+b");
         assert.isFalse(
-          persisted.some((entry) => entry.command === "terminal.toggle" && entry.key === "mod+j"),
+          persisted.some((entry) => entry.command === "sidebar.toggle" && entry.key === "mod+b"),
         );
 
         for (const defaultRule of Keybindings.DEFAULT_KEYBINDINGS) {
@@ -360,7 +408,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     return Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
       yield* writeKeybindingsConfig(keybindingsConfigPath, [
-        { key: "mod+j", command: "script.custom-action.run" },
+        { key: "mod+b", command: "script.custom-action.run" },
       ]);
 
       yield* Effect.gen(function* () {
@@ -369,7 +417,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      assert.isFalse(persisted.some((entry) => entry.command === "terminal.toggle"));
+      assert.isFalse(persisted.some((entry) => entry.command === "sidebar.toggle"));
       assert.isTrue(persisted.some((entry) => entry.command === "script.custom-action.run"));
 
       assert.isTrue(

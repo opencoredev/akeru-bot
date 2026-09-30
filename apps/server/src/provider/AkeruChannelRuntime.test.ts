@@ -30,6 +30,7 @@ const bot = (id: BotId, groupId: GroupId | null) => ({
   sandbox: "local" as const,
   runtimeMode: "approval-required" as const,
   usageCap: null,
+  imageProvider: null,
   voiceEnabled: false,
   channelBindings: [],
   groupId,

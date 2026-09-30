@@ -1,7 +1,8 @@
-import { CopyIcon, ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   EnvironmentId,
+  ProviderInstanceId,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
@@ -20,18 +21,21 @@ import {
   providerSupportsBaseUrl,
 } from "@t3tools/client-runtime/provider-auth";
 
-import { useSettingsEnvironmentId } from "../../settingsDialogStore";
+import { useAtomValue } from "@effect/atom-react";
+import { providerAccessModelNames } from "@t3tools/client-runtime/provider-access";
+
+import { useI18n } from "../../i18n";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-import {
-  SUBSCRIPTION_PROVIDERS,
-  type SubscriptionProviderDefinition,
-} from "./subscriptionProviders";
+import { ProviderAccessDetails } from "./ProviderAccessDetails";
+import { accountConnectionState } from "./providerStatus";
+import { SettingsMessageRow } from "./settingsDetailLayout";
+import { SignInCodeCopy } from "./SignInCodeCopy";
+import { SettingsRow, SettingsSection } from "./settingsLayout";
+import type { SubscriptionProviderDefinition } from "./subscriptionProviders";
 
 export { SUBSCRIPTION_PROVIDERS } from "./subscriptionProviders";
 
@@ -41,53 +45,39 @@ interface ActiveLogin {
   readonly error: string | null;
 }
 
-const healthLabels: Readonly<Record<NonNullable<SubscriptionProviderStatus["health"]>, string>> = {
-  missing: "Missing",
-  detected: "Detected",
-  healthy: "Healthy",
-  expired: "Expired",
-  revoked: "Revoked",
-  failed: "Failed",
-  unsupported: "Unsupported",
-  disabled: "Disabled",
-  "failed-first-request": "First request failed",
-  recovered: "Recovered",
-};
+type Translate = ReturnType<typeof useI18n>["t"];
 
-function providerBadgeLabel(status: SubscriptionProviderStatus | undefined): string {
-  if (status?.connected !== true) return "Missing";
-  if (
-    status.health === "expired" ||
-    status.health === "revoked" ||
-    status.health === "failed" ||
-    status.health === "failed-first-request"
-  ) {
-    return healthLabels[status.health];
-  }
-  return "Connected";
-}
-
-function healthBadgeVariant(health: SubscriptionProviderStatus["health"] | undefined) {
-  if (health === "healthy" || health === "recovered") return "success" as const;
-  if (
-    health === "expired" ||
-    health === "revoked" ||
-    health === "failed" ||
-    health === "failed-first-request"
-  ) {
-    return "error" as const;
-  }
-  if (health === "detected") return "warning" as const;
-  return "secondary" as const;
-}
-
-function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+function commandError(result: AtomCommandResult<unknown, unknown>, t: Translate): string {
+  if (result._tag !== "Failure") return t("The request failed.");
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "The request failed.";
+  return error instanceof Error ? error.message : t("The request failed.");
 }
 
-export function ProviderLoginCard({
+function disconnectDescription(
+  status: SubscriptionProviderStatus | undefined,
+  t: Translate,
+  locale: string,
+): string {
+  const bots = status?.dependentBots.map((bot) => bot.name) ?? [];
+  if (bots.length === 0) return t("Remove the saved credentials from this environment.");
+  const shown =
+    bots.length > 3 ? [...bots.slice(0, 3), t("{count} more", { count: bots.length - 3 })] : bots;
+  const names = new Intl.ListFormat(locale, { type: "conjunction" }).format(shown);
+  return bots.length === 1
+    ? t("{names} uses this account.", { names })
+    : t("{names} use this account.", { names });
+}
+
+function BusyIcon({ busy, idle }: { readonly busy: boolean; readonly idle?: ReactNode }) {
+  if (busy) return <LoaderIcon className="size-3.5 animate-spin" />;
+  return idle ?? null;
+}
+
+/**
+ * The rows of a provider's Account section: how the environment signs in to
+ * the provider, and the way back out. Each row has one primary action.
+ */
+export function ProviderAccountRows({
   definition,
   status,
   busy,
@@ -96,90 +86,136 @@ export function ProviderLoginCard({
   onDisconnect,
   onTest,
   onApiKey,
+  models,
 }: {
   readonly definition: SubscriptionProviderDefinition;
   readonly status: SubscriptionProviderStatus | undefined;
+  /** Model names this environment serves for the provider, for the access guide. */
+  readonly models?: ReadonlyArray<string>;
   readonly busy: boolean;
   readonly disabled?: boolean;
   readonly onConnect: () => void;
   readonly onDisconnect: () => void;
   readonly onTest: () => void;
-  readonly onApiKey?: () => void;
+  readonly onApiKey: () => void;
 }) {
+  const { t, locale } = useI18n();
   const connected = status?.connected === true;
-  const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
+  const usesKey = connected && providerUsesApiKey(status);
+  const keyOnly = definition.id === "opencode-go";
+  const locked = busy || disabled;
+  const attention = accountConnectionState(status, false);
+  const problem = attention.tone === "attention" ? attention.detail : null;
 
   return (
-    <SettingsRow
-      title={
-        <span className="flex items-center gap-2">
-          {ProviderIcon ? (
-            <ProviderIcon className="size-4 shrink-0" />
+    <>
+      {connected ? (
+        <SettingsRow
+          title={t("Connected account")}
+          description={
+            status.accountLabel ??
+            (usesKey ? t("API key saved on this environment") : t("Account identity unavailable"))
+          }
+        />
+      ) : null}
+      {keyOnly ? null : (
+        <SettingsRow
+          title={t("Subscription")}
+          description={t(definition.subscription)}
+          status={
+            problem && !usesKey ? <span className="text-destructive">{t(problem)}</span> : undefined
+          }
+          control={
+            !connected ? (
+              <Button size="xs" disabled={locked} onClick={onConnect}>
+                <BusyIcon busy={busy} />
+                {t("Connect")}
+              </Button>
+            ) : usesKey ? (
+              <Button size="xs" variant="outline" disabled={locked} onClick={onConnect}>
+                {t("Use OAuth")}
+              </Button>
+            ) : (
+              <>
+                <Button size="xs" variant="ghost-muted" disabled={locked} onClick={onConnect}>
+                  {t("Reconnect")}
+                </Button>
+                <Button size="xs" variant="outline" disabled={locked} onClick={onTest}>
+                  <BusyIcon busy={busy} idle={<RefreshCwIcon className="size-3.5" />} />
+                  {t("Check")}
+                </Button>
+              </>
+            )
+          }
+        />
+      )}
+      <SettingsRow
+        title={t("API key")}
+        description={
+          usesKey
+            ? status?.baseUrl
+              ? t("Saved · {baseUrl}", { baseUrl: status.baseUrl })
+              : t("Saved")
+            : keyOnly
+              ? t(definition.description)
+              : t("Pay per request instead of using the subscription.")
+        }
+        status={
+          problem && usesKey ? <span className="text-destructive">{t(problem)}</span> : undefined
+        }
+        control={
+          usesKey ? (
+            <>
+              <Button size="xs" variant="ghost-muted" disabled={locked} onClick={onApiKey}>
+                {t("Replace key")}
+              </Button>
+              <Button size="xs" variant="outline" disabled={locked} onClick={onTest}>
+                <BusyIcon busy={busy} idle={<RefreshCwIcon className="size-3.5" />} />
+                {t("Check key")}
+              </Button>
+            </>
           ) : (
-            <img
-              src={definition.icon as string}
-              alt=""
-              className="size-4 shrink-0 brightness-0 dark:invert"
-            />
-          )}
-          {definition.label}
-          <Badge variant={healthBadgeVariant(status?.health)} className="h-4 px-1.5 text-[10px]">
-            {providerBadgeLabel(status)}
-          </Badge>
-        </span>
-      }
-      description={providerUsesApiKey(status) ? undefined : definition.description}
-      status={
-        status?.authMode === "api-key"
-          ? `API key saved${status.baseUrl ? ` · ${status.baseUrl}` : ""}`
-          : definition.subscription
-      }
-      control={
-        <div className="flex flex-wrap items-center gap-1.5">
-          {definition.id !== "opencode-go" && onApiKey ? (
-            <Button size="xs" variant="ghost-muted" disabled={busy || disabled} onClick={onApiKey}>
-              {providerUsesApiKey(status) ? "Reconnect key" : "API key"}
+            <Button
+              size="xs"
+              variant={keyOnly && !connected ? "default" : "outline"}
+              disabled={locked}
+              onClick={onApiKey}
+            >
+              {t("Add key")}
             </Button>
-          ) : null}
-          {connected ? (
-            <div className="flex items-center gap-1.5">
-              <Button size="xs" variant="outline" disabled={busy || disabled} onClick={onTest}>
-                {busy ? (
-                  <LoaderIcon className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCwIcon className="size-3.5" />
-                )}
-                {providerUsesApiKey(status) ? "Check key" : "Check OAuth"}
-              </Button>
-              <Button
-                size="xs"
-                variant="ghost-muted"
-                disabled={busy || disabled}
-                onClick={onConnect}
-              >
-                {providerUsesApiKey(status) && definition.id !== "opencode-go"
-                  ? "Use OAuth"
-                  : "Reconnect"}
-              </Button>
-              <Button
-                size="icon-xs"
-                variant="ghost-muted"
-                aria-label={`Disconnect ${definition.label}`}
-                disabled={busy || disabled}
-                onClick={onDisconnect}
-              >
-                <LogOutIcon className="size-3.5" />
-              </Button>
-            </div>
-          ) : (
-            <Button size="xs" variant="outline" disabled={busy || disabled} onClick={onConnect}>
-              {busy ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
-              Connect
+          )
+        }
+      />
+      <SettingsRow
+        title={t("Access")}
+        description={
+          <ProviderAccessDetails
+            provider={definition.id}
+            status={status}
+            models={models}
+            showFailure={false}
+          />
+        }
+      />
+      {connected ? (
+        <SettingsRow
+          title={t("Disconnect")}
+          description={disconnectDescription(status, t, locale)}
+          control={
+            <Button
+              size="xs"
+              variant="destructive-outline"
+              aria-label={t("Disconnect {provider}", { provider: definition.label })}
+              disabled={locked}
+              onClick={onDisconnect}
+            >
+              <LogOutIcon className="size-3.5" />
+              {t("Disconnect")}
             </Button>
-          )}
-        </div>
-      }
-    />
+          }
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -204,6 +240,7 @@ export function ProviderApiKeyForm({
   readonly onSave: () => void;
   readonly onCancel: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <form
       className="space-y-3 px-3 pb-3 sm:px-4"
@@ -213,7 +250,7 @@ export function ProviderApiKeyForm({
       }}
     >
       <label className="block space-y-1 text-sm">
-        <span>API key</span>
+        <span>{t("API key")}</span>
         <Input
           type="password"
           autoComplete="off"
@@ -225,12 +262,12 @@ export function ProviderApiKeyForm({
       </label>
       {supportsBaseUrl ? (
         <label className="block space-y-1 text-sm">
-          <span>Base URL (optional)</span>
+          <span>{t("Base URL (optional)")}</span>
           <Input
             type="url"
             autoComplete="off"
             spellCheck={false}
-            placeholder="Provider default"
+            placeholder={t("Provider default")}
             value={baseUrl}
             disabled={busy}
             onChange={(event) => onBaseUrlChange(event.currentTarget.value)}
@@ -239,9 +276,9 @@ export function ProviderApiKeyForm({
       ) : null}
       <p className="text-[13px] text-muted-foreground">
         {supportsBaseUrl
-          ? "The environment sends this key to the selected endpoint."
-          : "Grok uses its default endpoint."}{" "}
-        API billing can be separate from your subscription.
+          ? t("The environment sends this key to the selected endpoint.")
+          : t("Grok uses its default endpoint.")}{" "}
+        {t("API billing can be separate from your subscription.")}
       </p>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -250,10 +287,10 @@ export function ProviderApiKeyForm({
       ) : null}
       <div className="flex gap-2">
         <Button type="submit" size="xs" disabled={busy || !apiKey.trim()}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("Saving…") : t("Save")}
         </Button>
         <Button type="button" size="xs" variant="ghost-muted" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t("Cancel")}
         </Button>
       </div>
     </form>
@@ -275,37 +312,31 @@ function ActiveLoginPanel({
   readonly onCancel: () => void;
   readonly completing: boolean;
 }) {
+  const { t } = useI18n();
   const { flow } = login;
   const isApiKey = flow.provider === "opencode-go";
   return (
-    <div className="mx-3 mb-3 space-y-3 rounded-xl border bg-muted/30 p-4 sm:mx-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-muted-foreground">
-          {flow.instructions ?? "Finish signing in on the provider page."}
-        </p>
-        <Button
-          size="xs"
-          variant="outline"
-          render={<a href={flow.url} target="_blank" rel="noreferrer" />}
-        >
-          {isApiKey ? "Open OpenCode" : "Open sign-in"}
-          <ExternalLinkIcon className="size-3.5" />
-        </Button>
-      </div>
+    <div data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">
+      <p className="text-[13px] leading-[1.45] text-muted-foreground">
+        {flow.userCode
+          ? t("Copy this code, then open the sign-in page and enter it.")
+          : (flow.instructions ??
+            t("Finish signing in to {provider} in the browser.", {
+              provider: login.providerLabel,
+            }))}
+      </p>
 
-      {flow.userCode ? (
-        <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2">
-          <code className="flex-1 text-sm font-semibold tracking-widest">{flow.userCode}</code>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Copy sign-in code"
-            onClick={() => void navigator.clipboard.writeText(flow.userCode ?? "")}
-          >
-            <CopyIcon className="size-3.5" />
-          </Button>
-        </div>
-      ) : null}
+      {/* The shared copy control falls back to manual copy on plain-HTTP remote clients. */}
+      {flow.userCode ? <SignInCodeCopy code={flow.userCode} className="bg-muted/60" /> : null}
+
+      <Button
+        size="xs"
+        variant="outline"
+        render={<a href={flow.url} target="_blank" rel="noreferrer" />}
+      >
+        {isApiKey ? t("Open OpenCode") : t("Open sign-in page")}
+        <ExternalLinkIcon className="size-3.5" />
+      </Button>
 
       {flow.completion === "paste" ? (
         <div className="flex gap-2">
@@ -314,8 +345,8 @@ function ActiveLoginPanel({
             autoComplete="off"
             value={pastedCode}
             onChange={(event) => onPastedCodeChange(event.currentTarget.value)}
-            placeholder={isApiKey ? "Paste the API key" : "Paste the authorization code"}
-            aria-label={isApiKey ? "API key" : "Authorization code"}
+            placeholder={isApiKey ? t("Paste the API key") : t("Paste the authorization code")}
+            aria-label={isApiKey ? t("API key") : t("Authorization code")}
             className="flex-1"
           />
           <Button
@@ -324,13 +355,13 @@ function ActiveLoginPanel({
             onClick={onComplete}
           >
             {completing ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
-            Connect
+            {t("Connect")}
           </Button>
         </div>
       ) : !login.error ? (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />
-          Waiting for approval…
+          {t("Waiting for approval…")}
         </div>
       ) : null}
 
@@ -341,23 +372,36 @@ function ActiveLoginPanel({
       ) : null}
 
       <Button size="xs" variant="ghost-muted" disabled={completing} onClick={onCancel}>
-        Cancel
+        {t("Cancel")}
       </Button>
     </div>
   );
 }
 
-export function ProvidersPanel() {
-  const environmentId = useSettingsEnvironmentId();
-  return <ProviderConnections key={environmentId ?? "none"} environmentId={environmentId} />;
-}
-
-function ProviderConnections({ environmentId }: { readonly environmentId: EnvironmentId | null }) {
+/** Subscription and API key status for every account on one environment. */
+export function useSubscriptionStatuses(environmentId: EnvironmentId | null) {
   const statusQuery = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+  const statusByProvider = useMemo(
+    () =>
+      new Map<SubscriptionProviderId, SubscriptionProviderStatus>(
+        statusQuery.data?.providers.map((status) => [status.provider, status]) ?? [],
+      ),
+    [statusQuery.data],
+  );
+  return { statusQuery, statusByProvider };
+}
+
+/** Sign-in, API key, check, and disconnect flows for subscription accounts. */
+function useSubscriptionAccounts(
+  environmentId: EnvironmentId | null,
+  instanceId?: ProviderInstanceId,
+) {
+  const { t } = useI18n();
+  const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
   const startAuth = useAtomCommand(serverEnvironment.startSubscriptionAuth, {
     reportFailure: false,
   });
@@ -385,10 +429,6 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
   const [keyProvider, setKeyProvider] = useState<SubscriptionProviderDefinition | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
 
-  const statusByProvider = useMemo(
-    () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
-    [statusQuery.data],
-  );
   const settleLogin = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
       if (progress.status === "connected") {
@@ -420,7 +460,7 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
       if (cancelled || isAtomCommandInterrupted(result)) return;
       if (result._tag === "Failure") {
         setActiveLogin((current) =>
-          current ? { ...current, error: commandError(result) } : current,
+          current ? { ...current, error: commandError(result, t) } : current,
         );
         setBusyProvider(null);
         return;
@@ -443,10 +483,22 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     setPastedCode("");
     setBaseUrl(
       providerSupportsBaseUrl(definition.id)
-        ? (statusByProvider.get(definition.id)?.baseUrl ?? "")
+        ? ((instanceId
+            ? statusQuery.data?.accounts.find(
+                (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
+              )
+            : statusByProvider.get(definition.id)
+          )?.baseUrl ?? "")
         : "",
     );
     setKeyProvider(definition);
+  };
+
+  const closeApiKey = () => {
+    setKeyProvider(null);
+    setPastedCode("");
+    setBaseUrl("");
+    setError(null);
   };
 
   const saveApiKey = async () => {
@@ -457,11 +509,14 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     setCompleting(true);
     const started = await startAuth({
       environmentId,
-      input: apiKeyStartInput(keyProvider.id, baseUrl),
+      input: {
+        ...apiKeyStartInput(keyProvider.id, baseUrl),
+        ...(instanceId ? { instanceId } : {}),
+      },
     });
     if (started._tag !== "Success") {
       setCompleting(false);
-      if (started._tag === "Failure") setError(commandError(started));
+      if (started._tag === "Failure") setError(commandError(started, t));
       return;
     }
     const result = await completeAuth({
@@ -475,12 +530,12 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
       setBaseUrl("");
       statusQuery.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result));
+      if (result._tag === "Failure") setError(commandError(result, t));
       else if (result._tag === "Success")
         setError(
           result.value.status === "failed"
             ? result.value.error
-            : "The key was not saved. Try again.",
+            : t("The key was not saved. Try again."),
         );
       await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
     }
@@ -497,11 +552,11 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     setBusyProvider(definition.id);
     const result = await startAuth({
       environmentId,
-      input: { provider: definition.id },
+      input: { provider: definition.id, ...(instanceId ? { instanceId } : {}) },
     });
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
-      setError(commandError(result));
+      setError(commandError(result, t));
       setBusyProvider(null);
       return;
     }
@@ -520,7 +575,7 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     if (isAtomCommandInterrupted(result)) return;
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
-        current ? { ...current, error: commandError(result) } : current,
+        current ? { ...current, error: commandError(result, t) } : current,
       );
       return;
     }
@@ -534,109 +589,178 @@ function ProviderConnections({ environmentId }: { readonly environmentId: Enviro
     setPastedCode("");
     if (environmentId === null || !login) return;
     const result = await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
-    if (result._tag === "Failure") setError(commandError(result));
+    if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const disconnect = async (provider: SubscriptionProviderId) => {
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
-    const result = await logoutAuth({ environmentId, input: { provider } });
+    const result = await logoutAuth({
+      environmentId,
+      input: { provider, ...(instanceId ? { instanceId } : {}) },
+    });
     setBusyProvider(null);
     if (result._tag === "Success") statusQuery.refresh();
-    else if (result._tag === "Failure") setError(commandError(result));
+    else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
   const testHealth = async (provider: SubscriptionProviderId) => {
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
-    const result = await testAuth({ environmentId, input: { provider } });
+    const result = await testAuth({
+      environmentId,
+      input: { provider, ...(instanceId ? { instanceId } : {}) },
+    });
     setBusyProvider(null);
     if (result._tag === "Success") {
       statusQuery.refresh();
-      const status = result.value.providers.find((entry) => entry.provider === provider);
+      const status = (instanceId ? result.value.accounts : result.value.providers).find(
+        (entry) => entry.provider === provider && (!instanceId || entry.instanceId === instanceId),
+      );
       if (status?.oauthCheck?.status === "failed" || status?.healthTest?.status === "failed") {
         setError(
           status.lastFailedRequest?.message ??
-            "The provider check failed. Reconnect and try again.",
+            t("The provider check failed. Reconnect and try again."),
         );
       }
-    } else if (result._tag === "Failure") setError(commandError(result));
+    } else if (result._tag === "Failure") setError(commandError(result, t));
   };
 
-  if (keyProvider) {
-    return (
-      <SettingsPageContainer>
-        <SettingsSection title={`Connect ${keyProvider.label} with an API key`}>
-          <ProviderApiKeyForm
-            supportsBaseUrl={providerSupportsBaseUrl(keyProvider.id)}
-            apiKey={pastedCode}
-            baseUrl={baseUrl}
-            busy={completing}
-            error={error}
-            onKeyChange={setPastedCode}
-            onBaseUrlChange={setBaseUrl}
-            onSave={() => void saveApiKey()}
-            onCancel={() => {
-              setKeyProvider(null);
-              setPastedCode("");
-              setBaseUrl("");
-              setError(null);
-            }}
-          />
-        </SettingsSection>
-      </SettingsPageContainer>
-    );
-  }
+  return {
+    statusQuery,
+    statusByProvider,
+    activeLogin,
+    busyProvider,
+    pastedCode,
+    setPastedCode,
+    completing,
+    error,
+    keyProvider,
+    baseUrl,
+    setBaseUrl,
+    openApiKey,
+    closeApiKey,
+    saveApiKey,
+    connect,
+    complete,
+    cancelLogin,
+    disconnect,
+    testHealth,
+  };
+}
 
-  if (activeLogin) {
-    return (
-      <SettingsPageContainer>
-        <SettingsSection title={`Connect ${activeLogin.providerLabel}`}>
-          <ActiveLoginPanel
-            login={activeLogin}
-            pastedCode={pastedCode}
-            onPastedCodeChange={setPastedCode}
-            onComplete={() => void complete()}
-            onCancel={() => void cancelLogin()}
-            completing={completing}
-          />
-        </SettingsSection>
-      </SettingsPageContainer>
+/**
+ * Account section of a provider subpage. A running sign-in or API key form
+ * replaces the rows until it finishes or the user cancels.
+ */
+export function ProviderAccountSection({
+  environmentId,
+  definition,
+  instanceId,
+}: {
+  readonly environmentId: EnvironmentId | null;
+  readonly definition: SubscriptionProviderDefinition;
+  readonly instanceId?: ProviderInstanceId;
+}) {
+  const { t } = useI18n();
+  const accounts = useSubscriptionAccounts(environmentId, instanceId);
+  const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
+  const status = instanceId
+    ? accounts.statusQuery.data?.accounts.find(
+        (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
+      )
+    : accounts.statusByProvider.get(definition.id);
+  const loadError = status ? null : accounts.statusQuery.error;
+
+  let body: ReactNode;
+  if (environmentId === null) {
+    body = (
+      <SettingsMessageRow>
+        {t("Connect to an environment to manage this account.")}
+      </SettingsMessageRow>
+    );
+  } else if (accounts.keyProvider) {
+    body = (
+      <div data-settings-row="" className="rounded-xl pt-3">
+        <h3 className="px-3 pb-3 text-sm font-medium text-foreground sm:px-4">
+          {status?.connected && providerUsesApiKey(status)
+            ? t("Replace API key")
+            : t("Add API key")}
+        </h3>
+        <ProviderApiKeyForm
+          supportsBaseUrl={providerSupportsBaseUrl(accounts.keyProvider.id)}
+          apiKey={accounts.pastedCode}
+          baseUrl={accounts.baseUrl}
+          busy={accounts.completing}
+          error={accounts.error}
+          onKeyChange={accounts.setPastedCode}
+          onBaseUrlChange={accounts.setBaseUrl}
+          onSave={() => void accounts.saveApiKey()}
+          onCancel={accounts.closeApiKey}
+        />
+      </div>
+    );
+  } else if (accounts.activeLogin) {
+    body = (
+      <ActiveLoginPanel
+        login={accounts.activeLogin}
+        pastedCode={accounts.pastedCode}
+        onPastedCodeChange={accounts.setPastedCode}
+        onComplete={() => void accounts.complete()}
+        onCancel={() => void accounts.cancelLogin()}
+        completing={accounts.completing}
+      />
+    );
+  } else if (!status && accounts.statusQuery.isPending) {
+    body = (
+      <SettingsMessageRow>
+        <span className="inline-flex items-center gap-2">
+          <LoaderIcon className="size-3.5 animate-spin" />
+          {t("Checking account")}
+        </span>
+      </SettingsMessageRow>
+    );
+  } else {
+    body = (
+      <>
+        {loadError ? (
+          <SettingsMessageRow
+            tone="error"
+            action={
+              <Button size="xs" variant="outline" onClick={() => accounts.statusQuery.refresh()}>
+                {t("Try again")}
+              </Button>
+            }
+          >
+            {loadError}
+          </SettingsMessageRow>
+        ) : null}
+        {accounts.error ? (
+          <SettingsMessageRow tone="error">{accounts.error}</SettingsMessageRow>
+        ) : null}
+        <ProviderAccountRows
+          definition={definition}
+          status={status}
+          models={providerAccessModelNames(serverProviders, definition.id)}
+          busy={accounts.busyProvider === definition.id}
+          disabled={accounts.busyProvider !== null}
+          onApiKey={() => accounts.openApiKey(definition)}
+          onConnect={() => void accounts.connect(definition)}
+          onDisconnect={() => void accounts.disconnect(definition.id)}
+          onTest={() => void accounts.testHealth(definition.id)}
+        />
+      </>
     );
   }
 
   return (
-    <SettingsPageContainer>
-      <SettingsSection title="Providers">
-        <div className="px-3 pb-2 text-[13px] leading-[1.45] text-muted-foreground sm:px-4">
-          Connect a subscription or API key. Credentials stay on this environment.
-        </div>
-
-        {error || statusQuery.error ? (
-          <div
-            role="alert"
-            className="mx-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:mx-4"
-          >
-            {error ?? statusQuery.error}
-          </div>
-        ) : null}
-
-        {SUBSCRIPTION_PROVIDERS.map((definition) => (
-          <ProviderLoginCard
-            key={definition.id}
-            definition={definition}
-            status={statusByProvider.get(definition.id)}
-            busy={busyProvider === definition.id}
-            disabled={busyProvider !== null || statusQuery.isPending}
-            onApiKey={() => openApiKey(definition)}
-            onConnect={() => void connect(definition)}
-            onDisconnect={() => void disconnect(definition.id)}
-            onTest={() => void testHealth(definition.id)}
-          />
-        ))}
-      </SettingsSection>
-    </SettingsPageContainer>
+    <SettingsSection
+      id={instanceId ? `provider-account-${instanceId}` : "provider-account"}
+      title={instanceId ? t("Instance account") : t("Account")}
+    >
+      {body}
+    </SettingsSection>
   );
 }

@@ -11,4 +11,4 @@ Akeru Bot prefers a supported connector over a browser login. A browser session 
 
 Detection means that Akeru Bot found a credential, subscription login, key, or CLI. Healthy means that a real provider request passed. OAuth refresh, an installed CLI, and an authenticated CLI probe do not prove provider access.
 
-Consumer subscription access and API billing are separate. ChatGPT, Claude Max, Cursor Pro, SuperGrok, and X Premium+ do not prove billed API access. Akeru Bot cannot distinguish SuperGrok from X Premium+ through the shared xAI login, so it does not report plan-specific X Premium+ health.
+Consumer subscription access and API billing are separate. ChatGPT, Claude Max, SuperGrok, and X Premium+ do not prove billed API access. Akeru Bot cannot distinguish SuperGrok from X Premium+ through the shared xAI login, so it does not report plan-specific X Premium+ health.

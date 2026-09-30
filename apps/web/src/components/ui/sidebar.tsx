@@ -18,6 +18,7 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useIsMobile } from "~/hooks/useMediaQuery";
+import { useI18n } from "~/i18n";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
 import * as Schema from "effect/Schema";
@@ -194,6 +195,7 @@ function Sidebar({
   resizable?: boolean | SidebarResizableOptions;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const { t } = useI18n();
   const resolvedResizable = React.useMemo<SidebarResolvedResizableOptions | null>(() => {
     if (isMobile || collapsible === "none" || !resizable) {
       return null;
@@ -251,8 +253,8 @@ function Sidebar({
             }
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Sidebar</SheetTitle>
-              <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+              <SheetTitle>{t("Sidebar")}</SheetTitle>
+              <SheetDescription>{t("Displays the mobile sidebar.")}</SheetDescription>
             </SheetHeader>
             <div
               className={cn(
@@ -321,6 +323,7 @@ function Sidebar({
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar();
   const isOpen = useSidebarVisibility();
+  const { t } = useI18n();
 
   return (
     <Button
@@ -355,7 +358,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
           strokeWidth={1.55}
         />
       </span>
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{t("Toggle Sidebar")}</span>
     </Button>
   );
 }
@@ -393,8 +396,9 @@ function SidebarRail({
   } | null>(null);
   const resolvedResizable = sidebarInstance?.resizable ?? null;
   const canResize = resolvedResizable !== null && open;
-  const railLabel = canResize ? "Resize Sidebar" : "Toggle Sidebar";
-  const railTitle = canResize ? "Drag to resize sidebar" : "Toggle Sidebar";
+  const { t } = useI18n();
+  const railLabel = canResize ? t("Resize Sidebar") : t("Toggle Sidebar");
+  const railTitle = canResize ? t("Drag to resize sidebar") : t("Toggle Sidebar");
 
   const stopResize = React.useCallback(
     (pointerId: number) => {

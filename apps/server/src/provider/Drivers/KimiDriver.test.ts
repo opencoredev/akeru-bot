@@ -32,7 +32,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>
@@ -49,6 +49,9 @@ describe("KimiDriver", () => {
               expect.objectContaining({ slug: "k3" }),
               expect.objectContaining({ slug: "k3-256k" }),
             ]),
+            // Kimi For Coding has no skill-loading mechanism, so the catalog
+            // is intentionally empty rather than silently missing.
+            skills: [],
           });
         }),
       ),
@@ -87,7 +90,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>

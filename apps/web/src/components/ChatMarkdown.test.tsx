@@ -17,18 +17,12 @@ vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
-vi.mock("../remoteOpen", () => ({
-  useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }),
+vi.mock("../localShellAccess", () => ({
+  useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
-}));
-vi.mock("~/lib/openPullRequestLink", () => ({
-  findProjectForChangeRequest: () => undefined,
-  matchesLinkedPullRequestUrl: () => false,
-  parseChangeRequestUrl: () => null,
-  useOpenChangeRequestLink: () => vi.fn(),
 }));
 
 import ChatMarkdown, {
@@ -66,44 +60,40 @@ describe("canUseMarkdownFileShellActions", () => {
   const environmentId = EnvironmentId.make("environment-1");
 
   it("allows editor and file manager actions for local environments", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "local-exec", true)).toBe(true);
+    expect(canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: true })).toBe(
+      true,
+    );
   });
 
   it("hides shell actions until the environment mode is resolved", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "local-exec", false)).toBe(false);
+    expect(
+      canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: false }),
+    ).toBe(false);
   });
 
   it("hides editor and file manager actions for remote environments", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, "remote-links", true)).toBe(false);
-    expect(canUseMarkdownFileShellActions(environmentId, "remote-unavailable", true)).toBe(false);
+    expect(
+      canUseMarkdownFileShellActions(environmentId, { isLocal: false, isResolved: true }),
+    ).toBe(false);
   });
 
   it("hides shell actions when no environment owns the markdown", () => {
-    expect(canUseMarkdownFileShellActions(null, "local-exec", true)).toBe(false);
+    expect(canUseMarkdownFileShellActions(null, { isLocal: true, isResolved: true })).toBe(false);
   });
 });
 
 describe("hasMarkdownFilePrimaryAction", () => {
-  it("keeps the chip interactive when an editor, browser, or panel can open it", () => {
+  it("keeps the chip interactive when an editor or browser can open it", () => {
     expect(
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: true,
         canOpenInBrowser: false,
-        canOpenInPanel: false,
       }),
     ).toBe(true);
     expect(
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: false,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
-      }),
-    ).toBe(true);
-    expect(
-      hasMarkdownFilePrimaryAction({
-        canOpenInEditor: false,
-        canOpenInBrowser: false,
-        canOpenInPanel: true,
       }),
     ).toBe(true);
   });
@@ -113,7 +103,6 @@ describe("hasMarkdownFilePrimaryAction", () => {
       hasMarkdownFilePrimaryAction({
         canOpenInEditor: false,
         canOpenInBrowser: false,
-        canOpenInPanel: false,
       }),
     ).toBe(false);
   });
@@ -138,7 +127,7 @@ describe("ChatMarkdown settings chips", () => {
     );
 
     expect(html).toContain("chat-markdown-settings-link");
-    expect(html).toContain("Open Settings &gt; Errors");
+    expect(html).toContain("Open Settings &gt; Advanced &gt; Bot inbox");
     expect(html).not.toContain('target="_blank"');
   });
 });
@@ -150,26 +139,16 @@ describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
         iconPath: "/tmp/report.html",
         canOpenInEditor: false,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
       }),
     ).toBe(true);
   });
 
-  it("preserves the normal editor and panel defaults for HTML files", () => {
+  it("prefers the editor for HTML files when one is available", () => {
     expect(
       shouldUseMarkdownFileBrowserPrimaryAction({
         iconPath: "/tmp/report.html",
         canOpenInEditor: true,
         canOpenInBrowser: true,
-        canOpenInPanel: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldUseMarkdownFileBrowserPrimaryAction({
-        iconPath: "/tmp/report.html",
-        canOpenInEditor: false,
-        canOpenInBrowser: true,
-        canOpenInPanel: true,
       }),
     ).toBe(false);
   });
@@ -180,7 +159,6 @@ describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
         iconPath: "/tmp/report.pdf",
         canOpenInEditor: true,
         canOpenInBrowser: true,
-        canOpenInPanel: true,
       }),
     ).toBe(true);
   });
@@ -383,5 +361,211 @@ describe("ChatMarkdown Windows file links", () => {
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("d:alert");
     expect(html).not.toContain("chat-markdown-file-link");
+  });
+});
+
+// Bot chat renders settled answers with the same props BotThreadLanding passes;
+// the coding chat also streams through `isStreaming`. Every form must render
+// the same markup on reload and while streaming a settled prefix.
+describe("ChatMarkdown bot chat forms", () => {
+  const render = (text: string, isStreaming = false) =>
+    renderToStaticMarkup(<ChatMarkdown cwd="/tmp/project" text={text} isStreaming={isStreaming} />);
+
+  const TABLE = ["| File | State |", "| --- | --- |", "| src/output.ts | Ready |"].join("\n");
+  const CHECKLIST = ["- [x] Render table", "- [ ] Review diff", "- [ ] Ship"].join("\n");
+  const DIFF = [
+    "```diff",
+    "diff --git a/src/app.ts b/src/app.ts",
+    "--- a/src/app.ts",
+    "+++ b/src/app.ts",
+    "@@ -1,2 +1,2 @@",
+    " import { run } from './run';",
+    "-run(1);",
+    "+run(2);",
+    "```",
+  ].join("\n");
+  const ALL_FORMS = [
+    "Summary with a [docs link](https://example.com/docs) and [Voice settings](grokbot://app/v1/settings?id=voice).",
+    "",
+    TABLE,
+    "",
+    CHECKLIST,
+    "",
+    DIFF,
+    "",
+    '```ts title="src/generated.ts"',
+    "export const ready = true;",
+    "```",
+    "",
+    "See [output](/tmp/project/src/output.ts).",
+    "",
+  ].join("\n");
+
+  it("renders tables in a scroll container with header cells", () => {
+    const html = render(TABLE);
+    expect(html).toContain("chat-markdown-table-container");
+    expect(html.match(/<th[ >]/g)).toHaveLength(2);
+    expect(html).toContain("src/output.ts");
+  });
+
+  it("renders checklists read-only with a static progress summary", () => {
+    const html = render(CHECKLIST);
+    expect(html.match(/type="checkbox"/g)).toHaveLength(3);
+    expect(html.match(/readOnly=""/g)).toHaveLength(3);
+    expect(html).toContain('data-task-progress="1/3"');
+    expect(html).toContain("1 of 3 done");
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('aria-valuenow="1"');
+    expect(html).not.toMatch(/transition|animate-/);
+  });
+
+  it("summarizes only the outer list of a nested checklist", () => {
+    const html = render(
+      ["- [x] Outer one", "  - [x] Inner one", "  - [ ] Inner two", "- [ ] Outer two"].join("\n"),
+    );
+    expect(html.match(/data-task-progress=/g)).toHaveLength(1);
+    expect(html).toContain('data-task-progress="1/2"');
+  });
+
+  it("skips the progress summary for a single task or a plain list", () => {
+    expect(render("- [x] Only task")).not.toContain("data-task-progress");
+    expect(render("- one\n- two")).not.toContain("data-task-progress");
+  });
+
+  it("renders diffs as a change card with line tints and counts", () => {
+    const html = render(DIFF);
+    expect(html).toContain('data-language="diff"');
+    expect(html).toContain("chat-markdown-diff");
+    expect(html.match(/data-diff-line="add"/g)).toHaveLength(1);
+    expect(html.match(/data-diff-line="remove"/g)).toHaveLength(1);
+    expect(html.match(/data-diff-line="hunk"/g)).toHaveLength(1);
+    expect(html.match(/data-diff-line="meta"/g)).toHaveLength(3);
+    expect(html).toContain("src/app.ts");
+    expect(html).toContain('aria-label="1 additions, 1 deletions"');
+  });
+
+  it("titles multi-file and patch fences", () => {
+    const html = render(
+      [
+        "```patch",
+        "--- a/a.ts",
+        "+++ b/a.ts",
+        "@@ -1 +1 @@",
+        "-a",
+        "+b",
+        "--- a/b.ts",
+        "+++ b/b.ts",
+        "@@ -1 +1 @@",
+        "-c",
+        "+d",
+        "```",
+      ].join("\n"),
+    );
+    expect(html).toContain('data-language="patch"');
+    expect(html).toContain("2 files");
+    expect(html).toContain('aria-label="2 additions, 2 deletions"');
+  });
+
+  it("renders file references as titled code cards and file chips", () => {
+    const html = render(ALL_FORMS);
+    expect(html).toContain('data-language="ts"');
+    expect(html).toContain("src/generated.ts");
+    expect(html).toContain("chat-markdown-file-link");
+    expect(html).toContain("output.ts");
+  });
+
+  it("renders external links and Settings chips", () => {
+    const html = render(ALL_FORMS);
+    expect(html).toContain('href="https://example.com/docs"');
+    expect(html).toContain("chat-markdown-settings-link");
+    expect(html).toContain("Open Settings &gt; Providers &gt; Voice");
+  });
+
+  it.each([
+    ["channels", "Channels"],
+    ["browser", "Browser"],
+    ["plugins", "Plugins"],
+    ["sandbox", "Sandbox"],
+    ["privacy", "Privacy &amp; data"],
+  ])("renders a Settings chip for %s", (id, label) => {
+    const html = render(`[Open](grokbot://app/v1/settings?id=${id})`);
+    expect(html).toContain("chat-markdown-settings-link");
+    expect(html).toContain(`Open Settings &gt; ${label}`);
+  });
+
+  it.each([
+    ["a wrong host", "grokbot://evil/v1/settings?id=providers"],
+    ["an extra query key", "grokbot://app/v1/settings?id=providers&from=chat"],
+    ["an unknown id", "grokbot://app/v1/settings?id=unknown"],
+  ])("renders a Settings link with %s as plain text with no link", (_case, href) => {
+    const html = render(`See [Open provider settings](${href}) here.`);
+    expect(html).toContain("Open provider settings");
+    expect(html).not.toContain("<a");
+    expect(html).not.toContain("target=");
+    expect(html).not.toContain("grokbot:");
+  });
+
+  it("renders a rejected Settings link as plain text, not an OS link", () => {
+    const html = render("[Open](grokbot://app/v1/settings?id=unknown)");
+    expect(html).not.toContain("chat-markdown-settings-link");
+    expect(html).not.toContain('href="grokbot:');
+  });
+
+  it("re-renders identical markup from persisted text after reload", () => {
+    expect(render(ALL_FORMS)).toBe(render(ALL_FORMS));
+  });
+
+  it("renders a finished stream exactly like the settled message", () => {
+    expect(render(ALL_FORMS, true)).toBe(render(ALL_FORMS));
+  });
+
+  it("never renders half a table while streaming", () => {
+    const [header, delimiter] = TABLE.split("\n");
+    for (const partial of [
+      `Intro\n\n${header?.slice(0, 8)}`,
+      `Intro\n\n${header}\n`,
+      `Intro\n\n${header}\n${delimiter?.slice(0, 5)}`,
+    ]) {
+      const html = render(partial, true);
+      expect(html, partial).not.toContain("| File");
+      expect(html, partial).not.toContain("<table");
+      expect(html, partial).toContain("Intro");
+    }
+    const withRowInFlight = render(`${header}\n${delimiter}\n| src/output.ts | Rea`, true);
+    expect(withRowInFlight).toContain("<table");
+    expect(withRowInFlight).not.toContain("src/output.ts");
+  });
+
+  it("never renders a partial fence opener while streaming", () => {
+    for (const partial of ["Intro\n`", "Intro\n``", "Intro\n```", "Intro\n```di"]) {
+      const html = render(partial, true);
+      expect(html, partial).not.toContain("data-language");
+      expect(html, partial).not.toMatch(/>[^<]*`/);
+    }
+    expect(render("Intro\n```diff\n+run(2);", true)).toContain('data-diff-line="add"');
+  });
+
+  it("never renders a partial task marker or setext heading while streaming", () => {
+    for (const partial of ["- [x] Done\n- [", "- [x] Done\n- [ ]", "- [x] Done\n-"]) {
+      const html = render(partial, true);
+      expect(html.match(/type="checkbox"/g), partial).toHaveLength(1);
+      // No bracket in rendered text; class names may contain brackets.
+      expect(html, partial).not.toMatch(/>[^<]*\[/);
+    }
+    expect(render("Almost done\n-", true)).not.toContain("<h2");
+  });
+
+  it("keeps already streamed diff lines unchanged as the fence grows", () => {
+    const settled = render(DIFF);
+    const lines = DIFF.split("\n");
+    for (let count = 2; count < lines.length - 1; count += 1) {
+      const streamed = render(`${lines.slice(0, count).join("\n")}\n`, true);
+      const kinds = [...streamed.matchAll(/data-diff-line="(\w+)"/g)].map((match) => match[1]);
+      const settledKinds = [...settled.matchAll(/data-diff-line="(\w+)"/g)].map(
+        (match) => match[1],
+      );
+      expect(kinds).toEqual(settledKinds.slice(0, kinds.length));
+      expect(kinds).toHaveLength(count - 1);
+    }
   });
 });

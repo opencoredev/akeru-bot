@@ -79,6 +79,7 @@ describe("environment shell synchronization", () => {
         connect: Effect.void,
         disconnect: Effect.void,
         retryNow: Effect.void,
+        retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
       const cache = Persistence.EnvironmentCacheStore.of({
         loadShell: () => Effect.succeed(Option.none()),
@@ -88,10 +89,6 @@ describe("environment shell synchronization", () => {
         removeThread: () => Effect.void,
         loadServerConfig: () => Effect.succeed(Option.none()),
         saveServerConfig: () => Effect.void,
-        loadVcsRefs: () => Effect.succeed(Option.none()),
-        saveVcsRefs: () => Effect.void,
-        removeVcsRefs: () => Effect.void,
-        clearVcsRefs: () => Effect.void,
         clear: () => Effect.void,
       });
       // Cold cache with no HTTP snapshot available → falls back to the
@@ -198,6 +195,7 @@ describe("environment shell synchronization", () => {
         connect: Effect.void,
         disconnect: Effect.void,
         retryNow: Effect.void,
+        retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
       const cache = Persistence.EnvironmentCacheStore.of({
         loadShell: () => Effect.succeed(Option.some(cachedSnapshot)),
@@ -207,10 +205,6 @@ describe("environment shell synchronization", () => {
         removeThread: () => Effect.void,
         loadServerConfig: () => Effect.succeed(Option.none()),
         saveServerConfig: () => Effect.void,
-        loadVcsRefs: () => Effect.succeed(Option.none()),
-        saveVcsRefs: () => Effect.void,
-        removeVcsRefs: () => Effect.void,
-        clearVcsRefs: () => Effect.void,
         clear: () => Effect.void,
       });
       const snapshotLoader = ShellSnapshotLoader.of({
@@ -278,6 +272,7 @@ describe("environment shell synchronization", () => {
         connect: Effect.void,
         disconnect: Effect.void,
         retryNow: Effect.void,
+        retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
       const cache = Persistence.EnvironmentCacheStore.of({
         loadShell: () => Effect.succeed(Option.some(LIVE_SHELL_SNAPSHOT)),
@@ -287,10 +282,6 @@ describe("environment shell synchronization", () => {
         removeThread: () => Effect.void,
         loadServerConfig: () => Effect.succeed(Option.none()),
         saveServerConfig: () => Effect.void,
-        loadVcsRefs: () => Effect.succeed(Option.none()),
-        saveVcsRefs: () => Effect.void,
-        removeVcsRefs: () => Effect.void,
-        clearVcsRefs: () => Effect.void,
         clear: () => Effect.void,
       });
       const snapshotLoader = ShellSnapshotLoader.of({

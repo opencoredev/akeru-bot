@@ -4,7 +4,13 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { Launcher, readServiceState, writeServiceState } from "./serviceLauncher.ts";
+import {
+  Launcher,
+  readServiceState,
+  runtimeNodePath,
+  syncDirectory,
+  writeServiceState,
+} from "./serviceLauncher.ts";
 import {
   compareExactServiceVersions,
   decodeServiceState,
@@ -12,6 +18,21 @@ import {
   SERVICE_LAUNCHER_PROTOCOL,
   SERVICE_STOP_MARKER_FILE,
 } from "./cloud/serviceProtocol.ts";
+
+it("ignores directory sync errors only from filesystems that cannot sync a directory", async () => {
+  const failingOpen = (code: string) => async () => ({
+    sync: () => Promise.reject(Object.assign(new Error(code), { code })),
+    close: () => Promise.resolve(),
+  });
+  for (const code of ["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]) {
+    await syncDirectory("/state", failingOpen(code));
+  }
+  let rejected: unknown;
+  await syncDirectory("/state", failingOpen("EIO")).catch((error: unknown) => {
+    rejected = error;
+  });
+  assert.strictEqual((rejected as NodeJS.ErrnoException | undefined)?.code, "EIO");
+});
 
 it("accepts only exact semantic versions", () => {
   for (const version of ["0.0.0", "1.2.3", "1.2.3-alpha.1", "1.2.3-0", "1.2.3+001"]) {
@@ -76,6 +97,22 @@ it("rejects contradictory service state", () => {
 });
 
 it.layer(NodeServices.layer)("service state persistence", (it) => {
+  it.effect("runs a version on its bundled Node when the runtime ships one", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const versionDir = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-runtime-node-" });
+      assert.strictEqual(
+        yield* Effect.promise(() => runtimeNodePath(versionDir)),
+        process.execPath,
+      );
+      const bundled = path.join(versionDir, "node", "node.exe");
+      yield* fs.makeDirectory(path.dirname(bundled), { recursive: true });
+      yield* fs.writeFileString(bundled, "");
+      assert.strictEqual(yield* Effect.promise(() => runtimeNodePath(versionDir)), bundled);
+    }),
+  );
+
   it.effect("durably replaces and strictly reads one state document", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

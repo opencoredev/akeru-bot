@@ -15,6 +15,7 @@ import {
   type IncomingShareDestination,
   type IncomingShareDraft,
 } from "./incoming-share-model";
+import { useMobileI18n } from "../../lib/i18n";
 import { createIncomingSharePayloadReader } from "./incoming-share-native";
 import { IncomingShareInbox } from "./incoming-share-inbox";
 import {
@@ -165,6 +166,7 @@ const incomingShareInbox = new IncomingShareInbox({
 });
 
 export function IncomingShareProvider(props: React.PropsWithChildren) {
+  const { t } = useMobileI18n();
   const enabled = receiveSharingEnabled();
   const [drafts, setDrafts] = useState<ReadonlyArray<IncomingShareDraft>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -238,10 +240,10 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
     if (!error) {
       return;
     }
-    Alert.alert("Could not import shared content", error.message, [
-      { text: "Dismiss", style: "cancel", onPress: () => setError(null) },
+    Alert.alert(t("Could not import shared content"), error.message, [
+      { text: t("Dismiss"), style: "cancel", onPress: () => setError(null) },
       {
-        text: "Retry",
+        text: t("Retry"),
         onPress: () => {
           setError(null);
           void refresh();

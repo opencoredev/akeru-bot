@@ -14,6 +14,8 @@ import {
 } from "@mastra/core/workspace";
 import type { BotSandbox } from "@t3tools/contracts";
 import { BotWorkspaceFilesystem } from "./botWorkspaceFilesystem.ts";
+import { DaytonaComputer } from "./daytonaComputer.ts";
+import { WorkspaceComputer } from "./workspaceComputer.ts";
 
 export const REMOTE_BOT_SANDBOXES = ["e2b", "daytona", "vercel", "upstash", "ascii"] as const;
 export type RemoteBotSandbox = (typeof REMOTE_BOT_SANDBOXES)[number];
@@ -28,6 +30,7 @@ export interface AkeruBotWorkspace {
   readonly id: string;
   readonly provider: BotSandbox;
   readonly providerId?: string;
+  readonly computer?: WorkspaceComputer;
   readonly workspace: Workspace;
   readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
   readonly inspect: () => Promise<AkeruWorkspaceState>;
@@ -38,6 +41,7 @@ export interface AkeruBotWorkspace {
 
 export interface AkeruRemoteSession {
   readonly providerId: string;
+  readonly computer?: WorkspaceComputer;
   readonly inspect: () => Promise<AkeruWorkspaceState>;
   readonly run: (
     command: string,
@@ -151,12 +155,17 @@ export async function createRemoteBotWorkspace(
     id: input.workspaceId,
     provider: input.sandbox,
     providerId: session.providerId,
+    ...(session.computer ? { computer: session.computer } : {}),
     workspace,
     browserEndpoint: session.browserEndpoint,
     inspect: session.inspect,
     wake: () => workspace.init(),
-    sleep: () => workspace.stop(),
+    sleep: async () => {
+      await session.computer?.close();
+      await workspace.stop();
+    },
     destroy: async () => {
+      await session.computer?.close();
       await workspace.destroy();
       await NodeFS.promises.rm(identityFile, { force: true });
     },
@@ -478,13 +487,36 @@ export function daytona(
   client: import("@daytona/sdk").Daytona,
   sandbox: import("@daytona/sdk").Sandbox,
 ): AkeruRemoteSession {
+  const inspect = async (): Promise<AkeruWorkspaceState> => {
+    await sandbox.refreshData();
+    const current = String(sandbox.state);
+    return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
+  };
+  const computer = new WorkspaceComputer(
+    sandbox.id,
+    new DaytonaComputer(sandbox),
+    // Chromium survives reconnects and some wakes; reuse it instead of starting
+    // a second browser on the same profile and debugging port.
+    async () => {
+      const result = await sandbox.process.executeCommand(
+        "sh -c 'command -v chromium >/dev/null || command -v chromium-browser >/dev/null || exit 1; profile=/tmp/akeru-chromium; command -v pgrep >/dev/null && pgrep -f \"[-]-user-data-dir=$profile\" >/dev/null && exit 0; mkdir -p $profile; nohup ${CHROMIUM_BIN:-$(command -v chromium || command -v chromium-browser)} --no-sandbox --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --user-data-dir=$profile about:blank >/dev/null 2>&1 </dev/null &'",
+        undefined,
+        { DISPLAY: ":1" },
+      );
+      if (result.exitCode !== 0) throw new Error("Daytona graphical Chromium is unavailable.");
+    },
+    async () => {
+      const preview = await sandbox.getPreviewLink(9222);
+      if (!preview.url || !preview.token)
+        throw new Error("Daytona browser endpoint is unavailable.");
+      return { url: preview.url, requestHeaders: { "x-daytona-preview-token": preview.token } };
+    },
+    inspect,
+  );
   return {
     providerId: sandbox.id,
-    inspect: async () => {
-      await sandbox.refreshData();
-      const current = String(sandbox.state);
-      return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
-    },
+    computer,
+    inspect,
     run: async (command, args, options) => {
       const result = await sandbox.process.executeCommand(
         commandLine(command, args),

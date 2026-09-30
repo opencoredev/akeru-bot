@@ -375,6 +375,46 @@ it.effect("defaults omitted bot channel bindings", () =>
   }),
 );
 
+it.effect("defaults an omitted bot image provider to the global default", () =>
+  Effect.gen(function* () {
+    const bot = yield* decodeOrchestrationBot({
+      id: "bot-1",
+      name: "Akeru",
+      title: "Agent",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: null,
+      sandbox: "local",
+      groupId: null,
+      archivedAt: null,
+      createdAt: "2026-08-27T20:00:00.000Z",
+      updatedAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.strictEqual(bot.imageProvider, null);
+  }),
+);
+
+it.effect("keeps an explicit bot image provider independent of the chat engine", () =>
+  Effect.gen(function* () {
+    const bot = yield* decodeOrchestrationBot({
+      id: "bot-1",
+      name: "Akeru",
+      title: "Agent",
+      avatar: { kind: "dither", seed: "akeru" },
+      engine: { provider: "claudeAgent", model: "claude-opus-5.5" },
+      imageProvider: "chatgpt",
+      sandbox: "local",
+      groupId: null,
+      archivedAt: null,
+      createdAt: "2026-08-27T20:00:00.000Z",
+      updatedAt: "2026-08-27T20:00:00.000Z",
+    });
+
+    assert.strictEqual(bot.imageProvider, "chatgpt");
+    assert.strictEqual(bot.engine?.provider, "claudeAgent");
+  }),
+);
+
 it.effect("decodes a dispatch error after its bootstrap thread was deleted", () =>
   Effect.gen(function* () {
     const error = yield* decodeDispatchCommandError({
@@ -746,6 +786,23 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
 
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.modelSelection.instanceId, "codex");
+  }),
+);
+
+it.effect("decodes historical thread.created payloads without parent links", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadCreatedPayload({
+      threadId: "thread-legacy",
+      projectId: "project-1",
+      title: "Legacy thread",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      branch: null,
+      worktreePath: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.parentThreadId, undefined);
+    assert.strictEqual(parsed.parentDelegationId, undefined);
   }),
 );
 

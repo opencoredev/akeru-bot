@@ -14,7 +14,15 @@ import {
 } from "./baseSchemas.ts";
 import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
-import { McpServerId } from "./mcpServer.ts";
+import {
+  AKERU_WORKER_MAX_DEPTH,
+  AkeruWorkerCheckInput,
+  AkeruWorkerMessageInput,
+  AkeruWorkerStopInput,
+  AkeruWorkerTaskInput,
+} from "./akeruWorkers.ts";
+import { McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
+import { ImageGenerationRequest } from "./imageGeneration.ts";
 import { BotSandbox, RuntimeMode } from "./orchestration.ts";
 
 export const AKERU_COMMAND_MAX_CHARS = 32_000;
@@ -59,6 +67,32 @@ const CommandInput = Schema.Struct({
 const PathInput = Schema.Struct({ path: PathText });
 const CopyInput = Schema.Struct({ sourcePath: PathText, destinationPath: PathText });
 const McpServerIdInput = Schema.Struct({ serverId: TrimmedNonEmptyString });
+const WebSearchInput = Schema.Struct({
+  query: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
+  domains: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+});
+const WebFetchInput = Schema.Struct({
+  url: Schema.String.check(Schema.isPattern(/^https?:\/\//i)),
+});
+const AddMcpServerInput = Schema.Union([
+  Schema.Struct({
+    serverId: McpServerId,
+    name: TrimmedNonEmptyString,
+    transport: Schema.Literal("stdio"),
+    command: TrimmedNonEmptyString,
+    args: Schema.optional(Schema.Array(Schema.String)),
+  }),
+  Schema.Struct({
+    serverId: McpServerId,
+    name: TrimmedNonEmptyString,
+    transport: Schema.Literal("url"),
+    url: McpServerUrl,
+  }),
+]);
+const RenameMcpAccountInput = Schema.Struct({
+  serverId: McpServerId,
+  name: TrimmedNonEmptyString,
+});
 const UpdateBotProfileInput = Schema.Struct({
   name: Schema.optional(TrimmedNonEmptyString),
   title: Schema.optional(TrimmedNonEmptyString),
@@ -106,6 +140,18 @@ export const AkeruToolId = Schema.Literals([
   "UpdateBotProfile",
   "AuthenticateMcpServer",
   "RestartMcpServers",
+  "WebSearch",
+  "WebFetch",
+  "GenerateImage",
+  "AddMcpServer",
+  "UninstallMcpServer",
+  "RemoveMcpAccount",
+  "RenameMcpAccount",
+  "SetMcpInstructions",
+  "Task",
+  "CheckSubagent",
+  "MessageSubagent",
+  "StopSubagent",
 ]);
 export type AkeruToolId = typeof AkeruToolId.Type;
 
@@ -120,10 +166,24 @@ export const AkeruToolApprovalClass = Schema.Literals([
 ]);
 export type AkeruToolApprovalClass = typeof AkeruToolApprovalClass.Type;
 
+/**
+ * Maximum characters of parent context a bot may hand to a child. Longer
+ * input is rejected, never truncated, so the child never works from a silently
+ * clipped brief.
+ */
+export const AKERU_DELEGATION_CONTEXT_MAX_CHARS = 8_000;
+
 const AgentMessageInput = Schema.Struct({
   botId: BotId,
   task: TrimmedNonEmptyString,
   expectedResult: TrimmedNonEmptyString,
+  context: Schema.optional(
+    Schema.String.check(
+      Schema.isMaxLength(AKERU_DELEGATION_CONTEXT_MAX_CHARS, {
+        message: `Delegation context must be at most ${AKERU_DELEGATION_CONTEXT_MAX_CHARS} characters.`,
+      }),
+    ),
+  ),
   deadline: Schema.optional(IsoDateTime),
   allowedToolIds: Schema.optional(Schema.Array(AkeruToolId)),
   memoryScopes: Schema.optional(Schema.Array(AkeruMemoryTargetScope)),
@@ -157,7 +217,11 @@ export const AkeruToolInputSchemas = {
   CheckAgent: Schema.Struct({ botId: BotId }),
   MessageAgent: AgentMessageInput,
   StopAgent: Schema.Struct({ botId: BotId }),
-  SendToAgent: AgentMessageInput,
+  SendToAgent: Schema.Struct({
+    ...AgentMessageInput.fields,
+    /** Keep the work running after the parent turn ends instead of stopping it. */
+    keep: Schema.optional(Schema.Boolean),
+  }),
   CreateChannel: Schema.Struct({
     name: TrimmedNonEmptyString,
     specialistBotIds: Schema.optional(Schema.Array(BotId)),
@@ -189,6 +253,18 @@ export const AkeruToolInputSchemas = {
   RestartMcpServers: Schema.Struct({
     serverIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   }),
+  WebSearch: WebSearchInput,
+  WebFetch: WebFetchInput,
+  GenerateImage: ImageGenerationRequest,
+  AddMcpServer: AddMcpServerInput,
+  UninstallMcpServer: Schema.Struct({ serverId: McpServerId }),
+  RemoveMcpAccount: Schema.Struct({ serverId: McpServerId }),
+  RenameMcpAccount: RenameMcpAccountInput,
+  SetMcpInstructions: Schema.Struct({ serverId: McpServerId, instructions: McpServerInstructions }),
+  Task: AkeruWorkerTaskInput,
+  CheckSubagent: AkeruWorkerCheckInput,
+  MessageSubagent: AkeruWorkerMessageInput,
+  StopSubagent: AkeruWorkerStopInput,
 } as const satisfies Record<AkeruToolId, Schema.Top>;
 
 export const AkeruMessageReactionResult = Schema.Union([
@@ -323,16 +399,30 @@ export const AKERU_TOOL_CATALOG = [
     requiresUserComputer: true,
   }),
   define("CreateAgent", "bot-workspace", "Create a durable named bot."),
-  define("CheckAgent", "bot-workspace", "Inspect a durable named bot and its delegated work."),
-  define("MessageAgent", "bot-workspace", "Send bounded work to a durable named bot.", {
-    approval: "send",
-  }),
+  define(
+    "CheckAgent",
+    "bot-workspace",
+    "Inspect a durable named bot and its delegated work. A finished result returned here counts as delivered and is not repeated in your next turn.",
+  ),
+  define(
+    "MessageAgent",
+    "bot-workspace",
+    "Send bounded work to a durable named bot. Returns a handle at once; the result arrives in your next turn.",
+    {
+      approval: "send",
+    },
+  ),
   define("StopAgent", "bot-workspace", "Cancel a durable bot's delegated work.", {
     approval: "delete",
   }),
-  define("SendToAgent", "bot-workspace", "Delegate a task to another bot.", {
-    approval: "send",
-  }),
+  define(
+    "SendToAgent",
+    "bot-workspace",
+    "Delegate a task to another bot. Returns a handle at once; the result arrives in your next turn.",
+    {
+      approval: "send",
+    },
+  ),
   define("CreateChannel", "bot-workspace", "Create a bot channel."),
   define("UpdateChannel", "bot-workspace", "Rename a bot channel."),
   define("SendToUser", "bot-workspace", "Send a message into the current Akeru thread.", {
@@ -374,6 +464,41 @@ export const AKERU_TOOL_CATALOG = [
   define("RestartMcpServers", "bot-workspace", "Restart MCP servers.", {
     approval: "production",
   }),
+  define("WebSearch", "bot-workspace", "Search the public web."),
+  define("WebFetch", "bot-workspace", "Fetch and extract a public URL."),
+  define(
+    "GenerateImage",
+    "bot-workspace",
+    "Generate a new image, or edit images from this chat, with the image provider the user configured. " +
+      'Use operation "generate" with a prompt, or operation "edit" with a prompt and optional inputImages ' +
+      "(attachment ids from this chat; defaults to the images on the latest user message). " +
+      "Finished images appear in the chat automatically; do not repeat or describe the file data. " +
+      'If the result status is "needs-consent", ask the user before retrying with allowProvider.',
+    { approval: "production" },
+  ),
+  define("AddMcpServer", "bot-workspace", "Add an MCP server account.", { approval: "secrets" }),
+  define("UninstallMcpServer", "bot-workspace", "Remove an MCP server.", { approval: "delete" }),
+  define("RemoveMcpAccount", "bot-workspace", "Remove an MCP account.", { approval: "delete" }),
+  define("RenameMcpAccount", "bot-workspace", "Rename an MCP account.", { approval: "secrets" }),
+  define("SetMcpInstructions", "bot-workspace", "Set MCP account instructions.", {
+    approval: "secrets",
+  }),
+  define(
+    "Task",
+    "bot-workspace",
+    "Start a temporary worker for a bounded subtask. The worker is a copy of this bot with the same tools and no memory writes, runs in a hidden chat, and ends with this turn. Waits for the result unless background is true. Workers cannot start workers, and one turn can run at most 3 at once.",
+  ),
+  define(
+    "CheckSubagent",
+    "bot-workspace",
+    "Report a temporary worker's status: Running, Completed with its result, Failed, or Canceled. Set wait to block until it finishes.",
+  ),
+  define(
+    "MessageSubagent",
+    "bot-workspace",
+    "Send a follow-up instruction to a running temporary worker.",
+  ),
+  define("StopSubagent", "bot-workspace", "Cancel a temporary worker. It ends as Canceled."),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;
 
 export interface AkeruToolAvailabilityContext {
@@ -384,6 +509,8 @@ export interface AkeruToolAvailabilityContext {
   readonly implementedTools: ReadonlySet<string>;
   readonly delegationDepth?: number;
   readonly activeDelegations?: number;
+  /** 0 for a bot turn, 1 inside a temporary worker. */
+  readonly workerDepth?: number;
 }
 
 export function filterAkeruTools(
@@ -398,6 +525,7 @@ export function filterAkeruTools(
         (context.activeDelegations ?? 0) >= AKERU_DELEGATION_MAX_CONCURRENCY)
     )
       return false;
+    if (tool.id === "Task" && (context.workerDepth ?? 0) >= AKERU_WORKER_MAX_DEPTH) return false;
     if (tool.workspace === "bot-workspace" && context.workspaceType === "none") return false;
     if (tool.workspace === "user-computer" && !context.hasUserComputer) return false;
     return !(tool.requiresUserComputer && !context.hasUserComputer);

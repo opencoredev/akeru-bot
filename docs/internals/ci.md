@@ -20,7 +20,8 @@ Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through Git
 The repository ruleset requires the `Repository checks` result before a pull request can
 merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated
 revision lands on `main`; version packaging is separate from pull-request CI. The version workflow
-uses Changesets to maintain one rolling Version Packages pull request. CI also requires every
+runs `pnpm release:version` and maintains one rolling Version Packages pull request with Git and
+`gh`, finding it by its `changeset-release/main` head branch. CI also requires every
 ordinary pull request to contain a real or empty changeset, so release intent cannot be lost after
 merge. Changesets consumes those files in the version pull request and keeps the four product
 package versions synchronized. Only the repository-owned Changesets branch and bot-authored pull

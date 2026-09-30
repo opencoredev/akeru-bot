@@ -12,7 +12,7 @@
  */
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ForwardCompatibleArray, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { SubscriptionProviderId } from "./subscriptionAuth.ts";
 
 /**
@@ -22,14 +22,7 @@ import { SubscriptionProviderId } from "./subscriptionAuth.ts";
  */
 export const USAGE_CONTRACT_VERSION = 5 as const;
 
-export const UsageProviderKind = Schema.Literals([
-  "claude",
-  "codex",
-  "cursor",
-  "grok",
-  "kimi",
-  "opencode",
-]);
+export const UsageProviderKind = Schema.Literals(["claude", "codex", "grok", "kimi", "opencode"]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 
 /**
@@ -180,7 +173,7 @@ export type UsagePlanLimitsStatus = typeof UsagePlanLimitsStatus.Type;
 
 /** Live plan meters for one Settings → Providers login. */
 export const UsageProviderPlanLimits = Schema.Struct({
-  provider: SubscriptionProviderId,
+  provider: Schema.Literals(["anthropic", "openai-codex", "xai", "kimi-for-coding", "opencode-go"]),
   status: UsagePlanLimitsStatus,
   plan: Schema.NullOr(TrimmedNonEmptyString),
   message: Schema.NullOr(TrimmedNonEmptyString),
@@ -213,15 +206,18 @@ export const UsageSummary = Schema.Struct({
   timeZone: TrimmedNonEmptyString,
   sinceDay: UsageDay,
   untilDay: UsageDay,
-  buckets: Schema.Array(UsageBucket),
-  sources: Schema.Array(UsageSource),
+  // Same-version servers may still report retired providers such as Cursor, and
+  // newer ones may add providers. Drop entries this build cannot read so the
+  // rest of that environment's usage still shows.
+  buckets: ForwardCompatibleArray(UsageBucket),
+  sources: ForwardCompatibleArray(UsageSource),
   pricing: UsagePricing,
   /** Wall-clock cost of the scan, surfaced in diagnostics. */
   scanDurationMs: NonNegativeInt,
   /** Live plan windows for connected provider subscriptions. */
-  planLimits: Schema.optional(Schema.Array(UsageProviderPlanLimits)),
+  planLimits: Schema.optional(ForwardCompatibleArray(UsageProviderPlanLimits)),
   /** Settings -> Providers connections that may contribute usage. Absent on older servers. */
-  connectedProviders: Schema.optional(Schema.Array(SubscriptionProviderId)),
+  connectedProviders: Schema.optional(ForwardCompatibleArray(SubscriptionProviderId)),
 });
 export type UsageSummary = typeof UsageSummary.Type;
 

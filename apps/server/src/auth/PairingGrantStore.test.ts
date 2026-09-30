@@ -74,12 +74,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
       const second = yield* Effect.flip(bootstrapCredentials.consume(issued.credential));
 
       expect(first.method).toBe("one-time-token");
-      expect(first.scopes).toEqual([
-        "orchestration:read",
-        "orchestration:operate",
-        "terminal:operate",
-        "review:write",
-      ]);
+      expect(first.scopes).toEqual(["orchestration:read", "orchestration:operate"]);
       expect(first.subject).toBe("one-time-token");
       expect(first.label).toBe("Julius iPhone");
       expect(issued.label).toBe("Julius iPhone");
@@ -124,8 +119,6 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
       expect(first.scopes).toEqual([
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);

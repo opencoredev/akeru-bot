@@ -5,7 +5,6 @@ import type {
   OrchestrationCheckpointSummary,
   OrchestrationLatestTurn,
   OrchestrationMessage,
-  OrchestrationProposedPlan,
   OrchestrationSession,
   ProjectScript as ContractProjectScript,
   ProviderInteractionMode,
@@ -42,7 +41,6 @@ export interface ChatMessage extends Omit<OrchestrationMessage, "attachments"> {
   readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
 }
 
-export type ProposedPlan = OrchestrationProposedPlan;
 export type TurnDiffFileChange = OrchestrationCheckpointFile;
 export type TurnDiffSummary = OrchestrationCheckpointSummary;
 

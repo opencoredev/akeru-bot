@@ -13,6 +13,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -186,11 +187,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const failed = snapshot.delegations.find(
         (delegation) => delegation.delegationId === "delegation-050",
       );
-      assert.equal(failed?.failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
-      assert.isTrue(failed?.failure?.message.endsWith("…"));
+      const failure = failed?.phase._tag === "Failed" ? failed.phase.failure : undefined;
+      assert.equal(failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
+      assert.isTrue(failure?.message.endsWith("…"));
+      const completed = snapshot.delegations.find(
+        (delegation) => delegation.delegationId === "delegation-025",
+      );
       assert.equal(
-        snapshot.delegations.find((delegation) => delegation.delegationId === "delegation-025")
-          ?.result?.summary,
+        completed?.phase._tag === "Completed" ? completed.phase.result.summary : undefined,
         "Done 25",
       );
       yield* sql`DELETE FROM projection_delegations`;
@@ -461,6 +465,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           projectId: asProjectId("project-1"),
           botId: null,
           groupId: null,
+          parentThreadId: null,
+          parentDelegationId: null,
           respondingBotId: null,
           title: "Thread 1",
           modelSelection: {
@@ -597,6 +603,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           projectId: asProjectId("project-1"),
           botId: null,
           groupId: null,
+          parentThreadId: null,
+          parentDelegationId: null,
           respondingBotId: null,
           title: "Thread 1",
           modelSelection: {
@@ -672,6 +680,80 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         assert.equal(turnStart.value.message.role, "assistant");
         assert.equal(turnStart.value.message.text, "hello from projection");
         assert.equal(turnStart.value.hasOtherUserMessages, false);
+      }
+    }),
+  );
+
+  it.effect("reads the projected channel_delivery column over the deliveries join fallback", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`DELETE FROM channel_deliveries`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, default_model_selection_json, scripts_json,
+          created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'project-1', 'Project 1', '/tmp/project-1',
+          '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+          '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z', NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          branch, worktree_path, linked_pull_request_json, latest_turn_id,
+          latest_user_message_at, pending_approval_count, pending_user_input_count,
+          has_actionable_proposed_plan, pinned_at, pin_order_key,
+          created_at, updated_at, deleted_at
+        )
+        VALUES (
+          'thread-1', 'project-1', 'Thread 1',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+          NULL, NULL, NULL, NULL, NULL, 0, 0, 0, NULL, NULL,
+          '2026-02-24T00:00:02.000Z', '2026-02-24T00:00:03.000Z', NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text,
+          channel_delivery, is_streaming, created_at, updated_at
+        )
+        VALUES
+          ('message-unknown', 'thread-1', NULL, 'assistant', 'ambiguous reply',
+           'unknown', 0, '2026-02-24T00:00:04.000Z', '2026-02-24T00:00:05.000Z'),
+          ('message-failed', 'thread-1', NULL, 'assistant', 'rejected reply',
+           'failed', 0, '2026-02-24T00:00:06.000Z', '2026-02-24T00:00:07.000Z'),
+          ('message-legacy', 'thread-1', NULL, 'assistant', 'pre-column reply',
+           NULL, 0, '2026-02-24T00:00:08.000Z', '2026-02-24T00:00:09.000Z')
+      `;
+      // A 'requested' row must not mask a projected 'unknown'; the same row is
+      // the fallback for messages written before migration 071.
+      yield* sql`
+        INSERT INTO channel_deliveries (
+          message_id, bot_id, thread_id, provider, external_thread_id,
+          status, requested_at, sent_at
+        )
+        VALUES
+          ('message-unknown', 'bot-1', 'thread-1', 'slack', 'slack:C1:1',
+           'requested', '2026-02-24T00:00:04.000Z', NULL),
+          ('message-legacy', 'bot-1', 'thread-1', 'slack', 'slack:C1:1',
+           'sent', '2026-02-24T00:00:08.000Z', '2026-02-24T00:00:09.000Z')
+      `;
+
+      const detail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
+      assert.equal(detail._tag, "Some");
+      if (detail._tag === "Some") {
+        const byId = new Map(detail.value.messages.map((message) => [message.id, message]));
+        assert.equal(byId.get(asMessageId("message-unknown"))?.channelDelivery, "unknown");
+        assert.equal(byId.get(asMessageId("message-failed"))?.channelDelivery, "failed");
+        assert.equal(byId.get(asMessageId("message-legacy"))?.channelDelivery, "sent");
       }
     }),
   );
@@ -794,6 +876,64 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         [ThreadId.make("thread-archived")],
       );
       assert.equal(archivedShellSnapshot.threads[0]?.archivedAt, "2026-04-06T00:00:06.000Z");
+    }),
+  );
+
+  it.effect("reads the channel origin of a turn start message", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id,
+          thread_id,
+          turn_id,
+          role,
+          text,
+          channel_origin_json,
+          is_streaming,
+          created_at,
+          updated_at
+        )
+        VALUES
+          (
+            'message-channel',
+            'thread-channel',
+            NULL,
+            'user',
+            'From Telegram',
+            '{"provider":"telegram","externalThreadId":"chat-1"}',
+            0,
+            '2026-04-06T00:00:01.000Z',
+            '2026-04-06T00:00:01.000Z'
+          ),
+          (
+            'message-local',
+            'thread-channel',
+            NULL,
+            'user',
+            'From the app',
+            NULL,
+            0,
+            '2026-04-06T00:00:02.000Z',
+            '2026-04-06T00:00:02.000Z'
+          )
+      `;
+
+      const read = (messageId: string) =>
+        snapshotQuery
+          .getTurnStartMessage({
+            threadId: ThreadId.make("thread-channel"),
+            messageId: MessageId.make(messageId),
+          })
+          .pipe(Effect.map(Option.getOrThrow));
+      assert.deepEqual((yield* read("message-channel")).message.channelOrigin, {
+        provider: "telegram",
+        externalThreadId: "chat-1",
+      });
+      assert.equal((yield* read("message-local")).message.channelOrigin, undefined);
     }),
   );
 
@@ -2157,6 +2297,19 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (yield* snapshotQuery.searchThreads({ query: "hidden needle" })).matches,
         [],
       );
+      // Child work shows only as a card in its parent chat, never as a chat of its own.
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchThreads({ query: "100x" })).matches.map(
+          (match) => match.threadId,
+        ),
+        [ThreadId.make("thread-percent-decoy")],
+      );
+      yield* sql`
+        UPDATE projection_threads
+        SET parent_thread_id = 'thread-active'
+        WHERE thread_id = 'thread-percent-decoy'
+      `;
+      assert.deepStrictEqual((yield* snapshotQuery.searchThreads({ query: "100x" })).matches, []);
       yield* sql`
         UPDATE projection_threads
         SET deleted_at = '2026-05-01T00:00:20.000Z'
@@ -2695,6 +2848,31 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
             'user-input-tied-a-resolution', 'thread-w', NULL, 'info', 'user-input.resolved',
             'Tied open question', '{"requestId":"input-tied-open"}', NULL,
             '2026-03-01T00:00:05.000Z'
+          ),
+          (
+            'memory-approval:memory-open:requested', 'thread-w', NULL, 'approval',
+            'memory.approval.requested', 'Save to project memory?',
+            '{"candidateId":"memory-open"}', NULL, '2026-03-01T00:00:06.000Z'
+          ),
+          (
+            'memory-approval:memory-decided:requested', 'thread-w', NULL, 'approval',
+            'memory.approval.requested', 'Save to project memory?',
+            '{"candidateId":"memory-decided"}', NULL, '2026-03-01T00:00:07.000Z'
+          )
+      `;
+      yield* sql`
+        INSERT INTO akeru_memory_candidates (
+          candidate_id, tenant_id, initiating_user_id, source_thread_id, fact_text,
+          target_scope, sensitive, confidence, affected_bot_ids_json, status, created_at
+        )
+        VALUES
+          (
+            'memory-open', 'tenant', 'user', 'thread-w', 'Open fact', 'project', 0, 1, '[]',
+            'pending', '2026-03-01T00:00:06.000Z'
+          ),
+          (
+            'memory-decided', 'tenant', 'user', 'thread-w', 'Decided fact', 'project', 0, 1,
+            '[]', 'approved', '2026-03-01T00:00:07.000Z'
           )
       `;
       yield* sql`
@@ -2718,11 +2896,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         const ids = new Set(
           detailWithPinnedRequests.value.activities.map((activity) => activity.id),
         );
-        assert.equal(detailWithPinnedRequests.value.activities.length, 503);
+        assert.equal(detailWithPinnedRequests.value.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
         assert.equal(ids.has(asEventId("user-input-closed")), false);
         assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-open:requested")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-decided:requested")), false);
       }
 
       const windowWithPinnedRequests = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
@@ -2733,11 +2913,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         const ids = new Set(
           windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id),
         );
-        assert.equal(windowWithPinnedRequests.value.thread.activities.length, 503);
+        assert.equal(windowWithPinnedRequests.value.thread.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
         assert.equal(ids.has(asEventId("user-input-closed")), false);
         assert.equal(ids.has(asEventId("user-input-tied-z-request")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-open:requested")), true);
+        assert.equal(ids.has(asEventId("memory-approval:memory-decided:requested")), false);
       }
     }),
   );

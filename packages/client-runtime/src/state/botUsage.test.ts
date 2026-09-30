@@ -1,5 +1,6 @@
 import { BotId, EnvironmentId, WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -26,6 +27,82 @@ const target = new PrimaryConnectionTarget({
   httpBaseUrl: "https://usage.example.test",
   wsBaseUrl: "wss://usage.example.test",
 });
+
+const snapshotFor = (botId: BotId) => ({
+  botId,
+  consumedTokens: 0,
+  reservedTokens: 0,
+  measurements: {
+    input: { tokens: 0, unavailableEntries: 0 },
+    output: { tokens: 0, unavailableEntries: 0 },
+    observer: { tokens: 0, unavailableEntries: 0 },
+    reflector: { tokens: 0, unavailableEntries: 0 },
+  },
+  entries: [],
+  usageCap: null,
+  estimatedCost: { status: "unavailable", usd: null },
+  subscriptionPool: { status: "unavailable", used: null, limit: null, unit: null },
+});
+
+/**
+ * A connected environment whose `bot.usage` handler counts calls, so a test can
+ * assert how many reads a policy costs rather than that a read happened.
+ */
+const connectedEnvironment = Effect.fn(function* () {
+  const calls = { count: 0 };
+  const client = {
+    [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
+      Effect.sync(() => {
+        calls.count += 1;
+        return snapshotFor(input.botId);
+      }),
+  } as unknown as WsRpcProtocolClient;
+  const rpcSession: RpcSession = {
+    client,
+    initialConfig: Effect.never,
+    ready: Effect.void,
+    probe: Effect.void,
+    closed: Effect.never,
+  };
+  const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+    target,
+    state: yield* SubscriptionRef.make<SupervisorConnectionState>({
+      ...AVAILABLE_CONNECTION_STATE,
+      desired: true,
+      network: "online",
+      phase: "connected",
+      attempt: 1,
+      generation: 1,
+    }),
+    session: yield* SubscriptionRef.make(Option.some(rpcSession)),
+    prepared: yield* SubscriptionRef.make(Option.none<PreparedConnection>()),
+    connect: Effect.void,
+    disconnect: Effect.void,
+    retryNow: Effect.void,
+    retryIfDesired: Effect.void,
+  } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+  const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
+    run: ((_id, effect) =>
+      Effect.provideService(
+        effect,
+        EnvironmentSupervisor.EnvironmentSupervisor,
+        supervisor,
+      )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["run"],
+    followStream: ((_id, stream) =>
+      Stream.provideService(
+        stream,
+        EnvironmentSupervisor.EnvironmentSupervisor,
+        supervisor,
+      )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"],
+    stateChanges: () => SubscriptionRef.changes(supervisor.state),
+  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  return {
+    calls,
+    runtime: Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registryService)),
+  };
+});
+
+const PAST_THE_OLD_POLL_INTERVAL_MS = 6_000;
 
 describe("bot usage environment atoms", () => {
   it.effect("keys usage queries by environment and bot and calls bot.usage", () =>
@@ -85,6 +162,7 @@ describe("bot usage environment atoms", () => {
           connect: Effect.void,
           disconnect: Effect.void,
           retryNow: Effect.void,
+          retryIfDesired: Effect.void,
         } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
         const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
           Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
@@ -119,6 +197,60 @@ describe("bot usage environment atoms", () => {
         yield* Effect.addFinalizer(() => Effect.sync(unmount));
         yield* Effect.promise(() => requested);
         expect(requestedBotId).toBe(botId);
+      }),
+    ),
+  );
+
+  it.live("does not poll a mounted query while nothing signals focus", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { calls, runtime } = yield* connectedEnvironment();
+        const atoms = createBotUsageEnvironmentAtoms(runtime);
+        const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
+          Effect.sync(() => value.dispose()),
+        );
+        vi.useFakeTimers();
+        try {
+          const unmount = registry.mount(
+            atoms.summary({ environmentId, input: { botId: BotId.make("bot-no-poll") } }),
+          );
+          yield* Effect.addFinalizer(() => Effect.sync(unmount));
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(PAST_THE_OLD_POLL_INTERVAL_MS));
+          expect(calls.count).toBe(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      }),
+    ),
+  );
+
+  it.live("reads again when the client returns to the foreground", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { calls, runtime } = yield* connectedEnvironment();
+        const focusSignal = Atom.make(0);
+        const atoms = createBotUsageEnvironmentAtoms(runtime, { focusSignal });
+        const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
+          Effect.sync(() => value.dispose()),
+        );
+        vi.useFakeTimers();
+        try {
+          const unmount = registry.mount(
+            atoms.summary({ environmentId, input: { botId: BotId.make("bot-focus") } }),
+          );
+          yield* Effect.addFinalizer(() => Effect.sync(unmount));
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(PAST_THE_OLD_POLL_INTERVAL_MS));
+          expect(calls.count).toBe(1);
+          registry.set(focusSignal, 1);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
+          expect(calls.count).toBe(2);
+        } finally {
+          vi.useRealTimers();
+        }
       }),
     ),
   );

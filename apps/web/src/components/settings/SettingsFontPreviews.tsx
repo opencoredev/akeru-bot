@@ -1,7 +1,7 @@
 import { preloadPatchFile } from "@pierre/diffs/ssr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "../ComposerPromptEditor";
-import { terminalThemeFromApp } from "../ThreadTerminalDrawer";
+import { terminalThemeFromApp } from "~/terminal/ghostty/appTheme";
 import { useTheme } from "../../hooks/useTheme";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import { resolveDiffThemeName, type DiffThemeName } from "../../lib/diffRendering";
@@ -21,9 +21,7 @@ const EMPTY_SKILLS: ReadonlyArray<never> = [];
 // markdown-style file links render as chips, so the preview shows prompt
 // text and pills exactly as the real composer draws them.
 const PROMPT_PREVIEW_TEXT =
-  "Use $frontend-design to fix the flaky test in " +
-  "[surface.test.ts](apps/web/src/terminal/ghostty/surface.test.ts) and align the header with " +
-  "[SettingsPanels.tsx](apps/web/src/components/settings/SettingsPanels.tsx) before shipping.";
+  "Review the latest changes, check the important states, and summarize what is ready to ship.";
 
 function noop() {}
 
@@ -37,7 +35,7 @@ export function PromptFontPreview() {
     setCursor(nextCursor);
   }, []);
   return (
-    <div className="mt-1 mb-2 rounded-lg border border-border bg-background px-3 py-2">
+    <div className="mt-1 mb-2 rounded-lg border border-border bg-card px-3 py-2">
       <ComposerPromptEditor
         editorRef={editorRef}
         value={prompt}
@@ -56,13 +54,13 @@ export function PromptFontPreview() {
 }
 
 const DIFF_PREVIEW_PATCH = [
-  "diff --git a/src/formatUser.ts b/src/formatUser.ts",
-  "--- a/src/formatUser.ts",
-  "+++ b/src/formatUser.ts",
+  "diff --git a/src/profile.ts b/src/profile.ts",
+  "--- a/src/profile.ts",
+  "+++ b/src/profile.ts",
   "@@ -1,3 +1,3 @@",
-  " export function formatUser(user: User) {",
-  "-  return user.name.toUpperCase();",
-  "+  return `${user.name} <${user.email}>`; // 0O 1lI",
+  " export function formatProfile(profile: Profile) {",
+  "-  return profile.name;",
+  "+  return profile.displayName ?? profile.name;",
   " }",
   "",
 ].join("\n");
@@ -154,14 +152,14 @@ const TERMINAL_PROMPT =
 // colors, and a background cell, so a font choice shows every SGR the
 // terminal actually renders.
 const TERMINAL_PREVIEW_TRANSCRIPT =
-  `${TERMINAL_PROMPT}vpr dev\r\n` +
+  `${TERMINAL_PROMPT}akeru check\r\n` +
   "\r\n" +
   "  \x1b[1;32mVITE\x1b[0m \x1b[32mv7.1.1\x1b[0m  \x1b[2mready in\x1b[0m \x1b[1m1.24s\x1b[0m\r\n" +
   "\r\n" +
   "  \x1b[32m→\x1b[0m  \x1b[2mLocal:\x1b[0m    \x1b[4;36mhttp://127.0.0.1:5173/\x1b[0m\r\n" +
   "  \x1b[32m→\x1b[0m  \x1b[2mNetwork:\x1b[0m  \x1b[4;36mhttp://192.168.1.24:5173/\x1b[0m\r\n" +
   "\r\n" +
-  "  \x1b[32m✓ 85 passed\x1b[0m   \x1b[33m△ 2 warnings\x1b[0m   \x1b[31m✗ 0 failed\x1b[0m\r\n" +
+  "  \x1b[32m✓ All checks passed\x1b[0m   \x1b[33m△ 2 notes\x1b[0m\r\n" +
   "\r\n" +
   "  \x1b[42;30m READY \x1b[0m \x1b[2mwatching for changes — press\x1b[0m \x1b[1mq\x1b[0m \x1b[2mto quit\x1b[0m\r\n" +
   "\r\n" +

@@ -82,8 +82,6 @@ it.layer(NodeServices.layer)("EnvironmentAuth administrative operations", (it) =
       expect(issued.scopes).toEqual([
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);
@@ -93,8 +91,6 @@ it.layer(NodeServices.layer)("EnvironmentAuth administrative operations", (it) =
       expect(verified.scopes).toEqual([
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);

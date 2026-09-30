@@ -1,485 +1,336 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
-import type { Thread } from "../types";
 import {
-  browseInputEndPaddingClass,
-  buildBrowseGroups,
+  activeComposerModelPicker,
+  registerComposerModelPicker,
+} from "../composerModelPickerRegistry";
+import { activeChatPaletteActions, registerChatPaletteActions } from "../chatActionsRegistry";
+import {
+  buildChatCommandPaletteItems,
+  buildChatSearchCommandPaletteItems,
+  buildEnvironmentOwnerNames,
+  buildLanguageCommandPaletteAction,
   buildModelPickerCommandPaletteAction,
-  buildRootGroups,
-  buildThreadActionItems,
-  enumerateCommandPaletteItems,
-  filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
-  getCommandPaletteInputPlaceholder,
-  reduceCommandPaletteUiState,
+  type CommandPaletteChat,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
-describe("command palette product language", () => {
-  it("uses conversation language for history and search", () => {
-    expect(
-      buildRootGroups({
-        actionItems: [],
-        recentThreadItems: [
-          {
-            kind: "action",
-            value: "thread:one",
-            searchTerms: [],
-            title: "Example",
-            icon: null,
-            run: async () => undefined,
-          },
-        ],
-      })[0]?.label,
-    ).toBe("Recent conversations");
-    expect(getCommandPaletteInputPlaceholder("root")).toBe(
-      "Search commands, projects, and conversations...",
-    );
-  });
-});
-
-describe("browseInputEndPaddingClass", () => {
-  it("reserves the widest space for the create action", () => {
-    expect(
-      browseInputEndPaddingClass({
-        willCreateProjectPath: true,
-        hasHighlightedBrowseItem: false,
-      }),
-    ).toContain("pe-38");
-  });
-
-  it("reserves space for the wider highlighted-item shortcut", () => {
-    expect(
-      browseInputEndPaddingClass({
-        willCreateProjectPath: false,
-        hasHighlightedBrowseItem: true,
-      }),
-    ).toContain("pe-30");
-  });
-
-  it("keeps the compact reserve for the normal add action", () => {
-    expect(
-      browseInputEndPaddingClass({
-        willCreateProjectPath: false,
-        hasHighlightedBrowseItem: false,
-      }),
-    ).toContain("pe-24");
-  });
-});
-
-describe("reduceCommandPaletteUiState", () => {
-  const closedState = { open: false, mode: "command", openIntent: null } as const;
-
-  it("toggles each overlay mode open and closed", () => {
-    const filesOpen = reduceCommandPaletteUiState(closedState, {
-      _tag: "ToggleMode",
-      mode: "files",
-    });
-    expect(filesOpen).toEqual({ open: true, mode: "files", openIntent: null });
-
-    const contentOpen = reduceCommandPaletteUiState(filesOpen, {
-      _tag: "ToggleMode",
-      mode: "content",
-    });
-    expect(contentOpen).toEqual({ open: true, mode: "content", openIntent: null });
-
-    expect(
-      reduceCommandPaletteUiState(contentOpen, { _tag: "ToggleMode", mode: "content" }),
-    ).toEqual({ open: false, mode: "content", openIntent: null });
-  });
-
-  it("switches between open modes without closing", () => {
-    const filesOpen = reduceCommandPaletteUiState(closedState, {
-      _tag: "ToggleMode",
-      mode: "files",
-    });
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "ToggleMode", mode: "command" })).toEqual(
-      {
-        open: true,
-        mode: "command",
-        openIntent: null,
-      },
-    );
-  });
-
-  it("routes open intents to command mode", () => {
-    const filesOpen = reduceCommandPaletteUiState(closedState, {
-      _tag: "ToggleMode",
-      mode: "files",
-    });
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenAddProject" })).toEqual({
-      open: true,
-      mode: "command",
-      openIntent: { kind: "add-project" },
-    });
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenNewThreadIn" })).toEqual({
-      open: true,
-      mode: "command",
-      openIntent: { kind: "new-thread-in" },
-    });
-  });
-
-  it("preserves the mode on close and resets it on open", () => {
-    const filesOpen = reduceCommandPaletteUiState(closedState, {
-      _tag: "ToggleMode",
-      mode: "files",
-    });
-
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "SetOpen", open: false })).toEqual({
-      open: false,
-      mode: "files",
-      openIntent: null,
-    });
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "SetOpen", open: true })).toEqual({
-      open: true,
-      mode: "command",
-      openIntent: null,
-    });
-  });
-});
-
-describe("buildModelPickerCommandPaletteAction", () => {
-  it("closes the command palette and schedules the shared handle opener", async () => {
-    const events: string[] = [];
-    const openModelPicker = vi.fn(() => events.push("open-model-picker"));
-    let scheduled: (() => void) | null = null;
-    const action = buildModelPickerCommandPaletteAction({
-      composerHandle: { openModelPicker },
-      closePalette: () => events.push("close-command-palette"),
-      scheduleAfterClose: (open) => {
-        events.push("schedule-model-picker");
-        scheduled = open;
-      },
-      icon: null,
-    });
-
-    expect(action).toMatchObject({
-      value: "action:change-model",
-      title: "Change model",
-      disabled: false,
-      keepOpen: true,
-      shortcutCommand: "modelPicker.toggle",
-    });
-    await action.run();
-    expect(events).toEqual(["close-command-palette", "schedule-model-picker"]);
-    expect(openModelPicker).not.toHaveBeenCalled();
-
-    expect(scheduled).not.toBeNull();
-    scheduled!();
-    expect(openModelPicker).toHaveBeenCalledOnce();
-    expect(events).toEqual(["close-command-palette", "schedule-model-picker", "open-model-picker"]);
-  });
-
-  it("disables the action when no composer handle exists", async () => {
-    const closePalette = vi.fn();
-    const scheduleAfterClose = vi.fn();
-    const action = buildModelPickerCommandPaletteAction({
-      composerHandle: null,
-      closePalette,
-      scheduleAfterClose,
-      icon: null,
-    });
-
-    expect(action.disabled).toBe(true);
-    await action.run();
-    expect(closePalette).not.toHaveBeenCalled();
-    expect(scheduleAfterClose).not.toHaveBeenCalled();
-  });
-});
-
-describe("enumerateCommandPaletteItems", () => {
-  it("assigns positional jump shortcuts to the first nine displayed items", () => {
-    const items = Array.from({ length: 10 }, (_, index) => ({
-      kind: "action" as const,
-      value: `project-${index + 1}`,
-      searchTerms: [],
-      title: `Project ${index + 1}`,
-      icon: null,
-      shortcutCommand: "chat.new" as const,
-      run: async () => undefined,
-    }));
-
-    expect(enumerateCommandPaletteItems(items).map((item) => item.shortcutCommand)).toEqual([
-      "thread.jump.1",
-      "thread.jump.2",
-      "thread.jump.3",
-      "thread.jump.4",
-      "thread.jump.5",
-      "thread.jump.6",
-      "thread.jump.7",
-      "thread.jump.8",
-      "thread.jump.9",
-      undefined,
-    ]);
-  });
-});
-
-const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
-const PROJECT_ID = ProjectId.make("project-1");
-
-function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
-    id: ThreadId.make("thread-1"),
-    environmentId: LOCAL_ENVIRONMENT_ID,
-    projectId: PROJECT_ID,
-    title: "Thread",
-    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    session: null,
-    messages: [],
-    proposedPlans: [],
-    createdAt: "2026-03-01T00:00:00.000Z",
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    deletedAt: null,
-    updatedAt: "2026-03-01T00:00:00.000Z",
-    latestTurn: null,
-    branch: null,
-    worktreePath: null,
-    checkpoints: [],
-    activities: [],
-    ...overrides,
-  };
+function action(value: string, searchTerms: ReadonlyArray<string>) {
+  return { value, searchTerms, title: value, icon: null, run: async () => undefined };
 }
 
-describe("buildThreadActionItems", () => {
-  it("orders threads by most recent activity and formats timestamps from updatedAt", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-25T12:00:00.000Z"));
+const ACTIONS: CommandPaletteGroup = {
+  value: "actions",
+  label: "Actions",
+  items: [
+    action("action:theme-editor", ["theme", "appearance", "colors"]),
+    action("action:settings", ["settings", "preferences", "keybindings"]),
+    action("action:plugins", ["plugins", "mcp", "tools"]),
+  ],
+};
 
-    try {
-      const items = buildThreadActionItems({
-        threads: [
-          makeThread({
-            id: ThreadId.make("thread-older"),
-            title: "Older thread",
-            updatedAt: "2026-03-24T12:00:00.000Z",
-          }),
-          makeThread({
-            id: ThreadId.make("thread-newer"),
-            title: "Newer thread",
-            createdAt: "2026-03-20T00:00:00.000Z",
-            updatedAt: "2026-03-20T00:00:00.000Z",
-          }),
-        ],
-        projectTitleById: new Map([[PROJECT_ID, "Project"]]),
-        sortOrder: "updated_at",
-        icon: null,
-        runThread: async (_thread) => undefined,
-      });
-
-      expect(items.map((item) => item.value)).toEqual([
-        "thread:thread-older",
-        "thread:thread-newer",
-      ]);
-      expect(items[0]?.timestamp).toBe("1d ago");
-      expect(items[1]?.timestamp).toBe("5d ago");
-    } finally {
-      vi.useRealTimers();
-    }
+describe("filterCommandPaletteGroups", () => {
+  it("returns every group for an empty query", () => {
+    expect(filterCommandPaletteGroups({ groups: [ACTIONS], query: "  " })).toEqual([ACTIONS]);
   });
 
-  it("ranks thread title matches ahead of contextual project-name matches", () => {
-    const threadItems = buildThreadActionItems({
-      threads: [
-        makeThread({
-          id: ThreadId.make("thread-context-match"),
-          title: "Fix navbar spacing",
-          updatedAt: "2026-03-20T00:00:00.000Z",
-        }),
-        makeThread({
-          id: ThreadId.make("thread-title-match"),
-          title: "Project kickoff notes",
-          createdAt: "2026-03-02T00:00:00.000Z",
-          updatedAt: "2026-03-19T00:00:00.000Z",
-        }),
-      ],
-      projectTitleById: new Map([[PROJECT_ID, "Project"]]),
-      sortOrder: "updated_at",
+  it("keeps only matching items and drops empty groups", () => {
+    const groups = filterCommandPaletteGroups({ groups: [ACTIONS], query: "sett" });
+    expect(groups.map((group) => group.items.map((item) => item.value))).toEqual([
+      ["action:settings"],
+    ]);
+    expect(filterCommandPaletteGroups({ groups: [ACTIONS], query: "nothing" })).toEqual([]);
+  });
+
+  it("ranks earlier search terms ahead of later ones", () => {
+    const group: CommandPaletteGroup = {
+      value: "actions",
+      label: "Actions",
+      items: [action("later", ["open", "theme"]), action("first", ["theme", "open"])],
+    };
+    const groups = filterCommandPaletteGroups({ groups: [group], query: "theme" });
+    expect(groups[0]?.items.map((item) => item.value)).toEqual(["first", "later"]);
+  });
+
+  it("ignores a leading > so actions-style queries still match", () => {
+    const groups = filterCommandPaletteGroups({ groups: [ACTIONS], query: ">plugins" });
+    expect(groups[0]?.items.map((item) => item.value)).toEqual(["action:plugins"]);
+  });
+});
+
+describe("roadmap palette commands", () => {
+  it("keeps stable ids for the language command and matches translated labels", async () => {
+    const openSettings = vi.fn();
+    const action = buildLanguageCommandPaletteAction({
+      translate: () => "Changer la langue",
+      openSettings,
       icon: null,
-      runThread: async (_thread) => undefined,
+    });
+    expect(action.value).toBe("action:language");
+    for (const query of ["language", "locale", "langue", "> langue", "简体中文"]) {
+      const groups = filterCommandPaletteGroups({
+        groups: [{ value: "actions", label: "Actions", items: [action] }],
+        query,
+      });
+      expect(groups[0]?.items[0]?.value).toBe("action:language");
+    }
+    await action.run();
+    expect(openSettings).toHaveBeenCalledExactlyOnceWith("general", "language");
+  });
+
+  it("opens the registered composer model picker and disables itself without one", async () => {
+    const openModelPicker = vi.fn();
+    const scheduleAfterClose = vi.fn((open: () => void) => open());
+    const release = registerComposerModelPicker({ openModelPicker });
+    const action = buildModelPickerCommandPaletteAction({
+      composerHandle: activeComposerModelPicker(),
+      scheduleAfterClose,
+      title: "Change model",
+      icon: null,
+    });
+    expect(action.disabled).toBe(false);
+    await action.run();
+    expect(openModelPicker).toHaveBeenCalledOnce();
+
+    release();
+    expect(
+      buildModelPickerCommandPaletteAction({
+        composerHandle: activeComposerModelPicker(),
+        scheduleAfterClose,
+        title: "Change model",
+        icon: null,
+      }).disabled,
+    ).toBe(true);
+  });
+});
+
+describe("chat actions in the command palette", () => {
+  it("publishes the open chat's actions until that chat unmounts", () => {
+    const first = {};
+    const second = {};
+    const settle = { id: "settle", title: "Settle chat", searchTerms: ["settle"], run: vi.fn() };
+    const cleanupFirst = registerChatPaletteActions(first, [settle]);
+    expect(activeChatPaletteActions()).toEqual([settle]);
+
+    const cleanupSecond = registerChatPaletteActions(second, []);
+    cleanupFirst();
+    expect(activeChatPaletteActions()).toEqual([]);
+    registerChatPaletteActions(second, [settle]);
+    cleanupFirst();
+    expect(activeChatPaletteActions()).toEqual([settle]);
+    cleanupSecond();
+    expect(activeChatPaletteActions()).toEqual([]);
+  });
+
+  it("turns chat actions into searchable palette rows that run the action", async () => {
+    const run = vi.fn();
+    const [item] = buildChatCommandPaletteItems({
+      actions: [
+        {
+          id: "settle",
+          title: "Settle chat",
+          searchTerms: ["settle", "done"],
+          shortcutCommand: "thread.settle",
+          run,
+        },
+      ],
+      icon: null,
     });
 
-    const groups = filterCommandPaletteGroups({
-      activeGroups: [],
-      query: "project",
-      isInSubmenu: false,
-      projectSearchItems: [],
-      threadSearchItems: threadItems,
+    expect(item).toMatchObject({
+      value: "chat:settle",
+      title: "Settle chat",
+      shortcutCommand: "thread.settle",
+      searchTerms: ["Settle chat", "chat", "settle", "done"],
+    });
+    const filtered = filterCommandPaletteGroups({
+      groups: [{ value: "chat", label: "This chat", items: item ? [item] : [] }],
+      query: "done",
+    });
+    expect(filtered[0]?.items.map((entry) => entry.value)).toEqual(["chat:settle"]);
+    await item?.run();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an action's description, such as a snooze preset's wake time", () => {
+    const [snooze, pin] = buildChatCommandPaletteItems({
+      actions: [
+        {
+          id: "snooze:hour",
+          title: "Snooze chat: In 1 hour",
+          description: "1:00 PM",
+          searchTerms: ["snooze"],
+          run: () => undefined,
+        },
+        { id: "pin", title: "Pin chat", searchTerms: ["pin"], run: () => undefined },
+      ],
+      icon: null,
+    });
+    expect(snooze?.description).toBe("1:00 PM");
+    expect(pin).not.toHaveProperty("description");
+  });
+});
+
+describe("buildEnvironmentOwnerNames", () => {
+  const ownerName = buildEnvironmentOwnerNames([
+    {
+      environmentId: "env-a",
+      bots: [{ id: "bot-1", name: "Akeru" }],
+      groups: [{ id: "group-1", name: "Launch" }],
+    },
+    {
+      environmentId: "env-b",
+      bots: [{ id: "bot-1", name: "Home Akeru" }],
+      groups: [{ id: "group-2", name: "Family" }],
+    },
+  ]);
+
+  it("names a chat's bot or group from the chat's own environment", () => {
+    expect(ownerName("env-b", { botId: "bot-1" })).toBe("Home Akeru");
+    expect(ownerName("env-b", { groupId: "group-2" })).toBe("Family");
+    expect(ownerName("env-a", { botId: "bot-1" })).toBe("Akeru");
+  });
+
+  it("returns null when that environment has no such owner", () => {
+    expect(ownerName("env-a", { groupId: "group-2" })).toBeNull();
+    expect(ownerName("env-c", { botId: "bot-1" })).toBeNull();
+    expect(ownerName("env-a", {})).toBeNull();
+  });
+});
+
+describe("buildChatSearchCommandPaletteItems", () => {
+  const chat = (
+    threadId: string,
+    title: string,
+    updatedAt: string,
+    extra: Partial<CommandPaletteChat> = {},
+  ): CommandPaletteChat => ({
+    environmentId: "env-a",
+    threadId,
+    title,
+    updatedAt,
+    ownerName: "Akeru",
+    unavailableIn: null,
+    ...extra,
+  });
+  const chats = [
+    chat("trip-old", "Old trip notes", "2026-08-01T00:00:00.000Z"),
+    chat("trip", "Trip plan", "2026-08-03T00:00:00.000Z"),
+    chat("budget", "Budget", "2026-08-02T00:00:00.000Z"),
+    chat("draft", "New chat", "2026-08-04T00:00:00.000Z"),
+    chat("remote", "Trip receipts", "2026-08-05T00:00:00.000Z", {
+      environmentId: "env-b",
+      ownerName: "Home Akeru",
+      unavailableIn: "Home server",
+    }),
+  ];
+  const build = (
+    query: string,
+    matches: Parameters<typeof buildChatSearchCommandPaletteItems>[0]["matches"] = [],
+    openChat = vi.fn(async () => undefined),
+  ) =>
+    buildChatSearchCommandPaletteItems({
+      query,
+      chats,
+      matches,
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => `In ${environment}`,
+      icon: null,
+      openChat,
     });
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.value).toBe("threads-search");
-    expect(groups[0]?.items.map((item) => item.value)).toEqual([
-      "thread:thread-title-match",
-      "thread:thread-context-match",
+  it("returns nothing for an empty query or an actions-only query", () => {
+    expect(build("  ")).toEqual([]);
+    expect(build(">trip")).toEqual([]);
+  });
+
+  it("ranks prefix title matches ahead of looser ones, newest first among equals", () => {
+    expect(build("trip").map((item) => item.value)).toEqual([
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+      "chat-search:env-b:remote",
     ]);
   });
 
-  it("preserves thread project-name matches when there is no stronger title match", () => {
-    const group: CommandPaletteGroup = {
-      value: "threads-search",
-      label: "Conversations",
-      items: [
-        {
-          kind: "action",
-          value: "thread:project-context-only",
-          searchTerms: ["Fix navbar spacing", "Project"],
-          title: "Fix navbar spacing",
-          description: "Project",
-          icon: null,
-          run: async () => undefined,
-        },
-      ],
-    };
-
-    const groups = filterCommandPaletteGroups({
-      activeGroups: [group],
-      query: "project",
-      isInSubmenu: false,
-      projectSearchItems: [],
-      threadSearchItems: [],
-    });
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.items.map((item) => item.value)).toEqual(["thread:project-context-only"]);
+  it("adds message matches after title matches, once per chat, with the snippet", () => {
+    const items = build("trip", [
+      { environmentId: "env-a", threadId: "trip", snippet: "trip again" },
+      { environmentId: "env-a", threadId: "budget", snippet: "the trip costs" },
+      { environmentId: "env-a", threadId: "budget", snippet: "second hit" },
+      { environmentId: "env-a", threadId: "unknown", snippet: "not a listed chat" },
+    ]);
+    expect(items.map((item) => item.value)).toEqual([
+      "chat-search:env-a:trip",
+      "chat-search:env-a:trip-old",
+      "chat-search:env-a:budget",
+      "chat-search:env-b:remote",
+    ]);
+    expect(items[2]?.description).toBe("Akeru · the trip costs");
   });
 
-  it("keeps message excerpts searchable without replacing thread metadata", () => {
-    const [item] = buildThreadActionItems({
-      threads: [makeThread({ branch: "feat/search" })],
-      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
-      sortOrder: "updated_at",
-      icon: null,
-      getContentMatch: () => ({
-        source: "assistant",
-        snippet: "The relay reconnect is now bounded.",
-        query: "reconnect",
+  it("matches a placeholder-titled chat only by message and shows it as untitled", () => {
+    expect(build("new chat")).toEqual([]);
+    const [item] = build("hello", [
+      { environmentId: "env-a", threadId: "draft", snippet: "hello there" },
+    ]);
+    expect(item?.title).toBe("Untitled chat");
+  });
+
+  it("disables chats in another environment and names it", () => {
+    const remote = build("receipts")[0];
+    expect(remote?.disabled).toBe(true);
+    expect(remote?.description).toBe("Home Akeru · In Home server");
+  });
+
+  it("opens the chosen chat", async () => {
+    const openChat = vi.fn(async () => undefined);
+    const item = build("budget", [], openChat)[0];
+    await item?.run();
+    expect(openChat).toHaveBeenCalledWith(chats[2]);
+  });
+
+  it("keeps chats this client can open ahead of newer ones it cannot", () => {
+    const remote = Array.from({ length: 8 }, (_, index) =>
+      chat(`r${index}`, `Plan ${index}`, `2026-08-1${index}T00:00:00.000Z`, {
+        environmentId: "env-b",
+        unavailableIn: "Home server",
       }),
-      runThread: async (_thread) => undefined,
-    });
-
-    expect(item?.searchTerms).toContain("The relay reconnect is now bounded.");
-    expect(item?.threadContentMatch).toEqual({
-      source: "assistant",
-      snippet: "The relay reconnect is now bounded.",
-      query: "reconnect",
-    });
-    expect(item?.description).toBe("T3 Code · #feat/search");
-  });
-
-  it("prefers renderDescription when provided", () => {
-    const [item] = buildThreadActionItems({
-      threads: [makeThread({ branch: "feat/search", worktreePath: "/tmp/wt" })],
-      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
-      sortOrder: "updated_at",
-      icon: null,
-      renderDescription: (thread, { projectTitle }) =>
-        `${projectTitle}:${thread.branch}:${thread.worktreePath ? "wt" : "local"}`,
-      runThread: async (_thread) => undefined,
-    });
-
-    expect(item?.description).toBe("T3 Code:feat/search:wt");
-  });
-
-  it("filters archived threads out of thread search items", () => {
-    const items = buildThreadActionItems({
-      threads: [
-        makeThread({
-          id: ThreadId.make("thread-active"),
-          title: "Active thread",
-          createdAt: "2026-03-02T00:00:00.000Z",
-          updatedAt: "2026-03-19T00:00:00.000Z",
-        }),
-        makeThread({
-          id: ThreadId.make("thread-archived"),
-          title: "Archived thread",
-          archivedAt: "2026-03-20T00:00:00.000Z",
-          updatedAt: "2026-03-20T00:00:00.000Z",
-        }),
-      ],
-      projectTitleById: new Map([[PROJECT_ID, "Project"]]),
-      sortOrder: "updated_at",
-      icon: null,
-      runThread: async (_thread) => undefined,
-    });
-
-    expect(items.map((item) => item.value)).toEqual(["thread:thread-active"]);
-  });
-});
-
-describe("buildBrowseGroups", () => {
-  it("waits for asynchronous browse navigation actions", async () => {
-    let finishNavigation: (() => void) | undefined;
-    const browseTo = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishNavigation = resolve;
-        }),
     );
-    const groups = buildBrowseGroups({
-      browseEntries: [{ name: "Downloads", fullPath: "/Users/test/Downloads" }],
-      browseQuery: "~/",
-      canBrowseUp: false,
-      upIcon: null,
-      directoryIcon: null,
-      browseUp: vi.fn(),
-      browseTo,
-    });
-    const item = groups[0]?.items[0];
-    if (!item || item.kind !== "action") {
-      throw new Error("Expected a browse action");
-    }
-
-    let actionSettled = false;
-    const action = item.run().then(() => {
-      actionSettled = true;
-    });
-    await Promise.resolve();
-
-    expect(browseTo).toHaveBeenCalledWith("Downloads");
-    expect(actionSettled).toBe(false);
-
-    finishNavigation?.();
-    await action;
-    expect(actionSettled).toBe(true);
-  });
-});
-
-describe("filterPinnedBrowseEntries", () => {
-  const entries = [
-    { name: "repo", fullPath: "/projects/repo" },
-    { name: "work", fullPath: "/projects/work" },
-  ];
-
-  it("shows sibling folders without losing an existing pinned destination", () => {
-    expect(
-      filterPinnedBrowseEntries({
-        browseEntries: entries,
-        filterQuery: "repo",
-        pinnedDirectoryName: "repo",
-        caseSensitive: true,
-      }),
-    ).toEqual({ visibleEntries: entries, exactEntry: entries[0] });
-  });
-
-  it("matches an existing pinned destination without Windows casing", () => {
-    const windowsEntries = [
-      { name: "Repo", fullPath: "C:\\projects\\Repo" },
-      { name: "work", fullPath: "C:\\projects\\work" },
+    const local = [
+      chat("local-title", "Plan local", "2026-08-01T00:00:00.000Z"),
+      chat("local-message", "Budget", "2026-08-01T00:00:00.000Z"),
     ];
-    expect(
-      filterPinnedBrowseEntries({
-        browseEntries: windowsEntries,
-        filterQuery: "repo",
-        pinnedDirectoryName: "repo",
-        caseSensitive: false,
-      }),
-    ).toEqual({
-      visibleEntries: windowsEntries,
-      exactEntry: windowsEntries[0],
+    const items = buildChatSearchCommandPaletteItems({
+      query: "plan",
+      chats: [...remote, ...local],
+      matches: [{ environmentId: "env-a", threadId: "local-message", snippet: "the plan" }],
+      untitledLabel: "Untitled chat",
+      unavailableLabel: (environment) => environment,
+      icon: null,
+      openChat: async () => undefined,
     });
+    expect(items).toHaveLength(8);
+    expect(items.slice(0, 2).map((item) => [item.value, item.disabled])).toEqual([
+      ["chat-search:env-a:local-title", undefined],
+      ["chat-search:env-a:local-message", undefined],
+    ]);
+    expect(items.slice(2).every((item) => item.disabled)).toBe(true);
+  });
+
+  it("caps the results", () => {
+    const many = Array.from({ length: 12 }, (_, index) =>
+      chat(`c${index}`, `Chat ${index}`, "2026-08-01T00:00:00.000Z"),
+    );
+    expect(
+      buildChatSearchCommandPaletteItems({
+        query: "chat",
+        chats: many,
+        matches: [],
+        untitledLabel: "Untitled chat",
+        unavailableLabel: (environment) => environment,
+        icon: null,
+        openChat: async () => undefined,
+      }),
+    ).toHaveLength(8);
   });
 });

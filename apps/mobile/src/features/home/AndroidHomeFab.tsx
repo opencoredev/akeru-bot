@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type { ReactNode } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +25,7 @@ function AndroidHomeFab(props: {
   readonly onStartNewTask: () => void;
   readonly children: ReactNode;
 }) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const primaryForegroundColor = useThemeColor("--color-primary-foreground");
 
@@ -31,7 +33,7 @@ function AndroidHomeFab(props: {
     <View className="flex-1">
       {props.children}
       <Pressable
-        accessibilityLabel="New chat"
+        accessibilityLabel={t("New chat")}
         accessibilityRole="button"
         onPress={props.onStartNewTask}
         className="absolute right-5 size-14 items-center justify-center rounded-full bg-primary shadow-lg"

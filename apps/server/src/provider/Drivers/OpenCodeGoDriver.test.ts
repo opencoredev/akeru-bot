@@ -31,7 +31,7 @@ describe("OpenCodeGoDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-opencode-go-driver-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap(({ instance, snapshot }) =>
@@ -76,7 +76,7 @@ describe("OpenCodeGoDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-opencode-go-refresh-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((snapshot) =>

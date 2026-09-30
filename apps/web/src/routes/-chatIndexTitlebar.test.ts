@@ -1,14 +1,14 @@
 // @effect-diagnostics nodeBuiltinImport:off
-// Regression coverage compares the onboarding header with the shared titlebar contract.
+// Regression coverage compares the empty workspace header with the shared titlebar contract.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-describe("hosted static onboarding header", () => {
+describe("empty bot workspace header", () => {
   it("uses the shared workspace topbar geometry", () => {
     const routeSource = NodeFS.readFileSync(new URL("./_chat.index.tsx", import.meta.url), "utf8");
-    const onboardingStart = routeSource.indexOf("function HostedStaticOnboardingState()");
-    const onboardingEnd = routeSource.indexOf('<Empty className="flex-1">', onboardingStart);
+    const onboardingStart = routeSource.indexOf("function BotIndexRedirect()");
+    const onboardingEnd = routeSource.indexOf("<BotZeroState />", onboardingStart);
 
     expect(onboardingStart).toBeGreaterThanOrEqual(0);
     expect(onboardingEnd).toBeGreaterThan(onboardingStart);

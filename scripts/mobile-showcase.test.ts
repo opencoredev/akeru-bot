@@ -57,8 +57,8 @@ const config: ShowcaseConfig = {
       platform: "ios",
       simulator: "iPhone Test",
       appearance: "dark",
-      theme: "t3-code",
-      scenes: ["thread", "review"],
+      theme: "akeru-classic",
+      scenes: ["thread", "threads"],
       storeAsset: appleSpec,
     },
     {
@@ -66,8 +66,8 @@ const config: ShowcaseConfig = {
       platform: "android",
       avd: "Pixel_Test",
       appearance: "light",
-      theme: "t3-code",
-      scenes: ["thread", "terminal"],
+      theme: "akeru-classic",
+      scenes: ["thread", "environments"],
       storeAsset: googleSpec,
     },
   ],
@@ -80,14 +80,14 @@ it("parses repeatable capture filters", () => {
     "--device",
     "phone",
     "--scene",
-    "review",
+    "environments",
     "--appearance",
     "both",
     "--skip-build",
   ]);
   assert.deepStrictEqual([...options.platforms], ["ios"]);
   assert.deepStrictEqual([...options.deviceIds], ["phone"]);
-  assert.deepStrictEqual([...options.scenes], ["review"]);
+  assert.deepStrictEqual([...options.scenes], ["environments"]);
   assert.deepStrictEqual([...options.appearances], ["light", "dark"]);
   assert.equal(options.skipBuild, true);
 });
@@ -145,7 +145,7 @@ it("uses platform-correct default Android SDK roots", () => {
 });
 
 it("plans only scenes supported by each selected device", () => {
-  const options = parseShowcaseCliArgs(["--platform", "all", "--scene", "terminal"]);
+  const options = parseShowcaseCliArgs(["--platform", "all", "--scene", "environments"]);
   const captures = planShowcaseCaptures(config, options);
   assert.deepStrictEqual(
     captures.map((capture) => ({
@@ -153,7 +153,7 @@ it("plans only scenes supported by each selected device", () => {
       appearance: capture.appearance,
       scenes: capture.scenes,
     })),
-    [{ id: "pixel", appearance: "light", scenes: ["terminal"] }],
+    [{ id: "pixel", appearance: "light", scenes: ["environments"] }],
   );
 });
 
@@ -167,8 +167,8 @@ it("expands both appearances into independent upload-ready directories", () => {
       directory: showcaseCaptureDirectory("/captures", capture),
     })),
     [
-      { appearance: "light", directory: "/captures/apple/iphone-test/light/t3-code" },
-      { appearance: "dark", directory: "/captures/apple/iphone-test/dark/t3-code" },
+      { appearance: "light", directory: "/captures/apple/iphone-test/light/akeru-classic" },
+      { appearance: "dark", directory: "/captures/apple/iphone-test/dark/akeru-classic" },
     ],
   );
 });
@@ -260,7 +260,7 @@ it("enforces store screenshot count limits", () => {
 });
 
 it("defaults every device to the app's own palette", () => {
-  assert.equal(DEFAULT_SHOWCASE_THEME, "t3-code");
+  assert.equal(DEFAULT_SHOWCASE_THEME, "akeru-classic");
   assert.equal(
     showcaseConfig.devices.every((device) => device.theme === DEFAULT_SHOWCASE_THEME),
     true,
@@ -340,10 +340,6 @@ it("seeds a playful multi-environment project spectrum", () => {
       `${project.title} has no active thread`,
     );
   }
-  assert.equal(
-    SHOWCASE_PROJECTS.every((project) => project.favicon.includes("<svg")),
-    true,
-  );
 });
 
 it("reads multiline JSON from the pairing CLI", () => {

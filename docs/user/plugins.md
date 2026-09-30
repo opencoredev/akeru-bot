@@ -12,6 +12,10 @@ platforms, permissions, approval classes, setup, documentation, source, and depe
 Health stays **Not checked** until a real request succeeds. An enabled plugin is not proof that its
 connection works. A routine can require an enabled connector.
 
+Entries marked **Verification pending** cannot be connected yet. The directory shows the vendor's
+official recipe and the named blocker so the entry can be re-verified; plugins only become available
+after a real install, connect, use, disable, reconnect, and remove lifecycle passes.
+
 ## Plugin actions
 
 - **Add** installs a public or local plugin.
@@ -31,29 +35,51 @@ configured OAuth clients keep their existing registration.
 
 ## Enable tools for a bot
 
-Akeru enables a new plugin for every bot by default. Open the bot's **Tools** setting to disable it
-for that bot. Changing the bot's provider starts a fresh provider session with the same enabled tools.
+Akeru enables a new plugin for every bot by default. To turn one off for a single bot, open the
+bot's settings and go to **Tools**. Each tool shows its connection status and a switch. Select
+**Save** to apply the change. Changing the bot's provider starts a fresh provider session with the
+same enabled tools.
 
 ## Composio integrations
 
-Gmail appears as a normal plugin with a **Composio** provider badge. Select **Connect**, then enter a
-Composio API key. Akeru opens Composio's hosted sign-in page for the Gmail account.
+Composio connects apps such as Slack, Notion, or GitHub through your own Composio account. Akeru
+holds no vendor OAuth credentials: you bring a Composio API key, and Composio runs each app's
+sign-in.
 
-Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys). You can also save or
-replace the key under **Settings > Plugins**. Akeru stores the key on the environment server, not in
-the plugin catalog or MCP registry.
+1. Get a key from [Composio API keys](https://app.composio.dev/settings/api-keys).
+2. In **Plugins**, under **All** or **Installed**, paste it into the **Composio** section and select
+   **Save key**. Akeru stores the key on the environment server, not in the plugin catalog or MCP
+   registry.
+3. Type at least two letters in the search field. Matching apps appear under **From Composio**.
+4. Select **Connect**. Composio's sign-in opens in your browser. When you come back, the account
+   appears in the **Composio** section.
 
-Connect more than one Gmail account when you need separate work and personal accounts. Manage each
-account under **Settings > Plugins**. The bot asks you to select an account when a tool call could
-use more than one.
+Each account shows its state, such as **Connected**, **Waiting for sign-in**, or **Expired**, and has
+its own **Disconnect**. Use **Replace key** to swap keys, or **Remove key** to stop bots from using
+Composio apps. Without a key, the section says so and search shows no Composio apps.
+
+Gmail appears as a normal plugin with a **Composio** provider badge, but its connection lifecycle is
+still verification-pending. **Connect** stays unavailable, and Composio search does not offer Gmail
+either, until that lifecycle is verified.
+
+Connect more than one account for an app when you need separate work and personal accounts. The bot
+asks you to select an account when a tool call could use more than one.
 
 Composio tools work in chats opened from web, desktop, or mobile after an environment has a key and
-at least one connected account. Configure accounts from the web or desktop client.
+at least one connected account. Manage the key and accounts from the web or desktop client; the
+mobile app does not manage plugins.
 
 ## Custom MCP servers
 
 Use **Add server** under **Custom MCP servers** when a connector is not in the directory. Installed
 servers can be edited, disabled, or removed from the same section.
+
+Bots can also save short guidance for an MCP server, such as which tool
+to try first. Ask the bot to set it. The bot asks for approval, and the guidance applies to every
+bot that uses the server from the next message on. Guidance can be up to 4,000 characters. Ask the bot to clear it to
+remove it. Editing the server keeps its guidance.
+
+When a bot removes an MCP server for you, it reports which bots were using it and lose access.
 
 Akeru does not store plugin credentials in the public directory or MCP registry. Keep credentials in
 the environment server or the service's sign-in flow.

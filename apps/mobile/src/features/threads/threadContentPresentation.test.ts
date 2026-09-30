@@ -36,11 +36,11 @@ describe("thread content presentation", () => {
     ).toEqual({
       kind: "unavailable",
       title: "Messages not cached",
-      detail: "Reconnect this environment to load the conversation.",
+      detail: "Reconnect this environment to load the chat.",
     });
   });
 
-  it("uses chat language when the detail was deleted", () => {
+  it("uses bot-session language when the detail was deleted", () => {
     expect(
       projectThreadContentPresentation({
         hasDetail: false,
@@ -65,7 +65,7 @@ describe("thread content presentation", () => {
       }),
     ).toEqual({
       kind: "unavailable",
-      title: "Could not load conversation",
+      title: "Could not load chat",
       detail: "The thread stream failed.",
     });
   });

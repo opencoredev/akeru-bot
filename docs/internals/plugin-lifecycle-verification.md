@@ -2,7 +2,7 @@
 
 Milestone 13 keeps catalog discovery separate from connection verification. An entry stays non-installable until its real install, authentication, safe read, approved write, disable, reconnect, and removal lifecycle passes. `verification-pending` means that local lifecycle proof is missing. `approval-pending` means an external vendor, administrator, allowlist, or first-party connector is still required.
 
-`plugins/lifecycle-matrix.test.ts` is the catalog gate. It fixes the directory at 52 IDs, keeps four verified `builtin-<id>` recipes installable, and keeps the other 48 entries pending. It also checks Featured order, consequential approval coverage, broker identity, Custom MCP independence, legacy built-in display, and the Computer Use, Executor, Typefully, Paper, and PayPal blockers.
+`plugins/lifecycle-matrix.test.ts` is the catalog gate. It fixes the directory at 54 IDs and, since every entry is currently pending, keeps `loadCatalog()` empty until a lifecycle is verified. It also checks Featured order, consequential approval coverage, broker identity, Custom MCP independence, legacy built-in display, and the Computer Use, Executor, Typefully, Paper, and PayPal blockers.
 
 ## Runtime proof
 
@@ -20,8 +20,14 @@ Routine pausing remains an explicit dependency on the routine runtime in `t3code
 
 Run the matrix with the catalog, schema, runtime, and validator checks. Do not call a vendor endpoint from automated tests.
 
+## Lifecycle matrix execution
+
+`apps/server/src/provider/PluginLifecycleMatrix.test.ts` runs the install → connect → health → disconnect → reconnect → remove sequence through the same Mastra `McpManager` used by bot sessions. The Codex Computer Use stdio recipe (`akeru-codex-computer-use mcp`) runs against a newline-delimited JSON-RPC fixture because the CLI is not on PATH in CI. URL recipes (including Executor 2's authenticated `https://executor.sh/mcp` recipe) run against a loopback Streamable HTTP fake that stands in for the vendor endpoint. The Executor fixture requires a bearer header, so discovery is not treated as an unauthenticated socket probe.
+
+Fixtures prove the lifecycle wiring, not vendor behavior. A fixture pass never moves an entry out of `verification-pending`; only a run against the real CLI or endpoint does.
+
 ## Vendor status
 
-This local run did not perform a real Context.dev or Zernio connection lifecycle. Context.dev keeps its existing available identity; this run does not recertify it. Zernio stays Featured rank 2 and `verification-pending` until its OAuth and connection lifecycle passes.
+No entry is currently `available`. Context.dev, Exa, Firecrawl, Parallel, and Hoplite keep their official HTTPS recipes visible but are `verification-pending` until each OAuth and connection lifecycle passes against the live vendor. Gmail keeps its Composio `brokered` connection but reports a `pendingBlocker` naming the required Composio API key and connected Gmail account, so it cannot be connected until that lifecycle is verified.
 
-Executor now declares its official local stdio CLI recipe, but stays pending until its full add, use, disable, reconnect, and removal lifecycle passes. Typefully stays pending until its OAuth lifecycle passes. Paper stays pending until its loopback desktop lifecycle passes. PayPal stays pending until its first-party OAuth and payment lifecycle passes. No entry can move to available based on a manifest check, HTTP probe, or vendor documentation alone.
+Executor declares its official Executor 2 HTTP MCP recipe but stays pending until its full add, use, disable, reconnect, and removal lifecycle passes against the live service. Typefully stays pending until its OAuth lifecycle passes. Paper stays pending until its loopback desktop lifecycle passes. PayPal stays pending until its first-party OAuth and payment lifecycle passes. No entry can move to available based on a manifest check, HTTP probe, or vendor documentation alone.

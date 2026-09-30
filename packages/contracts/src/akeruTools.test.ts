@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AKERU_DELEGATION_CONTEXT_MAX_CHARS,
   AKERU_TOOL_CATALOG,
   AkeruToolReceipt,
   akeruToolApprovalForInput,
@@ -12,6 +13,40 @@ import {
 } from "./akeruTools.ts";
 
 describe("Akeru tool contracts", () => {
+  it("includes the M2-T6 catalog ids and rejects invalid inputs", () => {
+    for (const id of [
+      "WebSearch",
+      "WebFetch",
+      "GenerateImage",
+      "AddMcpServer",
+      "UninstallMcpServer",
+      "RemoveMcpAccount",
+      "RenameMcpAccount",
+      "SetMcpInstructions",
+    ] as const) {
+      expect(AKERU_TOOL_CATALOG.some((tool) => tool.id === id)).toBe(true);
+    }
+    expect(() => decodeAkeruToolInput("WebSearch", { query: "" })).toThrow();
+    expect(() => decodeAkeruToolInput("WebFetch", { url: "file:///secret" })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("GenerateImage", { operation: "generate", prompt: "" }),
+    ).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "stdio" }),
+    ).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "url" }),
+    ).toThrow();
+    expect(() => decodeAkeruToolInput("RenameMcpAccount", { serverId: "x" })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("AddMcpServer", {
+        serverId: "x",
+        name: "x",
+        transport: "url",
+        url: "https://user:pass@example.com",
+      }),
+    ).toThrow();
+  });
   it("validates copy direction and rejects incomplete input", () => {
     expect(copyDirectionForTool("CopyToBox")).toEqual({
       from: "user-computer",
@@ -90,6 +125,37 @@ describe("Akeru tool contracts", () => {
     expect(filterAkeruTools({ ...context, delegationDepth: 1, activeDelegations: 3 })).toEqual([]);
   });
 
+  it("hides Task inside a worker and validates worker inputs", () => {
+    const context = {
+      capabilities: new Set(["bot-workspace"] as const),
+      workspaceType: "local" as const,
+      hasUserComputer: false,
+      localFullAccess: false,
+      implementedTools: new Set(["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"]),
+    };
+    expect(filterAkeruTools({ ...context, workerDepth: 0 }).map((tool) => tool.id)).toEqual([
+      "Task",
+      "CheckSubagent",
+      "MessageSubagent",
+      "StopSubagent",
+    ]);
+    expect(filterAkeruTools({ ...context, workerDepth: 1 }).map((tool) => tool.id)).toEqual([
+      "CheckSubagent",
+      "MessageSubagent",
+      "StopSubagent",
+    ]);
+    for (const toolId of ["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"] as const) {
+      expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === toolId)?.approval).toBe("none");
+    }
+    expect(decodeAkeruToolInput("Task", { task: "Summarize", background: true })).toEqual({
+      task: "Summarize",
+      background: true,
+    });
+    expect(() => decodeAkeruToolInput("Task", { task: "  " })).toThrow();
+    expect(() => decodeAkeruToolInput("CheckSubagent", {})).toThrow();
+    expect(() => decodeAkeruToolInput("MessageSubagent", { workerId: "worker-1" })).toThrow();
+  });
+
   it("decodes the approval limit and keeps escalation fields server-owned", () => {
     const input = {
       botId: "bot-research",
@@ -107,6 +173,22 @@ describe("Akeru tool contracts", () => {
       }),
     ).toThrow();
     expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === "SendToAgent")?.approval).toBe("send");
+  });
+
+  it("bounds the context a bot hands to a child and rejects oversized context", () => {
+    const input = {
+      botId: "bot-research",
+      task: "Compare three flights.",
+      expectedResult: "A short comparison with sources.",
+    };
+    const context = "x".repeat(AKERU_DELEGATION_CONTEXT_MAX_CHARS);
+    expect(decodeAkeruToolInput("SendToAgent", { ...input, context })).toMatchObject({ context });
+    expect(
+      decodeAkeruToolInput("MessageAgent", { ...input, context: "Prefers morning flights." }),
+    ).toMatchObject({ context: "Prefers morning flights." });
+    expect(() => decodeAkeruToolInput("SendToAgent", { ...input, context: `${context}x` })).toThrow(
+      `at most ${AKERU_DELEGATION_CONTEXT_MAX_CHARS} characters`,
+    );
   });
 
   it("types durable bot management without bypassing send or cancellation approval", () => {

@@ -125,7 +125,9 @@ describe("voice channel messages", () => {
       }),
       handlers,
     );
-    expect(handlers.sessionFailed).toHaveBeenCalledWith("Session expired.");
+    expect(handlers.sessionFailed).toHaveBeenCalledWith(
+      "The voice session failed. Start a new call to continue.",
+    );
   });
 
   it("delegates workspace work to the existing chat runtime", async () => {

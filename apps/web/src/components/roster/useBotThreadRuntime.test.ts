@@ -58,8 +58,9 @@ vi.mock("../../session-logic", () => ({
 }));
 vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (selector: (state: { bots: []; chatPathByBotId: {} }) => unknown) =>
-    selector({ bots: [], chatPathByBotId: {} }),
+  useRosterStore: (
+    selector: (state: { bots: []; chatPathByBotId: {}; openChatByBotId: {} }) => unknown,
+  ) => selector({ bots: [], chatPathByBotId: {}, openChatByBotId: {} }),
 }));
 
 beforeEach(() => {

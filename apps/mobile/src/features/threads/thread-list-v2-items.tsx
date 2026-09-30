@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -9,16 +10,18 @@ import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } 
 import { Alert, Platform, Pressable, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
+import { useAtomValue } from "@effect/atom-react";
+
 import { SymbolView } from "../../components/AppSymbol";
+import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
+import { GroupAvatarStack } from "../../components/GroupAvatarStack";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
-import { ProjectFavicon } from "../../components/ProjectFavicon";
-import { ProviderIcon } from "../../components/ProviderIcon";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
+import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
-import { useThreadPr } from "../../state/use-thread-pr";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
@@ -29,6 +32,7 @@ import {
   resolveThreadListV2SwipeActions,
   type ThreadListV2Status,
 } from "./threadListV2";
+import { resolveThreadIdentity } from "./threadIdentity";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 
 /**
@@ -37,6 +41,26 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
  * long-press actions. State reads through colored status labels and text
  * hierarchy rather than card fills.
  */
+
+/** Bot-style display name for rows whose thread has no configured bot. */
+const PROVIDER_BOT_NAMES: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  grok: "Grok",
+  kimi: "Kimi",
+  opencode: "OpenCode",
+  opencodeGo: "OpenCode",
+};
+
+/**
+ * Display name for a thread that has no configured bot. Returns null until the
+ * provider is known so callers can pick their own wording rather than show a
+ * generic "Bot".
+ */
+export function providerBotName(driver: string | null): string | null {
+  if (!driver) return null;
+  return PROVIDER_BOT_NAMES[driver] ?? driver.charAt(0).toUpperCase() + driver.slice(1);
+}
 
 const MONO_FONT = Platform.select({
   ios: "Menlo",
@@ -116,6 +140,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
   readonly onToggle: () => void;
   readonly pane?: "screen" | "sidebar";
 }) {
+  const { t } = useMobileI18n();
   const { themeAppearance: colorScheme } = useAppearancePreferences();
   return (
     <Pressable
@@ -134,7 +159,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-blue-600 dark:text-blue-400">
-        {props.expanded ? "Snoozed" : `Snoozed (${props.count})`}
+        {props.expanded ? t("Snoozed") : `${t("Snoozed")} (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-blue-500/20 dark:bg-blue-400/15" />
       <SymbolView
@@ -155,6 +180,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   readonly onToggle: () => void;
   readonly pane?: "screen" | "sidebar";
 }) {
+  const { t } = useMobileI18n();
   const mutedColor = useThemeColor("--color-foreground-muted");
   return (
     <Pressable
@@ -173,7 +199,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       <Text className="text-xs font-t3-medium text-foreground-tertiary">
-        {props.expanded ? "Settled" : `Settled (${props.count})`}
+        {props.expanded ? t("Settled") : `${t("Settled")} (${props.count})`}
       </Text>
       <View className="h-px flex-1 bg-border" />
       <SymbolView
@@ -211,6 +237,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
 }) {
+  const { t } = useMobileI18n();
   const { pendingTask, onSelectPendingTask, onDeletePendingTask } = props;
   const drawerColor = useThemeColor("--color-drawer");
   const pressedBackgroundColor = useThemeColor("--color-subtle");
@@ -228,47 +255,30 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 
   const rowContent = (
     <>
-      <View className="flex-row items-center gap-1.5">
-        {props.project ? (
-          <ProjectFavicon
-            environmentId={pendingTask.message.environmentId}
-            faviconPath={props.project.faviconPath}
-            size={15}
-            projectTitle={projectTitle}
-            workspaceRoot={props.project.workspaceRoot}
-          />
-        ) : null}
-        <Text className="flex-1 text-sm font-t3-medium text-foreground-muted" numberOfLines={1}>
-          {projectTitle}
-        </Text>
-        <Text className="text-xs text-foreground-tertiary">Queued</Text>
-      </View>
-      {/* One line, unlike the two an active row allows: a queued title is
-          derived from the whole prompt rather than written as a title, so the
-          second line is usually a stray word or emoji rather than meaning. */}
-      <Text className="mt-1 text-base font-t3-medium text-foreground" numberOfLines={1}>
+      <Text className="text-[17px] font-t3-medium leading-snug text-foreground" numberOfLines={1}>
         {pendingTask.title}
       </Text>
-      {branch || props.environmentLabel ? (
-        <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
-          {branch ? (
-            <Text className="text-xs text-foreground-muted" style={{ fontFamily: MONO_FONT }}>
-              {branch}
-            </Text>
-          ) : null}
-          {branch && props.environmentLabel ? "  ·  " : null}
-          {props.environmentLabel ? (
-            <Text className="text-xs text-foreground-tertiary">{props.environmentLabel}</Text>
-          ) : null}
-        </Text>
-      ) : null}
+      <Text className="mt-1 text-[13px] text-foreground-muted" numberOfLines={1}>
+        Queued
+        {projectTitle ? `  ·  ${projectTitle}` : ""}
+        {branch ? (
+          <Text className="text-[13px] text-foreground-muted" style={{ fontFamily: MONO_FONT }}>
+            {`  ·  ${branch}`}
+          </Text>
+        ) : null}
+        {props.environmentLabel ? (
+          <Text className="text-[13px] text-foreground-tertiary">
+            {`  ·  ${props.environmentLabel}`}
+          </Text>
+        ) : null}
+      </Text>
     </>
   );
 
   return (
     <>
       {props.showPendingDivider ? (
-        <ThreadListV2SectionDivider label="Pending" pane={props.pane} />
+        <ThreadListV2SectionDivider label={t("Pending")} pane={props.pane} />
       ) : null}
       <ControlPillMenu
         actions={PENDING_TASK_MENU_ACTIONS}
@@ -276,7 +286,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
         shouldOpenOnLongPress
       >
         <Pressable
-          accessibilityHint="Opens the queued chat for editing"
+          accessibilityHint={t("Opens the queued chat for editing")}
           accessibilityLabel={pendingTask.title}
           accessibilityRole="button"
           onPress={() => onSelectPendingTask(pendingTask)}
@@ -295,10 +305,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
             rowContent
           ) : (
             <View className="bg-screen">
-              <View className="px-5 py-2.5">{rowContent}</View>
-              {props.showTrailingDivider !== false ? (
-                <View className="ml-5 h-px bg-border-subtle" />
-              ) : null}
+              <View className="px-5 py-3">{rowContent}</View>
             </View>
           )}
         </Pressable>
@@ -381,6 +388,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     typeof ThreadSwipeable
   >["simultaneousWithExternalGesture"];
 }) {
+  const { t } = useMobileI18n();
   const { width: windowWidth } = useWindowDimensions();
   const {
     thread,
@@ -400,7 +408,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
 
-  const pr = useThreadPr(thread, props.projectCwd ?? props.project?.workspaceRoot ?? null);
+  const environmentBots = useAtomValue(environmentBotsAtom(thread.environmentId));
+  const environmentGroups = useAtomValue(environmentGroupsAtom(thread.environmentId));
   const screenColor = useThemeColor("--color-screen");
   const drawerColor = useThemeColor("--color-drawer");
   const pressedBackgroundColor = useThemeColor("--color-subtle");
@@ -575,7 +584,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (snoozeSelection._tag === "selected") {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
       } else if (snoozeSelection._tag === "expired") {
-        Alert.alert("Could not snooze chat", "That snooze time has passed. Choose another time.");
+        Alert.alert(
+          t("Could not snooze chat"),
+          t("That snooze time has passed. Choose another time."),
+        );
       }
     },
     [
@@ -591,6 +603,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       snoozePresets,
+      t,
     ],
   );
   const primaryAction = useMemo(() => {
@@ -651,6 +664,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : null,
     [handleMenuAction, snoozePresetActions, swipeActions.secondary, thread.title],
   );
+  const displayThreadTitle = thread.title;
   const swipeAccessibilityHint =
     secondaryAction === null
       ? `Opens the chat. Swipe left to ${primaryAction.label.toLowerCase()}.`
@@ -658,125 +672,116 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   // The sidebar pane fills selected rows with the theme's message surface, so
   // every piece of row text must use that surface's paired foreground.
+  const projectTitleText = props.projectTitle ?? props.project?.title ?? "";
+  const metaMutedClass = selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted";
+  const identity = resolveThreadIdentity({
+    thread,
+    bots: environmentBots,
+    groups: environmentGroups,
+    providerDriver: props.providerDriver,
+    providerName: providerBotName,
+  });
+  const botName = identity.title;
+  const botAvatar = identity.isGroup
+    ? null
+    : (identity.bots[0]?.avatar ?? seededBlobAvatar(identity.avatarSeed));
+  const avatarState =
+    status === "working"
+      ? "working"
+      : status === "approval" || status === "input"
+        ? "needs-you"
+        : "idle";
+  const online = status === "working" || status === "approval" || status === "input";
+  // Preview line: live state first, then where the work lives.
+  const previewText =
+    status === "failed" && thread.session?.lastError
+      ? thread.session.lastError
+      : [
+          statusLabel?.label ? `${statusLabel.label}…` : null,
+          projectTitleText || null,
+          props.environmentLabel,
+        ]
+          .filter(Boolean)
+          .join("  ·  ");
+  // Roster row, matching the web bot roster: blob avatar with presence dot,
+  // bot name, the chat title as a task chip, timestamp, and a preview line.
   const cardContent = (
-    <>
-      <View className="flex-row items-center gap-1.5">
-        {props.project ? (
-          <ProjectFavicon
-            environmentId={thread.environmentId}
-            faviconPath={props.project.faviconPath}
-            size={15}
-            projectTitle={props.projectTitle ?? props.project.title}
-            workspaceRoot={props.project.workspaceRoot}
+    <View className="flex-row items-center gap-3">
+      <View>
+        {identity.isGroup ? (
+          <GroupAvatarStack
+            bots={identity.bots}
+            seed={identity.avatarSeed}
+            size={46}
+            state={avatarState}
           />
-        ) : null}
-        <Text
-          className={cn(
-            "flex-1 text-sm font-t3-medium",
-            selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted",
-          )}
-          numberOfLines={1}
-        >
-          {props.projectTitle ?? props.project?.title ?? ""}
-        </Text>
-        {pinnedRow ? (
-          <SymbolView name="pin" size={11} tintColor={pinTintColor} type="monochrome" />
-        ) : null}
-        <Text
-          className={cn(
-            "text-xs tabular-nums",
-            selected
-              ? "text-user-bubble-foreground"
-              : (statusLabel?.className ?? "text-foreground-tertiary"),
-          )}
-        >
-          {statusLabel?.label ?? timeLabel}
-        </Text>
-      </View>
-      <Text
-        className={cn(
-          "mt-1 text-base font-t3-medium",
-          selected ? "text-user-bubble-foreground" : "text-foreground",
+        ) : (
+          <BotAvatarView avatar={botAvatar} size={46} state={avatarState} />
         )}
-        numberOfLines={2}
-      >
-        {thread.title}
-      </Text>
-      {props.searchMatch ? (
-        <View className="mt-1">
-          <ThreadSearchMatchExcerpt
-            match={props.searchMatch}
-            query={props.searchQuery ?? ""}
-            selected={selected}
-          />
-        </View>
-      ) : null}
-      <View className="mt-1 flex-row items-center gap-2">
-        {status === "failed" && thread.session?.lastError ? (
+        {online ? (
+          <View className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-screen bg-green-500" />
+        ) : null}
+      </View>
+      <View className="min-w-0 flex-1">
+        <View className="flex-row items-center gap-2">
           <Text
             className={cn(
-              "flex-1 text-xs",
+              "shrink text-[17px] font-t3-bold leading-snug",
+              selected ? "text-user-bubble-foreground" : "text-foreground",
+            )}
+            numberOfLines={1}
+          >
+            {botName}
+          </Text>
+          {/* A title-derived identity already shows the title; skip the duplicate chip. */}
+          {displayThreadTitle !== botName ? (
+            <View className="min-w-0 shrink-[2] rounded-lg bg-subtle px-2 py-[3px]">
+              <Text className={cn("text-[13px] font-t3-medium", metaMutedClass)} numberOfLines={1}>
+                {displayThreadTitle}
+              </Text>
+            </View>
+          ) : null}
+          <View className="flex-1" />
+          {pinnedRow ? (
+            <SymbolView name="pin" size={11} tintColor={pinTintColor} type="monochrome" />
+          ) : null}
+          <Text
+            className={cn(
+              "text-[13px] tabular-nums",
               selected
                 ? "text-user-bubble-foreground-muted"
-                : "text-red-600/80 dark:text-red-400/80",
+                : (statusLabel?.className ?? "text-foreground-tertiary"),
             )}
-            numberOfLines={1}
           >
-            {thread.session.lastError}
+            {statusLabel?.label ?? timeLabel}
           </Text>
-        ) : thread.branch || props.environmentLabel ? (
-          /* "branch · machine" share one truncating line. The machine sits
-             last so a tight fit cuts the repetitive label, not the branch —
-             and machine-only fills the row for non-git projects. */
+        </View>
+        {previewText ? (
           <Text
             className={cn(
-              "flex-1 text-xs",
-              selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted",
+              "mt-0.5 text-[14px]",
+              status === "failed" && thread.session?.lastError
+                ? selected
+                  ? "text-user-bubble-foreground-muted"
+                  : "text-red-600/80 dark:text-red-400/80"
+                : metaMutedClass,
             )}
             numberOfLines={1}
           >
-            {thread.branch ? (
-              <Text
-                className={cn(
-                  "text-xs",
-                  selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted",
-                )}
-                style={{ fontFamily: MONO_FONT }}
-              >
-                {thread.branch}
-              </Text>
-            ) : null}
-            {thread.branch && props.environmentLabel ? "  ·  " : null}
-            {props.environmentLabel ? (
-              <Text
-                className={cn(
-                  "text-xs",
-                  selected ? "text-user-bubble-foreground-muted" : "text-foreground-tertiary",
-                )}
-              >
-                {props.environmentLabel}
-              </Text>
-            ) : null}
-          </Text>
-        ) : (
-          <View className="flex-1" />
-        )}
-        {pr ? (
-          <Text
-            accessibilityLabel={pr.accessibilityLabel}
-            className={cn("text-xs", selected ? "text-user-bubble-foreground" : pr.textClassName)}
-            style={{ fontFamily: MONO_FONT }}
-          >
-            #{pr.label}
+            {previewText}
           </Text>
         ) : null}
-        {props.providerDriver ? (
-          <View className="opacity-60">
-            <ProviderIcon provider={props.providerDriver} size={14} />
+        {props.searchMatch ? (
+          <View className="mt-0.5">
+            <ThreadSearchMatchExcerpt
+              match={props.searchMatch}
+              query={props.searchQuery ?? ""}
+              selected={selected}
+            />
           </View>
         ) : null}
       </View>
-    </>
+    </View>
   );
 
   const rowContent = (close: () => void) =>
@@ -813,10 +818,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
              separates rows. The opaque screen background stays so swipe
              actions reveal behind the row. */
           <View className="bg-screen">
-            <View className="px-5 py-2.5">{cardContent}</View>
-            {props.showTrailingDivider !== false ? (
-              <View className="ml-5 h-px bg-border-subtle" />
-            ) : null}
+            <View className="px-5 py-3">{cardContent}</View>
           </View>
         )}
       </Pressable>
@@ -844,24 +846,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
         }
       >
-        {/* Settled history recedes: dimmed favicon + muted title. */}
+        {/* Settled history recedes: muted title. */}
         <View
           className={cn(
             "min-h-[44px] flex-row items-center gap-2.5 py-2",
             sidebarPane ? "px-3" : "px-5",
           )}
         >
-          {props.project ? (
-            <View className="opacity-40">
-              <ProjectFavicon
-                environmentId={thread.environmentId}
-                faviconPath={props.project.faviconPath}
-                size={15}
-                projectTitle={props.projectTitle ?? props.project.title}
-                workspaceRoot={props.project.workspaceRoot}
-              />
-            </View>
-          ) : null}
           <View className="min-w-0 flex-1">
             <Text
               className={cn(
@@ -870,7 +861,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
               numberOfLines={1}
             >
-              {thread.title}
+              {displayThreadTitle}
             </Text>
             {props.searchMatch ? (
               <ThreadSearchMatchExcerpt

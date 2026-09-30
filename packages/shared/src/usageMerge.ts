@@ -174,14 +174,13 @@ function ownedContribution(
   };
 }
 
-const USAGE_PROVIDER_BY_CONNECTION = {
+const USAGE_PROVIDER_BY_CONNECTION: Partial<Record<SubscriptionProviderId, UsageProviderKind>> = {
   anthropic: "claude",
   "openai-codex": "codex",
-  cursor: "cursor",
   xai: "grok",
   "kimi-for-coding": "kimi",
   "opencode-go": "opencode",
-} as const satisfies Record<SubscriptionProviderId, UsageProviderKind>;
+};
 
 function bucketTokens(bucket: UsageBucket): number {
   // reasoningTokens is a subset of outputTokens and must not be added again.

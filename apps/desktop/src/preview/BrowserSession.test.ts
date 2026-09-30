@@ -57,7 +57,7 @@ describe("BrowserSession", () => {
       const first = yield* browserSessions.getSession("scope-a");
       const second = yield* browserSessions.getSession("scope-a");
 
-      assert.strictEqual(partition, "persist:t3code-preview-f051bb2c68cb7b2fe969");
+      assert.strictEqual(partition, "persist:akeru-preview-f051bb2c68cb7b2fe969");
       assert.strictEqual(first, second);
       assert.strictEqual(fromPartition.mock.calls.length, 1);
     }).pipe(Effect.provide(layer)),
