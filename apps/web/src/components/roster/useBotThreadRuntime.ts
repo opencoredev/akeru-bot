@@ -419,7 +419,11 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
 
       const pendingNewChat = pendingNewChatRef.current;
       // A send made after opening another chat during New chat goes to that chat.
-      const sendsToNewChat = pendingNewChat?.selection === readChatSelection(botId);
+      const submittedSelection = readChatSelection(botId);
+      const sendsToNewChat = pendingNewChat?.selection === submittedSelection;
+      // The chat on screen when the message was submitted. Reading attachments and
+      // waiting behind earlier sends takes time, and the user may open another chat.
+      const submittedThreadRef = retainedThreadRef.current.threadRef;
       queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
@@ -451,15 +455,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             setError(localFailure("Could not start a new chat."));
             return false;
           }
-          // New chat was not adopted because another chat was opened meanwhile. The
-          // message still goes where it was typed, but the view stays on the opened chat.
-          const keepsSelection =
-            newChatRef !== null &&
-            retainedThreadRef.current.threadRef?.threadId !== newChatRef.threadId;
           const currentThreadRef =
-            newChatRef ??
-            retainedThreadRef.current.threadRef ??
-            (await ensureTranscriptThread(title));
+            newChatRef ?? submittedThreadRef ?? (await ensureTranscriptThread(title));
           if (!currentThreadRef) {
             setError(localFailure("Could not send the message."));
             return false;
@@ -533,7 +530,9 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             });
           }
 
-          if (!keepsSelection) {
+          // Another chat was opened, or New chat adopted its chat, while this message
+          // was on its way. It still goes where it was typed, but the view stays put.
+          if (readChatSelection(botId) === submittedSelection) {
             if (retainedThreadRef.current.threadRef !== currentThreadRef) {
               retainedThreadRef.current = {
                 ownerId: botId,

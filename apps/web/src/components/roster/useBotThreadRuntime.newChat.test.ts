@@ -195,3 +195,38 @@ describe("New chat while another chat is opened", () => {
     expect(mocks.roster.chatPathByBotId["bot-1"]).toBe(`/env-a/${createdId}`);
   });
 });
+
+describe("Opening another chat while a send reads its attachments", () => {
+  it("sends into the chat where the message was submitted and keeps the newly opened chat", async () => {
+    const readers: Array<() => void> = [];
+    class DeferredFileReader extends EventTarget {
+      result: string | null = null;
+      error: Error | null = null;
+      readAsDataURL() {
+        readers.push(() => {
+          this.result = "data:image/png;base64,AAAA";
+          this.dispatchEvent(new Event("load"));
+        });
+      }
+    }
+    vi.stubGlobal("FileReader", DeferredFileReader);
+    try {
+      mocks.roster.openBotChat("bot-1", "older", "/env-a/newest");
+      const sending = render().send("look at this", [
+        new File(["png"], "shot.png", { type: "image/png" }),
+      ]);
+
+      mocks.roster.openBotChat("bot-1", "newest", "/env-a/newest");
+      render();
+      await vi.waitFor(() => expect(readers).toHaveLength(1));
+      readers[0]!();
+
+      expect(await sending).toBe(true);
+      expect(startedThreadIds()).toEqual(["older"]);
+      expect(mocks.roster.openChatByBotId["bot-1"]).toBe("newest");
+      expect(mocks.roster.chatPathByBotId["bot-1"]).toBe("/env-a/newest");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
