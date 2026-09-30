@@ -407,7 +407,17 @@ export function ascii(
       await waitUntilArchived();
     },
     destroy: async () => {
-      await client.deleteBox({ boxId, xAsciiConfirmDelete: boxId });
+      let result = await client.deleteBox({ boxId, xAsciiConfirmDelete: boxId });
+      const deadline = performance.now() + 300_000;
+      while (result.operation.status !== "completed") {
+        if (result.operation.status === "blocked")
+          throw new Error("Ascii Box deletion is blocked.");
+        if (performance.now() >= deadline) throw new Error("Ascii Box deletion timed out.");
+        // The SDK lifecycle is promise-based, like the archival wait above.
+        // @effect-diagnostics-next-line globalTimers:off
+        await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+        result = await client.getDeletionOperation({ operationId: result.operation.id });
+      }
     },
     run: async (command, args, options) => {
       const env = Object.entries(options?.env ?? {}).map(([key, value]) =>

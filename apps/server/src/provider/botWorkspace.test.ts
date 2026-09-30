@@ -30,7 +30,7 @@ describe("Ascii Box", () => {
       kind: "box",
       targetId: "ascii-id",
       reason: "explicit",
-      status: "pending",
+      status: "completed",
       attemptCount: 0,
       requestedAt: DateTime.toDate(DateTime.makeUnsafe(0)),
       completedAt: null,
@@ -52,6 +52,52 @@ describe("Ascii Box", () => {
     });
     return { client, get, session: ascii(client, "ascii-id") };
   }
+
+  it("waits for pending VM deletion to complete", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+    try {
+      const { client, session } = await setup();
+      const pending = {
+        ...deleted,
+        operation: { ...deleted.operation, status: "pending" as const },
+      };
+      vi.spyOn(client, "deleteBox").mockResolvedValue(pending);
+      const poll = vi
+        .spyOn(client, "getDeletionOperation")
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValue(deleted);
+      let complete = false;
+      const operation = session.destroy().then(() => {
+        complete = true;
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(complete).toBe(false);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await operation;
+      expect(poll).toHaveBeenCalledWith({ operationId: "deletion" });
+      expect(complete).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds pending deletion waits", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+    try {
+      const { client, session } = await setup();
+      const pending = {
+        ...deleted,
+        operation: { ...deleted.operation, status: "pending" as const },
+      };
+      vi.spyOn(client, "deleteBox").mockResolvedValue(pending);
+      vi.spyOn(client, "getDeletionOperation").mockResolvedValue(pending);
+      const failure = expect(session.destroy()).rejects.toThrow("deletion timed out");
+      await vi.advanceTimersByTimeAsync(300_000);
+      await failure;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("stops with a native snapshot, resumes, and deletes with confirmation", async () => {
     const { client, get, session } = await setup();
@@ -302,8 +348,17 @@ describe("Ascii Box", () => {
       expect(create).toHaveBeenCalledOnce();
       expect(get).toHaveBeenCalledWith({ boxId: "ascii-id" });
       await second.wake();
+      remove.mockResolvedValueOnce({
+        ...deleted,
+        operation: { ...deleted.operation, status: "blocked" },
+      });
+      await expect(second.destroy()).rejects.toThrow("deletion is blocked");
+      expect(JSON.parse(await NodeFS.promises.readFile(input.identityFile, "utf8"))).toEqual({
+        provider: "ascii",
+        providerId: "ascii-id",
+      });
       await second.destroy();
-      expect(remove).toHaveBeenCalledOnce();
+      expect(remove).toHaveBeenCalledTimes(2);
       await expect(NodeFS.promises.stat(input.identityFile)).rejects.toMatchObject({
         code: "ENOENT",
       });
