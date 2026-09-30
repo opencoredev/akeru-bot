@@ -227,9 +227,11 @@ export function BotPromptMentionMenu({
             <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
               {item.kind === "path"
                 ? item.directory
-                : item.kind === "bot" && item.detail !== null
-                  ? item.detail
-                  : mentionKindDescription[item.kind]}
+                : item.kind === "bot" && !item.canTakeWork
+                  ? [item.detail, t("Cannot take handed-off work")].filter(Boolean).join(", ")
+                  : item.kind === "bot" && item.detail !== null
+                    ? item.detail
+                    : mentionKindDescription[item.kind]}
             </span>
           </div>
         );

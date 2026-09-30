@@ -47,7 +47,9 @@ Groups hold bots only. You cannot add people to a group yet.
 
 A bot can hand part of a request to another bot. The bot does not wait for that work. It replies
 first, and a work card in the chat shows the other bot, the task, and its state: queued, running,
-blocked, completed, failed, or canceled. Mobile lists the same work in the chat.
+blocked, completed, failed, or canceled. On mobile the same card appears inline in the chat and
+folds away with that turn's work. Its **Let it finish**, **Cancel**, and **Try again** buttons work
+the same as on web and desktop.
 
 On web and desktop, each card sits right after the exchange that started the work, and it stays
 there when you reload or come back later. Work started in three different replies shows up as
@@ -58,7 +60,9 @@ Mori", because any bot in the group can hand off work.
 
 Open **Details** on a card to see the expected result and the access the other bot was given,
 including its tools and MCP servers. **View work** opens a read-only view of the other bot's chat
-for that work, with an **Open chat** button when you want to continue there.
+for that work. **Open chat** takes you to that bot's own chat, where you can keep talking to it.
+Handed-off work only appears as cards. It never becomes the bot's chat in the sidebar and does not
+show up in chat search.
 
 While work is still running, the chat shows **Waiting on delegated work**. When the work finishes,
 the card shows the result or what went wrong, and one of these lines:
@@ -72,8 +76,35 @@ the card shows the result or what went wrong, and one of these lines:
 A bot runs at most three pieces of work at a time from one chat. Asking the same bot twice starts
 two separate pieces of work, each with its own card.
 
+In a group chat, a bot can hand work only to bots in that group. The other bot does the work in
+its own chat. When it finishes, it posts the result in the group as **Finished work for {name}**.
+
+Bots on standard OpenCode cannot hand off work or take it from other bots. OpenCode Go bots can.
+The bot's Tools sheet says so, the `@` menu in a group chat marks the bot with **Cannot take
+handed-off work**, and on mobile the chat settings show the same note under Options. A bot that
+tries to hand them work is told to pick a bot on another provider.
+
+If the bot that did the work leaves the group before it finishes, its result stays on its card but
+is not posted in the group.
+
 Work that has a deadline stops at the deadline. Work without one stops after 4 hours if the other
 bot has not reported back. Either way the card shows it as failed because it timed out.
+
+On web, desktop, and mobile, a card's buttons change with the state of the work:
+
+- **Let it finish** keeps running work going even if you stop the reply that started it. A bot can
+  also mark its own work this way. Once work is kept, the button goes away.
+- **Cancel** stops queued, running, or blocked work.
+- **Try again** appears on failed or canceled work. It starts new work for the same bot with the
+  same task and gets its own card; the original card keeps its result. Each card can be retried
+  once: after you try again, the original card drops the button, and further retries start from
+  the newer card. A retry is refused while three pieces of work from the chat are still running.
+
+A retry sends the task and expected result again, but not the extra background your bot added when
+it first handed off the work. If that background matters, ask your bot to send the work again
+instead.
+
+If an action fails, a message explains why and the card stays as it was.
 
 ## Tables, checklists, and other rich replies
 

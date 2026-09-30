@@ -19,12 +19,15 @@ import { useMemo, useState } from "react";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
+import { routineDelegateOptions } from "../components/roster/botEngineSelection";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
+import { useThreadShell } from "../state/entities";
 import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
 import { useI18n } from "../i18n";
 import { randomUUID } from "../lib/utils";
+import { deriveProviderInstanceEntries } from "../providerInstances";
 import { botRoutePanelKeys } from "./botRoutePanelKeys";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { routineEnvironment } from "../state/routines";
@@ -62,6 +65,15 @@ function BotThreadRouteView() {
   const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
   const bot = routedBot.status === "available" ? routedBot.bot : null;
   const threadRef = useBotThreadRef(botId);
+  // A remembered chat that no longer loads cannot take a routine.
+  const routineThreadRef = useThreadShell(threadRef) ? threadRef : null;
+  // A routine can hand its work to any other active bot in this environment.
+  // Bots whose provider cannot take handed-off work stay listed but disabled.
+  const delegateOptions = useMemo(
+    () =>
+      bot ? routineDelegateOptions(bot.id, bots, deriveProviderInstanceEntries(providers)) : [],
+    [bot, bots, providers],
+  );
   const botAssignments = useMemo(
     () => (snapshot?.skillAssignments ?? []).filter((assignment) => assignment.botId === botId),
     [botId, snapshot?.skillAssignments],
@@ -147,7 +159,7 @@ function BotThreadRouteView() {
     projectId: ProjectId.make(draft.projectId),
     sandbox: draft.sandbox,
     approvalPolicy: draft.approval,
-    delegateToBotId: null,
+    delegateToBotId: draft.delegateToBotId === null ? null : BotId.make(draft.delegateToBotId),
   });
 
   return (
@@ -172,11 +184,12 @@ function BotThreadRouteView() {
               id: project.id,
               name: project.title,
             })),
+            delegateOptions,
             busyRoutineId,
             // A new routine reports back into the bot's own chat, so it can only be
             // created once that thread exists.
-            createNeedsChat: threadRef === null,
-            ...(threadRef
+            createNeedsChat: routineThreadRef === null,
+            ...(routineThreadRef
               ? {
                   onCreate: async (draft: RoutineAdapterDraft) => {
                     if (!environmentId) throw new Error("The routine environment is unavailable.");
@@ -186,7 +199,7 @@ function BotThreadRouteView() {
                         environmentId,
                         input: {
                           routineId,
-                          targetThreadId: threadRef.threadId,
+                          targetThreadId: routineThreadRef.threadId,
                           ...(await routineDefinition(draft)),
                           createdAt: new Date().toISOString(),
                         },
@@ -208,7 +221,6 @@ function BotThreadRouteView() {
                     routineId: RoutineId.make(routineId),
                     targetThreadId: current.targetThreadId,
                     ...(await routineDefinition(draft)),
-                    delegateToBotId: current.delegateToBotId,
                     expectedProcedureVersion: current.procedureVersion,
                     createdAt: new Date().toISOString(),
                   },

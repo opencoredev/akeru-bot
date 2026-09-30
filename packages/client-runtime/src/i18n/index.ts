@@ -980,6 +980,9 @@ export const englishCatalog = {
   "Audio could not play. Retry, or check voice settings.":
     "Audio could not play. Retry, or check voice settings.",
   "Cancel delegation to {name}": "Cancel delegation to {name}",
+  "Let it finish": "Let it finish",
+  "Let {name} finish the work": "Let {name} finish the work",
+  "Ask {name} to try again": "Ask {name} to try again",
   "Change reaction, {emoji} selected": "Change reaction, {emoji} selected",
   "Change this file?": "Change this file?",
   "Choose a reaction": "Choose a reaction",
@@ -1004,6 +1007,8 @@ export const englishCatalog = {
   "Could not approve procedure": "Could not approve procedure",
   "Could not assign {name}": "Could not assign {name}",
   "Could not cancel delegation": "Could not cancel delegation",
+  "Could not let the work finish": "Could not let the work finish",
+  "Could not retry the work": "Could not retry the work",
   "Could not create routine": "Could not create routine",
   "Could not delete routine": "Could not delete routine",
   "Could not enable routine": "Could not enable routine",
@@ -1263,9 +1268,26 @@ export const englishCatalog = {
   "New credentials connected": "New credentials connected",
   "The old connection could not be removed. Delete it from the channel list.":
     "The old connection could not be removed. Delete it from the channel list.",
-  "Connection saved. Could not connect {name}. Try again or check the connection settings.":
-    "Connection saved. Could not connect {name}. Try again or check the connection settings.",
+  "{name} is saved but could not connect. {reason}":
+    "{name} is saved but could not connect. {reason}",
+  "{name} is saved but could not connect. Try again or check the connection settings.":
+    "{name} is saved but could not connect. Try again or check the connection settings.",
+  "Delete {name}? Its saved credentials are removed from this environment.":
+    "Delete {name}? Its saved credentials are removed from this environment.",
   "Update {name} credentials": "Update {name} credentials",
+  "Telegram rejected the bot token.": "Telegram rejected the bot token.",
+  "Slack rejected the bot token or app token.": "Slack rejected the bot token or app token.",
+  "Discord rejected the bot token.": "Discord rejected the bot token.",
+  "WhatsApp rejected the access token.": "WhatsApp rejected the access token.",
+  "Photon rejected the connection credentials.": "Photon rejected the connection credentials.",
+  "Could not reach {provider}. Check the network and try again.":
+    "Could not reach {provider}. Check the network and try again.",
+  "The project for this channel is unavailable. Choose another project.":
+    "The project for this channel is unavailable. Choose another project.",
+  "A reply may not have reached {provider}. Check the chat before replying again.":
+    "A reply may not have reached {provider}. Check the chat before replying again.",
+  "{provider} did not reconnect after a restart. Reconnect to resume.":
+    "{provider} did not reconnect after a restart. Reconnect to resume.",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
   "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":
@@ -1277,6 +1299,10 @@ export const englishCatalog = {
   "Close bot tools": "Close bot tools",
   "Choose which workspace tools this bot can use.":
     "Choose which workspace tools this bot can use.",
+  "This bot's provider cannot hand off work.": "This bot's provider cannot hand off work.",
+  "It cannot send work to other bots or receive work from them.":
+    "It cannot send work to other bots or receive work from them.",
+  "Cannot take handed-off work": "Cannot take handed-off work",
   "Search tools": "Search tools",
   "Search bot tools": "Search bot tools",
   "Enable all": "Enable all",
@@ -1541,6 +1567,7 @@ export const englishCatalog = {
   "When to run": "When to run",
   "Last run": "Last run",
   "Latest run": "Latest run",
+  "Done by": "Done by",
   "This routine runs only once you approve its procedure.":
     "This routine runs only once you approve its procedure.",
   "Approve procedure": "Approve procedure",

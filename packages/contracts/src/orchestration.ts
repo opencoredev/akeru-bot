@@ -1876,6 +1876,17 @@ export const DelegationCancelCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+/**
+ * Starts a new delegation from a Failed or Canceled one: same child bot, task,
+ * access grant, and chat anchor. The original record is never changed.
+ */
+export const DelegationRetryCommand = Schema.Struct({
+  type: Schema.Literal("delegation.retry"),
+  commandId: CommandId,
+  delegationId: Schema.suspend(() => DelegationIdSchema),
+  createdAt: IsoDateTime,
+});
+
 const ThreadMessageReactionSetCommand = Schema.Struct({
   type: Schema.Literal("thread.message.reaction.set"),
   commandId: CommandId,
@@ -1935,6 +1946,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
+  DelegationRetryCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -1996,6 +2008,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
+  DelegationRetryCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -2015,6 +2028,8 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   delta: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
+  /** Attributes a server-authored message to this bot instead of the thread's responder. */
+  respondingBotId: Schema.optional(BotId),
   createdAt: IsoDateTime,
 });
 
@@ -2024,6 +2039,7 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   turnId: Schema.optional(TurnId),
+  respondingBotId: Schema.optional(BotId),
   createdAt: IsoDateTime,
 });
 
@@ -2199,6 +2215,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.activity-appended",
   "delegation.created",
   "delegation.updated",
+  "delegation.retry-requested",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -2631,6 +2648,11 @@ export const DelegationCreatedPayload = Schema.Struct({
   delegation: Schema.suspend(() => AkeruDelegationRecord),
 });
 export const DelegationUpdatedPayload = DelegationCreatedPayload;
+export const DelegationRetryRequestedPayload = Schema.Struct({
+  delegationId: Schema.suspend(() => DelegationIdSchema),
+  parentThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
 
 /**
  * Which client connection dispatched the command that produced an event.
@@ -2998,6 +3020,11 @@ export const OrchestrationEvent = Schema.Union([
     type: Schema.Literal("delegation.updated"),
     payload: DelegationUpdatedPayload,
   }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.retry-requested"),
+    payload: DelegationRetryRequestedPayload,
+  }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;
 
@@ -3235,6 +3262,8 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<O
       ]),
     ),
     repairAction: Schema.optional(TrimmedNonEmptyString),
+    /** Why a channel command failed, when the failure has a channel repair. */
+    channelFailureCategory: Schema.optional(ChannelFailureCategory),
   },
 ) {}
 

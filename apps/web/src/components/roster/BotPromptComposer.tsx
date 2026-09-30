@@ -960,6 +960,11 @@ export function BotPromptComposer({
                           <AtSignIcon />
                           {t("Mention {name}", { name: bot.name })}
                           {mention.detail ? ` (${mention.detail})` : ""}
+                          {bot.canTakeWork === false ? (
+                            <span className="ms-auto ps-3 text-xs text-muted-foreground">
+                              {t("Cannot take handed-off work")}
+                            </span>
+                          ) : null}
                         </MenuItem>
                       );
                     })}

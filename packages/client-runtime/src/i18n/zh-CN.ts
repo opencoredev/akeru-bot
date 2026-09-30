@@ -935,6 +935,9 @@ export const zhCNCatalog: TranslationCatalog = {
   "Approval required": "需要批准",
   "Audio could not play. Retry, or check voice settings.": "音频无法播放。请重试，或检查语音设置。",
   "Cancel delegation to {name}": "取消委派给 {name}",
+  "Let it finish": "让它完成",
+  "Let {name} finish the work": "让 {name} 完成这项工作",
+  "Ask {name} to try again": "让 {name} 重试",
   "Change reaction, {emoji} selected": "更改回应，已选择 {emoji}",
   "Change this file?": "修改此文件？",
   "Choose a reaction": "选择回应",
@@ -958,6 +961,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Could not approve procedure": "无法批准任务内容",
   "Could not assign {name}": "无法分配 {name}",
   "Could not cancel delegation": "无法取消委派",
+  "Could not let the work finish": "无法让工作继续完成",
+  "Could not retry the work": "无法重试这项工作",
   "Could not create routine": "无法创建例行任务",
   "Could not delete routine": "无法删除例行任务",
   "Could not enable routine": "无法启用例行任务",
@@ -1211,9 +1216,25 @@ export const zhCNCatalog: TranslationCatalog = {
   "New credentials connected": "新凭据已连接",
   "The old connection could not be removed. Delete it from the channel list.":
     "无法移除旧连接。请从频道列表中删除它。",
-  "Connection saved. Could not connect {name}. Try again or check the connection settings.":
-    "连接已保存。无法连接 {name}。请重试或检查连接设置。",
+  "{name} is saved but could not connect. {reason}": "{name} 已保存，但无法连接。{reason}",
+  "{name} is saved but could not connect. Try again or check the connection settings.":
+    "{name} 已保存，但无法连接。请重试或检查连接设置。",
+  "Delete {name}? Its saved credentials are removed from this environment.":
+    "删除 {name}？其保存的凭据将从此环境中移除。",
   "Update {name} credentials": "更新 {name} 凭据",
+  "Telegram rejected the bot token.": "Telegram 拒绝了机器人令牌。",
+  "Slack rejected the bot token or app token.": "Slack 拒绝了机器人令牌或应用令牌。",
+  "Discord rejected the bot token.": "Discord 拒绝了机器人令牌。",
+  "WhatsApp rejected the access token.": "WhatsApp 拒绝了访问令牌。",
+  "Photon rejected the connection credentials.": "Photon 拒绝了连接凭据。",
+  "Could not reach {provider}. Check the network and try again.":
+    "无法连接到 {provider}。请检查网络后重试。",
+  "The project for this channel is unavailable. Choose another project.":
+    "此频道的项目不可用。请选择其他项目。",
+  "A reply may not have reached {provider}. Check the chat before replying again.":
+    "回复可能未送达 {provider}。请先检查聊天再回复。",
+  "{provider} did not reconnect after a restart. Reconnect to resume.":
+    "{provider} 重启后未能重新连接。请重新连接以恢复。",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "任何能给此机器人发消息的人，都能让它使用已启用的工具在所选项目中工作。",
   "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":
@@ -1224,6 +1245,10 @@ export const zhCNCatalog: TranslationCatalog = {
   "Enable {name} for this bot": "为此机器人启用 {name}",
   "Close bot tools": "关闭机器人工具",
   "Choose which workspace tools this bot can use.": "选择此机器人可以使用哪些工作区工具。",
+  "This bot's provider cannot hand off work.": "此机器人的提供方无法移交工作。",
+  "It cannot send work to other bots or receive work from them.":
+    "它无法把工作交给其他机器人，也无法接收其他机器人交来的工作。",
+  "Cannot take handed-off work": "无法接收移交的工作",
   "Search tools": "搜索工具",
   "Search bot tools": "搜索机器人工具",
   "Enable all": "全部启用",
@@ -1480,6 +1505,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "When to run": "运行时间",
   "Last run": "上次运行",
   "Latest run": "最近一次运行",
+  "Done by": "执行者",
   "This routine runs only once you approve its procedure.": "批准任务内容后，此例行任务才会运行。",
   "Approve procedure": "批准任务内容",
   "Loading routines": "正在加载例行任务",

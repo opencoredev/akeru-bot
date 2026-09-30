@@ -69,6 +69,24 @@ describe("buildBotPromptMentionItems", () => {
     ).toEqual(["thread"]);
   });
 
+  it("carries whether each bot can take handed-off work", () => {
+    const items = buildBotPromptMentionItems({
+      query: "",
+      browserAvailable: false,
+      bots: [
+        { id: "bot-1", name: "Mika" },
+        { id: "bot-2", name: "Legacy", canTakeWork: false },
+      ],
+      threads: [],
+    });
+    expect(
+      items.map((item) => (item.kind === "bot" ? [item.label, item.canTakeWork] : null)),
+    ).toEqual([
+      ["Mika", true],
+      ["Legacy", false],
+    ]);
+  });
+
   it("matches bots by name prefix, like the browser", () => {
     const named = [
       { id: "bot-1", name: "Mika" },

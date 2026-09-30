@@ -9,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 
 import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import type { ProviderAvailabilityTranslate } from "@t3tools/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
@@ -19,6 +20,44 @@ import {
   resolveSelectableProviderInstanceEntry,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+
+/**
+ * False only when a bot's saved engine resolves to a provider that cannot take
+ * handed-off work. A bot without an engine, or on an instance this client does
+ * not know, is not marked.
+ */
+export function botEngineTakesDelegatedWork(
+  engine: BotEngine | null,
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+): boolean {
+  if (engine === null) return true;
+  const entry = instanceEntries.find((candidate) => candidate.instanceId === engine.provider);
+  return entry === undefined || driverSupportsDelegation(entry.driverKind);
+}
+
+/**
+ * Helpers a routine owned by `ownerId` can hand its work to: every other active
+ * bot, marked when its provider cannot take handed-off work so the picker can
+ * show it disabled with the reason.
+ */
+export function routineDelegateOptions(
+  ownerId: string,
+  bots: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly archivedAt: string | null;
+    readonly engine: BotEngine | null;
+  }>,
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+): ReadonlyArray<{ readonly id: string; readonly name: string; readonly canTakeWork: boolean }> {
+  return bots
+    .filter((candidate) => candidate.id !== ownerId && candidate.archivedAt === null)
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      canTakeWork: botEngineTakesDelegatedWork(candidate.engine, instanceEntries),
+    }));
+}
 
 /**
  * The engine a bot answers with. A saved engine is returned as saved, even when

@@ -256,6 +256,34 @@ function requireActiveResponder(input: {
     : Effect.asVoid(requireActiveGroupMember({ ...input, groupId: input.groupId, botId }));
 }
 
+// The bot an assistant message is attributed to. A server-authored message may
+// name a bot explicitly: an active member of a group chat, or the chat's own bot
+// in a direct chat. Otherwise the thread's current responder answers.
+const resolveAssistantMessageBot = Effect.fn("resolveAssistantMessageBot")(function* (input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: Extract<
+    OrchestrationCommand,
+    { type: "thread.message.assistant.delta" | "thread.message.assistant.complete" }
+  >;
+  readonly thread: OrchestrationReadModel["threads"][number];
+}) {
+  const botId = input.command.respondingBotId;
+  if (botId === undefined) return input.thread.respondingBotId ?? null;
+  if (input.thread.groupId === null && input.thread.botId !== botId) {
+    return yield* new OrchestrationCommandInvariantError({
+      commandType: input.command.type,
+      detail: `Bot '${botId}' cannot post in thread '${input.thread.id}'.`,
+    });
+  }
+  yield* requireActiveResponder({
+    readModel: input.readModel,
+    command: input.command,
+    groupId: input.thread.groupId,
+    botId,
+  });
+  return botId;
+});
+
 function botGroupUpdatedEvent(input: {
   readonly botId: BotId;
   readonly groupId: GroupId | null;
@@ -1502,6 +1530,59 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "delegation.retry": {
+      const original = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: command.delegationId,
+      });
+      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only failed or canceled bot work can be retried.",
+        });
+      }
+      if (
+        readModel.delegations.some(
+          (candidate) => candidate.retryOfDelegationId === original.delegationId,
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "This bot work was already retried. Use the newer card instead.",
+        });
+      }
+      yield* requireThread({ readModel, command, threadId: original.parentThreadId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.parentBotId });
+      yield* requireBotNotArchived({ readModel, command, botId: original.childBotId });
+      const activeDelegationCount = readModel.delegations.filter(
+        (candidate) =>
+          candidate.parentBotId === original.parentBotId &&
+          !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
+      ).length;
+      if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `This bot already has ${activeDelegationCount} bot work items running. Wait for one to finish, then retry.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.retry-requested",
+        payload: {
+          delegationId: command.delegationId,
+          parentThreadId: original.parentThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+    }
+
     case "routine.create-approved": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
@@ -1791,6 +1872,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' does not exist.`,
+        });
+      }
+      // A run canceled or settled before it started stays ended, and a
+      // cancellation never overwrites a run that already ended.
+      if (
+        (command.type === "routine.run.start" || command.type === "routine.run.cancel") &&
+        existingRun.status !== "queued" &&
+        existingRun.status !== "waiting-for-approval" &&
+        existingRun.status !== "running"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Routine run '${command.runId}' already ended with status '${existingRun.status}'.`,
         });
       }
       const occurredAt =
@@ -3196,6 +3290,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3211,7 +3306,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           text: command.delta,
           ...(command.attachments !== undefined ? { attachments: command.attachments } : {}),
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: true,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -3225,6 +3320,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -3239,7 +3335,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "assistant",
           text: "",
           turnId: command.turnId ?? null,
-          respondingBotId: thread.respondingBotId ?? null,
+          respondingBotId,
           streaming: false,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,

@@ -4,10 +4,13 @@ import type {
   OrchestrationThreadActivity,
 } from "@t3tools/contracts";
 import {
+  type DelegationAction,
+  delegationActions,
   delegationElapsedMs,
   presentDelegation,
 } from "@t3tools/client-runtime/delegation-presentation";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { formatTokens } from "@t3tools/shared/usageFormat";
 import { useMemo, useState, type ReactNode } from "react";
@@ -57,39 +60,101 @@ function DelegationElapsed({
   return elapsed === null ? null : <span className="tabular-nums">{formatDuration(elapsed)}</span>;
 }
 
-function DelegationCancelAction({
+function commandFailureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
+  const error = squashAtomCommandFailure(result);
+  return error instanceof Error ? error.message : undefined;
+}
+
+/**
+ * The reverse-state controls for one piece of bot work. Only the moves
+ * `delegationActions` allows show: Let it finish and Cancel while the work is
+ * live, Try again once it failed or was canceled and has not been retried yet.
+ * Every button stays disabled
+ * while a command is in flight.
+ */
+function DelegationActions({
   delegation,
+  delegations,
   childName,
 }: {
   readonly delegation: AkeruDelegationRecord;
+  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
   readonly childName: string;
 }) {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+  const [pending, setPending] = useState<DelegationAction | null>(null);
   const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
     reportFailure: false,
   });
-  if (environmentId === null) return null;
-  return (
-    <Button
-      size="sm"
-      variant="ghost-muted"
-      className="min-h-11"
-      aria-label={t("Cancel delegation to {name}", { name: childName })}
-      onClick={() => {
-        void cancelDelegation({
-          environmentId,
-          input: { delegationId: delegation.delegationId, keep: false },
-        }).then((result) => {
-          if (result._tag === "Failure") {
-            toastManager.add({ type: "error", title: t("Could not cancel delegation") });
-          }
+  const retryDelegation = useAtomCommand(orchestrationEnvironment.retryDelegation, {
+    reportFailure: false,
+  });
+  const actions = delegationActions(delegation, delegations);
+  if (environmentId === null || actions.length === 0) return null;
+
+  const run = (action: DelegationAction) => {
+    const { delegationId } = delegation;
+    setPending(action);
+    const request =
+      action === "retry"
+        ? retryDelegation({ environmentId, input: { delegationId } })
+        : cancelDelegation({ environmentId, input: { delegationId, keep: action === "keep" } });
+    return request
+      .then((result) => {
+        if (result._tag !== "Failure") return;
+        const description = commandFailureMessage(result);
+        toastManager.add({
+          type: "error",
+          title: actionCopy(action, t, childName).failure,
+          ...(description ? { description } : {}),
         });
-      }}
-    >
-      {t("Cancel")}
-    </Button>
-  );
+      })
+      .finally(() => setPending(null));
+  };
+
+  return actions.map((action) => {
+    const copy = actionCopy(action, t, childName);
+    return (
+      <Button
+        key={action}
+        size="sm"
+        variant="ghost-muted"
+        className="min-h-11"
+        disabled={pending !== null}
+        aria-busy={pending === action || undefined}
+        aria-label={copy.ariaLabel}
+        onClick={() => run(action)}
+      >
+        {copy.label}
+      </Button>
+    );
+  });
+}
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function actionCopy(action: DelegationAction, t: Translate, name: string) {
+  switch (action) {
+    case "keep":
+      return {
+        label: t("Let it finish"),
+        ariaLabel: t("Let {name} finish the work", { name }),
+        failure: t("Could not let the work finish"),
+      };
+    case "cancel":
+      return {
+        label: t("Cancel"),
+        ariaLabel: t("Cancel delegation to {name}", { name }),
+        failure: t("Could not cancel delegation"),
+      };
+    case "retry":
+      return {
+        label: t("Try again"),
+        ariaLabel: t("Ask {name} to try again", { name }),
+        failure: t("Could not retry the work"),
+      };
+  }
 }
 
 /**
@@ -97,18 +162,22 @@ function DelegationCancelAction({
  * is working, the task, progress, and the outcome. The access grant sits behind
  * Details, and View work opens the child's chat read-only.
  *
- * `actions` replaces the default Cancel control, so the reverse-state menu
- * (retry, let it finish, cancel) can own that slot. `variant="group"` names the
- * bot that asked, because a group room has several bots who can delegate.
+ * The actions slot defaults to the reverse-state controls (let it finish,
+ * cancel, try again); a caller can pass `actions` to replace them.
+ * `variant="group"` names the bot that asked, because a group room has several
+ * bots who can delegate. `delegations` is the chat's full list, so a card that
+ * was already retried stops offering Try again.
  */
 export function DelegationCard({
   delegation,
+  delegations,
   childBot,
   parentBot,
   variant = "bot",
   actions,
 }: {
   readonly delegation: AkeruDelegationRecord;
+  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
   readonly childBot: Bot | null;
   readonly parentBot: Bot | null;
   readonly variant?: "bot" | "group";
@@ -217,10 +286,13 @@ export function DelegationCard({
         </dl>
       </details>
       <div className="flex items-center gap-1" data-delegation-actions>
-        {actions ??
-          (presentation.terminal ? null : (
-            <DelegationCancelAction delegation={delegation} childName={childName} />
-          ))}
+        {actions ?? (
+          <DelegationActions
+            delegation={delegation}
+            delegations={delegations}
+            childName={childName}
+          />
+        )}
         <Button
           size="sm"
           variant="ghost-muted"

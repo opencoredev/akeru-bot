@@ -25,6 +25,7 @@ const routine: RoutineAdapterItem = {
   approval: "approval-required",
   skills: [],
   connectors: [],
+  delegateToBotId: null,
   procedureApproved: true,
   enabled: true,
   paused: false,

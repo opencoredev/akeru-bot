@@ -163,6 +163,7 @@ const ProjectionTurnStartMessageDbRowSchema = Schema.Struct({
   role: ProjectionThreadMessage.fields.role,
   text: ProjectionThreadMessage.fields.text,
   attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
+  channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
   isStreaming: Schema.Number,
   createdAt: ProjectionThreadMessage.fields.createdAt,
   updatedAt: ProjectionThreadMessage.fields.updatedAt,
@@ -1231,6 +1232,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ON projects.project_id = threads.project_id
           WHERE threads.deleted_at IS NULL
             AND threads.archived_at IS NULL
+            AND threads.parent_thread_id IS NULL
             AND projects.deleted_at IS NULL
             AND messages.is_streaming = 0
             AND (
@@ -1652,6 +1654,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         role,
         text,
         attachments_json AS "attachments",
+        channel_origin_json AS "channelOrigin",
         is_streaming AS "isStreaming",
         created_at AS "createdAt",
         updated_at AS "updatedAt",
@@ -3540,6 +3543,7 @@ pending_approval_requests AS (
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+        ...(row.channelOrigin !== null ? { channelOrigin: row.channelOrigin } : {}),
       },
       hasOtherUserMessages: row.hasOtherUserMessages === 1 || row.hasOtherUserMessages === true,
     }));

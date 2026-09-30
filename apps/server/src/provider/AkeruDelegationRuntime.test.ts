@@ -1,256 +1,50 @@
 import {
   AKERU_DELEGATION_CONTEXT_MAX_CHARS,
   AkeruDelegationContextTooLongError,
-  AuthSessionId,
+  AkeruDelegationProviderUnsupportedError,
   BotId,
   CommandId,
   DelegationId,
   GroupId,
   McpServerId,
   MessageId,
-  ProjectId,
   ProviderInstanceId,
   ThreadId,
   TurnId,
   AkeruDelegationRecord,
+  AkeruToolInputSchemas,
   type AkeruDelegationAccessGrant,
   type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-  type OrchestrationThread,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import { decideOrchestrationCommand } from "../orchestration/decider.ts";
-import { projectEvent } from "../orchestration/projector.ts";
 import {
   createAkeruDelegationRuntime,
   type AkeruDelegationChildOutcome,
-  type AkeruDelegationParent,
 } from "./AkeruDelegationRuntime.ts";
 import { PendingWaiterTimeoutError } from "./PendingWaiters.ts";
 import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
-
-const NOW = "2026-08-31T12:00:00.000Z";
-const PROJECT_ID = ProjectId.make("project-1");
-const PARENT_BOT_ID = BotId.make("bot-parent");
-const CHILD_BOT_ID = BotId.make("bot-child");
-const OTHER_BOT_ID = BotId.make("bot-other");
-const PARENT_THREAD_ID = ThreadId.make("thread-parent");
-const PARENT_TURN_ID = TurnId.make("turn-parent");
-const CHILD_TURN_ID = TurnId.make("turn-child");
-
-const access = (overrides: Partial<AkeruDelegationAccessGrant> = {}) => ({
-  allowedToolIds: ["Read", "Shell", "SendToAgent"] as const,
-  memoryScopes: ["private", "bot", "project"] as const,
-  sandbox: "local" as const,
-  runtimeMode: "approval-required" as const,
-  hasUserComputer: false,
-  enabledMcpServerIds: [],
-  disabledMcpServerIds: [],
-  approvalCeiling: "send" as const,
-  ...overrides,
-});
-
-function bot(id: BotId, overrides: Partial<OrchestrationBot> = {}): OrchestrationBot {
-  return {
-    id,
-    name: id,
-    title: "Agent",
-    label: null,
-    description: null,
-    disabledMcpServerIds: [],
-    avatar: { kind: "dither", seed: id },
-    engine: null,
-    sandbox: "local",
-    runtimeMode: "approval-required",
-    usageCap: null,
-    imageProvider: null,
-    voiceEnabled: false,
-    channelBindings: [],
-    groupId: null,
-    archivedAt: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-    ...overrides,
-  };
-}
-
-function thread(
-  id: ThreadId,
-  botId: BotId | null,
-  overrides: Partial<OrchestrationThread> = {},
-): OrchestrationThread {
-  return {
-    id,
-    projectId: PROJECT_ID,
-    botId,
-    groupId: null,
-    respondingBotId: null,
-    title: id,
-    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
-    runtimeMode: "approval-required",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    latestTurn: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    deletedAt: null,
-    messages: [],
-    proposedPlans: [],
-    activities: [],
-    checkpoints: [],
-    session: null,
-    ...overrides,
-  };
-}
-
-function delegation(
-  delegationId: DelegationId,
-  overrides: Partial<AkeruDelegationRecord> = {},
-): AkeruDelegationRecord {
-  return {
-    delegationId,
-    parentDelegationId: null,
-    parentBotId: PARENT_BOT_ID,
-    childBotId: CHILD_BOT_ID,
-    parentThreadId: PARENT_THREAD_ID,
-    parentTurnId: PARENT_TURN_ID,
-    ancestorBotIds: [PARENT_BOT_ID],
-    depth: 1,
-    task: "Research the answer.",
-    expectedResult: "A concise answer.",
-    deadline: null,
-    access: access(),
-    phase: { _tag: "Queued" },
-    billedBotId: CHILD_BOT_ID,
-    keep: false,
-    anchorMessageId: null,
-    retryOfDelegationId: null,
-    trigger: "bot" as const,
-    createdAt: NOW,
-    updatedAt: NOW,
-    ...overrides,
-  };
-}
-
-function snapshot(overrides: Partial<OrchestrationReadModel> = {}): OrchestrationReadModel {
-  return {
-    snapshotSequence: 0,
-    projects: [
-      {
-        id: PROJECT_ID,
-        title: "Project",
-        workspaceRoot: "/tmp/project",
-        defaultModelSelection: null,
-        scripts: [],
-        createdAt: NOW,
-        updatedAt: NOW,
-        deletedAt: null,
-      },
-    ],
-    bots: [bot(PARENT_BOT_ID), bot(CHILD_BOT_ID), bot(OTHER_BOT_ID)],
-    groups: [],
-    delegations: [],
-    mcpServers: [],
-    routines: [],
-    routineRuns: [],
-    skillAssignments: [],
-    threads: [thread(PARENT_THREAD_ID, PARENT_BOT_ID)],
-    updatedAt: NOW,
-    ...overrides,
-  };
-}
-
-const parent = (overrides: Partial<AkeruDelegationParent> = {}): AkeruDelegationParent => ({
-  threadId: PARENT_THREAD_ID,
-  turnId: PARENT_TURN_ID,
-  botId: PARENT_BOT_ID,
-  parentDelegationId: null,
-  ancestorBotIds: [],
-  depth: 0,
-  access: access(),
-  ...overrides,
-});
-
-const request = (overrides: Record<string, unknown> = {}) => ({
-  botId: CHILD_BOT_ID,
-  task: "Research the answer.",
-  expectedResult: "A concise answer.",
-  ...overrides,
-});
-
-function harness(
-  initial = snapshot(),
-  outcome: AkeruDelegationChildOutcome = {
-    state: "completed",
-    turnId: CHILD_TURN_ID,
-    summary: "The delegated answer.",
-  },
-) {
-  const state = {
-    ...initial,
-    delegations: [...initial.delegations],
-    threads: [...initial.threads],
-  };
-  const commands: OrchestrationCommand[] = [];
-  const interrupts: Array<{ threadId: ThreadId; turnId: TurnId | null }> = [];
-  const usage: Array<Record<string, unknown>> = [];
-  let nextId = 0;
-  // Runs every command through the real decider and projects its events back
-  // into `state`, so illegal phase transitions (for example Canceled -> Failed)
-  // surface as OrchestrationCommandInvariantError instead of passing silently.
-  const dispatch = vi.fn(async (command: OrchestrationCommand) => {
-    commands.push(command);
-    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- The async runtime callback crosses into the Effect decider and projector.
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const decided = yield* decideOrchestrationCommand({
-          command:
-            command.type === "thread.turn.start"
-              ? {
-                  ...command,
-                  senderPersonId: AuthSessionId.make("person-1"),
-                  senderCanManageGroups: true,
-                }
-              : command,
-          readModel: state as OrchestrationReadModel,
-        });
-        const events = Array.isArray(decided) ? decided : [decided];
-        let model = state as OrchestrationReadModel;
-        for (const event of events) {
-          model = yield* projectEvent(model, {
-            ...event,
-            sequence: model.snapshotSequence + 1,
-          });
-        }
-        Object.assign(state, model);
-      }).pipe(Effect.provide(NodeServices.layer)),
-    );
-  });
-  const recordUsage = vi.fn(async (entry: Record<string, unknown>) => {
-    usage.push(entry);
-  });
-  const runtime = createAkeruDelegationRuntime({
-    readSnapshot: async () => state as OrchestrationReadModel,
-    dispatch,
-    awaitChild: async () => outcome,
-    interruptChild: async (threadId, turnId) => {
-      interrupts.push({ threadId, turnId });
-    },
-    recordUsage,
-    now: () => NOW,
-    id: () => String(++nextId),
-  });
-  return { runtime, state, commands, interrupts, usage, dispatch, recordUsage };
-}
+import {
+  CHILD_BOT_ID,
+  CHILD_TURN_ID,
+  NOW,
+  OTHER_BOT_ID,
+  PARENT_BOT_ID,
+  PARENT_THREAD_ID,
+  PARENT_TURN_ID,
+  access,
+  bot,
+  delegation,
+  harness,
+  parent,
+  request,
+  snapshot,
+  thread,
+} from "./testUtils/delegationHarness.ts";
 
 describe("delegation access", () => {
   it("intersects MCP disables, user-computer capability, tools, and memory scopes", () => {
@@ -433,39 +227,11 @@ describe("AkeruDelegationRuntime", () => {
     });
   });
 
-  it("keeps completed work completed when usage and delivery fail", async () => {
-    const test = harness();
-    test.recordUsage.mockRejectedValueOnce(new Error("usage store offline"));
-    test.dispatch.mockImplementation(async (command: OrchestrationCommand) => {
-      test.commands.push(command);
-      if (
-        command.type === "thread.activity.append" &&
-        command.activity.kind === "delegation.completed"
-      )
-        throw new Error("delivery offline");
-      if (command.type === "delegation.create") test.state.delegations.push(command.delegation);
-      if (command.type === "delegation.state.set") {
-        const index = test.state.delegations.findIndex(
-          (entry) => entry.delegationId === command.delegation.delegationId,
-        );
-        if (index >= 0) test.state.delegations[index] = command.delegation;
-      }
-      if (command.type === "thread.create") test.state.threads.push(thread(command.threadId, null));
-    });
-
-    await test.runtime.send(parent(), request() as never);
-    await test.runtime.drain();
-
-    expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Completed"]);
-  });
-
   it("delivers completed work when the usage write fails", async () => {
     const test = harness();
     test.recordUsage.mockRejectedValueOnce(new Error("usage store offline"));
-
     await test.runtime.send(parent(), request() as never);
     await test.runtime.drain();
-
     expect(test.state.delegations.map((entry) => entry.phase._tag)).toEqual(["Completed"]);
     expect(
       test.commands.some(
@@ -526,6 +292,190 @@ describe("AkeruDelegationRuntime", () => {
     );
     await otherTurn.runtime.send(parent(), request() as never);
     expect(otherTurn.state.delegations.at(-1)?.anchorMessageId).toBeNull();
+  });
+
+  it("keeps work a bot sent with keep running after its turn ends", async () => {
+    const test = harness();
+    const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: test.dispatch,
+      awaitChild: () => child.promise,
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: (() => {
+        let next = 100;
+        return () => String(++next);
+      })(),
+    });
+    const input = Schema.decodeUnknownSync(AkeruToolInputSchemas.SendToAgent)(
+      request({ keep: true }),
+    );
+    const handle = await runtime.send(parent(), input);
+    expect(test.state.delegations.at(-1)).toMatchObject({ keep: true });
+
+    await runtime.parentFinished({
+      threadId: PARENT_THREAD_ID,
+      turnId: PARENT_TURN_ID,
+      failed: false,
+    });
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Running");
+
+    child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done later." });
+    await runtime.drain();
+    expect(test.state.delegations.at(-1)).toMatchObject({
+      delegationId: handle.delegationId,
+      phase: { _tag: "Completed", result: { summary: "Done later." } },
+    });
+  });
+
+  it("retries failed work as a new record and never changes the original", async () => {
+    const original = delegation(DelegationId.make("delegation-original"), {
+      anchorMessageId: MessageId.make("message-user"),
+      access: access({ memoryScopes: ["project"], allowedToolIds: ["Read"] }),
+      phase: {
+        _tag: "Failed",
+        childThreadId: ThreadId.make("child-old"),
+        childTurnId: CHILD_TURN_ID,
+        startedAt: NOW,
+        completedAt: NOW,
+        failure: { failureCode: "child_failed", message: "The child failed." },
+        acknowledgedAt: null,
+      },
+    });
+    const test = harness(snapshot({ delegations: [original] }));
+
+    const handle = await test.runtime.dispatchDelegation({
+      _tag: "Retry",
+      delegationId: original.delegationId,
+    });
+    await test.runtime.drain();
+
+    expect(test.state.delegations[0]).toEqual(original);
+    expect(
+      test.commands.filter(
+        (command) =>
+          (command.type === "delegation.state.set" || command.type === "delegation.create") &&
+          command.delegation.delegationId === original.delegationId,
+      ),
+    ).toEqual([]);
+    const retried = test.state.delegations.find(
+      (entry) => entry.delegationId === handle.delegationId,
+    );
+    expect(retried).toMatchObject({
+      retryOfDelegationId: original.delegationId,
+      anchorMessageId: "message-user",
+      trigger: "bot",
+      parentBotId: PARENT_BOT_ID,
+      childBotId: CHILD_BOT_ID,
+      parentTurnId: PARENT_TURN_ID,
+      ancestorBotIds: [PARENT_BOT_ID],
+      depth: 1,
+      task: original.task,
+      access: original.access,
+      phase: { _tag: "Completed" },
+    });
+
+    await expect(
+      test.runtime.dispatchDelegation({ _tag: "Retry", delegationId: handle.delegationId }),
+    ).rejects.toThrow("Only failed or canceled bot work can be retried.");
+    await expect(
+      test.runtime.dispatchDelegation({ _tag: "Retry", delegationId: original.delegationId }),
+    ).rejects.toThrow("already retried");
+  });
+
+  it("fails new bot work whose child turn cannot start, so it stays retryable", async () => {
+    const base = harness();
+    const test = harness(snapshot(), undefined, {
+      dispatch: async (command) => {
+        if (command.type === "thread.turn.start") throw new Error("provider unavailable");
+        await base.dispatch(command);
+      },
+      readSnapshot: async () => base.state as never,
+    });
+
+    await expect(test.runtime.send(parent(), request() as never)).rejects.toThrow(
+      "provider unavailable",
+    );
+    expect(base.state.delegations.at(-1)?.phase).toMatchObject({
+      _tag: "Failed",
+      failure: { failureCode: "internal", message: "provider unavailable" },
+    });
+  });
+
+  it("starts scheduled work from the owner chat that its turn end leaves running", async () => {
+    const test = harness(
+      snapshot({
+        threads: [
+          thread(PARENT_THREAD_ID, PARENT_BOT_ID, {
+            latestTurn: {
+              turnId: PARENT_TURN_ID,
+              state: "running",
+              requestedAt: NOW,
+              startedAt: NOW,
+              completedAt: null,
+              assistantMessageId: null,
+              requestMessageId: MessageId.make("message-user"),
+            },
+            messages: [
+              {
+                id: MessageId.make("message-last"),
+                role: "assistant",
+                text: "Earlier reply.",
+                turnId: PARENT_TURN_ID,
+                streaming: false,
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state,
+      dispatch: test.dispatch,
+      awaitChild: () => child.promise,
+      interruptChild: async () => undefined,
+      now: () => NOW,
+      id: (() => {
+        let next = 200;
+        return () => String(++next);
+      })(),
+    });
+
+    await runtime.dispatchDelegation({
+      _tag: "Scheduled",
+      parentThreadId: PARENT_THREAD_ID,
+      parentBotId: PARENT_BOT_ID,
+      childBotId: CHILD_BOT_ID,
+      task: "Summarize the inbox.",
+      expectedResult: "Three bullet points.",
+      runtimeMode: "approval-required",
+    });
+    expect(test.state.delegations.at(-1)).toMatchObject({
+      trigger: "scheduled",
+      retryOfDelegationId: null,
+      anchorMessageId: "message-last",
+      parentBotId: PARENT_BOT_ID,
+      parentDelegationId: null,
+      depth: 1,
+      access: { memoryScopes: [], runtimeMode: "approval-required" },
+    });
+    // The card keeps its own turn, so the running chat turn cannot move it.
+    expect(test.state.delegations.at(-1)?.parentTurnId).not.toBe(PARENT_TURN_ID);
+
+    await runtime.parentFinished({
+      threadId: PARENT_THREAD_ID,
+      turnId: PARENT_TURN_ID,
+      failed: true,
+    });
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Running");
+
+    child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Inbox summary." });
+    await runtime.drain();
+    expect(test.state.delegations.at(-1)?.phase._tag).toBe("Completed");
   });
 
   it("keeps lowercase activity kinds and states for delivered phases", async () => {
@@ -1129,7 +1079,7 @@ describe("AkeruDelegationRuntime", () => {
     expect(test.state.delegations[0]?.phase._tag).toBe("Completed");
   });
 
-  it("uses group-thread routing and does not treat a bot thread as a group", async () => {
+  it("runs group work in a direct child chat and posts the attributed result to the group", async () => {
     const groupId = GroupId.make("group-1");
     const group = {
       id: groupId,
@@ -1143,30 +1093,248 @@ describe("AkeruDelegationRuntime", () => {
       updatedAt: NOW,
     };
     const grouped = snapshot({
-      bots: [bot(PARENT_BOT_ID, { groupId }), bot(CHILD_BOT_ID, { groupId })],
-      groups: [group],
-      threads: [
-        thread(PARENT_THREAD_ID, null, { groupId, respondingBotId: PARENT_BOT_ID }),
-        thread(ThreadId.make("group-child"), null, { groupId }),
+      bots: [
+        bot(PARENT_BOT_ID, { groupId, name: "Boss" }),
+        bot(CHILD_BOT_ID, { groupId, name: "Scout" }),
       ],
+      groups: [group],
+      threads: [thread(PARENT_THREAD_ID, null, { groupId, respondingBotId: PARENT_BOT_ID })],
     });
     const test = harness(grouped);
-    await test.runtime.send(parent(), request() as never);
+    const handle = await test.runtime.send(parent(), request() as never);
     await test.runtime.drain();
-    const groupTurn = test.commands.find((command) => command.type === "thread.turn.start");
-    expect(groupTurn).toMatchObject({ respondingBotId: CHILD_BOT_ID });
-    expect(groupTurn && "threadId" in groupTurn ? groupTurn.threadId : null).not.toBe(
-      ThreadId.make("group-child"),
+
+    const create = test.commands.find((command) => command.type === "thread.create");
+    expect(create).toMatchObject({ botId: CHILD_BOT_ID, groupId: null });
+    const childTurn = test.commands.find((command) => command.type === "thread.turn.start");
+    expect(childTurn).not.toHaveProperty("respondingBotId");
+    expect(childTurn && "threadId" in childTurn ? childTurn.threadId : null).toBe(
+      handle.childThreadId,
     );
 
-    await expect(
-      harness(
-        snapshot({
-          bots: [bot(PARENT_BOT_ID), bot(CHILD_BOT_ID, { groupId })],
-          groups: [group],
-        }),
-      ).runtime.send(parent(), request() as never),
-    ).rejects.toThrow("current group");
+    const groupThread = test.state.threads.find((entry) => entry.id === PARENT_THREAD_ID);
+    const posted = groupThread?.messages.filter((message) => message.role === "assistant");
+    expect(posted).toEqual([
+      expect.objectContaining({
+        text: "Finished work for Boss: Research the answer.\n\nThe delegated answer.",
+        respondingBotId: CHILD_BOT_ID,
+        turnId: null,
+        streaming: false,
+      }),
+    ]);
+    // A server-authored message starts no turn in the group.
+    expect(
+      test.commands.filter(
+        (command) => command.type === "thread.turn.start" && command.threadId === PARENT_THREAD_ID,
+      ),
+    ).toEqual([]);
+  });
+
+  describe("group result after the child finishes", () => {
+    const groupId = GroupId.make("group-1");
+    const grouped = () =>
+      snapshot({
+        bots: [
+          bot(PARENT_BOT_ID, { groupId, name: "Boss" }),
+          bot(CHILD_BOT_ID, { groupId, name: "Scout" }),
+        ],
+        groups: [
+          {
+            id: groupId,
+            name: "Research",
+            bossBotId: PARENT_BOT_ID,
+            members: [
+              { kind: "bot" as const, botId: PARENT_BOT_ID, role: "boss" as const },
+              { kind: "bot" as const, botId: CHILD_BOT_ID, role: "specialist" as const },
+            ],
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+        ],
+        threads: [thread(PARENT_THREAD_ID, null, { groupId, respondingBotId: PARENT_BOT_ID })],
+      });
+    const removeChildFromGroup = (state: OrchestrationReadModel) => {
+      Object.assign(state, {
+        groups: state.groups.map((group) => ({
+          ...group,
+          members: group.members.filter(
+            (member) => !("botId" in member) || member.botId !== CHILD_BOT_ID,
+          ),
+        })),
+      });
+    };
+    const groupMessages = (state: OrchestrationReadModel) =>
+      state.threads
+        .find((entry) => entry.id === PARENT_THREAD_ID)
+        ?.messages.filter((message) => message.role === "assistant");
+
+    it("skips the group message when the bot left the group mid-task", async () => {
+      const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+      const skipped: Array<[DelegationId, string]> = [];
+      const watchErrors: unknown[] = [];
+      const test = harness(grouped(), undefined, {
+        awaitChild: () => child.promise,
+        onGroupResultSkipped: (delegationId, reason) => skipped.push([delegationId, reason]),
+        onWatchError: (_, cause) => watchErrors.push(cause),
+      });
+      const handle = await test.runtime.send(parent(), request() as never);
+      removeChildFromGroup(test.state);
+      child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." });
+      await test.runtime.drain();
+
+      expect(test.state.delegations[0]?.phase._tag).toBe("Completed");
+      expect(groupMessages(test.state)).toEqual([]);
+      expect(skipped).toEqual([[handle.delegationId, "bot_left_group"]]);
+      expect(watchErrors).toEqual([]);
+    });
+
+    it("reports a decider refusal from a bot that left during the post as a skip", async () => {
+      const skipped: string[] = [];
+      const watchErrors: unknown[] = [];
+      let inner: ((command: OrchestrationCommand) => Promise<void>) | undefined;
+      const test = harness(grouped(), undefined, {
+        dispatch: async (command) => {
+          if (command.type === "thread.message.assistant.delta") removeChildFromGroup(test.state);
+          await inner?.(command);
+        },
+        onGroupResultSkipped: (_, reason) => skipped.push(reason),
+        onWatchError: (_, cause) => watchErrors.push(cause),
+      });
+      inner = test.dispatch;
+      await test.runtime.send(parent(), request() as never);
+      await test.runtime.drain();
+
+      expect(test.state.delegations[0]?.phase._tag).toBe("Completed");
+      expect(groupMessages(test.state)).toEqual([]);
+      expect(skipped).toEqual(["bot_left_group"]);
+      expect(watchErrors).toEqual([]);
+    });
+
+    it("names the parent bot as it is when the work finishes", async () => {
+      const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+      const test = harness(grouped(), undefined, { awaitChild: () => child.promise });
+      await test.runtime.send(parent(), request() as never);
+      Object.assign(test.state, {
+        bots: test.state.bots.map((entry) =>
+          entry.id === PARENT_BOT_ID ? { ...entry, name: "Chief" } : entry,
+        ),
+      });
+      child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." });
+      await test.runtime.drain();
+
+      expect(groupMessages(test.state)?.map((message) => message.text)).toEqual([
+        "Finished work for Chief: Research the answer.\n\nDone.",
+      ]);
+    });
+  });
+
+  it("does not post a group message for work sent from a direct chat", async () => {
+    const test = harness();
+    await test.runtime.send(parent(), request() as never);
+    await test.runtime.drain();
+    const parentThread = test.state.threads.find((entry) => entry.id === PARENT_THREAD_ID);
+    expect(parentThread?.messages.filter((message) => message.role === "assistant")).toEqual([]);
+  });
+
+  it("delegates to a bot in two groups from either group and from a direct chat", async () => {
+    const firstGroupId = GroupId.make("group-1");
+    const secondGroupId = GroupId.make("group-2");
+    const groupOf = (id: GroupId, boss: BotId) => ({
+      id,
+      name: String(id),
+      bossBotId: boss,
+      members: [
+        { kind: "bot" as const, botId: boss, role: "boss" as const },
+        { kind: "bot" as const, botId: CHILD_BOT_ID, role: "specialist" as const },
+      ],
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    const secondThreadId = ThreadId.make("thread-second-group");
+    const test = harness(
+      snapshot({
+        // The legacy exclusive field names only the first group.
+        bots: [bot(PARENT_BOT_ID), bot(OTHER_BOT_ID), bot(CHILD_BOT_ID, { groupId: firstGroupId })],
+        groups: [groupOf(firstGroupId, PARENT_BOT_ID), groupOf(secondGroupId, OTHER_BOT_ID)],
+        threads: [
+          thread(PARENT_THREAD_ID, null, {
+            groupId: firstGroupId,
+            respondingBotId: PARENT_BOT_ID,
+          }),
+          thread(secondThreadId, null, { groupId: secondGroupId, respondingBotId: OTHER_BOT_ID }),
+          thread(ThreadId.make("thread-direct"), OTHER_BOT_ID),
+        ],
+      }),
+    );
+    await test.runtime.send(parent(), request() as never);
+    await test.runtime.send(
+      parent({ threadId: secondThreadId, botId: OTHER_BOT_ID }),
+      request() as never,
+    );
+    await test.runtime.send(
+      parent({ threadId: ThreadId.make("thread-direct"), botId: OTHER_BOT_ID }),
+      request() as never,
+    );
+    await test.runtime.drain();
+    expect(test.state.delegations.map((entry) => [entry.parentThreadId, entry.phase._tag])).toEqual(
+      [
+        [PARENT_THREAD_ID, "Completed"],
+        [secondThreadId, "Completed"],
+        [ThreadId.make("thread-direct"), "Completed"],
+      ],
+    );
+    expect(
+      test.state.threads
+        .find((entry) => entry.id === secondThreadId)
+        ?.messages.map((message) => message.respondingBotId),
+    ).toEqual([CHILD_BOT_ID]);
+  });
+
+  it("refuses a legacy-bridge target before creating the child chat", async () => {
+    const test = harness(
+      snapshot({
+        bots: [
+          bot(PARENT_BOT_ID),
+          bot(CHILD_BOT_ID, {
+            name: "Legacy",
+            engine: { provider: ProviderInstanceId.make("opencode"), model: "model" },
+          }),
+        ],
+      }),
+    );
+    const runtime = createAkeruDelegationRuntime({
+      readSnapshot: async () => test.state as OrchestrationReadModel,
+      dispatch: test.dispatch,
+      awaitChild: async () => ({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." }),
+      interruptChild: async () => undefined,
+      providerDriverKind: async (instanceId) => String(instanceId),
+      now: () => NOW,
+    });
+    const refused = await runtime.send(parent(), request() as never).catch((cause) => cause);
+    expect(Schema.is(AkeruDelegationProviderUnsupportedError)(refused)).toBe(true);
+    expect(refused.message).toBe(
+      "Legacy runs on the opencode provider, which cannot receive handed-off work. Do the work yourself or pick a bot on another provider.",
+    );
+    expect(test.commands).toEqual([]);
+  });
+
+  it("refuses a target whose provider instance is unknown before creating the child chat", async () => {
+    const test = harness(
+      snapshot({
+        bots: [
+          bot(PARENT_BOT_ID),
+          bot(CHILD_BOT_ID, {
+            engine: { provider: ProviderInstanceId.make("deleted-instance"), model: "model" },
+          }),
+        ],
+      }),
+      undefined,
+      { providerDriverKind: async () => null },
+    );
+    await expect(test.runtime.send(parent(), request() as never)).rejects.toThrow(
+      "The target bot is not available in this workspace.",
+    );
+    expect(test.commands).toEqual([]);
   });
 
   it("requires authoritative group membership for an associated bot", async () => {

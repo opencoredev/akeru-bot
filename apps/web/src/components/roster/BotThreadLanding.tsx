@@ -527,6 +527,7 @@ export function BotThreadLanding({
                   ) : item._tag === "Delegation" ? (
                     <DelegationCard
                       delegation={item.delegation}
+                      delegations={delegations}
                       childBot={activeBot(item.delegation.childBotId)}
                       parentBot={activeBot(item.delegation.parentBotId)}
                     />

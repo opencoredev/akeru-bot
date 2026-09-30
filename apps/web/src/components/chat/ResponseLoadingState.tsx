@@ -28,10 +28,15 @@ export const LOADER_RESTING_CELLS: readonly boolean[] = Array.from({ length: 9 }
   return column === 2 - Math.abs(row - 1);
 });
 
-/** `4s` under a minute, then `1m 04s`. Kept short so the line never reflows. */
+/** `4s` under a minute, `1m 04s` under an hour, then `7h 48m`. Kept short so the line never reflows. */
 export function formatLoadingElapsed(elapsedMs: number): string {
   const elapsedSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
   if (elapsedSeconds < 60) return `${elapsedSeconds}s`;
+  if (elapsedSeconds >= 3600) {
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = Math.floor(elapsedSeconds % 60);
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;

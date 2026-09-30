@@ -27,7 +27,8 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 
-import type { AgentControllerError } from "../Errors.ts";
+import type { AkeruDelegationDispatch, AkeruDelegationHandle } from "../AkeruDelegationRuntime.ts";
+import type { AgentControllerError, AgentControllerRuntimeError } from "../Errors.ts";
 import type { ProviderAdapterCapabilities } from "./ProviderAdapter.ts";
 import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
 
@@ -74,6 +75,10 @@ export interface AgentControllerShape {
     readonly threadId: ThreadId;
     readonly error: string;
   }) => Effect.Effect<void>;
+  /** Starts a delegation retry or a scheduled delegation; no live turn owns it. */
+  readonly dispatchDelegation?: (
+    input: AkeruDelegationDispatch,
+  ) => Effect.Effect<AkeruDelegationHandle, AgentControllerRuntimeError>;
 
   readonly authenticateMcpServer: (input: {
     readonly server: McpServer;

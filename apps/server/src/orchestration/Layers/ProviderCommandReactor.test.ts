@@ -46,6 +46,7 @@ import {
   AgentControllerRuntimeError,
   AgentControllerUnsupportedEngineError,
   ProviderAdapterRequestError,
+  ProviderValidationError,
 } from "../../provider/Errors.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -239,9 +240,11 @@ describe("ProviderCommandReactor", () => {
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
+    readonly disabledEngine?: boolean;
     readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
     readonly enableAgentBrowserAccess?: boolean;
     readonly startReactor?: boolean;
+    readonly dispatchDelegation?: AgentControllerShape["dispatchDelegation"];
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -466,6 +469,14 @@ describe("ProviderCommandReactor", () => {
             }),
           );
         }
+        if (input?.disabledEngine === true && engine !== null) {
+          return Effect.fail(
+            new ProviderValidationError({
+              operation: "AgentController.inspectEngine",
+              issue: `Provider instance '${engine.provider}' is disabled in Akeru Bot settings.`,
+            }),
+          );
+        }
         const selected =
           engine === null
             ? fallback
@@ -475,6 +486,9 @@ describe("ProviderCommandReactor", () => {
               };
         return inspectEngine(selected).pipe(Effect.map((result) => ({ ...result, mode })));
       },
+    );
+    const failDelegation = vi.fn<NonNullable<AgentControllerShape["failDelegation"]>>(
+      () => Effect.void,
     );
     const service: AgentControllerShape = {
       authenticateMcpServer: () => Effect.die("unused"),
@@ -487,6 +501,8 @@ describe("ProviderCommandReactor", () => {
       respondToUserInput: respondToUserInput as AgentControllerShape["respondToUserInput"],
       stopSession: stopSession as AgentControllerShape["stopSession"],
       listSessions: () => Effect.succeed(runtimeSessions),
+      ...(input?.dispatchDelegation ? { dispatchDelegation: input.dispatchDelegation } : {}),
+      failDelegation,
       rollbackConversation: () => Effect.die("unused"),
       uploadFeedback: () => Effect.die("unused"),
       get streamEvents() {
@@ -938,6 +954,7 @@ describe("ProviderCommandReactor", () => {
       engine,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       resolveEngine,
+      failDelegation,
       startSession,
       sendTurn,
       interruptTurn,
@@ -1565,6 +1582,46 @@ describe("ProviderCommandReactor", () => {
     );
     expect(harness.startSession).not.toHaveBeenCalled();
     expect(harness.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("reports a disabled engine as one readable line and names the bot on its bot work", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+      disabledEngine: true,
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-disabled-bot-engine"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-disabled-bot-engine"),
+          role: "user",
+          text: "use disabled engine",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.failDelegation.mock.calls.length === 1);
+    await harness.drain();
+    const detail = "Provider instance 'codex' is disabled in Akeru Bot settings.";
+    expect(harness.failDelegation).toHaveBeenCalledWith({
+      threadId: ThreadId.make("thread-1"),
+      error: `Configured bot could not start: ${detail}`,
+    });
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed")
+        ?.payload,
+    ).toMatchObject({ detail });
+    expect(thread?.session?.lastError).toBe(detail);
   });
 
   it("fails the turn before provider dispatch when Composio runtime preparation fails", async () => {
@@ -4786,6 +4843,138 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  effectIt.effect("hands a retry to the delegation runtime and reports a refused start", () =>
+    Effect.gen(function* () {
+      const dispatchDelegation = vi.fn((input: { readonly delegationId?: DelegationId }) =>
+        input.delegationId === DelegationId.make("delegation-refused")
+          ? Effect.fail(
+              new AgentControllerRuntimeError({
+                operation: "dispatchDelegation",
+                detail: "The target bot is not available in this workspace.",
+              }),
+            )
+          : Effect.succeed({
+              delegationId: DelegationId.make("delegation-retry"),
+              childThreadId: ThreadId.make("delegation-thread-retry"),
+              childBotId: BotId.make("bot-child"),
+              name: "Child bot",
+              phase: "running" as const,
+            }),
+      );
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: null,
+          dispatchDelegation: dispatchDelegation as AgentControllerShape["dispatchDelegation"],
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const later = "2026-01-01T00:00:01.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-retry-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      const createFailed = (suffix: string) =>
+        Effect.gen(function* () {
+          const queued = {
+            delegationId: DelegationId.make(`delegation-${suffix}`),
+            parentDelegationId: null,
+            parentBotId,
+            childBotId,
+            parentThreadId: ThreadId.make("thread-1"),
+            parentTurnId: TurnId.make("turn-parent"),
+            ancestorBotIds: [parentBotId],
+            depth: 1,
+            task: "Research the answer.",
+            expectedResult: "A concise answer.",
+            deadline: null,
+            access: {
+              allowedToolIds: ["Read" as const],
+              memoryScopes: [],
+              sandbox: "local" as const,
+              runtimeMode: "approval-required" as const,
+              hasUserComputer: false,
+              enabledMcpServerIds: [],
+              disabledMcpServerIds: [],
+              approvalCeiling: "send" as const,
+            },
+            phase: { _tag: "Queued" as const },
+            billedBotId: childBotId,
+            keep: false,
+            anchorMessageId: null,
+            retryOfDelegationId: null,
+            trigger: "bot" as const,
+            createdAt: now,
+            updatedAt: now,
+          };
+          yield* harness.engine.dispatch({
+            type: "delegation.create",
+            commandId: CommandId.make(`cmd-retry-create-${suffix}`),
+            delegation: queued,
+          });
+          yield* harness.engine.dispatch({
+            type: "delegation.state.set",
+            commandId: CommandId.make(`cmd-retry-failed-${suffix}`),
+            delegation: {
+              ...queued,
+              phase: {
+                _tag: "Failed",
+                childThreadId: null,
+                childTurnId: null,
+                startedAt: null,
+                completedAt: now,
+                failure: { failureCode: "child_failed", message: "The child failed." },
+                acknowledgedAt: null,
+              },
+            },
+          });
+          return queued.delegationId;
+        });
+
+      const original = yield* createFailed("original");
+      const before = (yield* Effect.promise(() => harness.readModel())).delegations;
+      yield* harness.engine.dispatch({
+        type: "delegation.retry",
+        commandId: CommandId.make("cmd-retry"),
+        delegationId: original,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+      expect(dispatchDelegation).toHaveBeenCalledWith({ _tag: "Retry", delegationId: original });
+      expect((yield* Effect.promise(() => harness.readModel())).delegations).toEqual(before);
+
+      const refused = yield* createFailed("refused");
+      yield* harness.engine.dispatch({
+        type: "delegation.retry",
+        commandId: CommandId.make("cmd-retry-refused"),
+        delegationId: refused,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+      const parentThread = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (thread) => thread.id === ThreadId.make("thread-1"),
+      );
+      expect(
+        parentThread?.activities.find((activity) => activity.kind === "delegation.retry.failed"),
+      ).toMatchObject({
+        tone: "error",
+        summary: "Bot work could not be retried",
+        payload: { detail: "The target bot is not available in this workspace." },
+      });
+    }),
+  );
+
   effectIt.effect(
     "stops a running session and records the failure when provider interrupt fails",
     () =>
@@ -5740,8 +5929,18 @@ describe("ProviderCommandReactor", () => {
     expect(failureActivity?.payload).toMatchObject({
       detail: expect.stringContaining("Stale pending user-input request"),
     });
-    expect(thread?.messages.some((message) => message.role === "assistant")).toBe(true);
+    expect(failureActivity?.payload).not.toMatchObject({
+      detail: expect.stringContaining("app restarts"),
+    });
+    expect(thread?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "assistant",
+        text: "I could not continue that request because the provider failed. Check the provider, then send it again.",
+      }),
+    );
     expect(thread?.session).toMatchObject({ status: "error" });
+    expect(thread?.session?.lastError).toContain("connection lost");
+    expect(thread?.session?.lastError).not.toContain("Stale pending");
   });
 
   it("reacts to thread.session.stop by stopping provider session and clearing thread session state", async () => {

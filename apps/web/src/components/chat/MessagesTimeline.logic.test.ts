@@ -554,6 +554,54 @@ describe("deriveMessagesTimelineRows", () => {
     ).toBeDefined();
   });
 
+  it("labels a turn that worked for hours with hours and minutes", () => {
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      at: string,
+      turnId: string | null,
+    ) => ({
+      id: `${id}-entry`,
+      kind: "message" as const,
+      createdAt: at,
+      message: {
+        id: id as never,
+        role,
+        text: id,
+        turnId: turnId as never,
+        createdAt: at,
+        updatedAt: at,
+        streaming: false,
+      },
+    });
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        message("user", "user", "2026-01-01T00:00:00Z", null),
+        message("assistant-first", "assistant", "2026-01-01T00:00:05Z", "turn-1"),
+        {
+          id: "work-entry-1",
+          kind: "work" as const,
+          createdAt: "2026-01-01T01:00:00Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T01:00:00Z",
+            turnId: "turn-1" as never,
+            label: "Ran command",
+            tone: "tool" as const,
+          },
+        },
+        message("assistant-final", "assistant", "2026-01-01T07:48:43Z", "turn-1"),
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    const foldRow = rows.find((row) => row.kind === "turn-fold");
+    expect(foldRow?.kind === "turn-fold" ? foldRow.label : null).toBe("Worked for 7h 48m");
+  });
+
   it("folds assistant messages between the first and terminal messages", () => {
     const timelineEntries = [
       {

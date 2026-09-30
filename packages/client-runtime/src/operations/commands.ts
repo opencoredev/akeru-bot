@@ -95,6 +95,7 @@ export type RespondToThreadUserInputInput = CommandInput<"thread.user-input.resp
 export type RevertThreadCheckpointInput = CommandInput<"thread.checkpoint.revert">;
 export type StopThreadSessionInput = CommandInput<"thread.session.stop">;
 export type CancelDelegationInput = CommandInput<"delegation.cancel">;
+export type RetryDelegationInput = CommandInput<"delegation.retry">;
 
 type DispatchTag = typeof ORCHESTRATION_WS_METHODS.dispatchCommand;
 type CommandEffect = Effect.Effect<
@@ -799,6 +800,18 @@ export const cancelDelegation: (input: CancelDelegationInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "delegation.cancel",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const retryDelegation: (input: RetryDelegationInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.retryDelegation",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "delegation.retry",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

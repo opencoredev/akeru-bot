@@ -4,7 +4,7 @@
  * `/settings` deep links) lands on the same surface.
  */
 import { create } from "zustand";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { ChannelProvider, EnvironmentId } from "@t3tools/contracts";
 
 import { usePrimaryEnvironmentId } from "./state/environments";
 
@@ -37,6 +37,9 @@ interface SettingsDialogState {
   readonly section: SettingsSection | null;
   readonly targetId: string | null;
   readonly environmentId: EnvironmentId | null;
+  /** The Bot channels tab. It outlives the dialog so closing and reopening keeps the user's place. */
+  readonly channelProvider: ChannelProvider;
+  readonly setChannelProvider: (provider: ChannelProvider) => void;
   readonly openSettings: (
     section?: SettingsSection,
     targetId?: string | null,
@@ -52,6 +55,8 @@ export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   section: null,
   targetId: null,
   environmentId: null,
+  channelProvider: "imessage",
+  setChannelProvider: (channelProvider) => set({ channelProvider }),
   openSettings: (section = "general", targetId = null, environmentId) =>
     set((state) => ({
       section,
@@ -102,4 +107,19 @@ export function settingsSectionFromPathname(pathname: string): SettingsSection {
   return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
     ? (slug as SettingsSection)
     : "general";
+}
+
+/** Select the Bot channels tab from outside React. */
+export function setSettingsChannelProvider(provider: ChannelProvider): void {
+  useSettingsDialogStore.getState().setChannelProvider(provider);
+}
+
+/** The selected Bot channels tab and its setter. */
+export function useSettingsChannelProvider(): readonly [
+  ChannelProvider,
+  (provider: ChannelProvider) => void,
+] {
+  const provider = useSettingsDialogStore((state) => state.channelProvider);
+  const setProvider = useSettingsDialogStore((state) => state.setChannelProvider);
+  return [provider, setProvider];
 }

@@ -60,6 +60,14 @@
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
     },
+    "./delegationProviders": {
+      "types": "./src/delegationProviders.ts",
+      "import": "./src/delegationProviders.ts"
+    },
+    "./delegationSummaryText": {
+      "types": "./src/delegationSummaryText.ts",
+      "import": "./src/delegationSummaryText.ts"
+    },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
       "import": "./src/DrainableWorker.ts"

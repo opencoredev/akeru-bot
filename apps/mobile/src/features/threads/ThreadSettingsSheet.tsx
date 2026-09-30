@@ -1,4 +1,5 @@
 import { useMobileI18n } from "../../lib/i18n";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import type {
   BotUsageCap,
   EnvironmentId,
@@ -391,6 +392,8 @@ type ThreadSettingsSessionValue = {
   readonly toggleProvider: (providerKey: string) => void;
   readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
   readonly routinesRef: ThreadSettingsSessionProps["routinesRef"];
+  /** False when the shown model's provider can neither hand off work nor receive it. */
+  readonly canDelegate: boolean;
 };
 
 const ThreadSettingsSessionContext = createContext<ThreadSettingsSessionValue | null>(null);
@@ -429,6 +432,16 @@ function ThreadSettingsSessionProvider(
     (option: ModelOption) => (pendingModel ? option.key === pendingModel.key : isApplied(option)),
     [isApplied, pendingModel],
   );
+
+  const displayedDriver = useMemo(
+    () =>
+      pendingModel?.providerDriver ??
+      props.providerGroups.flatMap((group) => group.models).find((option) => isApplied(option))
+        ?.providerDriver ??
+      null,
+    [isApplied, pendingModel, props.providerGroups],
+  );
+  const canDelegate = displayedDriver === null || driverSupportsDelegation(displayedDriver);
 
   // While a model is staged, the settings rows describe and edit the staged
   // model's options (kept on its pending selection); Save applies model and
@@ -536,9 +549,11 @@ function ThreadSettingsSessionProvider(
       toggleProvider,
       memoryThreadRef: props.memoryThreadRef,
       routinesRef: props.routinesRef,
+      canDelegate,
     }),
     [
       applyOptionChange,
+      canDelegate,
       botUsageCapDirty,
       botUsageCapInput,
       botUsageCapValid,
@@ -838,6 +853,15 @@ function ThreadSettingsOptionsItem(props: {
           </View>
         ) : null}
       </Animated.View>
+      {session.canDelegate ? null : (
+        <Text
+          accessibilityRole="text"
+          className="px-5 pt-2 text-xs leading-4 text-foreground-muted"
+        >
+          {t("This bot's provider cannot hand off work.")}{" "}
+          {t("It cannot send work to other bots or receive work from them.")}
+        </Text>
+      )}
 
       {Platform.OS !== "ios" && session.hasLegacyModels ? (
         <>

@@ -113,6 +113,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateId: command.delegation.delegationId,
       };
     case "delegation.cancel":
+    case "delegation.retry":
       return {
         aggregateKind: "delegation",
         aggregateId: command.delegationId,

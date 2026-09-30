@@ -1398,4 +1398,82 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       expect(unmentioned.readModel.threads[0]?.respondingBotId).toBe(BOSS_ID);
     }),
   );
+
+  it.effect("attributes a server-authored group message to a named member bot", () =>
+    Effect.gen(function* () {
+      const outsiderId = BotId.make("bot-outsider");
+      const base = makeReadModel({
+        bots: [
+          makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
+          makeBot({ id: SPECIALIST_ID, groupId: GROUP_ID }),
+          makeBot({ id: outsiderId }),
+        ],
+        groups: [makeGroup()],
+        threads: [{ ...makeGroupThread(), respondingBotId: BOSS_ID }],
+      });
+      const message = (botId: BotId, type: "delta" | "complete") =>
+        type === "delta"
+          ? ({
+              type: "thread.message.assistant.delta",
+              commandId: CommandId.make(`cmd-delta-${botId}`),
+              threadId: ThreadId.make("thread-group"),
+              messageId: MessageId.make("message-result"),
+              delta: "Finished work for Boss: Research\n\nDone.",
+              respondingBotId: botId,
+              createdAt: NOW,
+            } as const)
+          : ({
+              type: "thread.message.assistant.complete",
+              commandId: CommandId.make(`cmd-complete-${botId}`),
+              threadId: ThreadId.make("thread-group"),
+              messageId: MessageId.make("message-result"),
+              respondingBotId: botId,
+              createdAt: NOW,
+            } as const);
+
+      const delta = yield* applyCommand(base, message(SPECIALIST_ID, "delta"));
+      const complete = yield* applyCommand(delta.readModel, message(SPECIALIST_ID, "complete"));
+      expect(complete.readModel.threads[0]?.messages).toEqual([
+        expect.objectContaining({
+          id: MessageId.make("message-result"),
+          role: "assistant",
+          respondingBotId: SPECIALIST_ID,
+          turnId: null,
+          streaming: false,
+        }),
+      ]);
+      // The group's own responder is unchanged by an attributed message.
+      expect(complete.readModel.threads[0]?.respondingBotId).toBe(BOSS_ID);
+
+      const outsiderError = yield* decideOrchestrationCommand({
+        command: message(outsiderId, "delta"),
+        readModel: base,
+      }).pipe(Effect.flip);
+      expect(outsiderError._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("rejects attributing a direct chat message to another bot", () =>
+    Effect.gen(function* () {
+      const base = makeReadModel({
+        bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+        threads: [{ ...makeGroupThread(), groupId: null, botId: BOSS_ID }],
+      });
+      const command = {
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-direct-delta"),
+        threadId: ThreadId.make("thread-group"),
+        messageId: MessageId.make("message-direct"),
+        delta: "Hello",
+        createdAt: NOW,
+      } as const;
+      const error = yield* decideOrchestrationCommand({
+        command: { ...command, respondingBotId: SPECIALIST_ID },
+        readModel: base,
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      const own = yield* applyCommand(base, { ...command, respondingBotId: BOSS_ID });
+      expect(own.readModel.threads[0]?.messages[0]?.respondingBotId).toBe(BOSS_ID);
+    }),
+  );
 });

@@ -115,6 +115,42 @@ describe("bot mentions", () => {
     ]);
   });
 
+  it("marks a bot whose provider cannot take handed-off work", () => {
+    const withEngine = (id: string, name: string, provider: string) =>
+      ({
+        id,
+        name,
+        title: "",
+        archivedAt: null,
+        engine: { provider, model: "m" },
+      }) as unknown as OrchestrationBot;
+    const engineBots = [
+      withEngine("bot-claude-1", "Nova", "opencode"),
+      withEngine("bot-grok-2", "Nia", "opencode_go"),
+      withEngine("bot-3", "Nix", "missing"),
+    ];
+    const providers = [
+      { instanceId: "opencode", driver: "opencode" },
+      { instanceId: "opencode_go", driver: "opencodeGo" },
+    ] as unknown as Parameters<typeof groupMentionBots>[2];
+    const marked = groupMentionBots(group, engineBots, providers);
+    expect(marked.map((member) => member.canTakeWork)).toEqual([false, true, true]);
+    const items = buildComposerMentionItems({
+      query: "n",
+      browserAvailable: false,
+      bots: marked,
+      threads: [],
+      currentThreadId: "thread-1",
+      currentProjectId: "project-1",
+      matchedIds: new Set(),
+    });
+    expect(items.map((item) => item.description)).toEqual([
+      "Cannot take handed-off work",
+      "Bot",
+      "Bot",
+    ]);
+  });
+
   it("keeps bots out of an explicit @chat: query", () => {
     const items = buildComposerMentionItems({
       query: "chat:mi",

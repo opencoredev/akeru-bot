@@ -11,22 +11,27 @@ import {
 import {
   canChangeChannelProject,
   channelBindingNeedsProject,
+  channelFailureReason,
   channelPickerProjectId,
   channelRepairAction,
   channelRestoreProjectId,
 } from "@t3tools/client-runtime/channel-presentation";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
-import { useLocation } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { isChannelIdentityConflict, resolveChannelSettingsAccess } from "../../channelAccess";
+import {
+  channelFailureCategoryOf,
+  isChannelIdentityConflict,
+  resolveChannelSettingsAccess,
+} from "../../channelAccess";
+import { requestConfirmDialog } from "../../confirmDialog";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
 import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentSessionState } from "../../state/session";
-import { useSettingsEnvironmentId } from "../../settingsDialogStore";
+import { useSettingsChannelProvider, useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -104,14 +109,6 @@ export function parsePhotonHostedCredentials(input: string): {
   return projectId && projectSecret ? { projectId, projectSecret } : null;
 }
 
-function channelProviderFromHash(hash: string): ChannelProvider | null {
-  const target = hash.replace(/^#/, "");
-  return (
-    CHANNEL_PROVIDER_META.find((channel) => channelSettingsTarget(channel.provider) === target)
-      ?.provider ?? null
-  );
-}
-
 export function BotChannelsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
@@ -140,14 +137,7 @@ export function BotChannelsSettingsPanel() {
     reportFailure: false,
   });
   const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
-  // Repair links elsewhere open this panel on one provider through the `channel-<provider>` hash.
-  const hashProvider = channelProviderFromHash(
-    useLocation({ select: (location) => location.hash }),
-  );
-  const [provider, setProvider] = useState<ChannelProvider>(hashProvider ?? "imessage");
-  useEffect(() => {
-    if (hashProvider) setProvider(hashProvider);
-  }, [hashProvider]);
+  const [provider, setProvider] = useSettingsChannelProvider();
   const [setupOpen, setSetupOpen] = useState(false);
   const [replacing, setReplacing] = useState<ChannelReplacement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -163,6 +153,22 @@ export function BotChannelsSettingsPanel() {
   });
   const providerConnections = connections.filter((connection) => connection.provider === provider);
 
+  // Toast detail for a failed channel command: the conflict or the category's reason, if known.
+  const failureDescription = (
+    result: Parameters<typeof channelFailureCategoryOf>[0],
+    channel: ChannelProvider,
+  ) => {
+    if (isChannelIdentityConflict(result)) {
+      return {
+        description: t(
+          "Another bot already uses this account. Unassign it there, then connect again.",
+        ),
+      };
+    }
+    const category = channelFailureCategoryOf(result);
+    return category ? { description: channelFailureReason(category, channel, t) } : {};
+  };
+
   useEffect(() => {
     if (!pendingProfile) return;
     const present = connections.some((connection) => connection.id === pendingProfile.id);
@@ -174,6 +180,14 @@ export function BotChannelsSettingsPanel() {
 
   const removeConnection = async (connection: ChannelConnectionProfile) => {
     if (!environmentId || mutationRef.current) return;
+    const confirmed =
+      (await requestConfirmDialog(
+        t("Delete {name}? Its saved credentials are removed from this environment.", {
+          name: connection.name,
+        }),
+        { variant: "destructive", confirmLabel: t("Delete") },
+      )) ?? false;
+    if (!confirmed || mutationRef.current) return;
     mutationRef.current = true;
     setBusy(true);
     const result = await deleteConnection({
@@ -226,6 +240,14 @@ export function BotChannelsSettingsPanel() {
         },
       });
       if (result._tag === "Failure") {
+        // A failed attach keeps the new bot on the connection, so it has to let go before the
+        // previous bot can have the connection back.
+        const released = assignedBot
+          ? await detach({
+              environmentId,
+              input: { botId: BotId.make(nextBotId), provider: connection.provider },
+            })
+          : null;
         const restored = assignedBot
           ? await attach({
               environmentId,
@@ -244,16 +266,10 @@ export function BotChannelsSettingsPanel() {
         toastManager.add({
           type: "error",
           title:
-            restored?._tag === "Failure"
+            released?._tag === "Failure" || restored?._tag === "Failure"
               ? "Could not assign or restore channel"
               : "Could not assign channel",
-          ...(isChannelIdentityConflict(result)
-            ? {
-                description: t(
-                  "Another bot already uses this account. Unassign it there, then connect again.",
-                ),
-              }
-            : {}),
+          ...failureDescription(result, connection.provider),
         });
       }
     }
@@ -273,7 +289,11 @@ export function BotChannelsSettingsPanel() {
     });
     setBusyConnectionId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: t("Could not move channel to this project") });
+      toastManager.add({
+        type: "error",
+        title: t("Could not move channel to this project"),
+        ...failureDescription(result, connection.provider),
+      });
     }
   };
 
@@ -286,7 +306,11 @@ export function BotChannelsSettingsPanel() {
     });
     setBusyConnectionId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not reconnect channel" });
+      toastManager.add({
+        type: "error",
+        title: "Could not reconnect channel",
+        ...failureDescription(result, connection.provider),
+      });
     }
   };
 
@@ -534,6 +558,7 @@ export function BotChannelsSettingsPanel() {
                             toastManager.add({
                               type: "error",
                               title: "Could not disconnect channel",
+                              ...failureDescription(result, connection.provider),
                             });
                           }
                         });

@@ -1,9 +1,12 @@
 import type {
   ChannelBinding,
   ChannelBindingStatus,
+  ChannelFailureCategory,
   ChannelProvider,
   ProjectId,
 } from "@t3tools/contracts";
+
+import { createTranslator, type MessageKey, type TranslationParams } from "./i18n/index.ts";
 
 type ProjectRef = { readonly id: ProjectId };
 
@@ -13,6 +16,50 @@ export function channelProviderLabel(provider: ChannelProvider): string {
   if (provider === "telegram") return "Telegram";
   if (provider === "slack") return "Slack";
   return "Discord";
+}
+
+export type ChannelTranslate = (message: MessageKey, params?: TranslationParams) => string;
+
+const englishTranslate: ChannelTranslate = createTranslator("en").t;
+
+/**
+ * Why a channel connection failed, in words a user can act on. Every category the server sends
+ * has a sentence naming the provider, so clients never show a bare "could not connect".
+ */
+export function channelFailureReason(
+  category: ChannelFailureCategory,
+  provider: ChannelProvider,
+  t: ChannelTranslate = englishTranslate,
+): string {
+  if (category === "credentials") {
+    switch (provider) {
+      case "telegram":
+        return t("Telegram rejected the bot token.");
+      case "slack":
+        return t("Slack rejected the bot token or app token.");
+      case "discord":
+        return t("Discord rejected the bot token.");
+      case "whatsapp":
+        return t("WhatsApp rejected the access token.");
+      case "imessage":
+        return t("Photon rejected the connection credentials.");
+    }
+  }
+  const name = channelProviderLabel(provider);
+  switch (category) {
+    case "network":
+      return t("Could not reach {provider}. Check the network and try again.", { provider: name });
+    case "project":
+      return t("The project for this channel is unavailable. Choose another project.");
+    case "delivery-unknown":
+      return t("A reply may not have reached {provider}. Check the chat before replying again.", {
+        provider: name,
+      });
+    case "restore":
+      return t("{provider} did not reconnect after a restart. Reconnect to resume.", {
+        provider: name,
+      });
+  }
 }
 
 export function channelHealthLabel(status: ChannelBindingStatus): string {

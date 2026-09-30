@@ -28,9 +28,16 @@ export interface RoutineDependencyFailure {
   readonly nextAction: string;
 }
 
-export interface RoutineDispatchResult {
-  readonly threadRef: ThreadId;
-}
+/**
+ * A dispatched run points at the chat whose work settles it: the owner chat for
+ * a turn, or the helper's chat for scheduled bot work. A refused start blocks the
+ * run. `canceled` means the run ended before it started, and any work it began
+ * has been canceled.
+ */
+export type RoutineDispatchResult =
+  | { readonly threadRef: ThreadId }
+  | { readonly failure: RoutineDependencyFailure }
+  | { readonly canceled: true };
 
 export interface RoutineRuntimeAdapterShape {
   readonly isTargetBusy: (routine: Routine) => Effect.Effect<boolean>;
@@ -51,6 +58,9 @@ export interface RoutineRuntimeAdapterShape {
     failure: RoutineDependencyFailure,
     completedAt: string,
   ) => Effect.Effect<void>;
+  readonly recordCanceled: (run: RoutineRun, completedAt: string) => Effect.Effect<void>;
+  /** Cancels the scheduled bot work a run started, if it is still open. */
+  readonly cancelDelegatedRun: (run: RoutineRun) => Effect.Effect<void>;
   readonly openFailureIncident: (
     routine: Routine,
     failure: RoutineDependencyFailure,

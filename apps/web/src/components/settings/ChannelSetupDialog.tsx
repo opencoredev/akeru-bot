@@ -5,13 +5,16 @@ import {
   type EnvironmentId,
   type ProjectId,
 } from "@t3tools/contracts";
-import { channelPickerProjectId } from "@t3tools/client-runtime/channel-presentation";
+import {
+  channelFailureReason,
+  channelPickerProjectId,
+} from "@t3tools/client-runtime/channel-presentation";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 
-import { isChannelIdentityConflict } from "../../channelAccess";
+import { channelFailureCategoryOf, isChannelIdentityConflict } from "../../channelAccess";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -29,6 +32,10 @@ import { channelProviderMeta, discordInviteUrl, slackPasteTarget } from "./chann
 
 const STEPS = ["Set up", "Credentials", "Connect"] as const;
 const CONNECT_LATER = "connect-later";
+const PHOTON_MODE_LABELS = {
+  hosted: "Photon hosted",
+  "self-hosted": "Photon self-hosted",
+} as const;
 
 /**
  * An assigned connection whose credentials the dialog replaces. The dialog saves the new
@@ -40,6 +47,27 @@ export interface ChannelReplacement {
   readonly name: string;
   readonly botId: BotId;
   readonly projectId: ProjectId | undefined;
+}
+
+/** The Photon connection type picker. The trigger shows the option label, not the raw mode. */
+export function PhotonModeSelect({
+  mode,
+  onChange,
+}: {
+  readonly mode: keyof typeof PHOTON_MODE_LABELS;
+  readonly onChange: (mode: keyof typeof PHOTON_MODE_LABELS) => void;
+}) {
+  return (
+    <Select value={mode} onValueChange={(next) => next && onChange(next)}>
+      <SelectTrigger aria-label="Photon connection type">
+        <SelectValue>{PHOTON_MODE_LABELS[mode]}</SelectValue>
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectItem value="hosted">{PHOTON_MODE_LABELS.hosted}</SelectItem>
+        <SelectItem value="self-hosted">{PHOTON_MODE_LABELS["self-hosted"]}</SelectItem>
+      </SelectPopup>
+    </Select>
+  );
 }
 
 const newConnectionId = () =>
@@ -201,6 +229,10 @@ export function ChannelSetupDialog({
   const conflictCopy = t(
     "Another bot already uses this account. Unassign it there, then connect again.",
   );
+  const failureReason = (result: Parameters<typeof channelFailureCategoryOf>[0]) => {
+    const category = channelFailureCategoryOf(result);
+    return category ? channelFailureReason(category, provider, t) : null;
+  };
 
   const finish = (connectionId: ChannelConnectionId) => {
     setBusy(false);
@@ -274,14 +306,25 @@ export function ChannelSetupDialog({
         setUnconfirmed(null);
       }
       setBusy(false);
+      const reason = failureReason(attached);
       setConnectError(
         restored._tag === "Failure"
           ? isChannelIdentityConflict(attached)
             ? `${conflictCopy} ${t("The old connection could not be restored.")}`
-            : t("Could not connect with the new credentials or restore the old connection.")
+            : [
+                t("Could not connect with the new credentials or restore the old connection."),
+                reason,
+              ]
+                .filter(Boolean)
+                .join(" ")
           : isChannelIdentityConflict(attached)
             ? conflictCopy
-            : t("Could not connect with the new credentials. The old connection is unchanged."),
+            : [
+                t("Could not connect with the new credentials. The old connection is unchanged."),
+                reason,
+              ]
+                .filter(Boolean)
+                .join(" "),
       );
       return;
     }
@@ -337,13 +380,19 @@ export function ChannelSetupDialog({
       if (attached._tag === "Failure") {
         setBusy(false);
         onSaved(connectionId);
+        const reason = failureReason(attached);
         setConnectError(
           isChannelIdentityConflict(attached)
             ? conflictCopy
-            : t(
-                "Connection saved. Could not connect {name}. Try again or check the connection settings.",
-                { name: botName },
-              ),
+            : reason
+              ? t("{name} is saved but could not connect. {reason}", {
+                  name: name.trim(),
+                  reason,
+                })
+              : t(
+                  "{name} is saved but could not connect. Try again or check the connection settings.",
+                  { name: name.trim() },
+                ),
         );
         return;
       }
@@ -410,17 +459,7 @@ export function ChannelSetupDialog({
 
           {step === 1 ? (
             <div className="flex flex-col gap-2.5">
-              {provider === "imessage" ? (
-                <Select value={mode} onValueChange={(next) => next && setMode(next)}>
-                  <SelectTrigger aria-label="Photon connection type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="hosted">Photon hosted</SelectItem>
-                    <SelectItem value="self-hosted">Photon self-hosted</SelectItem>
-                  </SelectPopup>
-                </Select>
-              ) : null}
+              {provider === "imessage" ? <PhotonModeSelect mode={mode} onChange={setMode} /> : null}
               {provider === "imessage" && mode === "hosted" ? (
                 <Textarea
                   aria-label="Photon hosted credentials"

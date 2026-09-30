@@ -4,7 +4,6 @@ import {
   BotId,
   type ApprovalRequestId,
   EnvironmentId,
-  ThreadId,
   type MessageId,
   type ModelSelection,
   type ScopedThreadRef,
@@ -21,7 +20,6 @@ import {
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
   useThreadMessages,
-  useThreadShell,
   useThreadShells,
 } from "../../state/entities";
 import { environmentBotsAtom } from "../../state/bots";
@@ -45,6 +43,7 @@ import {
   resolveBotThreadTarget,
 } from "./botThreadRuntime.logic";
 import { useRosterStore } from "./rosterStore";
+import { useBotChatTarget } from "./useBotThreadRef";
 import { ensureLocalApi } from "../../localApi";
 import { resolveBotFileAttachment } from "./botFileAttachment";
 import {
@@ -101,16 +100,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   const target = primaryEnvironmentId
     ? resolveBotThreadTarget(botId, primaryEnvironmentId, primaryThreadShells, rememberedPath)
     : null;
-  const targetEnvironmentId = target?.environmentId;
-  const targetThreadId = target?.threadId;
-  const rememberedThreadRef = useMemo<ScopedThreadRef | null>(
-    () =>
-      targetEnvironmentId && targetThreadId
-        ? scopeThreadRef(EnvironmentId.make(targetEnvironmentId), ThreadId.make(targetThreadId))
-        : null,
-    [targetEnvironmentId, targetThreadId],
-  );
-  const rememberedThread = useThreadShell(rememberedThreadRef);
+  const { ref: rememberedThreadRef, shell: rememberedThread } = useBotChatTarget(botId, target);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
   const retainedThreadRef = useRef<{ botId: string; threadRef: ScopedThreadRef | null }>({
     botId,

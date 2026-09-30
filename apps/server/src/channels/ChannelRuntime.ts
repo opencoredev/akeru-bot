@@ -2002,39 +2002,54 @@ const revertConnectingBinding = (
 
 /**
  * Records why a start failed. A binding whose earlier transport still runs keeps its status and
- * gains the failure; one with nothing running becomes `failed` (or stays `blocked`); a binding
- * the attempt created is removed so a rejected first connect leaves nothing behind. When the bot
- * was archived or deleted during the attempt, the binding goes back to how it was before, so no
- * `connecting` binding outlives the attempt or returns when the bot is restored.
+ * gains the failure; one with nothing running becomes `failed` (or stays `blocked`). An attempt
+ * on a saved connection keeps the bot assigned to that connection, so the user can retry without
+ * choosing the bot again. A first connect with inline credentials leaves nothing behind. When the
+ * bot was archived or deleted during the attempt, the binding goes back to how it was before, so
+ * no `connecting` binding outlives the attempt or returns when the bot is restored.
  */
 const recordStartFailure = (
   ctx: ChannelRuntimeContext,
   previous: ChannelBinding | undefined,
   input: ChannelConnectInput,
   error: unknown,
+  connectionId: ChannelConnectionId | undefined,
 ) =>
   Effect.gen(function* () {
     const liveBot = (yield* ctx.deps.readModel).bots.some(
       (bot) => bot.id === input.botId && bot.archivedAt === null,
     );
-    if (!previous || !liveBot)
+    if (!liveBot || (!previous && !connectionId))
       return yield* revertConnectingBinding(ctx, input.botId, input.provider, previous);
+    const running = ctx.runtimes.has(runtimeKey(input.botId, input.provider));
+    const target: ChannelBinding =
+      previous && (running || !connectionId || previous.connectionId === connectionId)
+        ? previous
+        : {
+            botId: input.botId,
+            provider: input.provider,
+            status: "failed",
+            ...(connectionId ? { connectionId } : {}),
+            projectId: input.targetProjectId,
+            externalIdentity: null,
+            connectedAt: null,
+            sentMessageIds: [],
+          };
     const failure = channelFailurePresentation(error);
-    const { failureCategory: _previousCategory, ...base } = previous;
+    const { failureCategory: _previousCategory, ...base } = target;
     const annotated: ChannelBinding = {
       ...base,
       lastAttemptAt: yield* ctx.deps.nowIso,
       lastError: failure.message,
       ...(failure.category ? { failureCategory: failure.category } : {}),
     };
-    const running = ctx.runtimes.has(runtimeKey(input.botId, input.provider));
     yield* replaceBinding(
       ctx,
       running
         ? annotated
         : {
             ...annotated,
-            status: previous.status === "blocked" ? "blocked" : "failed",
+            status: target.status === "blocked" ? "blocked" : "failed",
             connectedAt: null,
           },
     );
@@ -2149,7 +2164,7 @@ const startAndCommitChannel = (
               : revertConnectingBinding(ctx, input.botId, input.provider, previous).pipe(
                   Effect.ignoreCause,
                 )
-            : recordStartFailure(ctx, previous, input, Cause.squash(cause)),
+            : recordStartFailure(ctx, previous, input, Cause.squash(cause), options.connectionId),
       ),
       Effect.ensuring(Effect.sync(() => ctx.connecting.delete(key))),
     );
@@ -2328,7 +2343,10 @@ const attachChannelConnection = (
           (candidate) => candidate.id === projectId && candidate.deletedAt === null,
         );
         if (!project)
-          return yield* failWith("The selected project is unavailable. Choose another project.");
+          return yield* failWith(
+            "The selected project is unavailable. Choose another project.",
+            "project",
+          );
         const inUse = model.bots.some(
           (bot) =>
             bot.id !== botId &&
@@ -2440,7 +2458,10 @@ const changeChannelProject = (
         (candidate) => candidate.id === projectId && candidate.deletedAt === null,
       );
       if (!project)
-        return yield* failWith("The selected project is unavailable. Choose another project.");
+        return yield* failWith(
+          "The selected project is unavailable. Choose another project.",
+          "project",
+        );
       const binding = bot.channelBindings?.find((candidate) => candidate.provider === provider);
       if (!binding) return yield* failWith(`No ${provider} channel is assigned to this bot.`);
       // A running channel already in the target project has nowhere to move.
@@ -2513,7 +2534,7 @@ const reconnectChannel = (ctx: ChannelRuntimeContext, botId: BotId, provider: Li
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       if (!binding.projectId)
-        return yield* failWith("Select a project before reconnecting this channel.");
+        return yield* failWith("Select a project before reconnecting this channel.", "project");
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
       const commandId = CommandId.make(yield* randomId(ctx, "channel-reconnect"));
       const input = yield* connectInputFromSecret(botId, binding.projectId, commandId, secret);

@@ -11,6 +11,7 @@ import type {
   EnvironmentId,
   MessageId,
   ModelSelection,
+  OrchestrationBot,
   OrchestrationThreadShell,
   ProviderApprovalDecision,
   ProviderInteractionMode,
@@ -86,7 +87,6 @@ import {
   ThreadComposer,
   type ThreadComposerProps,
 } from "./ThreadComposer";
-import { ThreadDelegations } from "./ThreadDelegations";
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
@@ -98,6 +98,13 @@ export interface ThreadDetailScreenProps {
   readonly connectionError: string | null;
   readonly environmentLabel: string | null;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
+  /** Bots by id, so delegation cards can name the child bot. */
+  readonly botsById?: ReadonlyMap<string, OrchestrationBot>;
+  /**
+   * The turn ended while delegated children still run; mobile renders the
+   * same waiting line as web above the composer.
+   */
+  readonly waitingOnChildren?: boolean;
   readonly activeWorkStartedAt: string | null;
   readonly silentRun: ThreadSilentRun | null;
   readonly activePendingApproval: PendingApproval | null;
@@ -680,6 +687,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             botId={props.selectedThread.botId ?? null}
             workspaceRoot={props.threadCwd}
             feed={props.selectedThreadFeed}
+            botsById={props.botsById}
             contentPresentation={props.contentPresentation}
             agentLabel={agentLabel}
             latestTurn={props.selectedThread.latestTurn}
@@ -763,10 +771,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               </Animated.View>
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
-              <ThreadDelegations
-                environmentId={props.environmentId}
-                threadId={props.selectedThread.id}
-              />
+              {props.waitingOnChildren === true && props.activeWorkStartedAt === null ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  className="mx-4 mb-2 text-xs text-foreground-muted"
+                >
+                  {t("Waiting on delegated work")}
+                </Text>
+              ) : null}
               {props.canResumeThread ? (
                 <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
                   <ResumeErrorSummary

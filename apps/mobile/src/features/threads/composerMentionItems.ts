@@ -2,6 +2,7 @@ import {
   isGroupBotMember,
   type OrchestrationBot,
   type OrchestrationGroup,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import {
   type ComposerMentionBot,
@@ -17,6 +18,7 @@ import {
   type ComposerThreadMentionCandidate,
   rankComposerThreadMentions,
 } from "@t3tools/shared/composerThreadMentions";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 
@@ -32,13 +34,33 @@ export function threadMentionQuery(query: string): string {
   return isThreadMentionQuery(query) ? query.slice(THREAD_QUERY_PREFIX.length) : query;
 }
 
-/** A group member the `@` menu can mention. The title tells namesakes apart. */
-export type ComposerMentionItemBot = ComposerMentionBot & { readonly title?: string };
+/**
+ * A group member the `@` menu can mention. The title tells namesakes apart;
+ * `canTakeWork` is false when the bot's provider cannot take handed-off work.
+ */
+export type ComposerMentionItemBot = ComposerMentionBot & {
+  readonly title?: string;
+  readonly canTakeWork?: boolean;
+};
+
+const CANNOT_TAKE_WORK = "Cannot take handed-off work";
+
+// Marks only a saved engine on a known provider that cannot take handed-off work.
+function botTakesDelegatedWork(
+  bot: OrchestrationBot,
+  providers: ReadonlyArray<Pick<ServerProvider, "instanceId" | "driver">>,
+): boolean {
+  const engine = bot.engine;
+  if (!engine) return true;
+  const provider = providers.find((candidate) => candidate.instanceId === engine.provider);
+  return provider === undefined || driverSupportsDelegation(provider.driver);
+}
 
 /** The active bots in a group chat, which the `@` menu offers. Direct chats offer none. */
 export function groupMentionBots(
   group: OrchestrationGroup | undefined,
   bots: ReadonlyArray<OrchestrationBot>,
+  providers: ReadonlyArray<Pick<ServerProvider, "instanceId" | "driver">> = [],
 ): ComposerMentionItemBot[] {
   if (!group) return [];
   const memberIds = new Set(
@@ -46,7 +68,12 @@ export function groupMentionBots(
   );
   return bots
     .filter((bot) => bot.archivedAt === null && memberIds.has(bot.id))
-    .map((bot) => ({ id: bot.id, name: bot.name, title: bot.title }));
+    .map((bot) => ({
+      id: bot.id,
+      name: bot.name,
+      title: bot.title,
+      canTakeWork: botTakesDelegatedWork(bot, providers),
+    }));
 }
 
 /**
@@ -82,7 +109,10 @@ export function buildComposerMentionItems(input: {
         type: "bot-mention",
         botId: bot.id,
         label: bot.name,
-        description: composerBotMentionDetail(bot, bots) ?? "Bot",
+        description:
+          bot.canTakeWork === false
+            ? [composerBotMentionDetail(bot, bots), CANNOT_TAKE_WORK].filter(Boolean).join(", ")
+            : (composerBotMentionDetail(bot, bots) ?? "Bot"),
       });
     }
   }

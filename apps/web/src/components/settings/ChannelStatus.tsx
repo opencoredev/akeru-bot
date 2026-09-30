@@ -1,5 +1,8 @@
 import type { ChannelBinding, ChannelConnectionProfile } from "@t3tools/contracts";
-import type { ChannelRepairAction } from "@t3tools/client-runtime/channel-presentation";
+import {
+  type ChannelRepairAction,
+  channelFailureReason,
+} from "@t3tools/client-runtime/channel-presentation";
 
 import type { ReactNode } from "react";
 
@@ -7,7 +10,7 @@ import { useI18n } from "../../i18n";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
-type StatusBinding = Pick<ChannelBinding, "status" | "lastError">;
+type StatusBinding = Pick<ChannelBinding, "status" | "lastError" | "provider" | "failureCategory">;
 
 /**
  * The webhook URL the server built for a connection, when it advertises one. Never derived from
@@ -113,7 +116,11 @@ export function ChannelStatusNotice({
       </>,
     );
   }
-  // Server failure text is fixed per category and never carries provider error details.
+  // Server failure text is fixed per category and never carries provider error details, so a
+  // known category reads better in the client's own words.
+  if (binding.failureCategory) {
+    return notice(channelFailureReason(binding.failureCategory, binding.provider, t));
+  }
   return binding.lastError ? notice(binding.lastError) : null;
 }
 

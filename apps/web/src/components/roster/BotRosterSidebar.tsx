@@ -48,7 +48,7 @@ import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages, useThreadShell } from "../../state/entities";
+import { useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -112,7 +112,7 @@ import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
 import type { Bot, BotAvatar, Group } from "./types";
-import { useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
+import { useBotChatTarget, useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
 /** Avatar with a yellow needs-you light and a green working light. */
 function RosterAvatar({
@@ -213,7 +213,8 @@ function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
 ): { message: RosterLastMessage | null; taskTitle: string | null } {
-  const threadRef = useBotThreadCandidate(botId);
+  const candidate = useBotThreadCandidate(botId);
+  const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
   const message = useMemo(
@@ -223,7 +224,7 @@ function useLatestBotMessage(
   // The chat title reads as the bot's current task; the placeholder title of
   // a brand-new chat says nothing, so the chip stays hidden until a real
   // title lands.
-  const shellTitle = useThreadShell(threadRef)?.title ?? null;
+  const shellTitle = shell?.title ?? null;
   const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
   return useMemo(() => ({ message, taskTitle }), [message, taskTitle]);
 }

@@ -149,6 +149,8 @@ export interface ThreadComposerProps {
 // KeyboardStickyView (frame-synced to the IME), and a time-based morph
 // running alongside that translate reads as jitter. Snapping the layout and
 // letting the keyboard-synced slide be the only motion looks native there.
+const NO_PROVIDERS: NonNullable<ThreadComposerProps["serverConfig"]>["providers"] = [];
+
 const COMPOSER_LAYOUT_TRANSITION =
   Platform.OS === "android" ? undefined : LinearTransition.duration(220);
 
@@ -852,6 +854,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             projectId={props.selectedThread.projectId}
             groupId={props.selectedThread.groupId ?? null}
             browserAvailable={props.serverConfig?.settings.enableAgentBrowserAccess === true}
+            providers={props.serverConfig?.providers ?? NO_PROVIDERS}
             query={composerTrigger.query}
             fileItems={composerMenuItems}
             isLoading={pathSearch.isPending}

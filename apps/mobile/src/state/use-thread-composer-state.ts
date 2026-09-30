@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
@@ -31,7 +33,12 @@ import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
 import { useMobileI18n } from "../lib/i18n";
-import { buildThreadFeed, unchangedPrefixLength } from "../lib/threadActivity";
+import {
+  buildThreadFeed,
+  deriveThreadFeedDelegations,
+  unchangedPrefixLength,
+  type ThreadFeedDelegations,
+} from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import { appAtomRegistry } from "../state/atom-registry";
 import {
@@ -51,6 +58,7 @@ import {
 import { setPendingConnectionError } from "../state/use-remote-environment-registry";
 import { useSelectedThreadDetail } from "../state/use-thread-detail";
 import { useThreadSelection } from "../state/use-thread-selection";
+import { environmentSnapshotAtom } from "../state/shell";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
@@ -86,6 +94,21 @@ export function useThreadDraftForThread(input: {
     draftAttachments: draft.attachments,
   };
 }
+
+const feedDelegationsAtom = Atom.family((key: string) => {
+  const [environmentId, threadId] = key.split("\n") as [
+    EnvironmentId | undefined,
+    ThreadId | undefined,
+  ];
+  return Atom.make((get) =>
+    deriveThreadFeedDelegations(
+      threadId,
+      environmentId === undefined
+        ? undefined
+        : (get(environmentSnapshotAtom(environmentId))?.delegations ?? []),
+    ),
+  ).pipe(Atom.withLabel(`mobile-feed-delegations:${key}`));
+});
 
 export function useThreadComposerState() {
   const { t } = useMobileI18n();
@@ -137,6 +160,18 @@ export function useThreadComposerState() {
     () => (selectedThreadKey ? (queuedMessagesByThreadKey[selectedThreadKey] ?? []) : []),
     [queuedMessagesByThreadKey, selectedThreadKey],
   );
+  // Delegations live on the environment snapshot, not the thread detail.
+  const selectedThreadDelegations = useAtomValue(
+    feedDelegationsAtom(
+      selectedThreadShell
+        ? `${selectedThreadShell.environmentId}\n${selectedThreadShell.id}`
+        : "\n",
+    ),
+  );
+  const selectedThreadFeedDelegations = useMemo(
+    () => JSON.parse(selectedThreadDelegations) as ThreadFeedDelegations,
+    [selectedThreadDelegations],
+  );
   const selectedThreadFeed = useMemo(() => {
     if (!selectedThreadDetail) {
       return [];
@@ -144,14 +179,21 @@ export function useThreadComposerState() {
     const submissions = selectedThreadKey
       ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? [])
       : [];
+    const { delegations } = selectedThreadFeedDelegations;
     return buildThreadFeed(selectedThreadDetail, {
       localMessages: submissions.flatMap((submission) =>
         submission.status === "interrupted"
           ? []
           : [codexFeedbackMessage(submission), codexFeedbackMessage(submission, "assistant")],
       ),
+      delegations,
     });
-  }, [feedbackSubmissionsByThreadKey, selectedThreadDetail, selectedThreadKey]);
+  }, [
+    feedbackSubmissionsByThreadKey,
+    selectedThreadFeedDelegations,
+    selectedThreadDetail,
+    selectedThreadKey,
+  ]);
 
   // Draft text and attachments are read by the composer itself, so typing
   // re-renders the composer rather than the whole thread route.
@@ -423,8 +465,11 @@ export function useThreadComposerState() {
     [selectedThreadKey],
   );
 
+  const selectedThreadWaitingOnChildren = selectedThreadFeedDelegations.waitingOnChildren;
+
   return {
     selectedThreadFeed,
+    selectedThreadWaitingOnChildren,
     selectedThreadQueueCount,
     activeWorkStartedAt,
     modelSelection,

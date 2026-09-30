@@ -7,9 +7,16 @@ shell. Both fields are nullable and optional at the decode boundary so events
 and clients from before this feature continue to replay.
 
 Parent-linked threads are execution details, not a bot's user conversation.
-Navigation selectors, roster message derivation, the web sidebar, and mobile
-thread lists therefore omit them. Work cards retain the child thread id and
-remain the supported path to open that detail.
+Navigation selectors, roster message derivation, the web sidebar, mobile
+thread lists, and server thread search therefore omit them. Work cards retain
+the child thread id and remain the supported path to open that detail.
+
+The web roster also remembers each bot's last chat path. Because a remembered
+path can point at a thread that is not in the child-free shell list yet,
+`useBotChatTarget` checks the target's own shell and drops it when the shell is
+parent-linked or belongs to another bot. A bot with only child threads resolves
+to no chat, so selecting it starts its direct chat. The work view's **Open
+chat** navigates to the child bot's route rather than the child thread.
 
 ## Record fields for placement, retry, and triggers
 
@@ -50,9 +57,8 @@ and usually replies before the child finishes.
 turn ends it records the outcome as a `delegation.updated` event with a
 `Completed` or `Failed` phase and `acknowledgedAt: null`, then appends an
 activity to the parent chat. Mastra child turns report through the controller's
-turn result. Legacy child turns (Claude, Grok, OpenCode) report through the
-delegation waiter that `settleLegacyTurnMemory` resolves when the child's
-`turn.completed` arrives. `drain()` resolves once every background watch has
+turn result. Every provider that can receive delegated work runs on the
+controller, so no child turn reports through the legacy bridge. `drain()` resolves once every background watch has
 recorded its outcome, so tests wait on it instead of sleeping.
 
 A child started by a parent turn that later completes keeps running. When a
@@ -136,17 +142,80 @@ Canceled delegations have no result to deliver.
 
 ## Provider injection
 
-| Provider        | Path          | Where `delegationResults` goes                          |
-| --------------- | ------------- | ------------------------------------------------------- |
-| Codex           | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Claude          | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Grok            | Mastra        | Per-turn `persistentMemoryContext`                      |
-| Kimi For Coding | Mastra        | Per-turn `persistentMemoryContext`                      |
-| OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext`                      |
-| OpenCode        | Legacy bridge | Per-turn context, which OpenCode reads as system prompt |
+| Provider        | Path          | Where `delegationResults` goes     |
+| --------------- | ------------- | ---------------------------------- |
+| Codex           | Mastra        | Per-turn `persistentMemoryContext` |
+| Kimi For Coding | Mastra        | Per-turn `persistentMemoryContext` |
+| Claude          | Mastra        | Per-turn `persistentMemoryContext` |
+| Grok            | Mastra        | Per-turn `persistentMemoryContext` |
+| OpenCode Go     | Mastra        | Per-turn `persistentMemoryContext` |
+| OpenCode        | Legacy bridge | Cannot delegate                    |
 
-On the legacy bridge the results ride the turn's `persistentMemoryContext`,
-which OpenCode reads as its system prompt.
+`driverSupportsDelegation` in `@t3tools/shared/delegationProviders` names the
+drivers in the Mastra rows. `AgentController` uses the same predicate to route
+a turn to the controller, so a driver that gets the Akeru tool catalog is
+exactly a driver that can delegate. `delegationProviderMatrix.test.ts` runs
+send, access grant, result, usage, cancel, and the depth cap against each of
+the five.
+
+## Legacy bridge providers
+
+Standard OpenCode runs on the legacy bridge, which registers no tool session.
+Its bots never see `SendToAgent` or the other delegation tools. A bot on
+another provider that sends work to an OpenCode bot is refused before any child
+thread exists: `send` resolves the target's driver through the
+`providerDriverKind` option and throws
+`AkeruDelegationProviderUnsupportedError`, which the tool runtime reports with
+failure code `denied`. The message names the target bot and tells the sender
+to do the work itself or pick a bot on another provider. When
+`providerDriverKind` returns `null` because the target's provider instance no
+longer exists, `send` refuses with "The target bot is not available in this
+workspace." and also creates nothing.
+
+Clients show the same limit before anyone asks. On web, the bot Tools sheet
+shows a note for a bot whose provider cannot hand off work, and the group
+`@` picker marks such a bot with "Cannot take handed-off work"
+(`botEngineTakesDelegatedWork` in `botEngineSelection.ts`). On mobile, the
+group `@` picker adds the same marker (`groupMentionBots` in
+`composerMentionItems.ts`), and chat settings show the Tools note under
+Options. Both use `driverSupportsDelegation`. A bot without an engine, or
+whose provider instance the client cannot find, is not marked. MCP bot tools
+for the legacy bridge are tracked separately.
+
+## Groups
+
+A bot in a group chat can send work only to bots that are members of that
+group. `send` checks membership before it creates anything and fails with
+"The target bot is not available in the current group." A direct chat can
+send work to any available bot.
+
+The child always runs in a direct thread with the target's `botId` and
+`groupId: null`, even when the parent is a group chat. When the child
+completes, the runtime records the result as usual and then posts a
+server-authored assistant message to the group:
+`Finished work for {parent bot}: {task}` followed by the summary. The message
+has ID `delegation-result-{id}` and `respondingBotId` set to the child bot, so
+the group shows it from the bot that did the work. It starts no turn. The
+runtime reads the parent bot's name when the child completes, so a rename
+during the work shows the current name.
+
+The delegation stays completed even when the group cannot take the result.
+If the child bot left the group, was archived, or the group is gone, the
+runtime skips the post and calls `onGroupResultSkipped` with
+`bot_left_group` or `group_unavailable`. `AgentController` logs that at info
+level. The runtime checks before it posts and again when the decider refuses
+the message, so a member removed mid-post is reported the same way. Any other
+delivery error goes to `onWatchError`.
+
+## Channel turns
+
+When the parent turn started from an external channel message, the turn start
+message carries a `channelOrigin`. `ProviderCommandReactor` then formats
+pending results with `delegationResultsContext(..., { channel: true })`, which
+uses `delegationSummaryText` from `@t3tools/shared` to write plain-text lines
+without Markdown. Akeru never starts a follow-up turn when delegated work
+finishes, so the external sender sees the result in the reply to their next
+message.
 
 ## Request limits
 
@@ -175,3 +244,87 @@ temporary worker inside the parent's own turn. The worker is a copy of the
 bot under a narrower grant, not a delegation to another bot, so it is not
 covered by this document's acknowledgement and delivery rules. See
 [Temporary workers](providers.md#temporary-workers) in providers.md.
+
+## Reverse states
+
+Every way into a delegation state has a way back out.
+
+- **Cancel.** `delegation.cancel` with `keep: false` moves live work to
+  `Canceled` with `canceledBy: "user"`. It does nothing to work that has
+  already finished.
+- **Let it finish.** `delegation.cancel` with `keep: true` only sets `keep` on
+  the record, and the work keeps running. A kept child survives its parent turn
+  being interrupted or failing. A bot can set the same flag up front with
+  `keep: true` on `SendToAgent`.
+- **Retry.** `delegation.retry` starts new work from a `Failed` or `Canceled`
+  record. The decider refuses any other phase, a record that another record
+  already retries (its `retryOfDelegationId` points at it), and a retry when
+  the parent chat already has `AKERU_DELEGATION_MAX_CONCURRENCY` active
+  delegations. The refusals are `OrchestrationCommandInvariantError`s whose
+  detail is readable text. Once a retry exists, the original is superseded: a
+  later retry has to start from the newest record. An accepted retry emits
+  `delegation.retry-requested` and leaves the original record untouched.
+  `ProviderCommandReactor` then calls `AgentController.dispatchDelegation`
+  with `{ _tag: "Retry" }`. The runtime sends a new delegation to the same bot
+  with the original task, expected result, access grant, `keep`, `trigger`,
+  and anchor, plus `retryOfDelegationId` pointing at the original. A deadline
+  carries over only if it is still in the future. The original `context` is
+  not stored on the record, so a retry runs without it. Storing it would put up
+  to 8,000 characters on every record sent to clients. If the runtime refuses
+  the new work, the reactor appends a `delegation.retry.failed` activity to
+  the parent chat with the reason.
+
+`delegationActions(record, delegations)` in
+`@t3tools/client-runtime/delegationPresentation` lists the actions a work card
+offers, given the chat's delegations. Live work offers `keep`, unless it is
+already kept, and `cancel` when `AKERU_DELEGATION_TRANSITIONS` allows it.
+Failed and canceled work offers `retry` unless `isDelegationSuperseded` finds a
+record that already retries it, which matches the decider's rule. Completed
+work offers nothing. Clients send the actions with the `cancelDelegation` and
+`retryDelegation` orchestration commands.
+
+On web, `DelegationCard` takes the chat's `delegations` and renders one button
+per action in its actions slot (Let it finish, Cancel, Try again), disables them
+all while a command is in flight, and shows the decider's refusal text in an
+error toast. On mobile, `buildThreadFeed` stores each card's actions on its feed
+entry, and `ThreadDelegationFeedCard` sends the same commands. The buttons
+disable while a command is in flight, and a refusal shows in an alert with the
+server's text.
+
+## Scheduled delegation
+
+A routine with `delegateToBotId` hands each run to that bot instead of running
+a turn in its own chat. The routines runtime adapter calls
+`AgentController.dispatchDelegation` with `{ _tag: "Scheduled" }`. The runtime
+records the delegation with `trigger: "scheduled"`, parented on the routine's
+chat with depth 0 and the owner bot's default grant. The run's approval policy
+sets the runtime mode. The card anchors to the chat's last message when the
+routine fired. The run's `threadRef` is the child thread, which is how the
+runtime links the run to its delegation.
+
+- A `Completed` delegation completes the run with the result summary.
+- A `Failed` delegation fails the run, opens an incident, and blocks the
+  routine.
+- A `Canceled` delegation cancels the run.
+- Canceling the run cancels its delegation. A run canceled while its
+  delegation is still starting has no `threadRef` yet. The decider refuses
+  `routine.run.start` for a run that already ended, and the adapter then
+  cancels the new delegation by the `delegationId` the runtime returned.
+- Pausing or disabling the routine leaves running work alone. The pause only
+  stops future runs.
+- The web **Done by** picker leaves out the routine's own bot and lists bots
+  whose provider cannot take handed-off work as disabled options, using
+  `routineDelegateOptions` in `botEngineSelection.ts`. Mobile only shows the
+  saved helper's name, so it has no picker to filter.
+- `checkDependencies` blocks a run up front, with "pick another bot"
+  guidance, when the delegate bot is archived or missing, is the routine's own
+  bot, or runs on a provider where `driverSupportsDelegation` is false (standard
+  OpenCode). A run whose delegation the runtime still refuses is blocked with
+  the runtime's reason.
+
+Scheduled work has no live parent turn. Ending a turn in the routine's chat
+therefore never cancels it.
+
+A delegation that ends while the server is down, or before `routine.run.start`
+records the run's `threadRef`, does not settle the run. Recovering those runs after a restart is
+follow-up work.

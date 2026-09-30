@@ -145,6 +145,7 @@ describe("discovered interface message coverage", () => {
       "apps/web/src/components/onboarding/desktopOnboarding.logic.ts",
       "apps/web/src/components/onboarding/goalPlan.logic.ts",
       "packages/client-runtime/src/botInbox.ts",
+      "packages/client-runtime/src/channelPresentation.ts",
       "packages/client-runtime/src/durableMemory.ts",
       "packages/client-runtime/src/errors/threadErrorPresentation.ts",
       "packages/client-runtime/src/imageGeneration.ts",

@@ -35,9 +35,10 @@ const fixtures = vi.hoisted(() => ({
   ] as Array<Record<string, unknown>>,
   scopes: [] as string[],
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
+  buttons: new Map<string, () => void>(),
+  confirm: vi.fn<(message: string) => Promise<boolean> | undefined>(),
   command: vi.fn(),
   toast: vi.fn(),
-  hash: "",
 }));
 
 vi.mock("@effect/atom-react", () => ({
@@ -52,7 +53,11 @@ vi.mock("../../state/bots", () => ({
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => fixtures.command }));
 vi.mock("../../hooks/useSettings", () => ({ useEnvironmentSettings: () => fixtures.connections }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
-vi.mock("../../settingsDialogStore", () => ({ useSettingsEnvironmentId: () => "environment-1" }));
+vi.mock("../../settingsDialogStore", () => ({
+  useSettingsEnvironmentId: () => "environment-1",
+  useSettingsChannelProvider: () => ["imessage", vi.fn()],
+}));
+vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: fixtures.confirm }));
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({
     isPending: false,
@@ -71,16 +76,29 @@ vi.mock("../ui/select", async (importOriginal) => {
   };
 });
 
-vi.mock("@tanstack/react-router", () => ({
-  useLocation: ({ select }: { select: (location: { hash: string }) => string }) =>
-    select({ hash: fixtures.hash }),
-}));
+vi.mock("../ui/button", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../ui/button")>();
+  return {
+    ...actual,
+    Button: (props: Parameters<typeof actual.Button>[0]) => {
+      if (typeof props.children === "string" && props.onClick) {
+        const onClick = props.onClick;
+        fixtures.buttons.set(props.children, () => onClick({} as never));
+      }
+      return <actual.Button {...props} />;
+    },
+  };
+});
+
 vi.mock("./settingsLayout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./settingsLayout")>()),
   SettingsPageContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
+import { channelFailureReason } from "@t3tools/client-runtime/channel-presentation";
+
 import { BotChannelsSettingsPanel } from "./BotChannelsSettings";
+import { PhotonModeSelect } from "./ChannelSetupDialog";
 
 const liveProject = fixtures.projects[0]!;
 
@@ -121,14 +139,6 @@ describe("channel project selection", () => {
     fixtures.selects = [];
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.command.mockReset().mockResolvedValue({ _tag: "Success" });
-  });
-
-  it("opens on the provider a repair link names", () => {
-    fixtures.hash = "#channel-telegram";
-    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
-    fixtures.hash = "";
-    expect(html).toMatch(/<button[^>]*id="channel-telegram"[^>]*aria-selected="true"/);
-    expect(html).toMatch(/<button[^>]*id="channel-imessage"[^>]*aria-selected="false"/);
   });
 
   it("preselects a live project for an unassigned connection and allows assignment", () => {
@@ -281,7 +291,10 @@ describe("channel health and repair", () => {
     expect(button(html, repair)).not.toMatch(/\sdisabled(=|\s|>)/);
     const repairs = ["Connect", "Reconnect", "Update credentials", "Reconnect in this project"];
     expect(repairs.filter((label) => button(html, label))).toEqual([repair]);
-    if (category) expect(html).toContain("Fixed server copy.");
+    if (category) {
+      expect(html).toContain(channelFailureReason(category, "imessage"));
+      expect(html).not.toContain("Fixed server copy.");
+    }
   });
 
   it("links a connected channel with unknown delivery to the provider console", () => {
@@ -315,13 +328,14 @@ describe("channel health and repair", () => {
       'href="https://provider.example.com/console"',
     );
     expect(button(withConsole, "Reconnect")).toBeDefined();
-    expect(withConsole).toContain("Delivery is unconfirmed.");
+    expect(withConsole).toContain(channelFailureReason("delivery-unknown", "imessage"));
+    expect(withConsole).not.toContain("Delivery is unconfirmed.");
 
     fixtures.connections = [fixtureConnection];
     const withoutConsole = renderToStaticMarkup(<BotChannelsSettingsPanel />);
     expect(button(withoutConsole, "Check the channel")).toBeUndefined();
     expect(button(withoutConsole, "Reconnect")).toBeDefined();
-    expect(withoutConsole).toContain("Delivery is unconfirmed.");
+    expect(withoutConsole).toContain(channelFailureReason("delivery-unknown", "imessage"));
   });
 
   it("shows no repair for a healthy connected channel", () => {
@@ -369,5 +383,96 @@ describe("channel identity conflicts", () => {
       title: "Could not assign channel",
       description: "Another bot already uses this account. Unassign it there, then connect again.",
     });
+  });
+});
+
+describe("failed channel attempts", () => {
+  beforeEach(() => {
+    fixtures.projects = [liveProject];
+    fixtures.connections = [fixtureConnection];
+    fixtures.selects = [];
+    fixtures.buttons = new Map();
+    fixtures.scopes = [AuthAccessWriteScope];
+    fixtures.toast.mockReset();
+    fixtures.confirm.mockReset();
+  });
+
+  it("keeps the chosen bot on a connection that failed to attach", () => {
+    fixtures.bots = [boundBot("failed", "Fixed server copy.", "credentials")];
+    const html = renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    expect(trigger(html, "Assign Fixture line")).toBeDefined();
+    expect(html).toContain(">Akeru<");
+    expect(html).not.toContain("Choose a bot");
+    expect(html).not.toContain(">Unassigned<");
+    expect(html).toContain("Photon rejected the connection credentials.");
+  });
+
+  it("releases the new bot before giving the connection back to the previous one", async () => {
+    fixtures.bots = [
+      boundBot("connected"),
+      { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
+    ];
+    fixtures.command.mockReset().mockImplementation(async (value: { input: object }) =>
+      "connectionId" in value.input && "botId" in value.input && value.input.botId === "bot-other"
+        ? {
+            _tag: "Failure",
+            cause: Cause.fail({
+              message: "The channel credentials were rejected.",
+              channelFailureCategory: "credentials",
+            }),
+          }
+        : { _tag: "Success" },
+    );
+    const toasted = new Promise<void>((resolve) => {
+      fixtures.toast.mockImplementationOnce(() => resolve());
+    });
+    renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    fixtures.selects[0]!.onValueChange?.("bot-other");
+    await toasted;
+    expect(fixtures.command.mock.calls.map(([value]) => value.input)).toEqual([
+      { botId: "bot-uuid", provider: "imessage" },
+      expect.objectContaining({ botId: "bot-other", connectionId: "profile-1" }),
+      { botId: "bot-other", provider: "imessage" },
+      expect.objectContaining({ botId: "bot-uuid", connectionId: "profile-1" }),
+    ]);
+    expect(fixtures.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Could not assign channel",
+      description: "Photon rejected the connection credentials.",
+    });
+  });
+
+  it("asks before deleting a connection", async () => {
+    fixtures.bots = [];
+    fixtures.command.mockReset().mockResolvedValue({ _tag: "Success" });
+    // The panel awaits the answer before the test does, so it has acted once the test resumes.
+    const declined = Promise.resolve(false);
+    fixtures.confirm.mockReturnValueOnce(declined);
+    renderToStaticMarkup(<BotChannelsSettingsPanel />);
+    fixtures.buttons.get("Delete")?.();
+    expect(fixtures.confirm).toHaveBeenCalledWith(
+      "Delete Fixture line? Its saved credentials are removed from this environment.",
+      { variant: "destructive", confirmLabel: "Delete" },
+    );
+    await declined;
+    expect(fixtures.command).not.toHaveBeenCalled();
+
+    const accepted = Promise.resolve(true);
+    fixtures.confirm.mockReturnValueOnce(accepted);
+    fixtures.buttons.get("Delete")?.();
+    await accepted;
+    expect(fixtures.command).toHaveBeenCalledWith({
+      environmentId: "environment-1",
+      input: { connectionId: "profile-1" },
+    });
+  });
+});
+
+describe("Photon connection type", () => {
+  it("shows the option label in the trigger", () => {
+    const html = renderToStaticMarkup(<PhotonModeSelect mode="hosted" onChange={() => {}} />);
+    expect(trigger(html, "Photon connection type")).toBeDefined();
+    expect(html).toContain(">Photon hosted<");
+    expect(html).not.toContain(">hosted<");
   });
 });

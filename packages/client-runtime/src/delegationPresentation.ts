@@ -1,4 +1,5 @@
 import {
+  AKERU_DELEGATION_TRANSITIONS,
   akeruDelegationStateOf,
   isAkeruDelegationTerminal,
   isThreadWaitingOnChildren,
@@ -90,4 +91,38 @@ export function threadDelegations(
     delegations: delegations.filter((delegation) => delegation.parentThreadId === threadId),
     waitingOnChildren: isThreadWaitingOnChildren(delegations, threadId),
   };
+}
+
+/**
+ * Whether a later record already retries this one. The decider refuses a
+ * second retry of the same record, so a superseded card offers no Try again.
+ */
+export function isDelegationSuperseded(
+  delegation: AkeruDelegationRecord,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+): boolean {
+  return delegations.some((candidate) => candidate.retryOfDelegationId === delegation.delegationId);
+}
+
+/**
+ * What a user can do with one piece of bot work. "Let it finish" keeps the work
+ * running when its parent chat stops; cancel belongs in an overflow menu; retry
+ * starts new work from a failed or canceled record without touching it, once.
+ * Pass the chat's delegations so a record that was already retried offers nothing.
+ */
+export type DelegationAction = "keep" | "cancel" | "retry";
+
+export function delegationActions(
+  delegation: AkeruDelegationRecord,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+): ReadonlyArray<DelegationAction> {
+  const phase = delegation.phase._tag;
+  if (phase === "Failed" || phase === "Canceled") {
+    return isDelegationSuperseded(delegation, delegations) ? [] : ["retry"];
+  }
+  if (phase === "Completed") return [];
+  const actions: DelegationAction[] = [];
+  if (!delegation.keep) actions.push("keep");
+  if (AKERU_DELEGATION_TRANSITIONS[phase].has("Canceled")) actions.push("cancel");
+  return actions;
 }

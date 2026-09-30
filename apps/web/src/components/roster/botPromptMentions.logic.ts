@@ -28,6 +28,8 @@ export type BotPromptMentionItem =
       readonly source: string;
       /** Tells bots that share a name apart; null for a unique name. */
       readonly detail: string | null;
+      /** False when the bot's provider cannot take handed-off work. */
+      readonly canTakeWork: boolean;
     }
   | {
       readonly kind: "thread";
@@ -75,6 +77,8 @@ export interface BotPromptMentionBot {
   readonly name: string;
   /** The bot's role, which usually tells two bots with the same name apart. */
   readonly title?: string;
+  /** False when the bot's provider cannot take handed-off work. Defaults to true. */
+  readonly canTakeWork?: boolean;
 }
 
 /**
@@ -127,6 +131,7 @@ export function buildBotPromptMentionItems(input: {
           key: `bot:${bot.id}`,
           label: bot.name,
           ...botPromptMention(bot, input.bots),
+          canTakeWork: bot.canTakeWork !== false,
         });
       }
     }

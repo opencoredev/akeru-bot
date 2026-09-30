@@ -3,7 +3,11 @@ import { BotId, CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import { channelCommandFailure, type ChannelCommand } from "./ChannelCommand.ts";
+import {
+  channelCommandFailure,
+  channelDispatchError,
+  type ChannelCommand,
+} from "./ChannelCommand.ts";
 import {
   ChannelPostRejectedError,
   ChannelRuntimeError,
@@ -70,3 +74,15 @@ it.effect("keeps a reply failure that happened before posting out of delivery-un
     assert.strictEqual(unknown.category, "delivery-unknown");
   }),
 );
+
+it("sends the failure category to clients with the fixed message", () => {
+  const credentials = channelDispatchError({
+    message: channelFailureMessage("credentials"),
+    category: "credentials",
+  });
+  assert.strictEqual(credentials.channelFailureCategory, "credentials");
+  assert.strictEqual(credentials.message, channelFailureMessage("credentials"));
+
+  const internal = channelDispatchError({ message: "Channel command failed. Try again." });
+  assert.strictEqual(internal.channelFailureCategory, undefined);
+});

@@ -85,6 +85,22 @@ describe("mobile thread channels", () => {
     expect(html).not.toContain("input");
   });
 
+  it("explains a categorized failure in plain words", () => {
+    state.snapshot = {
+      bots: [
+        {
+          id: botId,
+          channelBindings: [{ ...binding, status: "failed", failureCategory: "credentials" }],
+        },
+      ],
+      projects: [{ id: projectId, title: "Selected workspace" }],
+    };
+    const html = render();
+    expect(html).toContain("Telegram rejected the bot token.");
+    expect(html).not.toContain("Channel needs attention");
+    expect(html).not.toContain("private-credential-error");
+  });
+
   it("offers every live project when the channel's project is unavailable", () => {
     const other = ProjectId.make("project-2");
     state.snapshot = {

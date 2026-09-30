@@ -4,6 +4,7 @@ import { BotId, MessageId, ProjectId, type ChannelBinding } from "@t3tools/contr
 import {
   canChangeChannelProject,
   channelBindingNeedsProject,
+  channelFailureReason,
   channelBindingPresentation,
   channelPickerProjectId,
   channelRestoreProjectId,
@@ -12,6 +13,8 @@ import {
   channelRepairAction,
   channelRepairLabel,
 } from "./channelPresentation.ts";
+import { createTranslator } from "./i18n/index.ts";
+import { zhCNCatalog } from "./i18n/zh-CN.ts";
 
 describe("channel presentation", () => {
   const binding: ChannelBinding = {
@@ -206,5 +209,46 @@ describe("channel presentation", () => {
       channelProviderLabel("slack"),
       channelProviderLabel("discord"),
     ]).toEqual(["Telegram", "iMessage", "WhatsApp", "Slack", "Discord"]);
+  });
+});
+
+describe("channelFailureReason", () => {
+  it("names the provider and the rejected credential", () => {
+    expect(channelFailureReason("credentials", "telegram")).toBe(
+      "Telegram rejected the bot token.",
+    );
+    expect(channelFailureReason("credentials", "slack")).toBe(
+      "Slack rejected the bot token or app token.",
+    );
+    expect(channelFailureReason("credentials", "discord")).toBe("Discord rejected the bot token.");
+    expect(channelFailureReason("credentials", "whatsapp")).toBe(
+      "WhatsApp rejected the access token.",
+    );
+    expect(channelFailureReason("credentials", "imessage")).toBe(
+      "Photon rejected the connection credentials.",
+    );
+  });
+
+  it("explains every other category the server sends", () => {
+    expect(channelFailureReason("network", "discord")).toBe(
+      "Could not reach Discord. Check the network and try again.",
+    );
+    expect(channelFailureReason("project", "telegram")).toBe(
+      "The project for this channel is unavailable. Choose another project.",
+    );
+    expect(channelFailureReason("delivery-unknown", "slack")).toBe(
+      "A reply may not have reached Slack. Check the chat before replying again.",
+    );
+    expect(channelFailureReason("restore", "whatsapp")).toBe(
+      "WhatsApp did not reconnect after a restart. Reconnect to resume.",
+    );
+  });
+
+  it("translates with the caller's catalog", () => {
+    const zh = createTranslator("zh-CN", zhCNCatalog).t;
+    expect(channelFailureReason("credentials", "telegram", zh)).toBe("Telegram 拒绝了机器人令牌。");
+    expect(channelFailureReason("network", "slack", zh)).toBe(
+      "无法连接到 Slack。请检查网络后重试。",
+    );
   });
 });

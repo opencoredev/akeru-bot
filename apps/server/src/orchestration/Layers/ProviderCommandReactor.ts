@@ -59,10 +59,7 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
-import {
-  AgentControllerUnsupportedEngineError,
-  ProviderAdapterRequestError,
-} from "../../provider/Errors.ts";
+import { ProviderAdapterRequestError, readableErrorDetail } from "../../provider/Errors.ts";
 import type { AgentControllerError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import {
@@ -98,7 +95,6 @@ import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { ComposioService } from "../../composio/ComposioService.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
-const isAgentControllerUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
 const isComposioOperationError = Schema.is(ComposioOperationError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
@@ -129,7 +125,8 @@ type ProviderIntentEvent = Extract<
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
       | "thread.session-stop-requested"
-      | "delegation.updated";
+      | "delegation.updated"
+      | "delegation.retry-requested";
   }
 >;
 
@@ -438,6 +435,25 @@ const make = Effect.gen(function* () {
   }
   const failDelegation = (threadId: ThreadId, error: string) =>
     agentController.failDelegation?.({ threadId, error }) ?? Effect.void;
+  /** Fails the bot work a child chat runs, naming the bot that could not start. */
+  const failDelegationStart = (
+    thread: Pick<OrchestrationThreadShell, "id" | "botId" | "respondingBotId">,
+    detail: string,
+  ) => {
+    const botId = resolveControllerBotId(thread);
+    return (
+      botId === null
+        ? Effect.succeed(undefined)
+        : projectionBotRepository.getById({ botId }).pipe(
+            Effect.map(Option.getOrUndefined),
+            Effect.orElseSucceed(() => undefined),
+          )
+    ).pipe(
+      Effect.flatMap((bot) =>
+        failDelegation(thread.id, bot ? `${bot.name} could not start: ${detail}` : detail),
+      ),
+    );
+  };
   if (agentController.configureDelegation) {
     yield* agentController.configureDelegation({
       readSnapshot: () => runPromise(projectionSnapshotQuery.getCommandReadModel()),
@@ -479,7 +495,8 @@ const make = Effect.gen(function* () {
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
       | "provider.session.update.failed"
-      | "provider.session.stop.failed";
+      | "provider.session.stop.failed"
+      | "delegation.retry.failed";
     readonly summary: string;
     readonly detail: string;
     readonly turnId: TurnId | null;
@@ -518,6 +535,7 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly requestId: string;
     readonly createdAt: string;
+    readonly providerFailed?: boolean;
   }) {
     const thread = yield* resolveThreadDetail(input.threadId);
     if (!thread) return;
@@ -526,8 +544,9 @@ const make = Effect.gen(function* () {
     );
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
-    const text =
-      "I could not continue that request because the bot session restarted. Send it again.";
+    const text = input.providerFailed
+      ? "I could not continue that request because the provider failed. Check the provider, then send it again."
+      : "I could not continue that request because the bot session restarted. Send it again.";
 
     const deltaCommandId = yield* serverCommandId("user-input-failure-reply-delta");
     yield* orchestrationEngine.dispatch({
@@ -592,16 +611,7 @@ const make = Effect.gen(function* () {
       ? failReason.error
       : undefined;
     if (composioError) return composioError.message;
-    const providerError = isProviderAdapterRequestError(failReason?.error)
-      ? failReason.error
-      : undefined;
-    if (providerError) {
-      return providerError.detail;
-    }
-    const controllerError = isAgentControllerUnsupportedEngineError(failReason?.error)
-      ? failReason.error
-      : undefined;
-    return controllerError?.detail ?? Cause.pretty(cause);
+    return readableErrorDetail(failReason ? failReason.error : Cause.squash(cause));
   };
 
   const formatFailure = (cause: Cause.Cause<unknown>) => {
@@ -1663,6 +1673,7 @@ const make = Effect.gen(function* () {
   // them. A release that cannot be confirmed fails the turn start instead.
   const readDelegationResults = (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+    options: { readonly channel: boolean },
   ) => {
     const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
     if (delegationIds.length === 0) return Effect.succeed("");
@@ -1674,6 +1685,7 @@ const make = Effect.gen(function* () {
             delegationIds.includes(delegation.delegationId),
           ),
           readModel.bots,
+          options,
         ),
       ),
       Effect.catchCause((cause) =>
@@ -1750,26 +1762,29 @@ const make = Effect.gen(function* () {
       // The failure activity lands before the session error clears the pending
       // turn start, so a restart either replays the turn start or finds the
       // failure and releases the results this turn acknowledged.
-      return appendProviderFailureActivity({
-        threadId: event.payload.threadId,
-        kind: "provider.turn.start.failed",
-        summary: "Provider turn start failed",
-        detail,
-        turnId: null,
-        createdAt: event.payload.createdAt,
-        requestId: event.payload.messageId,
-        unavailability,
+      return Effect.gen(function* () {
+        yield* Effect.logWarning("provider turn start failed", {
+          threadId: event.payload.threadId,
+          cause: Cause.pretty(cause),
+        });
+        yield* appendProviderFailureActivity({
+          threadId: event.payload.threadId,
+          kind: "provider.turn.start.failed",
+          summary: "Provider turn start failed",
+          detail,
+          turnId: null,
+          createdAt: event.payload.createdAt,
+          requestId: event.payload.messageId,
+          unavailability,
+        });
+        yield* setThreadSessionErrorOnTurnStartFailure({
+          threadId: event.payload.threadId,
+          detail,
+          unavailability,
+          createdAt: event.payload.createdAt,
+        });
       }).pipe(
-        Effect.flatMap(() =>
-          setThreadSessionErrorOnTurnStartFailure({
-            threadId: event.payload.threadId,
-            detail,
-            unavailability,
-            createdAt: event.payload.createdAt,
-          }),
-        ),
-        Effect.asVoid,
-        Effect.ensuring(failDelegation(event.payload.threadId, detail)),
+        Effect.ensuring(failDelegationStart(thread, detail)),
         Effect.ensuring(releaseDelegationResults(event)),
       );
     };
@@ -1855,7 +1870,10 @@ const make = Effect.gen(function* () {
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
-    const delegationResults = yield* readDelegationResults(event).pipe(
+    // A channel turn's reply goes to an external sender who sees no work cards.
+    const delegationResults = yield* readDelegationResults(event, {
+      channel: message.channelOrigin != null,
+    }).pipe(
       Effect.map(Option.some),
       Effect.catchCause((cause) =>
         (respondingBotId === null
@@ -2112,8 +2130,12 @@ const make = Effect.gen(function* () {
         Effect.catchCause((cause) => {
           const detail = isUnknownPendingApprovalRequestError(cause)
             ? stalePendingRequestDetail("approval", event.payload.requestId)
-            : Cause.pretty(cause);
+            : formatFailureDetail(cause);
           return Effect.gen(function* () {
+            yield* Effect.logWarning("provider approval response failed", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            });
             yield* appendProviderFailureActivity({
               threadId: event.payload.threadId,
               kind: "provider.approval.respond.failed",
@@ -2179,13 +2201,19 @@ const make = Effect.gen(function* () {
         .pipe(
           Effect.catchCause((cause) => {
             const retryable = isRetryableUserInputResponseError(cause);
-            const staleDetail = stalePendingRequestDetail("user-input", event.payload.requestId);
+            const providerFailed = !retryable && !isUnknownPendingUserInputRequestError(cause);
+            const failureDetail = formatFailureDetail(cause);
+            // The stale marker closes the question; a provider failure keeps its real cause.
             const detail = retryable
-              ? Cause.pretty(cause)
-              : isUnknownPendingUserInputRequestError(cause)
-                ? staleDetail
-                : `${staleDetail} ${Cause.pretty(cause)}`;
+              ? failureDetail
+              : providerFailed
+                ? `Stale pending user-input request: ${event.payload.requestId}. ${failureDetail}`
+                : stalePendingRequestDetail("user-input", event.payload.requestId);
             return Effect.gen(function* () {
+              yield* Effect.logWarning("provider user input response failed", {
+                threadId: event.payload.threadId,
+                cause: Cause.pretty(cause),
+              });
               yield* appendProviderFailureActivity({
                 threadId: event.payload.threadId,
                 kind: "provider.user-input.respond.failed",
@@ -2201,6 +2229,7 @@ const make = Effect.gen(function* () {
                 threadId: event.payload.threadId,
                 requestId: event.payload.requestId,
                 createdAt: event.payload.createdAt,
+                providerFailed,
               });
               if (thread.session) {
                 yield* setThreadSession({
@@ -2209,7 +2238,7 @@ const make = Effect.gen(function* () {
                     ...withoutUnavailability(thread.session),
                     status: "error",
                     activeTurnId: null,
-                    lastError: detail,
+                    lastError: providerFailed ? failureDetail : detail,
                     updatedAt: event.payload.createdAt,
                   },
                   createdAt: event.payload.createdAt,
@@ -2271,7 +2300,9 @@ const make = Effect.gen(function* () {
                 ? null
                 : event.payload.delegation.phase.childThreadId) ?? "unassigned",
           }
-        : { "orchestration.thread_id": event.payload.threadId }),
+        : event.type === "delegation.retry-requested"
+          ? { "orchestration.thread_id": event.payload.parentThreadId }
+          : { "orchestration.thread_id": event.payload.threadId }),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
     yield* increment(orchestrationEventsProcessedTotal, {
@@ -2286,6 +2317,31 @@ const make = Effect.gen(function* () {
             ...(delegation.phase.childTurnId ? { turnId: delegation.phase.childTurnId } : {}),
           });
         }
+        return;
+      }
+      case "delegation.retry-requested": {
+        // The decider already checked phase and cap; the runtime starts a fresh
+        // record that points back at the original, which stays untouched.
+        const { delegationId, parentThreadId } = event.payload;
+        const dispatchDelegation = agentController.dispatchDelegation;
+        if (!dispatchDelegation) {
+          yield* Effect.logWarning("delegation retry requested without a delegation runtime", {
+            delegationId,
+          });
+          return;
+        }
+        yield* dispatchDelegation({ _tag: "Retry", delegationId }).pipe(
+          Effect.catchTag("AgentControllerRuntimeError", (error) =>
+            appendProviderFailureActivity({
+              threadId: parentThreadId,
+              kind: "delegation.retry.failed",
+              summary: "Bot work could not be retried",
+              detail: error.detail,
+              turnId: null,
+              createdAt: event.occurredAt,
+            }),
+          ),
+        );
         return;
       }
       case "thread.meta-updated":
@@ -2371,7 +2427,9 @@ const make = Effect.gen(function* () {
         event.payload.delegation.phase.childThreadId === null
         ? Effect.succeed(false)
         : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId)
-      : reconcileRestrictiveSessionCleanup(event.payload.threadId)
+      : event.type === "delegation.retry-requested"
+        ? Effect.succeed(false)
+        : reconcileRestrictiveSessionCleanup(event.payload.threadId)
     ).pipe(
       Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
       Effect.catchCause((cause) => {
@@ -2748,7 +2806,8 @@ const make = Effect.gen(function* () {
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
         event.type === "thread.session-stop-requested" ||
-        event.type === "delegation.updated"
+        event.type === "delegation.updated" ||
+        event.type === "delegation.retry-requested"
       ) {
         return yield* worker.enqueue(event);
       }

@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   channelBindingNeedsProject,
   channelBindingPresentation,
+  channelFailureReason,
 } from "@t3tools/client-runtime/channel-presentation";
 import {
   AuthAccessWriteScope,
@@ -60,6 +61,9 @@ export function ThreadChannels(props: {
         const channel = channelBindingPresentation(binding, projects);
         const key = binding.connectionId ?? `${binding.provider}:${index}`;
         const needsProject = channelBindingNeedsProject(binding, projects);
+        const warning = binding.failureCategory
+          ? channelFailureReason(binding.failureCategory, binding.provider, t)
+          : channel.warning;
         return (
           <View key={key} className="gap-1">
             <Text className="font-t3-medium text-xs text-neutral-900 dark:text-neutral-100">
@@ -71,8 +75,8 @@ export function ThreadChannels(props: {
                   "The project for this channel is unavailable. Choose another project to reconnect it.",
                 )}
               </Text>
-            ) : channel.warning ? (
-              <Text className="text-xs text-amber-700 dark:text-amber-400">{channel.warning}</Text>
+            ) : warning ? (
+              <Text className="text-xs text-amber-700 dark:text-amber-400">{warning}</Text>
             ) : null}
             <Text className="text-xs text-neutral-600 dark:text-neutral-300">
               Project · {channel.project}

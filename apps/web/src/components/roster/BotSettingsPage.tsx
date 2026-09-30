@@ -9,6 +9,7 @@ import {
   botImageProviderOptionLabel,
   globalDefaultOptionLabel,
 } from "@t3tools/client-runtime/image-generation";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import { Brain02Icon, Edit02Icon, Link02Icon, WrenchIcon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -575,6 +576,9 @@ function BotSettingsForm({
           draft.setDisabledMcpServerIds(ids);
           draft.markChanged();
         }}
+        canDelegate={
+          draft.activeEntry ? driverSupportsDelegation(draft.activeEntry.driverKind) : true
+        }
       />
       <BotMemorySheet open={memoryOpen} onOpenChange={setMemoryOpen} threadRef={threadRef} />
       <BotChannelsSheet bot={bot} open={channelsOpen} onOpenChange={setChannelsOpen} />

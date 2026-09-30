@@ -1,9 +1,14 @@
 import {
   AkeruUsageReservationId,
+  type BotId,
+  isAkeruDelegationTerminal,
   CommandId,
+  type DelegationId,
+  type ThreadId,
   MessageId,
   type OrchestrationCommand,
 } from "@t3tools/contracts";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -17,13 +22,20 @@ import { OrchestrationEngineService } from "../orchestration/Services/Orchestrat
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProjectionBotRepository } from "../persistence/Services/ProjectionBots.ts";
 import { ProjectionMcpServerRepository } from "../persistence/Services/ProjectionMcpServers.ts";
+import { AgentController } from "../provider/Services/AgentController.ts";
 import { ProviderRegistry } from "../provider/Services/ProviderRegistry.ts";
 import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import {
   RoutineRuntimeAdapter,
+  type Routine,
+  type RoutineDispatchResult,
   type RoutineDependencyFailure,
+  type RoutineRun,
   type RoutineRuntimeAdapterShape,
 } from "./types.ts";
+
+const routineTask = (procedure: string) =>
+  `Run the approved routine procedure below once. Do not create, update, enable, pause, or delete a routine or schedule.\n\n${procedure}`;
 
 export const findBlockingDependencyIncident = (
   incidents: ReadonlyArray<BotInboxItem>,
@@ -58,6 +70,7 @@ const make = Effect.gen(function* () {
   const inbox = BotInboxService.forSecretsDir(config.secretsDir);
   const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
   const botUsageLedger = yield* BotUsageLedger;
+  const agentController = yield* AgentController;
 
   const dispatch = (command: OrchestrationCommand) => engine.dispatch(command);
 
@@ -84,6 +97,41 @@ const make = Effect.gen(function* () {
           reason: "The assigned bot is archived or missing.",
           nextAction: "Restore the bot, then resume the routine.",
         } satisfies RoutineDependencyFailure;
+      }
+
+      if (routine.delegateToBotId !== null) {
+        if (routine.delegateToBotId === routine.botId) {
+          return {
+            kind: "bot",
+            reason: "This routine hands its work to its own bot.",
+            nextAction:
+              "Pick another bot to do the work, or clear the helper, then resume the routine.",
+          } satisfies RoutineDependencyFailure;
+        }
+        const helper = yield* bots.getById({ botId: routine.delegateToBotId });
+        if (Option.isNone(helper) || helper.value.archivedAt !== null) {
+          return {
+            kind: "bot",
+            reason: "The bot this routine hands work to is archived or missing.",
+            nextAction: "Restore that bot or pick another one, then resume the routine.",
+          } satisfies RoutineDependencyFailure;
+        }
+        // Standard OpenCode runs on the legacy bridge, which cannot enforce a
+        // delegated grant, so its bots never take bot work.
+        const helperInstanceId = helper.value.engine?.provider;
+        if (helperInstanceId !== undefined) {
+          const helperDriver =
+            (yield* providers.getProviders).find(
+              (provider) => provider.instanceId === helperInstanceId,
+            )?.driver ?? helperInstanceId;
+          if (!driverSupportsDelegation(helperDriver)) {
+            return {
+              kind: "bot",
+              reason: `${helper.value.name} runs on a provider that cannot take bot work.`,
+              nextAction: "Pick another bot to do the work, then resume the routine.",
+            } satisfies RoutineDependencyFailure;
+          }
+        }
       }
 
       const target = yield* snapshots.getThreadShellById(routine.targetThreadId);
@@ -245,6 +293,35 @@ const make = Effect.gen(function* () {
       createdAt: completedAt,
     }).pipe(Effect.asVoid, Effect.orDie);
 
+  const recordCanceled: RoutineRuntimeAdapterShape["recordCanceled"] = (run, completedAt) =>
+    dispatch({
+      type: "routine.run.cancel",
+      commandId: CommandId.make(`server:routine.cancel:${run.id}`),
+      routineId: run.routineId,
+      runId: run.id,
+      createdAt: completedAt,
+    }).pipe(
+      Effect.asVoid,
+      // A run that ended meanwhile keeps its outcome.
+      Effect.catchTag("OrchestrationCommandInvariantError", () => Effect.void),
+      Effect.orDie,
+    );
+
+  const cancelDelegatedRun: RoutineRuntimeAdapterShape["cancelDelegatedRun"] = (run) =>
+    Effect.gen(function* () {
+      if (run.threadRef === null) return;
+      const readModel = yield* snapshots.getCommandReadModel();
+      const delegation = (readModel.delegations ?? []).find(
+        (candidate) =>
+          candidate.trigger === "scheduled" &&
+          !isAkeruDelegationTerminal(candidate.phase) &&
+          candidate.phase._tag !== "Queued" &&
+          candidate.phase.childThreadId === run.threadRef,
+      );
+      if (delegation === undefined) return;
+      yield* cancelDelegation(run, delegation.delegationId);
+    }).pipe(Effect.orDie);
+
   const openFailureIncident: RoutineRuntimeAdapterShape["openFailureIncident"] = (
     routine,
     failure,
@@ -266,8 +343,97 @@ const make = Effect.gen(function* () {
     routineId,
   ) => Effect.sync(() => void inbox.resolve(`routine:${routineId}`));
 
+  // Records the run as started. The decider refuses a run that was canceled or
+  // settled first, and then nothing may start for it. Any other failure blocks
+  // the run with its reason instead of passing for a cancellation.
+  const startRun = (routine: Routine, run: RoutineRun, threadRef: ThreadId) =>
+    Effect.gen(function* () {
+      const started = yield* dispatch({
+        type: "routine.run.start",
+        commandId: CommandId.make(`server:routine.start:${run.id}`),
+        routineId: routine.id,
+        runId: run.id,
+        threadRef,
+        startedAt: DateTime.formatIso(yield* DateTime.now),
+      }).pipe(Effect.result);
+      if (started._tag === "Success") return "started" as const;
+      if (
+        started.failure._tag === "OrchestrationCommandInvariantError" ||
+        started.failure._tag === "OrchestrationCommandPreviouslyRejectedError"
+      ) {
+        return "ended" as const;
+      }
+      return {
+        failure: {
+          kind: "execution",
+          reason: `The routine run could not start: ${started.failure.message}`,
+          nextAction: "Resume the routine to try again.",
+        },
+      } as const;
+    });
+
+  const cancelDelegation = (run: RoutineRun, delegationId: DelegationId) =>
+    DateTime.now.pipe(
+      Effect.flatMap((now) =>
+        dispatch({
+          type: "delegation.cancel",
+          commandId: CommandId.make(`server:routine.cancel-delegation:${run.id}`),
+          delegationId,
+          keep: false,
+          createdAt: DateTime.formatIso(now),
+        }),
+      ),
+    );
+
+  // Scheduled bot work runs in the helper's chat and shows as a card in the owner
+  // chat. The run follows that work, so pausing the routine leaves it running.
+  const dispatchDelegatedTurn = (routine: Routine, run: RoutineRun, childBotId: BotId) =>
+    Effect.gen(function* () {
+      if (!agentController.dispatchDelegation) {
+        return {
+          failure: {
+            kind: "execution",
+            reason: "Bot work is not available in this environment.",
+            nextAction: "Clear the helper bot on this routine, then resume it.",
+          },
+        } as const;
+      }
+      const handle = yield* agentController
+        .dispatchDelegation({
+          _tag: "Scheduled",
+          parentThreadId: routine.targetThreadId,
+          parentBotId: routine.botId,
+          childBotId,
+          task: routineTask(routine.procedure),
+          expectedResult: "A short summary of what you did and anything the owner should know.",
+          runtimeMode: routine.approvalPolicy,
+        })
+        .pipe(Effect.result);
+      if (handle._tag === "Failure") {
+        return {
+          failure: {
+            kind: "execution",
+            reason: handle.failure.detail,
+            nextAction: "Check the helper bot, then resume the routine.",
+          },
+        } as const;
+      }
+      const { childThreadId: threadRef, delegationId } = handle.success;
+      // A run canceled while its work was starting has no threadRef for
+      // cancelDelegatedRun to match, so cancel the work by its id here.
+      const started = yield* startRun(routine, run, threadRef);
+      if (started !== "started") {
+        yield* cancelDelegation(run, delegationId);
+        return started === "ended" ? ({ canceled: true } satisfies RoutineDispatchResult) : started;
+      }
+      return { threadRef } satisfies RoutineDispatchResult;
+    });
+
   const dispatchTurn: RoutineRuntimeAdapterShape["dispatchTurn"] = (routine, run) =>
     Effect.gen(function* () {
+      if (routine.delegateToBotId !== null) {
+        return yield* dispatchDelegatedTurn(routine, run, routine.delegateToBotId);
+      }
       const threadRef = routine.targetThreadId;
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       const bot = yield* bots.getById({ botId: routine.botId });
@@ -297,14 +463,9 @@ const make = Effect.gen(function* () {
             ),
           );
       }
-      yield* dispatch({
-        type: "routine.run.start",
-        commandId: CommandId.make(`server:routine.start:${run.id}`),
-        routineId: routine.id,
-        runId: run.id,
-        threadRef,
-        startedAt: createdAt,
-      });
+      const started = yield* startRun(routine, run, threadRef);
+      if (started === "ended") return { canceled: true } satisfies RoutineDispatchResult;
+      if (started !== "started") return started;
       yield* dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make(`server:routine.turn:${run.id}`),
@@ -312,7 +473,7 @@ const make = Effect.gen(function* () {
         message: {
           messageId: MessageId.make(`routine:${run.id}:message`),
           role: "user",
-          text: `Run the approved routine procedure below once. Do not create, update, enable, pause, or delete a routine or schedule.\n\n${routine.procedure}`,
+          text: routineTask(routine.procedure),
           attachments: [],
         },
         runtimeMode: routine.approvalPolicy,
@@ -329,6 +490,8 @@ const make = Effect.gen(function* () {
     recordBlocked,
     recordCompleted,
     recordFailed,
+    recordCanceled,
+    cancelDelegatedRun,
     openFailureIncident,
     resolveFailureIncident,
     dispatchTurn,

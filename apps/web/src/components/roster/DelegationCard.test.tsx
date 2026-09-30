@@ -13,12 +13,17 @@ import {
   type OrchestrationThreadActivity,
   type OrchestrationThreadShell,
 } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
   activities: [] as OrchestrationThreadActivity[],
   cancel: vi.fn(),
+  retry: vi.fn(),
+  toast: vi.fn(),
+  // The in-flight action a mounted card would hold after a click.
+  pendingAction: null as string | null,
   navigate: vi.fn(),
   recordChatPath: vi.fn(),
   setState: vi.fn(),
@@ -32,7 +37,10 @@ vi.mock("react", async (importOriginal) => {
   return {
     ...actual,
     useMemo: <T,>(factory: () => T) => factory(),
-    useState: <T,>(initial: T) => [initial, mocks.setState],
+    useState: <T,>(initial: T) => [
+      initial === null ? (mocks.pendingAction as T) : initial,
+      mocks.setState,
+    ],
     useSyncExternalStore: <T,>(
       subscribe: (listener: () => void) => () => void,
       getSnapshot: () => T,
@@ -58,9 +66,15 @@ vi.mock("../../state/entities", () => ({
 }));
 vi.mock("../ChatMarkdown", () => ({ default: ({ text }: { text: string }) => text }));
 vi.mock("../../state/orchestration", () => ({
-  orchestrationEnvironment: { cancelDelegation: Symbol("cancelDelegation") },
+  orchestrationEnvironment: {
+    cancelDelegation: "cancelDelegation",
+    retryDelegation: "retryDelegation",
+  },
 }));
-vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => mocks.cancel }));
+vi.mock("../../state/use-atom-command", () => ({
+  useAtomCommand: (command: string) => (command === "retryDelegation" ? mocks.retry : mocks.cancel),
+}));
+vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 vi.mock("./rosterStore", () => ({
   useRosterStore: { getState: () => ({ recordChatPath: mocks.recordChatPath }) },
 }));
@@ -228,13 +242,19 @@ function renderCard(
   parent: Bot | null = parentBot,
 ) {
   return renderToStaticMarkup(
-    <DelegationCard delegation={delegation(state)} childBot={bot} parentBot={parent} />,
+    <DelegationCard
+      delegation={delegation(state)}
+      delegations={[]}
+      childBot={bot}
+      parentBot={parent}
+    />,
   );
 }
 
 function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
   return DelegationCard({
     delegation: delegation(state),
+    delegations: [],
     childBot: bot,
     parentBot,
   }) as ReactElement<Record<string, unknown>>;
@@ -271,6 +291,9 @@ describe("DelegationCard", () => {
     mocks.activities = [usage("other-turn", 99_999), usage("turn-child", 1_234)];
     mocks.thread = childThread;
     mocks.cancel.mockReset().mockResolvedValue({ _tag: "Success", value: { sequence: 1 } });
+    mocks.retry.mockReset().mockResolvedValue({ _tag: "Success", value: { sequence: 1 } });
+    mocks.toast.mockReset();
+    mocks.pendingAction = null;
     mocks.navigate.mockReset().mockResolvedValue(undefined);
     mocks.recordChatPath.mockReset();
     mocks.setState.mockReset();
@@ -314,6 +337,7 @@ describe("DelegationCard", () => {
             ...completed,
             phase: { ...completed.phase, acknowledgedAt: "2026-08-31T00:02:00.000Z" },
           }}
+          delegations={[]}
           childBot={childBot}
           parentBot={parentBot}
         />,
@@ -331,6 +355,7 @@ describe("DelegationCard", () => {
       renderToStaticMarkup(
         <DelegationCard
           delegation={{ ...completed, phase: { ...completed.phase, result: null as never } }}
+          delegations={[]}
           childBot={childBot}
           parentBot={parentBot}
         />,
@@ -340,6 +365,7 @@ describe("DelegationCard", () => {
       renderToStaticMarkup(
         <DelegationCard
           delegation={{ ...failed, phase: { ...failed.phase, failure: null as never } }}
+          delegations={[]}
           childBot={childBot}
           parentBot={parentBot}
         />,
@@ -347,11 +373,54 @@ describe("DelegationCard", () => {
     ).toContain("Failure details unavailable");
   });
 
+  it("shows a start failure as the bot-named readable line", () => {
+    const failed = delegation("failed");
+    if (failed.phase._tag !== "Failed") throw new Error("Expected a failed delegation");
+    const message =
+      "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.";
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={{
+          ...failed,
+          phase: { ...failed.phase, failure: { failureCode: "child_failed", message } },
+        }}
+        delegations={[]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+
+    expect(markup).toContain(
+      "Ren could not start: Provider instance &#x27;codex&#x27; is disabled",
+    );
+    expect(markup).not.toContain("ProviderValidationError");
+    expect(markup).not.toContain("file://");
+  });
+
   it("shows elapsed time and the access grant", () => {
     const markup = renderCard("completed");
     expect(markup).toContain(">50s</span>");
     expect(markup).toContain("approval required · local sandbox · tools: Read");
     expect(markup).toContain("memory: project · MCP servers: 0 · no user computer · no approvals");
+  });
+
+  it("shows hours for work that ran an hour or more", () => {
+    const completed = delegation("completed");
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={{
+          ...completed,
+          phase: {
+            ...completed.phase,
+            startedAt: "2026-08-30T16:12:17.000Z",
+          } as typeof completed.phase,
+        }}
+        delegations={[]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    expect(markup).toContain(">7h 48m</span>");
   });
 
   it("uses only the delegated child turn usage", () => {
@@ -379,6 +448,95 @@ describe("DelegationCard", () => {
     },
   );
 
+  it("offers let it finish and cancel while the work is live", () => {
+    const markup = renderCard("running");
+    expect(markup).toContain('aria-label="Let Mori finish the work"');
+    expect(markup).toContain('aria-label="Cancel delegation to Mori"');
+    expect(markup).not.toContain('aria-label="Ask Mori to try again"');
+  });
+
+  it("lets the work finish through the delegation command with keep enabled", async () => {
+    const keep = findByLabel(cardElement("running"), "Let Mori finish the work");
+    (keep?.props.onClick as (() => void) | undefined)?.();
+    await Promise.resolve();
+    expect(mocks.setState).toHaveBeenCalledWith("keep");
+    expect(mocks.cancel).toHaveBeenCalledWith({
+      environmentId: EnvironmentId.make("environment-1"),
+      input: { delegationId: delegation("running").delegationId, keep: true },
+    });
+  });
+
+  it("drops let it finish once the work is already kept", () => {
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={delegation("running", { keep: true })}
+        delegations={[]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    expect(markup).not.toContain("Let Mori finish the work");
+    expect(markup).toContain('aria-label="Cancel delegation to Mori"');
+  });
+
+  it.each(["failed", "canceled"] as const)("offers try again for %s work", async (state) => {
+    expect(renderCard(state)).not.toContain("Let Mori finish the work");
+    const retry = findByLabel(cardElement(state), "Ask Mori to try again");
+    (retry?.props.onClick as (() => void) | undefined)?.();
+    await Promise.resolve();
+    expect(mocks.retry).toHaveBeenCalledWith({
+      environmentId: EnvironmentId.make("environment-1"),
+      input: { delegationId: delegation(state).delegationId },
+    });
+  });
+
+  it("offers no try again once another card retries the work", () => {
+    const failed = delegation("failed");
+    const retry = delegation("running", {
+      delegationId: "delegation-retry",
+      retryOfDelegationId: failed.delegationId,
+    });
+    const markup = renderToStaticMarkup(
+      <DelegationCard
+        delegation={failed}
+        delegations={[failed, retry]}
+        childBot={childBot}
+        parentBot={parentBot}
+      />,
+    );
+    expect(markup).not.toContain("Ask Mori to try again");
+    expect(markup).toContain('aria-label="View Mori&#x27;s work"');
+  });
+
+  it("shows no reverse-state action for completed work", () => {
+    const markup = renderCard("completed");
+    expect(markup).not.toContain("Let Mori finish the work");
+    expect(markup).not.toContain("Ask Mori to try again");
+  });
+
+  it("disables every action while one is in flight", () => {
+    mocks.pendingAction = "keep";
+    const card = cardElement("running");
+    expect(findByLabel(card, "Let Mori finish the work")?.props.disabled).toBe(true);
+    expect(findByLabel(card, "Let Mori finish the work")?.props["aria-busy"]).toBe(true);
+    expect(findByLabel(card, "Cancel delegation to Mori")?.props.disabled).toBe(true);
+  });
+
+  it("explains a rejected retry in a toast and clears the busy state", async () => {
+    mocks.retry.mockResolvedValue({
+      _tag: "Failure",
+      cause: Cause.fail(new Error("This bot already has 3 bot work items running.")),
+    });
+    const retry = findByLabel(cardElement("failed"), "Ask Mori to try again");
+    await (retry?.props.onClick as (() => Promise<void>) | undefined)?.();
+    expect(mocks.setState).toHaveBeenLastCalledWith(null);
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Could not retry the work",
+      description: "This bot already has 3 bot work items running.",
+    });
+  });
+
   it("opens the read-only work view from the card", () => {
     const view = findByLabel(cardElement("running"), "View Mori's work");
     (view?.props.onClick as (() => void) | undefined)?.();
@@ -386,11 +544,11 @@ describe("DelegationCard", () => {
     expect(renderCard("queued")).toMatch(/aria-label="View Mori&#x27;s work" disabled=""/);
   });
 
-  it("opens the child chat through roster thread navigation from the work view", () => {
+  it("opens the child bot's own chat, not the child work thread, from the work view", () => {
     const onOpenChange = vi.fn();
     const open = findByLabel(detailElement(childBot, onOpenChange), "Open Mori chat");
     (open?.props.onClick as (() => void) | undefined)?.();
-    expect(mocks.recordChatPath).toHaveBeenCalledWith("bot-child", "/environment-1/thread-child");
+    expect(mocks.recordChatPath).not.toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(mocks.navigate).toHaveBeenCalledWith({
       to: "/bots/$botId",
@@ -435,6 +593,7 @@ describe("DelegationCard", () => {
             approvalCeiling: "none",
           },
         })}
+        delegations={[]}
         childBot={childBot}
         parentBot={parentBot}
       />,
@@ -451,6 +610,7 @@ describe("DelegationCard", () => {
     const group = renderToStaticMarkup(
       <DelegationCard
         delegation={delegation("running")}
+        delegations={[]}
         childBot={childBot}
         parentBot={parentBot}
         variant="group"
@@ -462,6 +622,7 @@ describe("DelegationCard", () => {
       renderToStaticMarkup(
         <DelegationCard
           delegation={delegation("running")}
+          delegations={[]}
           childBot={childBot}
           parentBot={null}
           variant="group"
@@ -478,6 +639,7 @@ describe("DelegationCard", () => {
           trigger: "scheduled",
           retryOfDelegationId: "delegation-earlier",
         })}
+        delegations={[]}
         childBot={childBot}
         parentBot={parentBot}
       />,
@@ -490,6 +652,7 @@ describe("DelegationCard", () => {
     const markup = renderToStaticMarkup(
       <DelegationCard
         delegation={delegation("running")}
+        delegations={[]}
         childBot={childBot}
         parentBot={parentBot}
         actions={<button type="button">Let it finish</button>}

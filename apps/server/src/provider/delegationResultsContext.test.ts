@@ -112,4 +112,39 @@ describe("delegationResultsContext", () => {
       delegationResultsContext([makeDelegation("delegation-queued", { _tag: "Queued" })], []),
     ).toBe("");
   });
+
+  it("uses plain text that names each bot for a channel turn", () => {
+    const context = delegationResultsContext(
+      [
+        makeDelegation("delegation-done", {
+          _tag: "Completed",
+          ...finished,
+          result: {
+            summary: "**Flight B** is cheapest. See [the fare](https://example.com/b).",
+            childThreadId: CHILD_THREAD_ID,
+            childTurnId: CHILD_TURN_ID,
+          },
+        }),
+        makeDelegation("delegation-failed", {
+          _tag: "Failed",
+          ...finished,
+          failure: { failureCode: "timeout", message: "The deadline passed." },
+        }),
+      ],
+      [{ id: CHILD_BOT_ID, name: "Scout" }],
+      { channel: true },
+    );
+
+    expect(context).toBe(
+      [
+        "<delegated-work-results>",
+        "Bot work you sent earlier has finished. This chat is an external channel that shows only your reply text, so tell the sender what each bot found, in plain text without markdown. They are not repeated.",
+        '- Scout finished "Compare three flights.": Flight B is cheapest. See the fare (https://example.com/b).',
+        '- Scout could not finish "Compare three flights.": The deadline passed.',
+        "</delegated-work-results>",
+      ].join("\n"),
+    );
+    expect(context).not.toContain("delegation-done");
+    expect(context).not.toContain("work card");
+  });
 });

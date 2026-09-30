@@ -71,6 +71,8 @@ import {
 import { labelSentMessageMentions, useSentMessageMentions } from "./sentMessageMentions";
 
 import { AppText as Text } from "../../components/AppText";
+import { ThreadDelegationFeedCard } from "./ThreadDelegationFeedCard";
+import type { OrchestrationBot } from "@t3tools/contracts";
 import { CopyTextButton } from "../../components/CopyTextButton";
 import { ReplyPlaybackControls } from "../replyPlayback/ReplyPlaybackControls";
 import {
@@ -177,6 +179,8 @@ export interface ThreadFeedProps {
   readonly botId: BotId | null;
   readonly workspaceRoot?: string | null;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
+  /** Bots by id, so delegation cards can show the child bot's name and avatar. */
+  readonly botsById?: ReadonlyMap<string, OrchestrationBot>;
   readonly contentPresentation: ThreadContentPresentation;
   readonly agentLabel: string;
   readonly latestTurn: ThreadFeedLatestTurn | null;
@@ -1046,7 +1050,7 @@ function useMarkdownStyles(
 
 function renderFeedEntry(
   info: { item: ThreadFeedEntry; index: number },
-  props: Pick<ThreadFeedProps, "environmentId" | "skills" | "silentRun"> & {
+  props: Pick<ThreadFeedProps, "environmentId" | "skills" | "silentRun" | "botsById"> & {
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly terminalAssistantMessageIds: ReadonlySet<string>;
@@ -1105,6 +1109,19 @@ function renderFeedEntry(
         iconSubtleColor={iconSubtleColor}
         onlyToolActivities={entry.onlyToolActivities}
         onToggle={() => props.onToggleWorkGroup(entry.groupId)}
+      />
+    );
+  }
+
+  if (entry.type === "delegation") {
+    const botsById = props.botsById;
+    return (
+      <ThreadDelegationFeedCard
+        environmentId={props.environmentId}
+        delegation={entry.delegation}
+        actions={entry.actions}
+        childBot={botsById?.get(entry.delegation.childBotId) ?? null}
+        parentBot={botsById?.get(entry.delegation.parentBotId) ?? null}
       />
     );
   }
@@ -2239,6 +2256,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       userBubbleMaxWidth,
       skills: props.skills,
       silentRun: props.silentRun,
+      botsById: props.botsById,
       replyPlayback,
       replySynthesis,
       formatDate,
@@ -2261,6 +2279,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onToggleTurnFold,
       onToggleWorkGroup,
       onToggleWorkRow,
+      props.botsById,
       props.environmentId,
       props.skills,
       props.silentRun,
