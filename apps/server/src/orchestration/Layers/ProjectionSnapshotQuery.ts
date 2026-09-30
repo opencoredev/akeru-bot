@@ -178,6 +178,7 @@ const ProjectionThreadRuntimeContextDbRowSchema = Schema.Struct({
   botId: Schema.NullOr(BotId),
   groupId: Schema.NullOr(GroupId),
   respondingBotId: Schema.NullOr(BotId),
+  parentThreadId: Schema.NullOr(ThreadId),
   runtimeMode: ProjectionThread.fields.runtimeMode,
   session: Schema.NullOr(ProjectionThreadSessionDbRowSchema),
 });
@@ -1592,6 +1593,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           threads.bot_id AS "botId",
           threads.group_id AS "groupId",
           threads.responding_bot_id AS "respondingBotId",
+          threads.parent_thread_id AS "parentThreadId",
           threads.runtime_mode AS "runtimeMode",
           sessions.thread_id AS "threadId",
           sessions.status,
@@ -1618,6 +1620,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             botId: row.botId,
             groupId: row.groupId,
             respondingBotId: row.respondingBotId,
+            parentThreadId: row.parentThreadId,
             runtimeMode: row.runtimeMode,
             session:
               row.threadId === null
@@ -3462,6 +3465,7 @@ pending_approval_requests AS (
         botId: row.botId,
         groupId: row.groupId,
         respondingBotId: row.respondingBotId ?? null,
+        parentThreadId: row.parentThreadId,
         runtimeMode: row.runtimeMode,
         session: row.session === null ? null : mapSessionRow(row.session),
       }));

@@ -78,6 +78,8 @@ export interface ProjectionThreadRuntimeContext {
   readonly botId: BotId | null;
   readonly groupId: GroupId | null;
   readonly respondingBotId: BotId | null;
+  /** The chat that started this one, such as a worker's bot chat. Optional for test doubles. */
+  readonly parentThreadId?: ThreadId | null;
   readonly runtimeMode: RuntimeMode;
 }
 

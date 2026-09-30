@@ -128,6 +128,7 @@ import {
 } from "../AkeruDelegationRuntime.ts";
 import {
   AkeruWorkerError,
+  isWorkerThreadId,
   makeAkeruWorkerRuntime,
   WORKER_THREAD_ID_PREFIX,
   workerAccess,
@@ -2810,8 +2811,16 @@ const make = (options?: AgentControllerLiveOptions) =>
         const botId =
           thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
         const bot = botId ? Option.getOrUndefined(yield* getBotById(botId)) : undefined;
+        const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
         return {
           parentDelegation: delegations.find((candidate) => isChildOf(candidate, threadId)),
+          workerParent: workerParentThreadId
+            ? {
+                delegatedAccess: (yield* listThreadDelegations(workerParentThreadId)).find(
+                  (candidate) => isChildOf(candidate, workerParentThreadId),
+                )?.access,
+              }
+            : undefined,
           bot,
           botId,
           activeChildDelegations: delegations.filter(
@@ -2827,10 +2836,18 @@ const make = (options?: AgentControllerLiveOptions) =>
         : undefined;
       const botId =
         thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
+      const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
       return {
         parentDelegation: snapshot.delegations.find(
           (candidate) => isChildOf(candidate, threadId) && isOpenDelegation(candidate),
         ),
+        workerParent: workerParentThreadId
+          ? {
+              delegatedAccess: snapshot.delegations.find((candidate) =>
+                isChildOf(candidate, workerParentThreadId),
+              )?.access,
+            }
+          : undefined,
         bot: snapshot.bots.find((candidate) => candidate.id === botId),
         botId,
         activeChildDelegations: snapshot.delegations.filter(
@@ -2844,14 +2861,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const { parentDelegation, bot, botId, activeChildDelegations, threadTitle } =
+      const { parentDelegation, workerParent, bot, botId, activeChildDelegations, threadTitle } =
         yield* readSessionStartContext(threadId, input.botId ?? null);
-      const delegatedAccess =
-        wired().delegationRuntime?.accessForThread(threadId) ??
-        parentDelegation?.access ??
-        workerRuntime.accessForThread(threadId);
       const isWorkerThread = workerRuntime.depthForThread(threadId) > 0;
-      const botAccess: AkeruDelegationAccessGrant = delegatedAccess ?? {
+      const botAccess: AkeruDelegationAccessGrant = {
         allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
         memoryScopes: ["private", "bot", "project", "group", "workspace"],
         sandbox: input.botSandbox ?? null,
@@ -2863,9 +2876,24 @@ const make = (options?: AgentControllerLiveOptions) =>
         disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
         approvalCeiling: "secrets",
       };
-      // A worker chat a restart orphaned has lost its grant, so it keeps the worker limits
-      // instead of regaining the bot's tools and memory.
-      const access = !delegatedAccess && isWorkerThread ? workerAccess(botAccess) : botAccess;
+      // A restart drops the worker runtime's grants, so a worker chat it orphaned rebuilds
+      // its grant from the parent chat: the parent's delegated grant, or the bot's own for a
+      // top-level parent. Without a parent link it keeps no tools rather than gaining any.
+      const orphanedWorkerAccess = () =>
+        workerAccess(
+          workerParent
+            ? (workerParent.delegatedAccess ?? {
+                ...botAccess,
+                sandbox: botAccess.sandbox ?? "local",
+              })
+            : { ...botAccess, allowedToolIds: [], enabledMcpServerIds: [] },
+        );
+      const delegatedAccess =
+        wired().delegationRuntime?.accessForThread(threadId) ??
+        parentDelegation?.access ??
+        workerRuntime.accessForThread(threadId) ??
+        (isWorkerThread ? orphanedWorkerAccess() : undefined);
+      const access = delegatedAccess ?? botAccess;
       // A top-level bot's null sandbox is its local workspace, while a delegated
       // null sandbox has none, so workers receive the local workspace explicitly.
       const workerParentAccess: AkeruDelegationAccessGrant =
