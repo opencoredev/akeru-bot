@@ -3,6 +3,8 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeSqlite from "node:sqlite";
 
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as HttpRouter from "effect/unstable/http/HttpRouter";
@@ -27,15 +29,26 @@ export function isLocalMachineCaller(request: HttpServerRequest.HttpServerReques
   return address === "::1" || (address?.startsWith("127.") ?? false);
 }
 
-export function hasActiveTurns(dbPath: string): boolean {
+/** Admitted turns count from commit: a pending start has no session row until its provider reacts. */
+const PENDING_TURN_START_WINDOW_MS = 5 * 60_000;
+
+export function hasActiveTurns(dbPath: string, nowMs: number): boolean {
   const db = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
   try {
-    const row = db
+    const sessions = db
       .prepare(
         "SELECT COUNT(*) AS count FROM projection_thread_sessions WHERE status IN ('starting', 'running') OR active_turn_id IS NOT NULL",
       )
       .get() as { count: number };
-    return row.count > 0;
+    if (sessions.count > 0) return true;
+    const pending = db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM projection_turns WHERE turn_id IS NULL AND state = 'pending' AND pending_message_id IS NOT NULL AND requested_at >= ?",
+      )
+      .get(DateTime.formatIso(DateTime.makeUnsafe(nowMs - PENDING_TURN_START_WINDOW_MS))) as {
+      count: number;
+    };
+    return pending.count > 0;
   } finally {
     db.close();
   }
@@ -79,7 +92,8 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
         }
         return yield* withMaintenance(
           Effect.gen(function* () {
-            if (yield* Effect.sync(() => hasActiveTurns(config.dbPath))) {
+            const nowMs = yield* Clock.currentTimeMillis;
+            if (yield* Effect.sync(() => hasActiveTurns(config.dbPath, nowMs))) {
               return HttpServerResponse.jsonUnsafe(
                 { error: "active_work", retryAfterSeconds: 3600 },
                 { status: 409, headers: { "retry-after": "3600" } },

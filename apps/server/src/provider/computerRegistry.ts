@@ -13,6 +13,7 @@ import type { WorkspaceComputer } from "./workspaceComputer.ts";
 import { Effect, Queue, Schedule, Schema, Stream } from "effect";
 
 const decodeFrame = Schema.decodeUnknownSync(ComputerFrame);
+const isComputerError = Schema.is(ComputerError);
 
 type Registration = { computer: WorkspaceComputer; controlUnavailableReason: string | null };
 
@@ -234,11 +235,16 @@ export class ComputerRegistry {
                 listener({ _tag: "frame", frame });
               }
             },
-            catch: () =>
-              new ComputerError({ code: "adapter", message: "Computer frame is unavailable." }),
+            catch: (cause) =>
+              isComputerError(cause)
+                ? cause
+                : new ComputerError({ code: "adapter", message: "Computer frame is unavailable." }),
           }).pipe(
-            Effect.catch(() =>
+            Effect.catch((error) =>
               Effect.sync(() => {
+                // Taking or returning control invalidates an in-flight frame;
+                // that stale frame is dropped, not a reason to stop the computer.
+                if (error.code === "revoked") return;
                 if (registry.threads.get(threadId) === entry) {
                   computer.gate.stop();
                   registry.publishWorkspace(computer);

@@ -28,6 +28,7 @@ import {
   orchestrationCommandDuration,
 } from "../../observability/Metrics.ts";
 import { toPersistenceSqlError } from "../../persistence/Errors.ts";
+import { gateTurnStart } from "../../remote/updateGate.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepository } from "../../persistence/Services/OrchestrationCommandReceipts.ts";
 import {
@@ -427,7 +428,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       aggregateId: threadId,
     });
 
-  const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) =>
+  const enqueue: OrchestrationEngineShape["dispatch"] = (command, options) =>
     Effect.gen(function* () {
       const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
       yield* Queue.offer(commandQueue, {
@@ -439,6 +440,21 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       });
       return yield* Deferred.await(result);
     });
+
+  // Every turn start, whatever surface sent it, is admitted here so a server
+  // update cannot begin while a turn is being committed. A blocked start is
+  // rejected without a receipt, so the same command can be retried afterwards.
+  const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) =>
+    command.type === "thread.turn.start" || command.type === "thread.turn.resume"
+      ? gateTurnStart(
+          enqueue(command, options),
+          () =>
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: "The server is installing an update. Try again in a moment.",
+            }),
+        )
+      : enqueue(command, options);
 
   return {
     readEvents,

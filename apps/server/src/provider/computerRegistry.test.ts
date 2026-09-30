@@ -271,6 +271,66 @@ describe("ComputerRegistry", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
+  it.effect("drops a frame invalidated by taking or returning control without stopping", () =>
+    Effect.gen(function* () {
+      const registry = new ComputerRegistry();
+      let pending: ReturnType<typeof latch> | null = null;
+      let started = latch();
+      const instance = new WorkspaceComputer(
+        "workspace-handoff",
+        {
+          open: async () => undefined,
+          input: async () => undefined,
+          capture: async () => {
+            const gate = pending;
+            started.resolve();
+            if (gate) await gate.promise;
+            return { mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 };
+          },
+        },
+        async () => undefined,
+        async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
+        async () => "running",
+      );
+      registry.register("thread-handoff", instance, null);
+      const thread = ThreadId.make("thread-handoff");
+      yield* Effect.promise(() => registry.open(thread));
+      const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
+        Effect.forkChild,
+      );
+
+      // Take control while a capture is in flight.
+      pending = latch();
+      yield* Effect.promise(() => started.promise);
+      const session = yield* Effect.promise(() => registry.acquire(thread, "owner"));
+      pending.resolve();
+      yield* Effect.promise(() => pending!.promise);
+      yield* Effect.yieldNow;
+      expect(registry.state(thread).status).toBe("human");
+
+      // Return control while the next capture is in flight.
+      pending = latch();
+      started = latch();
+      yield* TestClock.adjust("2 seconds");
+      yield* Effect.promise(() => started.promise);
+      yield* Effect.promise(() =>
+        registry.release({ threadId: thread, sessionId: session.sessionId }, "owner"),
+      );
+      pending.resolve();
+      yield* Effect.promise(() => pending!.promise);
+      yield* Effect.yieldNow;
+      expect(registry.state(thread).status).toBe("ready");
+
+      // The stream is still live and delivers the next frame.
+      pending = null;
+      yield* TestClock.adjust("2 seconds");
+      registry.stop(thread);
+      const values = yield* Fiber.join(collected).pipe(Effect.timeout("1 second"), Effect.orDie);
+      const frames = values.filter((event) => event._tag === "frame");
+      expect(frames).toHaveLength(1);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
   it.effect("delivers an initial state and closes a subscriber on stop", () =>
     Effect.gen(function* () {
       const registry = new ComputerRegistry();
