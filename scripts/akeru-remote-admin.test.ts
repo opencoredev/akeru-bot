@@ -161,20 +161,30 @@ describe("Akeru Remote administration", () => {
     ]);
   });
 
-  it("allows already removed tasks but reports a task Windows would not delete", () => {
-    const absent = runWindowsUninstall('case "$*" in *"Akeru Remote Heartbeat"*) exit 1;; esac\n');
-    expect(absent.status).toBe(0);
-
-    const denied = runWindowsUninstall(
-      'if [ "$1" = /Delete ] && [ "$4" = "Akeru Remote" ]; then exit 1; fi\n',
+  it("allows already removed tasks but reports every task Windows would not delete", () => {
+    const listing = `if [ "$1" = /Query ]; then printf '"\\\\Akeru Remote","N/A","Ready"\\r\\n"\\\\Other","N/A","Ready"\\r\\n'; exit 0; fi\n`;
+    const absent = runWindowsUninstall(
+      `${listing}case "$*" in *"Akeru Remote Heartbeat"*) exit 1;; esac\n`,
     );
+    expect(absent.status).toBe(0);
+    expect(absent.calls.at(-1)).toBe("schtasks /Query /FO CSV /NH");
+
+    const denied = runWindowsUninstall(`${listing}[ "$1" = /Delete ] && exit 1\n`);
     expect(denied.status).not.toBe(0);
-    expect(denied.stderr).toContain('Could not remove the "Akeru Remote" scheduled task.');
+    expect(denied.stderr).toContain("Could not remove scheduled tasks: Akeru Remote.");
     expect(denied.calls).toEqual([
       "schtasks /End /TN Akeru Remote",
       "schtasks /Delete /F /TN Akeru Remote",
-      "schtasks /Query /TN Akeru Remote",
+      "schtasks /Delete /F /TN Akeru Remote Update",
+      "schtasks /Delete /F /TN Akeru Remote Heartbeat",
+      "schtasks /Query /FO CSV /NH",
     ]);
+
+    const unconfirmed = runWindowsUninstall('[ "$1" = /End ] || exit 1\n');
+    expect(unconfirmed.status).not.toBe(0);
+    expect(unconfirmed.stderr).toContain(
+      "Could not confirm removal of scheduled tasks: Akeru Remote, Akeru Remote Update, Akeru Remote Heartbeat.",
+    );
   });
 
   it("pins the release manifest key the Windows updater verifies", () => {

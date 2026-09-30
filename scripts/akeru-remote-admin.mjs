@@ -223,11 +223,24 @@ switch (command) {
     break;
   case "uninstall":
     schtasks("/End", "/TN", SERVICE_TASK);
-    for (const task of [SERVICE_TASK, "Akeru Remote Update", "Akeru Remote Heartbeat"]) {
-      // A task that is already gone is fine. One that is still scheduled would run Remote again.
-      if (schtasks("/Delete", "/F", "/TN", task).status === 0) continue;
-      if (schtasks("/Query", "/TN", task).status === 0)
-        throw new Error(`Could not remove the "${task}" scheduled task.`);
+    {
+      // Try every task, then confirm any failed delete against the full task list. A task that is
+      // already gone is fine; one that is still scheduled would run Remote again.
+      const tasks = [SERVICE_TASK, "Akeru Remote Update", "Akeru Remote Heartbeat"];
+      const failed = tasks.filter((task) => schtasks("/Delete", "/F", "/TN", task).status !== 0);
+      if (failed.length > 0) {
+        const listed = NodeChildProcess.spawnSync("schtasks.exe", ["/Query", "/FO", "CSV", "/NH"], {
+          encoding: "utf8",
+        });
+        if (listed.status !== 0)
+          throw new Error(`Could not confirm removal of scheduled tasks: ${failed.join(", ")}.`);
+        const scheduled = new Set(
+          listed.stdout.split(/\r?\n/u).map((row) => row.match(/^"\\?([^"]*)"/u)?.[1]),
+        );
+        const remaining = failed.filter((task) => scheduled.has(task));
+        if (remaining.length > 0)
+          throw new Error(`Could not remove scheduled tasks: ${remaining.join(", ")}.`);
+      }
     }
     console.log("Removed Akeru Remote. Its data remains in ~/.akeru.");
     break;
