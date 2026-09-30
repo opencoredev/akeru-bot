@@ -132,7 +132,7 @@ describe("preflightProvider", () => {
 
   it("lets an unprobed provider proceed until its adapter is checked", () => {
     expect(
-      preflightProvider({ providers: [], providerId: "claude", model: "claude-sonnet" }),
+      preflightProvider({ providers: [], providerId: "claude", model: "claude-sonnet", now: 0 }),
     ).toBeUndefined();
   });
 
