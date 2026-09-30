@@ -4272,6 +4272,9 @@ describe("ProviderCommandReactor", () => {
         phase: { _tag: "Queued" as const },
         billedBotId: childBotId,
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       };
