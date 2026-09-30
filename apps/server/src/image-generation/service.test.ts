@@ -633,7 +633,7 @@ describe("image generation", () => {
   it("never sends a ChatGPT sign-in token to the OpenAI Images API", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => Response.json({ data: [{ b64_json: PNG_BASE64 }] }));
 
     await expect(
@@ -655,7 +655,7 @@ describe("image generation", () => {
   it("does not mark ChatGPT revoked when the Images API rejects the key", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
-    const service = new SubscriptionAuthService(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
 
     await expect(
