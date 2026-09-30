@@ -8,7 +8,7 @@ Railway does not offer pause/resume through its SDK. An idle bot leaves its VM r
 
 Before disconnecting Railway or changing access, stop active bot sessions and open your environment in the [Railway dashboard](https://railway.com/dashboard). Destroy any VMs you no longer need there. Disconnecting credentials in Akeru is not VM cleanup: VMs can continue accruing charges. Settings asks you to review these VMs before proceeding. When rotating a token, retain access to the same environment; Akeru reconnects to the saved VM with the new credentials. A different or inaccessible environment produces an error instead of silently creating a second VM.
 
-Bot deletion is blocked while the bot uses Railway. Stop its sessions and retire any unneeded VM in the Railway dashboard, then switch the bot's sandbox to Local before deleting it. Deleting a bot is not VM cleanup; this also applies to archived bots.
+Bot deletion is blocked while the bot explicitly uses Railway or inherits the default sandbox, which may be Railway. This conservative check also applies when the current default is another provider and to archived bots. Stop its sessions and retire any unneeded VM in the Railway dashboard, then switch the bot's sandbox to Local before deleting it. If the bot has never used Railway, simply select Local before retrying. Akeru does not verify VM retirement: switching to Local and deleting the bot do not stop or delete a VM. Retirement remains your responsibility, including VMs from earlier sandbox selections.
 
 ## Networking and previews
 

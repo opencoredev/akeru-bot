@@ -169,25 +169,28 @@ function makeDelegation(
 }
 
 it.layer(NodeServices.layer)("bot delete decider", (it) => {
-  it.effect("requires Railway VM retirement before deleting an active or archived bot", () =>
+  it.effect("requires explicit workspace review before deleting Railway or inherited bots", () =>
     Effect.gen(function* () {
-      for (const archivedAt of [null, NOW]) {
-        const error = yield* decideOrchestrationCommand({
-          command: {
-            type: "bot.delete",
-            commandId: CommandId.make("cmd-delete-railway"),
-            botId: BOT_ID,
-          },
-          readModel: makeReadModel({
-            bots: [{ ...makeBot({ id: BOT_ID, archivedAt }), sandbox: "railway" as const }],
-          }),
-        }).pipe(Effect.flip);
+      for (const sandbox of ["railway", null] as const) {
+        for (const archivedAt of [null, NOW]) {
+          const error = yield* decideOrchestrationCommand({
+            command: {
+              type: "bot.delete",
+              commandId: CommandId.make("cmd-delete-railway"),
+              botId: BOT_ID,
+            },
+            readModel: makeReadModel({
+              bots: [{ ...makeBot({ id: BOT_ID, archivedAt }), sandbox }],
+            }),
+          }).pipe(Effect.flip);
 
-        if (error._tag !== "OrchestrationCommandInvariantError") {
-          throw new Error("Expected Railway delete invariant error");
+          if (error._tag !== "OrchestrationCommandInvariantError") {
+            throw new Error("Expected Railway delete invariant error");
+          }
+          expect(error.detail).toContain("Railway dashboard");
+          expect(error.detail).toContain("switch the bot's sandbox to Local");
+          expect(error.detail).toContain("does not verify VM retirement");
         }
-        expect(error.detail).toContain("Railway dashboard");
-        expect(error.detail).toContain("switch the bot's sandbox to Local");
       }
     }),
   );
