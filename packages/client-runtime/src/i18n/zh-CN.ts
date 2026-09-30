@@ -1144,6 +1144,13 @@ export const zhCNCatalog: TranslationCatalog = {
     "允许此机器人接听订阅语音通话。还需要在设置中启用语音。",
   "Disable voice calls for {name}": "停用 {name} 的语音通话",
   "Enable voice calls for {name}": "启用 {name} 的语音通话",
+  Danger: "危险操作",
+  "Delete bot": "删除机器人",
+  "Remove {name} from the roster. Its chats stay in your history.":
+    "从名单中移除 {name}。其聊天记录会保留在历史中。",
+  "Delete {name}? Its chats stay in your history. This cannot be undone.":
+    "删除 {name}？其聊天记录会保留在历史中。此操作无法撤销。",
+  "Could not delete {name}": "无法删除 {name}",
   Model: "模型",
   "The provider and model this bot runs on.": "此机器人使用的提供商和模型。",
   "No model yet": "尚未选择模型",

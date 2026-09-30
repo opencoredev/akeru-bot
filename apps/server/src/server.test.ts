@@ -927,6 +927,7 @@ const buildAppUnderTest = (options?: {
             upsert: () => Effect.void,
             getById: () => Effect.succeed(Option.none()),
             listAll: () => Effect.succeed([]),
+            deleteById: () => Effect.void,
             ...options?.layers?.projectionBots,
           } satisfies ProjectionBots.ProjectionBotRepositoryShape),
           Layer.mock(BotUsageLedger)({

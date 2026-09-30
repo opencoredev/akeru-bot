@@ -1000,6 +1000,11 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     bot: OrchestrationBot,
   }),
   Schema.Struct({
+    kind: Schema.Literal("bot-removed"),
+    sequence: NonNegativeInt,
+    botId: BotId,
+  }),
+  Schema.Struct({
     kind: Schema.Literal("group-upserted"),
     sequence: NonNegativeInt,
     group: OrchestrationGroup,
@@ -1264,6 +1269,12 @@ const BotArchiveCommand = Schema.Struct({
 
 const BotRestoreCommand = Schema.Struct({
   type: Schema.Literal("bot.restore"),
+  commandId: CommandId,
+  botId: BotId,
+});
+
+const BotDeleteCommand = Schema.Struct({
+  type: Schema.Literal("bot.delete"),
   commandId: CommandId,
   botId: BotId,
 });
@@ -1914,6 +1925,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   BotUpdateCommand,
   BotArchiveCommand,
   BotRestoreCommand,
+  BotDeleteCommand,
   GroupCreateCommand,
   GroupRenameCommand,
   GroupDeleteCommand,
@@ -1967,6 +1979,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ClientBotUpdateCommand,
   BotArchiveCommand,
   BotRestoreCommand,
+  BotDeleteCommand,
   ChannelConnectCommand,
   ChannelConnectionSaveCommand,
   ChannelConnectionDeleteCommand,
@@ -2166,6 +2179,7 @@ export const OrchestrationEventType = Schema.Literals([
   "bot.updated",
   "bot.archived",
   "bot.restored",
+  "bot.deleted",
   "group.created",
   "group.renamed",
   "group.deleted",
@@ -2331,6 +2345,11 @@ export const BotArchivedPayload = Schema.Struct({
 export const BotRestoredPayload = Schema.Struct({
   botId: BotId,
   updatedAt: IsoDateTime,
+});
+
+export const BotDeletedPayload = Schema.Struct({
+  botId: BotId,
+  deletedAt: IsoDateTime,
 });
 
 export const GroupCreatedPayload = Schema.Struct({
@@ -2742,6 +2761,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("bot.restored"),
     payload: BotRestoredPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("bot.deleted"),
+    payload: BotDeletedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
