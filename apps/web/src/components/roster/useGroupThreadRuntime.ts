@@ -145,6 +145,9 @@ export function useGroupThreadRuntime(groupId: string) {
     threadRef: null,
     linked: false,
   });
+  // Chats created by queued sends, keyed by the retention state they were submitted from, so
+  // sends queued together share one chat even after the user leaves the group.
+  const createdChatsRef = useRef(new WeakMap<RetainedChat, ScopedThreadRef>());
   if (retainedThreadRef.current.ownerId !== groupId) {
     retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
@@ -324,7 +327,8 @@ export function useGroupThreadRuntime(groupId: string) {
       setError(null);
       // Bind the queued send to the chat selected at submission; the ref moves on if the user
       // switches groups.
-      const queuedThreadRef = retainedThreadRef.current.threadRef;
+      const queuedRetained = retainedThreadRef.current;
+      const queuedThreadRef = queuedRetained.threadRef;
       return sendQueueRef.current.enqueue(async () => {
         setError(null);
         const createdAt = new Date().toISOString();
@@ -332,7 +336,9 @@ export function useGroupThreadRuntime(groupId: string) {
         // group had a chat joins the one an earlier send created there.
         const live = retainedThreadRef.current;
         const currentThreadRef =
-          queuedThreadRef ?? (live.ownerId === groupId ? live.threadRef : null);
+          queuedThreadRef ??
+          createdChatsRef.current.get(queuedRetained) ??
+          (live.ownerId === groupId ? live.threadRef : null);
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
 
@@ -387,12 +393,16 @@ export function useGroupThreadRuntime(groupId: string) {
           }
           // Only a new chat restarts retention; a chat the shell list already showed stays
           // linked so archiving it releases it. Skip it if the user moved to another group.
-          if (currentThreadRef === null && retainedThreadRef.current.ownerId === groupId) {
-            retainedThreadRef.current = {
-              ownerId: groupId,
-              threadRef: scopeThreadRef(environmentId, threadId),
-              linked: false,
-            };
+          if (currentThreadRef === null) {
+            const createdThreadRef = scopeThreadRef(environmentId, threadId);
+            createdChatsRef.current.set(queuedRetained, createdThreadRef);
+            if (retainedThreadRef.current.ownerId === groupId) {
+              retainedThreadRef.current = {
+                ownerId: groupId,
+                threadRef: createdThreadRef,
+                linked: false,
+              };
+            }
           }
           return true;
         } catch (cause) {
