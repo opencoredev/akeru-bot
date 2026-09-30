@@ -1076,24 +1076,33 @@ export class SubscriptionAuthService {
       }
       const baseUrl = "baseUrl" in login ? login.baseUrl : undefined;
       const provider = login.provider;
-      await this.updateCredentials((data) => ({
-        ...data,
-        [provider]: {
-          type: "api-key",
-          access: apiKey,
-          connectionId: NodeCrypto.randomUUID(),
-          ...(baseUrl ? { baseUrl } : {}),
-        },
-      }));
-      this.reloadLocal();
+      // Claim the login inside the store update, so a cancel that lands while the
+      // update waits for the file wins and nothing is saved.
+      let claimed = false;
+      await this.updateCredentials((data) => {
+        this.reloadLocal();
+        if (!this.pendingLogins.has(loginId)) return data;
+        claimed = true;
+        for (const [id, pending] of this.pendingLogins) {
+          if (pending.provider === provider) this.pendingLogins.delete(id);
+        }
+        this.savePending();
+        return {
+          ...data,
+          [provider]: {
+            type: "api-key",
+            access: apiKey,
+            connectionId: NodeCrypto.randomUUID(),
+            ...(baseUrl ? { baseUrl } : {}),
+          },
+        };
+      });
+      if (!claimed) return { status: "failed", error: "Login cancelled. Start again." };
+      this.reloadHealth();
       delete this.health[provider];
       this.clearImageHealth(provider);
       this.saveHealth();
-      for (const [id, pending] of this.pendingLogins) {
-        if (pending.provider === login.provider) this.pendingLogins.delete(id);
-      }
-      this.savePending();
-      return this.startHealthCheck(login.provider);
+      return this.startHealthCheck(provider);
     }
     if (login.provider !== "anthropic") {
       return { status: "failed", error: "This login completes by polling, not with a code." };

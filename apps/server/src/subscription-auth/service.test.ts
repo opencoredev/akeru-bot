@@ -430,6 +430,38 @@ describe("subscription auth storage", () => {
     }
   });
 
+  it("does not save an API key when the login is cancelled while the store update waits", async () => {
+    const { authPath } = fixture();
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const login = await service.startLogin("xai", { authMode: "api-key" });
+    const store = Reflect.get(service, "store") as SubscriptionCredentialStore;
+    const originalUpdate = store.update;
+    let releaseUpdate!: () => void;
+    const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
+    let reachedUpdate!: () => void;
+    const reached = new Promise<void>((resolve) => (reachedUpdate = resolve));
+    const updateSpy = vi.spyOn(store, "update").mockImplementationOnce((f) => {
+      reachedUpdate();
+      return Effect.promise(() => held).pipe(Effect.andThen(originalUpdate(f)));
+    });
+    try {
+      const completing = service.completeLogin(login.loginId, "cancelled-key");
+      await reached;
+      service.cancelLogin(login.loginId);
+      releaseUpdate();
+      expect(await completing).toEqual({
+        status: "failed",
+        error: "Login cancelled. Start again.",
+      });
+      expect(service.isConnected("xai")).toBe(false);
+      expect(
+        NodeFS.existsSync(authPath) ? JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) : {},
+      ).toEqual({});
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
   it("does not let an OAuth health check undo logout from another service", async () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(
