@@ -1,6 +1,6 @@
 # Configure sandboxes
 
-Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, Upstash Box, or Tenki. Local workspaces
+Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, Upstash Box, Tenki, or Railway. Local workspaces
 need no credential and are always available.
 
 Tenki runs coding agents in full Linux VMs and supports public previews, disk and memory snapshots,
@@ -24,9 +24,14 @@ so connect that service before you start the bot.
 
 ## Session behavior
 
-Akeru pauses remote sandboxes while bots are idle and reconnects to the saved provider workspace when
+Akeru pauses remote sandboxes other than Railway while bots are idle and reconnects to the saved provider workspace when
 bot work resumes.
 If a remote pause fails, Akeru keeps the workspace and retries the pause while it remains idle.
+
+Railway VMs remain running while idle and can continue accruing charges. Connect with a
+`RAILWAY_API_TOKEN` and `RAILWAY_ENVIRONMENT_ID`. Previews require a Railway CLI tunnel;
+Akeru cannot attach its sandbox browser. See [Railway workspaces](railway-sandboxes.md)
+for credential rotation and VM cleanup.
 
 Changing a provider credential replaces active sessions that use the connection. A running session
 cannot continue with the old credential.

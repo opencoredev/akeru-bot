@@ -87,12 +87,15 @@ describe("Usage3hEvent", () => {
     ).toBe(0);
   });
 
-  it("defaults pre-Tenki queued counters without changing event identity", () => {
-    const properties = Object.fromEntries(
-      Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_tenki"),
-    );
-    expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
-  });
+  it.each(["sandbox_turns_tenki", "sandbox_turns_railway"])(
+    "defaults queued %s counters without changing event identity",
+    (counter) => {
+      const properties = Object.fromEntries(
+        Object.entries(event.properties).filter(([key]) => key !== counter),
+      );
+      expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
+    },
+  );
 
   it.each([-1, 1.5, USAGE_3H_COUNTER_MAX + 1, "1", null])(
     "rejects invalid Tenki counter %s",
