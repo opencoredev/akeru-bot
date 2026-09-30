@@ -1502,6 +1502,7 @@ function canonicalLocale(locale: string): string | undefined {
 function isSimplifiedChinese(locale: string): boolean {
   const lower = locale.toLowerCase();
   if (lower === "zh") return true;
+  if (!lower.startsWith("zh-")) return false;
   const rest = lower.slice(3);
   return (
     rest.startsWith("hans") ||

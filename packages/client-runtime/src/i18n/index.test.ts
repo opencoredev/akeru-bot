@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { zhCNCatalog } from "./zh-CN.ts";
 import {
   availableLanguages,
+  catalogIdForLocale,
   connectionFailureMessage,
   createTranslator,
   englishCatalog,
@@ -33,6 +34,11 @@ describe("client locale resolution", () => {
     expect(resolveLocale("zh-CN", ["en-US"])).toBe("zh-CN");
     expect(resolveLocale("system", ["zh-Hans-CN", "en-AU"])).toBe("zh-Hans-CN");
     expect(resolveLocale("system", ["zh-TW", "en-AU"])).toBe("en-AU");
+    expect(resolveLocale("system", ["ms-SG", "en-US"])).toBe("en-US");
+    expect(resolveLocale("system", ["ja-CN", "en-US"])).toBe("en-US");
+    expect(catalogIdForLocale("zh-SG")).toBe("zh-CN");
+    expect(catalogIdForLocale("ms-SG")).toBeUndefined();
+    expect(catalogIdForLocale("ja-CN")).toBeUndefined();
     expect(resolveLocale("system", ["fr-FR", "bad_locale", "en-AU"])).toBe("en-AU");
     expect(resolveLocale("system", [])).toBe("en");
   });
