@@ -12,7 +12,7 @@ import {
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import { Brain02Icon, Edit02Icon, Link02Icon } from "@hugeicons/core-free-icons";
 import { useBlocker, useCanGoBack, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
@@ -24,6 +24,7 @@ import { botEnvironment } from "../../state/bots";
 import { environmentMcpServersAtom } from "../../state/mcpServers";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { SidebarInset } from "../ui/sidebar";
@@ -133,7 +134,12 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
           </WorkspaceBreadcrumb>
         </WorkspacePageHeader>
         {bot ? (
-          <BotSettingsForm key={bot.id} bot={bot} onSave={onSaveBot} />
+          <BotSettingsForm
+            key={bot.id}
+            bot={bot}
+            onSave={onSaveBot}
+            onDeleted={navigateBackWithinApp}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
             {t("This bot is no longer available.")}
@@ -147,13 +153,16 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
 function BotSettingsForm({
   bot,
   onSave,
+  onDeleted,
 }: {
   readonly bot: Bot;
   readonly onSave: (input: BotProfileUpdate) => Promise<boolean>;
+  readonly onDeleted: () => void;
 }) {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
+  const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const imageSettings = useEnvironmentSettings(
     environmentId ?? NO_ENVIRONMENT,
     (settings) => settings.imageGeneration,
@@ -177,9 +186,11 @@ function BotSettingsForm({
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deletedRef = useRef(false);
 
   const shouldBlockNavigation = useCallback(async () => {
-    if (!draft.dirty) return false;
+    if (deletedRef.current || !draft.dirty) return false;
     const confirmation = requestConfirmDialog(t("Discard unsaved bot settings?"), {
       variant: "destructive",
     });
@@ -198,6 +209,40 @@ function BotSettingsForm({
   const connectedChannelCount = assignedChannels.filter(
     (binding) => binding.status === "connected",
   ).length;
+
+  const onDeleteBot = useCallback(() => {
+    if (!environmentId) return;
+    const confirmation = requestConfirmDialog(
+      t("Delete {name}? Its chats stay in your history. This cannot be undone.", {
+        name: bot.name,
+      }),
+      { variant: "destructive" },
+    );
+    if (!confirmation) return;
+    setDeleting(true);
+    void confirmation.then(async (confirmed) => {
+      if (!confirmed) {
+        setDeleting(false);
+        return;
+      }
+      const result = await deleteBot({
+        environmentId,
+        input: { botId: BotId.make(bot.id) },
+      });
+      setDeleting(false);
+      if (result._tag === "Failure") {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: t("Could not delete {name}", { name: bot.name }),
+          description: error instanceof Error ? error.message : t("The command failed."),
+        });
+        return;
+      }
+      deletedRef.current = true;
+      onDeleted();
+    });
+  }, [bot, environmentId, deleteBot, onDeleted, t]);
 
   return (
     <>
@@ -574,6 +619,25 @@ function BotSettingsForm({
             draft.activeEntry ? driverSupportsDelegation(draft.activeEntry.driverKind) : true
           }
         />
+
+        <SettingsSection title={t("Danger")}>
+          <SettingsRow
+            title={t("Delete bot")}
+            description={t("Remove {name} from the roster. Its chats stay in your history.", {
+              name: bot.name,
+            })}
+            control={
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleting || !environmentId}
+                onClick={onDeleteBot}
+              >
+                {deleting ? t("Deleting…") : t("Delete")}
+              </Button>
+            }
+          />
+        </SettingsSection>
       </SettingsPageContainer>
 
       <div

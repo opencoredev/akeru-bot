@@ -321,6 +321,9 @@ type ThreadSettingsSessionProps = {
     readonly botId: string;
     readonly botName?: string;
   };
+  /** Deletes the chat's bot. Resolves false when the server refuses. */
+  /** Resolves to null on success, or the reason the delete failed. */
+  readonly onDeleteBot?: () => Promise<string | null>;
 };
 
 export type ExistingThreadSettingsRouteSession = ThreadSettingsSessionProps & {
@@ -392,6 +395,7 @@ type ThreadSettingsSessionValue = {
   readonly toggleProvider: (providerKey: string) => void;
   readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
   readonly routinesRef: ThreadSettingsSessionProps["routinesRef"];
+  readonly onDeleteBot: ThreadSettingsSessionProps["onDeleteBot"];
   /** False when the shown model's provider can neither hand off work nor receive it. */
   readonly canDelegate: boolean;
 };
@@ -549,6 +553,7 @@ function ThreadSettingsSessionProvider(
       toggleProvider,
       memoryThreadRef: props.memoryThreadRef,
       routinesRef: props.routinesRef,
+      onDeleteBot: props.onDeleteBot,
       canDelegate,
     }),
     [
@@ -573,6 +578,7 @@ function ThreadSettingsSessionProvider(
       props.runtimeMode,
       props.memoryThreadRef,
       props.routinesRef,
+      props.onDeleteBot,
       searchQuery,
       showLegacyToggle,
       toggleProvider,
@@ -863,6 +869,8 @@ function ThreadSettingsOptionsItem(props: {
         </Text>
       )}
 
+      <DeleteBotSection />
+
       {Platform.OS !== "ios" && session.hasLegacyModels ? (
         <>
           <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
@@ -879,6 +887,63 @@ function ThreadSettingsOptionsItem(props: {
         </>
       ) : null}
     </View>
+  );
+}
+
+/** Destructive bot removal, shown only for chats that belong to a bot. */
+function DeleteBotSection() {
+  const { t } = useMobileI18n();
+  const session = useThreadSettingsSession();
+  const presentation = useThreadSettingsPickerPresentation();
+  const [deleting, setDeleting] = useState(false);
+  const onDeleteBot = session.onDeleteBot;
+  const botName = session.routinesRef?.botName;
+  if (!onDeleteBot || !botName) return null;
+
+  const deleteBot = async () => {
+    setDeleting(true);
+    const failure = await onDeleteBot();
+    setDeleting(false);
+    if (failure !== null) {
+      Alert.alert(t("Could not delete {name}", { name: botName }), failure);
+      return;
+    }
+    presentation.onClose();
+  };
+  const confirmDelete = () =>
+    Alert.alert(
+      t("Delete {name}? Its chats stay in your history. This cannot be undone.", {
+        name: botName,
+      }),
+      undefined,
+      [
+        { text: t("Cancel"), style: "cancel" },
+        { text: t("Delete"), style: "destructive", onPress: () => void deleteBot() },
+      ],
+    );
+
+  return (
+    <>
+      <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
+        {t("Danger")}
+      </Text>
+      <View className="mx-4 overflow-hidden rounded-2xl bg-card">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: deleting }}
+          disabled={deleting}
+          onPress={confirmDelete}
+          className="min-h-11 flex-row items-center bg-card px-4 py-2 active:bg-subtle"
+        >
+          <Text className="text-sm font-t3-medium text-danger">
+            {deleting ? t("Deleting…") : t("Delete bot")}
+          </Text>
+        </Pressable>
+      </View>
+      <Text className="px-5 pt-2 text-xs leading-4 text-foreground-muted">
+        {t("Remove {name} from the roster. Its chats stay in your history.", { name: botName })}
+      </Text>
+    </>
   );
 }
 

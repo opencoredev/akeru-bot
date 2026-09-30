@@ -41,6 +41,12 @@ export function applyShellStreamEvent(
         : Arr.append(snapshot.bots, event.bot);
       return { ...snapshot, bots, snapshotSequence: event.sequence };
     }
+    case "bot-removed":
+      return {
+        ...snapshot,
+        bots: Arr.filter(snapshot.bots, (bot) => bot.id !== event.botId),
+        snapshotSequence: event.sequence,
+      };
     case "group-upserted": {
       const groups = snapshot.groups.some((group) => group.id === event.group.id)
         ? Arr.map(snapshot.groups, (group) => (group.id === event.group.id ? event.group : group))

@@ -110,7 +110,7 @@ vi.mock("../../state/use-composer-path-search", () => ({
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
 }));
 vi.mock("../../state/bots", () => ({
-  botEnvironment: { update: Symbol("update") },
+  botEnvironment: { update: Symbol("update"), delete: Symbol("delete") },
   environmentBotsAtom: () => Symbol("bots"),
   environmentGroupsAtom: () => Symbol("groups"),
 }));
