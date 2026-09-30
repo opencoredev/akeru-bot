@@ -139,6 +139,18 @@ describe("native DictationControls interaction handlers", () => {
     expect(handlers.onRelease).not.toHaveBeenCalled();
   });
 
+  it("cancels a send-slot transcription on touch", () => {
+    const handlers = callbacks();
+    const view = render({ status: "transcribing", appearance: "send-slot", ...handlers });
+    expect(view.button.accessibilityLabel).toBe("Cancel dictation");
+    expect(view.button.onStartShouldSetResponder!(event)).toBe(true);
+    view.button.onResponderGrant!(event);
+    view.button.onResponderRelease!(event);
+    expect(handlers.onCancel).toHaveBeenCalledTimes(1);
+    expect(handlers.onStart).not.toHaveBeenCalled();
+    expect(handlers.onRelease).not.toHaveBeenCalled();
+  });
+
   it("offers retry and dismiss after a send-slot failure", () => {
     const handlers = callbacks();
     state.cursor = 0;

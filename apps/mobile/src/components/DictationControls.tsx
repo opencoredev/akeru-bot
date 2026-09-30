@@ -119,12 +119,12 @@ export function DictationControls({
           onBlockedPress(unavailableReason!);
           return;
         }
-        if (
-          disabled ||
-          holding.current ||
-          (appearance === "send-slot" && status === "transcribing")
-        )
+        if (disabled || holding.current) return;
+        // While transcribing, the send slot is a cancel button, so a tap cancels.
+        if (appearance === "send-slot" && status === "transcribing") {
+          cancel();
           return;
+        }
         holding.current = true;
         holdStartedAt.current = Date.now();
         startedThisGesture.current = !active;
