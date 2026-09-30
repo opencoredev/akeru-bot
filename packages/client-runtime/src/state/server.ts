@@ -804,11 +804,6 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.routinesListThreadRuns,
       staleTimeMs: 0,
     }),
-    voiceProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
-      label: "environment-data:server:voice-providers",
-      tag: WS_METHODS.voiceProviders,
-      staleTimeMs: 5_000,
-    }),
     imageProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:image-providers",
       tag: WS_METHODS.imageProviderList,
@@ -936,10 +931,6 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: voiceCallHangupConcurrencyKey,
       },
-    }),
-    transcribeVoice: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:server:voice:transcribe",
-      tag: WS_METHODS.voiceTranscribe,
     }),
     connectVoiceProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice:connect",
