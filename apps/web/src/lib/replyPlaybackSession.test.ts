@@ -65,6 +65,7 @@ describe("web reply playback synthesis", () => {
     session.subscribeSynthesis(listener);
     voice = { ...voice, synthesisVoices: { openai: "nova" } };
     session.setContext({ environmentId: "primary", threadId: "thread" } as never);
+    listener.mockClear();
     const before = session.getSynthesisSnapshot();
     expect(session.getSynthesisSnapshot()).toBe(before);
     session.refreshSynthesis();
