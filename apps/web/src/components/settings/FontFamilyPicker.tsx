@@ -205,7 +205,7 @@ export function FontFamilyPicker({
     >
       <ComboboxTrigger
         aria-label={ariaLabel}
-        className="relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-input bg-background px-[calc(--spacing(3)-1px)] text-left text-base text-foreground shadow-xs/5 outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/24 sm:min-h-8 sm:text-sm dark:bg-input/32"
+        className="relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary px-[calc(--spacing(3)-1px)] text-left text-base text-foreground outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-h-8 sm:text-sm"
       >
         <span className="min-w-0 truncate">
           {selectedFamily.length === 0 ? defaultFamily : selectedFamily}
@@ -214,7 +214,7 @@ export function FontFamilyPicker({
       </ComboboxTrigger>
       <ComboboxPopup align="end" className="flex w-72 flex-col">
         <div className="shrink-0 px-3 pt-2.5">
-          <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-ring">
+          <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-foreground/30">
             <SearchIcon
               aria-hidden="true"
               className="pointer-events-none absolute top-1.5 left-0 size-4 shrink-0 text-muted-foreground/55"

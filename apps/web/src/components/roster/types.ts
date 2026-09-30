@@ -1,4 +1,10 @@
-import type { BotEngine, ChannelBinding, GroupMembership, McpServerId } from "@t3tools/contracts";
+import type {
+  BotEngine,
+  ChannelBinding,
+  GroupMembership,
+  ImageProviderId,
+  McpServerId,
+} from "@t3tools/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
@@ -37,6 +43,8 @@ export interface Bot {
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */
   personalityTone?: number;
   voiceEnabled: boolean;
+  /** Image provider override; null or absent uses the environment's image generation default. */
+  imageProvider?: ImageProviderId | null;
   channelBindings?: ReadonlyArray<ChannelBinding>;
   groupId: string | null;
   pinned: boolean;

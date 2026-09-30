@@ -328,9 +328,12 @@ const structuredData = [
     text-decoration: none;
   }
 
+  :where(a[href], button, summary, label, select):where(:not(:disabled)) {
+    cursor: pointer;
+  }
+
   button {
     font-family: inherit;
-    cursor: pointer;
     border: 0;
     background: none;
     color: inherit;

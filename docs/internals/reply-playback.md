@@ -30,9 +30,9 @@ message edits do not replay.
 
 ## Synthesis boundary
 
-Until LEO-401 exposes a stored-text synthesis operation, the client reports
-that stored-reply speech is unavailable. ChatGPT realtime remains a live call
-and must not be used as a TTS fallback. Platform adapters
+The client uses the authenticated `voice.synthesize` operation with the
+provider and voice resolved from the environment's voice settings. ChatGPT
+realtime remains a live call and must not be used as a TTS fallback. Platform adapters
 (`createBrowserReplyAudio`, `createExpoReplyAudio`) accept already-decoded
 audio bytes and own temporary object URLs or cache files.
 

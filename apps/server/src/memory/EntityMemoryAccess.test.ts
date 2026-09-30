@@ -91,6 +91,30 @@ describe("entity memory access", () => {
     }),
   );
 
+  it.effect("revokes a bot from shared history on the next turn", () =>
+    Effect.gen(function* () {
+      const before = yield* resolveAuthorizedMemoryPartitions({
+        ...base,
+        botId: BotId.make("bot-2"),
+        groupId: GroupId.make("group-1"),
+        respondingBotId: BotId.make("bot-2"),
+        groupMemberBotIds: [BotId.make("bot-1"), BotId.make("bot-2")],
+      });
+      const after = yield* Effect.exit(
+        resolveAuthorizedMemoryPartitions({
+          ...base,
+          botId: BotId.make("bot-2"),
+          groupId: GroupId.make("group-1"),
+          respondingBotId: BotId.make("bot-2"),
+          groupMemberBotIds: [BotId.make("bot-1")],
+        }),
+      );
+
+      assert.isTrue(before.some((candidate) => candidate.scope === "group"));
+      assert.equal(after._tag, "Failure");
+    }),
+  );
+
   it("keeps the workspace partition stable when the project root moves", () => {
     const beforeMove = deriveAkeruWorkspaceId(base.projectId);
     const afterMove = deriveAkeruWorkspaceId(

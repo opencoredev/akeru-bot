@@ -31,10 +31,21 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
 type MobileThemeVariable = `--color-${string}`;
 export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>;
 
+// Theme ids before the rebrand; mapped so stored preferences keep resolving.
+const LEGACY_MOBILE_THEME_IDS: Readonly<Record<string, MobileThemeId>> = {
+  "t3-code": DEFAULT_MOBILE_THEME_ID,
+  "t3-chat": "akeru-chat",
+};
+
 export function normalizeMobileThemeId(value: unknown): MobileThemeId {
-  return typeof value === "string" && (MOBILE_THEME_IDS as readonly string[]).includes(value)
-    ? (value as MobileThemeId)
-    : DEFAULT_MOBILE_THEME_ID;
+  if (typeof value === "string") {
+    if ((MOBILE_THEME_IDS as readonly string[]).includes(value)) {
+      return value as MobileThemeId;
+    }
+    const aliased = LEGACY_MOBILE_THEME_IDS[value];
+    if (aliased !== undefined) return aliased;
+  }
+  return DEFAULT_MOBILE_THEME_ID;
 }
 
 export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {

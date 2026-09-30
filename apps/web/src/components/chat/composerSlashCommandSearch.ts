@@ -57,17 +57,17 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
   return Math.min(...scores);
 }
 
-export function searchSlashCommandItems(
-  items: ReadonlyArray<SlashSearchItem>,
+export function searchSlashCommandItems<T extends SlashSearchItem>(
+  items: ReadonlyArray<T>,
   query: string,
-): SlashSearchItem[] {
+): T[] {
   const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\/+/ });
   if (!normalizedQuery) {
     return [...items];
   }
 
   const ranked: Array<{
-    item: SlashSearchItem;
+    item: T;
     score: number;
     tieBreaker: string;
   }> = [];

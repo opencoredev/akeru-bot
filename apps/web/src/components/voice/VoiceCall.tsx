@@ -1,6 +1,13 @@
 import { CallEndIcon, CallIcon } from "@hugeicons/core-free-icons";
 import { useAtomValue } from "@effect/atom-react";
 import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
+import {
+  createRealtimeVoiceSession,
+  createVoiceCallScope,
+  runComposedVoiceCall,
+  type VoiceCallChatHandlers,
+  type VoiceCallScope,
+} from "@t3tools/client-runtime/voice";
 import { BotId, type VoiceCallSnapshot } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
@@ -18,6 +25,7 @@ import {
 
 import type { Bot } from "../roster/types";
 import { resolveStickyBotEngine } from "../roster/botEngineSelection";
+import { useBotEngineAvailability } from "../roster/useBotEngineAvailability";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
 import { useRosterStore } from "../roster/rosterStore";
 import { Button } from "../ui/button";
@@ -35,14 +43,19 @@ import { primaryServerProvidersAtom, serverEnvironment } from "../../state/serve
 import { useProjects } from "../../state/entities";
 import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { captureVoiceUtterance, playVoiceAudio } from "./browserVoiceAudio";
+import { composedVoiceAdapters } from "./composedVoiceCall";
 
 interface ActiveBrowserCall {
   readonly call: Exclude<VoiceCallSnapshot, { status: "idle" }>;
   readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
-  readonly peer: RTCPeerConnection;
+  /** Cancels every capture, provider request, reply wait, and playback owned by this call. */
+  readonly scope: VoiceCallScope;
+  /** Null for composed calls, which take turns over RPC instead of WebRTC. */
+  readonly peer: RTCPeerConnection | null;
   readonly microphone: MediaStream;
   readonly speaker: HTMLAudioElement;
-  readonly events: RTCDataChannel;
+  readonly events: RTCDataChannel | null;
   stopListeningForDeviceLoss: () => void;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   environmentDisconnectTimer: ReturnType<typeof setTimeout> | null;
@@ -53,6 +66,7 @@ interface PendingBrowserCall {
   readonly abortController: AbortController;
   readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
   failure: Error | null;
+  scope: VoiceCallScope | null;
   microphone: MediaStream | null;
   peer: RTCPeerConnection | null;
   speaker: HTMLAudioElement | null;
@@ -72,114 +86,14 @@ export function reduceVoiceCallUiState(
   return action.type === "connected" ? action.call : null;
 }
 
-export interface VoiceCallChatHandlers {
-  readonly appendTranscript: (role: "user" | "assistant", text: string) => void | Promise<void>;
-  readonly sendGoalMessage: (text: string) => boolean | Promise<boolean>;
-  readonly speechStarted: () => void;
-  readonly speechFinished: () => void;
-  readonly sessionFailed: (message: string) => void;
-}
+export {
+  handleVoiceChannelMessage,
+  type VoiceCallChatHandlers,
+} from "@t3tools/client-runtime/voice";
 
-function stringField(value: unknown, field: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const candidate = (value as Record<string, unknown>)[field];
-  return typeof candidate === "string" ? candidate : null;
-}
-
-export function handleVoiceChannelMessage(
-  raw: string,
-  handlers: VoiceCallChatHandlers,
-  reply: (payload: string) => void = () => {},
-): void {
-  let event: unknown;
-  try {
-    event = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  const type = stringField(event, "type");
-  const transcript = stringField(event, "transcript")?.trim() ?? "";
-  if (type === "conversation.item.input_audio_transcription.completed" && transcript.length > 0) {
-    void handlers.appendTranscript("user", transcript);
-    return;
-  }
-  if (
-    (type === "response.output_audio_transcript.done" ||
-      type === "response.audio_transcript.done") &&
-    transcript.length > 0
-  ) {
-    void handlers.appendTranscript("assistant", transcript);
-    return;
-  }
-  if (type === "output_audio_buffer.started") {
-    handlers.speechStarted();
-    return;
-  }
-  if (type === "output_audio_buffer.stopped") {
-    handlers.speechFinished();
-    return;
-  }
-  if (type === "response.done") {
-    const response =
-      typeof event === "object" && event !== null
-        ? (event as Record<string, unknown>).response
-        : null;
-    const status = stringField(response, "status");
-    if (status !== "completed" && status !== "cancelled" && status !== "incomplete") {
-      handlers.sessionFailed("The voice response failed.");
-    }
-    return;
-  }
-  if (
-    type === "response.function_call_arguments.done" &&
-    stringField(event, "name") === "send_to_chat"
-  ) {
-    const callId = stringField(event, "call_id");
-    const finish = (output: Record<string, unknown>) => {
-      if (callId === null) return;
-      reply(
-        JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "function_call_output",
-            call_id: callId,
-            output: JSON.stringify(output),
-          },
-        }),
-      );
-      reply(JSON.stringify({ type: "response.create" }));
-    };
-    let parsedArguments: unknown;
-    try {
-      parsedArguments = JSON.parse(stringField(event, "arguments") ?? "");
-    } catch {
-      finish({ ok: false, error: "Could not parse the tool arguments." });
-      return;
-    }
-    const message = stringField(parsedArguments, "message")?.trim() ?? "";
-    if (message.length === 0) {
-      finish({ ok: false, error: "The message was empty." });
-      return;
-    }
-    void Promise.resolve(handlers.sendGoalMessage(message))
-      .catch(() => false)
-      .then((delivered) =>
-        finish(
-          delivered
-            ? { ok: true, delivered: "chat" }
-            : { ok: false, error: "The chat did not accept the message." },
-        ),
-      );
-    return;
-  }
-  if (type === "error") {
-    const realtimeError =
-      typeof event === "object" && event !== null
-        ? stringField((event as Record<string, unknown>).error, "message")
-        : null;
-    handlers.sessionFailed(realtimeError ?? "The voice session failed.");
-  }
-}
+/** Shown when the server pinned a different voice mode than the client prepared for. */
+export const VOICE_MODE_CHANGED_MESSAGE =
+  "Voice settings changed while the call was starting. Start the call again.";
 
 export function voiceStartErrorDescription(cause: unknown): string {
   if (cause instanceof DOMException) {
@@ -271,22 +185,26 @@ export function scheduleVoiceDisconnectTimeout(
 }
 
 function stopBrowserCall(active: ActiveBrowserCall): void {
+  active.scope.cancel();
   if (active.disconnectTimer !== null) clearTimeout(active.disconnectTimer);
   if (active.environmentDisconnectTimer !== null) {
     clearTimeout(active.environmentDisconnectTimer);
   }
   active.stopListeningForDeviceLoss();
-  active.events.onmessage = null;
-  active.events.onerror = null;
-  active.events.onclose = null;
+  if (active.events) {
+    active.events.onmessage = null;
+    active.events.onerror = null;
+    active.events.onclose = null;
+  }
   active.microphone.getTracks().forEach((track) => track.stop());
-  active.peer.close();
+  active.peer?.close();
   active.speaker.pause();
   active.speaker.srcObject = null;
 }
 
 function cleanPendingBrowserCall(pending: PendingBrowserCall): void {
   pending.abortController.abort();
+  pending.scope?.cancel();
   pending.stopListeningForDeviceLoss();
   if (pending.events) {
     pending.events.onmessage = null;
@@ -308,6 +226,13 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   const hangupVoiceCall = useAtomCommand(serverEnvironment.hangupVoiceCall, {
     reportFailure: false,
   });
+  const transcribeVoice = useAtomCommand(serverEnvironment.transcribeVoice, {
+    reportFailure: false,
+  });
+  const synthesizeVoice = useAtomCommand(serverEnvironment.synthesizeVoice, {
+    reportFailure: false,
+  });
+  const cancelVoice = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
   const [activeCall, dispatchCall] = useReducer(reduceVoiceCallUiState, null);
   const [reconnecting, setReconnecting] = useState(false);
   const [startingBotId, setStartingBotId] = useState<string | null>(null);
@@ -346,6 +271,15 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   const runtime = useBotThreadRuntime(sessionBotId ?? "", sessionModelSelection);
   const runtimeRef = useRef(runtime);
   runtimeRef.current = runtime;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const voiceCommandsRef = useRef({ transcribeVoice, synthesizeVoice, cancelVoice });
+  voiceCommandsRef.current = { transcribeVoice, synthesizeVoice, cancelVoice };
+  // Composed calls wait for the bot's reply; these listeners re-read the turn after each render.
+  const turnListenersRef = useRef(new Set<() => void>());
+  useEffect(() => {
+    for (const changed of [...turnListenersRef.current]) changed();
+  }, [runtime.latestTurn, runtime.messages]);
   const activeRef = useRef<ActiveBrowserCall | null>(null);
   const mountedRef = useRef(true);
   const pendingStartRef = useRef<PendingBrowserCall | null>(null);
@@ -408,6 +342,15 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
       setReconnecting(false);
       return;
     }
+    // Composed calls run every turn over RPC, so they cannot ride out a disconnect.
+    if (current.peer === null) {
+      endBrowserCall(current, {
+        type: "warning",
+        title: "Call connection lost",
+        description: "Start a new call after the environment reconnects.",
+      });
+      return;
+    }
     setReconnecting(true);
     current.environmentDisconnectTimer ??= setTimeout(() => {
       current.environmentDisconnectTimer = null;
@@ -443,7 +386,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
         toastManager.add({
           type: "error",
           title: "Voice is unavailable",
-          description: "Add a project before you call a bot.",
+          description: "Your workspace is still loading. Try again in a moment.",
         });
         return;
       }
@@ -455,6 +398,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           abortController: new AbortController(),
           environmentId,
           failure: null,
+          scope: null,
           microphone: null,
           peer: null,
           speaker: null,
@@ -463,6 +407,24 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
         };
         pendingStartRef.current = pending;
         let serverCallId: string | null = null;
+        const hangupCancelledStart = (callId: string) =>
+          void hangupCommandRef.current({ environmentId, input: { callId } });
+        const activate = (browserCall: ActiveBrowserCall) => {
+          activeRef.current = browserCall;
+          dispatchCall({ type: "connected", call: browserCall.call });
+          setReconnecting(false);
+          pending.stopListeningForDeviceLoss = () => {};
+          browserCall.stopListeningForDeviceLoss();
+          browserCall.stopListeningForDeviceLoss = listenForMicrophoneLoss(
+            browserCall.microphone,
+            () =>
+              endBrowserCall(browserCall, {
+                type: "warning",
+                title: "Microphone disconnected",
+                description: "Connect a microphone, then start a new call.",
+              }),
+          );
+        };
         try {
           if (!navigator.mediaDevices?.getUserMedia) {
             throw new DOMException("No microphone API", "NotFoundError");
@@ -480,14 +442,82 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             microphone.getTracks().forEach((track) => track.stop());
             return;
           }
+          const scope = createVoiceCallScope({ botId: bot.id, environmentId });
+          pending.scope = scope;
           pending.stopListeningForDeviceLoss = listenForMicrophoneLoss(microphone, () => {
             pending.failure ??= new Error("The microphone disconnected.");
             pending.peer?.close();
           });
-          const peer = new RTCPeerConnection();
-          pending.peer = peer;
           const speaker = new Audio();
           pending.speaker = speaker;
+
+          if (settingsRef.current.voice.provider === "composed") {
+            // Capture only while listening; the loop enables tracks for each utterance.
+            microphone.getAudioTracks().forEach((track) => {
+              track.enabled = false;
+            });
+            const result = await startVoiceCall({
+              environmentId,
+              input: { botId: BotId.make(bot.id) },
+            });
+            if (result._tag === "Failure") {
+              const cause = Cause.squash(result.cause);
+              throw new Error(
+                cause instanceof Error ? cause.message : "Could not start the voice call.",
+              );
+            }
+            const callId = result.value.call.callId;
+            serverCallId = callId;
+            if (pending.cancelled) return hangupCancelledStart(callId);
+            if (pending.failure) throw pending.failure;
+            if (result.value.transport !== "composed") throw new Error(VOICE_MODE_CHANGED_MESSAGE);
+            const browserCall: ActiveBrowserCall = {
+              call: result.value.call,
+              environmentId,
+              scope,
+              peer: null,
+              microphone,
+              speaker,
+              events: null,
+              stopListeningForDeviceLoss: pending.stopListeningForDeviceLoss,
+              disconnectTimer: null,
+              environmentDisconnectTimer: null,
+            };
+            activate(browserCall);
+            const commands = () => voiceCommandsRef.current;
+            void runComposedVoiceCall(
+              scope,
+              composedVoiceAdapters({
+                callId,
+                capture: (signal) => captureVoiceUtterance(microphone, signal),
+                play: (audio, signal) => playVoiceAudio(speaker, audio, signal),
+                transcribe: (input) => commands().transcribeVoice({ environmentId, input }),
+                synthesize: (input) => commands().synthesizeVoice({ environmentId, input }),
+                cancel: (operationId) =>
+                  commands().cancelVoice({ environmentId, input: { operationId } }),
+                sendMessage: (text) => runtimeRef.current.sendVoiceMessage(text),
+                readTurn: () => ({
+                  latestTurn: runtimeRef.current.latestTurn,
+                  messages: runtimeRef.current.messages,
+                }),
+                subscribeTurn: (changed) => {
+                  turnListenersRef.current.add(changed);
+                  return () => turnListenersRef.current.delete(changed);
+                },
+              }),
+            ).catch((error: unknown) => {
+              if (scope.signal.aborted) return;
+              endBrowserCall(browserCall, {
+                type: "error",
+                title: "Voice call ended",
+                description: voiceStartErrorDescription(error),
+              });
+            });
+            return;
+          }
+
+          const peer = new RTCPeerConnection();
+          pending.peer = peer;
           speaker.autoplay = true;
           peer.ontrack = (event) => {
             if (!event.streams[0]) return;
@@ -518,7 +548,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             },
             sessionFailed: (message) => {
               const active = activeRef.current;
-              if (active?.events === events) {
+              if (active?.scope === scope) {
                 endBrowserCall(active, {
                   type: "error",
                   title: "Voice session failed",
@@ -530,10 +560,11 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               pending.peer?.close();
             },
           };
-          events.onmessage = (channelMessage) =>
-            handleVoiceChannelMessage(String(channelMessage.data), chatHandlers, (payload) => {
-              if (events.readyState === "open") events.send(payload);
-            });
+          // One session per call drops replayed event ids and duplicate send_to_chat calls.
+          const session = createRealtimeVoiceSession(scope, chatHandlers, (payload) => {
+            if (events.readyState === "open") events.send(payload);
+          });
+          events.onmessage = (channelMessage) => session.receive(String(channelMessage.data));
           const offer = await peer.createOffer();
           if (pending.failure) throw pending.failure;
           await peer.setLocalDescription(offer);
@@ -554,26 +585,17 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             );
           }
           serverCallId = result.value.call.callId;
-          if (pending.cancelled) {
-            void hangupCommandRef.current({
-              environmentId,
-              input: { callId: serverCallId },
-            });
-            return;
-          }
+          if (pending.cancelled) return hangupCancelledStart(serverCallId);
           if (pending.failure) throw pending.failure;
+          if (result.value.transport !== "webrtc") throw new Error(VOICE_MODE_CHANGED_MESSAGE);
+          if (!result.value.answerSdp) throw new Error("The voice call did not return an answer.");
           await peer.setRemoteDescription({ type: "answer", sdp: result.value.answerSdp });
-          if (pending.cancelled) {
-            void hangupCommandRef.current({
-              environmentId,
-              input: { callId: serverCallId },
-            });
-            return;
-          }
+          if (pending.cancelled) return hangupCancelledStart(serverCallId);
           if (pending.failure) throw pending.failure;
           const browserCall: ActiveBrowserCall = {
             call: result.value.call,
             environmentId,
+            scope,
             peer,
             microphone,
             speaker,
@@ -582,18 +604,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             disconnectTimer: null,
             environmentDisconnectTimer: null,
           };
-          activeRef.current = browserCall;
-          dispatchCall({ type: "connected", call: browserCall.call });
-          setReconnecting(false);
-          pending.stopListeningForDeviceLoss = () => {};
-          browserCall.stopListeningForDeviceLoss();
-          browserCall.stopListeningForDeviceLoss = listenForMicrophoneLoss(microphone, () =>
-            endBrowserCall(browserCall, {
-              type: "warning",
-              title: "Microphone disconnected",
-              description: "Connect a microphone, then start a new call.",
-            }),
-          );
+          activate(browserCall);
           events.onerror = () =>
             endBrowserCall(browserCall, {
               type: "error",
@@ -606,8 +617,8 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               title: "Call ended",
               description: "The voice session closed.",
             });
-          browserCall.peer.onconnectionstatechange = () => {
-            const action = voiceConnectionStateAction(browserCall.peer.connectionState);
+          peer.onconnectionstatechange = () => {
+            const action = voiceConnectionStateAction(peer.connectionState);
             if (action === "recovered") {
               if (browserCall.disconnectTimer !== null) {
                 clearTimeout(browserCall.disconnectTimer);
@@ -619,7 +630,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             if (action === "wait-for-recovery") {
               setReconnecting(true);
               browserCall.disconnectTimer ??= scheduleVoiceDisconnectTimeout(
-                () => browserCall.peer.connectionState,
+                () => peer.connectionState,
                 (recovered) => {
                   browserCall.disconnectTimer = null;
                   if (!recovered) {
@@ -725,17 +736,21 @@ export function BotVoiceCallButtonView({
   bot,
   active,
   disabled,
+  disabledReason = null,
   globallyEnabled,
   onClick,
 }: {
   readonly bot: Bot;
   readonly active: boolean;
   readonly disabled: boolean;
+  /** Why a call cannot start, shown with the button. */
+  readonly disabledReason?: string | null;
   readonly globallyEnabled: boolean;
   readonly onClick: () => void;
 }) {
   if (!globallyEnabled || !bot.voiceEnabled) return null;
   const label = active ? `Return to call with ${bot.name}` : `Call ${bot.name}`;
+  const description = disabled && disabledReason ? `${label}. ${disabledReason}` : label;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -744,7 +759,7 @@ export function BotVoiceCallButtonView({
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label={label}
+            aria-label={description}
             disabled={disabled}
             onClick={onClick}
           />
@@ -752,7 +767,7 @@ export function BotVoiceCallButtonView({
       >
         <AppIcon icon={CallIcon} />
       </TooltipTrigger>
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
+      <TooltipPopup side="bottom">{description}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -766,11 +781,15 @@ export function BotVoiceCallButton({
 }) {
   const { activeCall, startingBotId, startOrReturn } = useVoiceCall();
   const globallyEnabled = usePrimarySettings((settings) => settings.voice.enabled);
+  const engine = useBotEngineAvailability(bot.engine);
+  const active = activeCall?.botId === bot.id;
+  const blocked = engine.blocked && !active;
   return (
     <BotVoiceCallButtonView
       bot={bot}
-      active={activeCall?.botId === bot.id}
-      disabled={disabled || startingBotId !== null}
+      active={active}
+      disabled={disabled || blocked || startingBotId !== null}
+      disabledReason={blocked ? (engine.unavailability?.title ?? null) : null}
       globallyEnabled={globallyEnabled}
       onClick={() => startOrReturn(bot)}
     />

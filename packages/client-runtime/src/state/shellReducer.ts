@@ -1,5 +1,6 @@
 import * as Arr from "effect/Array";
 import {
+  akeruDelegationStateOf,
   isTerminalDelegationState,
   SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
   type AkeruDelegationRecord,
@@ -82,7 +83,7 @@ export function applyShellStreamEvent(
         : Arr.append(snapshot.delegations, event.delegation);
       return {
         ...snapshot,
-        delegations: isTerminalDelegationState(event.delegation.state)
+        delegations: isTerminalDelegationState(akeruDelegationStateOf(event.delegation.phase))
           ? capTerminalDelegations(delegations, event.delegation.parentThreadId)
           : delegations,
         snapshotSequence: event.sequence,
@@ -113,10 +114,17 @@ export function applyShellStreamEvent(
       return {
         ...snapshot,
         routines: Arr.filter(snapshot.routines ?? [], (routine) => routine.id !== event.routineId),
-        routineRuns: Arr.filter(
-          snapshot.routineRuns ?? [],
-          (run) => run.routineId !== event.routineId,
-        ),
+        routineReceiptSources: event.receiptSource
+          ? [
+              ...(snapshot.routineReceiptSources ?? []).filter(
+                (source) => source.id !== event.routineId,
+              ),
+              event.receiptSource,
+            ]
+          : snapshot.routineReceiptSources,
+        routineRuns: event.receiptSource
+          ? snapshot.routineRuns
+          : Arr.filter(snapshot.routineRuns ?? [], (run) => run.routineId !== event.routineId),
         snapshotSequence: event.sequence,
       };
     case "skill-assignment-upserted": {
@@ -175,12 +183,13 @@ function capTerminalDelegations(
 ): ReadonlyArray<AkeruDelegationRecord> {
   const terminal = delegations.filter(
     (delegation) =>
-      delegation.parentThreadId === parentThreadId && isTerminalDelegationState(delegation.state),
+      delegation.parentThreadId === parentThreadId &&
+      isTerminalDelegationState(akeruDelegationStateOf(delegation.phase)),
   );
   if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
   const dropped = new Set(
-    terminal
-      .toSorted(
+    [...terminal]
+      .sort(
         (left, right) =>
           compareText(right.updatedAt, left.updatedAt) ||
           compareText(left.createdAt, right.createdAt) ||

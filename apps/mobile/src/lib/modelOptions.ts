@@ -4,7 +4,19 @@ import type {
   ServerConfig as T3ServerConfig,
   SubscriptionProviderStatus,
 } from "@t3tools/contracts";
-import { filterProvidersBySubscriptionConnection } from "@t3tools/client-runtime/provider-auth";
+import { PROVIDER_DISPLAY_NAMES, type ProviderDriverKind } from "@t3tools/contracts";
+import {
+  filterProvidersBySubscriptionConnection,
+  withRefreshableSubscriptionLogin,
+} from "@t3tools/client-runtime/provider-auth";
+import {
+  presentProviderUnavailability,
+  type ProviderAvailabilityTranslate,
+  providerAvailabilityReason,
+  providerUnavailabilitySummary,
+  type ProviderAvailabilityPresentation,
+  type ProviderAvailabilityReason,
+} from "@t3tools/client-runtime/provider-availability";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
@@ -21,6 +33,8 @@ export type ModelOption = {
   readonly isLegacy: boolean;
   readonly capabilities: ModelCapabilities | null;
   readonly selection: ModelSelection;
+  /** Why this model cannot run right now; the row stays visible but cannot be picked. */
+  readonly disabledReason: string | null;
 };
 
 export type ProviderGroup = {
@@ -35,9 +49,53 @@ function providerDisplayLabel(provider: {
   readonly instanceId: string;
 }): string {
   if (provider.displayName) return provider.displayName;
-  if (provider.driver === "codex") return "Codex";
-  if (provider.driver === "claudeAgent") return "Claude";
-  return provider.instanceId;
+  return PROVIDER_DISPLAY_NAMES[provider.driver as ProviderDriverKind] ?? provider.instanceId;
+}
+
+/**
+ * Why a chat's saved model cannot take a new message, using the same reasons
+ * the server preflight refuses with. A temporary failure does not block Send,
+ * and a missing config (environment offline) cannot be judged, so both
+ * return `null`.
+ */
+export function resolveModelSendBlock(
+  config: T3ServerConfig | null | undefined,
+  selection: ModelSelection,
+  t?: ProviderAvailabilityTranslate,
+  subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
+): ProviderAvailabilityPresentation | null {
+  if (!config) return null;
+  const provider = config.providers.find(
+    (candidate) => candidate.instanceId === selection.instanceId,
+  );
+  const connected = filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses);
+  const reason =
+    provider && !connected.includes(provider)
+      ? "missing-login"
+      : providerAvailabilityReason(
+          provider &&
+            withRefreshableSubscriptionLogin(
+              provider,
+              subscriptionStatuses,
+              config.settings.providerInstances,
+            ),
+          selection.model,
+        );
+  if (reason === null || reason === "temporary-failure") return null;
+  const modelName =
+    provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??
+    selection.model;
+  return presentProviderUnavailability(
+    {
+      reason,
+      providerName: providerDisplayLabel(
+        provider ?? { driver: selection.instanceId, instanceId: selection.instanceId },
+      ),
+      modelName,
+      detail: provider?.unavailabilityDetail ?? provider?.message,
+    },
+    t,
+  );
 }
 
 function normalizeSelectionOptions(
@@ -79,7 +137,14 @@ export function resolveSelectableModelSelection(
   const providers = subscriptionStatuses
     ? filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses)
     : config.providers;
-  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const found = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const provider =
+    found &&
+    withRefreshableSubscriptionLogin(
+      found,
+      subscriptionStatuses,
+      config.settings.providerInstances,
+    );
   return provider &&
     provider.enabled &&
     provider.installed &&
@@ -113,18 +178,44 @@ export function buildModelOptions(
   config: T3ServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
+  t?: ProviderAvailabilityTranslate,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
 
-  const providers = subscriptionStatuses
-    ? filterProvidersBySubscriptionConnection(config?.providers ?? [], subscriptionStatuses)
-    : (config?.providers ?? []);
-  for (const provider of providers) {
-    if (!provider.enabled || !provider.installed || provider.auth.status === "unauthenticated") {
-      continue;
-    }
+  const allProviders = config?.providers ?? [];
+  const connected = new Set(
+    filterProvidersBySubscriptionConnection(allProviders, subscriptionStatuses),
+  );
+  // Unavailable providers stay listed so the picker can say why their models
+  // are off. A brief provider error does not block a pick.
+  const blockReason = (
+    provider: (typeof allProviders)[number] | undefined,
+    model?: string,
+  ): ProviderAvailabilityReason | null => {
+    if (provider && !connected.has(provider)) return "missing-login";
+    const reason = providerAvailabilityReason(
+      provider &&
+        withRefreshableSubscriptionLogin(
+          provider,
+          subscriptionStatuses,
+          config?.settings.providerInstances,
+        ),
+      model,
+    );
+    return reason === "temporary-failure" ? null : reason;
+  };
+  const summary = (
+    reason: ProviderAvailabilityReason | null,
+    providerLabel: string,
+    modelName: string,
+  ): string | null =>
+    reason === null
+      ? null
+      : providerUnavailabilitySummary({ reason, providerName: providerLabel, modelName }, t);
 
+  for (const provider of allProviders) {
     const providerLabel = providerDisplayLabel(provider);
+    const providerReason = blockReason(provider);
     for (const model of provider.models) {
       const key = `${provider.instanceId}:${model.slug}`;
       options.set(key, {
@@ -144,15 +235,14 @@ export function buildModelOptions(
           },
           model.capabilities,
         ),
+        disabledReason: summary(providerReason, providerLabel, model.name),
       });
     }
   }
 
-  if (
-    fallbackModelSelection &&
-    (!subscriptionStatuses ||
-      providers.some((provider) => provider.instanceId === fallbackModelSelection.instanceId))
-  ) {
+  // A saved selection always keeps a row, even when its provider or model is
+  // gone, so the picker shows what the chat is set to and why it cannot run.
+  if (fallbackModelSelection) {
     const key = `${fallbackModelSelection.instanceId}:${fallbackModelSelection.model}`;
     const existing = options.get(key);
     if (existing) {
@@ -161,18 +251,31 @@ export function buildModelOptions(
         selection: normalizeSelectionOptions(fallbackModelSelection, existing.capabilities),
       });
     } else {
-      const providerLabel = fallbackModelSelection.instanceId;
+      const provider = allProviders.find(
+        (candidate) => candidate.instanceId === fallbackModelSelection.instanceId,
+      );
+      const providerLabel = providerDisplayLabel(
+        provider ?? {
+          driver: fallbackModelSelection.instanceId,
+          instanceId: fallbackModelSelection.instanceId,
+        },
+      );
       options.set(key, {
         key,
         label: fallbackModelSelection.model,
         subtitle: providerLabel,
         providerKey: fallbackModelSelection.instanceId,
         providerLabel,
-        providerDriver: fallbackModelSelection.instanceId,
+        providerDriver: provider?.driver ?? fallbackModelSelection.instanceId,
         isDefault: false,
         isLegacy: false,
         capabilities: null,
         selection: fallbackModelSelection,
+        disabledReason: summary(
+          blockReason(provider, fallbackModelSelection.model),
+          providerLabel,
+          fallbackModelSelection.model,
+        ),
       });
     }
   }

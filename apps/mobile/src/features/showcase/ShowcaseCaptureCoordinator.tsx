@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Keyboard, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View } from "react-native";
 import {
   CommonActions,
   type NavigationState,
@@ -30,12 +30,6 @@ import {
   SHOWCASE_PENDING_TASK_DEFINITIONS,
 } from "./showcasePendingTasks";
 import { retryShowcaseOperation } from "./showcaseRetry";
-import {
-  clearShowcaseRenderSignal,
-  getShowcaseRenderSignal,
-  isShowcaseNativeContentReady,
-  subscribeToShowcaseRenderSignal,
-} from "./showcaseRenderSignal";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 const SHOWCASE_THREAD_ID = "remote-command-center";
@@ -47,8 +41,6 @@ function sceneFromPathname(pathname: string): ShowcaseScene | null {
   if (routePath === "/settings" || routePath.endsWith("/settings/environments")) {
     return "environments";
   }
-  if (routePath.endsWith("/terminal")) return "terminal";
-  if (routePath.endsWith("/review")) return "review";
   if (routePath.startsWith("/threads/")) return "thread";
   if (routePath === "/") return "threads";
   return null;
@@ -59,7 +51,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   const { connectPairingUrl } = useConnectionController();
   const {
     isReady: appearancePreferencesReady,
-    themeId,
     themeIds,
     setThemeIdForBothAppearances,
   } = useAppearancePreferences();
@@ -76,11 +67,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
   const [readyScene, setReadyScene] = useState<ShowcaseScene | null>(null);
   const [orientationSettled, setOrientationSettled] = useState(false);
   const requestedSceneRef = useRef<ShowcaseScene | null>(null);
-  const renderSignal = useSyncExternalStore(
-    subscribeToShowcaseRenderSignal,
-    getShowcaseRenderSignal,
-    getShowcaseRenderSignal,
-  );
 
   useEffect(() => {
     if (!SHOWCASE_ENABLED || pairingUrls.length > 0) return;
@@ -126,9 +112,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       const value = getNativeShowcaseScene();
       if (!value || requestedSceneRef.current === value) return;
       requestedSceneRef.current = value;
-      // A native draw belongs only to the scene request that produced it. In
-      // particular, revisiting review must wait for its newly mounted surface.
-      clearShowcaseRenderSignal();
       setRequestedScene(value);
     };
     readRequestedScene();
@@ -247,14 +230,6 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       });
     } else {
       routes.push({ name: "Thread", params });
-      if (requestedScene === "terminal") {
-        routes.push({
-          name: "ThreadTerminal",
-          params: { ...params, terminalId: "term-1" },
-        });
-      } else if (requestedScene === "review") {
-        routes.push({ name: "ThreadReview", params });
-      }
     }
     navigation.dispatch(
       CommonActions.reset({
@@ -275,14 +250,11 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       // being applied — a screenshot taken early has the wrong dimensions.
       !orientationSettled ||
       // Likewise for the palette: an early screenshot shows the default theme.
-      !themeApplied ||
-      !isShowcaseNativeContentReady({ scene, themeId, renderSignal })
+      !themeApplied
     ) {
       setReadyScene(null);
       return;
     }
-    if (scene === "terminal") Keyboard.dismiss();
-
     let renderFrame: number | null = null;
     let readyFrame: number | null = null;
     const settleTimer = setTimeout(() => {
@@ -298,7 +270,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       if (renderFrame !== null) cancelAnimationFrame(renderFrame);
       if (readyFrame !== null) cancelAnimationFrame(readyFrame);
     };
-  }, [hasFixture, orientationSettled, renderSignal, requestedScene, scene, themeApplied, themeId]);
+  }, [hasFixture, orientationSettled, requestedScene, scene, themeApplied]);
 
   if (!SHOWCASE_ENABLED || readyScene === null) return null;
 

@@ -56,6 +56,7 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
         connect: Effect.void,
         disconnect: Effect.void,
         retryNow: Effect.void,
+        retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
       const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
         Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);

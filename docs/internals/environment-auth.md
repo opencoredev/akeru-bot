@@ -11,13 +11,17 @@ boundary.
 | ----------------------- | ------------------------------------------------------- |
 | `orchestration:read`    | Read projects, threads, configuration, and diagnostics. |
 | `orchestration:operate` | Change server and orchestration state.                  |
-| `terminal:operate`      | Open and control terminals.                             |
-| `review:write`          | Submit review operations.                               |
 | `access:read`           | List pairing links and client sessions.                 |
 | `access:write`          | Create and revoke pairing links and sessions.           |
 
-Ordinary pairing credentials grant the four orchestration, terminal, and review scopes.
-Administrative credentials also grant both access scopes.
+Ordinary pairing credentials grant the two orchestration scopes. Administrative credentials also
+grant both access scopes.
+
+Older builds also granted `review:write` and `terminal:operate`. Stored sessions, pairing links, and
+tokens can still carry them, and older clients can still request them. The server accepts these
+retired scopes, grants nothing for them, and drops them when it decodes scopes
+(`AuthRetiredEnvironmentScopes` in `packages/contracts/src/auth.ts`). Link creation no longer offers
+them.
 
 ## Bootstrap methods
 
@@ -45,7 +49,7 @@ of the bootstrap grant. A successful response has this form:
   "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
   "token_type": "Bearer",
   "expires_in": 2592000,
-  "scope": "orchestration:read orchestration:operate terminal:operate review:write"
+  "scope": "orchestration:read orchestration:operate"
 }
 ```
 

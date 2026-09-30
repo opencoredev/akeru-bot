@@ -10,10 +10,6 @@ export type SettingsInboxView =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly items: ReadonlyArray<BotInboxItem> };
 
-export function canResolveInboxItem(item: BotInboxItem): boolean {
-  return item.kind === "approval-request";
-}
-
 export function settingsInboxView(query: SettingsInboxQuery): SettingsInboxView {
   if (query.error !== null) {
     return { kind: "error", message: query.error };

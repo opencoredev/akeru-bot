@@ -49,6 +49,7 @@ import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
 import { makeProviderServiceLive } from "./ProviderService.ts";
+import { activateImageGenerationRuntime } from "../../image-generation/ImageGenerationRuntime.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -937,6 +938,27 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("cancels in-flight image requests when a session stops", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-image-stop");
+      const cancelled: string[] = [];
+      yield* activateImageGenerationRuntime({
+        generate: () => Effect.die("unused image generation"),
+        cancelThread: (id) => Effect.sync(() => void cancelled.push(id)),
+      });
+      yield* provider.startSession(threadId, {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId });
+      assert.deepEqual(cancelled, [threadId]);
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
@@ -1020,6 +1042,37 @@ routing.layer("ProviderServiceLive routing", (it) => {
         assert.equal(startPayload.threadId, session.threadId);
       }
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
+    }),
+  );
+
+  it.effect("rejects a sendTurn whose modelSelection targets a different instance", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+
+      const session = yield* provider.startSession(asThreadId("thread-1"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-1"),
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      routing.codex.sendTurn.mockClear();
+      const failure = yield* Effect.flip(
+        provider.sendTurn({
+          threadId: session.threadId,
+          input: "wrong instance",
+          attachments: [],
+          modelSelection: createModelSelection(claudeAgentInstanceId, "claude-opus-4-6"),
+        }),
+      );
+
+      assert.instanceOf(failure, ProviderValidationError);
+      assert.include(
+        failure.issue,
+        "Model selection targets provider instance 'claudeAgent' but thread 'thread-1' is bound to 'codex'.",
+      );
+      assert.equal(routing.codex.sendTurn.mock.calls.length, 0);
     }),
   );
 
@@ -2174,9 +2227,14 @@ boundedListing.layer("ProviderServiceLive session listing", (it) => {
 describe("agent browser access", () => {
   const revokedThreads: Array<ThreadId> = [];
 
-  const startSessionWith = (enableAgentBrowserAccess: boolean, threadId: ThreadId) =>
+  const startSessionWith = (
+    enableAgentBrowserAccess: boolean,
+    threadId: ThreadId,
+    imageGeneration: { chatgptEnabled?: boolean; grokEnabled?: boolean } = {},
+  ) =>
     Effect.gen(function* () {
       const issued: Array<ThreadId> = [];
+      const capabilities: Array<ReadonlyArray<string>> = [];
       const codex = makeFakeCodexAdapter();
       const providerAdapterLayer = Layer.succeed(
         ProviderAdapterRegistry.ProviderAdapterRegistry,
@@ -2192,13 +2250,19 @@ describe("agent browser access", () => {
         issueMcpCredential: (request) =>
           Effect.sync(() => {
             issued.push(request.threadId);
+            capabilities.push([...(request.capabilities ?? [])].toSorted());
             return undefined;
           }),
         revokeMcpCredential: (revoked) => Effect.sync(() => void revokedThreads.push(revoked)),
       }).pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
-        Layer.provide(ServerSettings.ServerSettingsService.layerTest({ enableAgentBrowserAccess })),
+        Layer.provide(
+          ServerSettings.ServerSettingsService.layerTest({
+            enableAgentBrowserAccess,
+            imageGeneration,
+          }),
+        ),
         Layer.provide(serverConfigTestLayer),
         Layer.provide(
           Layer.succeed(
@@ -2218,7 +2282,7 @@ describe("agent browser access", () => {
         });
       }).pipe(Effect.provide(providerLayer));
 
-      return issued;
+      return Object.assign(issued, { capabilities });
     });
 
   // Credential issuance is the observable that matters: it is the only place a
@@ -2228,7 +2292,7 @@ describe("agent browser access", () => {
     Effect.gen(function* () {
       const issued = yield* startSessionWith(false, asThreadId("thread-browser-off"));
 
-      assert.deepEqual(issued, []);
+      assert.deepEqual([...issued], []);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -2253,6 +2317,28 @@ describe("agent browser access", () => {
       const issued = yield* startSessionWith(true, threadId);
 
       assert.deepEqual(issued, [threadId]);
+      assert.deepEqual(issued.capabilities, [["preview"]]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants only the image tool when image generation is on without browser access", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-image-only");
+
+      const issued = yield* startSessionWith(false, threadId, { grokEnabled: true });
+
+      assert.deepEqual(issued, [threadId]);
+      assert.deepEqual(issued.capabilities, [["image"]]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants preview and image together when both are on", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(true, asThreadId("thread-image-and-preview"), {
+        chatgptEnabled: true,
+      });
+
+      assert.deepEqual(issued.capabilities, [["image", "preview"]]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

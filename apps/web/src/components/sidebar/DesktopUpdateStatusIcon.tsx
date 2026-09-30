@@ -3,7 +3,7 @@ import type { AnimationEventHandler } from "react";
 
 import { cn } from "../../lib/utils";
 
-const DOWNLOAD_PROGRESS_RADIUS = 14;
+const DOWNLOAD_PROGRESS_RADIUS = 8.25;
 const DOWNLOAD_PROGRESS_CIRCUMFERENCE = 2 * Math.PI * DOWNLOAD_PROGRESS_RADIUS;
 
 export type DesktopUpdateStatusIconState =
@@ -41,15 +41,7 @@ export function shouldContinueDesktopUpdateCheckAnimation({
 }
 
 function DesktopUpdateAvailableIcon() {
-  return (
-    <span className="relative grid size-4 place-items-center">
-      <DownloadIcon className="size-4" />
-      <span
-        aria-hidden="true"
-        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-current ring-2 ring-sidebar-control-surface"
-      />
-    </span>
-  );
+  return <DownloadIcon className="size-4" />;
 }
 
 function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | null }) {
@@ -57,23 +49,23 @@ function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | 
   const progressOffset = DOWNLOAD_PROGRESS_CIRCUMFERENCE * (1 - normalizedPercent / 100);
 
   return (
-    <span className="relative grid size-8 place-items-center">
+    <span className="relative grid size-5 place-items-center">
       <svg
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 size-full -rotate-90"
-        viewBox="0 0 32 32"
+        viewBox="0 0 20 20"
       >
         <circle
-          cx="16"
-          cy="16"
+          cx="10"
+          cy="10"
           r={DOWNLOAD_PROGRESS_RADIUS}
           fill="none"
           stroke="color-mix(in srgb, currentColor 22%, transparent)"
           strokeWidth="1.5"
         />
         <circle
-          cx="16"
-          cy="16"
+          cx="10"
+          cy="10"
           r={DOWNLOAD_PROGRESS_RADIUS}
           fill="none"
           stroke="currentColor"
@@ -84,7 +76,7 @@ function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | 
           className="transition-[stroke-dashoffset] duration-300 ease-out motion-reduce:transition-none"
         />
       </svg>
-      <DownloadIcon className="size-4" />
+      <DownloadIcon className="size-3" strokeWidth={2.25} />
     </span>
   );
 }
@@ -93,8 +85,8 @@ function DesktopUpdateDownloadedIcon() {
   return (
     <span className="relative grid size-4 place-items-center">
       <RotateCwIcon className="size-4" />
-      <span className="absolute -right-1 -bottom-1 grid size-2.5 place-items-center rounded-full bg-foreground text-background ring-2 ring-background">
-        <CheckIcon className="size-2" strokeWidth={3} />
+      <span className="absolute -right-0.5 -bottom-0.5 grid size-2 place-items-center rounded-full bg-sidebar-foreground text-sidebar ring-1 ring-sidebar">
+        <CheckIcon className="size-1.5" strokeWidth={3.5} />
       </span>
     </span>
   );

@@ -60,7 +60,7 @@ export function exportAkeruMemory(input: {
   return Effect.gen(function* () {
     const partitions = yield* resolveMemoryArchivePartitions(input.access, input.target);
     const revisions = yield* input.repository.listByPartitions({
-      tenantId: input.access.tenantId,
+      access: input.access,
       partitions,
       complete: input.complete,
     });

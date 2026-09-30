@@ -4,7 +4,9 @@ import { create } from "zustand";
 import { PersistedComposerImageAttachment } from "./composerDraftStore";
 import { createMemoryStorage, type StateStorage } from "./lib/storage";
 
-export const PROMPT_STASH_STORAGE_KEY = "t3code:prompt-stash:v2";
+export const PROMPT_STASH_STORAGE_KEY = "akeru:prompt-stash:v2";
+// The v2 payload lived under the `t3code:` prefix before the rebrand.
+const LEGACY_PROMPT_STASH_STORAGE_KEY_V2 = "t3code:prompt-stash:v2";
 /**
  * v1 bucketed entries into per-provider-instance queues and stored a model
  * selection with each prompt. The stash is provider-agnostic now, so the old
@@ -272,6 +274,14 @@ export const usePromptStashStore = create<PromptStashStoreState>()((set, get) =>
 {
   try {
     baseStashStorage.removeItem(LEGACY_PROMPT_STASH_STORAGE_KEY);
+    // Read-through migration for the pre-rebrand v2 payload.
+    if (baseStashStorage.getItem(PROMPT_STASH_STORAGE_KEY) == null) {
+      const legacyRaw = baseStashStorage.getItem(LEGACY_PROMPT_STASH_STORAGE_KEY_V2);
+      if (typeof legacyRaw === "string") {
+        baseStashStorage.setItem(PROMPT_STASH_STORAGE_KEY, legacyRaw);
+      }
+    }
+    baseStashStorage.removeItem(LEGACY_PROMPT_STASH_STORAGE_KEY_V2);
   } catch {
     // Purging the v1 payload is best-effort; a storage policy that rejects
     // the delete must not take down module init.

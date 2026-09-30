@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 const controls = vi.hoisted(() => ({
   buttons: [] as Array<{ readonly label: string; readonly onClick?: () => void }>,
   inspect: vi.fn(() => "inspect-documents"),
+  listFacts: vi.fn(() => "list-facts"),
   mutate: vi.fn(async (_input: unknown) => ({ _tag: "Success", value: {} })),
   query: vi.fn(),
   toast: vi.fn(),
@@ -30,6 +31,8 @@ vi.mock("../ui/sheet", async () => {
     React.createElement("div", null, children);
   return {
     Sheet: Wrapper,
+    SheetDescription: Wrapper,
+    SheetFooter: Wrapper,
     SheetHeader: Wrapper,
     SheetPanel: Wrapper,
     SheetPopup: Wrapper,
@@ -39,6 +42,8 @@ vi.mock("../ui/sheet", async () => {
 vi.mock("../../state/memory", () => ({
   memoryEnvironment: {
     inspectDocuments: controls.inspect,
+    listFacts: controls.listFacts,
+    mutateFact: "mutate-fact",
     replaceDocument: "replace-document",
     clearObservations: "clear-observations",
   },
@@ -62,29 +67,34 @@ describe("BotMemorySheet", () => {
     controls.buttons.length = 0;
     controls.inspect.mockClear();
     controls.mutate.mockClear();
-    controls.query.mockImplementation((input) => ({
-      data: {
-        botId: "bot-1",
-        groupId: "group-1",
-        user: document("user", "The user prefers short answers.", 1_375),
-        memory: document("memory", "Use the release checklist.", 2_200),
-        group: document("group", "The group ships on Fridays.", 2_200),
-        conversation: {
-          current: input
-            ? {
-                generationCount: 2,
-                activeObservations: "Thread observation",
-                createdAt: "2026-08-31T00:00:00.000Z",
-                updatedAt: "2026-08-31T00:00:00.000Z",
-              }
-            : null,
-          history: [],
+    controls.query.mockImplementation((input) => {
+      if (input === "list-facts") {
+        return { data: { facts: [] }, error: null, isPending: false, refresh: vi.fn() };
+      }
+      return {
+        data: {
+          botId: "bot-1",
+          groupId: "group-1",
+          user: document("user", "The user prefers short answers.", 1_375),
+          memory: document("memory", "Use the release checklist.", 2_200),
+          group: document("group", "The group ships on Fridays.", 2_200),
+          conversation: {
+            current: input
+              ? {
+                  generationCount: 2,
+                  activeObservations: "Thread observation",
+                  createdAt: "2026-08-31T00:00:00.000Z",
+                  updatedAt: "2026-08-31T00:00:00.000Z",
+                }
+              : null,
+            history: [],
+          },
         },
-      },
-      error: null,
-      isPending: false,
-      refresh: vi.fn(),
-    }));
+        error: null,
+        isPending: false,
+        refresh: vi.fn(),
+      };
+    });
     vi.stubGlobal("window", {
       confirm: vi.fn(() => true),
       prompt: vi.fn(() => "Edited fact"),
@@ -118,6 +128,9 @@ describe("BotMemorySheet", () => {
       }),
     );
     expect(markup).toContain("Thread observation");
+    expect(markup).toContain("Condensed 2 times to stay short.");
+    expect(markup).toContain("About you");
+    expect(markup).not.toContain("generations");
     expect(markup).toContain("The user prefers short answers.");
     expect(markup).toContain("Use the release checklist.");
     expect(markup).toContain("The group ships on Fridays.");

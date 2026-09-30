@@ -26,7 +26,9 @@ function fixture() {
 
 function status(
   health: ProviderStatus["health"],
-  message = health === "failed-first-request" ? "The first request failed." : undefined,
+  message = ["failed", "failed-first-request", "revoked"].includes(health)
+    ? "The first request failed."
+    : undefined,
 ): ProviderStatus {
   return {
     provider: "xai",

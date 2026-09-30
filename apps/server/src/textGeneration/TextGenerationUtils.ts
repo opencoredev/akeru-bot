@@ -1,4 +1,4 @@
-import { TextGenerationError } from "@t3tools/contracts";
+import { PLACEHOLDER_THREAD_TITLE, TextGenerationError } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -23,29 +23,6 @@ export function limitSection(value: string, maxChars: number): string {
   return `${truncated}\n\n[truncated]`;
 }
 
-/** Normalise a raw commit subject to imperative-mood, ≤72 chars, no trailing period. */
-export function sanitizeCommitSubject(raw: string): string {
-  const singleLine = raw.trim().split(/\r?\n/g)[0]?.trim() ?? "";
-  const withoutTrailingPeriod = singleLine.replace(/[.]+$/g, "").trim();
-  if (withoutTrailingPeriod.length === 0) {
-    return "Update project files";
-  }
-
-  if (withoutTrailingPeriod.length <= 72) {
-    return withoutTrailingPeriod;
-  }
-  return withoutTrailingPeriod.slice(0, 72).trimEnd();
-}
-
-/** Normalise a raw PR title to a single line with a sensible fallback. */
-export function sanitizePrTitle(raw: string): string {
-  const singleLine = raw.trim().split(/\r?\n/g)[0]?.trim() ?? "";
-  if (singleLine.length > 0) {
-    return singleLine;
-  }
-  return "Update project changes";
-}
-
 /** Normalise a raw thread title to a compact single-line sidebar-safe label. */
 export function sanitizeThreadTitle(raw: string): string {
   // Unwrap a JSON-formatted title before truncation can cut off the closing brace.
@@ -60,7 +37,7 @@ export function sanitizeThreadTitle(raw: string): string {
     .replace(/\s+/g, " ");
 
   if (!normalized || normalized.trim().length === 0) {
-    return "New chat";
+    return PLACEHOLDER_THREAD_TITLE;
   }
 
   if (normalized.length <= 50) {

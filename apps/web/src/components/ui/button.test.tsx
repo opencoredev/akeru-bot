@@ -52,3 +52,13 @@ describe("button geometry tokens", () => {
     expect(micro).toContain("text-muted-foreground");
   });
 });
+
+describe("button primary variant", () => {
+  it("renders the default variant as a neutral foreground-on-background button", () => {
+    const html = renderToStaticMarkup(<Button>Save</Button>);
+
+    expect(html).toContain("bg-foreground");
+    expect(html).toContain("text-background");
+    expect(html).not.toContain("bg-primary");
+  });
+});

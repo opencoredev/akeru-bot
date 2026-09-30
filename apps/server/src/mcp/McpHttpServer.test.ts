@@ -9,6 +9,7 @@ import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai";
 import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { PNG } from "pngjs";
 
+import * as ImageGenerationRuntime from "../image-generation/ImageGenerationRuntime.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpMemoryToolSession from "./McpMemoryToolSession.ts";
@@ -164,6 +165,83 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
     Effect.ensuring(Effect.sync(() => McpMemoryToolSession.clearMcpMemoryToolSession(threadId))),
     Effect.provide(TestLayer),
   ),
+);
+
+it.effect("gates generate_image on the image capability and returns metadata only", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const received: Array<unknown> = [];
+      yield* ImageGenerationRuntime.activateImageGenerationRuntime({
+        generate: (_threadId, input) =>
+          Effect.sync(() => {
+            received.push(input);
+            return {
+              status: "completed" as const,
+              provider: "grok" as const,
+              artifacts: [
+                {
+                  attachmentId: "thread-mcp-test-image",
+                  mimeType: "image/png" as const,
+                  width: 16,
+                  height: 16,
+                  sizeBytes: 33,
+                  provider: "grok" as const,
+                },
+              ],
+              attempts: [{ provider: "grok" as const, outcome: "completed" as const }],
+            };
+          }),
+        cancelThread: () => Effect.void,
+      });
+      const call = (capabilities: ReadonlySet<McpInvocationContext.McpCapability>) =>
+        server
+          .callTool({
+            name: "generate_image",
+            arguments: { operation: "generate", prompt: "A kite", quality: "ultra" },
+          })
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, {
+              ...invocation,
+              capabilities,
+            }),
+            Effect.provideService(McpSchema.McpServerClient, client),
+          );
+
+      const denied = yield* call(new Set(["preview", "memory"]));
+      expect(denied.isError).toBe(true);
+      expect(received).toEqual([]);
+
+      const result = yield* call(new Set(["image"]));
+      expect(result.isError).toBe(false);
+      // The runtime decodes strictly, so unknown options must reach it unchanged.
+      expect(received).toEqual([{ operation: "generate", prompt: "A kite", quality: "ultra" }]);
+      expect(result.structuredContent).toMatchObject({
+        status: "completed",
+        artifacts: [{ attachmentId: "thread-mcp-test-image", mimeType: "image/png" }],
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: "Created 1 image. It is shown in the chat." },
+      ]);
+    }),
+  ).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("reports generate_image as unavailable when no runtime is running", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server
+      .callTool({ name: "generate_image", arguments: { operation: "generate", prompt: "A kite" } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...invocation,
+          capabilities: new Set(["image"] as const),
+        }),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ status: "failed", kind: "unavailable" });
+  }).pipe(Effect.provide(TestLayer)),
 );
 
 it.effect("returns bounded structural preview snapshot failures", () =>

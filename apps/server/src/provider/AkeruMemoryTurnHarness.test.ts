@@ -90,6 +90,28 @@ describe("AkeruMemoryTurnHarness", () => {
     }
   });
 
+  it("releases a review claim when the turn scope closes", async () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-scope-close-"));
+    const store = new BotMemoryStore(root);
+    const botId = BotId.make("bot-scope-close");
+    try {
+      for (let prompt = 0; prompt < 10; prompt += 1) {
+        const seed = await store.reserveReviewCadence(botId);
+        await store.settleReviewCadence(seed, true);
+      }
+      const turn = await new AkeruMemoryTurnHarness(store).admit({
+        access: { botId, groupId: null, groupMemberBotIds: [] },
+        input: { threadId: "current", groupId: null, text: "Remember cats." },
+      });
+      await turn.close();
+      const retry = await new BotMemoryStore(root).reserveReviewCadence(botId);
+      expect(retry.memoryReviewIncluded).toBe(true);
+      await new BotMemoryStore(root).settleReviewCadence(retry, false);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("releases a review claim when admission cannot read memory", async () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-admission-harness-"));
     const store = new BotMemoryStore(root);

@@ -6,7 +6,6 @@ import {
   dispatchHardwareKeyboardCommand,
   getHardwareKeyboardCommandRegistrationVersion,
   getRegisteredHardwareKeyboardCommands,
-  parseActiveThreadPath,
   subscribeToHardwareKeyboardCommandRegistrations,
   type HardwareKeyboardCommand,
 } from "./hardwareKeyboardCommands";
@@ -25,11 +24,6 @@ export function HardwareKeyboardCommandProvider({
     const commands = new Set<HardwareKeyboardCommand>(getRegisteredHardwareKeyboardCommands());
     commands.add("newTask");
     if (pathname !== "/" || navigation.canGoBack()) commands.add("back");
-    if (parseActiveThreadPath(pathname)) {
-      commands.add("files");
-      commands.add("terminal");
-      commands.add("review");
-    }
     return [...commands];
   }, [pathname, registrationVersion, navigation]);
 
@@ -48,18 +42,6 @@ export function HardwareKeyboardCommandProvider({
           navigation.dispatch(StackActions.replace("Home"));
         }
         return;
-      }
-
-      const thread = parseActiveThreadPath(pathname);
-      if (!thread) return;
-      if (command === "files" && !/\/files(?:\/|$)/.test(pathname)) {
-        navigation.navigate("ThreadFiles", thread);
-      }
-      if (command === "terminal" && !/\/terminal(?:\/|$)/.test(pathname)) {
-        navigation.navigate("ThreadTerminal", thread);
-      }
-      if (command === "review" && !/\/review(?:\/|$)/.test(pathname)) {
-        navigation.navigate("ThreadReview", thread);
       }
     },
     [pathname, navigation],

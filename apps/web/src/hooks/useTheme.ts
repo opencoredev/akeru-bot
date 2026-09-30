@@ -10,9 +10,13 @@ import {
   isKnownThemePreference,
   getThemePreferenceMode,
   parseThemeHalves,
+  removeLegacyStorageKey,
   resolveDesktopTheme,
   resolveThemeAppearance,
   resolveThemeHalf,
+  LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY,
+  LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY,
+  LEGACY_THEME_HALVES_STORAGE_KEY,
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   THEME_HALVES_STORAGE_KEY,
@@ -33,7 +37,8 @@ type ThemeSnapshot = {
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = "akeru:theme";
+const LEGACY_STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME = "akeru-paper";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
@@ -53,9 +58,23 @@ export function readThemeHalves(): ThemeHalves | null {
 function readStoredThemeHalves(): ThemeHalves | null {
   if (typeof window === "undefined") return null;
   try {
-    return parseThemeHalves(window.localStorage.getItem(THEME_HALVES_STORAGE_KEY));
+    return parseThemeHalves(
+      window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY),
+    );
   } catch {
     return null;
+  }
+}
+
+/** Removes the stored mix. An empty mix under the current key shadows a legacy mix that
+ * could not be removed, so the legacy fallback in readStoredThemeHalves cannot revive it. */
+function clearStoredThemeHalves(): void {
+  removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
+  if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
+    window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+  } else {
+    window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, "{}");
   }
 }
 
@@ -119,7 +138,9 @@ function readStoredFollowSystem(theme: Theme): boolean {
   if (typeof window === "undefined") return theme === "system";
 
   try {
-    const raw = window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY);
     if (raw === "true") return true;
     if (raw === "false") return false;
   } catch {
@@ -136,7 +157,9 @@ function isThemePreferenceMode(value: string | null): value is ThemePreferenceMo
 export function readAppearanceModePreference(theme: Theme): ThemePreferenceMode {
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY);
+      const raw =
+        window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
       if (isThemePreferenceMode(raw)) return raw;
     } catch {
       // Fall back to the legacy preference below when storage is unavailable.
@@ -160,13 +183,15 @@ function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): voi
       cause,
     });
   }
+  removeLegacyStorageKey(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
 }
 
 export function readThemePreference(): Theme {
   if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT.theme;
   let raw: string | null;
   try {
-    raw = window.localStorage.getItem(STORAGE_KEY);
+    raw =
+      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
   } catch (cause) {
     throw new ThemeStorageError({
       operation: "read",
@@ -193,6 +218,7 @@ export function writeThemePreference(theme: Theme): void {
       cause,
     });
   }
+  removeLegacyStorageKey(LEGACY_STORAGE_KEY);
 }
 
 function getStored(): Theme {
@@ -413,14 +439,22 @@ function handleSystemAppearanceChange() {
 }
 
 function handleStorageChange(e: StorageEvent) {
-  if (e.key === STORAGE_KEY) {
+  if (e.key === STORAGE_KEY || e.key === LEGACY_STORAGE_KEY) {
     themeStorageReadFailure = null;
     applyTheme(getStored(), true);
     emitChange();
-  } else if (e.key === THEME_FOLLOW_SYSTEM_STORAGE_KEY) {
+  } else if (
+    e.key === THEME_FOLLOW_SYSTEM_STORAGE_KEY ||
+    e.key === LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY
+  ) {
     applyTheme(getStored(), true);
     emitChange();
-  } else if (e.key === THEME_APPEARANCE_MODE_STORAGE_KEY || e.key === THEME_HALVES_STORAGE_KEY) {
+  } else if (
+    e.key === THEME_APPEARANCE_MODE_STORAGE_KEY ||
+    e.key === THEME_HALVES_STORAGE_KEY ||
+    e.key === LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY ||
+    e.key === LEGACY_THEME_HALVES_STORAGE_KEY
+  ) {
     applyTheme(getStored(), true);
     emitChange();
   } else if (e.key === CUSTOM_THEMES_STORAGE_KEY || e.key === null) {
@@ -481,8 +515,10 @@ export function useTheme() {
       // Choosing a whole theme replaces any automatic-mode mix. The mix is
       // captured first so a failed preference write can put it back instead
       // of erasing it or leaving it attached to the new theme.
-      const previousHalvesRaw = window.localStorage.getItem(THEME_HALVES_STORAGE_KEY);
-      window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      const previousHalvesRaw =
+        window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY);
+      clearStoredThemeHalves();
       try {
         writeThemePreference(next);
       } catch (cause) {
@@ -564,7 +600,7 @@ export function useTheme() {
         if (themeId === null) delete next[appearance];
         else next[appearance] = themeId;
         if (next.light === undefined && next.dark === undefined) {
-          window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+          clearStoredThemeHalves();
         } else {
           window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, JSON.stringify(next));
         }
@@ -581,6 +617,7 @@ export function useTheme() {
         });
         return false;
       }
+      removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
       applyTheme(getStored(), true);
       emitChange();
       return true;
@@ -591,7 +628,7 @@ export function useTheme() {
   const clearThemeHalves = useCallback((): boolean => {
     if (typeof window === "undefined") return false;
     try {
-      window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
+      clearStoredThemeHalves();
     } catch (cause) {
       const error = new ThemeStorageError({
         operation: "write",

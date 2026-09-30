@@ -91,7 +91,7 @@ describe("provider update logic", () => {
           instanceId: instanceId("codex"),
           latestVersion: "1.1.0",
         }),
-        provider({ driver: driver("cursor"), latestVersion: "0.3.0" }),
+        provider({ driver: driver("grok"), latestVersion: "0.3.0" }),
       ]),
     ).toHaveLength(2);
   });
@@ -184,7 +184,7 @@ describe("provider update logic", () => {
         },
       }),
       provider({
-        driver: driver("cursor"),
+        driver: driver("grok"),
         updateState: {
           status: "queued",
           startedAt: null,
@@ -198,7 +198,7 @@ describe("provider update logic", () => {
     expect(view).toMatchObject({
       tone: "loading",
       title: "Updating 2 providers",
-      description: "Codex and Cursor updates are in progress.",
+      description: "Codex and Grok updates are in progress.",
     });
   });
 
@@ -283,7 +283,7 @@ describe("provider update logic", () => {
     const view = getProviderUpdateSidebarPillView(
       [
         provider({
-          driver: driver("cursor"),
+          driver: driver("grok"),
           updateState: {
             status: "unchanged",
             startedAt: checkedAt,
@@ -297,9 +297,9 @@ describe("provider update logic", () => {
     );
 
     expect(view).toMatchObject({
-      key: "unchanged:cursor:2026-04-23T10:00:00.000Z:still old",
+      key: "unchanged:grok:2026-04-23T10:00:00.000Z:still old",
       tone: "warning",
-      title: "Cursor still needs an update",
+      title: "Grok still needs an update",
       dismissible: true,
     });
   });
@@ -375,7 +375,7 @@ describe("provider update logic", () => {
     expect(
       getProviderUpdateSidebarPillView([
         provider({ driver: driver("codex"), canUpdate: true }),
-        provider({ driver: driver("cursor"), canUpdate: false }),
+        provider({ driver: driver("grok"), canUpdate: false }),
       ]),
     ).toBeNull();
   });

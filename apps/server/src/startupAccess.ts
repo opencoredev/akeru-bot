@@ -1,10 +1,12 @@
 import * as NodeOS from "node:os";
 
+import type { AuthClientSession } from "@t3tools/contracts";
 import { QrCode } from "@t3tools/shared/qrCode";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/unstable/http";
 
 import { ServerConfig } from "./config.ts";
+import { hasPairedAdminClient } from "./auth/adminClients.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 
 export interface HeadlessServeAccessInfo {
@@ -129,6 +131,47 @@ export const formatHeadlessServeOutput = (accessInfo: HeadlessServeAccessInfo): 
     renderTerminalQrCode(accessInfo.pairingUrl),
     "",
   ].join("\n");
+
+/**
+ * First-boot output for an Akeru Remote install. The link carries administrative scopes, so the
+ * text says so plainly; it is printed only while no admin client has been paired.
+ */
+export const formatRemoteFirstBootOutput = (accessInfo: HeadlessServeAccessInfo): string =>
+  [
+    "Akeru Remote is ready and no admin client has been paired yet.",
+    "Open this link on the phone or computer you will manage this machine from.",
+    "It grants admin scope: that device can pair and revoke other clients and change Connections.",
+    "It works once. Pair more devices later with `akeru pair`.",
+    "",
+    `Pairing URL: ${accessInfo.pairingUrl}`,
+    "",
+    renderTerminalQrCode(accessInfo.pairingUrl),
+    "",
+  ].join("\n");
+
+export const REMOTE_ALREADY_PAIRED_OUTPUT =
+  "Akeru Remote is ready. An admin client is already paired; run `akeru pair` to add a device.";
+
+/**
+ * Prints one admin pairing link when a remote install starts with no admin client paired, and a
+ * token-free line otherwise. Dependencies are passed in so startup and tests share one path.
+ */
+export const announceRemoteStartup = <E1, E2, R1, R2>(input: {
+  readonly listSessions: Effect.Effect<
+    ReadonlyArray<Pick<AuthClientSession, "scopes" | "client">>,
+    E1,
+    R1
+  >;
+  readonly issueAccessInfo: Effect.Effect<HeadlessServeAccessInfo, E2, R2>;
+  readonly print: (text: string) => Effect.Effect<void>;
+}) =>
+  Effect.gen(function* () {
+    if (hasPairedAdminClient(yield* input.listSessions)) {
+      return yield* input.print(REMOTE_ALREADY_PAIRED_OUTPUT);
+    }
+    const accessInfo = yield* input.issueAccessInfo;
+    yield* input.print(formatRemoteFirstBootOutput(accessInfo));
+  });
 
 export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessInfo")(function* () {
   const serverConfig = yield* ServerConfig;

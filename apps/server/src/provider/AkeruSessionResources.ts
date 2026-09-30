@@ -9,7 +9,7 @@ import {
   type McpServerConfig,
 } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
-import type { BotSandbox, McpServer } from "@t3tools/contracts";
+import type { BotId, BotSandbox, McpServer } from "@t3tools/contracts";
 
 import {
   createBotBrowser,
@@ -24,6 +24,7 @@ import {
   type CreateRemoteBotWorkspaceInput,
 } from "./botWorkspace.ts";
 import { BotWorkspacePool, type BotWorkspaceLease } from "./botWorkspacePool.ts";
+import { computerRegistry } from "./computerRegistry.ts";
 import { mcpServerNeedsBrowserAttachment } from "./McpServerConfig.ts";
 import {
   CODEX_COMPUTER_USE_SERVER_ID,
@@ -42,6 +43,10 @@ export interface AkeruSessionResourceInput {
   readonly sandboxEnvironment?: Readonly<Record<string, string>>;
   readonly userComputerCwd?: string;
   readonly mcpServers: readonly McpServer[];
+  readonly exclusiveComputer?: boolean;
+  readonly botId?: BotId;
+  readonly botName?: string;
+  readonly taskOrRoutine?: string;
 }
 
 export interface AkeruSessionResourceView {
@@ -59,6 +64,14 @@ export interface AkeruSessionResourcesOptions {
   readonly hostPlatform?: NodeJS.Platform;
   readonly resolveComputerUseServer?: typeof resolveCodexComputerUseServer;
   readonly onMcpServerConnectionFailure?: (serverId: McpServer["id"]) => void;
+  readonly onBrowserFailure?: (input: {
+    readonly botId: BotId;
+    readonly botName: string;
+    readonly taskOrRoutine: string;
+    readonly detail: string;
+    readonly resourceKey: string;
+  }) => void;
+  readonly onBrowserReady?: (botId: BotId, resourceKey: string) => void;
   readonly getPreviewMcpServerConfig?: (threadId: string) => McpServerConfig | undefined;
   readonly toMcpServerConfigs: (
     servers: readonly McpServer[],
@@ -66,8 +79,22 @@ export interface AkeruSessionResourcesOptions {
   ) => Record<string, McpServerConfig>;
 }
 
-const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
-const T3_CODE_PREVIEW_TOOL_PREFIX = `${T3_CODE_PREVIEW_MCP_SERVER_NAME}_`;
+interface BrowserAttribution {
+  readonly botId: BotId;
+  readonly botName: string;
+  readonly taskOrRoutine: string;
+  references: number;
+}
+
+const AKERU_PREVIEW_MCP_SERVER_NAME = "akeru";
+const AKERU_PREVIEW_TOOL_PREFIX = `${AKERU_PREVIEW_MCP_SERVER_NAME}_`;
+/**
+ * Mastra sessions reach image generation through the GenerateImage catalog
+ * tool on the runtime, not the shared `/mcp` server (their credential never
+ * carries the `image` capability). Hide the dead MCP copy so a bot sees
+ * exactly one image tool.
+ */
+const AKERU_MASTRA_HIDDEN_TOOLS = new Set([`${AKERU_PREVIEW_TOOL_PREFIX}generate_image`]);
 
 export class AkeruSessionResources {
   private readonly options: AkeruSessionResourcesOptions;
@@ -77,11 +104,15 @@ export class AkeruSessionResources {
   private readonly userComputerWorkspaceLeases = new Map<string, BotWorkspaceLease>();
   private readonly workspacePool = new BotWorkspacePool();
   private readonly threadBrowsers = new Map<string, BotBrowser>();
+  private readonly computerRegistrations = new Map<string, () => void>();
   private readonly browserResourceKeys = new Map<string, string>();
   private readonly resourceBrowsers = new Map<string, BotBrowser>();
   private readonly browserReferences = new Map<string, number>();
   private readonly browserDestroyRequests = new Set<string>();
   private readonly browserReconnects = new Map<string, Promise<void>>();
+  private readonly browserAttributions = new Map<string, Map<string, BrowserAttribution>>();
+  private readonly browserFailures = new Map<string, string>();
+  private readonly browserThreadBots = new Map<string, string>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
   private readonly tenkiThreads = new Set<string>();
   private controllingThreadId: string | undefined;
@@ -180,16 +211,74 @@ export class AkeruSessionResources {
       }
 
       const existingBrowser = this.resourceBrowsers.get(input.workspaceResourceKey);
-      const browser =
-        existingBrowser ??
-        (this.options.makeBotBrowser ?? createBotBrowser)({
+      if (!existingBrowser) this.browserFailures.delete(input.workspaceResourceKey);
+      if (input.botId) {
+        const attributions =
+          this.browserAttributions.get(input.workspaceResourceKey) ??
+          new Map<string, BrowserAttribution>();
+        const botKey = String(input.botId);
+        const existingAttribution = attributions.get(botKey);
+        attributions.set(
+          botKey,
+          existingAttribution
+            ? { ...existingAttribution, references: existingAttribution.references + 1 }
+            : {
+                botId: input.botId,
+                botName: input.botName ?? "Bot",
+                taskOrRoutine: input.taskOrRoutine ?? "Browser task",
+                references: 1,
+              },
+        );
+        this.browserAttributions.set(input.workspaceResourceKey, attributions);
+        this.browserThreadBots.set(key, String(input.botId));
+        const activeFailure = this.browserFailures.get(input.workspaceResourceKey);
+        if (!existingAttribution && activeFailure) {
+          this.options.onBrowserFailure?.({
+            ...attributions.get(botKey)!,
+            resourceKey: input.workspaceResourceKey,
+            detail: activeFailure,
+          });
+        }
+      }
+      let browser = existingBrowser;
+      if (!browser) {
+        browser = (this.options.makeBotBrowser ?? createBotBrowser)({
           threadId: input.resourceScope,
           workspace: workspaceLease.workspace.workspace,
           cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
+          ...(workspaceLease.workspace.computer
+            ? { makeRpc: () => workspaceLease.workspace.computer! }
+            : {}),
           ...(workspaceLease.workspace.browserEndpoint
             ? { browserEndpoint: workspaceLease.workspace.browserEndpoint }
             : {}),
+          ...(this.options.onBrowserFailure
+            ? {
+                onFailure: (error: unknown) => {
+                  if (this.resourceBrowsers.get(input.workspaceResourceKey) === browser) {
+                    this.reportBrowserFailure(input.workspaceResourceKey, error);
+                  }
+                },
+              }
+            : {}),
+          ...(this.options.onBrowserReady
+            ? {
+                onReady: () => {
+                  if (this.resourceBrowsers.get(input.workspaceResourceKey) === browser) {
+                    this.resolveBrowserFailures(input.workspaceResourceKey);
+                  }
+                },
+              }
+            : {}),
         });
+      }
+
+      if (workspaceLease.workspace.computer && input.exclusiveComputer) {
+        this.computerRegistrations.set(
+          key,
+          computerRegistry.register(key, workspaceLease.workspace.computer, null),
+        );
+      }
 
       this.resourceBrowsers.set(input.workspaceResourceKey, browser);
       this.threadBrowsers.set(key, browser);
@@ -222,7 +311,7 @@ export class AkeruSessionResources {
             : undefined;
         const configs = this.options.toMcpServerConfigs(input.mcpServers, attachment);
         if (previewMcpServerConfig) {
-          configs[T3_CODE_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
+          configs[AKERU_PREVIEW_MCP_SERVER_NAME] = previewMcpServerConfig;
         }
         if (usesComputer) {
           if (!this.options.hostPlatform) {
@@ -293,28 +382,30 @@ export class AkeruSessionResources {
       ...this.mcpManagers.get(threadId)?.getTools(),
     };
     return Object.fromEntries(
-      Object.entries(tools).map(([name, tool]) => {
-        const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
-          ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
-          : name;
-        const execute = Reflect.get(tool, "execute") as unknown;
-        if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
-          return [exposedName, tool];
-        }
-        return [
-          exposedName,
-          {
-            ...tool,
-            execute: async (...args: readonly unknown[]) => {
-              const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
-              return sanitizeCodexComputerUseResult(
-                await Reflect.apply(execute, tool, args),
-                temporaryDirectory ? { temporaryDirectory } : undefined,
-              );
+      Object.entries(tools)
+        .filter(([name]) => !AKERU_MASTRA_HIDDEN_TOOLS.has(name))
+        .map(([name, tool]) => {
+          const exposedName = name.startsWith(AKERU_PREVIEW_TOOL_PREFIX)
+            ? name.slice(AKERU_PREVIEW_TOOL_PREFIX.length)
+            : name;
+          const execute = Reflect.get(tool, "execute") as unknown;
+          if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
+            return [exposedName, tool];
+          }
+          return [
+            exposedName,
+            {
+              ...tool,
+              execute: async (...args: readonly unknown[]) => {
+                const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
+                return sanitizeCodexComputerUseResult(
+                  await Reflect.apply(execute, tool, args),
+                  temporaryDirectory ? { temporaryDirectory } : undefined,
+                );
+              },
             },
-          },
-        ];
-      }),
+          ];
+        }),
     );
   }
 
@@ -369,11 +460,20 @@ export class AkeruSessionResources {
       }
     }
 
+    this.computerRegistrations.get(threadId)?.();
+    this.computerRegistrations.delete(threadId);
     const browser = this.threadBrowsers.get(threadId);
     const resourceKey = this.browserResourceKeys.get(threadId);
     this.threadBrowsers.delete(threadId);
     this.browserResourceKeys.delete(threadId);
     if (browser && resourceKey) {
+      const botKey = this.browserThreadBots.get(threadId);
+      this.browserThreadBots.delete(threadId);
+      if (botKey) {
+        const attribution = this.browserAttributions.get(resourceKey)?.get(botKey);
+        if (attribution && attribution.references > 1) attribution.references -= 1;
+        else this.browserAttributions.get(resourceKey)?.delete(botKey);
+      }
       if (options?.destroy) this.browserDestroyRequests.add(resourceKey);
       const references = Math.max(0, (this.browserReferences.get(resourceKey) ?? 1) - 1);
       if (references > 0) {
@@ -412,12 +512,29 @@ export class AkeruSessionResources {
     this.resourceBrowsers.delete(resourceKey);
     this.browserReferences.delete(resourceKey);
     this.browserDestroyRequests.delete(resourceKey);
+    this.browserAttributions.delete(resourceKey);
     for (const [threadId, key] of this.browserResourceKeys) {
       if (key !== resourceKey) continue;
       this.browserResourceKeys.delete(threadId);
       this.threadBrowsers.delete(threadId);
+      this.browserThreadBots.delete(threadId);
     }
     await browser.close().catch(() => undefined);
+  }
+
+  private reportBrowserFailure(resourceKey: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    this.browserFailures.set(resourceKey, detail);
+    for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
+      this.options.onBrowserFailure?.({ ...attribution, resourceKey, detail });
+    }
+  }
+
+  private resolveBrowserFailures(resourceKey: string): void {
+    this.browserFailures.delete(resourceKey);
+    for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {
+      this.options.onBrowserReady?.(attribution.botId, resourceKey);
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -452,6 +569,9 @@ export class AkeruSessionResources {
     this.browserReferences.clear();
     this.browserDestroyRequests.clear();
     this.browserReconnects.clear();
+    this.browserAttributions.clear();
+    this.browserFailures.clear();
+    this.browserThreadBots.clear();
     if (failures.length > 0) throw failures[0];
   }
 }

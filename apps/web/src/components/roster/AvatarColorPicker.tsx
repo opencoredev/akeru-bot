@@ -1,5 +1,6 @@
 import { useEffect, useState, type KeyboardEvent, type PointerEvent } from "react";
 
+import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
@@ -36,6 +37,7 @@ function ColorPickerPanel({
   value: string;
   onChange: (color: string) => void;
 }) {
+  const { t } = useI18n();
   const [hsv, setHsv] = useState<HsvColor>(() => hexToHsv(value) ?? { h: 210, s: 0.5, v: 0.7 });
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -97,11 +99,11 @@ function ColorPickerPanel({
       <div
         role="slider"
         tabIndex={0}
-        aria-label="Saturation and brightness"
+        aria-label={t("Saturation and brightness")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(hsv.v * 100)}
-        aria-valuetext={formatColorFieldValueText(hsv, color)}
+        aria-valuetext={formatColorFieldValueText(hsv, color, t)}
         className="relative h-36 cursor-crosshair touch-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{
           backgroundColor: hueColor,
@@ -120,7 +122,7 @@ function ColorPickerPanel({
       <div
         role="slider"
         tabIndex={0}
-        aria-label="Hue"
+        aria-label={t("Hue")}
         aria-valuemin={0}
         aria-valuemax={360}
         aria-valuenow={Math.round(hsv.h)}
@@ -138,11 +140,11 @@ function ColorPickerPanel({
       </div>
 
       <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        Hex
+        {t("Hex")}
         <span className="flex h-8 flex-1 items-center rounded-md border border-input bg-background px-2 font-mono text-foreground focus-within:ring-2 focus-within:ring-ring">
           #
           <input
-            aria-label="Avatar color hex value"
+            aria-label={t("Avatar color hex value")}
             className="min-w-0 flex-1 bg-transparent outline-none"
             value={(draft ?? color).replace("#", "")}
             maxLength={6}
@@ -168,33 +170,34 @@ export function AvatarColorPicker({
   value,
   onChange,
   className,
-  label = "Avatar color",
+  label,
 }: {
   value: string;
   onChange: (color: string) => void;
   className?: string;
   label?: string;
 }) {
+  const { t } = useI18n();
   const color = resolveBlobColor(value);
   const presetSelected = BLOB_COLORS.includes(color);
 
   return (
     <div
       role="group"
-      aria-label={label}
+      aria-label={label ?? t("Avatar color")}
       className={cn("flex flex-wrap items-center gap-2.5", className)}
     >
       {BLOB_COLORS.map((preset) => (
         <button
           key={preset}
           type="button"
-          aria-label={`Use ${preset}`}
+          aria-label={t("Use {color}", { color: preset })}
           aria-pressed={color === preset}
           onClick={() => onChange(preset)}
           style={{ backgroundColor: preset }}
           className={cn(
             "size-8 cursor-pointer rounded-full border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            color === preset && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+            color === preset && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
           )}
         />
       ))}
@@ -204,11 +207,11 @@ export function AvatarColorPicker({
           render={
             <button
               type="button"
-              aria-label={`Choose a custom avatar color. Current color ${color}`}
+              aria-label={t("Choose a custom avatar color. Current color {color}", { color })}
               aria-pressed={!presetSelected}
               className={cn(
                 "size-8 cursor-pointer rounded-full border border-foreground/15 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                !presetSelected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                !presetSelected && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
               )}
               style={{
                 background:

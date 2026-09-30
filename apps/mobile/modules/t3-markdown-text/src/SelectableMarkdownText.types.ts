@@ -31,9 +31,16 @@ export type MarkdownCodeHighlighter = (input: {
   readonly theme: "light" | "dark";
 }) => Promise<ReadonlyArray<ReadonlyArray<MarkdownHighlightedToken>>>;
 
+/**
+ * An inline chip. By default it matches `$name`. With `token`, it matches that
+ * literal text instead, which is how composer mentions such as `@browser` render.
+ */
 export interface SelectableMarkdownSkill {
   readonly name: string;
   readonly displayName?: string | null;
+  readonly token?: string;
+  /** SF Symbol shown in the chip. Defaults to the skill cube. */
+  readonly icon?: string;
 }
 
 export interface MarkdownImageRequest {

@@ -30,6 +30,11 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryExport)).pipe(
             Effect.as({ schemaVersion: 2 } as never),
           ),
+        [WS_METHODS.memoryFactMutate]: () =>
+          Effect.sync(() => calls.push(WS_METHODS.memoryFactMutate)).pipe(
+            Effect.as({ kind: "deleted", memoryId: "root-1" } as never),
+          ),
+        [WS_METHODS.memoryFactsList]: () => Effect.succeed({ facts: [] } as never),
         [WS_METHODS.memoryObservationsClear]: () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryObservationsClear)).pipe(
             Effect.as(undefined as never),
@@ -62,6 +67,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         connect: Effect.void,
         disconnect: Effect.void,
         retryNow: Effect.void,
+        retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
       const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
         Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
@@ -81,10 +87,24 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
       const refresh = vi.spyOn(registry, "refresh");
       const threadId = ThreadId.make("thread-memory");
 
+      // Another chat's mounted list shares bot and project facts with this chat.
+      const otherThreadId = ThreadId.make("thread-memory-other");
+      const otherProjectList = atoms.listFacts({
+        environmentId,
+        input: { threadId: otherThreadId, target: "project" },
+      });
+      const unmount = registry.mount(otherProjectList);
+      yield* Effect.addFinalizer(() => Effect.sync(unmount));
+      const unmountedOtherThreadId = ThreadId.make("thread-memory-unmounted");
+      atoms.listFacts({
+        environmentId,
+        input: { threadId: unmountedOtherThreadId, target: "project" },
+      });
+
       const exported = yield* Effect.promise(() =>
         atoms.exportArchive.run(registry, {
           environmentId,
-          input: { threadId },
+          input: { threadId, target: "thread", complete: true },
         }),
       );
       const cleared = yield* Effect.promise(() =>
@@ -94,9 +114,41 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         }),
       );
 
+      const deleted = yield* Effect.promise(() =>
+        atoms.mutateFact.run(registry, {
+          environmentId,
+          input: {
+            threadId,
+            mutation: {
+              operation: "fact.delete",
+              memoryId: "root-1" as never,
+              expectedRevision: 2,
+            },
+          },
+        }),
+      );
+
       expect(AsyncResult.isSuccess(exported)).toBe(true);
       expect(AsyncResult.isSuccess(cleared)).toBe(true);
-      expect(calls).toEqual([WS_METHODS.memoryExport, WS_METHODS.memoryObservationsClear]);
+      expect(AsyncResult.isSuccess(deleted)).toBe(true);
+      expect(calls).toEqual([
+        WS_METHODS.memoryExport,
+        WS_METHODS.memoryObservationsClear,
+        WS_METHODS.memoryFactMutate,
+      ]);
+      // A mutation can move a fact between scopes, so every listed scope refreshes.
+      for (const target of ["thread", "bot", "project"] as const) {
+        expect(refresh).toHaveBeenCalledWith(
+          atoms.listFacts({ environmentId, input: { threadId, target } }),
+        );
+      }
+      expect(refresh).toHaveBeenCalledWith(otherProjectList);
+      expect(refresh).not.toHaveBeenCalledWith(
+        atoms.listFacts({
+          environmentId,
+          input: { threadId: unmountedOtherThreadId, target: "project" },
+        }),
+      );
       expect(refresh).toHaveBeenCalledWith(
         atoms.inspectDocuments({
           environmentId,

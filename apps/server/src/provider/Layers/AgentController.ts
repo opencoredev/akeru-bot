@@ -1,4 +1,4 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off
+// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -20,8 +20,10 @@ import {
   AkeruUsageReservationId,
   CommandId,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
+  McpServerId,
   RuntimeItemId,
   RuntimeRequestId,
   RoutineId,
@@ -47,20 +49,28 @@ import {
   type OrchestrationCommand,
   type OrchestrationReadModel,
   AKERU_CREATE_ROUTINE_TOOL_NAME,
+  decodeAkeruToolInput,
 } from "@t3tools/contracts";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schedule from "effect/Schedule";
+import * as Ref from "effect/Ref";
+import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { recordBrowserFailure, resolveBrowserFailure } from "../../bot-inbox/browserIncidents.ts";
 import { recordUserActionIncident } from "../../bot-inbox/userActionIncidents.ts";
 import { ServerConfig } from "../../config.ts";
 import {
@@ -70,6 +80,7 @@ import {
 } from "../../memory/BotMemory.ts";
 import {
   createBotMemoryToolHandler,
+  type AkeruMemoryShareFact,
   type AkeruMemoryToolHandler,
 } from "../../memory/BotMemoryToolHandlers.ts";
 import {
@@ -81,8 +92,14 @@ import {
   EntityMemoryRepository,
   type EntityMemoryRepositoryShape,
 } from "../../memory/Services/EntityMemoryRepository.ts";
+import { buildProviderMemoryPacket } from "../../memory/ProviderMemoryPacket.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { retainProjectionMessagesAfterRevert } from "../../orchestration/RetainedRevertMessages.ts";
+import { ProjectionThreadMessageRepository } from "../../persistence/Services/ProjectionThreadMessages.ts";
+import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
+import { ProjectionThreadMessageRepositoryLive } from "../../persistence/Layers/ProjectionThreadMessages.ts";
+import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import * as McpInvocationContext from "../../mcp/McpInvocationContext.ts";
@@ -97,11 +114,12 @@ import {
 import {
   akeruActionNeedsApproval,
   akeruToolCategory,
-  createAkeruMastraHarness,
+  makeAkeruMastraHarness,
   criticalAkeruAction,
   mastraModelId,
   openCodeGoInlineConnection,
   type AkeruMastraHarness,
+  type AkeruMastraHarnessError,
   type AkeruMastraHarnessOptions,
   type AkeruMastraSession,
 } from "../AkeruMastraHarness.ts";
@@ -117,11 +135,34 @@ import {
   type AkeruDelegationRuntimeOptions,
 } from "../AkeruDelegationRuntime.ts";
 import {
+  AkeruWorkerError,
+  isWorkerThreadId,
+  makeAkeruWorkerRuntime,
+  WORKER_THREAD_ID_PREFIX,
+  workerAccess,
+} from "../AkeruWorkerRuntime.ts";
+import { makeAkeruRuntimeSeam } from "../AkeruRuntimeSeam.ts";
+import {
+  AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
+  AKERU_ROUTINE_REVIEW_TIMEOUT,
+  makePendingWaiters,
+} from "../PendingWaiters.ts";
+import {
   createAkeruCatalogToolHandlers,
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
 } from "../AkeruCatalogToolHandlers.ts";
 import {
+  akeruWebSearchUnavailable,
+  createAkeruWebFetch,
+  type AkeruWebFetchOptions,
+} from "../AkeruWebFetch.ts";
+import {
+  cancelActiveImageGenerations,
+  runImageGenerationTool,
+} from "../../image-generation/ImageGenerationRuntime.ts";
+import {
+  formatMcpServerInstructions,
   getMcpRuntimeHeaders,
   mcpServerNeedsBrowserAttachment,
   sameMcpServerConfigurations,
@@ -139,7 +180,11 @@ import {
   isCodexComputerUseTool,
   resolveCodexComputerUseServer,
 } from "../CodexComputerUse.ts";
-import type { AkeruBotWorkspace, CreateRemoteBotWorkspaceInput } from "../botWorkspace.ts";
+import {
+  isRemoteBotSandbox,
+  type AkeruBotWorkspace,
+  type CreateRemoteBotWorkspaceInput,
+} from "../botWorkspace.ts";
 import {
   botRuntimeResourceScope,
   botWorkspaceCredentialFingerprint,
@@ -158,14 +203,25 @@ import {
 } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import { RoutineDraftDispatcher } from "../../routines/RoutineDraftDispatcher.ts";
+import { MemoryApprovals } from "../../memory/MemoryApprovals.ts";
 
 const DEFAULT_MODE_ID = "build";
+const DEFAULT_MEMORY_TOOL_SETTINGS = {
+  enabled: true,
+  privateBotMemory: true,
+  sharedProjectMemory: "ask",
+} as const;
 const PLAN_MODE_ID = "plan";
 const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
 );
 const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"]);
 type MastraSession = AkeruMastraSession;
+
+function omitNullToolFields(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
+}
 
 interface ResolvedEngine {
   readonly modelSelection: ModelSelection;
@@ -202,6 +258,8 @@ interface ActiveTurn {
   readonly turnId: TurnId;
   readonly assistantMessages: Map<string, ActiveAssistantMessage>;
   waiting: boolean;
+  /** Suspended tool calls still waiting for a user answer. */
+  readonly suspendedToolCalls: Set<string>;
   finished: boolean;
   inputTokens: number;
   outputTokens: number;
@@ -217,14 +275,18 @@ interface PendingTurn {
   readonly botUsage: AgentControllerSendTurnInput["botUsage"];
   readonly toolSession: AkeruToolSession;
   readonly memoryAccess: BotMemoryAccess | undefined;
+  readonly entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   readonly reviewInput: string;
+  readonly hiddenWake: boolean;
+  readonly delegationResults: string | undefined;
 }
 
 interface ActiveSession {
+  startInput: Parameters<AgentControllerShape["startSession"]>[1];
   readonly session: MastraSession;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
-  readonly cwd: string | undefined;
+  cwd: string | undefined;
   readonly createdAt: string;
   readonly mcpServerIds: readonly McpServer["id"][];
   readonly mcpServers: readonly McpServer[];
@@ -234,13 +296,17 @@ interface ActiveSession {
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
+  readonly pendingDispatches: Set<Promise<void>>;
   readonly toolNames: Map<string, string>;
   readonly approvalRequests: Map<string, { readonly name: string; readonly input: unknown }>;
   readonly connectorSessionApprovals: Set<string>;
   toolSession: AkeruToolSession;
   memoryAccess: BotMemoryAccess | undefined;
+  entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   configuredToolSession: AkeruToolSession;
   configuredMemoryAccess: BotMemoryAccess | undefined;
+  configuredEntityMemoryAccess: AkeruMemoryThreadAccess | undefined;
+  privateBotMemory: boolean;
   readonly workspaceResourceKey: string;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
@@ -262,6 +328,7 @@ interface LegacyTurnMemoryState {
   readonly earlyEvents: Array<ProviderRuntimeEvent>;
   assistant: string;
   readonly memoryTurn: AkeruMemoryTurn | undefined;
+  readonly hiddenWake: boolean;
   priorMemoryHandler?: AkeruMemoryToolHandler;
   reviewMemoryHandler?: AkeruMemoryToolHandler;
 }
@@ -272,13 +339,24 @@ interface LegacyResourceIdentity {
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
   memoryAccess: BotMemoryAccess | undefined;
+  entityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   readonly botName: string | undefined;
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
+  privateBotMemory: boolean;
+}
+
+/** Orchestration access for temporary workers and delegation. */
+interface WorkerOrchestration {
+  readonly readSnapshot: () => Promise<OrchestrationReadModel>;
+  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
 }
 
 export interface AgentControllerLiveOptions {
-  readonly makeMastraHarness?: (options: AkeruMastraHarnessOptions) => Promise<AkeruMastraHarness>;
+  /** Builds the harness in the layer scope; closing the scope shuts it down. */
+  readonly makeMastraHarness?: (
+    options: AkeruMastraHarnessOptions,
+  ) => Effect.Effect<AkeruMastraHarness, AkeruMastraHarnessError, Scope.Scope>;
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (
     input: CreateRemoteBotWorkspaceInput,
@@ -293,7 +371,14 @@ export interface AgentControllerLiveOptions {
     AkeruDelegationRuntime,
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
-    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
+    Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop" | "dispatchDelegation">>;
+  /** Overrides the WebFetch resolver and address policy in tests. */
+  readonly webFetch?: AkeruWebFetchOptions;
+  /**
+   * Overrides the image generation entry for tests. Defaults to
+   * `runImageGenerationTool`, which calls the active ImageGenerationRuntime.
+   */
+  readonly generateImage?: (threadId: ThreadId, input: unknown) => Effect.Effect<unknown>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -322,6 +407,55 @@ function sessionFailureDetail(active: Pick<ActiveSession, "mcpServerIds">, cause
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Active bots that lose an MCP server when it goes away: every one that has not turned it off. */
+function mcpServerDependentBots(snapshot: OrchestrationReadModel, serverId: string) {
+  return snapshot.bots
+    .filter(
+      (bot) =>
+        bot.archivedAt === null && !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+    )
+    .map((bot) => ({ id: bot.id, name: bot.name }));
+}
+
+/**
+ * Deletes an MCP server for the Uninstall and Remove catalog tools. The result names the bots that
+ * lose access, and the id is swept from every bot's disabled list so no dead id is left behind.
+ */
+async function deleteCatalogMcpServer(
+  runtime: Pick<AkeruPluginRuntimeOptions, "readSnapshot" | "dispatch">,
+  serverId: string,
+  commandPrefix: "mcp-delete" | "mcp-remove",
+) {
+  const snapshot = await runtime.readSnapshot();
+  const dependentBots = mcpServerDependentBots(snapshot, serverId);
+  await runtime.dispatch({
+    type: "mcp-server.delete",
+    commandId: CommandId.make(`catalog:${commandPrefix}:${NodeCrypto.randomUUID()}`),
+    mcpServerId: McpServerId.make(serverId),
+  });
+  const sweptBots = snapshot.bots.filter((bot) =>
+    bot.disabledMcpServerIds.some((id) => String(id) === serverId),
+  );
+  for (const swept of sweptBots) {
+    // Each bot's list is re-read so a setting saved since the first snapshot
+    // survives the sweep.
+    const bot = (await runtime.readSnapshot()).bots.find((entry) => entry.id === swept.id);
+    if (!bot?.disabledMcpServerIds.some((id) => String(id) === serverId)) continue;
+    await runtime.dispatch({
+      type: "bot.update",
+      commandId: CommandId.make(`catalog:mcp-sweep:${NodeCrypto.randomUUID()}`),
+      botId: bot.id,
+      disabledMcpServerIds: bot.disabledMcpServerIds.filter((id) => String(id) !== serverId),
+    });
+  }
+  return {
+    serverId,
+    removed: true,
+    dependentBots,
+    clearedDisabledFor: sweptBots.map((bot) => ({ id: bot.id, name: bot.name })),
+  };
 }
 
 function eventId(): EventId {
@@ -378,46 +512,51 @@ export function toMcpServerConfigs(
   servers: readonly McpServer[],
   browser?: BotBrowserAttachment,
 ): Record<string, McpServerConfig> {
-  const browserRequestHeaders = browser ? JSON.stringify(browser.requestHeaders) : undefined;
-  const browserEnvironment = browser
-    ? {
-        AKERU_BROWSER_MCP_URL: browser.browserUrl,
-        AKERU_BROWSER_MCP_SESSION_ID: browser.mcpSessionId,
-        AKERU_BROWSER_MCP_HEADERS: JSON.stringify(browser.localRequestHeaders),
-      }
-    : undefined;
   return Object.fromEntries(
-    servers.map((server) => [
-      String(server.id),
-      server.transport === "url"
-        ? {
-            url: server.url,
-            ...(Object.keys(getMcpRuntimeHeaders(server)).length > 0
-              ? { headers: getMcpRuntimeHeaders(server) }
-              : {}),
-            ...(browser?.availableToHostedPlugins &&
-            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
-              ? {
-                  headers: {
-                    ...getMcpRuntimeHeaders(server),
-                    "x-akeru-browser-mcp-url": browser.browserUrl,
-                    "x-akeru-browser-mcp-session-id": browser.mcpSessionId,
-                    "x-akeru-browser-mcp-headers": browserRequestHeaders!,
-                  },
-                }
-              : {}),
-          }
-        : {
-            command: server.command,
-            ...(server.args ? { args: [...server.args] } : {}),
-            ...(browserEnvironment &&
-            browser &&
-            mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
-              ? { env: browserEnvironment }
-              : {}),
-          },
-    ]),
+    servers.map((server) => [String(server.id), toMcpServerConfig(server, browser)]),
   );
+}
+
+/**
+ * Projects one persisted Akeru MCP registration into the Mastra connection
+ * recipe. Authentication headers are transient runtime state and therefore
+ * never become part of the persisted contract record.
+ */
+export function toMcpServerConfig(
+  server: McpServer,
+  browser?: BotBrowserAttachment,
+): McpServerConfig {
+  const runtimeHeaders = getMcpRuntimeHeaders(server);
+  if (server.transport === "stdio") {
+    const browserAttachment =
+      browser && mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
+        ? {
+            AKERU_BROWSER_MCP_URL: browser.browserUrl,
+            AKERU_BROWSER_MCP_SESSION_ID: browser.mcpSessionId,
+            AKERU_BROWSER_MCP_HEADERS: JSON.stringify(browser.localRequestHeaders),
+          }
+        : undefined;
+    return {
+      command: server.command,
+      ...(server.args ? { args: [...server.args] } : {}),
+      ...(browserAttachment ? { env: browserAttachment } : {}),
+    };
+  }
+
+  const browserHeaders =
+    browser?.availableToHostedPlugins &&
+    mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
+      ? {
+          ...runtimeHeaders,
+          "x-akeru-browser-mcp-url": browser.browserUrl,
+          "x-akeru-browser-mcp-session-id": browser.mcpSessionId,
+          "x-akeru-browser-mcp-headers": JSON.stringify(browser.requestHeaders),
+        }
+      : runtimeHeaders;
+  return {
+    url: server.url,
+    ...(Object.keys(browserHeaders).length > 0 ? { headers: browserHeaders } : {}),
+  };
 }
 
 export function mcpServerIdForToolName(
@@ -444,6 +583,10 @@ function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string)
     | { readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } } }
     | undefined;
   if (tool) return tool.mcp?.annotations?.readOnlyHint !== true;
+  // Akeru's own tools declare their risk; plain workspace tools follow the bot's mode.
+  const akeruTool = AKERU_TOOL_CATALOG.find((entry) => entry.id === toolName);
+  if (akeruTool) return akeruTool.approval !== "none";
+  if (isMemoryToolId(toolName)) return false;
   return !BUILTIN_MASTRA_TOOL_NAMES.has(toolName);
 }
 
@@ -453,14 +596,15 @@ function approvalDetail(toolName: string, action: string | null, oneUse: boolean
   return `Approve this ${target}? This approval applies only to the pending action. It cannot undo completed work.`;
 }
 
-function usesMastraCode(provider: ProviderDriverKind): boolean {
-  return (
-    provider === "codex" ||
-    provider === "claudeAgent" ||
-    provider === "grok" ||
-    provider === "kimi" ||
-    provider === "opencodeGo"
-  );
+/**
+ * Providers whose bots run through Akeru's Mastra controller and receive the
+ * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
+ * registers a tool session, so it gets no catalog tools, workers included.
+ * These are exactly the drivers that can delegate, so the delegation gate and
+ * this routing never disagree.
+ */
+export function usesMastraCode(provider: ProviderDriverKind): boolean {
+  return driverSupportsDelegation(provider);
 }
 
 function disabledProviderError(
@@ -481,8 +625,6 @@ function subscriptionProviderForDriver(
       return "openai-codex";
     case "claudeAgent":
       return "anthropic";
-    case "cursor":
-      return "cursor";
     case "grok":
       return "xai";
     case "kimi":
@@ -556,22 +698,41 @@ export function mastraConnectionIssue(
 export function recordProviderAccessHealth(
   subscriptionAuth: SubscriptionAuthService,
   event: ProviderRuntimeEvent,
+  model?: string,
 ): void {
   const provider = subscriptionProviderForDriver(event.provider);
   const providerInstanceId = event.providerInstanceId;
   if (event.type === "turn.completed") {
     if (event.payload.state === "failed") {
       const message = event.payload.errorMessage ?? "The provider request failed.";
-      if (provider) subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      if (provider) {
+        if (providerInstanceId)
+          subscriptionAuth.recordAccountRequestFailure(
+            provider,
+            providerInstanceId,
+            message,
+            event.createdAt,
+          );
+        else subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+      }
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceFailure(
           providerInstanceId,
           message,
           event.createdAt,
+          model,
         );
       }
     } else if (event.payload.state === "completed") {
-      if (provider) subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      if (provider) {
+        if (providerInstanceId)
+          subscriptionAuth.recordAccountRequestSuccess(
+            provider,
+            providerInstanceId,
+            event.createdAt,
+          );
+        else subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+      }
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
       }
@@ -580,13 +741,21 @@ export function recordProviderAccessHealth(
   }
   if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
   if (provider) {
-    subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+    if (providerInstanceId)
+      subscriptionAuth.recordAccountRequestFailure(
+        provider,
+        providerInstanceId,
+        event.payload.message,
+        event.createdAt,
+      );
+    else subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
   }
   if (providerInstanceId) {
     subscriptionAuth.recordProviderInstanceFailure(
       providerInstanceId,
       event.payload.message,
       event.createdAt,
+      model,
     );
   }
 }
@@ -608,20 +777,51 @@ const make = (options?: AgentControllerLiveOptions) =>
     const botUsageLedger = yield* BotUsageLedger;
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
-    const runtimeContext = yield* Effect.context<never>();
-    const runPromise = Effect.runPromiseWith(runtimeContext);
+    // Promise-based callers re-enter Effect only through this seam; its fibers
+    // are interrupted when the layer scope closes.
+    const { runPromise, fork, forkPromise } = yield* makeAkeruRuntimeSeam;
     const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
+    const memoryApprovals = yield* Effect.serviceOption(MemoryApprovals);
     const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
     const mutationLock = yield* Semaphore.make(1);
     const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
     const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
     const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
+    const projectionMessages = yield* Effect.serviceOption(ProjectionThreadMessageRepository);
+    const projectionTurns = yield* Effect.serviceOption(ProjectionTurnRepository);
     const resolvedByThread = new Map<string, ResolvedEngine>();
+    const webFetch = createAkeruWebFetch(options?.webFetch);
     const modelConnections = new Map<
       string,
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
     >();
     const sessions = new Map<string, ActiveSession>();
+    // Tool calls consume no model tokens, so their entries hold no cap while they run.
+    // `persisted` is false when the start write failed; finish then writes the whole entry.
+    const toolUsageStarts = new Map<
+      string,
+      {
+        persisted: boolean;
+        readonly turnId: TurnId | null;
+        readonly provider: ProviderDriverKind | null;
+        readonly model: string | null;
+      }
+    >();
+    // Providers only promise tool-call ids unique within a chat.
+    const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
+      `tool:${input.threadId}:${input.toolCallId}`;
+    const legacyHiddenWakeByTurn = new Map<string, boolean>();
+    // Memory calls with no live turn reservation, recorded when they finish.
+    const unreservedMemoryCalls = new Map<
+      string,
+      {
+        readonly botId: BotId;
+        readonly threadId: ThreadId;
+        readonly category: "observer" | "reflector";
+        readonly provider: ProviderDriverKind | null;
+        readonly model: string | null;
+      }
+    >();
     const memoryUsageByThread = new Map<
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
@@ -655,14 +855,20 @@ const make = (options?: AgentControllerLiveOptions) =>
       memoryHandler?: AkeruMemoryToolHandler,
     ) =>
       Effect.gen(function* () {
-        const previewEnabled = Option.isSome(serverSettings)
+        // Matches ProviderService's capabilities: an unreadable settings file withholds both.
+        const { previewEnabled, imageEnabled } = Option.isSome(serverSettings)
           ? yield* serverSettings.value.getSettings.pipe(
-              Effect.map((settings) => settings.enableAgentBrowserAccess),
-              Effect.orElseSucceed(() => false),
+              Effect.map((settings) => ({
+                previewEnabled: settings.enableAgentBrowserAccess,
+                imageEnabled:
+                  settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled,
+              })),
+              Effect.orElseSucceed(() => ({ previewEnabled: false, imageEnabled: false })),
             )
-          : true;
+          : { previewEnabled: true, imageEnabled: false };
         const capabilities = new Set<McpInvocationContext.McpCapability>([
           ...(previewEnabled ? (["preview"] as const) : []),
+          ...(imageEnabled ? (["image"] as const) : []),
           ...(memoryHandler ? (["memory"] as const) : []),
         ]);
         if (capabilities.size === 0) {
@@ -685,37 +891,47 @@ const make = (options?: AgentControllerLiveOptions) =>
           });
         }
       });
-    let channelRuntime: AkeruChannelRuntime | undefined;
-    let pluginRuntime: ReturnType<typeof createAkeruPluginRuntime> | undefined;
-    let pluginRuntimeOptions: AkeruPluginRuntimeOptions | undefined;
-    let botStateRuntime: AkeruBotStateRuntime | undefined;
-    const childWaiters = new Map<
-      string,
-      {
-        readonly resolve: (outcome: AkeruDelegationChildOutcome) => void;
-        readonly reject: (cause: Error) => void;
-        readonly timer: ReturnType<typeof setTimeout> | undefined;
-      }
-    >();
+    /**
+     * Orchestration-backed runtimes. The orchestration layer is built after this
+     * controller, so it hands them over through configurePluginRuntime and
+     * configureDelegation.
+     */
+    const lateWiring = yield* Ref.make<{
+      readonly channelRuntime?: AkeruChannelRuntime;
+      readonly pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>;
+      readonly pluginRuntimeOptions?: AkeruPluginRuntimeOptions;
+      readonly botStateRuntime?: AkeruBotStateRuntime;
+      readonly delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"];
+      readonly workerOrchestration?: WorkerOrchestration;
+    }>({ delegationRuntime: options?.delegationRuntime });
+    const wired = () => Ref.getUnsafe(lateWiring);
+    const childWaiters = yield* makePendingWaiters<null, AkeruDelegationChildOutcome>(
+      "The agent controller stopped.",
+    );
     const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
-      const waiter = childWaiters.get(String(threadId));
-      if (!waiter) return;
-      if (waiter.timer) clearTimeout(waiter.timer);
-      childWaiters.delete(String(threadId));
-      waiter.resolve(outcome);
+      childWaiters.resolve(String(threadId), outcome);
     };
-    const pendingRoutineRequests = new Map<
-      string,
+    const pendingRoutineRequests = yield* makePendingWaiters<
       {
         readonly threadId: string;
         readonly input: AkeruCreateRoutineInput;
         readonly timezone: string;
-        readonly resolve: (result: unknown) => void;
-        readonly reject: (cause: unknown) => void;
-      }
-    >();
+      },
+      unknown,
+      Error
+    >("The agent controller stopped before the routine review finished.");
+    // Accepted routine reviews whose routine is still being created, by tool call.
+    const creatingRoutineReviews = new Map<string, string>();
+    // A turn waits on the user while any tool approval, question, or routine review
+    // it opened is unanswered, or an accepted routine is still being created.
+    const turnStillWaiting = (threadId: string, active: ActiveSession) =>
+      active.pendingApprovals.size > 0 ||
+      (active.activeTurn?.suspendedToolCalls.size ?? 0) > 0 ||
+      pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
+      [...creatingRoutineReviews.values()].includes(threadId);
 
-    const runMastra = <A>(operation: string, run: () => Promise<A>) =>
+    /** Calls out to a Promise-based library and types its failure. */
+    const runMastra = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
       Effect.tryPromise({
         try: run,
         catch: (cause) =>
@@ -731,7 +947,8 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
-    const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
+    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const sessionResources = new AkeruSessionResources({
       stateDir: config.stateDir,
       hostPlatform,
@@ -747,6 +964,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       toMcpServerConfigs,
       onMcpServerConnectionFailure: (serverId) =>
         subscriptionAuth.recordMcpRequestFailure(serverId, "The MCP server failed to connect."),
+      onBrowserFailure: (input) => recordBrowserFailure(botInbox, input),
+      onBrowserReady: (botId, resourceKey) => resolveBrowserFailure(botInbox, botId, resourceKey),
       ...(options?.makeMcpManager ? { makeMcpManager: options.makeMcpManager } : {}),
       ...(options?.makeRemoteWorkspace ? { makeRemoteWorkspace: options.makeRemoteWorkspace } : {}),
       ...(options?.makeBotBrowser ? { makeBotBrowser: options.makeBotBrowser } : {}),
@@ -754,7 +973,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         ? { resolveComputerUseServer: options.resolveComputerUseServer }
         : {}),
     });
-    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
     const botMemoryStore = options?.botMemoryStore ?? new BotMemoryStore(config.stateDir);
     const memoryTurnHarness = new AkeruMemoryTurnHarness(botMemoryStore);
     const toolRuntime = createAkeruToolRuntime({
@@ -774,6 +992,84 @@ const make = (options?: AgentControllerLiveOptions) =>
           payload: receipt,
           createdAt: receipt.createdAt,
         });
+      },
+      onToolStart: async (input, session) => {
+        if (!session.botId) return;
+        const key = toolUsageKey(input);
+        const active = sessions.get(input.threadId);
+        const started = {
+          persisted: false,
+          turnId: active?.activeTurn?.turnId ?? null,
+          provider: active?.provider ?? null,
+          model: active?.model ?? null,
+        };
+        toolUsageStarts.set(key, started);
+        await runPromise(
+          botUsageLedger
+            .recordStart({
+              reservationId: AkeruUsageReservationId.make(key),
+              sourceKey: key,
+              botId: session.botId,
+              threadId: ThreadId.make(input.threadId),
+              turnId: started.turnId,
+              category: "tool",
+              provider: started.provider,
+              model: started.model,
+              createdAt: nowIso(),
+            })
+            .pipe(
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  started.persisted = true;
+                }),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("failed to record tool start", {
+                  toolCallId: input.toolCallId,
+                  cause,
+                }),
+              ),
+            ),
+        );
+      },
+      onToolFinish: async (input, session) => {
+        const key = toolUsageKey(input);
+        const started = toolUsageStarts.get(key);
+        toolUsageStarts.delete(key);
+        if (!session.botId || !started) return;
+        await runPromise(
+          (started.persisted
+            ? botUsageLedger.settle({
+                reservationId: AkeruUsageReservationId.make(key),
+                state: "reported",
+                inputTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: null,
+                settledAt: nowIso(),
+              })
+            : botUsageLedger.recordMeasurement({
+                reservationId: AkeruUsageReservationId.make(key),
+                sourceKey: key,
+                botId: session.botId,
+                threadId: ThreadId.make(input.threadId),
+                turnId: started.turnId,
+                category: "tool",
+                inputTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: null,
+                provider: started.provider,
+                model: started.model,
+                createdAt: nowIso(),
+              })
+          ).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("failed to record tool usage", {
+                toolCallId: input.toolCallId,
+                cause,
+              }),
+            ),
+          ),
+        );
       },
       onProgress: ({ threadId, toolId, toolCallId, summary, authorizationUrl }) => {
         const active = sessions.get(threadId);
@@ -807,21 +1103,153 @@ const make = (options?: AgentControllerLiveOptions) =>
           }
         : undefined;
     };
+    const refreshEntityMemoryAccess = async (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): Promise<AkeruMemoryThreadAccess | undefined> => {
+      if (!access || access.groupId === null) return access;
+      // Without a projection the membership cannot be rechecked. The access stays a group
+      // access with no members, so it reads neither group facts nor the bot's private ones.
+      if (Option.isNone(projectionSnapshotQuery)) {
+        return { ...access, groupMemberBotIds: [] };
+      }
+      const snapshot = await runPromise(projectionSnapshotQuery.value.getSnapshot());
+      const group = snapshot.groups.find((candidate) => candidate.id === access.groupId);
+      if (!group) return undefined;
+      const groupMemberBotIds = group.members
+        .filter((member) => member.kind === "bot")
+        .map((member) => member.botId);
+      const respondingBotId = access.respondingBotId ?? access.botId;
+      if (respondingBotId === null || !groupMemberBotIds.includes(respondingBotId))
+        return undefined;
+      return { ...access, groupMemberBotIds };
+    };
+    const entityMemoryContext = async (
+      access: AkeruMemoryThreadAccess | undefined,
+    ): Promise<string> => {
+      const current = await refreshEntityMemoryAccess(access);
+      if (!current || !options?.entityMemoryRepository) return "";
+      if (current.groupId !== null && current.groupMemberBotIds.length === 0) return "";
+      const currentRevisions = await runPromise(
+        options.entityMemoryRepository.listCurrent({ access: current }),
+      );
+      // Memory inspection and export still list bot-private facts; only the
+      // provider packet honours the Private bot memory switch.
+      const { privateBotMemory } = await runPromise(memorySettings());
+      const revisions = privateBotMemory
+        ? currentRevisions
+        : currentRevisions.filter(
+            (revision) =>
+              revision.partition.scope !== "bot" && revision.partition.scope !== "bot-user",
+          );
+      await runPromise(
+        options.entityMemoryRepository.recordDerivedCopies?.({
+          tenantId: current.tenantId,
+          threadId: String(current.threadId),
+          revisions,
+        }) ?? Effect.void,
+      );
+      const packet = buildProviderMemoryPacket(current.threadId, revisions);
+      return packet.rendered ? `<entity-memory>\n${packet.rendered}\n</entity-memory>` : "";
+    };
     const memoryHandlers = (
       access: AkeruMemoryThreadAccess | undefined,
-      allowedScopes?: AkeruDelegationAccessGrant["memoryScopes"],
+      allowedScopes: AkeruDelegationAccessGrant["memoryScopes"],
     ) => {
       const resolved = memoryAccessFor(access);
       if (!resolved) return undefined;
-      const scopes = new Set(allowedScopes ?? ["private", "bot", "group"]);
+      const scopes = new Set(allowedScopes);
       const targets = new Set<AkeruMemoryDocumentTarget>();
       if (scopes.has("private")) targets.add("user");
       if (scopes.has("bot")) targets.add("memory");
       if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
-      return targets.size > 0
-        ? createBotMemoryToolHandler(botMemoryStore, resolved, targets)
-        : undefined;
+      const canShare =
+        scopes.has("project") ||
+        scopes.has("workspace") ||
+        (resolved.groupId !== null && scopes.has("group"));
+      if (targets.size === 0 && !(canShare && Option.isSome(memoryApprovals))) return undefined;
+      // Shared facts go through MemoryApprovals, which saves them directly in
+      // auto mode or opens an approval card and inbox item in ask mode.
+      const shareFact: AkeruMemoryShareFact | undefined =
+        access && Option.isSome(memoryApprovals)
+          ? async (request) => {
+              if (!scopes.has(request.scope)) {
+                throw new Error(
+                  `The ${request.scope} memory scope is outside this bot's access grant.`,
+                );
+              }
+              if (request.scope === "group" && access.groupId === null) {
+                throw new Error("Group memory is available only in a group chat.");
+              }
+              const settings = await runPromise(memorySettings());
+              const result = await runPromise(
+                memoryApprovals.value.propose({
+                  access,
+                  fact: request.fact,
+                  scope: request.scope,
+                  sensitive: request.sensitive,
+                  mode: settings.sharedProjectMemory,
+                }),
+              );
+              return { status: result.status };
+            }
+          : undefined;
+      const handler = createBotMemoryToolHandler(
+        botMemoryStore,
+        resolved,
+        targets,
+        shareFact,
+      ).memory;
+      // The memory settings gate is enforced at call time: a handler captured
+      // while Memory was on must deny calls after it is turned off, and a
+      // "Private bot memory" toggle applies without rebuilding the session.
+      const guarded: AkeruMemoryToolHandler = async (input) => {
+        const settings = await runPromise(memorySettings());
+        if (!settings.enabled) {
+          throw new Error("Bot memory is disabled.");
+        }
+        if (!settings.privateBotMemory) {
+          const { target, operations, share } = input.input as {
+            readonly target?: AkeruMemoryDocumentTarget;
+            readonly operations?: ReadonlyArray<unknown>;
+            readonly share?: unknown;
+          };
+          // A share-only call never reads or changes the target document.
+          const shareOnly = share !== undefined && operations?.length === 0;
+          if (target === "memory" && !shareOnly) {
+            throw new Error("Private bot memory is disabled.");
+          }
+        }
+        return handler(input);
+      };
+      return { memory: guarded };
     };
+    // Image providers for the GenerateImage tool, read on every session start or reuse. An
+    // unreadable settings file hides the tool rather than offering a call that can only fail
+    // (ProviderService denies the MCP capability the same way). Without the service, tests
+    // keep the tool visible.
+    const imageToolSettings = Option.isSome(serverSettings)
+      ? serverSettings.value.getSettings.pipe(
+          Effect.map((settings) => settings.imageGeneration),
+          Effect.orElseSucceed(() => ({ chatgptEnabled: false, grokEnabled: false })),
+          Effect.map(({ chatgptEnabled, grokEnabled }) => ({ chatgptEnabled, grokEnabled })),
+        )
+      : Effect.succeed({ chatgptEnabled: true, grokEnabled: true });
+    const memorySettings = () =>
+      Option.isSome(serverSettings)
+        ? serverSettings.value.getSettings.pipe(
+            Effect.map((settings) => ({
+              enabled: settings.memory.enabled,
+              privateBotMemory: settings.memory.privateBotMemory,
+              sharedProjectMemory: settings.memory.sharedProjectMemory,
+            })),
+            // Fail closed: an unreadable setting must not re-enable memory the user turned off.
+            Effect.orElseSucceed(() => ({
+              ...DEFAULT_MEMORY_TOOL_SETTINGS,
+              enabled: false,
+              privateBotMemory: false,
+            })),
+          )
+        : Effect.succeed(DEFAULT_MEMORY_TOOL_SETTINGS);
     const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>
       access ? `${access.botId}:${access.groupId ?? "private"}` : undefined;
     const legacyResourceIdentity = new Map<string, LegacyResourceIdentity>();
@@ -861,7 +1289,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       Effect.forEach(
         [...mastraMemoryTurns.entries()].filter(([key]) => key.startsWith(`${String(threadId)}:`)),
         ([key, memoryTurn]) =>
-          Effect.tryPromise(() => memoryTurn.abandon()).pipe(
+          runMastra("memory.abandon", () => memoryTurn.abandon()).pipe(
             Effect.ensuring(
               Effect.sync(() => {
                 if (mastraMemoryTurns.get(key) === memoryTurn) {
@@ -882,18 +1310,31 @@ const make = (options?: AgentControllerLiveOptions) =>
         if (!hasLegacyPending(key, pending)) return;
         const foregroundSucceeded =
           event.type === "turn.completed" && event.payload.state === "completed";
+        // Delegated children on legacy providers report back through the same waiter as Mastra.
+        const assistantText = pending.assistant.trim();
+        resolveChildWaiter(ThreadId.make(key), {
+          state: foregroundSucceeded ? "completed" : "failed",
+          turnId: event.turnId ?? null,
+          ...(foregroundSucceeded && assistantText
+            ? { summary: assistantText }
+            : {
+                error:
+                  (event.type === "turn.completed" ? event.payload.errorMessage : undefined) ??
+                  "The delegated turn did not finish.",
+              }),
+        });
         if (!foregroundSucceeded) {
           restoreLegacyMemoryHandler(key, pending);
           removeLegacyPending(key, pending);
           if (pending.memoryTurn) {
-            yield* Effect.tryPromise(() =>
+            yield* runMastra("memory.finishForeground", () =>
               pending.memoryTurn!.finishForeground(false, "foreground"),
             ).pipe(Effect.ignoreCause({ log: true }));
           }
           return;
         }
         if (pending.memoryTurn) {
-          yield* Effect.tryPromise(() =>
+          yield* runMastra("memory.finishForeground", () =>
             pending.memoryTurn!.finishForeground(true, "foreground"),
           ).pipe(Effect.ignoreCause({ log: true }));
         }
@@ -910,19 +1351,24 @@ const make = (options?: AgentControllerLiveOptions) =>
           const assistant = mergedPrompts
             .map((entry) => entry.assistant)
             .toSorted((left, right) => right.length - left.length)[0]!;
-          void bundle
-            .observeExternalTurn({
-              threadId: key,
-              turnId: pending.turnId ?? `legacy-${event.eventId}`,
-              modelId: pending.modelId,
-              userMessages: mergedPrompts.map((entry) => ({
-                id: entry.observationPromptId,
-                text: entry.user,
-              })),
-              assistant,
-              createdAt: event.createdAt,
-            })
-            .catch(() => undefined);
+          const observeExternalTurn = bundle.observeExternalTurn;
+          const turnId = pending.turnId ?? `legacy-${event.eventId}`;
+          forkPromise(
+            "Akeru background observational memory failed.",
+            () =>
+              observeExternalTurn({
+                threadId: key,
+                turnId,
+                modelId: pending.modelId,
+                userMessages: mergedPrompts.map((entry) => ({
+                  id: entry.observationPromptId,
+                  text: entry.user,
+                })),
+                assistant,
+                createdAt: event.createdAt,
+              }),
+            { annotations: { threadId: key, turnId } },
+          );
         }
         removeLegacyPending(key, pending);
         if (pending.memoryTurn?.reviewIncluded) {
@@ -944,7 +1390,6 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         if (terminals.size === 0) legacyBufferedTerminals.delete(key);
       });
-    let delegationRuntime = options?.delegationRuntime;
     const delegationFor = (input: {
       readonly threadId: ThreadId;
       readonly botId: BotId;
@@ -952,6 +1397,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       readonly access: AkeruDelegationAccessGrant;
       readonly activeChildDelegations: number;
     }): NonNullable<AkeruToolSession["delegation"]> => {
+      const delegationRuntime = wired().delegationRuntime;
       const parent = () => {
         const turnId = sessions.get(String(input.threadId))?.activeTurn?.turnId;
         if (!turnId || !delegationRuntime) {
@@ -980,154 +1426,281 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(stopAgent ? { stop: (request) => stopAgent(parent(), request) } : {}),
       };
     };
-    const makeMastraHarness = options?.makeMastraHarness ?? createAkeruMastraHarness;
-    const bundle = yield* runMastra("construct", () =>
-      makeMastraHarness({
-        authStorage,
-        getKimiAccess: () => subscriptionAuth.getKimiForCodingAccess(),
-        getOpenCodeGoApiKey: async () =>
-          subscriptionAuth.getApiKeyCredential("opencode-go")?.access,
-        getSubscriptionApiKey: (provider) => subscriptionAuth.getApiKeyCredential(provider),
-        getModelConnection: (providerInstanceId) => modelConnections.get(providerInstanceId),
-        memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
-        syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
-          const active = sessions.get(threadId);
-          const activeTurn = active?.activeTurn;
-          if (
-            !active ||
-            !activeTurn ||
-            (!protectedAction && !active.connectorSessionApprovals.has(toolName))
-          ) {
-            return;
-          }
-          const update = await runPromise(
-            legacyProviderBridge.dispatchIfEnabled(
-              active.providerInstanceId,
-              "AgentController.syncThreadToolApproval",
-              () => {
-                if (sessions.get(threadId) !== active || active.activeTurn !== activeTurn) return;
-                return active.session.permissions.setForTool({
-                  toolName,
-                  policy: protectedAction ? "ask" : "allow",
-                });
+    const makeMastraHarness = options?.makeMastraHarness ?? makeAkeruMastraHarness;
+    const bundle = yield* makeMastraHarness({
+      authStorage,
+      getKimiAccess: (instanceId) => subscriptionAuth.getKimiForCodingAccess(instanceId),
+      getOpenCodeGoApiKey: async (instanceId) =>
+        subscriptionAuth.getApiKeyCredential("opencode-go", instanceId)?.access,
+      getSubscriptionApiKey: (provider, instanceId) =>
+        subscriptionAuth.getApiKeyCredential(provider, instanceId),
+      getSubscriptionOAuth: (provider, instanceId) =>
+        subscriptionAuth.getOAuthCredential(provider, instanceId),
+      getSubscriptionAccessToken: (provider, instanceId) =>
+        subscriptionAuth.getAccessToken(provider, instanceId),
+      getModelConnection: (providerInstanceId) => {
+        const connection = modelConnections.get(providerInstanceId);
+        return connection ? { ...connection, instanceId: providerInstanceId } : undefined;
+      },
+      memoryDbPath: NodePath.join(config.stateDir, "mastra-observational-memory.sqlite"),
+      syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
+        const active = sessions.get(threadId);
+        const activeTurn = active?.activeTurn;
+        if (
+          !active ||
+          !activeTurn ||
+          (!protectedAction && !active.connectorSessionApprovals.has(toolName))
+        ) {
+          return;
+        }
+        const update = await runPromise(
+          legacyProviderBridge.dispatchIfEnabled(
+            active.providerInstanceId,
+            "AgentController.syncThreadToolApproval",
+            () => {
+              if (sessions.get(threadId) !== active || active.activeTurn !== activeTurn) return;
+              return active.session.permissions.setForTool({
+                toolName,
+                policy: protectedAction ? "ask" : "allow",
+              });
+            },
+          ),
+        );
+        await update;
+      },
+      getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
+      // Durable queue rows can drain before any client opens the thread (for
+      // example right after a server restart), so the activity must not
+      // depend on an active provider session; the row's recorded turnId is
+      // the authority and the active turn is only a fallback.
+      onObservationDropped: async ({
+        observationId,
+        threadId,
+        turnId,
+        resourceId,
+        modelId,
+        attempts,
+        error,
+      }) => {
+        if (!Option.isSome(orchestrationEngine)) return;
+        const active = sessions.get(threadId);
+        const droppedAt = nowIso();
+        await runPromise(
+          orchestrationEngine.value.dispatch({
+            type: "thread.activity.append",
+            // Stable ids make a retried notice idempotent.
+            commandId: CommandId.make(`server:observation-dropped:${observationId}`),
+            threadId: ThreadIdBrand(threadId),
+            activity: {
+              id: EventId.make(`observation-dropped:${observationId}`),
+              tone: "error",
+              kind: "memory.observation.dropped",
+              summary: "Background memory observation dropped after repeated failures",
+              payload: {
+                resourceId,
+                modelId: modelId ?? null,
+                attempts,
+                detail: error.message,
               },
+              turnId: turnId ? TurnId.make(turnId) : (active?.activeTurn?.turnId ?? null),
+              createdAt: droppedAt,
+            },
+            createdAt: droppedAt,
+          }),
+        );
+      },
+      ...(routineDispatcher
+        ? {
+            listRoutines: (threadId: string) =>
+              runPromise(
+                routineDispatcher
+                  .listForThread(ThreadIdBrand(threadId))
+                  .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
+              ),
+            deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
+              runPromise(
+                routineDispatcher
+                  .deleteForThread(
+                    ThreadIdBrand(threadId),
+                    routineIds.map((routineId) => RoutineId.make(routineId)),
+                  )
+                  .pipe(
+                    Effect.map((result) => ({
+                      status: result.status,
+                      deletedRoutineIds: [...result.routineIds],
+                    })),
+                  ),
+              ),
+            createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
+              const active = sessions.get(threadId);
+              const timezone = active?.toolSession.timezone;
+              if (!timezone) {
+                return Promise.reject(new Error("Send a message before creating a routine."));
+              }
+              const requestId = `routine-${NodeCrypto.randomUUID()}`;
+              return runPromise(
+                pendingRoutineRequests
+                  .wait(
+                    requestId,
+                    { threadId, input, timezone },
+                    {
+                      timeout: AKERU_ROUTINE_REVIEW_TIMEOUT,
+                      timeoutMessage:
+                        "The routine review expired without a response. Ask again to create the routine.",
+                      onOpen: () => {
+                        if (active.activeTurn) active.activeTurn.waiting = true;
+                        publishSessionState(ThreadIdBrand(threadId), active, "waiting");
+                        publish({
+                          ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
+                          requestId: RuntimeRequestId.make(requestId),
+                          type: "request.opened",
+                          payload: {
+                            requestType: "dynamic_tool_call",
+                            detail: "Review routine",
+                            toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                            args: { ...input, timezone },
+                            options: [
+                              { decision: "accept", label: "Create routine" },
+                              { decision: "decline", label: "Cancel" },
+                            ],
+                          },
+                        });
+                      },
+                    },
+                  )
+                  .pipe(
+                    Effect.tapErrorTag("PendingWaiterTimeoutError", () =>
+                      Effect.sync(() => {
+                        // Close the review card so the chat no longer waits on the user.
+                        const current = sessions.get(threadId);
+                        if (!current?.activeTurn) return;
+                        current.activeTurn.waiting = turnStillWaiting(threadId, current);
+                        publish({
+                          ...baseEvent(ThreadIdBrand(threadId), current, current.activeTurn.turnId),
+                          requestId: RuntimeRequestId.make(requestId),
+                          type: "request.resolved",
+                          payload: {
+                            requestType: "dynamic_tool_call" as const,
+                            decision: "cancel",
+                            actor: "system",
+                            target: AKERU_CREATE_ROUTINE_TOOL_NAME,
+                            outcome: "cancelled",
+                          },
+                        });
+                        publishSessionState(
+                          ThreadIdBrand(threadId),
+                          current,
+                          current.activeTurn.waiting ? "waiting" : "running",
+                        );
+                      }),
+                    ),
+                  ),
+              );
+            },
+          }
+        : {}),
+      toolRuntime,
+      startMemoryCall: async ({ threadId, category }) => {
+        const context = memoryUsageByThread.get(threadId);
+        const active = sessions.get(threadId);
+        const callId = `${category}:${NodeCrypto.randomUUID()}`;
+        if (!context || !active) {
+          // A queued observation can drain after a restart before its chat
+          // reopens. Attribute it to the chat's bot and record what it used.
+          const botId = await runPromise(
+            readSessionStartContext(ThreadIdBrand(threadId), null).pipe(
+              Effect.map((started) => started.botId),
+              Effect.catchCause(() => Effect.succeed(null)),
             ),
           );
-          await update;
-        },
-        getThreadTools: (threadId) => sessionResources.getConnectorTools(threadId),
-        ...(routineDispatcher
-          ? {
-              listRoutines: (threadId: string) =>
-                runPromise(
-                  routineDispatcher
-                    .listForThread(ThreadIdBrand(threadId))
-                    .pipe(Effect.map((routines) => ({ routines: [...routines] }))),
-                ),
-              deleteRoutines: (threadId: string, routineIds: ReadonlyArray<string>) =>
-                runPromise(
-                  routineDispatcher
-                    .deleteForThread(
-                      ThreadIdBrand(threadId),
-                      routineIds.map((routineId) => RoutineId.make(routineId)),
-                    )
-                    .pipe(
-                      Effect.map((result) => ({
-                        status: result.status,
-                        deletedRoutineIds: [...result.routineIds],
-                      })),
-                    ),
-                ),
-              createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
-                const active = sessions.get(threadId);
-                const timezone = active?.toolSession.timezone;
-                if (!timezone) {
-                  return Promise.reject(new Error("Send a message before creating a routine."));
-                }
-                const requestId = `routine-${NodeCrypto.randomUUID()}`;
-                return new Promise((resolve, reject) => {
-                  pendingRoutineRequests.set(requestId, {
-                    threadId,
-                    input,
-                    timezone,
-                    resolve,
-                    reject,
-                  });
-                  if (active.activeTurn) active.activeTurn.waiting = true;
-                  publishSessionState(ThreadIdBrand(threadId), active, "waiting");
-                  publish({
-                    ...baseEvent(ThreadIdBrand(threadId), active, active.activeTurn?.turnId),
-                    requestId: RuntimeRequestId.make(requestId),
-                    type: "request.opened",
-                    payload: {
-                      requestType: "dynamic_tool_call",
-                      detail: "Review routine",
-                      toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
-                      args: { ...input, timezone },
-                      options: [
-                        { decision: "accept", label: "Create routine" },
-                        { decision: "decline", label: "Cancel" },
-                      ],
-                    },
-                  });
-                });
-              },
-            }
-          : {}),
-        toolRuntime,
-        startMemoryCall: async ({ threadId, category }) => {
-          const context = memoryUsageByThread.get(threadId);
-          const active = sessions.get(threadId);
-          if (!context || !active) return undefined;
-          const callId = `${category}:${NodeCrypto.randomUUID()}`;
+          if (!botId) return undefined;
+          unreservedMemoryCalls.set(callId, {
+            botId,
+            threadId: ThreadIdBrand(threadId),
+            category,
+            provider: active?.provider ?? null,
+            model: active?.model ?? null,
+          });
+          return callId;
+        }
+        await runPromise(
+          botUsageLedger.reserve({
+            reservationId: AkeruUsageReservationId.make(callId),
+            sourceKey: callId,
+            botId: context.botId,
+            threadId: ThreadIdBrand(threadId),
+            turnId: context.turnId,
+            category,
+            maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
+            capLimit: context.capLimit,
+            provider: active.provider,
+            model: active.model,
+            createdAt: nowIso(),
+          }),
+        );
+        return callId;
+      },
+      finishMemoryCall: async ({ callId, usage, error }) => {
+        const outputTokens = usage?.outputTokens ?? 0;
+        const inputTokens =
+          usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+        const unreserved = unreservedMemoryCalls.get(callId);
+        if (unreserved) {
+          unreservedMemoryCalls.delete(callId);
+          if (!usage) return;
           await runPromise(
-            botUsageLedger.reserve({
+            botUsageLedger.recordMeasurement({
               reservationId: AkeruUsageReservationId.make(callId),
               sourceKey: callId,
-              botId: context.botId,
-              threadId: ThreadIdBrand(threadId),
-              turnId: context.turnId,
-              category,
-              maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
-              capLimit: context.capLimit,
-              provider: active.provider,
-              model: active.model,
+              botId: unreserved.botId,
+              threadId: unreserved.threadId,
+              turnId: null,
+              category: unreserved.category,
+              inputTokens,
+              outputTokens,
+              reasoningTokens: null,
+              provider: unreserved.provider,
+              model: unreserved.model,
               createdAt: nowIso(),
             }),
           );
-          return callId;
-        },
-        finishMemoryCall: async ({ callId, usage, error }) => {
-          const outputTokens = usage?.outputTokens ?? 0;
-          const inputTokens =
-            usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
-          await runPromise(
-            botUsageLedger.settle(
-              usage
+          return;
+        }
+        await runPromise(
+          botUsageLedger.settle(
+            usage
+              ? {
+                  reservationId: AkeruUsageReservationId.make(callId),
+                  state: "reported",
+                  inputTokens,
+                  outputTokens,
+                  reasoningTokens: null,
+                  settledAt: nowIso(),
+                }
+              : error
                 ? {
                     reservationId: AkeruUsageReservationId.make(callId),
-                    state: "reported",
-                    inputTokens,
-                    outputTokens,
-                    reasoningTokens: null,
+                    state: "unavailable",
+                    reason: error.message || "Observational Memory usage was unavailable.",
                     settledAt: nowIso(),
                   }
-                : error
-                  ? {
-                      reservationId: AkeruUsageReservationId.make(callId),
-                      state: "unavailable",
-                      reason: error.message || "Observational Memory usage was unavailable.",
-                      settledAt: nowIso(),
-                    }
-                  : {
-                      reservationId: AkeruUsageReservationId.make(callId),
-                      state: "released",
-                      settledAt: nowIso(),
-                    },
-            ),
-          );
-        },
-      }),
+                : {
+                    reservationId: AkeruUsageReservationId.make(callId),
+                    state: "released",
+                    settledAt: nowIso(),
+                  },
+          ),
+        );
+      },
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AgentControllerRuntimeError({
+            operation: "construct",
+            detail: failureDetail(cause),
+            cause,
+          }),
+      ),
     );
     yield* runMastra("init", () => bundle.controller.init());
 
@@ -1141,26 +1714,26 @@ const make = (options?: AgentControllerLiveOptions) =>
       createAkeruDelegationRuntime({
         ...input,
         awaitChild: (threadId, deadline) =>
-          new Promise((resolve, reject) => {
-            const key = String(threadId);
-            if (childWaiters.has(key)) {
-              reject(new Error(`Delegation waiter already exists for '${threadId}'.`));
-              return;
-            }
-            const delay = deadline === null ? undefined : Date.parse(deadline) - Date.now();
-            if (delay !== undefined && delay <= 0) {
-              reject(new Error("The delegation deadline expired."));
-              return;
-            }
-            const timer =
-              delay === undefined
-                ? undefined
-                : setTimeout(() => {
-                    childWaiters.delete(key);
-                    reject(new Error("The delegation deadline expired."));
-                  }, delay);
-            childWaiters.set(key, { resolve, reject, timer });
-          }),
+          runPromise(
+            Effect.gen(function* () {
+              const now = yield* Clock.currentTimeMillis;
+              return yield* childWaiters.wait(
+                String(threadId),
+                null,
+                deadline === null
+                  ? {
+                      timeout: AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
+                      timeoutMessage: `The bot did not report back within ${Duration.toHours(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT)} hours.`,
+                      existsMessage: `Delegation waiter already exists for '${threadId}'.`,
+                    }
+                  : {
+                      timeout: Duration.millis(Date.parse(deadline) - now),
+                      timeoutMessage: "The delegation deadline expired.",
+                      existsMessage: `Delegation waiter already exists for '${threadId}'.`,
+                    },
+              );
+            }),
+          ),
         interruptChild: (threadId, turnId) =>
           input
             .dispatch({
@@ -1171,40 +1744,176 @@ const make = (options?: AgentControllerLiveOptions) =>
               createdAt: nowIso(),
             })
             .then(() => undefined),
+        providerDriverKind: (instanceId) =>
+          runPromise(
+            legacyProviderBridge.getInstanceInfo(instanceId).pipe(
+              Effect.map((routing): string | null => routing.driverKind),
+              Effect.orElseSucceed(() => null),
+            ),
+          ),
         recordUsage: async (usage) => {
           const active = sessions.get(String(usage.threadId));
           if (active) publish(delegatedUsageReceipt(usage, active));
         },
+        onWatchError: (delegationId, cause) =>
+          fork(
+            "Akeru delegated work could not record its outcome.",
+            Effect.fail(failureDetail(cause)),
+            { delegationId },
+          ),
+        onGroupResultSkipped: (delegationId, reason) =>
+          fork(
+            "Akeru could not log a skipped group result.",
+            Effect.logInfo("delegated result not posted to the group chat", {
+              delegationId,
+              reason,
+            }),
+          ),
       });
-    delegationRuntime ??=
-      Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)
-        ? makeDelegationRuntime({
-            readSnapshot: () =>
-              Effect.runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
-            dispatch: (command) => Effect.runPromise(orchestrationEngine.value.dispatch(command)),
-          })
-        : undefined;
+    if (Option.isSome(orchestrationEngine) && Option.isSome(projectionSnapshotQuery)) {
+      const orchestration: WorkerOrchestration = {
+        readSnapshot: () => runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
+        dispatch: (command) => runPromise(orchestrationEngine.value.dispatch(command)),
+      };
+      yield* Ref.update(lateWiring, (current) => ({
+        ...current,
+        delegationRuntime: current.delegationRuntime ?? makeDelegationRuntime(orchestration),
+        workerOrchestration: orchestration,
+      }));
+    }
+
+    /** Runtime mode for each hidden worker thread's turns, keyed by child thread id. */
+    const workerTurnDefaults = new Map<string, RuntimeMode>();
+    const workerCall = <A>(run: (orchestration: WorkerOrchestration) => Promise<A>) =>
+      runMastra("worker.orchestration", () => {
+        const orchestration = wired().workerOrchestration;
+        if (!orchestration) throw new Error("Workers need the orchestration engine.");
+        return run(orchestration);
+      }).pipe(
+        Effect.mapError(
+          (error) => new AkeruWorkerError({ reason: "start_failed", detail: error.detail }),
+        ),
+      );
+    const workerRuntime = yield* makeAkeruWorkerRuntime({
+      createChild: (spec) =>
+        workerCall(async (orchestration) => {
+          const snapshot = await orchestration.readSnapshot();
+          const parentThread = snapshot.threads.find(
+            (candidate) => candidate.id === spec.parentThreadId,
+          );
+          if (!parentThread) throw new Error(`Chat '${spec.parentThreadId}' was not found.`);
+          const botId =
+            sessions.get(String(spec.parentThreadId))?.toolSession.botId ??
+            parentThread.respondingBotId ??
+            parentThread.botId ??
+            null;
+          const childThreadId = ThreadId.make(
+            `${WORKER_THREAD_ID_PREFIX}${NodeCrypto.randomUUID()}`,
+          );
+          workerTurnDefaults.set(String(childThreadId), parentThread.runtimeMode);
+          // A worker is a direct copy of the responding bot, never a group chat,
+          // even when the parent is one.
+          await orchestration.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`worker:thread:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            projectId: parentThread.projectId,
+            botId,
+            groupId: null,
+            parentThreadId: spec.parentThreadId,
+            parentDelegationId: null,
+            title: spec.title,
+            modelSelection: parentThread.modelSelection,
+            runtimeMode: parentThread.runtimeMode,
+            interactionMode: "default",
+            branch: parentThread.branch,
+            worktreePath: parentThread.worktreePath,
+            createdAt: nowIso(),
+          });
+          return childThreadId;
+        }),
+      messageChild: (childThreadId, text) =>
+        workerCall(async (orchestration) => {
+          const runtimeMode = workerTurnDefaults.get(String(childThreadId));
+          if (!runtimeMode) throw new Error(`Worker chat '${childThreadId}' is not known.`);
+          await orchestration.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`worker:turn:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            message: {
+              messageId: MessageId.make(`worker-message-${NodeCrypto.randomUUID()}`),
+              role: "user",
+              text,
+              attachments: [],
+            },
+            runtimeMode,
+            interactionMode: "default",
+            createdAt: nowIso(),
+          });
+        }),
+      interruptChild: (childThreadId) =>
+        workerCall((orchestration) =>
+          orchestration.dispatch({
+            type: "thread.turn.interrupt",
+            commandId: CommandId.make(`worker:interrupt:${NodeCrypto.randomUUID()}`),
+            threadId: childThreadId,
+            createdAt: nowIso(),
+          }),
+        ).pipe(Effect.ignoreCause({ log: true })),
+      discardChild: (childThreadId) =>
+        Effect.sync(() => workerTurnDefaults.delete(String(childThreadId))).pipe(
+          Effect.andThen(
+            workerCall((orchestration) =>
+              orchestration.dispatch({
+                type: "thread.delete",
+                commandId: CommandId.make(`worker:discard:${NodeCrypto.randomUUID()}`),
+                threadId: childThreadId,
+              }),
+            ),
+          ),
+          Effect.ignoreCause({ log: true }),
+        ),
+    });
+    const workersFor = (
+      threadId: ThreadId,
+      access: AkeruDelegationAccessGrant,
+    ): NonNullable<AkeruToolSession["workers"]> => {
+      const parent = () => {
+        const turnId = sessions.get(String(threadId))?.activeTurn?.turnId;
+        if (!turnId) throw new Error("Workers require an active turn.");
+        return { threadId, turnId, depth: workerRuntime.depthForThread(threadId), access };
+      };
+      return {
+        depth: workerRuntime.depthForThread(threadId),
+        spawn: (request) => runPromise(workerRuntime.spawn(parent(), request)),
+        check: (request) => runPromise(workerRuntime.check({ threadId }, request)),
+        message: (request) => runPromise(workerRuntime.message({ threadId }, request)),
+        stop: (request) => runPromise(workerRuntime.stop({ threadId }, request)),
+      };
+    };
 
     const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
       const resolved = resolvedByThread.get(String(threadId));
       if (turn.memoryQueued || !bundle.observeAfterTurn || !resolved) return;
       turn.memoryQueued = true;
-      void bundle
-        .observeAfterTurn({
-          threadId: String(threadId),
-          resourceId: String(threadId),
-          modelId: resolved.mastraModelId,
-        })
-        .catch((cause) => {
-          turn.memoryQueued = false;
-          Effect.runFork(
-            Effect.logWarning("Akeru background observational memory failed.", {
-              threadId,
-              turnId: turn.turnId,
-              cause,
-            }),
-          );
-        });
+      const observeAfterTurn = bundle.observeAfterTurn;
+      forkPromise(
+        "Akeru background observational memory failed.",
+        () =>
+          observeAfterTurn({
+            threadId: String(threadId),
+            resourceId: String(threadId),
+            modelId: resolved.mastraModelId,
+            providerInstanceId: active.providerInstanceId,
+            turnId: String(turn.turnId),
+          }),
+        {
+          annotations: { threadId, turnId: turn.turnId },
+          onFailure: () => {
+            turn.memoryQueued = false;
+          },
+        },
+      );
     };
 
     const baseEvent = (
@@ -1319,7 +2028,7 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     const beginPendingTurn = (
       active: ActiveSession,
-      { threadId, turnId, botUsage }: PendingTurn,
+      { threadId, turnId, botUsage, hiddenWake }: PendingTurn,
     ) => {
       const key = String(threadId);
       if (botUsage) {
@@ -1331,6 +2040,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         turnId,
         assistantMessages: new Map(),
         waiting: false,
+        suspendedToolCalls: new Set(),
         finished: false,
         inputTokens: 0,
         outputTokens: 0,
@@ -1342,7 +2052,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       publish({
         ...baseEvent(threadId, active, turnId),
         type: "turn.started",
-        payload: { model: active.model },
+        payload: { model: active.model, ...(hiddenWake ? { hiddenWake: true } : {}) },
       });
       publishSessionState(threadId, active, "running");
     };
@@ -1391,22 +2101,59 @@ const make = (options?: AgentControllerLiveOptions) =>
     const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
       const { threadId, turnId, message } = pending;
       if (active.admittingTurn?.turnId !== turnId) return;
-      active.toolSession = pending.toolSession;
-      active.memoryAccess = pending.memoryAccess;
-      let dispatch: Promise<void>;
-      if (!active.memoryAccess) {
-        toolRuntime.registerSession(String(threadId), active.toolSession);
-        active.admittingTurn = null;
-        beginPendingTurn(active, pending);
-        const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
-        dispatch = persistentMemoryContext
-          ? active.session.state
-              .set(stateWithoutMemory)
-              .then(() => active.session.sendMessage(message))
-          : active.session.sendMessage(message);
-      } else {
-        dispatch = (async () => {
-          const memoryAccess = active.memoryAccess!;
+      const dispatch: Promise<void> = (async () => {
+        const settings = pending.memoryAccess ? await runPromise(memorySettings()) : undefined;
+        // The settings read is asynchronous; the turn may have been interrupted
+        // while it was pending. Only mutate session state if this admission
+        // still owns the turn.
+        if (active.admittingTurn?.turnId !== turnId) return;
+        const memoryAccess =
+          pending.memoryAccess && settings?.enabled ? pending.memoryAccess : undefined;
+        // Entity memory rides on durable memory access. With Memory off (or a
+        // delegated turn without memory) the turn runs without memory, so group
+        // membership is only checked when memory is actually in play.
+        const entityMemoryAccess = memoryAccess
+          ? await refreshEntityMemoryAccess(pending.entityMemoryAccess)
+          : undefined;
+        if (memoryAccess && pending.entityMemoryAccess && !entityMemoryAccess) {
+          active.admittingTurn = null;
+          beginPendingTurn(active, pending);
+          await failActiveTurn(
+            active,
+            pending.threadId,
+            pending.turnId,
+            new Error("The bot is no longer a member of this group."),
+          );
+          return;
+        }
+        if (settings) active.privateBotMemory = settings.privateBotMemory;
+        active.memoryAccess = memoryAccess;
+        if (!memoryAccess) {
+          // Memory was turned off after the turn was queued: drop the memory
+          // tool handler so the bot cannot read or change facts. A delegated
+          // turn never has durable access, so it keeps the handler its grant
+          // built; that handler checks the Memory setting on every call.
+          const toolSession = { ...pending.toolSession };
+          if (pending.memoryAccess) delete toolSession.memoryHandlers;
+          active.toolSession = toolSession;
+          toolRuntime.registerSession(String(threadId), active.toolSession);
+          const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
+          if (pending.delegationResults) {
+            await active.session.state.set({
+              ...stateWithoutMemory,
+              persistentMemoryContext: pending.delegationResults,
+            });
+          } else if (persistentMemoryContext) {
+            await active.session.state.set(stateWithoutMemory);
+          }
+          if (active.admittingTurn?.turnId !== turnId) return;
+          active.admittingTurn = null;
+          beginPendingTurn(active, pending);
+          await active.session.sendMessage(message);
+          return;
+        }
+        {
+          active.toolSession = pending.toolSession;
           const memoryTurn = await memoryTurnHarness.admit({
             access: memoryAccess,
             input: {
@@ -1414,6 +2161,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
               text: pending.reviewInput.slice(0, 4_000),
             },
+            privateBotMemory: active.privateBotMemory,
           });
           const reservationKey = mastraReservationKey(threadId, turnId);
           mastraMemoryTurns.set(reservationKey, memoryTurn);
@@ -1434,7 +2182,14 @@ const make = (options?: AgentControllerLiveOptions) =>
             const currentState = active.session.state.get();
             const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
               currentState;
-            const persistentMemoryContext = memoryTurn.context;
+            const entityPacket = await entityMemoryContext(entityMemoryAccess);
+            const persistentMemoryContext = [
+              memoryTurn.context,
+              entityPacket,
+              pending.delegationResults,
+            ]
+              .filter(Boolean)
+              .join("\n\n");
             await active.session.state.set({
               ...stateWithoutMemory,
               ...(persistentMemoryContext ? { persistentMemoryContext } : {}),
@@ -1454,16 +2209,27 @@ const make = (options?: AgentControllerLiveOptions) =>
               mastraMemoryTurns.delete(reservationKey);
             }
           }
-        })();
-      }
-      void dispatch
-        .then(() => {
-          const turn = active.activeTurn;
-          if (turn?.turnId === turnId && !turn.waiting) {
-            finishTurn(threadId, active, "completed");
-          }
-        })
-        .catch((cause: unknown) => handlePendingTurnFailure(active, pending, cause));
+        }
+      })();
+      active.pendingDispatches.add(dispatch);
+      void dispatch.then(
+        () => active.pendingDispatches.delete(dispatch),
+        () => active.pendingDispatches.delete(dispatch),
+      );
+      forkPromise(
+        "Akeru turn dispatch failed.",
+        () =>
+          dispatch.then(() => {
+            const turn = active.activeTurn;
+            if (turn?.turnId === turnId && !turn.waiting) {
+              finishTurn(threadId, active, "completed");
+            }
+          }),
+        {
+          annotations: { threadId, turnId },
+          onFailure: (cause) => handlePendingTurnFailure(active, pending, cause),
+        },
+      );
     };
 
     const admitPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
@@ -1485,8 +2251,13 @@ const make = (options?: AgentControllerLiveOptions) =>
     };
 
     function startPendingTurn(active: ActiveSession, pending: PendingTurn) {
-      void runPromise(admitPendingTurn(active, pending)).catch((cause: unknown) =>
-        handlePendingTurnFailure(active, pending, cause),
+      forkPromise(
+        "Akeru turn admission failed.",
+        () => runPromise(admitPendingTurn(active, pending)),
+        {
+          annotations: { threadId: pending.threadId, turnId: pending.turnId },
+          onFailure: (cause) => handlePendingTurnFailure(active, pending, cause),
+        },
       );
     }
 
@@ -1518,26 +2289,61 @@ const make = (options?: AgentControllerLiveOptions) =>
           : { error: errorMessage ?? `The delegated turn ${state}.` }),
         usage: { inputTokens: turn.inputTokens, outputTokens: turn.outputTokens },
       });
-      if (state !== "completed") {
-        void delegationRuntime
-          ?.parentFinished({ threadId, failed: state === "failed" })
-          .catch((cause) => {
-            publish({
-              ...baseEvent(threadId, active, turn.turnId),
-              type: "runtime.error",
-              payload: { message: failureDetail(cause), class: "provider_error" },
-            });
-          });
+      fork(
+        "Akeru worker could not record its turn outcome.",
+        workerRuntime.childTurnFinished(threadId, {
+          state: state === "completed" ? "completed" : "failed",
+          ...(state === "completed" && turn.assistantText.trim()
+            ? { summary: turn.assistantText.trim() }
+            : { error: errorMessage ?? `The worker turn ${state}.` }),
+        }),
+        { threadId, turnId: turn.turnId },
+      );
+      fork(
+        "Akeru workers could not settle after the parent turn.",
+        workerRuntime.parentTurnEnded(threadId, turn.turnId),
+        {
+          threadId,
+          turnId: turn.turnId,
+        },
+      );
+      const delegationRuntime = wired().delegationRuntime;
+      if (state !== "completed" && delegationRuntime) {
+        forkPromise(
+          "Akeru delegated work could not settle after the parent turn.",
+          () =>
+            delegationRuntime.parentFinished({
+              threadId,
+              turnId: turn.turnId,
+              failed: state === "failed",
+            }),
+          {
+            annotations: { threadId, turnId: turn.turnId },
+            onFailure: (cause) => {
+              publish({
+                ...baseEvent(threadId, active, turn.turnId),
+                type: "runtime.error",
+                payload: { message: failureDetail(cause), class: "provider_error" },
+              });
+            },
+          },
+        );
       }
-      for (const [requestId, request] of pendingRoutineRequests) {
+      for (const [requestId, request] of pendingRoutineRequests.entries()) {
         if (request.threadId !== String(threadId)) continue;
-        pendingRoutineRequests.delete(requestId);
-        request.reject(new Error("The routine review ended before it received a response."));
+        pendingRoutineRequests.reject(
+          requestId,
+          new Error("The routine review ended before it received a response."),
+        );
       }
       active.activeTurn = null;
       const nextTurn = active.pendingTurns.shift();
       if (nextTurn) {
         startPendingTurn(active, nextTurn);
+      } else if (state === "failed") {
+        // Keep the failure visible until the next turn; publishing ready here
+        // would overwrite the error state that turn.completed just recorded.
+        publishSessionState(threadId, active, "error", errorMessage);
       } else {
         publishSessionState(threadId, active, "ready");
       }
@@ -1712,36 +2518,75 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
             return;
           }
-          const action = criticalAkeruAction(event.toolName, event.args);
+          const toolInput = omitNullToolFields(event.args);
+          const action = criticalAkeruAction(event.toolName, toolInput);
           const oneUseApproval =
-            akeruActionNeedsApproval(event.toolName, event.args) ||
+            akeruActionNeedsApproval(event.toolName, toolInput) ||
             mcpToolNeedsApproval(mcpManager, event.toolName);
           if (
             event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
             !oneUseApproval &&
             permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
           ) {
-            void runPromise(
-              legacyProviderBridge.dispatchIfEnabled(
-                active.providerInstanceId,
-                "AgentController.handleControllerEvent",
-                () => {
+            forkPromise(
+              "Akeru could not approve an allowed tool call.",
+              () =>
+                runPromise(
+                  legacyProviderBridge.dispatchIfEnabled(
+                    active.providerInstanceId,
+                    "AgentController.handleControllerEvent",
+                    () => {
+                      if (active.activeTurn !== turn || turn.finished) return;
+                      // Akeru runtime tools check their own grant before running.
+                      const runtimeToolId =
+                        AKERU_TOOL_CATALOG.find((tool) => tool.id === event.toolName)?.id ??
+                        (isMemoryToolId(event.toolName) ? event.toolName : undefined);
+                      if (runtimeToolId) {
+                        toolRuntime.grantApproval({
+                          threadId: String(threadId),
+                          toolCallId: event.toolCallId,
+                          toolId: runtimeToolId,
+                          input: event.args,
+                        });
+                      }
+                      active.session.respondToToolApproval({
+                        toolCallId: event.toolCallId,
+                        decision: "approve",
+                      });
+                    },
+                  ),
+                ),
+              {
+                annotations: { threadId, turnId: turn.turnId, toolCallId: event.toolCallId },
+                onFailure: (cause) => {
                   if (active.activeTurn !== turn || turn.finished) return;
-                  active.session.respondToToolApproval({
-                    toolCallId: event.toolCallId,
-                    decision: "approve",
-                  });
+                  return failActiveTurn(active, threadId, turn.turnId, cause);
                 },
-              ),
-            ).catch((cause: unknown) => {
-              if (active.activeTurn !== turn || turn.finished) return;
-              void failActiveTurn(active, threadId, turn.turnId, cause);
+              },
+            );
+            return;
+          }
+          // The session's own grant covers a worker chat a restart orphaned, which the
+          // runtimes no longer track.
+          const grant =
+            wired().delegationRuntime?.accessForThread(threadId) ??
+            workerRuntime.accessForThread(threadId) ??
+            active.toolSession.delegation?.access;
+          if (grant?.approvalCeiling === "none") {
+            // Nobody can answer a prompt here, so the call fails now instead of waiting.
+            active.session.respondToToolApproval({
+              toolCallId: event.toolCallId,
+              decision: "decline",
+              declineContext: {
+                reason: "approval_unavailable",
+                message: `Tool '${event.toolName}' needs approval, and this chat cannot ask anyone for it. Finish without it or report the blocker.`,
+              },
             });
             return;
           }
           active.approvalRequests.set(event.toolCallId, {
             name: event.toolName,
-            input: event.args,
+            input: toolInput,
           });
           active.pendingApprovals.set(event.toolCallId, {
             toolName: event.toolName,
@@ -1766,7 +2611,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                     : approvalDetail(event.toolName, action, oneUseApproval),
               toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
               ...(action ? { action } : {}),
-              args: isCodexComputerUseTool(event.toolName) ? undefined : event.args,
+              args: isCodexComputerUseTool(event.toolName) ? undefined : toolInput,
               options: isCodexComputerUseTool(event.toolName)
                 ? [
                     { decision: "accept", label: "Allow" },
@@ -1782,20 +2627,15 @@ const make = (options?: AgentControllerLiveOptions) =>
                         { decision: "accept", label: "Create routine" },
                         { decision: "decline", label: "Cancel" },
                       ]
-                    : AKERU_TOOL_CATALOG.some((tool) => tool.id === event.toolName) ||
-                        isMemoryToolId(event.toolName) ||
-                        oneUseApproval
+                    : oneUseApproval
                       ? [
                           { decision: "decline", label: "Decline" },
-                          {
-                            decision: "accept",
-                            label: oneUseApproval ? "Approve" : "Allow",
-                          },
+                          { decision: "accept", label: "Approve" },
                         ]
                       : [
-                          { decision: "accept", label: "Allow" },
-                          { decision: "acceptForSession", label: "Allow for session" },
                           { decision: "decline", label: "Decline" },
+                          { decision: "acceptAlways", label: "Enable Auto Review" },
+                          { decision: "accept", label: "Allow" },
                         ],
             },
           });
@@ -1805,6 +2645,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          turn.suspendedToolCalls.add(event.toolCallId);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
           const suspendPayload =
@@ -1922,6 +2763,29 @@ const make = (options?: AgentControllerLiveOptions) =>
           modelSelection.instanceId,
         );
       }
+      // Fail closed on a model the instance's snapshot does not advertise.
+      // The bot engine is applied after ws-level preflight ran against the
+      // command's own selection, so this check is the only validation a
+      // bot-owned thread ever sees. An empty snapshot is not evidence the
+      // model is unknown — the first probe may still be running.
+      // Only a settled probe is authoritative: pending snapshots still carry
+      // the built-in catalog, and probe fallbacks do too, so neither proves the
+      // saved model is gone.
+      if (
+        usesMastraCode(routing.driverKind) &&
+        routing.instanceSnapshot !== undefined &&
+        routing.instanceSnapshot.status === "ready"
+      ) {
+        const advertised = routing.instanceSnapshot.models;
+        if (advertised.length > 0 && !advertised.some((entry) => entry.slug === model)) {
+          const name = routing.instanceSnapshot.displayName ?? routing.driverKind;
+          return yield* new AgentControllerUnsupportedEngineError({
+            provider,
+            model,
+            detail: `Model '${model}' is not available for ${name}.`,
+          });
+        }
+      }
       if (routing.mastraConnection) {
         modelConnections.set(String(modelSelection.instanceId), routing.mastraConnection);
       } else {
@@ -1932,7 +2796,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         const issue = mastraConnectionIssue(
           routing.driverKind,
           routing.mastraConnection,
-          subscriptionProvider ? subscriptionAuth.isConnected(subscriptionProvider) : false,
+          subscriptionProvider
+            ? subscriptionAuth.isConnected(subscriptionProvider, modelSelection.instanceId)
+            : false,
         );
         if (issue) return yield* unavailable(new Error(issue));
       }
@@ -1997,9 +2863,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
 
     const isOpenDelegation = (delegation: AkeruDelegationRecord) =>
-      delegation.state !== "completed" &&
-      delegation.state !== "failed" &&
-      delegation.state !== "canceled";
+      !["Completed", "Failed", "Canceled"].includes(delegation.phase._tag);
+    const isChildOf = (delegation: AkeruDelegationRecord, threadId: ThreadId) =>
+      delegation.phase._tag !== "Queued" && delegation.phase.childThreadId === threadId;
 
     // Resolves the thread's bot, group boss, and delegation links with by-id
     // reads. Falls back to the command read model for query doubles that do
@@ -2014,6 +2880,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           bot: undefined,
           botId: fallbackBotId,
           activeChildDelegations: 0,
+          threadTitle: undefined,
         };
       }
       const query = projectionSnapshotQuery.value;
@@ -2027,13 +2894,22 @@ const make = (options?: AgentControllerLiveOptions) =>
         const botId =
           thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
         const bot = botId ? Option.getOrUndefined(yield* getBotById(botId)) : undefined;
+        const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
         return {
-          parentDelegation: delegations.find((candidate) => candidate.childThreadId === threadId),
+          parentDelegation: delegations.find((candidate) => isChildOf(candidate, threadId)),
+          workerParent: workerParentThreadId
+            ? {
+                delegatedAccess: (yield* listThreadDelegations(workerParentThreadId)).find(
+                  (candidate) => isChildOf(candidate, workerParentThreadId),
+                )?.access,
+              }
+            : undefined,
           bot,
           botId,
           activeChildDelegations: delegations.filter(
             (candidate) => candidate.parentThreadId === threadId,
           ).length,
+          threadTitle: thread?.title,
         };
       }
       const snapshot = yield* query.getCommandReadModel();
@@ -2043,15 +2919,24 @@ const make = (options?: AgentControllerLiveOptions) =>
         : undefined;
       const botId =
         thread?.respondingBotId ?? thread?.botId ?? fallbackBotId ?? group?.bossBotId ?? null;
+      const workerParentThreadId = isWorkerThreadId(threadId) ? thread?.parentThreadId : null;
       return {
         parentDelegation: snapshot.delegations.find(
-          (candidate) => candidate.childThreadId === threadId && isOpenDelegation(candidate),
+          (candidate) => isChildOf(candidate, threadId) && isOpenDelegation(candidate),
         ),
+        workerParent: workerParentThreadId
+          ? {
+              delegatedAccess: snapshot.delegations.find((candidate) =>
+                isChildOf(candidate, workerParentThreadId),
+              )?.access,
+            }
+          : undefined,
         bot: snapshot.bots.find((candidate) => candidate.id === botId),
         botId,
         activeChildDelegations: snapshot.delegations.filter(
           (candidate) => candidate.parentThreadId === threadId && isOpenDelegation(candidate),
         ).length,
+        threadTitle: thread?.title,
       };
     });
 
@@ -2059,11 +2944,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       "AgentController.startSession",
     )(function* (threadId, input) {
       const key = String(threadId);
-      const { parentDelegation, bot, botId, activeChildDelegations } =
+      const { parentDelegation, workerParent, bot, botId, activeChildDelegations, threadTitle } =
         yield* readSessionStartContext(threadId, input.botId ?? null);
-      const delegatedAccess =
-        delegationRuntime?.accessForThread(threadId) ?? parentDelegation?.access;
-      const access: AkeruDelegationAccessGrant = delegatedAccess ?? {
+      const isWorkerThread = workerRuntime.depthForThread(threadId) > 0;
+      const botAccess: AkeruDelegationAccessGrant = {
         allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
         memoryScopes: ["private", "bot", "project", "group", "workspace"],
         sandbox: input.botSandbox ?? null,
@@ -2075,6 +2959,28 @@ const make = (options?: AgentControllerLiveOptions) =>
         disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
         approvalCeiling: "secrets",
       };
+      // A restart drops the worker runtime's grants, so a worker chat it orphaned rebuilds
+      // its grant from the parent chat: the parent's delegated grant, or the bot's own for a
+      // top-level parent. Without a parent link it keeps no tools rather than gaining any.
+      const orphanedWorkerAccess = () =>
+        workerAccess(
+          workerParent
+            ? (workerParent.delegatedAccess ?? {
+                ...botAccess,
+                sandbox: botAccess.sandbox ?? "local",
+              })
+            : { ...botAccess, allowedToolIds: [], enabledMcpServerIds: [] },
+        );
+      const delegatedAccess =
+        wired().delegationRuntime?.accessForThread(threadId) ??
+        parentDelegation?.access ??
+        workerRuntime.accessForThread(threadId) ??
+        (isWorkerThread ? orphanedWorkerAccess() : undefined);
+      const access = delegatedAccess ?? botAccess;
+      // A top-level bot's null sandbox is its local workspace, while a delegated
+      // null sandbox has none, so workers receive the local workspace explicitly.
+      const workerParentAccess: AkeruDelegationAccessGrant =
+        delegatedAccess || access.sandbox !== null ? access : { ...access, sandbox: "local" };
       const mcpServers = (input.mcpServers ?? []).filter(
         (server) =>
           access.enabledMcpServerIds.includes(server.id) &&
@@ -2161,25 +3067,22 @@ const make = (options?: AgentControllerLiveOptions) =>
                 }),
             ),
           );
-          yield* Effect.tryPromise({
-            try: () =>
-              migrateLegacyBotMemory({
-                store: botMemoryStore,
-                access: input.memoryAccess!,
-                revisions,
-              }),
-            catch: (cause) =>
-              new AgentControllerRuntimeError({
-                operation: "memory.migrate",
-                detail: failureDetail(cause),
-                cause,
-              }),
-          });
+          yield* runMastra("memory.migrate", () =>
+            migrateLegacyBotMemory({
+              store: botMemoryStore,
+              access: input.memoryAccess!,
+              revisions,
+            }),
+          );
         }
       }
+      // A cwd change invalidates reuse for local workspaces: the user-computer
+      // workspace lease is keyed by cwd and the session tools would keep
+      // acting on the old directory. Remote sandboxes have no user-computer
+      // workspace, so cwd only feeds projectPath there and can update in place.
       if (
         existing?.workspaceResourceKey === workspaceResourceKey &&
-        existing.cwd === input.cwd &&
+        (existing.cwd === input.cwd || isRemoteBotSandbox(access.sandbox)) &&
         existing.toolSession.workspaceType === workspaceType &&
         sameMcpServerConfigurations(existing.mcpServers, mcpServers) &&
         resolved &&
@@ -2187,13 +3090,15 @@ const make = (options?: AgentControllerLiveOptions) =>
         existing.providerInstanceId === resolved.providerInstanceId
       ) {
         existing.runtimeMode = access.runtimeMode;
+        existing.cwd = input.cwd;
         yield* runMastra("state.set", () =>
           existing.session.state.set({
-            ...(input.cwd ? { projectPath: input.cwd } : {}),
+            projectPath: input.cwd || undefined,
             yolo: false,
             botConversation: resolved.botConversation,
             botName: input.botName || "",
             personalityTone,
+            mcpInstructions: formatMcpServerInstructions(mcpServers),
           }),
         );
         const toolSession = { ...existing.configuredToolSession };
@@ -2201,8 +3106,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.botName;
         delete toolSession.billedBotId;
         delete toolSession.delegation;
+        delete toolSession.workers;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
+        delete toolSession.imageGeneration;
+        const imageGeneration = yield* imageToolSettings;
+        const settings = yield* memorySettings();
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
             ? memoryHandlers(input.memoryAccess, access.memoryScopes)
@@ -2214,7 +3123,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ...(input.botName ? { botName: input.botName } : {}),
           ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
           ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-          ...(delegationRuntime && botId
+          ...(wired().delegationRuntime && botId
             ? {
                 delegation: delegationFor({
                   threadId,
@@ -2225,20 +3134,29 @@ const make = (options?: AgentControllerLiveOptions) =>
                 }),
               }
             : {}),
-          ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+          ...(wired().workerOrchestration && botId && !isWorkerThread
+            ? { workers: workersFor(threadId, workerParentAccess) }
+            : {}),
+          ...(input.botId && wired().botStateRuntime ? { botState: wired().botStateRuntime } : {}),
+          imageGeneration,
         };
         existing.configuredToolSession = configuredToolSession;
+        existing.startInput = input;
         existing.configuredMemoryAccess = delegatedAccess
           ? undefined
           : memoryAccessFor(input.memoryAccess);
+        existing.configuredEntityMemoryAccess = input.memoryAccess;
+        existing.privateBotMemory = settings.privateBotMemory;
         if (!existing.activeTurn && !existing.admittingTurn && existing.pendingTurns.length === 0) {
           existing.toolSession = configuredToolSession;
           existing.memoryAccess = existing.configuredMemoryAccess;
+          existing.entityMemoryAccess = existing.configuredEntityMemoryAccess;
           toolRuntime.registerSession(key, existing.toolSession);
         }
         return toProviderSession(threadId, existing);
       }
       const existingLegacy = legacyResourceIdentity.get(key);
+      const settings = yield* memorySettings();
       const nextMemoryAccess = delegatedAccess ? undefined : memoryAccessFor(input.memoryAccess);
       const nextMemoryHandlers =
         access.memoryScopes.length > 0
@@ -2260,6 +3178,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         );
         if (live) {
           existingLegacy.memoryAccess = nextMemoryAccess;
+          existingLegacy.entityMemoryAccess = input.memoryAccess;
+          existingLegacy.privateBotMemory = settings.privateBotMemory;
           if (nextMemoryHandlers?.memory) {
             McpMemoryToolSession.setMcpMemoryToolSession(threadId, nextMemoryHandlers.memory);
           } else {
@@ -2312,19 +3232,38 @@ const make = (options?: AgentControllerLiveOptions) =>
                   ? { userComputerCwd: input.cwd }
                   : {}),
                 mcpServers,
+                exclusiveComputer: resolved.provider === "codex" || resolved.provider === "kimi",
+                ...(botId ? { botId } : {}),
+                ...(bot?.name ? { botName: bot.name } : {}),
+                taskOrRoutine: threadTitle ?? "Browser task",
               }),
             ).pipe(Effect.onError(() => clearPreviewMcpSession(threadId)));
       if (!usesMastraCode(resolved.provider)) {
-        const frozenMemoryContext = nextMemoryAccess
-          ? formatBotMemoryPrompt(
-              yield* Effect.promise(() => botMemoryStore.readPromptSnapshot(nextMemoryAccess)),
-            )
-          : "";
+        const frozenMemoryContext =
+          nextMemoryAccess && settings.enabled
+            ? formatBotMemoryPrompt(
+                yield* Effect.promise(() =>
+                  settings.privateBotMemory
+                    ? botMemoryStore.readPromptSnapshot(nextMemoryAccess)
+                    : botMemoryStore.readPromptSnapshot(nextMemoryAccess).then((snapshot) => ({
+                        ...snapshot,
+                        memory: { ...snapshot.memory, content: "", charCount: 0 },
+                      })),
+                ),
+              )
+            : "";
+        const entityPacket =
+          nextMemoryAccess && settings.enabled
+            ? yield* runMastra("memory.packet", () => entityMemoryContext(input.memoryAccess))
+            : "";
+        const combinedMemoryContext = [frozenMemoryContext, entityPacket]
+          .filter(Boolean)
+          .join("\n\n");
         return yield* legacyProviderBridge
           .startSession(threadId, {
             ...input,
             personalityTone,
-            ...(frozenMemoryContext ? { persistentMemoryContext: frozenMemoryContext } : {}),
+            ...(combinedMemoryContext ? { persistentMemoryContext: combinedMemoryContext } : {}),
           })
           .pipe(
             Effect.tap((session) =>
@@ -2337,7 +3276,9 @@ const make = (options?: AgentControllerLiveOptions) =>
                   botName: input.botName,
                   personalityTone,
                   memoryAccess: nextMemoryAccess,
+                  entityMemoryAccess: input.memoryAccess,
                   memoryAccessKey: memoryAccessKey(nextMemoryAccess),
+                  privateBotMemory: settings.privateBotMemory,
                 });
                 return session;
               }),
@@ -2356,6 +3297,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           : undefined;
       const registeredMemoryHandlers = nextMemoryHandlers;
       const mcpManager = sessionResources.getMcpManager(key);
+      const imageGenerationSettings = yield* imageToolSettings;
       const mcpDependencies =
         input.botId && input.botName
           ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
@@ -2368,10 +3310,11 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(workspace ? { workspace } : {}),
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-        ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+        ...(input.botId && wired().botStateRuntime ? { botState: wired().botStateRuntime } : {}),
+        imageGeneration: imageGenerationSettings,
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,
-          pluginRuntime,
+          wired().pluginRuntime,
           mcpManager
             ? {
                 getRequestHealth: (serverId) => subscriptionAuth.mcpRequestHealth(serverId),
@@ -2380,16 +3323,10 @@ const make = (options?: AgentControllerLiveOptions) =>
                 recordFailure: (serverId, message, at) =>
                   subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
                 getDependencies: async (serverId) => {
-                  const snapshot = await pluginRuntimeOptions?.readSnapshot();
+                  const snapshot = await wired().pluginRuntimeOptions?.readSnapshot();
                   return snapshot
                     ? {
-                        dependentBots: snapshot.bots
-                          .filter(
-                            (bot) =>
-                              bot.archivedAt === null &&
-                              !bot.disabledMcpServerIds.some((id) => String(id) === serverId),
-                          )
-                          .map((bot) => ({ id: bot.id, name: bot.name })),
+                        dependentBots: mcpServerDependentBots(snapshot, serverId),
                         dependentRoutines: [],
                       }
                     : mcpDependencies;
@@ -2414,15 +3351,97 @@ const make = (options?: AgentControllerLiveOptions) =>
                 },
               }
             : undefined,
+          {
+            webSearch: akeruWebSearchUnavailable,
+            webFetch,
+            // The router bounds each provider attempt and interruptTurn cancels
+            // in-flight requests, so there is no outer deadline here.
+            generateImage: async (request: unknown) => {
+              const generate = options?.generateImage ?? runImageGenerationTool;
+              return runPromise(generate(threadId, request));
+            },
+            ...(wired().pluginRuntimeOptions
+              ? {
+                  addMcpServer: async (input: unknown) => {
+                    const value = decodeAkeruToolInput("AddMcpServer", input);
+                    const base = {
+                      type: "mcp-server.create" as const,
+                      commandId: CommandId.make(`catalog:mcp-add:${NodeCrypto.randomUUID()}`),
+                      mcpServerId: value.serverId,
+                      name: value.name,
+                      enabled: true,
+                      createdAt: nowIso(),
+                    };
+                    await wired().pluginRuntimeOptions!.dispatch(
+                      value.transport === "stdio"
+                        ? {
+                            ...base,
+                            transport: "stdio",
+                            command: value.command,
+                            ...(value.args ? { args: [...value.args] } : {}),
+                          }
+                        : { ...base, transport: "url", url: value.url },
+                    );
+                    return { serverId: value.serverId, added: true };
+                  },
+                  uninstallMcpServer: (serverId: string) =>
+                    deleteCatalogMcpServer(wired().pluginRuntimeOptions!, serverId, "mcp-delete"),
+                  removeMcpAccount: (serverId: string) =>
+                    deleteCatalogMcpServer(wired().pluginRuntimeOptions!, serverId, "mcp-remove"),
+                  renameMcpAccount: async (input: unknown) => {
+                    const value = decodeAkeruToolInput("RenameMcpAccount", input);
+                    const server = (
+                      await wired().pluginRuntimeOptions!.readSnapshot()
+                    ).mcpServers?.find((candidate) => candidate.id === value.serverId);
+                    if (!server) throw new Error(`MCP server '${value.serverId}' was not found.`);
+                    const base = {
+                      type: "mcp-server.update" as const,
+                      commandId: CommandId.make(`catalog:mcp-rename:${NodeCrypto.randomUUID()}`),
+                      mcpServerId: server.id,
+                      name: value.name,
+                    };
+                    await wired().pluginRuntimeOptions!.dispatch(
+                      server.transport === "stdio"
+                        ? {
+                            ...base,
+                            transport: "stdio",
+                            command: server.command,
+                            ...(server.args ? { args: [...server.args] } : {}),
+                          }
+                        : { ...base, transport: "url", url: server.url },
+                    );
+                    return { serverId: value.serverId, name: value.name, renamed: true };
+                  },
+                  setMcpInstructions: async (value: {
+                    readonly serverId: string;
+                    readonly instructions: string;
+                  }) => {
+                    await wired().pluginRuntimeOptions!.dispatch({
+                      type: "mcp-server.instructions.set",
+                      commandId: CommandId.make(
+                        `catalog:mcp-instructions:${NodeCrypto.randomUUID()}`,
+                      ),
+                      mcpServerId: McpServerId.make(value.serverId),
+                      instructions: value.instructions,
+                    });
+                    return {
+                      serverId: value.serverId,
+                      instructions: value.instructions.trim(),
+                      appliesFrom: "next-turn",
+                    };
+                  },
+                }
+              : {}),
+          },
         ),
         ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-        ...(delegationRuntime && botId
+        ...(wired().delegationRuntime && botId
           ? {
               sendToUser: async (request) => {
                 const active = sessions.get(key);
                 const turnId = active?.activeTurn?.turnId;
                 if (!turnId) throw new Error("User messaging requires an active turn.");
-                return delegationRuntime!.sendToUser(
+                return wired().delegationRuntime!.sendToUser(
                   {
                     threadId,
                     turnId,
@@ -2444,13 +3463,16 @@ const make = (options?: AgentControllerLiveOptions) =>
               }),
             }
           : {}),
-        ...(input.botId && channelRuntime
+        ...(wired().workerOrchestration && botId && !isWorkerThread
+          ? { workers: workersFor(threadId, workerParentAccess) }
+          : {}),
+        ...(input.botId && wired().channelRuntime
           ? {
               reactToMessage: (request, toolCallId) =>
-                channelRuntime!.react(threadId, input.botId!, request, toolCallId),
+                wired().channelRuntime!.react(threadId, input.botId!, request, toolCallId),
               channels: {
-                create: (request) => channelRuntime!.create(input.botId!, request),
-                update: (request) => channelRuntime!.update(input.botId!, request),
+                create: (request) => wired().channelRuntime!.create(input.botId!, request),
+                update: (request) => wired().channelRuntime!.update(input.botId!, request),
               },
             }
           : {}),
@@ -2497,6 +3519,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             botConversation: resolved.botConversation,
             ...(input.botName ? { botName: input.botName } : {}),
             personalityTone,
+            mcpInstructions: formatMcpServerInstructions(mcpServers),
             ...(modelOptions ? { modelOptions } : {}),
           }),
         );
@@ -2537,6 +3560,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
         return {
           session,
+          startInput: input,
+          pendingDispatches: new Set<Promise<void>>(),
           provider: resolved.provider,
           providerInstanceId: resolved.providerInstanceId,
           cwd: input.cwd,
@@ -2554,8 +3579,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           connectorSessionApprovals: new Set<string>(),
           toolSession,
           memoryAccess: nextMemoryAccess,
+          entityMemoryAccess: input.memoryAccess,
           configuredToolSession: toolSession,
           configuredMemoryAccess: nextMemoryAccess,
+          configuredEntityMemoryAccess: input.memoryAccess,
+          privateBotMemory: settings.privateBotMemory,
           workspaceResourceKey,
           pendingApprovals: new Map<string, PendingApproval>(),
           unsubscribe,
@@ -2594,8 +3622,32 @@ const make = (options?: AgentControllerLiveOptions) =>
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
-          const { botUsage: _, ...providerInput } = input;
-          const memoryAccess = legacyResourceIdentity.get(key)?.memoryAccess;
+          const { botUsage: _, delegationResults, ...providerInput } = input;
+          // memory.enabled is authoritative per turn: while it is off the turn
+          // must not read the durable snapshot or reserve review cadence. The
+          // identity keeps its stored access so re-enabling restores memory.
+          const settings = yield* memorySettings();
+          const memoryAccess = settings.enabled
+            ? legacyResourceIdentity.get(key)?.memoryAccess
+            : undefined;
+          const entityMemoryAccess = settings.enabled
+            ? yield* runMastra("memory.access", () =>
+                refreshEntityMemoryAccess(legacyResourceIdentity.get(key)?.entityMemoryAccess),
+              )
+            : undefined;
+          if (
+            settings.enabled &&
+            legacyResourceIdentity.get(key)?.entityMemoryAccess &&
+            !entityMemoryAccess
+          ) {
+            return yield* new AgentControllerRuntimeError({
+              operation: "sendTurn.memory",
+              detail: "The bot is no longer a member of this group.",
+            });
+          }
+          const entityPacket = entityMemoryAccess
+            ? yield* runMastra("memory.packet", () => entityMemoryContext(entityMemoryAccess))
+            : "";
           const conversation = bundle.readObservationalMemory
             ? yield* runMastra("memory.read", () => bundle.readObservationalMemory!(key, key))
             : undefined;
@@ -2615,6 +3667,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                     groupId: memoryAccess.groupId === null ? null : String(memoryAccess.groupId),
                     text: (providerInput.input ?? "").slice(0, 4_000),
                   },
+                  privateBotMemory: settings.privateBotMemory,
                 }),
               )
             : undefined;
@@ -2629,6 +3682,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             earlyEvents: [],
             assistant: "",
             memoryTurn,
+            hiddenWake: input.hiddenWake === true,
           };
           if (memoryTurn?.reviewIncluded) {
             const priorMemoryHandler = McpMemoryToolSession.readMcpMemoryToolSession(
@@ -2650,18 +3704,24 @@ const make = (options?: AgentControllerLiveOptions) =>
                   : {}),
               })
             : "";
+          // OpenCode reads per-turn context as its system prompt. Claude and Grok
+          // only read context at session start, so this turn's text carries it.
+          const contextInSystem = resolved?.provider === "opencode";
           const providerContext = [
-            resolved?.provider === "opencode" ? turnInstructions : "",
+            contextInSystem ? turnInstructions : "",
             memoryTurn?.context,
+            entityPacket,
             observationContext,
+            contextInSystem ? delegationResults : "",
           ]
             .filter(Boolean)
             .join("\n\n");
+          const inputPrefix = contextInSystem ? [] : [turnInstructions, delegationResults];
           return yield* legacyProviderBridge
             .sendTurn({
               ...providerInput,
-              ...(turnInstructions && resolved?.provider !== "opencode"
-                ? { input: [turnInstructions, providerInput.input].filter(Boolean).join("\n\n") }
+              ...(inputPrefix.some(Boolean)
+                ? { input: [...inputPrefix, providerInput.input].filter(Boolean).join("\n\n") }
                 : {}),
               ...(providerContext ? { persistentMemoryContext: providerContext } : {}),
             })
@@ -2670,6 +3730,8 @@ const make = (options?: AgentControllerLiveOptions) =>
                 Effect.gen(function* () {
                   if (!hasLegacyPending(key, pendingMemory)) return;
                   pendingMemory.turnId = String(result.turnId);
+                  if (input.hiddenWake === true)
+                    legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                   pendingMemory.dispatchReturned = true;
                   for (const event of pendingMemory.earlyEvents) {
                     if (String(event.turnId) !== pendingMemory.turnId) continue;
@@ -2750,7 +3812,10 @@ const make = (options?: AgentControllerLiveOptions) =>
           botUsage: input.botUsage,
           toolSession: active.configuredToolSession,
           memoryAccess: active.configuredMemoryAccess,
+          entityMemoryAccess: active.configuredEntityMemoryAccess,
           reviewInput: input.input ?? "",
+          hiddenWake: input.hiddenWake === true,
+          delegationResults: input.delegationResults,
         });
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
@@ -2788,7 +3853,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 pendingTurns,
                 (pendingMemory) =>
                   pendingMemory.memoryTurn
-                    ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                    ? runMastra("memory.abandon", () => pendingMemory.memoryTurn!.abandon()).pipe(
                         Effect.ignoreCause({ log: true }),
                       )
                     : Effect.void,
@@ -2801,6 +3866,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
+      yield* cancelActiveImageGenerations(input.threadId);
       yield* releaseMastraReservations(input.threadId);
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -2835,22 +3901,48 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const toolCallId = String(input.requestId);
-      const routineRequest = pendingRoutineRequests.get(toolCallId);
-      if (routineRequest) {
-        pendingRoutineRequests.delete(toolCallId);
-        if (active.activeTurn) active.activeTurn.waiting = false;
-        publish({
-          ...baseEvent(input.threadId, active, active.activeTurn?.turnId),
-          requestId: RuntimeRequestId.make(toolCallId),
-          type: "request.resolved",
-          payload: { requestType: "dynamic_tool_call" as const, decision: input.decision },
+      const openRoutineRequest = pendingRoutineRequests.get(toolCallId);
+      if (openRoutineRequest && openRoutineRequest.threadId !== key) {
+        return yield* new AgentControllerRuntimeError({
+          operation: "respondToRequest",
+          detail: `The routine review belongs to another chat: ${input.requestId}.`,
         });
-        publishSessionState(input.threadId, active, "running");
+      }
+      // Claiming the review first stops its timeout, so an answer that arrives
+      // in time always decides the outcome even if creation outlasts the limit.
+      const routineRequest = pendingRoutineRequests.claim(toolCallId);
+      if (routineRequest) {
+        // The review stays open until its answer has taken effect, so an
+        // accepted review keeps the turn waiting while the routine is created.
+        const resolveReview = (outcome?: "failed") =>
+          Effect.sync(() => {
+            const current = sessions.get(key);
+            if (!current?.activeTurn) return;
+            current.activeTurn.waiting = turnStillWaiting(key, current);
+            publish({
+              ...baseEvent(input.threadId, current, current.activeTurn.turnId),
+              requestId: RuntimeRequestId.make(toolCallId),
+              type: "request.resolved",
+              payload: {
+                requestType: "dynamic_tool_call" as const,
+                decision: input.decision,
+                ...(outcome ? { outcome } : {}),
+              },
+            });
+            publishSessionState(
+              input.threadId,
+              current,
+              current.activeTurn.waiting ? "waiting" : "running",
+            );
+          });
         if (input.decision === "decline" || input.decision === "cancel") {
-          routineRequest.resolve({ status: "cancelled" });
+          yield* resolveReview();
+          pendingRoutineRequests.resolve(toolCallId, { status: "cancelled" });
           return;
         }
-        const result = yield* routineDispatcher!
+        creatingRoutineReviews.set(toolCallId, key);
+        let created = false;
+        yield* routineDispatcher!
           .createApprovedForThread(
             ThreadIdBrand(routineRequest.threadId),
             routineRequest.timezone,
@@ -2865,13 +3957,32 @@ const make = (options?: AgentControllerLiveOptions) =>
                   cause,
                 }),
             ),
+            Effect.tap((result) =>
+              Effect.sync(() => {
+                created = true;
+                pendingRoutineRequests.resolve(toolCallId, result);
+              }),
+            ),
             Effect.tapError((cause) =>
               Effect.sync(() => {
-                routineRequest.reject(cause);
+                pendingRoutineRequests.reject(toolCallId, cause);
+              }),
+            ),
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                pendingRoutineRequests.reject(
+                  toolCallId,
+                  new Error("The routine review was interrupted before the routine was created."),
+                );
+              }),
+            ),
+            Effect.ensuring(
+              Effect.suspend(() => {
+                creatingRoutineReviews.delete(toolCallId);
+                return resolveReview(created ? undefined : "failed");
               }),
             ),
           );
-        routineRequest.resolve(result);
         return;
       }
       const toolRequest = active.approvalRequests.get(toolCallId);
@@ -2891,6 +4002,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         !isCodexComputerUseTool(toolName) &&
         !akeruActionNeedsApproval(toolName, toolInput) &&
         toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+      const enableAutoReview =
+        input.decision === "acceptAlways" &&
+        !isCodexComputerUseTool(toolName) &&
+        !akeruActionNeedsApproval(toolName, toolInput) &&
+        toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
+        toolName !== AKERU_CREATE_ROUTINE_TOOL_NAME;
       const target = pendingApproval.toolName;
       const decision =
         input.decision === "acceptForSession" || input.decision === "acceptAlways"
@@ -2913,11 +4030,14 @@ const make = (options?: AgentControllerLiveOptions) =>
               input: toolInput,
             });
           }
+          // Auto Review lets permissionPolicy run the rest of this session; risky
+          // one-use actions still ask.
+          if (enableAutoReview) active.runtimeMode = "auto";
           const update = acceptForSession
             ? active.session.permissions.setForTool({ toolName, policy: "allow" })
             : undefined;
           if (acceptForSession) active.connectorSessionApprovals.add(toolName);
-          if (active.activeTurn) active.activeTurn.waiting = false;
+          if (active.activeTurn) active.activeTurn.waiting = turnStillWaiting(key, active);
           active.session.respondToToolApproval({
             toolCallId,
             decision:
@@ -2951,7 +4071,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           outcome: decision === "accept" ? "approved" : "denied",
         },
       });
-      publishSessionState(input.threadId, active, "running");
+      publishSessionState(
+        input.threadId,
+        active,
+        active.activeTurn?.waiting ? "waiting" : "running",
+      );
     });
 
     const respondToUserInput: AgentControllerShape["respondToUserInput"] = Effect.fn(
@@ -2986,6 +4110,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const activeTurn = active.activeTurn;
+      // Only a question this turn was waiting on goes back into its set on failure.
+      let ownedByTurn = false;
+      let restored = false;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
         if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
@@ -3002,7 +4129,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             if (!activeTurn || active.activeTurn !== activeTurn) {
               return { _tag: "Stale" as const };
             }
-            if (active.activeTurn) active.activeTurn.waiting = false;
+            ownedByTurn = activeTurn.suspendedToolCalls.delete(toolCallId);
+            activeTurn.waiting = turnStillWaiting(key, active);
             return {
               _tag: "Dispatched" as const,
               resume: active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
@@ -3015,7 +4143,33 @@ const make = (options?: AgentControllerLiveOptions) =>
             detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,
           });
         }
-        yield* runMastra("respondToToolSuspension", () => admitted.resume);
+        yield* runMastra("respondToToolSuspension", () => admitted.resume).pipe(
+          // A rejected resume leaves the question open while its turn is still live.
+          Effect.onError(() =>
+            Effect.sync(() => {
+              if (
+                !ownedByTurn ||
+                !activeTurn ||
+                active.activeTurn !== activeTurn ||
+                resumeFailure !== undefined
+              )
+                return;
+              activeTurn.suspendedToolCalls.add(toolCallId);
+              activeTurn.waiting = turnStillWaiting(key, active);
+              restored = true;
+            }),
+          ),
+          Effect.mapError((error) =>
+            restored
+              ? new AgentControllerRuntimeError({
+                  operation: error.operation,
+                  detail: error.detail,
+                  cause: error.cause,
+                  retryable: true,
+                })
+              : error,
+          ),
+        );
       }).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
       if (resumeFailure !== undefined) {
         return yield* new AgentControllerRuntimeError({
@@ -3030,13 +4184,19 @@ const make = (options?: AgentControllerLiveOptions) =>
         type: "user-input.resolved",
         payload: { answers: input.answers },
       });
-      publishSessionState(input.threadId, active, "running");
+      publishSessionState(
+        input.threadId,
+        active,
+        active.activeTurn?.waiting ? "waiting" : "running",
+      );
     });
 
     const stopSessionWithResources = Effect.fn("AgentController.stopSession")(function* (
       input: Parameters<AgentControllerShape["stopSession"]>[0],
       destroyResources: boolean,
     ) {
+      // A stopped chat must not receive an image that finishes later.
+      yield* cancelActiveImageGenerations(input.threadId);
       const key = String(input.threadId);
       const active = sessions.get(key);
       if (!active) {
@@ -3050,7 +4210,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             pendingTurns,
             (pendingMemory) =>
               pendingMemory.memoryTurn
-                ? Effect.tryPromise(() => pendingMemory.memoryTurn!.abandon()).pipe(
+                ? runMastra("memory.abandon", () => pendingMemory.memoryTurn!.abandon()).pipe(
                     Effect.ignoreCause({ log: true }),
                   )
                 : Effect.void,
@@ -3104,6 +4264,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             toolRuntime.unregisterSession(key);
             sessions.delete(key);
             memoryUsageByThread.delete(key);
+            yield* workerRuntime.releaseThread(input.threadId);
+            workerTurnDefaults.delete(key);
           }),
         ),
       );
@@ -3112,21 +4274,141 @@ const make = (options?: AgentControllerLiveOptions) =>
     const stopSession: AgentControllerShape["stopSession"] = (input) =>
       stopSessionWithResources(input, false);
 
-    const rollbackConversation: AgentControllerShape["rollbackConversation"] = (input) => {
+    const rollbackConversation: AgentControllerShape["rollbackConversation"] = Effect.fn(
+      "AgentController.rollbackConversation",
+    )(function* (input) {
+      if (input.numTurns === 0) return;
       const resolved = resolvedByThread.get(String(input.threadId));
       if (!sessions.has(String(input.threadId)) && !resolved) {
-        return legacyProviderBridge.rollbackConversation(input);
+        return yield* legacyProviderBridge.rollbackConversation(input);
       }
       if (resolved && !usesMastraCode(resolved.provider)) {
-        return legacyProviderBridge.rollbackConversation(input);
+        return yield* legacyProviderBridge.rollbackConversation(input);
       }
-      return Effect.fail(
-        new AgentControllerRuntimeError({
+      const active = sessions.get(String(input.threadId));
+      if (
+        !active ||
+        !bundle.rebuildConversation ||
+        Option.isNone(projectionMessages) ||
+        Option.isNone(projectionTurns)
+      ) {
+        return yield* new AgentControllerRuntimeError({
           operation: "rollbackConversation",
-          detail: `Mastra conversation rollback is not available for thread '${input.threadId}'.`,
+          detail: "Conversation history is unavailable for rebuilding the provider session.",
+        });
+      }
+      const turns = yield* projectionTurns.value.listByThreadId({ threadId: input.threadId });
+      const messages = yield* projectionMessages.value.listByThreadId({ threadId: input.threadId });
+      const currentTurnCount = turns.reduce(
+        (count, turn) => Math.max(count, turn.checkpointTurnCount ?? 0),
+        0,
+      );
+      const retained = retainProjectionMessagesAfterRevert(
+        messages,
+        turns,
+        Math.max(0, currentTurnCount - input.numTurns),
+      );
+      const key = String(input.threadId);
+      const transcript: MastraDBMessage[] = yield* Effect.forEach(retained, (message) =>
+        Effect.try({
+          try: () => ({
+            id: String(message.messageId),
+            role: message.role,
+            content: {
+              format: 2 as const,
+              parts: [
+                {
+                  type: "text" as const,
+                  text: [
+                    message.text,
+                    ...(message.attachments ?? []).map((attachment) => {
+                      const path = resolveAttachmentPath({
+                        attachmentsDir: config.attachmentsDir,
+                        attachment,
+                      });
+                      return `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
+                    }),
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n"),
+                },
+              ],
+              ...(message.attachments?.length
+                ? {
+                    experimental_attachments: message.attachments.map((attachment) => {
+                      const path = resolveAttachmentPath({
+                        attachmentsDir: config.attachmentsDir,
+                        attachment,
+                      });
+                      if (path === null) throw new Error(`Invalid attachment '${attachment.id}'.`);
+                      return {
+                        name: attachment.name,
+                        contentType: attachment.mimeType,
+                        url: `data:${attachment.mimeType};base64,${NodeFS.readFileSync(path).toString("base64")}`,
+                      };
+                    }),
+                  }
+                : {}),
+            },
+            createdAt: DateTime.toDate(DateTime.makeUnsafe(message.createdAt)),
+            threadId: key,
+            resourceId: key,
+          }),
+          catch: (cause) =>
+            new AgentControllerRuntimeError({
+              operation: "rollbackConversation",
+              detail: "Could not rebuild retained conversation attachments.",
+              cause,
+            }),
         }),
       );
-    };
+      const startInput = {
+        ...active.startInput,
+        runtimeMode: active.runtimeMode,
+        ...(resolved ? { modelSelection: resolved.modelSelection } : {}),
+      };
+      const drainLifetime = new AbortController();
+      const drained = (async () => {
+        while (
+          !drainLifetime.signal.aborted &&
+          (active.session.stream.isActive() || active.session.run.getRunId() !== null)
+        ) {
+          const wake = new AbortController();
+          const cancel = () => wake.abort();
+          drainLifetime.signal.addEventListener("abort", cancel, { once: true });
+          try {
+            await Promise.race([
+              active.session.stream.waitForTeardown(wake.signal),
+              active.session.run.waitForTeardown(wake.signal),
+            ]);
+          } finally {
+            drainLifetime.signal.removeEventListener("abort", cancel);
+            wake.abort();
+          }
+        }
+      })();
+      yield* interruptTurn({ threadId: input.threadId });
+      yield* runMastra("drainConversation", async () => {
+        await Promise.allSettled([...active.pendingDispatches]);
+        await drained;
+      }).pipe(Effect.ensuring(Effect.sync(() => drainLifetime.abort())));
+      yield* stopSession({ threadId: input.threadId });
+      const restore = yield* runMastra("rebuildConversation", () =>
+        bundle.rebuildConversation!(key, transcript),
+      );
+      // A failed restart restores the original transcript and reopens its session, so the chat
+      // keeps a live provider session even though the revert fails.
+      yield* startSession(input.threadId, startInput).pipe(
+        Effect.catch((error) =>
+          runMastra("restoreConversation", restore).pipe(
+            Effect.andThen(
+              startSession(input.threadId, startInput).pipe(Effect.ignoreCause({ log: true })),
+            ),
+            Effect.andThen(Effect.fail(error)),
+          ),
+        ),
+      );
+    });
 
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
@@ -3151,7 +4433,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         for (const pendingTurns of legacyTurnMemory.values()) {
           for (const pending of pendingTurns) {
             if (pending.memoryTurn) {
-              yield* Effect.tryPromise(() => pending.memoryTurn!.abandon()).pipe(
+              yield* runMastra("memory.abandon", () => pending.memoryTurn!.abandon()).pipe(
                 Effect.ignoreCause({ log: true }),
               );
             }
@@ -3161,18 +4443,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         legacyBufferedTerminals.clear();
         legacyResourceIdentity.clear();
         sessions.clear();
-        for (const waiter of childWaiters.values()) {
-          if (waiter.timer) clearTimeout(waiter.timer);
-          waiter.reject(new Error("The agent controller stopped."));
-        }
-        childWaiters.clear();
         yield* runMastra("resources.shutdown", () => sessionResources.shutdown()).pipe(
-          Effect.ignoreCause({ log: true }),
-        );
-        yield* runMastra("destroy", () => bundle.controller.destroy()).pipe(
-          Effect.ignoreCause({ log: true }),
-        );
-        yield* runMastra("bundle.destroy", async () => bundle.destroy()).pipe(
           Effect.ignoreCause({ log: true }),
         );
       }),
@@ -3188,58 +4459,68 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     return AgentController.of({
       configurePluginRuntime: (input: AkeruPluginRuntimeOptions) =>
-        Effect.sync(() => {
-          pluginRuntimeOptions = input;
-          pluginRuntime = createAkeruPluginRuntime(input);
-        }),
+        Ref.update(lateWiring, (current) => ({
+          ...current,
+          pluginRuntimeOptions: input,
+          pluginRuntime: createAkeruPluginRuntime(input),
+        })),
       configureDelegation: (input) =>
-        Effect.sync(() => {
-          botStateRuntime = createAkeruBotStateRuntime(input);
-          channelRuntime = createAkeruChannelRuntime(input);
-          delegationRuntime ??= makeDelegationRuntime(input);
-        }),
+        Ref.update(lateWiring, (current) => ({
+          ...current,
+          botStateRuntime: createAkeruBotStateRuntime(input),
+          channelRuntime: createAkeruChannelRuntime(input),
+          delegationRuntime: current.delegationRuntime ?? makeDelegationRuntime(input),
+          workerOrchestration: current.workerOrchestration ?? input,
+        })),
       failDelegation: ({ threadId, error }) =>
-        Effect.sync(() => resolveChildWaiter(threadId, { state: "failed", turnId: null, error })),
-      authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
+        Effect.sync(() =>
+          resolveChildWaiter(threadId, { state: "failed", turnId: null, error }),
+        ).pipe(
+          Effect.andThen(workerRuntime.childTurnFinished(threadId, { state: "failed", error })),
+        ),
+      dispatchDelegation: (input) =>
         Effect.tryPromise({
-          try: async (signal) => {
-            const recoveryFailures: string[] = [];
-            const managerSessions = sessionResources.getMcpManagerSessionsForServer(
-              String(server.id),
-            );
-            const status = await authenticateMcpServer({
-              server,
-              managers: managerSessions.map(({ manager }) => manager),
-              managerThreadIds: managerSessions.map(({ threadId }) => threadId),
-              createManager: () =>
-                (options?.makeMcpManager ?? createMcpManager)(
-                  NodePath.join(config.stateDir, "bot-mcp-runtime"),
-                  ".akeru-runtime",
-                  toMcpServerConfigs([server]),
-                ),
-              onAuthorizationUrl,
-              signal,
-              recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
-              recordFailure: (serverId, message) =>
-                subscriptionAuth.recordMcpRequestFailure(serverId, message),
-              recordRecoveryFailure: (serverId, message) => {
-                recoveryFailures.push(message);
-                void runPromise(
-                  Effect.logWarning("MCP session recovery failed after authentication.", {
-                    serverId,
-                    error: message,
-                  }),
-                );
-              },
-            });
-            return { toolCount: status.toolCount, recoveryFailures };
+          try: async () => {
+            const dispatchDelegation = wired().delegationRuntime?.dispatchDelegation;
+            if (!dispatchDelegation) throw new Error("Bot work is not available yet.");
+            return dispatchDelegation(input);
           },
           catch: (cause) =>
             new AgentControllerRuntimeError({
-              operation: "mcp.authenticate",
+              operation: "dispatchDelegation",
               detail: failureDetail(cause),
               cause,
             }),
+        }),
+      authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
+        runMastra("mcp.authenticate", async (signal) => {
+          const recoveryFailures: string[] = [];
+          const managerSessions = sessionResources.getMcpManagerSessionsForServer(
+            String(server.id),
+          );
+          const status = await authenticateMcpServer({
+            server,
+            managers: managerSessions.map(({ manager }) => manager),
+            managerThreadIds: managerSessions.map(({ threadId }) => threadId),
+            createManager: () =>
+              (options?.makeMcpManager ?? createMcpManager)(
+                NodePath.join(config.stateDir, "bot-mcp-runtime"),
+                ".akeru-runtime",
+                toMcpServerConfigs([server]),
+              ),
+            onAuthorizationUrl,
+            signal,
+            recordSuccess: (serverId) => subscriptionAuth.recordMcpRequestSuccess(serverId),
+            recordFailure: (serverId, message) =>
+              subscriptionAuth.recordMcpRequestFailure(serverId, message),
+            recordRecoveryFailure: (serverId, message) => {
+              recoveryFailures.push(message);
+              fork("MCP session recovery failed after authentication.", Effect.fail(message), {
+                serverId,
+              });
+            },
+          });
+          return { toolCount: status.toolCount, recoveryFailures };
         }),
       readConversationMemory: (threadId) =>
         bundle.readObservationalMemory
@@ -3301,10 +4582,28 @@ const make = (options?: AgentControllerLiveOptions) =>
           legacyProviderBridge.streamEvents,
           Stream.fromPubSub(runtimeEvents),
         ).pipe(
+          Stream.map((event) => {
+            if (event.type !== "turn.started") return event;
+            const key = String(event.threadId);
+            const hiddenWake =
+              event.turnId === undefined
+                ? false
+                : legacyHiddenWakeByTurn.get(`${key}:${String(event.turnId)}`) === true ||
+                  legacyPending(key).some(
+                    (pending) => !pending.dispatchReturned && pending.hiddenWake,
+                  );
+            return hiddenWake
+              ? { ...event, payload: { ...event.payload, hiddenWake: true } }
+              : event;
+          }),
           Stream.tap((event) =>
             Effect.gen(function* () {
-              recordProviderAccessHealth(subscriptionAuth, event);
               const key = String(event.threadId);
+              recordProviderAccessHealth(
+                subscriptionAuth,
+                event,
+                resolvedByThread.get(key)?.modelSelection.model,
+              );
               if (sessions.has(key)) return;
               const pendingTurns = legacyPending(key);
               if (pendingTurns.length === 0) return;
@@ -3316,6 +4615,7 @@ const make = (options?: AgentControllerLiveOptions) =>
                 pending.seenEventIds.add(String(event.eventId));
               }
               if (event.type === "turn.completed" || event.type === "turn.aborted") {
+                if (event.turnId) legacyHiddenWakeByTurn.delete(`${key}:${String(event.turnId)}`);
                 if (!event.turnId) return;
                 const terminals = legacyBufferedTerminals.get(key) ?? new Map();
                 terminals.set(String(event.turnId), event);
@@ -3385,4 +4685,7 @@ export const AgentControllerLive = Layer.effect(
     const entityMemoryRepository = yield* EntityMemoryRepository;
     return yield* make({ entityMemoryRepository });
   }),
+).pipe(
+  Layer.provide(ProjectionThreadMessageRepositoryLive),
+  Layer.provide(ProjectionTurnRepositoryLive),
 );

@@ -33,6 +33,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { AppText as Text } from "../../components/AppText";
+import { useMobileI18n } from "../../lib/i18n";
 
 // Wide enough for the longest action label ("Unarchive").
 const ACTION_ITEM_WIDTH = 58;
@@ -74,15 +75,16 @@ function resolveSecondaryAction(input: {
   readonly close: () => void;
   readonly onDelete: () => void;
   readonly secondaryAction: ThreadSwipeAction | null | undefined;
+  readonly t: ReturnType<typeof useMobileI18n>["t"];
   readonly threadTitle: string;
 }): ThreadSwipeSecondaryAction | null {
   if (input.secondaryAction === null) return null;
   if (input.secondaryAction === undefined) {
     return {
-      accessibilityLabel: `Delete ${input.threadTitle}`,
+      accessibilityLabel: input.t("Delete {title}", { title: input.threadTitle }),
       backgroundColor: "#ff2d55",
       icon: "trash",
-      label: "Delete",
+      label: input.t("Delete"),
       onPress: () => {
         input.close();
         input.onDelete();
@@ -256,6 +258,7 @@ export function ThreadSwipeable(props: {
   >["simultaneousWithExternalGesture"];
   readonly threadTitle: string;
 }) {
+  const { t } = useMobileI18n();
   const swipeableRef = useRef<SwipeableMethods | null>(null);
   const fullSwipeArmedRef = useRef(false);
   const hasSecondaryAction = props.secondaryAction !== null;
@@ -343,6 +346,7 @@ export function ThreadSwipeable(props: {
             close: () => methods.close(),
             onDelete: props.onDelete,
             secondaryAction: props.secondaryAction,
+            t,
             threadTitle: props.threadTitle,
           })}
           translation={translation}

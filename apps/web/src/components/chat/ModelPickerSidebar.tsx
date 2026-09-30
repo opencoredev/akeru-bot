@@ -3,35 +3,32 @@ import { memo, useLayoutEffect, useRef, useState } from "react";
 import { SparklesIcon, StarIcon } from "lucide-react";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import {
   isProviderInstancePickerReady,
   isProviderInstancePickerSelectable,
+  providerInstanceUnavailableReason,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 
 /**
- * Build the hover tooltip for an instance button. Mirrors the old
- * kind-based copy but uses the entry's configured `displayName` so custom
- * instances get their user-authored name (e.g. "Codex Personal — Unavailable.").
+ * Hover tooltip for an instance that cannot run turns right now. The rail
+ * stays browsable so the user can see which models it would offer.
  */
-function describeUnavailableInstance(entry: ProviderInstanceEntry): string {
-  const label = entry.displayName;
-  if (!entry.enabled || entry.status === "disabled") {
-    return `${label} — Disabled in settings.`;
-  }
-  if (entry.status === "ready" && entry.isAvailable) {
-    return label;
-  }
-  const kind =
-    entry.status === "error" ? "Unavailable" : entry.status === "warning" ? "Limited" : "Not ready";
-  const msg = entry.snapshot.message?.trim();
-  return msg ? `${label} — ${kind}. ${msg}` : `${label} — ${kind}.`;
+function describeUnavailableInstance(
+  entry: ProviderInstanceEntry,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  return (
+    providerInstanceUnavailableReason(entry, { t }) ??
+    (entry.snapshot.message?.trim() || t("{name} is not ready yet.", { name: entry.displayName }))
+  );
 }
 
 const SELECTED_INDICATOR_CLASS =
-  "pointer-events-none absolute -right-1 top-1/2 z-10 h-5 w-0.75 -translate-y-1/2 rounded-l-full bg-primary";
+  "pointer-events-none absolute -right-1 top-1/2 z-10 h-5 w-0.75 -translate-y-1/2 rounded-l-full bg-foreground/70";
 const BADGE_BASE_CLASS =
   "pointer-events-none absolute -right-0.5 top-0.5 z-10 flex size-3.5 items-center justify-center rounded-full bg-transparent shadow-sm ";
 const NEW_BADGE_CLASS = `${BADGE_BASE_CLASS} text-update-foreground `;
@@ -63,6 +60,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
    */
   newBadgeInstanceIds?: ReadonlySet<ProviderInstanceId>;
 }) {
+  const { t } = useI18n();
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
@@ -108,11 +106,12 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     render={
                       <button
                         className={cn(
-                          "relative isolate flex w-full cursor-pointer aspect-square items-center justify-center rounded-md transition-colors hover:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:outline-none",
+                          "relative isolate flex w-full cursor-pointer aspect-square items-center justify-center rounded-md transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         )}
                         onClick={() => handleSelect("favorites")}
                         type="button"
-                        aria-label="Favorites"
+                        aria-label={t("Favorites")}
+                        aria-pressed={props.selectedInstanceId === "favorites"}
                       >
                         <StarIcon className="size-5 fill-current shrink-0" aria-hidden />
                       </button>
@@ -124,7 +123,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     align="center"
                     className={PICKER_TOOLTIP_CLASS}
                   >
-                    Favorites
+                    {t("Favorites")}
                   </TooltipPopup>
                 </Tooltip>
               </div>
@@ -137,25 +136,29 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const isUnavailable = !isProviderInstancePickerSelectable(entry);
             const isNotReady = !isProviderInstancePickerReady(entry);
             const isContextDisabled = props.disabledInstanceIds?.has(entry.instanceId) ?? false;
-            const isDisabled = isUnavailable || isContextDisabled;
+            // Unavailable instances stay clickable so their models can be
+            // browsed; the rows themselves render disabled with the reason.
+            const isDisabled = isContextDisabled;
             const isSelected = props.selectedInstanceId === entry.instanceId;
             const isHovered = hoveredInstanceId === entry.instanceId;
             const showNewBadge = props.newBadgeInstanceIds?.has(entry.instanceId) ?? false;
             const showInstanceBadge = shouldShowInstanceBadge(entry, props.instanceEntries);
 
-            const tooltip = isNotReady
-              ? describeUnavailableInstance(entry)
-              : isContextDisabled
-                ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
-                : showNewBadge
-                  ? `${entry.displayName} — New`
-                  : entry.displayName;
+            const tooltip =
+              isUnavailable || isNotReady
+                ? describeUnavailableInstance(entry, t)
+                : isContextDisabled
+                  ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
+                  : showNewBadge
+                    ? t("{name}, new", { name: entry.displayName })
+                    : entry.displayName;
 
             const button = (
               <button
                 className={cn(
-                  "relative isolate flex w-full cursor-pointer aspect-square items-center justify-center rounded-md transition-colors hover:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] focus-visible:outline-none",
+                  "relative isolate flex w-full cursor-pointer aspect-square items-center justify-center rounded-md transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isDisabled && "opacity-50 cursor-not-allowed hover:bg-transparent",
+                  !isDisabled && isUnavailable && "opacity-60",
                 )}
                 data-provider-accent-color={entry.accentColor}
                 onClick={() => !isDisabled && handleSelect(entry.instanceId)}
@@ -169,11 +172,12 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                 }
                 disabled={isDisabled}
                 type="button"
+                aria-pressed={isSelected}
                 aria-label={
-                  isDisabled
+                  isDisabled || isUnavailable
                     ? tooltip
                     : showNewBadge
-                      ? `${entry.displayName}, new`
+                      ? t("{name}, new", { name: entry.displayName })
                       : entry.displayName
                 }
               >

@@ -5,6 +5,8 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
+import { expectedRemoteAssetNames } from "./package-remote.ts";
+
 export function expectedReleaseAssetNames(version: string): readonly string[] {
   return [
     `Akeru-Bot-${version}-arm64.dmg`,
@@ -17,6 +19,7 @@ export function expectedReleaseAssetNames(version: string): readonly string[] {
     "latest-mac.yml",
     "latest.yml",
     "latest-linux.yml",
+    ...expectedRemoteAssetNames(version),
   ];
 }
 

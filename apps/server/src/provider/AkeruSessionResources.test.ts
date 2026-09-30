@@ -4,11 +4,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
-import { McpServerId } from "@t3tools/contracts";
+import { BotId, McpServerId, ThreadId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AkeruSessionResources } from "./AkeruSessionResources.ts";
 import { createBotBrowserTools } from "./botBrowser.ts";
+import { computerRegistry } from "./computerRegistry.ts";
+import { WorkspaceComputer } from "./workspaceComputer.ts";
 import { CODEX_COMPUTER_USE_SERVER_ID } from "./CodexComputerUse.ts";
 import { createBotBrowser } from "./botBrowser.ts";
 import {
@@ -180,6 +182,153 @@ describe("AkeruSessionResources", () => {
     await expect(resources.release("idle-retry")).rejects.toThrow("pause unavailable");
     await resources.retryFailedWorkspaceSleeps();
     expect(botWorkspace.sleep).toHaveBeenCalledTimes(2);
+    await resources.shutdown();
+  });
+
+  it("attributes shared browser failures and recovery to every active bot", async () => {
+    const browserFailure = vi.fn();
+    const browserReady = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    let onReady!: () => void;
+    const sharedBrowser = browser();
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        onReady = input.onReady!;
+        return sharedBrowser;
+      },
+      onBrowserFailure: browserFailure,
+      onBrowserReady: browserReady,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "bot-a",
+      botId: BotId.make("bot-a"),
+      botName: "A",
+      taskOrRoutine: "Task A",
+    };
+    const second = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "bot-b",
+      botId: BotId.make("bot-b"),
+      botName: "B",
+      taskOrRoutine: "Task B",
+    };
+    await resources.acquire(first);
+    await resources.acquire(second);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure.mock.calls.map(([value]) => value.botId)).toEqual([
+      first.botId,
+      second.botId,
+    ]);
+    onReady();
+    expect(browserReady.mock.calls.map(([botId]) => botId)).toEqual([first.botId, second.botId]);
+    await resources.shutdown();
+  });
+
+  it("reports an active shared-browser failure to a bot that joins later", async () => {
+    const browserFailure = vi.fn();
+    const browserReady = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    let onReady!: () => void;
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        onReady = input.onReady!;
+        return browser();
+      },
+      onBrowserFailure: browserFailure,
+      onBrowserReady: browserReady,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "late-share-first",
+      botId: BotId.make("late-share-first"),
+    };
+    const second = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "late-share-second",
+      botId: BotId.make("late-share-second"),
+    };
+    await resources.acquire(first);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.acquire(second);
+    expect(browserFailure.mock.calls.map(([input]) => input.botId)).toEqual([
+      first.botId,
+      second.botId,
+    ]);
+    onReady();
+    expect(browserReady.mock.calls.map(([botId]) => botId)).toEqual([first.botId, second.botId]);
+    await resources.shutdown();
+  });
+
+  it("does not pass a discarded browser failure to a replacement browser's bot", async () => {
+    const browserFailure = vi.fn();
+    const callbacks: Array<(error: unknown) => void> = [];
+    const makeBotBrowser = vi.fn((input: { onFailure?: (error: unknown) => void }) => {
+      callbacks.push(input.onFailure!);
+      return browser();
+    });
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser,
+      onBrowserFailure: browserFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+    const first = {
+      ...remoteInput,
+      botSandbox: null,
+      threadId: "discarded-browser",
+      botId: BotId.make("bot-a"),
+    };
+    const second = {
+      ...first,
+      threadId: "replacement-browser",
+      botId: BotId.make("bot-b"),
+    };
+
+    await resources.acquire(first);
+    callbacks[0]!(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.release(first.threadId, { destroy: true });
+    await resources.acquire(second);
+
+    expect(makeBotBrowser).toHaveBeenCalledTimes(2);
+    callbacks[0]!(new Error("old request rejected after replacement"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    await resources.shutdown();
+  });
+
+  it("retains attribution while another chat for the same bot is active", async () => {
+    const browserFailure = vi.fn();
+    let onFailure!: (error: unknown) => void;
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeBotBrowser: (input) => {
+        onFailure = input.onFailure!;
+        return browser();
+      },
+      onBrowserFailure: browserFailure,
+      toMcpServerConfigs: () => ({}),
+    });
+    const botId = BotId.make("bot-same");
+    const first = { ...remoteInput, botSandbox: null, threadId: "chat-a", botId };
+    const second = { ...remoteInput, botSandbox: null, threadId: "chat-b", botId };
+    await resources.acquire(first);
+    await resources.acquire(second);
+    await resources.release(first.threadId);
+    onFailure(new Error("browser exited"));
+    expect(browserFailure).toHaveBeenCalledOnce();
+    expect(browserFailure.mock.calls[0]?.[0].botId).toBe(botId);
     await resources.shutdown();
   });
 
@@ -357,15 +506,15 @@ describe("AkeruSessionResources", () => {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({
-        "t3-code_preview_status": previewStatus,
-        "t3-code_preview_snapshot": previewSnapshot,
+        akeru_preview_status: previewStatus,
+        akeru_preview_snapshot: previewSnapshot,
       })),
       getServerStatuses: vi.fn(() => [
         {
-          name: "t3-code",
+          name: "akeru",
           connected: true,
           toolCount: 2,
-          toolNames: ["t3-code_preview_status", "t3-code_preview_snapshot"],
+          toolNames: ["akeru_preview_status", "akeru_preview_snapshot"],
         },
       ]),
     };
@@ -392,7 +541,7 @@ describe("AkeruSessionResources", () => {
     expect(getPreviewMcpServerConfig).toHaveBeenCalledExactlyOnceWith("preview-thread");
     expect(makeMcpManager).toHaveBeenCalledOnce();
     expect(makeMcpManager.mock.calls[0]?.[2]).toEqual({
-      "t3-code": {
+      akeru: {
         url: "http://127.0.0.1:4000/mcp",
         headers: { Authorization: "Bearer preview-token" },
       },
@@ -452,6 +601,11 @@ describe("AkeruSessionResources", () => {
       resources.acquire({ ...remoteInput, threadId: "failed-reconnect" }),
     ).rejects.toThrow("reconnect failed");
     expect(firstBrowser.close).toHaveBeenCalledOnce();
+    expect(
+      (resources as unknown as { browserThreadBots: Map<string, string> }).browserThreadBots.has(
+        "failed-reconnect",
+      ),
+    ).toBe(false);
 
     await resources.acquire({ ...remoteInput, threadId: "replacement" });
     expect(makeBotBrowser).toHaveBeenCalledTimes(2);
@@ -822,6 +976,42 @@ describe("AkeruSessionResources", () => {
         mcpServers: [computerServer()],
       }),
     ).rejects.toThrow("Computer Use MCP failed to start.");
+    await resources.shutdown();
+  });
+  it("registers exclusive computers only when requested and unregisters on release", async () => {
+    const graphical = new WorkspaceComputer(
+      "daytona-id",
+      {
+        open: async () => undefined,
+        input: async () => undefined,
+        capture: async () => ({ mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 }),
+      },
+      async () => undefined,
+      async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
+      async () => "running",
+    );
+    const resources = new AkeruSessionResources({
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => ({
+        ...localBotWorkspace(workspace()),
+        computer: graphical,
+      }),
+      makeBotBrowser: () => browser(),
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "legacy" });
+    expect(computerRegistry.state(ThreadId.make("legacy")).capability).toBe("none");
+    await resources.release("legacy");
+
+    await resources.acquire({ ...remoteInput, threadId: "codex", exclusiveComputer: true });
+    expect(computerRegistry.state(ThreadId.make("codex"))).toMatchObject({
+      capability: "desktop",
+      controlAvailable: true,
+      workspaceId: "daytona-id",
+    });
+    await resources.release("codex");
+    expect(computerRegistry.state(ThreadId.make("codex")).capability).toBe("none");
     await resources.shutdown();
   });
 });

@@ -59,7 +59,7 @@ function Input({
       className={
         cn(
           !unstyled &&
-            "relative inline-flex w-full rounded-lg border border-transparent bg-secondary text-base text-foreground ring-ring/70 transition-shadow has-focus-visible:has-aria-invalid:ring-destructive/60 has-aria-invalid:ring-2 has-aria-invalid:ring-destructive/40 has-autofill:bg-foreground/4 has-disabled:opacity-64 has-focus-visible:ring-2 sm:text-sm dark:has-autofill:bg-foreground/8",
+            "relative inline-flex w-full rounded-lg border border-transparent bg-secondary text-base text-foreground ring-foreground/20 transition-shadow has-focus-visible:has-aria-invalid:ring-destructive/60 has-aria-invalid:ring-2 has-aria-invalid:ring-destructive/40 has-autofill:bg-foreground/4 has-disabled:opacity-64 has-focus-visible:ring-2 sm:text-sm dark:has-autofill:bg-foreground/8",
           !unstyled &&
             size === "compact" &&
             "rounded-md before:rounded-[calc(var(--radius-md)-1px)]",

@@ -12,7 +12,6 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 import {
   buildCodexDeveloperInstructions,
   codexDefaultModeDeveloperInstructions,
-  codexPlanModeDeveloperInstructions,
 } from "../CodexDeveloperInstructions.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
@@ -93,7 +92,7 @@ describe("buildTurnStartParams", () => {
     NodeAssert.doesNotMatch(JSON.stringify(directDiagnostics), new RegExp(secret));
   });
 
-  it("includes plan collaboration mode when requested", () => {
+  it("runs a stored plan-mode turn in the default collaboration mode", () => {
     const params = Effect.runSync(
       buildTurnStartParams({
         threadId: "provider-thread-1",
@@ -121,11 +120,11 @@ describe("buildTurnStartParams", () => {
       model: "gpt-5.3-codex",
       effort: "medium",
       collaborationMode: {
-        mode: "plan",
+        mode: "default",
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
-          developer_instructions: buildCodexDeveloperInstructions("plan", {
+          developer_instructions: buildCodexDeveloperInstructions({
             model: "gpt-5.3-codex",
             reasoningEffort: "medium",
           }),
@@ -174,7 +173,7 @@ describe("buildTurnStartParams", () => {
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
-          developer_instructions: buildCodexDeveloperInstructions("default", {
+          developer_instructions: buildCodexDeveloperInstructions({
             model: "gpt-5.3-codex",
             reasoningEffort: "medium",
           }),
@@ -454,7 +453,7 @@ describe("Codex MCP elicitation approvals", () => {
 
 describe("buildCodexDeveloperInstructions", () => {
   it("appends runtime info after the mode instructions", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
+    const instructions = buildCodexDeveloperInstructions({
       model: "gpt-5.3-codex",
       reasoningEffort: "high",
     });
@@ -465,22 +464,12 @@ describe("buildCodexDeveloperInstructions", () => {
     NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
   });
 
-  it("includes runtime info alongside plan mode instructions", () => {
-    const instructions = buildCodexDeveloperInstructions("plan", {
-      model: "gpt-5.3-codex",
-      reasoningEffort: "medium",
-    });
-
-    NodeAssert.ok(instructions.startsWith(codexPlanModeDeveloperInstructions(true)));
-    NodeAssert.match(instructions, /as gpt-5\.3-codex with medium reasoning effort/);
-  });
-
   it("varies with the model and effort of each turn", () => {
-    const first = buildCodexDeveloperInstructions("default", {
+    const first = buildCodexDeveloperInstructions({
       model: "gpt-5.3-codex",
       reasoningEffort: "medium",
     });
-    const second = buildCodexDeveloperInstructions("default", {
+    const second = buildCodexDeveloperInstructions({
       model: "gpt-5.4",
       reasoningEffort: "high",
     });
@@ -489,7 +478,7 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 
   it("flattens multiline metadata into single-line runtime info", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
+    const instructions = buildCodexDeveloperInstructions({
       model: "gpt\n5.3\ncodex",
       reasoningEffort: " high\neffort ",
     });
@@ -499,13 +488,10 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 });
 
-describe("T3 browser developer instructions", () => {
-  it("prefers the product-native preview tools in both collaboration modes", () => {
-    for (const instructions of [
-      codexDefaultModeDeveloperInstructions(true),
-      codexPlanModeDeveloperInstructions(true),
-    ]) {
-      NodeAssert.match(instructions, /t3-code/);
+describe("Akeru browser developer instructions", () => {
+  it("prefers the product-native preview tools", () => {
+    for (const instructions of [codexDefaultModeDeveloperInstructions(true)]) {
+      NodeAssert.match(instructions, /akeru/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
@@ -513,10 +499,7 @@ describe("T3 browser developer instructions", () => {
   });
 
   it("omits the browser block entirely when the preview tools are not attached", () => {
-    for (const instructions of [
-      codexDefaultModeDeveloperInstructions(false),
-      codexPlanModeDeveloperInstructions(false),
-    ]) {
+    for (const instructions of [codexDefaultModeDeveloperInstructions(false)]) {
       NodeAssert.doesNotMatch(instructions, /preview_status/);
       NodeAssert.doesNotMatch(instructions, /preview_open/);
       NodeAssert.doesNotMatch(instructions, /Akeru Bot collaborative browser/);
@@ -531,11 +514,8 @@ describe("T3 browser developer instructions", () => {
 
   it("tracks the turn's MCP configuration rather than defaulting to on", () => {
     const runtime = { model: "gpt-5.3-codex", reasoningEffort: "high" };
-    NodeAssert.match(buildCodexDeveloperInstructions("default", runtime, true), /preview_open/);
-    NodeAssert.doesNotMatch(
-      buildCodexDeveloperInstructions("default", runtime, false),
-      /preview_open/,
-    );
+    NodeAssert.match(buildCodexDeveloperInstructions(runtime, true), /preview_open/);
+    NodeAssert.doesNotMatch(buildCodexDeveloperInstructions(runtime, false), /preview_open/);
   });
 });
 
@@ -544,7 +524,7 @@ describe("hasConfiguredMcpServer", () => {
     NodeAssert.equal(hasConfiguredMcpServer(undefined), false);
     NodeAssert.equal(hasConfiguredMcpServer(["--model", "gpt-5.4"]), false);
     NodeAssert.equal(
-      hasConfiguredMcpServer(["-c", 'mcp_servers.t3-code.url="http://127.0.0.1/mcp"']),
+      hasConfiguredMcpServer(["-c", 'mcp_servers.akeru.url="http://127.0.0.1/mcp"']),
       true,
     );
   });
@@ -700,7 +680,7 @@ describe("codexSessionAppServerArgs", () => {
   it("keeps launch args when explicit app-server args are provided", () => {
     NodeAssert.deepStrictEqual(
       codexSessionAppServerArgs(
-        ["-c", "mcp_servers.t3-code.url=http://127.0.0.1/mcp"],
+        ["-c", "mcp_servers.akeru.url=http://127.0.0.1/mcp"],
         "--strict-config --enable foo",
       ),
       [
@@ -709,7 +689,7 @@ describe("codexSessionAppServerArgs", () => {
         "--enable",
         "foo",
         "-c",
-        "mcp_servers.t3-code.url=http://127.0.0.1/mcp",
+        "mcp_servers.akeru.url=http://127.0.0.1/mcp",
       ],
     );
   });

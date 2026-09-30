@@ -42,6 +42,7 @@ export type AttachChannelInput = CommandInput<"channel.attach">;
 export type DisconnectChannelInput = CommandInput<"channel.disconnect">;
 export type DetachChannelInput = CommandInput<"channel.detach">;
 export type ReconnectChannelInput = CommandInput<"channel.reconnect">;
+export type ChangeChannelProjectInput = CommandInput<"channel.change-project">;
 export type SendChannelMessageInput = CommandInput<"channel.send">;
 export type CreateGroupInput = CommandInput<"group.create">;
 export type RenameGroupInput = CommandInput<"group.rename">;
@@ -91,9 +92,9 @@ export type AppendVoiceTranscriptInput = CommandInput<"thread.voice-transcript.a
 export type InterruptThreadTurnInput = CommandInput<"thread.turn.interrupt">;
 export type RespondToThreadApprovalInput = CommandInput<"thread.approval.respond">;
 export type RespondToThreadUserInputInput = CommandInput<"thread.user-input.respond">;
-export type RevertThreadCheckpointInput = CommandInput<"thread.checkpoint.revert">;
 export type StopThreadSessionInput = CommandInput<"thread.session.stop">;
 export type CancelDelegationInput = CommandInput<"delegation.cancel">;
+export type RetryDelegationInput = CommandInput<"delegation.retry">;
 
 type DispatchTag = typeof ORCHESTRATION_WS_METHODS.dispatchCommand;
 type CommandEffect = Effect.Effect<
@@ -413,6 +414,16 @@ export const reconnectChannel: (input: ReconnectChannelInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "channel.reconnect",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const changeChannelProject: (input: ChangeChannelProjectInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.changeChannelProject",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "channel.change-project",
     commandId: yield* commandId(input),
   });
 });
@@ -758,17 +769,6 @@ export const respondToThreadUserInput: (input: RespondToThreadUserInputInput) =>
     });
   });
 
-export const revertThreadCheckpoint: (input: RevertThreadCheckpointInput) => CommandEffect =
-  Effect.fn("EnvironmentCommands.revertThreadCheckpoint")(function* (input) {
-    const metadata = yield* timestampedCommandMetadata(input);
-    return yield* dispatch({
-      ...input,
-      type: "thread.checkpoint.revert",
-      commandId: metadata.commandId,
-      createdAt: metadata.createdAt,
-    });
-  });
-
 export const stopThreadSession: (input: StopThreadSessionInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.stopThreadSession",
 )(function* (input) {
@@ -788,6 +788,18 @@ export const cancelDelegation: (input: CancelDelegationInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "delegation.cancel",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const retryDelegation: (input: RetryDelegationInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.retryDelegation",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "delegation.retry",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

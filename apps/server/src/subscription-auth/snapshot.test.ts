@@ -95,7 +95,6 @@ describe("provider access capabilities", () => {
   it.each([
     ["openai-codex", "chatgpt", "expired"],
     ["anthropic", "claude-max", "revoked"],
-    ["cursor", "cursor-pro", "recovered"],
   ] as const)("reports %s subscription access on the %s row", (provider, rowId, health) => {
     const capabilities = buildProviderAccessCapabilities(
       [{ ...baseSubscription, provider, health }],

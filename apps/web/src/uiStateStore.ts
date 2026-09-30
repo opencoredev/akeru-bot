@@ -2,7 +2,9 @@ import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
-export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
+export const PERSISTED_STATE_KEY = "akeru:ui-state:v1";
+// Pre-rebrand key, checked before the older `renderer-state` lineage.
+const REBRAND_LEGACY_STATE_KEY = "t3code:ui-state:v1";
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 1;
 const LEGACY_PERSISTED_STATE_KEYS = [
   "t3code:renderer-state:v8",
@@ -143,7 +145,9 @@ function readPersistedState(): UiState {
     return initialState;
   }
   try {
-    const raw = window.localStorage.getItem(PERSISTED_STATE_KEY);
+    const raw =
+      window.localStorage.getItem(PERSISTED_STATE_KEY) ??
+      window.localStorage.getItem(REBRAND_LEGACY_STATE_KEY);
     if (!raw) {
       for (const legacyKey of LEGACY_PERSISTED_STATE_KEYS) {
         const legacyRaw = window.localStorage.getItem(legacyKey);
@@ -211,6 +215,7 @@ export function persistState(state: UiState): void {
     );
     if (!legacyKeysCleanedUp) {
       legacyKeysCleanedUp = true;
+      window.localStorage.removeItem(REBRAND_LEGACY_STATE_KEY);
       for (const legacyKey of LEGACY_PERSISTED_STATE_KEYS) {
         window.localStorage.removeItem(legacyKey);
       }

@@ -319,11 +319,13 @@ export const ThreadTokenUsageSnapshot = Schema.Struct({
   maxTokens: Schema.optional(PositiveInt),
   inputTokens: Schema.optional(NonNegativeInt),
   cachedInputTokens: Schema.optional(NonNegativeInt),
+  cacheCreationTokens: Schema.optional(NonNegativeInt),
   outputTokens: Schema.optional(NonNegativeInt),
   reasoningOutputTokens: Schema.optional(NonNegativeInt),
   lastUsedTokens: Schema.optional(NonNegativeInt),
   lastInputTokens: Schema.optional(NonNegativeInt),
   lastCachedInputTokens: Schema.optional(NonNegativeInt),
+  lastCacheCreationTokens: Schema.optional(NonNegativeInt),
   lastOutputTokens: Schema.optional(NonNegativeInt),
   lastReasoningOutputTokens: Schema.optional(NonNegativeInt),
   toolUses: Schema.optional(NonNegativeInt),
@@ -364,6 +366,7 @@ const ThreadRealtimeClosedPayload = Schema.Struct({
 export type ThreadRealtimeClosedPayload = typeof ThreadRealtimeClosedPayload.Type;
 
 const TurnStartedPayload = Schema.Struct({
+  hiddenWake: Schema.optional(Schema.Boolean),
   model: Schema.optional(TrimmedNonEmptyStringSchema),
   effort: Schema.optional(TrimmedNonEmptyStringSchema),
 });

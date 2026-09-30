@@ -6,6 +6,8 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -37,17 +39,17 @@ function models(customModels: readonly string[]): ServerProviderModel[] {
     }));
 }
 
-export type KimiDriverEnv = ServerConfig;
+export type KimiDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
 
 export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
   driverKind: DRIVER_KIND,
-  metadata: { displayName: "Kimi For Coding", supportsMultipleInstances: false },
+  metadata: { displayName: "Kimi For Coding", supportsMultipleInstances: true },
   configSchema: KimiSettings,
   defaultConfig: () => decodeSettings({}),
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
-      const auth = SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+      const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
         PubSub.shutdown,
@@ -58,9 +60,9 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
         driverKind: DRIVER_KIND,
         instanceId,
       });
-      const readSnapshot = Effect.sync(() => {
-        auth.reload();
-        const connected = auth.isConnected("kimi-for-coding");
+      const readSnapshot = Effect.gen(function* () {
+        yield* auth.reload();
+        const connected = auth.isConnected("kimi-for-coding", instanceId);
         return {
           instanceId,
           driver: DRIVER_KIND,
@@ -79,6 +81,10 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
           availability: "available",
           models: models(config.customModels),
           slashCommands: [],
+          // Kimi For Coding has no skill-loading mechanism — its CLI exposes
+          // no skill catalog to report (unlike `skills/list`, `grok inspect`,
+          // or Claude Code's SKILL.md roots), so the `$` picker correctly
+          // stays empty for this provider.
           skills: [],
         } satisfies ServerProvider;
       });

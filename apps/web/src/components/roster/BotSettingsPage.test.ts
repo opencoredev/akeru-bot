@@ -3,6 +3,8 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { BOT_IMAGE_PROVIDER_DEFAULT, botImageProviderFromSelectValue } from "./useBotProfileDraft";
+
 function read(relativePath: string): string {
   return NodeFS.readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
@@ -37,10 +39,11 @@ describe("bot settings page", () => {
   it("groups the bot's own settings into named sections", () => {
     const source = read("./BotSettingsPage.tsx");
 
-    expect(source).toContain('title="Bot"');
-    expect(source).toContain('title="Voice and personality"');
-    expect(source).toContain('title="Model"');
-    expect(source).toContain('title="Workspace"');
+    expect(source).toContain('id="identity" title={t("Identity")}');
+    expect(source).toContain('id="behavior" title={t("Behavior")}');
+    expect(source).toContain('id="model" title={t("Model & usage")}');
+    expect(source).toContain('title={t("Workspace")}');
+    expect(source).toContain('aria-label={t("Bot settings sections")}');
   });
 
   it("saves through the shared bot update command", () => {
@@ -50,8 +53,8 @@ describe("bot settings page", () => {
     expect(source).toContain("botId: BotId.make(bot.id)");
     // The draft hook builds the payload, so the page cannot invent a shape.
     expect(source).toContain("useBotProfileDraft(bot, onSave)");
-    expect(source).toContain('title: "Could not save bot settings"');
-    expect(source).toContain('title: "Bot settings saved"');
+    expect(source).toContain('title: t("Could not save bot settings")');
+    expect(source).toContain('title: t("Bot settings saved")');
   });
 
   it("reports saving, saved, and unsaved state from the shared draft", () => {
@@ -61,14 +64,14 @@ describe("bot settings page", () => {
     expect(source).toContain("draft.saved");
     expect(source).toContain("draft.dirty");
     expect(source).toContain("disabled={!draft.canSave || draft.saving}");
-    expect(source).toContain('{draft.saving ? "Saving" : "Save"}');
+    expect(source).toContain('{draft.saving ? t("Saving") : t("Save")}');
   });
 
   it("protects unsaved settings from app navigation and page unload", () => {
     const source = read("./BotSettingsPage.tsx");
 
     expect(source).toContain("useBlocker({");
-    expect(source).toContain('requestConfirmDialog("Discard unsaved bot settings?"');
+    expect(source).toContain('requestConfirmDialog(t("Discard unsaved bot settings?")');
     expect(source).toContain("enableBeforeUnload: () => draft.dirty");
     expect(source).toContain("disabled: !draft.dirty");
   });
@@ -82,6 +85,21 @@ describe("bot settings page", () => {
     expect(source).toContain("draft.setPersonalityTone(tone)");
     // The baseline promise has to be on the page, not only in this test.
     expect(source).toContain("It is a baseline, not a costume.");
+  });
+
+  it("lists tools inline with per-bot switches that save with the page", () => {
+    const page = read("./BotSettingsPage.tsx");
+    const section = read("./BotToolsSection.tsx");
+
+    expect(page).toContain("<BotToolsSection");
+    expect(page).toContain('["tools", t("Tools")]');
+    expect(page).toContain("draft.setDisabledMcpServerIds(ids)");
+    // Tools used to open an overlay sheet; they now live on the page.
+    expect(page).not.toContain("BotToolsSheet");
+    expect(section).toContain('id="tools"');
+    expect(section).toContain("<Switch");
+    expect(section).toContain('t("No tools yet")');
+    expect(section).not.toContain("BotSideSheet");
   });
 
   it("handles a bot that is gone instead of rendering an empty form", () => {
@@ -116,7 +134,7 @@ describe("bot settings entry points", () => {
     const route = read("../../routes/_chat.bots.$botId.tsx");
 
     expect(panel).toContain(
-      "botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone))",
+      "botPersonalityToneLabel(canonicalizeBotPersonalityTone(bot.personalityTone), t)",
     );
     expect(panel).toContain("Open bot settings");
     expect(panel).not.toContain("<BotModelPicker");
@@ -137,7 +155,7 @@ describe("bot settings entry points", () => {
     // Per-bot settings are reached from the bot, not from a global nav entry.
     // The legacy `/settings/bots` deep link still redirects, and stays.
     expect(sections).not.toContain("bots");
-    expect(settingsStore).toContain('if (slug === "bots") return "channels";');
+    expect(settingsStore).toContain('bots: { section: "channels" }');
   });
 });
 
@@ -160,5 +178,20 @@ describe("global settings stay global", () => {
     // The bot owns only its own participation.
     expect(botSettings).toContain("draft.voiceEnabled");
     expect(botSettings).not.toContain("updateSettings(");
+  });
+});
+
+describe("per-bot image provider", () => {
+  it("maps select values to the saved provider and treats unknown values as the default", () => {
+    expect(botImageProviderFromSelectValue(BOT_IMAGE_PROVIDER_DEFAULT)).toBeNull();
+    expect(botImageProviderFromSelectValue("grok")).toBe("grok");
+    expect(botImageProviderFromSelectValue("chatgpt")).toBe("chatgpt");
+    expect(botImageProviderFromSelectValue("dall-e")).toBeNull();
+  });
+
+  it("keeps image settings out of the chat composer", () => {
+    const composer = read("./BotPromptComposer.tsx");
+    expect(composer).not.toContain("imageProvider");
+    expect(composer).not.toContain("image-generation");
   });
 });

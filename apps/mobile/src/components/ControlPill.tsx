@@ -22,6 +22,7 @@ export function ControlPill(props: {
   readonly iconNode?: ReactNode;
   readonly label?: string;
   readonly accessibilityLabel?: string;
+  readonly accessibilityHint?: string;
   readonly onPress?: () => void;
   readonly activateOnPressIn?: boolean;
   readonly variant?: "circle" | "pill" | "primary" | "danger";
@@ -91,7 +92,9 @@ export function ControlPill(props: {
   return (
     <Pressable
       accessibilityLabel={props.accessibilityLabel ?? props.label}
+      accessibilityHint={props.accessibilityHint}
       accessibilityRole="button"
+      accessibilityState={{ disabled: props.disabled === true }}
       onPress={props.activateOnPressIn ? handlePress : props.onPress}
       onPressIn={props.activateOnPressIn ? handlePressIn : undefined}
       onPressOut={props.activateOnPressIn ? handlePressOut : undefined}

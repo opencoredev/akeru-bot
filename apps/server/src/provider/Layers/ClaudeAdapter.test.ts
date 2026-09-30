@@ -299,7 +299,7 @@ describe("ClaudeAdapterLive", () => {
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const config = yield* ServerConfig;
-      const auth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+      const auth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
       const login = yield* Effect.promise(() =>
         auth.startLogin("anthropic", { authMode: "api-key", baseUrl: "https://proxy.example/v1" }),
       );
@@ -1804,6 +1804,8 @@ describe("ClaudeAdapterLive", () => {
           totalProcessedTokens: 450,
           inputTokens: 180,
           outputTokens: 20,
+          cachedInputTokens: 0,
+          cacheCreationTokens: 0,
           maxTokens: 200000,
         });
       }
@@ -3441,6 +3443,8 @@ describe("ClaudeAdapterLive", () => {
             usedTokens: 24542,
             lastUsedTokens: 24542,
             inputTokens: 23863,
+            cachedInputTokens: 21144,
+            cacheCreationTokens: 2715,
             outputTokens: 679,
             maxTokens: 200000,
           },
@@ -3505,6 +3509,8 @@ describe("ClaudeAdapterLive", () => {
             usedTokens: 200000,
             lastUsedTokens: 200000,
             totalProcessedTokens: 535000,
+            cachedInputTokens: 0,
+            cacheCreationTokens: 0,
             maxTokens: 200000,
           },
         });
@@ -4890,7 +4896,7 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("sets plan permission mode on sendTurn when interactionMode is plan", () => {
+  it.effect("never enters the plan permission mode, even for a stored plan-mode turn", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
@@ -4907,7 +4913,7 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      assert.deepEqual(harness.query.setPermissionModeCalls, ["plan"]);
+      assert.deepEqual(harness.query.setPermissionModeCalls, ["bypassPermissions"]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -4919,7 +4925,7 @@ describe("ClaudeAdapterLive", () => {
     { runtimeMode: "approval-required", expectedBase: "default" },
     { runtimeMode: "auto-accept-edits", expectedBase: "acceptEdits" },
   ])(
-    "restores $expectedBase permission mode after plan turn ($runtimeMode)",
+    "applies the $expectedBase base permission mode on default turns ($runtimeMode)",
     ({ runtimeMode, expectedBase }) => {
       const harness = makeHarness();
       return Effect.gen(function* () {
@@ -4931,32 +4937,6 @@ describe("ClaudeAdapterLive", () => {
           runtimeMode,
         });
 
-        // First turn in plan mode
-        yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "plan this",
-          interactionMode: "plan",
-          attachments: [],
-        });
-
-        // Complete the turn so we can send another
-        const turnCompletedFiber = yield* Stream.filter(
-          adapter.streamEvents,
-          (event) => event.type === "turn.completed",
-        ).pipe(Stream.runHead, Effect.forkChild);
-
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: `sdk-session-${runtimeMode}`,
-          uuid: `result-${runtimeMode}`,
-        } as unknown as SDKMessage);
-
-        yield* Fiber.join(turnCompletedFiber);
-
-        // Second turn back to default
         yield* adapter.sendTurn({
           threadId: session.threadId,
           input: "now do it",
@@ -4964,7 +4944,7 @@ describe("ClaudeAdapterLive", () => {
           attachments: [],
         });
 
-        assert.deepEqual(harness.query.setPermissionModeCalls, ["plan", expectedBase]);
+        assert.deepEqual(harness.query.setPermissionModeCalls, [expectedBase]);
       }).pipe(
         Effect.provideService(Random.Random, makeDeterministicRandomService()),
         Effect.provide(harness.layer),

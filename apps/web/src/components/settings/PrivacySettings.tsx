@@ -1,6 +1,15 @@
+import {
+  MEMORY_SETTING_DISABLED_HINT,
+  SHARED_PROJECT_MEMORY_SETTING,
+  sharedProjectMemoryAutoSaves,
+  sharedProjectMemoryMode,
+} from "@t3tools/client-runtime/durable-memory";
 import { AKERU_MARKETING_SITE_URL, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
 
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+
 import { usePrimarySettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { Switch } from "../ui/switch";
 import {
   SettingResetButton,
@@ -8,7 +17,8 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { PortabilitySettings } from "./PortabilitySettings";
+import { searchableSetting, type SettingsSearchItemId } from "./settingsSearch";
 
 const privacyPolicyUrl = `${AKERU_MARKETING_SITE_URL}/privacy-policy`;
 const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
@@ -16,17 +26,25 @@ const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
 export function PrivacySettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+  const { t } = useI18n();
+  const memoryHint = (description: MessageKey) =>
+    settings.memory.enabled
+      ? t(description)
+      : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
+  const translatedSetting = (id: SettingsSearchItemId) => searchableSetting(id, t);
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Privacy controls">
+      <SettingsSection title={t("Data sharing")}>
         <SettingsRow
-          {...searchableSetting("anonymous-analytics")}
-          description="Send app version, platform, architecture, client type, and feature events to PostHog. Akeru Bot does not use provider account IDs."
+          {...searchableSetting("anonymous-analytics", t)}
+          description={t(
+            "Share anonymous usage counts and app details. Prompts, files, and provider account IDs are excluded.",
+          )}
           resetAction={
             settings.analyticsEnabled !== DEFAULT_SERVER_SETTINGS.analyticsEnabled ? (
               <SettingResetButton
-                label="anonymous analytics"
+                label={t("anonymous analytics")}
                 onClick={() =>
                   updateSettings({ analyticsEnabled: DEFAULT_SERVER_SETTINGS.analyticsEnabled })
                 }
@@ -37,65 +55,104 @@ export function PrivacySettingsPanel() {
             <Switch
               checked={settings.analyticsEnabled}
               onCheckedChange={(checked) => updateSettings({ analyticsEnabled: Boolean(checked) })}
-              aria-label="Send anonymous analytics"
+              aria-label={t("Send anonymous analytics")}
             />
           }
         />
         <SettingsRow
-          {...searchableSetting("privacy-product-feedback")}
-          description="Send feedback you submit to the Akeru feedback service. The service keeps submissions for up to 90 days."
+          {...searchableSetting("privacy-product-feedback", t)}
+          description={t(
+            "Allow feedback you submit to reach the Akeru feedback service. Submissions may be kept for up to 90 days.",
+          )}
           control={
             <Switch
               checked={settings.productFeedbackEnabled}
               onCheckedChange={(checked) =>
                 updateSettings({ productFeedbackEnabled: Boolean(checked) })
               }
-              aria-label="Enable product feedback"
+              aria-label={t("Enable product feedback")}
             />
           }
         />
         <SettingsRow
-          {...searchableSetting("privacy-voice-calls")}
-          description="Send live microphone audio and session data to the ChatGPT Realtime service during a call."
+          {...searchableSetting("privacy-voice-calls", t)}
+          description={t(
+            "Allow calls through ChatGPT Realtime. Microphone audio and call data leave this environment during a call.",
+          )}
           control={
             <Switch
               checked={settings.voice.enabled}
               onCheckedChange={(checked) =>
                 updateSettings({ voice: { enabled: Boolean(checked) } })
               }
-              aria-label="Enable voice calls"
+              aria-label={t("Enable voice calls")}
             />
           }
         />
+      </SettingsSection>
+
+      <SettingsSection title={t("Memory")}>
         <SettingsRow
-          {...searchableSetting("privacy-provider-update-checks")}
-          description="Contact provider release sources to check for newer CLI versions."
+          {...translatedSetting("memory-enabled")}
+          description={t("Keep durable facts that bots can use across chats.")}
           control={
             <Switch
-              checked={settings.enableProviderUpdateChecks}
+              checked={settings.memory.enabled}
               onCheckedChange={(checked) =>
-                updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
+                updateSettings({ memory: { enabled: Boolean(checked) } })
               }
-              aria-label="Enable provider update checks"
+              aria-label={t("Memory")}
+            />
+          }
+        />
+        <SettingsRow
+          {...translatedSetting("memory-private-bot")}
+          description={memoryHint("Let each bot keep facts about you that only that bot uses.")}
+          control={
+            <Switch
+              checked={settings.memory.privateBotMemory}
+              disabled={!settings.memory.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ memory: { privateBotMemory: Boolean(checked) } })
+              }
+              aria-label={t("Private bot memory")}
+            />
+          }
+        />
+        <SettingsRow
+          {...translatedSetting("memory-shared-project")}
+          description={memoryHint(SHARED_PROJECT_MEMORY_SETTING.description)}
+          control={
+            <Switch
+              checked={sharedProjectMemoryAutoSaves(settings.memory.sharedProjectMemory)}
+              disabled={!settings.memory.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  memory: { sharedProjectMemory: sharedProjectMemoryMode(Boolean(checked)) },
+                })
+              }
+              aria-label={t(SHARED_PROJECT_MEMORY_SETTING.label)}
             />
           }
         />
       </SettingsSection>
 
-      <SettingsSection title="Outbound data">
+      <SettingsSection title={t("Backup and transfer")}>
+        <PortabilitySettings />
+      </SettingsSection>
+
+      <SettingsSection title={t("Other connections")}>
         <SettingsRow
-          title="Provider CLIs"
-          description="Prompts, selected files, tool results, screenshots, and conversation context go to the provider you choose. Provider terms and retention rules apply."
-        />
-        <SettingsRow
-          title="Desktop updates"
-          description="Signed desktop builds contact the configured release host to check for and download updates."
+          title={t("Desktop updates")}
+          description={t(
+            "Signed desktop builds contact the configured release host to check for and download updates.",
+          )}
         />
       </SettingsSection>
 
-      <SettingsSection title="Legal">
+      <SettingsSection title={t("Policies")}>
         <SettingsRow
-          title="Policies"
+          title={t("Read the terms and privacy policy")}
           description={
             <span className="flex gap-3">
               <a
@@ -104,7 +161,7 @@ export function PrivacySettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Terms of Use
+                {t("Terms of Use")}
               </a>
               <a
                 className="underline underline-offset-4"
@@ -112,7 +169,7 @@ export function PrivacySettingsPanel() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Privacy Policy
+                {t("Privacy Policy")}
               </a>
             </span>
           }

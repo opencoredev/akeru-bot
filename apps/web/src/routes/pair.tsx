@@ -10,12 +10,9 @@ export const Route = createFileRoute("/pair")({
   beforeLoad: async ({ context }) => {
     const { authGateState } = context;
     if (authGateState.status === "hosted-pairing") {
-      return {
-        authGateState,
-      };
+      return { authGateState };
     }
-
-    if (authGateState.status === "authenticated" || authGateState.status === "hosted-static") {
+    if (authGateState.status === "authenticated") {
       throw redirect({ to: "/", replace: true });
     }
     return {

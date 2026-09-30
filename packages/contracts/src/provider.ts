@@ -90,6 +90,8 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  /** Server-owned marker for an automatic hidden self-wake. */
+  hiddenWake: Schema.optional(Schema.Boolean),
   timezone: Schema.optional(TrimmedNonEmptyString),
   /**
    * Server-owned context refreshed immediately before dispatch. Clients never

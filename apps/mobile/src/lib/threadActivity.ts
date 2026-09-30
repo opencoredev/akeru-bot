@@ -1,3 +1,10 @@
+import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
+import {
+  delegationActions,
+  threadDelegations,
+  type DelegationAction,
+} from "@t3tools/client-runtime/delegation-presentation";
+import { botChatTimeline } from "@t3tools/client-runtime/state/bot-chat-timeline";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -7,9 +14,13 @@ import {
 } from "@t3tools/client-runtime/pending-requests";
 import { isToolLifecycleItemType } from "@t3tools/contracts";
 import type {
+  AkeruDelegationRecord,
+  BotId,
+  ChannelProvider,
   OrchestrationLatestTurn,
   OrchestrationThread,
   OrchestrationThreadActivity,
+  ThreadId,
   ToolLifecycleItemType,
   TurnId,
   UserInputQuestion,
@@ -89,6 +100,9 @@ type RawThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly message: OrchestrationThread["messages"][number];
+      /** Provider of the channel conversation this message delivers to, when the
+          message is a channel-originated assistant reply. */
+      readonly channelProvider?: ChannelProvider;
       readonly botStepMeter?: BotStepMeterData;
     }
   | {
@@ -101,6 +115,14 @@ type RawThreadFeedEntry =
 
 export type ThreadFeedEntry =
   | Extract<RawThreadFeedEntry, { type: "message" }>
+  | {
+      readonly type: "delegation";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly delegation: AkeruDelegationRecord;
+      /** Reverse-state moves the card offers, judged against the whole chat. */
+      readonly actions: ReadonlyArray<DelegationAction>;
+    }
   | {
       readonly type: "working";
       readonly id: string;
@@ -244,6 +266,8 @@ function deriveWorkLogEntries(
     if (activity.kind === "context-window.updated") continue;
     if (activity.kind === "bot.step-usage.updated") continue;
     if (activity.kind === "bot.usage-cap.hit") continue;
+    // Silent-run state drives the status line; it is not work the bot did.
+    if (isSilentRunActivity(activity)) continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
@@ -1113,6 +1137,8 @@ function deriveThreadFeedTurnFolds(
       pendingUserBoundary = entry.message.createdAt;
       continue;
     }
+    // Delegation cards never join a fold: bot work stays visible in the chat
+    // without opening the turn's work log, as it does on web.
     const turnId =
       entry.type === "message" && entry.message.role === "assistant"
         ? entry.message.turnId
@@ -1299,6 +1325,32 @@ function appendPresentedFeedEntry(
   });
 }
 
+export interface ThreadFeedDelegations {
+  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
+  readonly waitingOnChildren: boolean;
+}
+
+const EMPTY_THREAD_FEED_DELEGATIONS: ThreadFeedDelegations = {
+  delegations: [],
+  waitingOnChildren: false,
+};
+
+/**
+ * The delegation slice of the environment snapshot that feeds the selected
+ * chat's cards and its waiting line. Scoped to one thread: callers pass the
+ * ids separately, never a joined key, so no separator can desync. JSON keeps
+ * the atom quiet unless this chat's cards actually changed.
+ */
+export function deriveThreadFeedDelegations(
+  threadId: ThreadId | undefined,
+  snapshotDelegations: ReadonlyArray<AkeruDelegationRecord> | undefined,
+): string {
+  if (!threadId) {
+    return JSON.stringify(EMPTY_THREAD_FEED_DELEGATIONS);
+  }
+  return JSON.stringify(threadDelegations(snapshotDelegations ?? [], threadId));
+}
+
 /**
  * Sorts activities into lifecycle order. `derivePendingApprovals` and
  * `derivePendingUserInputs` both expect this ordering; sorting once and
@@ -1380,26 +1432,73 @@ export function buildPendingUserInputAnswers(
   return answers;
 }
 
+/**
+ * Drops the `delegation.<state>` delivery activities whose record renders as a
+ * card; the card already shows that state and result. Activities without a
+ * card, such as `delegation.retry.failed`, stay in the work log.
+ */
+function withoutCardedDelegationActivities(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+): ReadonlyArray<OrchestrationThreadActivity> {
+  if (delegations.length === 0) return activities;
+  const cardIds = new Set<string>(delegations.map((delegation) => delegation.delegationId));
+  return activities.filter((activity) => {
+    if (!activity.kind.startsWith("delegation.")) return true;
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const delegationId = payload?.delegationId;
+    return typeof delegationId !== "string" || !cardIds.has(delegationId);
+  });
+}
+
 export function buildThreadFeed(
   thread: OrchestrationThread,
   options?: {
     readonly loadedMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
     readonly localMessages?: ReadonlyArray<OrchestrationThread["messages"][number]>;
+    /**
+     * Delegations this chat started, from the environment snapshot's
+     * `delegations` list (thread detail payloads do not carry them).
+     * `botChatTimeline` anchors each card to the turn that asked for it. Cards
+     * stay outside collapsed work, and the `delegation.<state>` work-log rows
+     * for a record that has a card are dropped so it shows once.
+     */
+    readonly delegations?: ReadonlyArray<AkeruDelegationRecord>;
   },
 ): ThreadFeedEntry[] {
   const loadedMessages = options?.loadedMessages ?? thread.messages;
   const messages = options?.localMessages
     ? [...loadedMessages, ...options.localMessages]
     : loadedMessages;
+  // Assistant replies to a channel-originated user message deliver back to that
+  // provider; track the nearest preceding channel origin so the feed can label
+  // delivery state without rescanning messages at render time.
+  const channelProviderByMessageId = new Map<string, ChannelProvider>();
+  {
+    let lastChannelProvider: ChannelProvider | null = null;
+    for (const message of messages) {
+      if (message.role === "user") {
+        lastChannelProvider = message.channelOrigin?.provider ?? null;
+      } else if (message.role === "assistant" && lastChannelProvider !== null) {
+        channelProviderByMessageId.set(message.id, lastChannelProvider);
+      }
+    }
+  }
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
   const botStepMeters = buildBotStepMeters(thread.activities);
-  const workLogEntries = deriveWorkLogEntries(thread.activities);
+  const workLogEntries = deriveWorkLogEntries(
+    withoutCardedDelegationActivities(thread.activities, options?.delegations ?? []),
+  );
   const timed: Array<{ readonly at: number; readonly entry: RawThreadFeedEntry }> = [];
   for (const message of messages) {
     const entry = messageFeedEntry(
       message,
       message.turnId === null ? undefined : botStepMeters.get(message.turnId),
+      channelProviderByMessageId.get(message.id),
     );
     timed.push({ at: Date.parse(entry.createdAt), entry });
   }
@@ -1418,7 +1517,11 @@ export function buildThreadFeed(
   // Date per comparison.
   timed.sort((left, right) => compareFeedTimes(left.at, right.at));
 
-  return groupAdjacentActivities(timed.map((item) => item.entry));
+  return mergeDelegationCards(
+    groupAdjacentActivities(timed.map((item) => item.entry)),
+    messages,
+    options?.delegations ?? [],
+  );
 }
 
 /** Same ordering as `Order.Date`: stable ties, unparsable times first. */
@@ -1444,9 +1547,14 @@ const messageFeedEntryCache = new WeakMap<
 function messageFeedEntry(
   message: OrchestrationThread["messages"][number],
   botStepMeter: BotStepMeterData | undefined,
+  channelProvider: ChannelProvider | undefined,
 ): MessageFeedEntry {
   const cached = messageFeedEntryCache.get(message);
-  if (cached !== undefined && botStepMetersEqual(cached.botStepMeter, botStepMeter)) {
+  if (
+    cached !== undefined &&
+    cached.channelProvider === channelProvider &&
+    botStepMetersEqual(cached.botStepMeter, botStepMeter)
+  ) {
     return cached;
   }
   const entry: MessageFeedEntry = {
@@ -1454,6 +1562,7 @@ function messageFeedEntry(
     id: message.id,
     createdAt: message.createdAt,
     message,
+    ...(channelProvider === undefined ? {} : { channelProvider }),
     ...(message.turnId === null ? {} : { botStepMeter }),
   };
   messageFeedEntryCache.set(message, entry);
@@ -1562,10 +1671,18 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
   if (previous === next) return true;
   if (previous.id !== next.id || previous.createdAt !== next.createdAt) return false;
   switch (previous.type) {
+    case "delegation":
+      return (
+        next.type === "delegation" &&
+        previous.delegation === next.delegation &&
+        previous.actions.length === next.actions.length &&
+        previous.actions.every((action, index) => action === next.actions[index])
+      );
     case "message":
       return (
         next.type === "message" &&
         previous.message === next.message &&
+        previous.channelProvider === next.channelProvider &&
         botStepMetersEqual(previous.botStepMeter, next.botStepMeter)
       );
     case "working":
@@ -1594,4 +1711,112 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
         previous.expanded === next.expanded
       );
   }
+}
+
+function mergeDelegationCards(
+  grouped: ThreadFeedEntry[],
+  messages: ReadonlyArray<OrchestrationThread["messages"][number]>,
+  delegations: ReadonlyArray<AkeruDelegationRecord>,
+): ThreadFeedEntry[] {
+  // Delegation cards keep the same anchor placement as web. The shared
+  // timeline runs over the thread's messages; each card lands just after the
+  // feed row for the message the timeline placed it under.
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  const rawMessages = [...messages].sort((left, right) =>
+    left.createdAt.localeCompare(right.createdAt),
+  );
+  // Positions are indexes into `grouped`, the array the merge below walks.
+  // Activity groups count as one row here even when they hold several
+  // activities; counting them by length desyncs the two index spaces and the
+  // card lands late or drops entirely.
+  const rawPositionByMessageId = new Map<string, number>();
+  grouped.forEach((entry, position) => {
+    if (entry.type === "message") {
+      rawPositionByMessageId.set(entry.id, position);
+    }
+  });
+
+  const delegationsByPosition = new Map<number, (ThreadFeedEntry & { type: "delegation" })[]>();
+  const feedDelegations = delegations;
+  const timelineEntries = botChatTimeline({
+    messages: rawMessages.map((message) => ({
+      id: message.id,
+      turnId: message.turnId,
+      createdAt: message.createdAt,
+    })),
+    delegations: feedDelegations,
+  });
+  let previousTimelineMessage:
+    | Extract<(typeof timelineEntries)[number], { _tag: "Message" }>
+    | undefined;
+  for (const timelineEntry of timelineEntries) {
+    if (timelineEntry._tag === "Message") {
+      previousTimelineMessage = timelineEntry;
+      continue;
+    }
+    if (timelineEntry._tag !== "Delegation") continue;
+    const card: ThreadFeedEntry & { type: "delegation" } = {
+      type: "delegation",
+      id: `delegation:${timelineEntry.delegation.delegationId}`,
+      createdAt: timelineEntry.delegation.createdAt,
+      delegation: timelineEntry.delegation,
+      actions: delegationActions(timelineEntry.delegation, feedDelegations),
+    };
+    if (previousTimelineMessage === undefined) {
+      // Cards before the first message (empty chat or end-fallback) lead the feed.
+      delegationsByPosition.set(0, [...(delegationsByPosition.get(0) ?? []), card]);
+      continue;
+    }
+    // The preceding message can be an empty row the grouping pass dropped;
+    // anchor to the nearest earlier message that is still rendered, then to
+    // the front of the feed.
+    let position: number | undefined;
+    for (
+      let rawIndex = previousTimelineMessage.index;
+      rawIndex >= 0 && position === undefined;
+      rawIndex--
+    ) {
+      const rawMessage = rawMessages[rawIndex];
+      if (rawMessage !== undefined) {
+        position = rawPositionByMessageId.get(rawMessage.id);
+      }
+    }
+    const insertAt = position === undefined ? 0 : position + 1;
+    delegationsByPosition.set(insertAt, [...(delegationsByPosition.get(insertAt) ?? []), card]);
+  }
+
+  if (delegationsByPosition.size === 0) return grouped;
+  const merged: ThreadFeedEntry[] = [];
+  grouped.forEach((entry, position) => {
+    const cards = delegationsByPosition.get(position);
+    if (cards) merged.push(...cards);
+    merged.push(entry);
+  });
+  merged.push(...(delegationsByPosition.get(grouped.length) ?? []));
+  return merged;
+}
+
+/**
+ * In a group chat, the assistant messages that start a new speaker run, keyed
+ * by message id to the bot that spoke. A message without `respondingBotId` is
+ * the boss's, as on web. Pass the presented feed so labels follow what is
+ * visible; direct chats (no `group`) get no labels. A group without a boss
+ * labels only replies that name their bot.
+ */
+export function deriveGroupSpeakerLabels(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+  group: { readonly bossBotId: BotId | null } | null,
+): ReadonlyMap<string, BotId> {
+  const labels = new Map<string, BotId>();
+  if (group === null) return labels;
+  let previousSpeaker: BotId | null = null;
+  for (const entry of feed) {
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const { message } = entry;
+    if (message.text.trim().length === 0 && (message.attachments ?? []).length === 0) continue;
+    const speaker = message.respondingBotId ?? group.bossBotId;
+    if (speaker !== null && speaker !== previousSpeaker) labels.set(message.id, speaker);
+    previousSpeaker = speaker;
+  }
+  return labels;
 }

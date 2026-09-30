@@ -58,7 +58,7 @@ describe("withRecentThreadShortcut", () => {
 });
 
 describe("buildShortcutActions", () => {
-  it("leads with the static new-chat action", () => {
+  it("leads with the static bot-session action", () => {
     const actions = buildShortcutActions([thread("a")]);
     expect(actions[0]?.id).toBe(NEW_TASK_SHORTCUT_ID);
     expect(actions[0]?.title).toBe("New chat");

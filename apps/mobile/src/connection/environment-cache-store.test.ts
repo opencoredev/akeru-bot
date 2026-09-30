@@ -1,4 +1,4 @@
-import { EnvironmentId, type VcsListRefsResult } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -7,20 +7,6 @@ import { type ClientCacheKind, MobileDatabase } from "../persistence/mobile-data
 import { make } from "./environment-cache-store";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
-const REFS: VcsListRefsResult = {
-  refs: [
-    {
-      name: "main",
-      current: true,
-      isDefault: true,
-      worktreePath: "/repo",
-    },
-  ],
-  isRepo: true,
-  hasPrimaryRemote: true,
-  nextCursor: null,
-  totalCount: 1,
-};
 
 function cacheId(environmentId: EnvironmentId, kind: ClientCacheKind, cacheKey: string) {
   return `${environmentId}:${kind}:${cacheKey}`;
@@ -63,56 +49,15 @@ function makeDatabase() {
 }
 
 describe("mobile SQLite environment cache store", () => {
-  it.effect("round-trips schema-validated VCS refs", () =>
-    Effect.gen(function* () {
-      const memory = makeDatabase();
-      const store = yield* make().pipe(Effect.provideService(MobileDatabase, memory.database));
-
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo", REFS);
-
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.some(REFS));
-    }),
-  );
-
   it.effect("deletes a corrupt cache record and treats it as a miss", () =>
     Effect.gen(function* () {
       const memory = makeDatabase();
       const store = yield* make().pipe(Effect.provideService(MobileDatabase, memory.database));
-      const id = cacheId(ENVIRONMENT_ID, "vcs-refs", "/repo");
+      const id = cacheId(ENVIRONMENT_ID, "server-config", "config");
       memory.values.set(id, "{not-json");
 
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.none());
+      expect(yield* store.loadServerConfig(ENVIRONMENT_ID)).toEqual(Option.none());
       expect(memory.removed).toEqual([id]);
-    }),
-  );
-
-  it.effect("removes one persisted VCS ref snapshot", () =>
-    Effect.gen(function* () {
-      const memory = makeDatabase();
-      const store = yield* make().pipe(Effect.provideService(MobileDatabase, memory.database));
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo", REFS);
-
-      yield* store.removeVcsRefs(ENVIRONMENT_ID, "/repo");
-
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.none());
-      expect(memory.removed).toContain(cacheId(ENVIRONMENT_ID, "vcs-refs", "/repo"));
-    }),
-  );
-
-  it.effect("clears every persisted VCS ref snapshot in one environment", () =>
-    Effect.gen(function* () {
-      const memory = makeDatabase();
-      const store = yield* make().pipe(Effect.provideService(MobileDatabase, memory.database));
-      const otherEnvironmentId = EnvironmentId.make("environment-2");
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo", REFS);
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo-worktree", REFS);
-      yield* store.saveVcsRefs(otherEnvironmentId, "/repo", REFS);
-
-      yield* store.clearVcsRefs(ENVIRONMENT_ID);
-
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.none());
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo-worktree")).toEqual(Option.none());
-      expect(yield* store.loadVcsRefs(otherEnvironmentId, "/repo")).toEqual(Option.some(REFS));
     }),
   );
 
@@ -121,13 +66,14 @@ describe("mobile SQLite environment cache store", () => {
       const memory = makeDatabase();
       const store = yield* make().pipe(Effect.provideService(MobileDatabase, memory.database));
       const otherEnvironmentId = EnvironmentId.make("environment-2");
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo", REFS);
-      yield* store.saveVcsRefs(otherEnvironmentId, "/repo", REFS);
+      memory.values.set(cacheId(ENVIRONMENT_ID, "server-config", "config"), "{}");
+      memory.values.set(cacheId(otherEnvironmentId, "server-config", "config"), "{}");
 
       yield* store.clear(ENVIRONMENT_ID);
 
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.none());
-      expect(yield* store.loadVcsRefs(otherEnvironmentId, "/repo")).toEqual(Option.some(REFS));
+      expect([...memory.values.keys()]).toEqual([
+        cacheId(otherEnvironmentId, "server-config", "config"),
+      ]);
     }),
   );
 });

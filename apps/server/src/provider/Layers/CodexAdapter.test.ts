@@ -682,7 +682,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           item: {
             type: "mcpToolCall",
             id: "mcp_1",
-            server: "t3-code",
+            server: "akeru",
             tool: "preview_status",
             arguments: {},
             durationMs: 12,
@@ -699,7 +699,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         return;
       }
       NodeAssert.equal(firstEvent.value.payload.itemType, "mcp_tool_call");
-      NodeAssert.equal(firstEvent.value.payload.title, "t3-code · preview_status");
+      NodeAssert.equal(firstEvent.value.payload.title, "akeru · preview_status");
       NodeAssert.deepStrictEqual(firstEvent.value.payload.data, {
         completedAtMs: 1_778_000_000_000,
         threadId: "thread-1",
@@ -707,7 +707,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         item: {
           type: "mcpToolCall",
           id: "mcp_1",
-          server: "t3-code",
+          server: "akeru",
           tool: "preview_status",
           arguments: {},
           durationMs: 12,
