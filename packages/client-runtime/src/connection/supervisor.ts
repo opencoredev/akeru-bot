@@ -204,8 +204,10 @@ export class EnvironmentSupervisor extends Context.Service<
     readonly connect: Effect.Effect<void>;
     readonly disconnect: Effect.Effect<void>;
     readonly retryNow: Effect.Effect<void>;
+    /** Retries only while connection is still desired, leaving intent unchanged. */
+    readonly retryIfDesired: Effect.Effect<void>;
   }
->()("@t3tools/client-runtime/connection/supervisor/EnvironmentSupervisor") {}
+>()("@akeru/client-runtime/connection/supervisor/EnvironmentSupervisor") {}
 
 export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   entry: ConnectionCatalogEntry,
@@ -712,9 +714,23 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     Effect.withSpan("EnvironmentSupervisor.disconnect"),
   );
 
+  // Retry is the user asking to connect now, so it also restores connection
+  // intent: an available environment that is not connecting starts connecting.
   const retryNow = Ref.set(resetRetryState, true).pipe(
+    Effect.andThen(Ref.update(intent, (current) => ({ ...current, desired: true }))),
     Effect.andThen(signal({ _tag: "RetryRequested" })),
     Effect.withSpan("EnvironmentSupervisor.retryNow"),
+  );
+
+  // Automatic nudges read the intent a disconnect writes and never set it, so a
+  // disconnect that lands at the same time is not undone.
+  const retryIfDesired = Ref.get(intent).pipe(
+    Effect.flatMap((current) =>
+      current.desired
+        ? Ref.set(resetRetryState, true).pipe(Effect.andThen(signal({ _tag: "RetryRequested" })))
+        : Effect.void,
+    ),
+    Effect.withSpan("EnvironmentSupervisor.retryIfDesired"),
   );
 
   yield* Effect.addFinalizer(() => Queue.shutdown(signals).pipe(Effect.andThen(clearLease)));
@@ -727,6 +743,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     connect,
     disconnect,
     retryNow,
+    retryIfDesired,
   });
 });
 

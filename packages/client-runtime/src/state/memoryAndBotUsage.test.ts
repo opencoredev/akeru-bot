@@ -1,4 +1,4 @@
-import { BotId, EnvironmentId, ThreadId, WS_METHODS } from "@t3tools/contracts";
+import { BotId, EnvironmentId, ThreadId, WS_METHODS } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -54,6 +54,7 @@ const runtimeFor = Effect.fn("memoryAndBotUsage.runtimeFor")(function* (
     connect: Effect.void,
     disconnect: Effect.void,
     retryNow: Effect.void,
+    retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
   const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
     Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);

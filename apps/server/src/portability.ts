@@ -25,12 +25,12 @@ import {
   type OrchestrationReadModel,
   type ServerSettings,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   isWindowsAbsolutePath,
   normalizeProjectPathForComparison,
   normalizeProjectPathForDispatch,
-} from "@t3tools/shared/path";
+} from "@akeru/shared/path";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 
@@ -386,6 +386,7 @@ export function portableRecords(
           ? { catalogId: server.id.slice(BUILTIN_MCP_PREFIX.length) }
           : {}),
         configuration: safeMcpConfiguration(server),
+        ...(server.instructions ? { instructions: safeText(server.instructions) } : {}),
       },
     })),
     ...snapshot.bots.map((bot) => ({
@@ -406,6 +407,7 @@ export function portableRecords(
         sandbox: bot.sandbox,
         runtimeMode: bot.runtimeMode,
         usageCap: bot.usageCap,
+        imageProvider: bot.imageProvider,
         personalityTone: bot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
         voiceEnabled: bot.voiceEnabled,
         archived: bot.archivedAt !== null,
@@ -635,6 +637,9 @@ function assertSafeImportedRecord(record: PortabilityArchiveRecord): void {
   }
   if (record.type === "mcp-server") {
     assertSafeImportedText(`MCP server '${record.id}' name`, record.data.configuration.name);
+    if (record.data.instructions !== undefined) {
+      assertSafeImportedText(`MCP server '${record.id}' instructions`, record.data.instructions);
+    }
     assertSafeImportedMcp(record);
     return;
   }
@@ -1308,6 +1313,7 @@ function itemForCommand(
         return `group:${command.groupId}`;
       case "mcp-server.create":
       case "mcp-server.update":
+      case "mcp-server.instructions.set":
       case "mcp-server.delete":
       case "mcp-server.enable":
       case "mcp-server.disable":
@@ -1316,6 +1322,7 @@ function itemForCommand(
       case "delegation.state.set":
         return `delegation:${command.delegation.delegationId}`;
       case "delegation.cancel":
+      case "delegation.retry":
         return `delegation:${command.delegationId}`;
       case "routine.create-approved":
       case "routine.draft":
@@ -1473,7 +1480,16 @@ export function commandsForPortabilityImport(
     else if (configurationChanged) {
       commands.push(mcpCommand("mcp-server.update", record));
     }
-    if (!existing || configurationChanged || existing.enabled) {
+    const instructionsChanged = (existing?.instructions ?? "") !== (record.data.instructions ?? "");
+    if (instructionsChanged) {
+      commands.push({
+        type: "mcp-server.instructions.set",
+        commandId: nextCommandId(),
+        mcpServerId: McpServerId.make(record.id),
+        instructions: record.data.instructions ?? "",
+      });
+    }
+    if (!existing || configurationChanged || instructionsChanged || existing.enabled) {
       applied += 1;
     }
   }
@@ -1538,6 +1554,7 @@ export function commandsForPortabilityImport(
       sandbox: record.data.sandbox,
       runtimeMode: record.data.runtimeMode,
       usageCap: record.data.usageCap,
+      imageProvider: record.data.imageProvider,
       personalityTone: record.data.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
       voiceEnabled: record.data.voiceEnabled,
     } as const;

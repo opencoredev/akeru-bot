@@ -1,4 +1,4 @@
-import { type ApprovalRequestId } from "@t3tools/contracts";
+import { type ApprovalRequestId } from "@akeru/contracts";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
@@ -7,6 +7,7 @@ import {
 } from "../../pendingUserInput";
 import { CheckIcon } from "lucide-react";
 import { Button } from "../ui/button";
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 
 interface PendingUserInputPanelProps {
@@ -67,6 +68,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onAdvance?: () => void;
   className?: string;
 }) {
+  const { t } = useI18n();
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
   const autoAdvanceTimerRef = useRef<number | null>(null);
@@ -186,7 +188,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         ) : null}
       </div>
       {activeQuestion.multiSelect ? (
-        <p className="mt-1 text-xs text-muted-foreground">Select one or more.</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("Select one or more.")}</p>
       ) : null}
       <div className="mt-3 overflow-hidden rounded-xl border border-border/80 bg-background/25 divide-y divide-border/70">
         {activeQuestion.options.map((option, index) => {
@@ -244,7 +246,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             disabled={isResponding || progress.selectedOptionLabels.length === 0}
             onClick={onAdvance}
           >
-            {questionIndex < prompt.questions.length - 1 ? "Continue" : "Submit"}
+            {questionIndex < prompt.questions.length - 1 ? t("Continue") : t("Submit")}
           </Button>
         </div>
       ) : null}

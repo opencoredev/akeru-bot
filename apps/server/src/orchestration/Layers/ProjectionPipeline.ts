@@ -9,8 +9,9 @@ import {
   type ChatAttachment,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
+  DelegationId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -52,6 +53,7 @@ import { ProjectionProjectRepositoryLive } from "../../persistence/Layers/Projec
 import { ProjectionStateRepositoryLive } from "../../persistence/Layers/ProjectionState.ts";
 import { ProjectionThreadActivityRepositoryLive } from "../../persistence/Layers/ProjectionThreadActivities.ts";
 import { ProjectionThreadMessageRepositoryLive } from "../../persistence/Layers/ProjectionThreadMessages.ts";
+import { retainProjectionMessagesAfterRevert } from "../RetainedRevertMessages.ts";
 import { ProjectionThreadProposedPlanRepositoryLive } from "../../persistence/Layers/ProjectionThreadProposedPlans.ts";
 import { ProjectionThreadSessionRepositoryLive } from "../../persistence/Layers/ProjectionThreadSessions.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
@@ -229,90 +231,6 @@ function derivePendingUserInputCountFromActivities(
   }
 
   return openRequestIds.size;
-}
-
-function retainProjectionMessagesAfterRevert(
-  messages: ReadonlyArray<ProjectionThreadMessage>,
-  turns: ReadonlyArray<ProjectionTurn>,
-  turnCount: number,
-): ReadonlyArray<ProjectionThreadMessage> {
-  const retainedMessageIds = new Set<string>();
-  const retainedTurnIds = new Set<string>();
-  const keptTurns = turns.filter(
-    (turn) =>
-      turn.turnId !== null &&
-      turn.checkpointTurnCount !== null &&
-      turn.checkpointTurnCount <= turnCount,
-  );
-  for (const turn of keptTurns) {
-    if (turn.turnId !== null) {
-      retainedTurnIds.add(turn.turnId);
-    }
-    if (turn.pendingMessageId !== null) {
-      retainedMessageIds.add(turn.pendingMessageId);
-    }
-    if (turn.assistantMessageId !== null) {
-      retainedMessageIds.add(turn.assistantMessageId);
-    }
-  }
-
-  for (const message of messages) {
-    if (message.role === "system") {
-      retainedMessageIds.add(message.messageId);
-      continue;
-    }
-    if (message.turnId !== null && retainedTurnIds.has(message.turnId)) {
-      retainedMessageIds.add(message.messageId);
-    }
-  }
-
-  const retainedUserCount = messages.filter(
-    (message) => message.role === "user" && retainedMessageIds.has(message.messageId),
-  ).length;
-  const missingUserCount = Math.max(0, turnCount - retainedUserCount);
-  if (missingUserCount > 0) {
-    const fallbackUserMessages = messages
-      .filter(
-        (message) =>
-          message.role === "user" &&
-          !retainedMessageIds.has(message.messageId) &&
-          (message.turnId === null || retainedTurnIds.has(message.turnId)),
-      )
-      .toSorted(
-        (left, right) =>
-          left.createdAt.localeCompare(right.createdAt) ||
-          left.messageId.localeCompare(right.messageId),
-      )
-      .slice(0, missingUserCount);
-    for (const message of fallbackUserMessages) {
-      retainedMessageIds.add(message.messageId);
-    }
-  }
-
-  const retainedAssistantCount = messages.filter(
-    (message) => message.role === "assistant" && retainedMessageIds.has(message.messageId),
-  ).length;
-  const missingAssistantCount = Math.max(0, turnCount - retainedAssistantCount);
-  if (missingAssistantCount > 0) {
-    const fallbackAssistantMessages = messages
-      .filter(
-        (message) =>
-          message.role === "assistant" &&
-          !retainedMessageIds.has(message.messageId) &&
-          (message.turnId === null || retainedTurnIds.has(message.turnId)),
-      )
-      .toSorted(
-        (left, right) =>
-          left.createdAt.localeCompare(right.createdAt) ||
-          left.messageId.localeCompare(right.messageId),
-      )
-      .slice(0, missingAssistantCount);
-    for (const message of fallbackAssistantMessages) {
-      retainedMessageIds.add(message.messageId);
-    }
-  }
-
-  return messages.filter((message) => retainedMessageIds.has(message.messageId));
 }
 
 function retainProjectionActivitiesAfterRevert(
@@ -596,6 +514,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               sandbox: event.payload.sandbox,
               runtimeMode: event.payload.runtimeMode,
               usageCap: event.payload.usageCap,
+              imageProvider: event.payload.imageProvider,
               personalityTone: event.payload.personalityTone,
               voiceEnabled: event.payload.voiceEnabled,
               channelBindings: event.payload.channelBindings,
@@ -626,6 +545,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                 ? { runtimeMode: event.payload.runtimeMode }
                 : {}),
               ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
+              ...(event.payload.imageProvider !== undefined
+                ? { imageProvider: event.payload.imageProvider }
+                : {}),
               ...(event.payload.personalityTone !== undefined
                 ? { personalityTone: event.payload.personalityTone }
                 : {}),
@@ -815,21 +737,59 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       if (event.type !== "delegation.created" && event.type !== "delegation.updated") {
         return Effect.void;
       }
-      return sql`
-        INSERT INTO projection_delegations (delegation_id, record_json)
-        VALUES (
-          ${event.payload.delegation.delegationId},
-          ${JSON.stringify(event.payload.delegation)}
-        )
-        ON CONFLICT (delegation_id) DO UPDATE SET
-          record_json = excluded.record_json
-      `.pipe(
+      const delegation = event.payload.delegation;
+      const recordJson = JSON.stringify(delegation);
+      return Effect.gen(function* () {
+        yield* sql`
+          INSERT INTO projection_delegations (delegation_id, record_json)
+          VALUES (
+            ${delegation.delegationId},
+            ${recordJson}
+          )
+          ON CONFLICT (delegation_id) DO UPDATE SET
+            record_json = excluded.record_json
+        `;
+        // Children created before thread.created carried parent links get
+        // them from their delegation record, whichever projector runs first.
+        const childThreadId =
+          "childThreadId" in delegation.phase ? delegation.phase.childThreadId : null;
+        if (childThreadId !== null) {
+          yield* sql`
+            UPDATE projection_threads
+            SET
+              parent_thread_id = ${delegation.parentThreadId},
+              parent_delegation_id = ${delegation.delegationId}
+            WHERE thread_id = ${childThreadId}
+              AND parent_thread_id IS NULL
+          `;
+        }
+      }).pipe(
         Effect.mapError(
           toPersistenceSqlError("ProjectionPipeline.applyDelegationsProjection:query"),
         ),
-        Effect.asVoid,
       );
     });
+
+    // Parent link for a delegated child whose thread.created event predates
+    // parent fields. Delegations project before threads, so a replay finds it.
+    const delegationParentLink = (threadId: string) =>
+      sql<{ readonly parentThreadId: string; readonly parentDelegationId: string }>`
+        SELECT
+          json_extract(record_json, '$.parentThreadId') AS "parentThreadId",
+          delegation_id AS "parentDelegationId"
+        FROM projection_delegations
+        WHERE COALESCE(
+          json_extract(record_json, '$.phase.childThreadId'),
+          json_extract(record_json, '$.childThreadId')
+        ) = ${threadId}
+        LIMIT 1
+      `.pipe(
+        Effect.map(([row]) => ({
+          parentThreadId: row ? ThreadId.make(row.parentThreadId) : null,
+          parentDelegationId: row ? DelegationId.make(row.parentDelegationId) : null,
+        })),
+        Effect.mapError(toPersistenceSqlError("ProjectionPipeline.delegationParentLink:query")),
+      );
 
     const applyRoutinesProjection: ProjectorDefinition["apply"] = Effect.fn(
       "applyRoutinesProjection",
@@ -880,8 +840,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         INSERT INTO projection_routines (
           routine_id, bot_id, target_thread_id, project_id, job, procedure, procedure_version,
           approval_version, schedule_json, timezone, skill_assignment_ids_json,
-          connector_dependencies_json, sandbox, approval_policy, enabled, lifecycle,
-          next_run_at, last_run_at, latest_result_json, latest_failure_json,
+          connector_dependencies_json, sandbox, approval_policy, delegate_to_bot_id, enabled,
+          lifecycle, next_run_at, last_run_at, latest_result_json, latest_failure_json,
           created_at, updated_at, deleted_at
         ) VALUES (
           ${routine.id}, ${routine.botId}, ${routine.targetThreadId}, ${routine.projectId}, ${routine.job},
@@ -889,7 +849,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           ${encodeRoutineSchedule(routine.schedule)}, ${routine.timezone},
           ${encodeSkillAssignmentIds(routine.skillAssignmentIds)},
           ${encodeMcpServerIds(routine.connectorDependencies)}, ${routine.sandbox},
-          ${routine.approvalPolicy}, ${routine.enabled ? 1 : 0}, ${routine.lifecycle},
+          ${routine.approvalPolicy}, ${routine.delegateToBotId}, ${routine.enabled ? 1 : 0},
+          ${routine.lifecycle},
           ${routine.nextRunAt}, ${routine.lastRunAt},
           ${routine.latestResult === null ? null : encodeRoutineResult(routine.latestResult)},
           ${routine.latestFailure === null ? null : encodeRoutineFailure(routine.latestFailure)},
@@ -908,6 +869,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           connector_dependencies_json = excluded.connector_dependencies_json,
           sandbox = excluded.sandbox,
           approval_policy = excluded.approval_policy,
+          delegate_to_bot_id = excluded.delegate_to_bot_id,
           enabled = excluded.enabled,
           lifecycle = excluded.lifecycle,
           next_run_at = excluded.next_run_at,
@@ -998,12 +960,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       "applyThreadsProjection",
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
-        case "thread.created":
+        case "thread.created": {
+          const parentLink = event.payload.parentThreadId
+            ? {
+                parentThreadId: event.payload.parentThreadId,
+                parentDelegationId: event.payload.parentDelegationId ?? null,
+              }
+            : yield* delegationParentLink(event.payload.threadId);
           yield* projectionThreadRepository.upsert({
             threadId: event.payload.threadId,
             projectId: event.payload.projectId,
             botId: event.payload.botId ?? null,
             groupId: event.payload.groupId ?? null,
+            ...parentLink,
             respondingBotId: null,
             title: event.payload.title,
             modelSelection: event.payload.modelSelection,
@@ -1032,6 +1001,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedAt: null,
           });
           return;
+        }
 
         case "thread.ownership-updated": {
           const existingRow = yield* projectionThreadRepository.getById({
@@ -1042,6 +1012,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             botId: event.payload.botId,
             groupId: event.payload.groupId,
+            respondingBotId: event.payload.botId,
             updatedAt: event.payload.updatedAt,
           });
           return;
@@ -1490,6 +1461,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             reactions: previousMessage?.reactions ?? [],
             isStreaming: false,
             createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.channel-delivery-set": {
+          const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
+            messageId: event.payload.messageId,
+          });
+          if (Option.isNone(existingMessage)) return;
+          yield* projectionThreadMessageRepository.upsert({
+            ...existingMessage.value,
+            channelDelivery: event.payload.delivery,
             updatedAt: event.payload.updatedAt,
           });
           return;
@@ -2227,6 +2211,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         eventTypes: projectorEventTypes([
           "thread.created",
           "thread.message-sent",
+          "thread.channel-delivery-set",
           "thread.message-reaction-set",
           "thread.reverted",
         ]),

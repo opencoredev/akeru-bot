@@ -5,7 +5,7 @@ import {
   HostProcessExecutablePath,
   HostProcessPlatform,
   HostProcessUserId,
-} from "@t3tools/shared/hostProcess";
+} from "@akeru/shared/hostProcess";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -29,7 +29,7 @@ it("keeps systemd pinned to the stable launcher rather than a versioned server",
     launcherPath: "/home/theo/.t3/runtime/service-launcher.mjs",
     baseDir: "/home/theo/.t3",
     logPath: "/home/theo/.t3/userdata/logs/boot-service.log",
-    unitPath: "/home/theo/.config/systemd/user/t3code.service",
+    unitPath: "/home/theo/.config/systemd/user/akeru-bot.service",
   });
 
   expect(unit).toContain("ExecStart=/usr/bin/node /home/theo/.t3/runtime/service-launcher.mjs");
@@ -43,7 +43,7 @@ it("survives the kernel OOM-killing a greedy agent child", () => {
     launcherPath: "/home/theo/.t3/runtime/service-launcher.mjs",
     baseDir: "/home/theo/.t3",
     logPath: "/home/theo/.t3/userdata/logs/boot-service.log",
-    unitPath: "/home/theo/.config/systemd/user/t3code.service",
+    unitPath: "/home/theo/.config/systemd/user/akeru-bot.service",
   });
 
   expect(unit).toContain("OOMPolicy=continue");
@@ -54,7 +54,7 @@ const macPlan = {
   launcherPath: "/Users/theo/.t3/runtime/service-launcher.mjs",
   baseDir: "/Users/theo/.t3",
   logPath: "/Users/theo/.t3/userdata/logs/boot-service.log",
-  unitPath: "/Users/theo/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+  unitPath: "/Users/theo/Library/LaunchAgents/dev.leodoes.akeru.service.plist",
 };
 const macInstallerPath =
   "/opt/homebrew/bin:/Users/theo/.npm-global/bin:/Users/theo/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin";
@@ -172,7 +172,7 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
       ),
     );
   const service = yield* makeService();
-  return { service, makeService, fs, statePath, commands, timeouts, control };
+  return { service, makeService, fs, statePath, commands, timeouts, control, home, baseDir };
 });
 
 it.layer(NodeServices.layer)("boot service install", (it) => {
@@ -206,7 +206,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect(commands.some((command) => command.startsWith("npm "))).toBe(false);
       // The stop can block up to systemd's 90s TimeoutStopSec; the runner's
       // 60s default would cancel it mid-shutdown.
-      expect(timeouts.get("systemctl --user disable --now t3code.service")).toEqual(
+      expect(timeouts.get("systemctl --user disable --now akeru-bot.service")).toEqual(
         Duration.seconds(120),
       );
     }),
@@ -233,9 +233,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const error = yield* service.install.pipe(Effect.flip);
       expect(error._tag).toBe("BootServiceCommandError");
       expect(commands.filter((command) => command.startsWith("systemctl "))).toEqual([
-        "systemctl --user stop t3code.service",
+        "systemctl --user stop akeru-bot.service",
         "systemctl --user daemon-reload",
-        "systemctl --user restart t3code.service",
+        "systemctl --user restart akeru-bot.service",
       ]);
     }),
   );
@@ -261,8 +261,8 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect((yield* service.install.pipe(Effect.flip))._tag).toBe("BootServiceUpdatePendingError");
       expect(serviceStateHasPendingUpdate(yield* fs.readFileString(statePath))).toBe(true);
       expect(commands.filter((command) => command.startsWith("systemctl "))).toEqual([
-        "systemctl --user stop t3code.service",
-        "systemctl --user restart t3code.service",
+        "systemctl --user stop akeru-bot.service",
+        "systemctl --user restart akeru-bot.service",
       ]);
     }),
   );
@@ -280,7 +280,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const { service, fs, statePath, commands, timeouts } = yield* makeHarness("darwin");
       const plan = yield* service.install;
 
-      expect(plan.unitPath.endsWith("Library/LaunchAgents/com.t3tools.t3code.service.plist")).toBe(
+      expect(plan.unitPath.endsWith("Library/LaunchAgents/dev.leodoes.akeru.service.plist")).toBe(
         true,
       );
       expect(yield* fs.readFileString(plan.unitPath)).toContain(
@@ -298,7 +298,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect(commands.some((command) => command.startsWith("systemctl "))).toBe(false);
       // A bootout can block up to the plist's 90s ExitTimeOut; the runner's
       // 60s default would cancel it and let bootstrap race a loaded job.
-      expect(timeouts.get("launchctl bootout --wait gui/501/com.t3tools.t3code.service")).toEqual(
+      expect(timeouts.get("launchctl bootout --wait gui/501/dev.leodoes.akeru.service")).toEqual(
         Duration.seconds(120),
       );
     }),
@@ -315,8 +315,8 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const error = yield* service.install.pipe(Effect.flip);
       expect(error._tag).toBe("BootServiceCommandError");
       expect(commands.filter((command) => command.startsWith("launchctl "))).toEqual([
-        "launchctl bootout --wait gui/501/com.t3tools.t3code.service",
-        "launchctl enable gui/501/com.t3tools.t3code.service",
+        "launchctl bootout --wait gui/501/dev.leodoes.akeru.service",
+        "launchctl enable gui/501/dev.leodoes.akeru.service",
         `launchctl bootstrap gui/501 ${plistPath}`,
         `launchctl bootstrap gui/501 ${plistPath}`,
       ]);
@@ -379,7 +379,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
     Effect.gen(function* () {
       const { service, control } = yield* makeHarness("darwin");
       yield* service.install;
-      control.failCommand = "launchctl bootout --wait gui/501/com.t3tools.t3code.service";
+      control.failCommand = "launchctl bootout --wait gui/501/dev.leodoes.akeru.service";
 
       yield* service.install;
       expect((yield* service.status).current).toBe(true);
@@ -408,9 +408,60 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect((yield* service.install.pipe(Effect.flip))._tag).toBe("BootServiceUpdatePendingError");
       expect(serviceStateHasPendingUpdate(yield* fs.readFileString(statePath))).toBe(true);
       expect(commands.filter((command) => command.startsWith("launchctl "))).toEqual([
-        "launchctl bootout --wait gui/501/com.t3tools.t3code.service",
+        "launchctl bootout --wait gui/501/dev.leodoes.akeru.service",
         `launchctl bootstrap gui/501 ${plistPath}`,
       ]);
+    }),
+  );
+
+  it.effect("renames an Akeru unit installed under the legacy t3code name", () =>
+    Effect.gen(function* () {
+      const { service, fs, commands, home, baseDir } = yield* makeHarness();
+      const legacyUnitPath = `${home}/.config/systemd/user/${BootService.LEGACY_BOOT_SERVICE_UNIT_FILE}`;
+      yield* fs.makeDirectory(`${home}/.config/systemd/user`, { recursive: true });
+      yield* fs.writeFileString(
+        legacyUnitPath,
+        BootService.renderBootServiceUnit({
+          nodePath: "/usr/bin/node",
+          launcherPath: `${baseDir}/runtime/service-launcher.mjs`,
+          baseDir,
+          logPath: `${baseDir}/userdata/logs/boot-service.log`,
+          unitPath: legacyUnitPath,
+        }),
+      );
+
+      const before = yield* service.status;
+      expect(before).toMatchObject({ installed: true, current: false, unitPath: legacyUnitPath });
+
+      const plan = yield* service.install;
+
+      expect(plan.unitPath.endsWith("akeru-bot.service")).toBe(true);
+      expect(yield* fs.exists(legacyUnitPath)).toBe(false);
+      expect(yield* fs.readFileString(plan.unitPath)).toContain("Environment=AKERU_HOME=");
+      expect(commands).toContain("systemctl --user stop t3code.service");
+      expect(commands).toContain("systemctl --user disable --now t3code.service");
+      // The legacy unit stops before the renamed unit starts on the same port.
+      expect(commands.indexOf("systemctl --user stop t3code.service")).toBeLessThan(
+        commands.indexOf("systemctl --user restart akeru-bot.service"),
+      );
+      expect((yield* service.status).current).toBe(true);
+    }),
+  );
+
+  it.effect("leaves a T3 Code unit that runs another launcher untouched", () =>
+    Effect.gen(function* () {
+      const { service, fs, commands, home } = yield* makeHarness();
+      const legacyUnitPath = `${home}/.config/systemd/user/${BootService.LEGACY_BOOT_SERVICE_UNIT_FILE}`;
+      const foreignUnit = "ExecStart=/usr/bin/node /home/theo/.t3/runtime/service-launcher.mjs\n";
+      yield* fs.makeDirectory(`${home}/.config/systemd/user`, { recursive: true });
+      yield* fs.writeFileString(legacyUnitPath, foreignUnit);
+
+      expect((yield* service.status).installed).toBe(false);
+      yield* service.install;
+      expect(yield* service.uninstall).toBe(true);
+
+      expect(yield* fs.readFileString(legacyUnitPath)).toBe(foreignUnit);
+      expect(commands.some((command) => command.includes("t3code.service"))).toBe(false);
     }),
   );
 });

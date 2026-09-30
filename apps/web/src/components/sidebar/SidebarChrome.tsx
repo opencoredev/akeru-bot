@@ -11,7 +11,7 @@ import type {
   OrchestrationBot,
   OrchestrationThreadShell,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { memo, useCallback, useState } from "react";
@@ -21,7 +21,10 @@ import {
   type PluginDefinition,
 } from "../../../../../plugins";
 
+import { createTranslator, type PluralForms } from "@akeru/client-runtime/i18n";
+
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { openSettings } from "../../settingsDialogStore";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openUsage } from "../../usageDialogStore";
@@ -62,6 +65,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }: {
   isElectron: boolean;
 }) {
+  const { t } = useI18n();
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
@@ -94,7 +98,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         </div>
         <div className="relative flex items-center justify-center">
           <Link
-            aria-label="Go to chats"
+            aria-label={t("Go to chats")}
             className={cn(
               "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
               backdropVariant ? "text-white" : "text-sidebar-foreground",
@@ -154,9 +158,17 @@ export function findActiveComputerUseControl(input: {
   return null;
 }
 
-export function formatEnabledPluginStatus(enabledCount: number): string {
-  if (enabledCount === 0) return "No plugins enabled";
-  return `${enabledCount} ${enabledCount === 1 ? "plugin" : "plugins"} enabled`;
+type Pluralize = (count: number, forms: PluralForms) => string;
+
+const englishTranslator = createTranslator("en");
+
+export function formatEnabledPluginStatus(
+  enabledCount: number,
+  t: (message: string) => string = englishTranslator.translate,
+  plural: Pluralize = englishTranslator.plural,
+): string {
+  if (enabledCount === 0) return t("No plugins enabled");
+  return plural(enabledCount, { one: "{count} plugin enabled", other: "{count} plugins enabled" });
 }
 
 export function formatEnabledPluginBadge(enabledCount: number): string | null {
@@ -194,9 +206,10 @@ function SidebarPluginSummaryForEnvironment({
   readonly environmentId: EnvironmentId;
   readonly onClick: () => void;
 }) {
+  const { t, plural } = useI18n();
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const { enabledCount } = summarizeEnabledPlugins(servers);
-  const statusLabel = formatEnabledPluginStatus(enabledCount);
+  const statusLabel = formatEnabledPluginStatus(enabledCount, t, plural);
 
   return (
     <SidebarPluginButton enabledCount={enabledCount} onClick={onClick} statusLabel={statusLabel} />
@@ -212,7 +225,10 @@ function SidebarPluginButton({
   readonly onClick: () => void;
   readonly statusLabel: string;
 }) {
+  const { t } = useI18n();
   const badgeLabel = formatEnabledPluginBadge(enabledCount);
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   return (
     <SidebarMenuItem className="shrink-0">
@@ -220,16 +236,18 @@ function SidebarPluginButton({
         <TooltipTrigger
           render={
             <SidebarMenuButton
-              aria-label={`Plugins, ${statusLabel}`}
+              aria-label={t("Plugins, {status}", { status: statusLabel })}
               className="relative overflow-visible!"
-              size="icon"
               onClick={onClick}
             >
               <AppIcon className="size-4" icon={PlugSocketIcon} />
+              <span className="truncate group-data-[collapsible=icon]:hidden">{t("Plugins")}</span>
+              {/* Expanded, the count sits inline where it can be read as a
+                  number; collapsed, it becomes the badge on the glyph. */}
               {badgeLabel ? (
                 <span
                   aria-hidden="true"
-                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sidebar-primary px-1 text-[9px] font-semibold tabular-nums text-sidebar-primary-foreground"
+                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:bg-sidebar-primary group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-[9px] group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:text-sidebar-primary-foreground"
                 >
                   {badgeLabel}
                 </span>
@@ -237,20 +255,25 @@ function SidebarPluginButton({
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{`Plugins · ${statusLabel}`}</TooltipPopup>
+        {collapsed ? (
+          <TooltipPopup side="right">
+            {t("Plugins · {status}", { status: statusLabel })}
+          </TooltipPopup>
+        ) : null}
       </Tooltip>
     </SidebarMenuItem>
   );
 }
 
 function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   if (!environmentId) {
     return (
       <SidebarPluginButton
         enabledCount={0}
         onClick={onClick}
-        statusLabel="Connect an environment"
+        statusLabel={t("Connect an environment")}
       />
     );
   }
@@ -262,6 +285,7 @@ function ComputerUseControlForEnvironment({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useI18n();
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
   const disableServer = useAtomCommand(mcpServerEnvironment.disable);
@@ -305,22 +329,24 @@ function ComputerUseControlForEnvironment({
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
       <div className="flex items-center gap-2 text-xs font-medium">
         <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
-        <span className="min-w-0 truncate">{control.botName} controls this Mac</span>
+        <span className="min-w-0 truncate">
+          {t("{name} controls this Mac", { name: control.botName })}
+        </span>
       </div>
       <div className="mt-2 flex gap-2">
         <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
-          Stop
+          {t("Stop")}
         </Button>
         <Button
-          aria-label="Revoke Computer Use for all bots"
+          aria-label={t("Revoke Computer Use for all bots")}
           className="h-7 flex-1 text-xs"
           disabled={pending}
           size="sm"
-          title="Disable Computer Use for all bots"
+          title={t("Disable Computer Use for all bots")}
           variant="destructive-outline"
           onClick={revoke}
         >
-          Revoke
+          {t("Revoke")}
         </Button>
       </div>
     </div>
@@ -332,7 +358,24 @@ function ComputerUseControl() {
   return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
 }
 
-function SidebarUtilityItem({
+/** Status that must stay visible whatever chrome hosts it: computer use and update notices. */
+export function SidebarStatusStack({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex flex-col gap-2 empty:hidden", className)}>
+      <ComputerUseControl />
+      <SidebarProviderUpdatePill />
+      <SidebarUpdateArchitectureWarning />
+    </div>
+  );
+}
+
+/**
+ * A footer destination. Expanded, it reads as a labeled row — four unlabeled
+ * icons asked the user to remember which glyph meant Usage and which meant
+ * Feedback. Collapsed to the icon rail there is no room for the label, so the
+ * tooltip carries it there and only there.
+ */
+export function SidebarUtilityItem({
   icon,
   label,
   onClick,
@@ -341,23 +384,31 @@ function SidebarUtilityItem({
   label: string;
   onClick: () => void;
 }) {
+  const { state } = useSidebar();
+
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} size="icon" onClick={onClick}>
+            <SidebarMenuButton
+              aria-label={label}
+              className="group-data-[collapsible=icon]:justify-center"
+              onClick={onClick}
+            >
               {icon}
+              <span className="truncate group-data-[collapsible=icon]:hidden">{label}</span>
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        {state === "collapsed" ? <TooltipPopup side="right">{label}</TooltipPopup> : null}
       </Tooltip>
     </SidebarMenuItem>
   );
 }
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+  const { t } = useI18n();
   const { isMobile, setOpenMobile } = useSidebar();
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
@@ -386,22 +437,25 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarProviderUpdatePill />
         <SidebarUpdateArchitectureWarning />
       </div>
-      <SidebarMenu className="flex-row flex-wrap items-center justify-center gap-1 overflow-visible group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:flex-nowrap">
+      {/* A labeled column, not a row of glyphs: each destination gets a
+          full-width row with a comfortable hit target. The icon rail collapses
+          it back to centered icons. */}
+      <SidebarMenu className="flex-col flex-nowrap gap-0.5 overflow-visible">
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
+          icon={<AppIcon className="size-4" icon={Analytics01Icon} />}
+          label={t("Usage")}
+          onClick={handleUsageClick}
+        />
+        <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Settings02Icon} />}
-          label="Settings"
+          label={t("Settings")}
           onClick={handleSettingsClick}
         />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={HelpCircleIcon} />}
-          label="Feedback"
+          label={t("Feedback")}
           onClick={handleFeedbackClick}
-        />
-        <SidebarUtilityItem
-          icon={<AppIcon className="size-4" icon={Analytics01Icon} />}
-          label="Usage"
-          onClick={handleUsageClick}
         />
         <SidebarUpdatePill />
       </SidebarMenu>

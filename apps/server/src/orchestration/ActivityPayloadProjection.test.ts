@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
+import type { OrchestrationThreadActivity } from "@akeru/contracts";
 import { projectActivityPayload } from "./ActivityPayloadProjection.ts";
 
 function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
@@ -30,6 +30,16 @@ describe("projectActivityPayload", () => {
     );
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data).toEqual({ command: 'printf "hi\\n"' });
+  });
+
+  it("tells memory writes from reads without shipping the notes", () => {
+    const write = projectActivityPayload(
+      activity({
+        itemType: "dynamic_tool_call",
+        data: { args: { operations: [{ op: "add", text: "secret" }] } },
+      }),
+    );
+    expect((write.payload as Record<string, unknown>).data).toEqual({ memoryOperationCount: 1 });
   });
 
   it("preserves tool attribution (agentId/parentToolUseId) through data slimming", () => {

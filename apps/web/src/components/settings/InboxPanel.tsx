@@ -1,59 +1,64 @@
-import { CircleAlertIcon } from "lucide-react";
+import { BookmarkIcon, CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
-import { selectOpenBotInboxItems, type BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
+import {
+  botInboxItemCopy,
+  botInboxRowAction,
+  selectOpenBotInboxItems,
+  type BotInboxItem,
+} from "@akeru/client-runtime/bot-inbox";
+import {
+  describeDurableFactFailure,
+  memoryApprovalMutation,
+  type MemoryApprovalIntent,
+} from "@akeru/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openSettings } from "../../settingsDialogStore";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
+import { useI18n } from "../../i18n";
 import { botInboxEnvironment } from "../../state/botInbox";
+import { memoryEnvironment } from "../../state/memory";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-export type InboxRepairDestination = "providers" | "plugins";
-export type InboxRowAction = InboxRepairDestination | "resolve";
-
-export function inboxRepairDestination(item: BotInboxItem): InboxRepairDestination | null {
-  if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
-  if (item.incidentKey.startsWith("connector:") || item.incidentKey.startsWith("access:")) {
-    return "providers";
-  }
-  return null;
-}
-
-export function inboxRowAction(item: BotInboxItem): InboxRowAction {
-  return inboxRepairDestination(item) ?? "resolve";
-}
-
-export function InboxPanel() {
+/** Open bot errors and approval requests for surfaces that still use the inbox. */
+export function InboxSection() {
+  const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
   const inboxQuery = useEnvironmentQuery(
     environmentId === null ? null : botInboxEnvironment.list({ environmentId, input: {} }),
   );
   const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
+  const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
   const openItems = selectOpenBotInboxItems(inboxQuery.data ?? []);
 
   return (
-    <SettingsPageContainer>
-      <SettingsSection
-        title="Error inbox"
-        headerAction={
-          openItems.length > 0 ? <Badge variant="error">{openItems.length} open</Badge> : null
-        }
-      >
-        {inboxQuery.isPending ? (
-          <SettingsRow title="Loading errors" />
-        ) : inboxQuery.error ? (
-          <SettingsRow title="Could not load errors" description={inboxQuery.error} />
-        ) : openItems.length === 0 ? (
-          <SettingsRow
-            title="No errors"
-            description="Bot failures and approval requests appear here."
-          />
-        ) : (
-          openItems.map((item) => (
+    <SettingsSection
+      id="errors"
+      title={t("Bot inbox")}
+      headerAction={
+        openItems.length > 0 ? (
+          <Badge variant="error">{t("{count} open", { count: openItems.length })}</Badge>
+        ) : null
+      }
+    >
+      {inboxQuery.isPending ? (
+        <SettingsRow title={t("Loading inbox")} />
+      ) : inboxQuery.error ? (
+        <SettingsRow title={t("Could not load the inbox")} description={inboxQuery.error} />
+      ) : openItems.length === 0 ? (
+        <SettingsRow
+          title={t("Nothing open")}
+          description={t("Bot failures and memory approvals appear here.")}
+        />
+      ) : (
+        openItems.map((item) => {
+          const approval = item.memoryApproval;
+          return (
             <InboxIncidentRow
               key={item.id}
               item={item}
@@ -71,24 +76,49 @@ export function InboxPanel() {
                         : null;
                     }
               }
+              onDecideMemory={
+                environmentId === null || approval === undefined
+                  ? null
+                  : async (intent) => {
+                      const result = await mutateFact({
+                        environmentId,
+                        input: {
+                          threadId: approval.sourceThreadId,
+                          mutation: memoryApprovalMutation(approval, intent),
+                        },
+                      });
+                      if (result._tag === "Failure") {
+                        return t(
+                          describeDurableFactFailure(squashAtomCommandFailure(result)).message,
+                        );
+                      }
+                      // The server closes the inbox item when it records the decision.
+                      inboxQuery.refresh();
+                      return null;
+                    }
+              }
             />
-          ))
-        )}
-      </SettingsSection>
-    </SettingsPageContainer>
+          );
+        })
+      )}
+    </SettingsSection>
   );
 }
 
-function InboxIncidentRow({
+export function InboxIncidentRow({
   item,
   environmentId,
   onResolve,
+  onDecideMemory,
 }: {
   readonly item: BotInboxItem;
   readonly environmentId: ReturnType<typeof useSettingsEnvironmentId>;
   readonly onResolve: (() => Promise<string | null>) | null;
+  readonly onDecideMemory: ((intent: MemoryApprovalIntent) => Promise<string | null>) | null;
 }) {
-  const action = inboxRowAction(item);
+  const { t } = useI18n();
+  const action = botInboxRowAction(item);
+  const copy = botInboxItemCopy(item, t);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const openRepair = () => {
@@ -108,30 +138,67 @@ function InboxIncidentRow({
       setIsResolving(false);
     }
   };
+  const handleDecideMemory = async (intent: MemoryApprovalIntent) => {
+    if (onDecideMemory === null || isResolving) return;
+    setIsResolving(true);
+    setResolveError(null);
+    try {
+      setResolveError(await onDecideMemory(intent));
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
   return (
     <SettingsRow
       title={
         <span className="flex items-center gap-2">
-          <CircleAlertIcon className="size-4 text-destructive" />
-          {item.botName} · {item.taskOrRoutine}
+          {action === "memory-approval" ? (
+            <BookmarkIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <CircleAlertIcon className="size-4 text-destructive" />
+          )}
+          <span>
+            {item.botName} · {item.taskOrRoutine} · {copy.kind}
+          </span>
+          {copy.sensitive ? (
+            <span className="text-xs font-normal text-muted-foreground">· {copy.sensitive}</span>
+          ) : null}
         </span>
       }
-      description={item.lastFailure}
-      status={resolveError ?? item.nextAction}
+      description={copy.detail}
+      status={resolveError ?? copy.nextAction}
       control={
-        action === "resolve" ? (
+        action === "memory-approval" ? (
+          <span className="flex items-center gap-1.5">
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              disabled={isResolving || onDecideMemory === null}
+              onClick={() => void handleDecideMemory({ action: "reject" })}
+            >
+              {t("Reject")}
+            </Button>
+            <Button
+              size="xs"
+              disabled={isResolving || onDecideMemory === null}
+              onClick={() => void handleDecideMemory({ action: "approve" })}
+            >
+              {t("Approve")}
+            </Button>
+          </span>
+        ) : action === "resolve" ? (
           <Button
             size="xs"
             variant="outline"
             disabled={isResolving || onResolve === null}
             onClick={() => void handleResolve()}
           >
-            {isResolving ? "Resolving..." : "Resolve"}
+            {isResolving ? t("Resolving…") : t("Resolve")}
           </Button>
         ) : (
           <Button size="xs" variant="outline" onClick={openRepair}>
-            {action === "plugins" ? "Open Plugins" : "Open Providers"}
+            {action === "plugins" ? t("Open Plugins") : t("Open Providers")}
           </Button>
         )
       }

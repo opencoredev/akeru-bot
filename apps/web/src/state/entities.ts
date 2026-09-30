@@ -3,21 +3,21 @@ import type {
   EnvironmentProject,
   EnvironmentThread,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@akeru/client-runtime/state/shell";
 import {
+  type BotChatCompletion,
   type EnvironmentThreadStatus,
   mergeEnvironmentThread,
-} from "@t3tools/client-runtime/state/threads";
+} from "@akeru/client-runtime/state/threads";
 import type {
   OrchestrationMessage,
-  OrchestrationProposedPlan,
   OrchestrationSession,
   OrchestrationThreadActivity,
   ScopedProjectRef,
   ScopedThreadRef,
   ServerConfig,
-} from "@t3tools/contracts";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -30,7 +30,6 @@ const EMPTY_PROJECT_REFS: ReadonlyArray<ScopedProjectRef> = Object.freeze([]);
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
 const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
 const EMPTY_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = Object.freeze([]);
-const EMPTY_PROPOSED_PLANS: ReadonlyArray<OrchestrationProposedPlan> = Object.freeze([]);
 
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("web-project:empty"),
@@ -47,6 +46,9 @@ const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).p
 const EMPTY_THREAD_ID_ATOM = Atom.make<ThreadId | null>(null).pipe(
   Atom.withLabel("web-thread-id:empty"),
 );
+const EMPTY_BOT_CHAT_COMPLETIONS_ATOM = Atom.make<ReadonlyArray<BotChatCompletion>>([]).pipe(
+  Atom.withLabel("web-bot-chat-completions:empty"),
+);
 const EMPTY_THREAD_DETAIL_ATOM = Atom.make<EnvironmentThread | null>(null).pipe(
   Atom.withLabel("web-thread-detail:empty"),
 );
@@ -58,9 +60,6 @@ const EMPTY_MESSAGES_ATOM = Atom.make(EMPTY_MESSAGES).pipe(
 );
 const EMPTY_ACTIVITIES_ATOM = Atom.make(EMPTY_ACTIVITIES).pipe(
   Atom.withLabel("web-thread-activities:empty"),
-);
-const EMPTY_PROPOSED_PLANS_ATOM = Atom.make(EMPTY_PROPOSED_PLANS).pipe(
-  Atom.withLabel("web-thread-proposed-plans:empty"),
 );
 const EMPTY_SESSION_ATOM = Atom.make<OrchestrationSession | null>(null).pipe(
   Atom.withLabel("web-thread-session:empty"),
@@ -144,6 +143,15 @@ export function useThreadShell(ref: ScopedThreadRef | null): EnvironmentThreadSh
 }
 
 /** Latest live thread id for a bot. Re-renders only when that bot's latest thread changes. */
+/** Last completion of each live chat the bot owns in one environment. */
+export function useBotChatCompletions(environmentId: EnvironmentId | null, botId: string) {
+  return useAtomValue(
+    environmentId === null || botId === ""
+      ? EMPTY_BOT_CHAT_COMPLETIONS_ATOM
+      : environmentThreadShells.botChatCompletionsAtom(environmentId, botId),
+  );
+}
+
 export function useLatestBotThreadId(
   environmentId: EnvironmentId | null,
   botId: string,
@@ -224,14 +232,6 @@ export function useThreadActivities(
 ): ReadonlyArray<OrchestrationThreadActivity> {
   return useAtomValue(
     ref === null ? EMPTY_ACTIVITIES_ATOM : environmentThreadDetails.activitiesAtom(ref),
-  );
-}
-
-export function useThreadProposedPlans(
-  ref: ScopedThreadRef | null,
-): ReadonlyArray<OrchestrationProposedPlan> {
-  return useAtomValue(
-    ref === null ? EMPTY_PROPOSED_PLANS_ATOM : environmentThreadDetails.proposedPlansAtom(ref),
   );
 }
 

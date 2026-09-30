@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@akeru/shared",
   "version": "0.0.2",
   "private": true,
   "type": "module",
@@ -12,9 +12,13 @@
       "types": "./src/themePreview.ts",
       "import": "./src/themePreview.ts"
     },
-    "./projectFavicon": {
-      "types": "./src/projectFavicon.ts",
-      "import": "./src/projectFavicon.ts"
+    "./channelProject": {
+      "types": "./src/channelProject.ts",
+      "import": "./src/channelProject.ts"
+    },
+    "./errorText": {
+      "types": "./src/errorText.ts",
+      "import": "./src/errorText.ts"
     },
     "./model": {
       "types": "./src/model.ts",
@@ -55,6 +59,14 @@
     "./Net": {
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
+    },
+    "./delegationProviders": {
+      "types": "./src/delegationProviders.ts",
+      "import": "./src/delegationProviders.ts"
+    },
+    "./delegationSummaryText": {
+      "types": "./src/delegationSummaryText.ts",
+      "import": "./src/delegationSummaryText.ts"
     },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
@@ -100,14 +112,6 @@
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"
     },
-    "./threadEnvMode": {
-      "types": "./src/threadEnvMode.ts",
-      "import": "./src/threadEnvMode.ts"
-    },
-    "./t3ProjectFile": {
-      "types": "./src/t3ProjectFile.ts",
-      "import": "./src/t3ProjectFile.ts"
-    },
     "./orchestrationTiming": {
       "types": "./src/orchestrationTiming.ts",
       "import": "./src/orchestrationTiming.ts"
@@ -115,6 +119,10 @@
     "./remote": {
       "types": "./src/remote.ts",
       "import": "./src/remote.ts"
+    },
+    "./relay": {
+      "types": "./src/relay.ts",
+      "import": "./src/relay.ts"
     },
     "./oauthScope": {
       "types": "./src/oauthScope.ts",
@@ -144,13 +152,17 @@
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
     },
+    "./composerThreadMentions": {
+      "types": "./src/composerThreadMentions.ts",
+      "import": "./src/composerThreadMentions.ts"
+    },
+    "./composerBotMentions": {
+      "types": "./src/composerBotMentions.ts",
+      "import": "./src/composerBotMentions.ts"
+    },
     "./composerInlineTokens": {
       "types": "./src/composerInlineTokens.ts",
       "import": "./src/composerInlineTokens.ts"
-    },
-    "./terminalLabels": {
-      "types": "./src/terminalLabels.ts",
-      "import": "./src/terminalLabels.ts"
     },
     "./preview": {
       "types": "./src/preview.ts",
@@ -214,7 +226,7 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
+    "@akeru/contracts": "workspace:*",
     "effect": "catalog:",
     "yaml": "catalog:"
   },

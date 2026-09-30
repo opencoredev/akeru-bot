@@ -7,14 +7,14 @@ import {
   ProviderInstanceId,
   type ServerProvider,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   createModelSelection,
   normalizeCustomModelSlug,
   resolveSelectableModel,
-} from "@t3tools/shared/model";
+} from "@akeru/shared/model";
 import { getComposerProviderState } from "./components/chat/composerProviderState";
-import { UnifiedSettings } from "@t3tools/contracts/settings";
+import { UnifiedSettings } from "@akeru/contracts/settings";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import {
@@ -23,7 +23,12 @@ import {
   resolveSelectableProvider,
 } from "./providerModels";
 import { ModelEsque } from "./components/chat/providerIconUtils";
-import { type ProviderInstanceEntry, deriveProviderInstanceEntries } from "./providerInstances";
+import {
+  type ProviderInstanceEntry,
+  deriveProviderInstanceEntries,
+  isProviderInstancePickerSelectable,
+  NO_PROVIDER_MODEL_SELECTION,
+} from "./providerInstances";
 import { sortModelsForProviderInstance } from "./modelOrdering";
 
 const MAX_CUSTOM_MODEL_COUNT = 32;
@@ -268,20 +273,30 @@ export function resolveAppModelSelectionForInstance(
 export function getCustomModelOptionsByInstance(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
-  _selectedInstanceId?: ProviderInstanceId | null,
-  _selectedModel?: string | null,
+  selectedInstanceId?: ProviderInstanceId | null,
+  selectedModel?: string | null,
 ): ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>> {
   const out = new Map<ProviderInstanceId, ReadonlyArray<ModelEsque>>();
   for (const entry of deriveProviderInstanceEntries(providers)) {
-    out.set(entry.instanceId, getAppModelOptionsForInstance(settings, entry));
+    const options: ModelEsque[] = getAppModelOptionsForInstance(settings, entry);
+    // Keep a selected model the provider stopped listing, marked unavailable, so
+    // the picker never shows a different model than the one that will be sent.
+    if (
+      entry.instanceId === selectedInstanceId &&
+      selectedModel &&
+      !options.some((option) => option.slug === selectedModel)
+    ) {
+      options.push({ slug: selectedModel, name: selectedModel, unavailable: true });
+    }
+    out.set(entry.instanceId, options);
   }
   return out;
 }
 
 /**
- * Drop the opencode "plan" agent option from a stored model selection.
- * Used when legacy plan mode is turned off so server-side text-generation
- * tasks (title, branch, PR) cannot keep dispatching the plan agent.
+ * Drop the opencode "plan" agent option from a stored model selection so
+ * server-side text-generation tasks cannot keep dispatching the retired plan
+ * agent.
  */
 export function withoutPlanAgentSelection(
   selection: ModelSelection | null | undefined,
@@ -298,18 +313,13 @@ export function withoutPlanAgentSelection(
   return createModelSelection(selection.instanceId, selection.model, options);
 }
 
-// The dropdown hides the opencode "plan" agent while legacy plan mode is off,
-// but the persisted text-generation selections are only healed when the toggle
-// flips. Users who already have plan mode off and a stored "plan" selection
-// never trip the toggle handler, so resolve the heal once per settings load.
+// Plan mode is retired and the dropdown never offers the opencode "plan"
+// agent, but selections persisted before the retirement can still carry it.
+// Resolve the heal once per settings load.
 export function resolvePlanAgentHealPatch(input: {
-  readonly planModeEnabled: boolean;
   readonly textGenerationModelSelection: ModelSelection | null | undefined;
   readonly sourceControlWriterModelSelection: ModelSelection | null | undefined;
 }): ServerSettingsPatch | null {
-  if (input.planModeEnabled) {
-    return null;
-  }
   const healedText = withoutPlanAgentSelection(input.textGenerationModelSelection);
   const healedSourceControl = withoutPlanAgentSelection(input.sourceControlWriterModelSelection);
   const patch: ServerSettingsPatch = {
@@ -333,10 +343,10 @@ export function resolveAppModelSelectionState(
   };
   const entries = deriveProviderInstanceEntries(providers);
   const selectedEntry = entries.find(
-    (entry) => entry.instanceId === selection.instanceId && entry.enabled && entry.isAvailable,
+    (entry) =>
+      entry.instanceId === selection.instanceId && isProviderInstancePickerSelectable(entry),
   );
-  const entry =
-    selectedEntry ?? entries.find((candidate) => candidate.enabled && candidate.isAvailable);
+  const entry = selectedEntry ?? entries.find(isProviderInstancePickerSelectable);
   if (entry) {
     // When the instance changed due to fallback (e.g. selected instance was disabled),
     // don't carry over the old instance's model — use the fallback instance's default.
@@ -354,26 +364,12 @@ export function resolveAppModelSelectionState(
       model,
       models: entry.models,
       modelOptions: selectedEntry ? selection.options : undefined,
-      planModeEnabled: settings.planModeEnabled,
     });
 
     return createModelSelection(entry.instanceId, model, modelOptionsForDispatch);
   }
 
-  const provider = resolveSelectableProvider(providers, null);
-  const keptSelectedProvider = false;
-
-  // When the provider changed due to fallback (e.g. selected provider was disabled),
-  // don't carry over the old provider's model — use the fallback provider's default.
-  const selectedModel = keptSelectedProvider ? selection.model : null;
-  const model = resolveAppModelSelection(provider, settings, providers, selectedModel);
-  const { modelOptionsForDispatch } = getComposerProviderState({
-    provider,
-    model,
-    models: getProviderModels(providers, provider),
-    modelOptions: keptSelectedProvider ? selection.options : undefined,
-    planModeEnabled: settings.planModeEnabled,
-  });
-
-  return createModelSelection(defaultInstanceIdForDriver(provider), model, modelOptionsForDispatch);
+  // There is no usable provider. Keep this explicit sentinel all the way to
+  // the composer instead of silently falling back to a built-in model slug.
+  return NO_PROVIDER_MODEL_SELECTION;
 }

@@ -2,8 +2,8 @@ import type {
   OrchestrationEvent,
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
-} from "@t3tools/contracts";
-import { AkeruPluginSearchResult } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { AkeruPluginSearchResult } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
@@ -321,6 +321,15 @@ function projectMcpToolCallData(data: Record<string, unknown>): Record<string, u
   return projectedData;
 }
 
+/**
+ * Task-list tools (Akeru's `task_write`, Claude's `TodoWrite`) carry the whole
+ * list in their args. Clients only show the step in progress, as a short status.
+ */
+function projectMemoryOperationCount(data: Record<string, unknown>): number | undefined {
+  const operations = asRecord(data.args)?.operations;
+  return Array.isArray(operations) ? operations.length : undefined;
+}
+
 function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
   const direct = asTrimmedString(value);
   if (direct) {
@@ -455,6 +464,11 @@ export function projectActivityPayload(
   }
   if ("kind" in data) {
     projectedData.kind = data.kind;
+  }
+
+  const memoryOperationCount = projectMemoryOperationCount(data);
+  if (memoryOperationCount !== undefined) {
+    projectedData.memoryOperationCount = memoryOperationCount;
   }
 
   const rawOutput = projectRawOutput(data.rawOutput) ?? projectAcpContent(data.content);

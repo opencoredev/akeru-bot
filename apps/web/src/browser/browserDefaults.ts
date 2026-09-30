@@ -17,7 +17,7 @@ import type {
   DesktopPreviewTabDefaults,
   PreviewAppearancePreference,
   PreviewViewportSetting,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import {
   ensureClientSettingsHydrated,
@@ -31,19 +31,16 @@ export interface BrowserDefaults {
   readonly viewport: PreviewViewportSetting;
   readonly zoomFactor: number;
   readonly appearance: PreviewAppearancePreference;
-  readonly autoShowFloatingPreview: boolean;
 }
 
 const toBrowserDefaults = (settings: {
   readonly browserDefaultViewport: PreviewViewportSetting;
   readonly browserDefaultZoomFactor: number;
   readonly browserDefaultAppearance: PreviewAppearancePreference;
-  readonly browserAutoShowFloatingPreview: boolean;
 }): BrowserDefaults => ({
   viewport: settings.browserDefaultViewport,
   zoomFactor: settings.browserDefaultZoomFactor,
   appearance: settings.browserDefaultAppearance,
-  autoShowFloatingPreview: settings.browserAutoShowFloatingPreview,
 });
 
 /** Non-hook accessor for imperative open paths (menu actions, automation hosts). */

@@ -1,4 +1,4 @@
-import type { ReplyAudioEvents, ReplyAudioHandle } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyAudioEvents, ReplyAudioHandle } from "@akeru/client-runtime/reply-playback";
 import { createAudioPlayer, setAudioModeAsync, type AudioStatus } from "expo-audio";
 import { randomUUID } from "expo-crypto";
 import { File, Paths } from "expo-file-system";

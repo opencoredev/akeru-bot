@@ -1,4 +1,4 @@
-import { EnvironmentId, type OrchestrationShellSnapshot } from "@t3tools/contracts";
+import { EnvironmentId, type OrchestrationShellSnapshot } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 import * as Option from "effect/Option";
@@ -59,7 +59,7 @@ export function createArchivedThreadSnapshotsAtomFamily<E>(options: {
         }
 
         if (error === null && result._tag === "Failure") {
-          error = "Failed to load archived conversations.";
+          error = "Failed to load archived chats.";
         }
       }
 

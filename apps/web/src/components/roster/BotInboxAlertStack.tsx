@@ -1,6 +1,7 @@
 import { CircleAlertIcon } from "lucide-react";
 
-import type { BotInboxItem } from "../../botInbox";
+import { botInboxKindLabel, type BotInboxItem } from "@akeru/client-runtime/bot-inbox";
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { ComposerBannerStack } from "../chat/ComposerBannerStack";
 
@@ -11,6 +12,7 @@ export function BotInboxAlertStack({
   readonly items: ReadonlyArray<BotInboxItem>;
   readonly onOpenDetails: () => void;
 }) {
+  const { t } = useI18n();
   const visibleItems = items.filter(
     (item) => item.kind !== "approval-request" && item.kind !== "routine-failure",
   );
@@ -23,16 +25,16 @@ export function BotInboxAlertStack({
         id: item.id,
         variant: "error",
         icon: <CircleAlertIcon />,
-        title: `${item.botName} · ${item.taskOrRoutine}`,
+        title: `${item.botName} · ${item.taskOrRoutine} · ${t(botInboxKindLabel(item.kind))}`,
         description: (
           <>
             <span>{item.lastFailure}</span>
-            <span>Next: {item.nextAction}</span>
+            <span>{t("Next: {action}", { action: item.nextAction })}</span>
           </>
         ),
         actions: (
           <Button size="xs" variant="ghost" onClick={onOpenDetails}>
-            View details
+            {t("View details")}
           </Button>
         ),
       }))}

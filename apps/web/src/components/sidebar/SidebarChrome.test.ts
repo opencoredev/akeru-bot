@@ -1,10 +1,10 @@
 // @effect-diagnostics nodeBuiltinImport:off - This integration guard reads related source files.
 import * as NodeFS from "node:fs";
-import { BotId, McpServerId, ThreadId, type McpServer } from "@t3tools/contracts";
+import { BotId, McpServerId, ThreadId, type McpServer } from "@akeru/contracts";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { loadCatalog } from "../../../../../plugins";
+import { loadDirectoryCatalog } from "../../../../../plugins";
 import {
   findActiveComputerUseControl,
   formatEnabledPluginBadge,
@@ -12,8 +12,13 @@ import {
   summarizeEnabledPlugins,
 } from "./SidebarChrome";
 
-const catalogPlugin = loadCatalog().find((plugin) => plugin.id === "exa");
-if (!catalogPlugin) throw new TypeError("Exa must remain in the plugin catalog.");
+const exa = loadDirectoryCatalog().find((plugin) => plugin.id === "exa");
+if (!exa || exa.kind !== "mcp-url") throw new TypeError("Exa URL fixture is missing.");
+const catalogPlugin = {
+  ...exa,
+  catalogStatus: "available" as const,
+  connection: { type: "ready" as const },
+};
 
 function server(id: string, enabled = true): McpServer {
   return {
@@ -68,6 +73,7 @@ describe("sidebar footer", () => {
           sandbox: null,
           runtimeMode: "approval-required",
           usageCap: null,
+          imageProvider: null,
           voiceEnabled: false,
           channelBindings: [],
           groupId: null,
@@ -197,11 +203,7 @@ describe("sidebar footer", () => {
     }
   });
 
-  it("mints fresh web and mobile threads from the local execution setting", () => {
-    const webSource = NodeFS.readFileSync(
-      new URL("../../hooks/useHandleNewThread.ts", import.meta.url),
-      "utf8",
-    );
+  it("mints fresh mobile threads from the local execution setting", () => {
     const mobileSource = NodeFS.readFileSync(
       new URL(
         "../../../../mobile/src/features/threads/new-task-flow-provider.tsx",
@@ -210,9 +212,6 @@ describe("sidebar footer", () => {
       "utf8",
     );
 
-    expect(webSource).toContain(
-      "runtimeMode: carryRuntimeMode ?? primaryServerSettings.localExecutionMode",
-    );
     expect(mobileSource).toContain("selectedEnvironmentServerConfig?.settings.localExecutionMode");
   });
 

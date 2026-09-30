@@ -1,5 +1,7 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
+import * as NodeCrypto from "node:crypto";
+import * as NodeSqlite from "node:sqlite";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
@@ -8,17 +10,21 @@ import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
-import type { ToolsInput } from "@mastra/core/agent";
+import { Agent, type ToolsInput } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
+  type MastraDBMessage,
   type Session,
 } from "@mastra/core/agent-controller";
-import { createCodingAgent } from "@mastra/core/coding-agent";
 import { RequestContext } from "@mastra/core/request-context";
-import type {
-  Processor,
-  ProcessInputStepArgs,
-  ProcessOutputResultArgs,
+import {
+  isBadRequestError,
+  PrefillErrorHandler,
+  ProviderHistoryCompat,
+  StreamErrorRetryProcessor,
+  type Processor,
+  type ProcessInputStepArgs,
+  type ProcessOutputResultArgs,
 } from "@mastra/core/processors";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
 import type { ObservationalMemoryRecord } from "@mastra/core/storage";
@@ -41,10 +47,16 @@ import {
   type ProviderDriverKind,
   type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
   type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FiberHandle from "effect/FiberHandle";
+import * as FiberSet from "effect/FiberSet";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { z } from "zod";
 
 import {
@@ -59,6 +71,10 @@ import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
 import { selectRecentConversation } from "./RecentConversation.ts";
+import {
+  registerEntityMemoryResource,
+  registerEntityMemoryStore,
+} from "../memory/EntityMemoryInvalidation.ts";
 
 const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
@@ -151,12 +167,14 @@ export type AkeruRoutineDeleteResult = z.infer<typeof routineDeleteResultSchema>
 
 export interface AkeruMastraState {
   readonly providerInstanceId?: string;
-  readonly projectPath?: string;
+  // Undefined clears a previous directory when a reused session loses its cwd.
+  readonly projectPath?: string | undefined;
   readonly yolo?: boolean;
   readonly botConversation?: boolean;
   readonly botName?: string;
   readonly personalityTone?: BotPersonalityTone;
   readonly persistentMemoryContext?: string;
+  readonly mcpInstructions?: string;
   readonly modelOptions?: {
     readonly reasoningEffort?: string;
     readonly serviceTier?: string;
@@ -197,17 +215,25 @@ export function withAkeruModelRunOptions(
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
-  readonly getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>;
-  readonly getOpenCodeGoApiKey?: () => Promise<string | undefined>;
+  readonly getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>;
+  readonly getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>;
   readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
+  readonly getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"];
+  readonly getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"];
   readonly getModelConnection?: (providerInstanceId: string) =>
     | {
         readonly environment: NodeJS.ProcessEnv;
         readonly instanceEnvironment: NodeJS.ProcessEnv;
         readonly useSavedCredential: boolean;
+        readonly instanceId?: string;
       }
     | undefined;
   readonly memoryDbPath: string;
+  /**
+   * How long closing the harness waits for admitted memory work before it
+   * interrupts that work. Defaults to five seconds.
+   */
+  readonly observationCloseGrace?: Duration.Input;
   readonly startMemoryCall?: (input: {
     readonly threadId: string;
     readonly category: "observer" | "reflector";
@@ -238,12 +264,26 @@ export interface AkeruMastraHarnessOptions {
     threadId: string,
     routineIds: ReadonlyArray<string>,
   ) => Promise<AkeruRoutineDeleteResult>;
+  readonly onObservationDropped?: (input: {
+    /** Stable queue-row id; retried notices reuse it. */
+    readonly observationId: string;
+    readonly threadId: string;
+    readonly turnId?: string;
+    readonly resourceId: string;
+    readonly modelId: string;
+    readonly attempts: number;
+    readonly error: Error;
+  }) => Promise<void> | void;
 }
 
 export interface AkeruMastraHarness {
+  readonly rebuildConversation?: (
+    threadId: string,
+    messages: ReadonlyArray<MastraDBMessage>,
+  ) => Promise<() => Promise<void>>;
   readonly controller: Pick<
     MastraAgentController<AkeruMastraState>,
-    "init" | "createSession" | "deleteSession" | "destroy"
+    "init" | "createSession" | "deleteSession"
   >;
   readonly clearObservationalMemory?: (threadId: string, resourceId?: string) => Promise<void>;
   readonly readObservationalMemory?: (
@@ -265,14 +305,16 @@ export interface AkeruMastraHarness {
     readonly assistant: string;
     readonly createdAt: string;
   }) => Promise<void>;
-  readonly destroy: () => void | Promise<void>;
+  readonly drainObservationQueue?: () => Promise<void>;
 }
 
 export interface AkeruBackgroundObservationInput {
   readonly threadId: string;
   readonly resourceId?: string;
   readonly modelId: string;
-  readonly hooks?: ObserveHooks;
+  /** Routes the observer to this instance's own credentials. */
+  readonly providerInstanceId?: string;
+  readonly turnId?: string;
 }
 
 type AkeruMastraToolOptions = Pick<
@@ -424,6 +466,8 @@ export async function createAkeruMastraMemory(
     | "getKimiAccess"
     | "getOpenCodeGoApiKey"
     | "getSubscriptionApiKey"
+    | "getSubscriptionOAuth"
+    | "getSubscriptionAccessToken"
     | "getModelConnection"
     | "memoryDbPath"
   >,
@@ -443,6 +487,8 @@ export async function createAkeruMastraMemory(
       undefined,
       options.getSubscriptionApiKey,
       controllerModelConnection(requestContext, options.getModelConnection),
+      options.getSubscriptionOAuth,
+      options.getSubscriptionAccessToken,
     );
   const memory = new Memory({
     storage,
@@ -536,21 +582,43 @@ export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | unde
 export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
-  getKimiAccess?: () => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: () => Promise<string | undefined>,
+  getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
     readonly environment: NodeJS.ProcessEnv;
     readonly instanceEnvironment: NodeJS.ProcessEnv;
     readonly useSavedCredential: boolean;
+    readonly instanceId?: string;
   },
+  getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"],
+  getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"],
 ) {
   const trimmed = modelId.trim();
   const environment = connection?.useSavedCredential
     ? connection.environment
     : connection?.instanceEnvironment;
   const useSavedCredential = connection?.useSavedCredential !== false;
+  const instanceId = connection?.instanceId;
+  const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
+    instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
+  const scopedAuthStorage =
+    instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
+      ? Object.assign(Object.create(authStorage) as AuthStorage, {
+          reload: () => {},
+          get: (provider: string) =>
+            getSubscriptionOAuth(
+              provider as Parameters<typeof getSubscriptionOAuth>[0],
+              instanceId,
+            ),
+          getApiKey: (provider: string) =>
+            getSubscriptionAccessToken(
+              provider as Parameters<typeof getSubscriptionAccessToken>[0],
+              instanceId,
+            ),
+        })
+      : authStorage;
   if (trimmed.startsWith("openai/")) {
     const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
     const getCredential = instanceApiKey
@@ -562,7 +630,7 @@ export function resolveAkeruMastraModel(
             : {}),
         })
       : useSavedCredential
-        ? () => getSubscriptionApiKey?.("openai-codex")
+        ? () => savedApiKey("openai-codex")
         : undefined;
     if (getCredential?.()) {
       return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
@@ -572,7 +640,7 @@ export function resolveAkeruMastraModel(
     }
     const reasoningEffort = modelOptions?.reasoningEffort;
     return openaiCodexProvider(trimmed.slice("openai/".length), {
-      authStorage,
+      authStorage: scopedAuthStorage,
       ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
     });
   }
@@ -589,7 +657,7 @@ export function resolveAkeruMastraModel(
           : {}),
       })(model);
     }
-    const credential = useSavedCredential ? getSubscriptionApiKey?.("anthropic") : undefined;
+    const credential = useSavedCredential ? savedApiKey("anthropic") : undefined;
     if (credential) {
       return createAnthropic({
         apiKey: credential.access,
@@ -601,7 +669,7 @@ export function resolveAkeruMastraModel(
         "This Claude instance has no API key or auth token transport for Akeru Mastra.",
       );
     }
-    return opencodeClaudeMaxProvider(model, { authStorage });
+    return opencodeClaudeMaxProvider(model, { authStorage: scopedAuthStorage });
   }
   if (trimmed.startsWith("xai/")) {
     const model = trimmed.slice("xai/".length);
@@ -612,7 +680,7 @@ export function resolveAkeruMastraModel(
           baseUrl: environment?.XAI_BASE_URL?.trim() || undefined,
         }
       : useSavedCredential
-        ? getSubscriptionApiKey?.("xai")
+        ? savedApiKey("xai")
         : undefined;
     if (credential) {
       return createOpenAICompatible({
@@ -624,7 +692,7 @@ export function resolveAkeruMastraModel(
     if (!useSavedCredential) {
       throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
     }
-    return xaiProvider(model, { authStorage });
+    return xaiProvider(model, { authStorage: scopedAuthStorage });
   }
   if (trimmed.startsWith("kimi-for-coding/")) {
     if (!useSavedCredential) {
@@ -633,15 +701,17 @@ export function resolveAkeruMastraModel(
       );
     }
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
-    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), getKimiAccess);
+    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), () =>
+      getKimiAccess(instanceId),
+    );
   }
   if (trimmed.startsWith("opencode-go/")) {
     const inlineConnection = openCodeGoInlineConnection(environment);
     const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
     const resolveApiKey = instanceApiKey
       ? async () => instanceApiKey
-      : useSavedCredential
-        ? getOpenCodeGoApiKey
+      : useSavedCredential && getOpenCodeGoApiKey
+        ? () => getOpenCodeGoApiKey(instanceId)
         : undefined;
     if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
     return akeruOpenCodeGoProvider(
@@ -650,7 +720,7 @@ export function resolveAkeruMastraModel(
       () =>
         environment?.OPENCODE_BASE_URL?.trim() ||
         inlineConnection.baseUrl ||
-        (useSavedCredential ? getSubscriptionApiKey?.("opencode-go")?.baseUrl : undefined),
+        (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
     );
   }
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
@@ -692,7 +762,14 @@ export function resolveAkeruInstructions(
     typeof state.persistentMemoryContext === "string"
       ? state.persistentMemoryContext
       : "";
-  return [instructions, persistentMemoryContext].filter(Boolean).join("\n\n");
+  const mcpInstructions =
+    typeof state === "object" &&
+    state !== null &&
+    "mcpInstructions" in state &&
+    typeof state.mcpInstructions === "string"
+      ? state.mcpInstructions
+      : "";
+  return [instructions, mcpInstructions, persistentMemoryContext].filter(Boolean).join("\n\n");
 }
 
 export async function resolveAkeruTools(
@@ -705,7 +782,7 @@ export async function resolveAkeruTools(
     ? createTool({
         id: AKERU_CREATE_ROUTINE_TOOL_NAME,
         description:
-          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
+          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Put the timing only in schedule, and make instructions describe only what each run should do. Keep the name short and specific. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
         inputSchema: routineToolInputSchema,
         requireApproval: false,
         execute: async ({ skillNames, connectorNames, ...input }) =>
@@ -1047,14 +1124,256 @@ export function routineToolNeedsGlobalApproval(toolName: string): boolean {
   );
 }
 
-export async function createAkeruMastraHarness(
+function isConnectionReset(error: unknown): boolean {
+  if (!error) return false;
+  const code = typeof error === "object" && "code" in error ? error.code : undefined;
+  if (typeof code === "string" && code.toUpperCase() === "ECONNRESET") return true;
+  return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
+}
+
+/**
+ * The stream retry policy `createCodingAgent` applies by default. Akeru builds
+ * its Agent directly because `createCodingAgent` also adds a task-list tool
+ * whenever memory is on, and each list update costs a full model round trip.
+ */
+function akeruErrorProcessors() {
+  return [
+    new StreamErrorRetryProcessor({
+      retryUnknownErrors: true,
+      maxRetries: 2,
+      delayMs: 3_000,
+      matchers: [
+        { match: isBadRequestError, maxRetries: 1, delayMs: 2_000 },
+        {
+          match: isConnectionReset,
+          maxRetries: 2,
+          delayMs: ({ retryCount }) => Math.min(1_000 * 2 ** retryCount, 30_000),
+        },
+      ],
+    }),
+    new PrefillErrorHandler(),
+    new ProviderHistoryCompat(),
+  ];
+}
+
+const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+
+/** Harness construction failed before it could serve any session. */
+export class AkeruMastraHarnessError extends Schema.TaggedErrorClass<AkeruMastraHarnessError>()(
+  "AkeruMastraHarnessError",
+  {
+    operation: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Akeru harness ${this.operation} failed: ${errorMessage(this.cause)}`;
+  }
+}
+
+/** Observational memory work was requested after the harness scope began closing. */
+export class AkeruObservationQueueClosedError extends Schema.TaggedErrorClass<AkeruObservationQueueClosedError>()(
+  "AkeruObservationQueueClosedError",
+  {
+    threadId: Schema.String,
+    resourceId: Schema.String,
+  },
+) {
+  override get message(): string {
+    return "Akeru observational memory is closing.";
+  }
+}
+
+/**
+ * Restoring an observation snapshot failed. `cause` is always the original
+ * restore failure; `rollbackCause` is set only when putting the prior records
+ * back failed too, in which case `rolledBack` is false.
+ */
+export class AkeruObservationRestoreError extends Schema.TaggedErrorClass<AkeruObservationRestoreError>()(
+  "AkeruObservationRestoreError",
+  {
+    threadId: Schema.String,
+    resourceId: Schema.String,
+    rolledBack: Schema.Boolean,
+    cause: Schema.Defect(),
+    rollbackCause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.rolledBack
+      ? `Observation restore failed and the original observations were kept: ${errorMessage(this.cause)}`
+      : `Observation restore failed and the original observations could not be restored: ${errorMessage(this.cause)}`;
+  }
+}
+
+const isObservationQueueClosed = Schema.is(AkeruObservationQueueClosedError);
+
+const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
+const OBSERVATION_CLAIM_LEASE_MS = 5 * 60_000;
+const OBSERVATION_RETRY_BACKOFF_MS = 30_000;
+const OBSERVATION_DROP_ATTEMPTS = 3;
+// A dropped row stays queued until its drop notice lands; past this many
+// attempts it is removed even if the notice keeps failing.
+const OBSERVATION_NOTICE_ATTEMPTS = 6;
+const OBSERVATION_CLOSE_GRACE: Duration.Input = "5 seconds";
+
+// The queue lives in its own store beside the memory DB because the harness
+// opens it directly; the environment state.sqlite schema is provisioned by
+// the Effect migration runner, which this path never sees. The queue store
+// versions itself with PRAGMA user_version instead.
+function openObservationQueueDb(memoryDbPath: string): NodeSqlite.DatabaseSync {
+  const db = new NodeSqlite.DatabaseSync(`${memoryDbPath}.queue.sqlite`);
+  try {
+    db.exec("PRAGMA busy_timeout = 5000");
+    const version = (db.prepare("PRAGMA user_version").get() as { user_version: number })
+      .user_version;
+    if (version > OBSERVATION_QUEUE_SCHEMA_VERSION) {
+      throw new Error(
+        `Akeru observation queue schema version ${version} is newer than supported version ${OBSERVATION_QUEUE_SCHEMA_VERSION}.`,
+      );
+    }
+    if (version === 0) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS akeru_observation_queue (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          resource_id TEXT NOT NULL,
+          model_id TEXT NOT NULL,
+          turn_id TEXT,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          claimed_at TEXT,
+          next_attempt_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          provider_instance_id TEXT
+        )
+      `);
+      db.exec(
+        "CREATE INDEX IF NOT EXISTS akeru_observation_queue_created_at ON akeru_observation_queue (created_at, id)",
+      );
+      db.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
+    } else if (version === 1) {
+      // Rows queued before version 2 have no instance and keep using the default connection.
+      db.exec("ALTER TABLE akeru_observation_queue ADD COLUMN provider_instance_id TEXT");
+      db.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
+    }
+    return db;
+  } catch (cause) {
+    db.close();
+    throw cause;
+  }
+}
+
+/**
+ * Builds the Mastra harness inside the caller's scope. Closing the scope stops
+ * admitting observational-memory work, destroys the Mastra controller, gives
+ * admitted work `observationCloseGrace` to finish, interrupts the rest, and
+ * closes both stores. Durable queue rows that were not finished stay in the
+ * queue store for the next harness.
+ */
+export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   options: AkeruMastraHarnessOptions,
-): Promise<AkeruMastraHarness> {
-  const observationalMemory = await createAkeruMastraMemory(options);
+) {
+  const observationalMemory = yield* Effect.acquireRelease(
+    Effect.tryPromise({
+      try: () => createAkeruMastraMemory(options),
+      catch: (cause) => new AkeruMastraHarnessError({ operation: "memory.open", cause }),
+    }),
+    (memory) => Effect.promise(() => memory.close()).pipe(Effect.ignoreCause({ log: true })),
+  );
+  const observationQueueDb = yield* Effect.acquireRelease(
+    Effect.try({
+      try: () => openObservationQueueDb(options.memoryDbPath),
+      catch: (cause) => new AkeruMastraHarnessError({ operation: "queue.open", cause }),
+    }),
+    (db) => Effect.sync(() => db.close()).pipe(Effect.ignoreCause({ log: true })),
+  );
+  // Every piece of observational-memory work runs as a fiber in this set, so
+  // closing the scope can wait for admitted work and interrupt anything left.
+  const observationFibers = yield* FiberSet.make<unknown, unknown>();
+  const runObservation = yield* FiberSet.runtimePromise(observationFibers)();
+  // Lease renewals also run in the set, so close interrupts them before the
+  // queue store closes.
+  const forkObservation = yield* FiberSet.runtime(observationFibers)();
+  // At most one retry timer is armed; arming another replaces it, and closing
+  // the scope interrupts it.
+  const observationRetry = yield* FiberHandle.make<void, never>();
+  const runObservationRetry = yield* FiberHandle.runtime(observationRetry)();
   const observeHooks = createAkeruObserveHooks(options);
-  const observationTails = new Map<string, Promise<void>>();
-  let closing = false;
-  const agent = createCodingAgent({
+  const observationLocks = new Map<
+    string,
+    { readonly semaphore: Semaphore.Semaphore; users: number }
+  >();
+  let closed = false;
+  // Rows this harness has claimed and not yet finished, with their attempts and
+  // current claim token, so close can hand interrupted claims back to the queue.
+  const claimedRows = new Map<string, { readonly attempts: number; claim: string }>();
+  // Claimed rows whose Mastra observe call has started and not settled. Mastra
+  // cannot abort observe, so close keeps these claimed until the lease expires
+  // instead of letting another harness observe the same turn concurrently.
+  const observingRows = new Set<string>();
+  // The observer failure behind each dropped row whose notice is waiting for a
+  // retry, so the retried notice reports the original error.
+  const droppedCauses = new Map<string, unknown>();
+
+  const enqueueObservation = observationQueueDb.prepare(
+    `INSERT OR IGNORE INTO akeru_observation_queue
+      (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at, next_attempt_at, created_at,
+       provider_instance_id)
+      VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
+  );
+  // One statement picks and claims the oldest eligible row, so concurrent
+  // drains (in-process or across processes sharing the store) cannot both
+  // observe the same row.
+  const claimQueuedObservation = observationQueueDb.prepare(
+    `UPDATE akeru_observation_queue
+        SET claimed_at = ?
+      WHERE id = (
+        SELECT id FROM akeru_observation_queue
+         WHERE next_attempt_at <= ?
+           AND (claimed_at IS NULL OR claimed_at <= ?)
+         ORDER BY created_at, id
+         LIMIT 1
+      )
+      RETURNING id, thread_id AS threadId, resource_id AS resourceId,
+                model_id AS modelId, turn_id AS turnId, attempts,
+                provider_instance_id AS providerInstanceId`,
+  );
+  // Release and remove only act on a row this drain still holds. If its lease
+  // expired and another drain reclaimed the row, that drain owns the outcome.
+  const releaseQueuedObservation = observationQueueDb.prepare(
+    `UPDATE akeru_observation_queue
+        SET claimed_at = NULL, attempts = ?, next_attempt_at = ?
+      WHERE id = ? AND claimed_at = ?`,
+  );
+  const removeQueuedObservation = observationQueueDb.prepare(
+    `DELETE FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
+  );
+  // A running observation renews its lease, so a slow observe is never reclaimed
+  // and run a second time by another drain.
+  const renewQueuedObservationClaim = observationQueueDb.prepare(
+    `UPDATE akeru_observation_queue SET claimed_at = ? WHERE id = ? AND claimed_at = ?`,
+  );
+  const isQueuedObservationClaimed = observationQueueDb.prepare(
+    `SELECT 1 AS claimed FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
+  );
+  const discardQueuedObservations = observationQueueDb.prepare(
+    `DELETE FROM akeru_observation_queue WHERE thread_id = ? AND resource_id = ?`,
+  );
+  // A claimed row becomes eligible again when its lease expires, which covers a
+  // claim left behind by a harness that stopped mid-observation.
+  const nextQueuedObservationAt = observationQueueDb.prepare(
+    `SELECT MIN(CASE WHEN claimed_at IS NULL THEN next_attempt_at
+                     ELSE MAX(next_attempt_at,
+                              strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, ?)) END)
+              AS nextAttemptAt
+       FROM akeru_observation_queue`,
+  );
+  let observationDrain: Promise<void> | undefined;
+  // True while a drain loop can still claim rows. The loop clears it in the
+  // same synchronous step as its last empty claim, so a row enqueued after that
+  // starts a new drain instead of joining one that already finished.
+  let drainActive = false;
+  const agent = new Agent({
     id: "akeru-agent",
     name: "Akeru",
     instructions: ({ requestContext }) => resolveAkeruInstructions(requestContext),
@@ -1067,12 +1386,14 @@ export async function createAkeruMastraHarness(
         controllerModelOptions(requestContext),
         options.getSubscriptionApiKey,
         controllerModelConnection(requestContext, options.getModelConnection),
+        options.getSubscriptionOAuth,
+        options.getSubscriptionAccessToken,
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,
     inputProcessors: [observationalMemory.processor],
     outputProcessors: [observationalMemory.processor],
-    workspace: undefined,
+    errorProcessors: akeruErrorProcessors(),
   });
 
   const controller = new MastraAgentController<AkeruMastraState>({
@@ -1121,37 +1442,340 @@ export async function createAkeruMastraHarness(
     return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
-  const queueObservation = (threadId: string, resourceId: string, use: () => Promise<void>) => {
-    if (closing) return Promise.reject(new Error("Akeru observational memory is closing."));
+  // Registered after the stores, so it runs before they close. Admission stops
+  // synchronously; nothing can join the fiber set after `closed` flips.
+  // Admitted work gets a grace period, then anything still running or waiting
+  // for a permit is interrupted. Rows that never started observing go back to
+  // the queue; rows still inside Mastra observe keep their claim until the lease
+  // expires, because that call cannot be cancelled.
+  yield* Effect.addFinalizer(() =>
+    Effect.gen(function* () {
+      closed = true;
+      yield* FiberHandle.clear(observationRetry);
+      yield* Effect.tryPromise(() => controller.destroy()).pipe(Effect.ignoreCause({ log: true }));
+      yield* FiberSet.awaitEmpty(observationFibers).pipe(
+        Effect.timeoutOption(options.observationCloseGrace ?? OBSERVATION_CLOSE_GRACE),
+      );
+      yield* FiberSet.clear(observationFibers);
+      yield* FiberSet.awaitEmpty(observationFibers);
+      yield* Effect.sync(() => {
+        const now = DateTime.formatIso(DateTime.nowUnsafe());
+        for (const [id, { attempts, claim }] of claimedRows) {
+          if (!observingRows.has(id)) releaseQueuedObservation.run(attempts, now, id, claim);
+        }
+        claimedRows.clear();
+      }).pipe(Effect.ignoreCause({ log: true }));
+    }),
+  );
+
+  // Work for one thread/resource pair runs in admission order behind a
+  // one-permit semaphore; different pairs run concurrently.
+  const queueObservation = <A>(
+    threadId: string,
+    resourceId: string,
+    use: () => Promise<A>,
+  ): Promise<A> => {
+    if (closed) {
+      return Promise.reject(new AkeruObservationQueueClosedError({ threadId, resourceId }));
+    }
     const key = `${threadId}\u0000${resourceId}`;
-    const prior = observationTails.get(key) ?? Promise.resolve();
-    const work = prior.catch(() => undefined).then(use);
-    observationTails.set(key, work);
-    void work
-      .finally(() => {
-        if (observationTails.get(key) === work) observationTails.delete(key);
-      })
-      .catch(() => undefined);
-    return work;
+    const lock = observationLocks.get(key) ?? { semaphore: Semaphore.makeUnsafe(1), users: 0 };
+    lock.users += 1;
+    observationLocks.set(key, lock);
+    let settled = false;
+    return runObservation(
+      // A rejected `use` becomes a defect so the Promise caller receives the
+      // original error unchanged.
+      lock.semaphore.withPermit(Effect.promise(() => use().finally(() => (settled = true)))).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            lock.users -= 1;
+            if (lock.users === 0) observationLocks.delete(key);
+          }),
+        ),
+      ),
+    ).catch((cause: unknown) => {
+      // Close interrupted this work before `use` settled.
+      if (closed && !settled) throw new AkeruObservationQueueClosedError({ threadId, resourceId });
+      throw cause;
+    });
+  };
+
+  // A backed-off or stale-leased row has no turn to wake it, so the drain that
+  // leaves it behind arms one timer for the earliest pending retry.
+  const scheduleObservationRetry = () => {
+    if (closed) return;
+    const { nextAttemptAt } = nextQueuedObservationAt.get(
+      `+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`,
+    ) as { nextAttemptAt: string | null };
+    if (nextAttemptAt === null) return;
+    const delay = Math.max(
+      0,
+      DateTime.toEpochMillis(DateTime.makeUnsafe(nextAttemptAt)) -
+        DateTime.toEpochMillis(DateTime.nowUnsafe()),
+    );
+    runObservationRetry(
+      Effect.sleep(Duration.millis(delay)).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            void drainObservationQueue().catch(() => undefined);
+          }),
+        ),
+      ),
+    );
+  };
+
+  type ClaimedObservation = {
+    readonly id: string;
+    readonly threadId: string;
+    readonly resourceId: string;
+    readonly modelId: string;
+    readonly turnId: string | null;
+  };
+  const releaseWithBackoff = (id: string, claim: string, attempts: number) =>
+    releaseQueuedObservation.run(
+      attempts,
+      DateTime.formatIso(
+        DateTime.addDuration(DateTime.nowUnsafe(), `${OBSERVATION_RETRY_BACKOFF_MS} millis`),
+      ),
+      id,
+      claim,
+    );
+  // Delivers a dropped row's notice, then removes the row. A failed notice
+  // keeps the row queued so later drains retry only the notice.
+  const reportDroppedObservation = async (
+    item: ClaimedObservation,
+    claim: string,
+    attempts: number,
+    cause: unknown,
+  ) => {
+    try {
+      await options.onObservationDropped?.({
+        observationId: item.id,
+        threadId: item.threadId,
+        ...(item.turnId !== null ? { turnId: item.turnId } : {}),
+        resourceId: item.resourceId,
+        modelId: item.modelId,
+        attempts,
+        error: cause instanceof Error ? cause : new Error(String(cause)),
+      });
+      droppedCauses.delete(item.id);
+      removeQueuedObservation.run(item.id, claim);
+    } catch (callbackCause) {
+      await Effect.runPromise(
+        Effect.logWarning("Akeru observation-drop notification failed.", {
+          threadId: item.threadId,
+          attempts,
+          cause: callbackCause,
+        }),
+      );
+      // Keep the row so a later drain retries the notice.
+      if (attempts >= OBSERVATION_NOTICE_ATTEMPTS) {
+        droppedCauses.delete(item.id);
+        removeQueuedObservation.run(item.id, claim);
+      } else {
+        droppedCauses.set(item.id, cause);
+        releaseWithBackoff(item.id, claim, attempts);
+      }
+    }
+  };
+
+  const drainQueuedObservations = async (): Promise<void> => {
+    try {
+      for (;;) {
+        if (closed) return;
+        const nowUtc = DateTime.nowUnsafe();
+        const now = DateTime.formatIso(nowUtc);
+        const leaseExpiry = DateTime.formatIso(
+          DateTime.subtractDuration(nowUtc, `${OBSERVATION_CLAIM_LEASE_MS} millis`),
+        );
+        const item = claimQueuedObservation.get(now, now, leaseExpiry) as
+          | {
+              id: string;
+              threadId: string;
+              resourceId: string;
+              modelId: string;
+              turnId: string | null;
+              attempts: number;
+              providerInstanceId: string | null;
+            }
+          | undefined;
+        if (!item) {
+          scheduleObservationRetry();
+          return;
+        }
+        if (item.attempts >= OBSERVATION_DROP_ATTEMPTS) {
+          // The observer already failed its last attempt; only the notice is pending.
+          await reportDroppedObservation(
+            item,
+            now,
+            item.attempts + 1,
+            // A restarted harness no longer has the original failure.
+            droppedCauses.get(item.id) ?? new Error("Observation failed repeatedly."),
+          );
+          continue;
+        }
+        const held = { attempts: item.attempts, claim: now };
+        claimedRows.set(item.id, held);
+        let leaseRenewal: Fiber.Fiber<unknown, unknown> | undefined;
+        const stopLeaseRenewal = async () => {
+          const fiber = leaseRenewal;
+          leaseRenewal = undefined;
+          if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
+        };
+        try {
+          leaseRenewal = forkObservation(
+            Effect.forever(
+              Effect.sleep(Duration.millis(OBSERVATION_CLAIM_LEASE_MS / 3)).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    const renewed = DateTime.formatIso(DateTime.nowUnsafe());
+                    if (
+                      renewQueuedObservationClaim.run(renewed, item.id, held.claim).changes === 1
+                    ) {
+                      held.claim = renewed;
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+          const requestContext = new RequestContext();
+          requestContext.setRaw("controller", {
+            resourceId: item.resourceId,
+            session: { modelId: item.modelId },
+            ...(item.providerInstanceId === null
+              ? {}
+              : { state: { providerInstanceId: item.providerInstanceId } }),
+          });
+          await queueObservation(item.threadId, item.resourceId, async () => {
+            // A clear or restore queued ahead of this row discarded it.
+            if (!isQueuedObservationClaimed.get(item.id, held.claim)) return;
+            observingRows.add(item.id);
+            try {
+              await observationalMemory.engine.observe({
+                threadId: item.threadId,
+                resourceId: item.resourceId,
+                requestContext,
+                trigger: "manual",
+                hooks: observeHooks,
+              });
+            } finally {
+              observingRows.delete(item.id);
+            }
+          });
+          await stopLeaseRenewal();
+          claimedRows.delete(item.id);
+          removeQueuedObservation.run(item.id, held.claim);
+        } catch (cause) {
+          await stopLeaseRenewal();
+          // Close releases the claim, so a later harness picks the row up
+          // rather than waiting for the lease to expire.
+          if (isObservationQueueClosed(cause)) return;
+          claimedRows.delete(item.id);
+          const claim = held.claim;
+          const attempts = item.attempts + 1;
+          if (attempts >= OBSERVATION_DROP_ATTEMPTS) {
+            // A clear or restore discarded the row, so there is nothing to report.
+            if (!isQueuedObservationClaimed.get(item.id, claim)) continue;
+            await Effect.runPromise(
+              Effect.logWarning("Akeru observational memory dropped a failed observation.", {
+                threadId: item.threadId,
+                turnId: item.turnId,
+                attempts,
+                cause,
+              }),
+            );
+            await reportDroppedObservation(item, claim, attempts, cause);
+            continue;
+          }
+          // Release the row with backoff so later rows are not stuck behind a
+          // failing observation; a subsequent drain retries or drops it.
+          releaseWithBackoff(item.id, claim, attempts);
+        }
+      }
+    } finally {
+      drainActive = false;
+    }
+  };
+
+  const drainObservationQueue = (): Promise<void> => {
+    if (drainActive && observationDrain) return observationDrain;
+    if (closed) return Promise.resolve();
+    drainActive = true;
+    // The drain itself is a fiber in the set, so closing waits for the item it
+    // is observing; the loop stops claiming once `closed` flips. Close may
+    // interrupt the drain; its rows are released, so that is not a failure.
+    const drain = runObservation(Effect.promise(drainQueuedObservations)).catch(
+      (cause: unknown) => {
+        if (!closed) throw cause;
+      },
+    );
+    observationDrain = drain;
+    return drain;
+  };
+
+  // Writes the durable queue row. Admitted work may call this during close;
+  // everything else goes through the closed gate in observeAfterTurn.
+  const writeObservationRow = (input: AkeruBackgroundObservationInput) => {
+    registerResource(input.threadId);
+    const resourceId = input.resourceId ?? input.threadId;
+    const id = `${input.threadId}:${resourceId}:${input.modelId}:${NodeCrypto.randomUUID()}`;
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    try {
+      enqueueObservation.run(
+        id,
+        input.threadId,
+        resourceId,
+        input.modelId,
+        input.turnId ?? null,
+        now,
+        now,
+        input.providerInstanceId ?? null,
+      );
+      return true;
+    } catch (cause) {
+      // SQLITE_BUSY is already padded by busy_timeout; a queue write failure
+      // must never take down the completed turn, so report and continue.
+      Effect.runFork(
+        Effect.logWarning("Akeru observation queue write failed; observation was not queued.", {
+          threadId: input.threadId,
+          turnId: input.turnId,
+          cause,
+        }),
+      );
+      return false;
+    }
   };
 
   const observeAfterTurn = (input: AkeruBackgroundObservationInput) => {
-    const resourceId = input.resourceId ?? input.threadId;
-    return queueObservation(input.threadId, resourceId, async () => {
-      const requestContext = new RequestContext();
-      requestContext.setRaw("controller", { resourceId, session: { modelId: input.modelId } });
-      await observationalMemory.engine.observe({
-        threadId: input.threadId,
-        resourceId,
-        requestContext,
-        trigger: "manual",
-        hooks: input.hooks ?? observeHooks,
-      });
-    });
+    // Same admission gate as queued work: once close begins, nothing new is
+    // written to the queue.
+    if (closed || !writeObservationRow(input)) return Promise.resolve();
+    return drainObservationQueue();
   };
 
   const observeExternalTurn: NonNullable<AkeruMastraHarness["observeExternalTurn"]> = async (
     input,
+  ) => {
+    registerResource(input.threadId);
+    // Persisting the turn and queueing its observation are admitted together,
+    // so close waits for (or interrupts) both before the stores close. A turn
+    // that persisted always leaves a row for the next start to observe.
+    const queued = await queueObservation(input.threadId, input.threadId, async () => {
+      await persistExternalTurn(input);
+      return writeObservationRow({
+        threadId: input.threadId,
+        resourceId: input.threadId,
+        modelId: input.modelId,
+        turnId: input.turnId,
+      });
+    });
+    if (queued) await drainObservationQueue();
+  };
+
+  const persistExternalTurn = async (
+    input: Parameters<NonNullable<AkeruMastraHarness["observeExternalTurn"]>>[0],
   ) => {
     const existingThread = await observationalMemory.memory.getThreadById({
       threadId: input.threadId,
@@ -1182,14 +1806,12 @@ export async function createAkeruMastraHarness(
         resourceId: input.threadId,
       },
     ]);
-    await observeAfterTurn({
-      threadId: input.threadId,
-      resourceId: input.threadId,
-      modelId: input.modelId,
-    });
   };
 
+  void drainObservationQueue().catch(() => undefined);
+
   const readObservationalMemory = async (threadId: string, resourceId?: string) => {
+    registerResource(threadId, resourceId ?? threadId);
     const normalize = (
       record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
     ) => {
@@ -1217,89 +1839,170 @@ export async function createAkeruMastraHarness(
     return { current: normalize(current), history: history.map((record) => normalize(record)!) };
   };
 
-  return {
-    controller,
-    clearObservationalMemory: (threadId, resourceId = threadId) =>
-      queueObservation(threadId, resourceId, () =>
-        observationalMemory.engine.clear(threadId, resourceId),
-      ),
-    readObservationalMemory,
-    restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) =>
-      queueObservation(threadId, resourceId, async () => {
-        const store = observationalMemory.engine.getStorage();
-        if (
-          expectedSnapshot &&
-          JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
-            JSON.stringify(expectedSnapshot)
-        ) {
-          throw new Error(
-            "Observations changed after the import preview. Preview the archive again.",
-          );
-        }
-        const originals = await store.getObservationalMemoryHistory(
+  const restoreRecords = async (
+    threadId: string,
+    snapshot: AkeruConversationMemorySnapshot,
+    resourceId: string,
+    expectedSnapshot: AkeruConversationMemorySnapshot | undefined,
+  ) => {
+    const store = observationalMemory.engine.getStorage();
+    if (
+      expectedSnapshot &&
+      JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
+        JSON.stringify(expectedSnapshot)
+    ) {
+      throw new Error("Observations changed after the import preview. Preview the archive again.");
+    }
+    discardQueuedObservations.run(threadId, resourceId);
+    const originals = await store.getObservationalMemoryHistory(
+      threadId,
+      resourceId,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const replace = async () => {
+      await store.clearObservationalMemory(threadId, resourceId);
+      const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
+      const seen = new Set<string>();
+      for (const record of records) {
+        if (seen.has(record.id)) continue;
+        seen.add(record.id);
+        await store.insertObservationalMemoryRecord({
+          id: record.id,
+          scope: "thread",
           threadId,
           resourceId,
+          createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
+          updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+          lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
+          originType: record.originType,
+          generationCount: record.generationCount,
+          // Archives flatten buffered chunks, so restore their text as active observations.
+          activeObservations: [record.activeObservations, record.bufferedObservations]
+            .filter(Boolean)
+            .join("\n\n"),
+          ...(record.bufferedReflection ? { bufferedReflection: record.bufferedReflection } : {}),
+          totalTokensObserved: record.totalTokensObserved,
+          observationTokenCount:
+            record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
+          pendingMessageTokens: 0,
+          isReflecting: false,
+          isObserving: false,
+          isBufferingObservation: false,
+          isBufferingReflection: false,
+          lastBufferedAtTokens: 0,
+          lastBufferedAtTime: null,
+          config: {},
+        } satisfies ObservationalMemoryRecord);
+      }
+    };
+    const rollback = async () => {
+      await store.clearObservationalMemory(threadId, resourceId);
+      for (const original of originals) await store.insertObservationalMemoryRecord(original);
+    };
+    try {
+      await replace();
+    } catch (cause) {
+      // The original failure stays the error's cause whether or not the
+      // rollback lands; a rollback failure is carried beside it.
+      let rollbackFailure: { readonly cause: unknown } | undefined;
+      await rollback().catch((rollbackCause: unknown) => {
+        rollbackFailure = { cause: rollbackCause };
+      });
+      throw new AkeruObservationRestoreError({
+        threadId,
+        resourceId,
+        rolledBack: rollbackFailure === undefined,
+        cause,
+        ...(rollbackFailure ? { rollbackCause: rollbackFailure.cause } : {}),
+      });
+    }
+  };
+
+  // Clear and restore discard pending observations for the chat, so a retry
+  // cannot write observations back over the user's change.
+  const clearObservationalMemory = (threadId: string, resourceId = threadId) =>
+    queueObservation(threadId, resourceId, () => {
+      discardQueuedObservations.run(threadId, resourceId);
+      return observationalMemory.engine.clear(threadId, resourceId);
+    });
+  const unregisterStore = registerEntityMemoryStore(clearObservationalMemory);
+  const registeredResources = new Map<string, () => void>();
+  let resourcesUnregistered = false;
+  const registerResource = (threadId: string, resourceId = threadId) => {
+    // A late call after close must not leave a callback into this closed harness.
+    if (closed || resourcesUnregistered) return;
+    const key = `${threadId}\u0000${resourceId}`;
+    registeredResources.get(key)?.();
+    registeredResources.set(
+      key,
+      registerEntityMemoryResource(threadId, resourceId, clearObservationalMemory),
+    );
+  };
+  // Registered last, so it runs first on close: invalidation stops reaching
+  // this harness before its memory work winds down.
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      unregisterStore();
+      resourcesUnregistered = true;
+      for (const unregister of registeredResources.values()) unregister();
+      registeredResources.clear();
+    }),
+  );
+
+  const harness: AkeruMastraHarness = {
+    controller,
+    rebuildConversation: (threadId, messages) =>
+      queueObservation(threadId, threadId, async () => {
+        const originalThread = await observationalMemory.memory.getThreadById({
+          threadId,
+          resourceId: threadId,
+        });
+        const originals = originalThread
+          ? (await observationalMemory.memory.recall({ threadId, perPage: false })).messages
+          : [];
+        const store = observationalMemory.engine.getStorage();
+        const observations = await store.getObservationalMemoryHistory(
+          threadId,
+          threadId,
           Number.MAX_SAFE_INTEGER,
         );
+        const replace = async (transcript: ReadonlyArray<MastraDBMessage>) => {
+          discardQueuedObservations.run(threadId, threadId);
+          await observationalMemory.engine.clear(threadId, threadId);
+          await observationalMemory.memory.deleteThread(threadId);
+          await observationalMemory.memory.createThread({
+            threadId,
+            resourceId: threadId,
+            ...(originalThread?.title ? { title: originalThread.title } : {}),
+            ...(originalThread?.metadata ? { metadata: originalThread.metadata } : {}),
+          });
+          if (transcript.length > 0) {
+            await observationalMemory.memory.persistMessages([...transcript]);
+          }
+        };
+        const restore = async () => {
+          await replace(originals);
+          for (const record of observations) await store.insertObservationalMemoryRecord(record);
+        };
         try {
-          await store.clearObservationalMemory(threadId, resourceId);
-          const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
-          const seen = new Set<string>();
-          for (const record of records) {
-            if (seen.has(record.id)) continue;
-            seen.add(record.id);
-            await store.insertObservationalMemoryRecord({
-              id: record.id,
-              scope: "thread",
-              threadId,
-              resourceId,
-              createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
-              updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-              lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-              originType: record.originType,
-              generationCount: record.generationCount,
-              // Archives flatten buffered chunks, so restore their text as active observations.
-              activeObservations: [record.activeObservations, record.bufferedObservations]
-                .filter(Boolean)
-                .join("\n\n"),
-              ...(record.bufferedReflection
-                ? { bufferedReflection: record.bufferedReflection }
-                : {}),
-              totalTokensObserved: record.totalTokensObserved,
-              observationTokenCount:
-                record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
-              pendingMessageTokens: 0,
-              isReflecting: false,
-              isObserving: false,
-              isBufferingObservation: false,
-              isBufferingReflection: false,
-              lastBufferedAtTokens: 0,
-              lastBufferedAtTime: null,
-              config: {},
-            } satisfies ObservationalMemoryRecord);
-          }
+          await replace(messages);
         } catch (cause) {
-          try {
-            await store.clearObservationalMemory(threadId, resourceId);
-            for (const original of originals) await store.insertObservationalMemoryRecord(original);
-          } catch (rollbackCause) {
-            throw Object.assign(
-              new Error(
-                "Observation restore failed and the original observations could not be restored.",
-                { cause: rollbackCause },
-              ),
-              { originalError: cause },
-            );
-          }
+          await restore();
           throw cause;
         }
+        return () => queueObservation(threadId, threadId, restore);
       }),
+    clearObservationalMemory,
+    readObservationalMemory,
+    restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) => {
+      registerResource(threadId, resourceId);
+      return queueObservation(threadId, resourceId, () =>
+        restoreRecords(threadId, snapshot, resourceId, expectedSnapshot),
+      );
+    },
     observeAfterTurn,
     observeExternalTurn,
-    destroy: async () => {
-      closing = true;
-      await Promise.allSettled(observationTails.values());
-      await observationalMemory.close();
-    },
+    drainObservationQueue,
   };
-}
+  return harness;
+});

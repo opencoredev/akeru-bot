@@ -1,14 +1,14 @@
-import type { UsageProviderKind } from "@t3tools/contracts";
+import type { UsageProviderKind } from "@akeru/contracts";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { DailyTotals, HourlyTotals } from "@t3tools/shared/usageMerge";
+import type { DailyTotals, HourlyTotals } from "@akeru/shared/usageMerge";
 import {
   formatDayShort,
   formatHourShort,
   formatRelativeHourShort,
   formatTokens,
   formatUsd,
-} from "@t3tools/shared/usageFormat";
+} from "@akeru/shared/usageFormat";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION } from "./usageProviders";
 
 const VIEW_WIDTH = 960;
@@ -331,6 +331,15 @@ export function UsageProviderChart({
     resolution === "hour" && referenceTime !== undefined
       ? formatRelativeHourShort(period, referenceTime, timeZone)
       : formatPeriod(period);
+
+  // A blank 260px plot reads as broken; the table below already says this, so match it.
+  if (periods.length === 0 || !paths.some((path) => path.total > 0)) {
+    return (
+      <p className="flex h-56 items-center justify-center text-sm text-muted-foreground">
+        No activity in this window.
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">

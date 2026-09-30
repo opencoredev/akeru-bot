@@ -1,8 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
-import { ProviderInstanceId, type BotEngine, type McpServerId } from "@t3tools/contracts";
+import {
+  ProviderInstanceId,
+  isImageProviderId,
+  type BotEngine,
+  type ImageProviderId,
+  type McpServerId,
+} from "@akeru/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionForInstance,
@@ -16,6 +23,7 @@ import {
 } from "../../providerInstances";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { shouldRenderTraitsControls } from "../chat/TraitsPicker";
+import { botEngineUnavailability } from "./botEngineSelection";
 import { canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, type BotSandboxChoice } from "./botSandbox";
 import type { Bot } from "./types";
@@ -46,7 +54,16 @@ export interface BotProfileUpdate {
   readonly sandbox: Bot["sandbox"];
   readonly personalityTone: number;
   readonly voiceEnabled: boolean;
+  readonly imageProvider: ImageProviderId | null;
   readonly disabledMcpServerIds: readonly McpServerId[];
+}
+
+/** Select value for "use the global default" in the bot image provider picker. */
+export const BOT_IMAGE_PROVIDER_DEFAULT = "default";
+
+/** Maps the bot image provider picker value to the saved field; anything unknown means the global default. */
+export function botImageProviderFromSelectValue(value: string | null): ImageProviderId | null {
+  return value !== null && isImageProviderId(value) ? value : null;
 }
 
 export function parseBotUsageCapInput(input: string): {
@@ -67,7 +84,7 @@ export function resolveBotUsageCapForProvider(
   readonly valid: boolean;
   readonly value: Bot["usageCap"];
 } {
-  if (providerDriver === "cursor" || providerDriver === "grok") {
+  if (providerDriver === "grok") {
     return { available: false, valid: true, value: null };
   }
   return { available: true, ...parseBotUsageCapInput(input) };
@@ -83,6 +100,7 @@ export function useBotProfileDraft(
   onSave?: (input: BotProfileUpdate) => Promise<boolean>,
 ) {
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const { t } = useI18n();
   const settings = usePrimarySettings();
 
   const [name, setName] = useState(bot.name);
@@ -94,6 +112,9 @@ export function useBotProfileDraft(
     canonicalizeBotPersonalityTone(bot.personalityTone),
   );
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
+  const [imageProvider, setImageProvider] = useState<ImageProviderId | null>(
+    bot.imageProvider ?? null,
+  );
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
     bot.disabledMcpServerIds,
   );
@@ -114,11 +135,20 @@ export function useBotProfileDraft(
     [providers, settings],
   );
   const [provider, setProvider] = useState(bot.engine?.provider ?? defaultSelection.instanceId);
+  // The saved instance wins even when it cannot run, so the picker keeps showing
+  // the bot's real choice; `engineUnavailability` says why it is blocked.
   const activeEntry = useMemo(
     () =>
-      resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider)),
-    [instanceEntries, provider],
+      instanceEntries.find((entry) => entry.instanceId === provider) ??
+      (bot.engine === null && !engineChanged
+        ? resolveSelectableProviderInstanceEntry(instanceEntries, ProviderInstanceId.make(provider))
+        : undefined),
+    [bot.engine, engineChanged, instanceEntries, provider],
   );
+  const providerInstanceId =
+    bot.engine === null && !engineChanged && activeEntry
+      ? activeEntry.instanceId
+      : ProviderInstanceId.make(provider);
   const [model, setModel] = useState<string>(
     () =>
       bot.engine?.model ??
@@ -136,8 +166,23 @@ export function useBotProfileDraft(
         : undefined),
   );
   const modelOptionsByInstance = useMemo(
-    () => getCustomModelOptionsByInstance(settings, providers),
-    [providers, settings],
+    () =>
+      getCustomModelOptionsByInstance(
+        settings,
+        providers,
+        ProviderInstanceId.make(provider),
+        model,
+      ),
+    [model, provider, providers, settings],
+  );
+  const engineUnavailability = useMemo(
+    () =>
+      botEngineUnavailability(
+        model ? { instanceId: providerInstanceId, model } : null,
+        instanceEntries,
+        t,
+      ),
+    [instanceEntries, model, providerInstanceId, t],
   );
 
   useEffect(() => {
@@ -187,6 +232,9 @@ export function useBotProfileDraft(
     setVoiceEnabled((current) =>
       rebaseUneditedValue(current, previous.voiceEnabled, bot.voiceEnabled),
     );
+    setImageProvider((current) =>
+      rebaseUneditedValue(current, previous.imageProvider ?? null, bot.imageProvider ?? null),
+    );
     setDisabledMcpServerIds((current) =>
       rebaseUneditedValue(
         current,
@@ -216,7 +264,6 @@ export function useBotProfileDraft(
       prompt: "",
       modelOptions,
       allowPromptInjectedEffort: false,
-      planModeEnabled: settings.planModeEnabled,
     });
   const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
   const usageCapDirty =
@@ -233,6 +280,7 @@ export function useBotProfileDraft(
     sandboxDirty ||
     personalityTone !== savedTone ||
     voiceEnabled !== bot.voiceEnabled ||
+    imageProvider !== (bot.imageProvider ?? null) ||
     toolOverridesDirty;
   const canSave = Boolean(onSave) && dirty && name.trim().length > 0 && resolvedUsageCap.valid;
 
@@ -242,6 +290,8 @@ export function useBotProfileDraft(
     instanceEntries,
     defaultSelection,
     activeEntry,
+    providerInstanceId,
+    engineUnavailability,
     modelOptionsByInstance,
     showModelOptions,
 
@@ -260,6 +310,8 @@ export function useBotProfileDraft(
     setPersonalityTone,
     voiceEnabled,
     setVoiceEnabled,
+    imageProvider,
+    setImageProvider,
     disabledMcpServerIds,
     setDisabledMcpServerIds,
     model,
@@ -300,6 +352,7 @@ export function useBotProfileDraft(
         sandbox,
         personalityTone,
         voiceEnabled,
+        imageProvider,
         disabledMcpServerIds,
       }).then((success) => {
         setSaving(false);

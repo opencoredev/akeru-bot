@@ -28,7 +28,7 @@ import {
   type ProviderInstanceId,
   type ServerProvider,
   type ServerProviderUpdateState,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -80,6 +80,13 @@ const hasModelCapabilities = (model: ServerProvider["models"][number]): boolean 
   (model.capabilities?.optionDescriptors?.length ?? 0) > 0;
 
 const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean => {
+  if (provider.driver === ProviderDriverKind.make("grok")) {
+    // A clean probe reads Grok's current catalog, so models it no longer lists are
+    // dropped instead of lingering as stale aliases. A snapshot that is still
+    // checking, signed out, or missing ACP metadata has an incomplete catalog
+    // and keeps the last good list.
+    return provider.enabled && provider.status !== "ready";
+  }
   if (provider.driver !== ProviderDriverKind.make("opencode")) {
     return true;
   }

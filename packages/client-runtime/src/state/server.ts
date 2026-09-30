@@ -8,7 +8,7 @@ import {
   type ServerSelfUpdateProgressEvent,
   type ServerSelfUpdateResult,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -656,7 +656,7 @@ export function createServerEnvironmentAtoms<R, E>(
         // letting the supervisor climb its backoff ladder.
         yield* nudgeReconnectDuringUpdateRestart({
           stateChanges: environmentRegistry.stateChanges(target.environmentId),
-          retryNow: environmentRegistry.retryNow(target.environmentId),
+          retryNow: environmentRegistry.retryNow(target.environmentId, { onlyIfDesired: true }),
         }).pipe(Effect.forkChild);
 
         const resumed = yield* environmentRegistry
@@ -799,6 +799,16 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.subscriptionAuthList,
       staleTimeMs: 5_000,
     }),
+    routineThreadRuns: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:routine-thread-runs",
+      tag: WS_METHODS.routinesListThreadRuns,
+      staleTimeMs: 0,
+    }),
+    imageProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:image-providers",
+      tag: WS_METHODS.imageProviderList,
+      staleTimeMs: 5_000,
+    }),
     composioStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:composio-status",
       tag: WS_METHODS.composioGetStatus,
@@ -813,6 +823,25 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:voice-call",
       tag: WS_METHODS.voiceCallGet,
       staleTimeMs: 1_000,
+    }),
+    voiceProviders: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:voice-providers",
+      tag: WS_METHODS.voiceProviders,
+      staleTimeMs: 5_000,
+    }),
+    // The doctor shells out to system tools for several seconds; keep a result until Re-run.
+    remoteDoctor: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:remote-doctor",
+      tag: WS_METHODS.serverGetRemoteDoctor,
+      staleTimeMs: 60_000,
+    }),
+    repairRemoteDoctor: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:repair-remote-doctor",
+      tag: WS_METHODS.serverRepairRemoteDoctor,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
     }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
@@ -897,6 +926,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:subscription-auth:health-test",
       tag: WS_METHODS.subscriptionAuthHealthTest,
     }),
+    testImageProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:image-provider:health-test",
+      tag: WS_METHODS.imageProviderHealthTest,
+    }),
     startVoiceCall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:voice-call:start",
       tag: WS_METHODS.voiceCallStart,
@@ -912,6 +945,38 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: voiceCallHangupConcurrencyKey,
       },
+    }),
+    connectVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:connect",
+      tag: WS_METHODS.voiceConnect,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    disconnectVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:disconnect",
+      tag: WS_METHODS.voiceDisconnect,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    testVoiceProvider: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:test",
+      tag: WS_METHODS.voiceTest,
+    }),
+    listVoiceVoices: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:list-voices",
+      tag: WS_METHODS.voiceListVoices,
+    }),
+    synthesizeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:synthesize",
+      tag: WS_METHODS.voiceSynthesize,
+    }),
+    transcribeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:transcribe",
+      tag: WS_METHODS.voiceTranscribe,
+    }),
+    cancelVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:voice:cancel",
+      tag: WS_METHODS.voiceCancel,
     }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",

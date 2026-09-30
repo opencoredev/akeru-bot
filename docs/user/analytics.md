@@ -31,7 +31,7 @@ events. It also supplies a fixed empty IP value instead of the client address.
 
 ## Turn analytics off
 
-Open **Settings > Privacy** and turn off **Anonymous analytics**. Mobile uses the same path.
+Open **Settings > Privacy & data** and turn off **Anonymous analytics**. Mobile uses the same path.
 
 Turning analytics off deletes the analytics UUID, the current period, queued reports, and the legacy
 analytics ID file. The setting stays off.

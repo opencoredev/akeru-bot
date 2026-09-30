@@ -1,4 +1,4 @@
-import type { ProviderAccessStatus } from "@t3tools/contracts";
+import type { ProviderAccessStatus } from "@akeru/contracts";
 
 import type { ProviderStatus } from "../subscription-auth/service.ts";
 import { BotInboxService } from "./service.ts";
@@ -29,6 +29,7 @@ export function syncConnectorIncidents(
             (status.health === "expired"
               ? "The OAuth access token expired."
               : "The provider rejected the request."),
+          ...(status.lastFailedRequest ? { lastFailedRequestAt: status.lastFailedRequest.at } : {}),
           nextAction: `${status.reconnectAction} in Settings, then send a provider request.`,
         });
         continue;
@@ -84,6 +85,7 @@ export function syncAccessIncidents(
           taskOrRoutine: `${item.label} access`,
           lastFailure: item.lastFailedRequest?.message ?? "The connector request failed.",
           nextAction: item.nextAction,
+          ...(item.lastFailedRequest ? { lastFailedRequestAt: item.lastFailedRequest.at } : {}),
         });
       } else if (unresolvedIncidentKeys.has(incidentKey)) {
         botInbox.resolve(incidentKey);

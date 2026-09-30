@@ -1,4 +1,4 @@
-import type { McpServer, OrchestrationBot, ProviderAccessStatus } from "@t3tools/contracts";
+import type { McpServer, OrchestrationBot, ProviderAccessStatus } from "@akeru/contracts";
 import {
   PLUGIN_CATEGORIES,
   type PluginCategory,
@@ -90,7 +90,7 @@ export function buildPluginSections(input: {
 }
 
 export function pluginBlocker(plugin: PluginDirectoryDefinition): string | null {
-  if (plugin.connection.type === "brokered") return null;
+  if (plugin.connection.type === "brokered") return plugin.connection.pendingBlocker ?? null;
   if (
     plugin.connection.type === "approval-pending" ||
     plugin.connection.type === "verification-pending"
@@ -112,6 +112,8 @@ export function pluginPrimaryAction(
     ["expired", "revoked", "failed", "failed-first-request"].includes(accessStatus.health);
   if (server?.enabled && !needsReconnect) return { label: "Disable", enable: false };
   const blocker = pluginBlocker(plugin);
+  // A blocked entry cannot reconnect, but an enabled server must stay switchable off.
+  if (blocker && server?.enabled) return { label: "Disable", enable: false };
   if (blocker) return { label: "Connect", enable: null, blocker };
   if (server) return { label: "Reconnect", enable: true };
   if (plugin.authentication === "api-key") return { label: "Add key", enable: true };
@@ -123,7 +125,12 @@ export function pluginPrimaryAction(
 
 export function pluginConnectionLabel(plugin: PluginDirectoryDefinition): string {
   if (plugin.connection.type === "approval-pending") return "Approval pending";
-  if (plugin.connection.type === "verification-pending") return "Verification pending";
+  if (
+    plugin.connection.type === "verification-pending" ||
+    (plugin.connection.type === "brokered" && plugin.connection.pendingBlocker !== undefined)
+  ) {
+    return "Verification pending";
+  }
   if (plugin.connection.type === "local") return "Local";
   if (plugin.authentication === "api-key") return "API key";
   if (plugin.authentication === "oauth" || plugin.authentication === "optional-oauth") {

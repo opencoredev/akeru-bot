@@ -1,7 +1,8 @@
-import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
+import type { StartThreadTurnInput } from "@akeru/client-runtime/operations";
 import {
   type EnvironmentId,
   isProviderDriverKind,
+  PLACEHOLDER_THREAD_TITLE,
   ProjectId,
   type MessageId,
   type ModelSelection,
@@ -11,7 +12,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadShell } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
 import * as Schema from "effect/Schema";
@@ -26,7 +27,7 @@ import type { DraftThreadEnvMode } from "../composerDraftStore";
 import type { ComposerSubmissionIntent } from "../composer-logic";
 import type { TimelineEntry } from "../session-logic";
 
-export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
+export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "akeru:last-invoked-script-by-project";
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
@@ -157,7 +158,7 @@ export function buildLocalDraftThread(
     id: threadId,
     environmentId: draftThread.environmentId,
     projectId: draftThread.projectId,
-    title: "New chat",
+    title: PLACEHOLDER_THREAD_TITLE,
     modelSelection: fallbackModelSelection,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,
@@ -296,11 +297,6 @@ export function collectUserMessageBlobPreviewUrls(message: ChatMessage): string[
     previewUrls.push(attachment.previewUrl);
   }
   return previewUrls;
-}
-
-export interface PullRequestDialogState {
-  initialReference: string | null;
-  key: number;
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {

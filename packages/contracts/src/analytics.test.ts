@@ -52,7 +52,7 @@ const rejects = (input: unknown) => expect(() => decodeUsage3hEvent(input)).toTh
 describe("Usage3hEvent", () => {
   it("accepts the fixed anonymous aggregate payload", () => {
     expect(decodeUsage3hEvent(event)).toEqual(event);
-    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(96);
+    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(94);
   });
 
   it("accepts current remote sandboxes and rejects the retired hosted sandbox", () => {

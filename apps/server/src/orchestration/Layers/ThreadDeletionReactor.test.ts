@@ -1,5 +1,5 @@
 import { it as effectIt } from "@effect/vitest";
-import { EventId, ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
+import { EventId, ThreadId, type OrchestrationEvent } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -11,7 +11,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { AgentController } from "../../provider/Services/AgentController.ts";
 import { ServerActivation } from "../../serverActivation.ts";
-import * as TerminalManager from "../../terminal/Manager.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import {
@@ -57,7 +56,6 @@ describe("ThreadDeletionReactor.start", () => {
       Effect.gen(function* () {
         const threadId = ThreadId.make("thread-deletion-parked-recreate");
         const stoppedThreadIds: ThreadId[] = [];
-        const closedThreadIds: ThreadId[] = [];
         const activation = yield* Deferred.make<void>();
         const eventPubSub = yield* PubSub.unbounded<OrchestrationEvent>();
         let latestSequence = 0;
@@ -118,13 +116,11 @@ describe("ThreadDeletionReactor.start", () => {
           });
 
           expect(stoppedThreadIds).toEqual([]);
-          expect(closedThreadIds).toEqual([]);
 
           yield* Deferred.succeed(activation, undefined);
           yield* reactor.drainThrough(2);
 
           expect(stoppedThreadIds).toEqual([threadId]);
-          expect(closedThreadIds).toEqual([threadId]);
         }).pipe(
           Effect.provideService(ServerActivation, Deferred.await(activation)),
           Effect.provide(
@@ -135,14 +131,6 @@ describe("ThreadDeletionReactor.start", () => {
                   stopSession: (input) =>
                     Effect.sync(() => {
                       stoppedThreadIds.push(input.threadId);
-                    }),
-                }),
-              ),
-              Layer.provide(
-                Layer.mock(TerminalManager.TerminalManager)({
-                  close: (input) =>
-                    Effect.sync(() => {
-                      closedThreadIds.push(ThreadId.make(input.threadId));
                     }),
                 }),
               ),

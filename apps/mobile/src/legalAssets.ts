@@ -1,7 +1,9 @@
 // Metro bundles these files into every native release. Keep the list in sync
 // with legal/licenses and THIRD_PARTY_NOTICES.md.
 void [
-  require("../../../LICENSE"),
+  // Metro does not resolve extensionless files as assets on Android. Keep a
+  // verbatim .txt copy beside the other bundled notices.
+  require("../../../legal/licenses/MIT-Akeru.txt"),
   require("../../../THIRD_PARTY_NOTICES.md"),
   require("../../../legal/licenses/Apache-2.0.txt"),
   require("../../../legal/licenses/Apache-MesloLGS-NF.txt"),
@@ -15,6 +17,7 @@ void [
   require("../../../legal/licenses/MIT-Ghostty.txt"),
   require("../../../legal/licenses/MIT-Khroma.txt"),
   require("../../../legal/licenses/MIT-Symbols-Nerd-Font.txt"),
+  require("../../../legal/licenses/MIT-Beautiful-UI.txt"),
   require("../../../legal/licenses/MIT-Bluesky.txt"),
   require("../../../legal/licenses/MIT-Expo.txt"),
   require("../../../legal/licenses/Apache-Pierre.txt"),

@@ -6,6 +6,7 @@ import {
   BotUsageCap,
   GroupId,
   ChannelBinding,
+  ChannelDeliveryState,
   ChannelMessageOrigin,
   ChatAttachment,
   CheckpointRef,
@@ -39,7 +40,7 @@ import {
   ProjectId,
   ThreadLinkedPullRequest,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -65,6 +66,7 @@ import { RoutineRepository } from "../../routines/Repository.ts";
 import { RoutineRepositoryLive } from "../../routines/RepositoryLive.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
+import { deletedRoutineReceiptSources } from "../routineReceiptSources.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionState } from "../../persistence/Services/ProjectionState.ts";
 import { ProjectionThreadActivity } from "../../persistence/Services/ProjectionThreadActivities.ts";
@@ -130,6 +132,9 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
+    // Projected channel_delivery column, with the channel_deliveries.status
+    // left join COALESCED in for rows written before migration 072.
+    channelDelivery: Schema.optional(Schema.NullOr(ChannelDeliveryState)),
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
     reactions: Schema.fromJsonString(Schema.Array(OrchestrationMessageReaction)),
@@ -158,6 +163,7 @@ const ProjectionTurnStartMessageDbRowSchema = Schema.Struct({
   role: ProjectionThreadMessage.fields.role,
   text: ProjectionThreadMessage.fields.text,
   attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
+  channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
   isStreaming: Schema.Number,
   createdAt: ProjectionThreadMessage.fields.createdAt,
   updatedAt: ProjectionThreadMessage.fields.updatedAt,
@@ -173,6 +179,7 @@ const ProjectionThreadRuntimeContextDbRowSchema = Schema.Struct({
   botId: Schema.NullOr(BotId),
   groupId: Schema.NullOr(GroupId),
   respondingBotId: Schema.NullOr(BotId),
+  parentThreadId: Schema.NullOr(ThreadId),
   runtimeMode: ProjectionThread.fields.runtimeMode,
   session: Schema.NullOr(ProjectionThreadSessionDbRowSchema),
 });
@@ -449,6 +456,7 @@ function mapBotRow(row: Schema.Schema.Type<typeof ProjectionBotDbRowSchema>): Or
     sandbox: row.sandbox,
     runtimeMode: row.runtimeMode,
     usageCap: row.usageCap,
+    imageProvider: row.imageProvider,
     personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,
     channelBindings: row.channelBindings ?? [],
@@ -513,6 +521,7 @@ function mapThreadMessageRow(
     ...(row.authorPersonId ? { authorPersonId: row.authorPersonId } : {}),
     ...(row.authorDisplayName ? { authorDisplayName: row.authorDisplayName } : {}),
     ...(row.channelOrigin ? { channelOrigin: row.channelOrigin } : {}),
+    ...(row.channelDelivery ? { channelDelivery: row.channelDelivery } : {}),
     reactions: row.reactions,
     streaming: row.isStreaming === 1,
     createdAt: row.createdAt,
@@ -600,7 +609,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", voice_enabled AS "voiceEnabled",
+        usage_cap_json AS "usageCap", image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
@@ -632,7 +641,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
   });
 
   // Open delegations plus the newest terminal ones per parent thread, so the
-  // shell snapshot never hydrates a thread's whole delegation history.
+  // shell snapshot never hydrates a thread's whole delegation history. Records
+  // store a tagged `phase`; rows written before it carry a legacy `state`.
   const listShellDelegationRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionDelegationDbRowSchema,
@@ -643,11 +653,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           record_json AS delegation,
           delegation_id,
           json_extract(record_json, '$.createdAt') AS created_at,
-          json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled') AS terminal,
+          COALESCE(
+            json_extract(record_json, '$.phase._tag'),
+            json_extract(record_json, '$.state')
+          ) IN ('Completed', 'Failed', 'Canceled', 'completed', 'failed', 'canceled') AS terminal,
           ROW_NUMBER() OVER (
             PARTITION BY
               json_extract(record_json, '$.parentThreadId'),
-              json_extract(record_json, '$.state') IN ('completed', 'failed', 'canceled')
+              COALESCE(
+                json_extract(record_json, '$.phase._tag'),
+                json_extract(record_json, '$.state')
+              ) IN ('Completed', 'Failed', 'Canceled', 'completed', 'failed', 'canceled')
             ORDER BY
               json_extract(record_json, '$.updatedAt') DESC,
               json_extract(record_json, '$.createdAt') ASC,
@@ -697,7 +713,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) => sql`
       SELECT record_json AS delegation
       FROM projection_delegations
-      WHERE json_extract(record_json, '$.childThreadId') = ${threadId}
+      WHERE COALESCE(
+          json_extract(record_json, '$.phase.childThreadId'),
+          json_extract(record_json, '$.childThreadId')
+        ) = ${threadId}
         OR json_extract(record_json, '$.parentThreadId') = ${threadId}
       ORDER BY json_extract(record_json, '$.createdAt') ASC, delegation_id ASC
     `,
@@ -727,6 +746,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",
@@ -768,6 +789,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",
@@ -811,6 +834,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",
@@ -850,22 +875,31 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: () =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        ORDER BY thread_id ASC, created_at ASC, message_id ASC
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        ORDER BY projection_thread_messages.thread_id ASC, created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -1053,6 +1087,20 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const getTurnStartFailureRow = SqlSchema.findOneOption({
+    Request: Schema.Struct({ threadId: ThreadId, requestedAt: IsoDateTime }),
+    Result: Schema.Struct({ activityId: Schema.String }),
+    execute: ({ threadId, requestedAt }) =>
+      sql`
+        SELECT activity_id AS "activityId"
+        FROM projection_thread_activities
+        WHERE thread_id = ${threadId}
+          AND created_at = ${requestedAt}
+          AND kind = 'provider.turn.start.failed'
+        LIMIT 1
+      `,
+  });
+
   const listActiveLatestTurnRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionLatestTurnDbRowSchema,
@@ -1184,6 +1232,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ON projects.project_id = threads.project_id
           WHERE threads.deleted_at IS NULL
             AND threads.archived_at IS NULL
+            AND threads.parent_thread_id IS NULL
             AND projects.deleted_at IS NULL
             AND messages.is_streaming = 0
             AND (
@@ -1322,6 +1371,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",
@@ -1362,23 +1413,32 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        WHERE thread_id = ${threadId}
-        ORDER BY created_at ASC, message_id ASC
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        WHERE projection_thread_messages.thread_id = ${threadId}
+        ORDER BY created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -1535,6 +1595,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           threads.bot_id AS "botId",
           threads.group_id AS "groupId",
           threads.responding_bot_id AS "respondingBotId",
+          threads.parent_thread_id AS "parentThreadId",
           threads.runtime_mode AS "runtimeMode",
           sessions.thread_id AS "threadId",
           sessions.status,
@@ -1561,6 +1622,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             botId: row.botId,
             groupId: row.groupId,
             respondingBotId: row.respondingBotId,
+            parentThreadId: row.parentThreadId,
             runtimeMode: row.runtimeMode,
             session:
               row.threadId === null
@@ -1592,6 +1654,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         role,
         text,
         attachments_json AS "attachments",
+        channel_origin_json AS "channelOrigin",
         is_streaming AS "isStreaming",
         created_at AS "createdAt",
         updated_at AS "updatedAt",
@@ -1721,7 +1784,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             'thread.activity-appended',
             'thread.turn-diff-completed',
             'thread.reverted',
-            'thread.session-set'
+            'thread.session-set',
+            'thread.channel-delivery-set'
           )
       `,
   });
@@ -1783,24 +1847,33 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId, minAnchorAt, minTurnKey, beforeAnchorAt, beforeTurnKey }) =>
       sql`
         SELECT
-          message_id AS "messageId",
-          thread_id AS "threadId",
-          turn_id AS "turnId",
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
           responding_bot_id AS "respondingBotId",
           author_person_id AS "authorPersonId",
           author_display_name AS "authorDisplayName",
-          channel_origin_json AS "channelOrigin",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
           role,
           text,
           attachments_json AS "attachments",
           reactions_json AS "reactions",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          projection_thread_messages.updated_at AS "updatedAt"
         FROM projection_thread_messages
-        WHERE thread_id = ${threadId}
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        WHERE projection_thread_messages.thread_id = ${threadId}
           AND (
-            turn_id IN (
+            projection_thread_messages.turn_id IN (
               SELECT turn_id FROM projection_turns
               WHERE thread_id = ${threadId}
                 AND turn_id IS NOT NULL
@@ -1820,12 +1893,12 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 )
             )
             OR (
-              turn_id IS NULL
+              projection_thread_messages.turn_id IS NULL
               AND created_at >= ${minAnchorAt}
               AND created_at < ${beforeAnchorAt}
             )
           )
-        ORDER BY created_at ASC, message_id ASC
+        ORDER BY created_at ASC, projection_thread_messages.message_id ASC
       `,
   });
 
@@ -1884,10 +1957,22 @@ pending_approval_requests AS (
             )
             AND json_extract(activity.payload_json, '$.requestId') IS NOT NULL
         ),
+        pending_memory_approval_activities AS (
+          SELECT activity.activity_id
+          FROM akeru_memory_candidates AS candidate
+          INNER JOIN projection_thread_activities AS activity
+            ON activity.activity_id = 'memory-approval:' || candidate.candidate_id || ':requested'
+          WHERE candidate.source_thread_id = ${threadId}
+            AND candidate.status = 'pending'
+            AND activity.thread_id = candidate.source_thread_id
+        ),
         pinned_activity_ids AS (
           SELECT activity_id
           FROM pending_approval_activities
           WHERE request_order = 1
+          UNION ALL
+          SELECT activity_id
+          FROM pending_memory_approval_activities
           UNION ALL
           SELECT activity_id
           FROM user_input_lifecycle
@@ -2245,6 +2330,7 @@ pending_approval_requests AS (
                   ...(row.authorPersonId ? { authorPersonId: row.authorPersonId } : {}),
                   ...(row.authorDisplayName ? { authorDisplayName: row.authorDisplayName } : {}),
                   ...(row.channelOrigin ? { channelOrigin: row.channelOrigin } : {}),
+                  ...(row.channelDelivery ? { channelDelivery: row.channelDelivery } : {}),
                   reactions: row.reactions,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
@@ -2342,6 +2428,8 @@ pending_approval_requests AS (
                 projectId: row.projectId,
                 botId: row.botId,
                 groupId: row.groupId,
+                parentThreadId: row.parentThreadId ?? null,
+                parentDelegationId: row.parentDelegationId ?? null,
                 respondingBotId: row.respondingBotId ?? null,
                 title: row.title,
                 modelSelection: row.modelSelection,
@@ -2617,6 +2705,8 @@ pending_approval_requests AS (
                   projectId: row.projectId,
                   botId: row.botId,
                   groupId: row.groupId,
+                  parentThreadId: row.parentThreadId ?? null,
+                  parentDelegationId: row.parentDelegationId ?? null,
                   respondingBotId: row.respondingBotId ?? null,
                   title: row.title,
                   modelSelection: row.modelSelection,
@@ -2820,6 +2910,7 @@ pending_approval_requests AS (
                 delegations: delegationRows.map((row) => toShellDelegation(row.delegation)),
                 mcpServers,
                 routines: routines.filter((routine) => routine.deletedAt === null),
+                routineReceiptSources: deletedRoutineReceiptSources(routines),
                 routineRuns,
                 skillAssignments,
                 threads: Arr.filterMap(threadRows, (row) =>
@@ -2829,6 +2920,8 @@ pending_approval_requests AS (
                         projectId: row.projectId,
                         botId: row.botId,
                         groupId: row.groupId,
+                        parentThreadId: row.parentThreadId ?? null,
+                        parentDelegationId: row.parentDelegationId ?? null,
                         respondingBotId: row.respondingBotId ?? null,
                         title: row.title,
                         modelSelection: row.modelSelection,
@@ -3006,6 +3099,8 @@ pending_approval_requests AS (
                     projectId: row.projectId,
                     botId: row.botId,
                     groupId: row.groupId,
+                    parentThreadId: row.parentThreadId ?? null,
+                    parentDelegationId: row.parentDelegationId ?? null,
                     respondingBotId: row.respondingBotId ?? null,
                     title: row.title,
                     modelSelection: row.modelSelection,
@@ -3320,6 +3415,8 @@ pending_approval_requests AS (
         projectId: threadRow.value.projectId,
         botId: threadRow.value.botId,
         groupId: threadRow.value.groupId,
+        parentThreadId: threadRow.value.parentThreadId ?? null,
+        parentDelegationId: threadRow.value.parentDelegationId ?? null,
         respondingBotId: threadRow.value.respondingBotId ?? null,
         title: threadRow.value.title,
         modelSelection: threadRow.value.modelSelection,
@@ -3371,6 +3468,7 @@ pending_approval_requests AS (
         botId: row.botId,
         groupId: row.groupId,
         respondingBotId: row.respondingBotId ?? null,
+        parentThreadId: row.parentThreadId,
         runtimeMode: row.runtimeMode,
         session: row.session === null ? null : mapSessionRow(row.session),
       }));
@@ -3445,6 +3543,7 @@ pending_approval_requests AS (
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+        ...(row.channelOrigin !== null ? { channelOrigin: row.channelOrigin } : {}),
       },
       hasOtherUserMessages: row.hasOtherUserMessages === 1 || row.hasOtherUserMessages === true,
     }));
@@ -3460,6 +3559,20 @@ pending_approval_requests AS (
           ),
         ),
       );
+    },
+  );
+
+  const hasTurnStartFailure = Effect.fn("ProjectionSnapshotQuery.hasTurnStartFailure")(
+    function* (input: { readonly threadId: ThreadId; readonly requestedAt: string }) {
+      const row = yield* getTurnStartFailureRow(input).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.hasTurnStartFailure:query",
+            "ProjectionSnapshotQuery.hasTurnStartFailure:decodeRow",
+          ),
+        ),
+      );
+      return Option.isSome(row);
     },
   );
 
@@ -3670,6 +3783,8 @@ pending_approval_requests AS (
         projectId: threadRow.value.projectId,
         botId: threadRow.value.botId,
         groupId: threadRow.value.groupId,
+        parentThreadId: threadRow.value.parentThreadId ?? null,
+        parentDelegationId: threadRow.value.parentDelegationId ?? null,
         respondingBotId: threadRow.value.respondingBotId ?? null,
         title: threadRow.value.title,
         modelSelection: threadRow.value.modelSelection,
@@ -3895,6 +4010,7 @@ pending_approval_requests AS (
     getLatestAssistantMessageIdForTurn,
     getTurnStartMessage,
     listPendingTurnStarts,
+    hasTurnStartFailure,
     getThreadDetailById,
     getThreadDetailSnapshot,
   } satisfies ProjectionSnapshotQueryShape;

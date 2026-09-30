@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
+import { ProviderInstanceId, type ServerConfig } from "@akeru/contracts";
 
 import {
   buildModelOptions,
   groupByProvider,
   resolveDefaultableModelSelection,
+  resolveModelSendBlock,
   resolveSelectableModelSelection,
 } from "./modelOptions";
 
@@ -51,7 +53,7 @@ describe("mobile model options", () => {
     ]);
   });
 
-  it("does not offer host-detected models for disconnected subscriptions", () => {
+  it("lists host-detected models for disconnected subscriptions as disabled", () => {
     const config = {
       providers: [
         {
@@ -90,7 +92,84 @@ describe("mobile model options", () => {
       },
     ]);
 
-    expect(options.map((option) => option.key)).toEqual(["grok:grok-build"]);
+    expect(
+      options.map((option) => [option.key, option.disabledReason?.split(".")[0] ?? null]),
+    ).toEqual([
+      ["codex:gpt-5.6-sol", "Codex is not connected"],
+      ["grok:grok-build", null],
+    ]);
+  });
+
+  it("keeps unavailable providers' models visible with their reason", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "claudeAgent",
+          driver: "claudeAgent",
+          enabled: true,
+          installed: true,
+          auth: { status: "unauthenticated" },
+          unavailability: "missing-login",
+          models: [{ slug: "claude-opus", name: "Claude Opus", capabilities: null }],
+        },
+        {
+          instanceId: "kimi",
+          driver: "kimi",
+          enabled: false,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [{ slug: "kimi-k3", name: "Kimi K3", capabilities: null }],
+        },
+        {
+          instanceId: "grok",
+          driver: "grok",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          unavailability: "temporary-failure",
+          models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    const options = buildModelOptions(config, null);
+
+    expect(options.map((option) => [option.key, option.disabledReason])).toEqual([
+      [
+        "claudeAgent:claude-opus",
+        "Claude is not connected. Connect your Claude account in Settings > Providers.",
+      ],
+      [
+        "kimi:kimi-k3",
+        "Kimi For Coding is turned off. Turn Kimi For Coding on in Settings > Providers, then send your message again.",
+      ],
+      ["grok:grok-build", null],
+    ]);
+  });
+
+  it("keeps a saved selection visible after its provider drops the model", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "codex",
+          driver: "codex",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    const saved = buildModelOptions(config, {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-4-retired",
+    }).find((option) => option.key === "codex:gpt-4-retired");
+
+    expect(saved?.providerLabel).toBe("Codex");
+    expect(saved?.disabledReason).toBe(
+      "gpt-4-retired is not available on Codex. Pick another model for this bot.",
+    );
   });
 
   it("normalizes a legacy fallback selection against current capabilities", () => {
@@ -212,5 +291,73 @@ describe("mobile model options", () => {
     expect(resolveDefaultableModelSelection(config, legacy)).toBeNull();
     // Offline: nothing to validate against, selection passes through.
     expect(resolveDefaultableModelSelection(null, legacy)).toBe(legacy);
+  });
+});
+
+describe("resolveModelSendBlock", () => {
+  const claude = (patch: Record<string, unknown>) =>
+    ({
+      providers: [
+        {
+          instanceId: "claudeAgent",
+          driver: "claudeAgent",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [{ slug: "claude-opus", name: "Claude Opus", isCustom: false }],
+          ...patch,
+        },
+      ],
+    }) as unknown as ServerConfig;
+  const selection = { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude-opus" };
+
+  it("blocks Send with the provider, what failed, and the next step", () => {
+    const block = resolveModelSendBlock(
+      claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
+      selection,
+    );
+    expect(block).toMatchObject({ title: "Claude is not connected", action: "providers" });
+  });
+
+  it("explains the block in the active interface language", async () => {
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+    const block = resolveModelSendBlock(
+      claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
+      selection,
+      zh.t,
+    );
+    expect(block).toMatchObject({ title: "Claude 未连接", action: "providers" });
+  });
+
+  it("names the saved model when the provider no longer offers it", () => {
+    const block = resolveModelSendBlock(claude({ models: [{ slug: "other", name: "Other" }] }), {
+      ...selection,
+    });
+    expect(block?.title).toBe("claude-opus is not available on Claude");
+  });
+
+  it("lets a temporary failure or an offline environment through", () => {
+    expect(resolveModelSendBlock(claude({ unavailability: "temporary-failure" }), selection)).toBe(
+      null,
+    );
+    expect(resolveModelSendBlock(null, selection)).toBe(null);
+    expect(resolveModelSendBlock(claude({}), selection)).toBe(null);
+  });
+
+  it("blocks a disconnected built-in subscription but keeps a custom instance usable", () => {
+    const disconnected = [
+      {
+        provider: "anthropic" as const,
+        connected: false,
+        dependentBots: [],
+        dependentRoutines: [],
+      },
+    ];
+    expect(resolveModelSendBlock(claude({}), selection, undefined, disconnected)?.title).toBe(
+      "Claude is not connected",
+    );
+    const customSelection = { ...selection, instanceId: ProviderInstanceId.make("claude_work") };
+    const custom = claude({ instanceId: customSelection.instanceId });
+    expect(resolveModelSendBlock(custom, customSelection, undefined, disconnected)).toBeNull();
   });
 });

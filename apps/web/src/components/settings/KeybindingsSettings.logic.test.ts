@@ -1,27 +1,46 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import type { ResolvedKeybindingsConfig } from "@akeru/contracts";
+
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@akeru/shared/keybindings";
 
 import {
+  buildKeybindingGroups,
   buildKeybindingRows,
   buildKeybindingCommandOptions,
   buildWhenVariableOptions,
   commandLabel,
+  describeWhenExpression,
+  isRetiredCommand,
   keybindingConflictLabels,
+  keybindingDisplayParts,
   keybindingFromKeyboardEvent,
+  keybindingGroupForCommand,
   parseWhenExpressionDraft,
   shortcutToKeybindingInput,
+  summarizeKeybindings,
   unknownWhenVariables,
   whenAstToExpression,
 } from "./KeybindingsSettings.logic";
+
+function shortcut(key: string, modifiers: { shift?: boolean; alt?: boolean } = {}) {
+  return {
+    key,
+    modKey: true,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: modifiers.alt ?? false,
+    shiftKey: modifiers.shift ?? false,
+  };
+}
 
 describe("KeybindingsSettings.logic", () => {
   it("builds searchable rows with readable key and when values", () => {
     const rows = buildKeybindingRows(
       [
         {
-          command: "terminal.toggle",
+          command: "sidebar.toggle",
           shortcut: {
-            key: "j",
+            key: "b",
             modKey: true,
             metaKey: false,
             ctrlKey: false,
@@ -34,15 +53,15 @@ describe("KeybindingsSettings.logic", () => {
           },
         },
       ] satisfies ResolvedKeybindingsConfig,
-      "terminal",
+      "sidebar",
     );
 
     expect(rows).toEqual([
       expect.objectContaining({
-        command: "terminal.toggle",
-        key: "mod+j",
+        command: "sidebar.toggle",
+        key: "mod+b",
         when: "!terminalFocus",
-        defaultKey: "mod+j",
+        defaultKey: "mod+b",
         defaultWhen: "",
         source: "Custom",
       }),
@@ -120,22 +139,190 @@ describe("KeybindingsSettings.logic", () => {
     });
   });
 
-  it("formats static and project script command labels", () => {
-    expect(commandLabel("commandPalette.toggle")).toBe("Command Palette: Toggle");
-    expect(commandLabel("themeEditor.toggle")).toBe("Theme Editor: Toggle");
-    expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
+  it("formats commands as plain-language actions", () => {
+    expect(commandLabel("commandPalette.toggle")).toBe("Open command palette");
+    expect(commandLabel("themeEditor.toggle")).toBe("Toggle theme editor");
+    expect(commandLabel("thread.jump.3")).toBe("Jump to chat 3");
+    expect(commandLabel("modelPicker.jump.2")).toBe("Pick model 2");
+  });
+
+  it("gives every default command a purpose group and a written title", () => {
+    for (const binding of DEFAULT_RESOLVED_KEYBINDINGS) {
+      expect(commandLabel(binding.command)).not.toContain(":");
+    }
+    expect(keybindingGroupForCommand("commandPalette.toggle")).toBe("general");
+    expect(keybindingGroupForCommand("thread.jump.1")).toBe("chats");
+    expect(keybindingGroupForCommand("modelPicker.jump.1")).toBe("composer");
+    expect(keybindingGroupForCommand("sidebar.toggle")).toBe("layout");
+  });
+
+  it("groups default bindings by purpose and collapses numbered series", () => {
+    const groups = buildKeybindingGroups(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, ""));
+
+    expect(groups.map((group) => group.id)).toEqual(["general", "chats", "composer", "layout"]);
+    const chats = groups.find((group) => group.id === "chats");
+    expect(chats?.rowCount).toBe(9);
+    expect(chats?.items).toEqual([
+      expect.objectContaining({
+        type: "series",
+        series: expect.objectContaining({
+          id: "thread.jump",
+          title: "Jump to chat 1–9",
+          rangeKey: "mod+1–9",
+          when: "",
+        }),
+      }),
+    ]);
+    const composer = groups.find((group) => group.id === "composer");
+    expect(composer?.items.map((item) => item.type)).toEqual(["row", "series"]);
+    expect(composer?.items[1]).toEqual(
+      expect.objectContaining({
+        series: expect.objectContaining({ title: "Pick model 1–9", when: "modelPickerOpen" }),
+      }),
+    );
+    const general = groups.find((group) => group.id === "general");
+    expect(
+      general?.items.map((item) => (item.type === "row" ? commandLabel(item.row.command) : "")),
+    ).toEqual(["Open command palette", "Toggle theme editor"]);
+    // No default depends on the removed terminal or browser preview.
+    expect(
+      groups.flatMap((group) =>
+        group.items.flatMap((item) => (item.type === "row" ? [item.row.when] : [])),
+      ),
+    ).toEqual(["", "", "", "", ""]);
+  });
+
+  it("drops the range shortcut when a series step was customized", () => {
+    const rows = buildKeybindingRows(
+      [
+        { command: "thread.jump.1", shortcut: shortcut("1") },
+        { command: "thread.jump.2", shortcut: shortcut("2", { alt: true }) },
+      ] satisfies ResolvedKeybindingsConfig,
+      "",
+    );
+    const [chats] = buildKeybindingGroups(rows);
+
+    expect(chats?.items).toEqual([
+      expect.objectContaining({
+        series: expect.objectContaining({ title: "Jump to chat 1–2", rangeKey: null }),
+      }),
+    ]);
+  });
+
+  it("shows a lone matching series step as a plain row", () => {
+    const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "jump to chat 4");
+    const groups = buildKeybindingGroups(rows);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items).toEqual([
+      expect.objectContaining({
+        type: "row",
+        row: expect.objectContaining({ command: "thread.jump.4" }),
+      }),
+    ]);
+  });
+
+  it("filters to customized and conflicting bindings and summarizes both", () => {
+    const rows = buildKeybindingRows(
+      [
+        { command: "sidebar.toggle", shortcut: shortcut("b") },
+        { command: "commandPalette.toggle", shortcut: shortcut("p") },
+        { command: "rightPanel.toggle", shortcut: shortcut("p") },
+      ] satisfies ResolvedKeybindingsConfig,
+      "",
+    );
+
+    expect(summarizeKeybindings(rows)).toEqual({ total: 3, customized: 2, conflicts: 2 });
+    expect(
+      buildKeybindingGroups(rows, "customized").flatMap((group) =>
+        group.items.map((item) => (item.type === "row" ? item.row.command : item.series.id)),
+      ),
+    ).toEqual(["commandPalette.toggle", "rightPanel.toggle"]);
+    expect(buildKeybindingGroups(rows, "conflicts").map((group) => group.id)).toEqual([
+      "general",
+      "layout",
+    ]);
+  });
+
+  it("describes when clauses in plain language", () => {
+    expect(describeWhenExpression(undefined)).toBeNull();
+    expect(describeWhenExpression({ type: "identifier", name: "previewFocus" })).toBe(
+      "When the preview is focused",
+    );
+    expect(
+      describeWhenExpression({
+        type: "not",
+        node: { type: "identifier", name: "modelPickerOpen" },
+      }),
+    ).toBe("Unless the model picker is open");
+    expect(
+      describeWhenExpression({
+        type: "and",
+        left: { type: "identifier", name: "modelPickerOpen" },
+        right: { type: "identifier", name: "previewFocus" },
+      }),
+    ).toBe("modelPickerOpen && previewFocus");
+  });
+
+  it("splits shortcuts into key caps in platform modifier order", () => {
+    expect(keybindingDisplayParts("mod+shift+k", "MacIntel")).toEqual(["⇧", "⌘", "K"]);
+    expect(keybindingDisplayParts("mod+shift+k", "Win32")).toEqual(["Ctrl", "Shift", "K"]);
+    expect(keybindingDisplayParts("mod++", "MacIntel")).toEqual(["⌘", "+"]);
+    expect(keybindingDisplayParts("mod+alt+arrowup", "Linux x86_64")).toEqual(["Ctrl", "Alt", "↑"]);
+    expect(keybindingDisplayParts("mod+1–9", "MacIntel")).toEqual(["⌘", "1–9"]);
+    expect(keybindingDisplayParts("", "MacIntel")).toEqual([]);
+  });
+
+  it("treats later scoped bindings as overrides rather than conflicts", () => {
+    const defaults = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "");
+    expect(summarizeKeybindings(defaults).conflicts).toBe(0);
+
+    // An unscoped binding added after a scoped one shadows it completely.
+    const shadowed = buildKeybindingRows(
+      [
+        {
+          command: "rightPanel.toggle",
+          shortcut: shortcut("r"),
+          whenAst: { type: "identifier", name: "previewFocus" },
+        },
+        { command: "sidebar.toggle", shortcut: shortcut("r") },
+      ] satisfies ResolvedKeybindingsConfig,
+      "",
+    );
+    expect(shadowed.map((row) => row.conflicts)).toEqual([
+      ["Toggle sidebar"],
+      ["Toggle right panel"],
+    ]);
+
+    // Drafts are appended on save, so a new scoped binding only overrides.
+    expect(
+      keybindingConflictLabels(defaults, {
+        rowId: "new",
+        key: "mod+1",
+        when: "previewFocus",
+      }),
+    ).toEqual([]);
+    expect(keybindingConflictLabels(defaults, { rowId: "new", key: "mod+k", when: "" })).toEqual([
+      "Open command palette",
+    ]);
+  });
+
+  it("searches by the written command title", () => {
+    const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "command palette");
+    expect(rows.map((row) => row.command)).toEqual(["commandPalette.toggle"]);
   });
 
   it("builds known when variable options from defaults without frontend labels", () => {
     const options = buildWhenVariableOptions();
 
-    expect(options).toEqual(
-      expect.arrayContaining(["terminalFocus", "terminalOpen", "modelPickerOpen", "true", "false"]),
-    );
+    expect(options).toEqual(expect.arrayContaining(["modelPickerOpen", "true", "false"]));
     expect(options).not.toContain("customModeActive");
+    // The terminal and browser preview were removed, so their conditions are not offered.
+    expect(options).not.toContain("terminalFocus");
+    expect(options).not.toContain("previewFocus");
   });
 
-  it("builds command options from built-in commands and resolved project bindings", () => {
+  it("builds command options from default commands without retired bindings", () => {
     const options = buildKeybindingCommandOptions([
       {
         command: "script.setup-db.run",
@@ -150,24 +337,31 @@ describe("KeybindingsSettings.logic", () => {
       },
     ] satisfies ResolvedKeybindingsConfig);
 
+    expect(options).toEqual(expect.arrayContaining(["sidebar.toggle", "rightPanel.toggle"]));
+    expect(options).not.toContain("script.setup-db.run");
+    expect(options).not.toContain("terminal.toggle");
+  });
+
+  it("offers the chat commands that run without a default shortcut and hides new local chat", () => {
+    const options = buildKeybindingCommandOptions([]);
+
     expect(options).toEqual(
-      expect.arrayContaining([
-        "chat.new",
-        "rightPanel.toggle",
-        "rightPanel.toggleMaximized",
-        "script.setup-db.run",
-      ]),
+      expect.arrayContaining(["chat.new", "thread.previous", "thread.next", "thread.settle"]),
     );
+    expect(options).not.toContain("chat.newLocal");
+    expect(isRetiredCommand("chat.newLocal")).toBe(true);
+    expect(commandLabel("thread.previous")).toBe("Previous bot");
+    expect(commandLabel("thread.next")).toBe("Next bot");
   });
 
   it("reports unknown when variables without rejecting parseable expressions", () => {
-    const parsed = parseWhenExpressionDraft("!terminalFocus && terminalFoc");
+    const parsed = parseWhenExpressionDraft("!modelPickerOpen && modelPickerOpn");
 
     expect(parsed.ok).toBe(true);
-    expect(unknownWhenVariables(parsed.ok ? parsed.value : undefined)).toEqual(["terminalFoc"]);
+    expect(unknownWhenVariables(parsed.ok ? parsed.value : undefined)).toEqual(["modelPickerOpn"]);
   });
 
-  it("marks each default shortcut for multi-binding commands as default", () => {
+  it("hides bindings for retired commands", () => {
     const rows = buildKeybindingRows(
       [
         {
@@ -198,7 +392,7 @@ describe("KeybindingsSettings.logic", () => {
       "",
     );
 
-    expect(rows.map((row) => row.source)).toEqual(["Default", "Default"]);
+    expect(rows).toEqual([]);
   });
 
   it("reports conflicting shortcuts that share an active when context", () => {
@@ -220,7 +414,7 @@ describe("KeybindingsSettings.logic", () => {
           },
         },
         {
-          command: "chat.newLocal",
+          command: "thread.settle",
           shortcut: {
             key: "n",
             modKey: true,
@@ -238,13 +432,13 @@ describe("KeybindingsSettings.logic", () => {
       "",
     );
 
-    expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
+    expect(rows[0]?.conflicts).toEqual(["Settle chat"]);
     expect(
       keybindingConflictLabels(rows, {
         rowId: rows[0]?.id ?? "",
         key: "mod+n",
         when: "",
       }),
-    ).toEqual(["Chat: New Local"]);
+    ).toEqual(["Settle chat"]);
   });
 });

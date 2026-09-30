@@ -41,6 +41,16 @@ describe("automatic bot memory review", () => {
     expect(composedInstructions).not.toContain("If nothing durable changed, do not call this tool");
   });
 
+  it("routes shared facts through the approval flow in the same review call", () => {
+    const prompt = formatAutomaticBotMemoryReview(true);
+    expect(prompt).toContain("include it as share in that same memory call");
+    expect(prompt).toContain("It may wait for the user's approval");
+    // A share-only call still counts as the one required review call.
+    expect(prompt.indexOf("include it as share")).toBeLessThan(
+      prompt.indexOf("Always call the memory tool exactly once"),
+    );
+  });
+
   it("limits a group review to the responding bot's active group file", () => {
     const prompt = formatAutomaticBotMemoryReview(true, [
       { threadId: "thread-private", groupId: null, text: "I really like cats." },

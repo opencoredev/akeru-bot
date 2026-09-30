@@ -1,11 +1,12 @@
 import {
   EnvironmentId,
   ProjectId,
+  DelegationId,
   ProviderInstanceId,
   ThreadId,
   type OrchestrationShellSnapshot,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
@@ -303,6 +304,51 @@ describe("environment entity projections", () => {
 
     expect(harness.registry.get(refsByProjectAtom).get(PROJECT_ID)).toBe(refs);
     expect(harness.registry.get(threadsAtom)).toBe(threads);
+  });
+
+  it("keeps parent-linked child threads out of navigation collections", () => {
+    const harness = makeHarness();
+    const childId = ThreadId.make("delegated-child");
+    harness.registry.set(
+      harness.shellStateAtom,
+      AsyncResult.success(
+        shellState({
+          ...SNAPSHOT,
+          threads: [
+            ...SNAPSHOT.threads,
+            {
+              ...THREAD_SHELL,
+              id: childId,
+              parentThreadId: THREAD_ID,
+              parentDelegationId: DelegationId.make("delegation-1"),
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(harness.registry.get(harness.threadShells.threadShellsAtom)).toHaveLength(2);
+    expect(
+      harness.registry
+        .get(harness.threadShells.threadShellsAtom)
+        .some((thread) => thread.id === childId),
+    ).toBe(false);
+    expect(
+      harness.registry.get(
+        harness.threadShells.threadShellAtom({
+          environmentId: ENVIRONMENT_ID,
+          threadId: childId,
+        }),
+      ),
+    ).not.toBeNull();
+
+    const projectThreads = harness.registry.get(
+      harness.threadShells.threadShellsForProjectRefsAtom([
+        { environmentId: ENVIRONMENT_ID, projectId: PROJECT_ID },
+      ]),
+    );
+    expect(projectThreads.map((thread) => thread.id)).toEqual([THREAD_ID]);
+    expect(projectThreads.some((thread) => thread.id === childId)).toBe(false);
   });
 
   it("updates only the requested thread detail and preserves untouched field identities", () => {

@@ -13,7 +13,7 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { ThreadEnvMode } from "./environment.ts";
-import { McpServerConfiguration, McpServerId } from "./mcpServer.ts";
+import { McpServerConfiguration, McpServerId, McpServerInstructions } from "./mcpServer.ts";
 import {
   BotAvatar,
   BotEngine,
@@ -28,6 +28,7 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
 } from "./orchestration.ts";
+import { ImageProviderId } from "./imageGeneration.ts";
 import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
@@ -93,6 +94,9 @@ export const PortabilityBotData = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
   usageCap: Schema.NullOr(BotUsageCap),
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
   archived: Schema.Boolean,
@@ -109,6 +113,7 @@ export type PortabilityGroupData = typeof PortabilityGroupData.Type;
 export const PortabilityMcpServerData = Schema.Struct({
   catalogId: Schema.optional(TrimmedNonEmptyString),
   configuration: McpServerConfiguration,
+  instructions: Schema.optional(McpServerInstructions),
 });
 export type PortabilityMcpServerData = typeof PortabilityMcpServerData.Type;
 

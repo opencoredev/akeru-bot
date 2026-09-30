@@ -15,10 +15,16 @@
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#050505";
         const DEFAULT_THEME = "akeru-paper";
-        const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
-        const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
-        const THEME_APPEARANCE_MODE_STORAGE_KEY = "t3code:theme-appearance-mode";
-        const THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
+        const CUSTOM_THEMES_STORAGE_KEY = "akeru:themes:v1";
+        const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "akeru:theme-follow-system";
+        const THEME_APPEARANCE_MODE_STORAGE_KEY = "akeru:theme-appearance-mode";
+        const THEME_HALVES_STORAGE_KEY = "akeru:theme-halves:v1";
+        // Theme persistence moved off the upstream `t3code:` prefix; keep
+        // reading the old keys until the runtime migrates them.
+        const LEGACY_CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
+        const LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
+        const LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY = "t3code:theme-appearance-mode";
+        const LEGACY_THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
         const SPLASH_COLORS = {
           light: {
             background: "#ffffff",
@@ -68,10 +74,10 @@
           },
           "akeru-paper": {
             light: {
-              background: "oklch(0.958531 0.009845 87.471)",
-              foreground: "oklch(0.274878 0.007028 67.529)",
+              background: "oklch(0.985 0.001 85)",
+              foreground: "oklch(0.235 0.003 70)",
               accent: "oklch(0.607447 0.134946 296.512)",
-              chrome: "oklch(0.931632 0.012785 86.832)",
+              chrome: "oklch(0.962 0.0015 85)",
             },
             dark: {
               background: "oklch(0.114918 0 0)",
@@ -80,7 +86,7 @@
               chrome: "oklch(0.177638 0 0)",
             },
           },
-          "t3-chat": {
+          "akeru-chat": {
             light: {
               background: "oklch(0.982446 0.010114 325.653)",
               foreground: "oklch(0.325698 0.116116 325.037)",
@@ -165,7 +171,7 @@
           "dark",
           "akeru-noir",
           "akeru-paper",
-          "t3-chat",
+          "akeru-chat",
           "grove",
           "ocean",
           "ember",
@@ -236,7 +242,9 @@
           if (RESERVED_THEME_IDS.includes(themeId)) return null;
           try {
             const parsed = JSON.parse(
-              window.localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY) ?? "null",
+              window.localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY) ??
+                window.localStorage.getItem(LEGACY_CUSTOM_THEMES_STORAGE_KEY) ??
+                "null",
             );
             if (!Array.isArray(parsed)) return null;
             return (
@@ -248,13 +256,16 @@
         };
 
         try {
-          const storedTheme = window.localStorage.getItem("t3code:theme");
+          const storedTheme =
+            window.localStorage.getItem("akeru:theme") ??
+            window.localStorage.getItem("t3code:theme");
           const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           // Older builds stored the dark T3 Chat palette as its own theme id
           // and every maintainer theme under a t3- prefix; keep those
           // preferences readable. Mirrors the runtime's legacy alias table.
           const LEGACY_THEME_IDS = {
-            "t3-chat-dark": "t3-chat",
+            "t3-chat": "akeru-chat",
+            "t3-chat-dark": "akeru-chat",
             "t3-grove": "grove",
             "t3-ocean": "ocean",
             "t3-ember": "ember",
@@ -285,10 +296,12 @@
           const isThemed = isKnownTheme && themeModes !== null;
           const baseAppearance = customTheme ? customTheme.appearance : "light";
           const systemMode = prefersDark ? "dark" : "light";
-          const storedAppearanceMode = window.localStorage.getItem(
-            THEME_APPEARANCE_MODE_STORAGE_KEY,
-          );
-          const storedFollowSystem = window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY);
+          const storedAppearanceMode =
+            window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) ??
+            window.localStorage.getItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
+          const storedFollowSystem =
+            window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY) ??
+            window.localStorage.getItem(LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY);
           // Mirrors the runtime's getThemePreferenceMode fallback: a bare
           // "light"/"dark" preference names its own mode.
           const preferenceMode =
@@ -310,7 +323,9 @@
           let halfCustomTheme = null;
           try {
             const halvesRaw = JSON.parse(
-              window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ?? "null",
+              window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
+                window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) ??
+                "null",
             );
             const candidate = isRecord(halvesRaw) ? halvesRaw[wantedMode] : null;
             if (typeof candidate === "string") {

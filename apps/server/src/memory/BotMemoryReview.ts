@@ -36,6 +36,7 @@ export function formatAutomaticBotMemoryReview(
       ? "GROUP.md is for durable context useful only in this group. Never read or change another bot's group memory."
       : "Never try to access group memory from a private chat.",
     "Use the memory tool to add, replace, or remove entries only when the documents need a real change. Consolidate stale or overlapping entries.",
+    "If the user asked for something to be remembered for the whole project, group, or workspace, include it as share in that same memory call. It may wait for the user's approval, so never share the same fact twice.",
     "Do not save transient task progress, one-off requests, temporary plans, raw conversation summaries, secrets, or facts that are easy to rediscover.",
     ...(inputs.length > 0
       ? [

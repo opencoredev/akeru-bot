@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { SymbolView } from "../../components/AppSymbol";
 import { Pressable, View } from "react-native";
 
@@ -28,10 +29,11 @@ function FallbackHeaderButton(props: {
 }
 
 export function SidebarHeaderActions(props: SidebarHeaderActionsProps) {
+  const { t } = useMobileI18n();
   return (
     <View className="flex-row items-center gap-0.5">
       <FallbackHeaderButton
-        accessibilityLabel="Open settings"
+        accessibilityLabel={t("Open settings")}
         icon="gearshape"
         onPress={props.onOpenSettings}
       />

@@ -14,6 +14,7 @@ export interface NativeMarkdownTextRun {
   readonly fileIcon?: MarkdownFileIcon;
   readonly skillName?: string;
   readonly skillLabel?: string;
+  readonly skillIcon?: string;
   readonly role?:
     | "body"
     | "heading"
@@ -141,6 +142,7 @@ function sameRunStyle(left: NativeMarkdownTextRun, right: NativeMarkdownTextRun)
     left.fileIcon === right.fileIcon &&
     left.skillName === right.skillName &&
     left.skillLabel === right.skillLabel &&
+    left.skillIcon === right.skillIcon &&
     left.role === right.role &&
     left.headingLevel === right.headingLevel &&
     left.depth === right.depth &&
@@ -191,8 +193,6 @@ function appendRun(
   return runs;
 }
 
-const SKILL_TOKEN_REGEX = /(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)(?=\s|$)/g;
-
 function formatSkillLabel(skill: SelectableMarkdownSkill): string {
   const displayName = skill.displayName?.trim();
   if (displayName) {
@@ -205,14 +205,23 @@ function formatSkillLabel(skill: SelectableMarkdownSkill): string {
     .join(" ");
 }
 
-function decorateSkillRuns(
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function decorateSkillRuns(
   runs: ReadonlyArray<NativeMarkdownTextRun>,
   skills: ReadonlyArray<SelectableMarkdownSkill>,
 ): ReadonlyArray<NativeMarkdownTextRun> {
   if (skills.length === 0) {
     return runs;
   }
-  const skillByName = new Map(skills.map((skill) => [skill.name, skill]));
+  const skillByToken = new Map(skills.map((skill) => [skill.token ?? `$${skill.name}`, skill]));
+  const literalTokens = skills.flatMap((skill) => (skill.token ? [escapeRegExp(skill.token)] : []));
+  const tokenRegex = new RegExp(
+    `(^|\\s)(\\$[a-zA-Z][a-zA-Z0-9:_-]*${literalTokens.map((token) => `|${token}`).join("")})(?=\\s|$)`,
+    "g",
+  );
   const decorated: NativeMarkdownTextRun[] = [];
 
   for (const run of runs) {
@@ -223,23 +232,24 @@ function decorateSkillRuns(
 
     let cursor = 0;
     let matched = false;
-    for (const match of run.text.matchAll(SKILL_TOKEN_REGEX)) {
+    for (const match of run.text.matchAll(tokenRegex)) {
       const prefix = match[1] ?? "";
-      const name = match[2] ?? "";
-      const skill = skillByName.get(name);
+      const token = match[2] ?? "";
+      const skill = skillByToken.get(token);
       if (!skill) {
         continue;
       }
       const start = (match.index ?? 0) + prefix.length;
-      const end = start + name.length + 1;
+      const end = start + token.length;
       if (start > cursor) {
         decorated.push({ ...run, text: run.text.slice(cursor, start) });
       }
       decorated.push({
         ...run,
         text: run.text.slice(start, end),
-        skillName: name,
+        skillName: skill.name,
         skillLabel: formatSkillLabel(skill),
+        ...(skill.icon ? { skillIcon: skill.icon } : {}),
       });
       cursor = end;
       matched = true;

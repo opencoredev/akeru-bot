@@ -5,24 +5,54 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterEach, assert, describe, expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import { vi } from "vite-plus/test";
-import { BotId, GroupId, type AkeruMemoryDocument } from "@t3tools/contracts";
+import { BotId, GroupId, type AkeruMemoryDocument } from "@akeru/contracts";
 
 import {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
   AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS,
   BOT_MEMORY_ENTRY_DELIMITER,
   BotMemoryStore,
+  acquireBotMemoryFileLock,
 } from "./BotMemory.ts";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, open: vi.fn(actual.open) };
+  return { ...actual, open: vi.fn(actual.open), readFile: vi.fn(actual.readFile) };
 });
 
 const NodeFS = NodeFSP;
 
 const directories: string[] = [];
+
+// Replaces a held lock file with another owner's record, as a stale-lock
+// recovery elsewhere would after deciding this owner was gone.
+async function takeLockFromOwner(lockPath: string) {
+  await NodeFS.unlink(lockPath);
+  await NodeFS.writeFile(
+    lockPath,
+    JSON.stringify({
+      pid: process.pid,
+      token: "other-owner",
+      heartbeatAtMs: DateTime.toEpochMillis(DateTime.nowUnsafe()),
+    }),
+    { mode: 0o600 },
+  );
+}
+
+// Loses the next acquired memory lock to another owner right after it is created.
+async function loseNextLock() {
+  const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+  vi.mocked(NodeFS.open).mockImplementationOnce(async (...args) => {
+    const handle = await actual.open(...args);
+    await takeLockFromOwner(String(args[0]));
+    return handle;
+  });
+}
 
 async function fixture() {
   const directory = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-bot-memory-"));
@@ -612,6 +642,106 @@ describe("BotMemoryStore", () => {
     assert.equal((await store.readDocument(access, "memory")).content, "Newer notes.");
   });
 
+  it.effect("releases the lock when its scoped fiber is interrupted", () =>
+    Effect.gen(function* () {
+      const store = yield* Effect.promise(() => fixture());
+      const filePath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md");
+      const acquired = yield* Deferred.make<void>();
+      const fiber = yield* Effect.forkChild(
+        Effect.scoped(
+          Effect.gen(function* () {
+            yield* Effect.promise(() =>
+              NodeFS.mkdir(NodePath.dirname(filePath), { recursive: true }),
+            );
+            yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
+            yield* Deferred.succeed(acquired, undefined);
+            return yield* Effect.never;
+          }),
+        ),
+      );
+      yield* Deferred.await(acquired);
+      yield* Fiber.interrupt(fiber);
+      yield* Effect.promise(() =>
+        expect(NodeFS.stat(`${filePath}.lock`)).rejects.toMatchObject({ code: "ENOENT" }),
+      );
+    }),
+  );
+
+  it.each(["", '{"pid":'])(
+    "quarantines an abandoned partial lock record (%j) past the stale threshold",
+    async (partialRecord) => {
+      const store = await fixture();
+      const lockPath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock");
+      await NodeFS.mkdir(NodePath.dirname(lockPath), { recursive: true });
+      // A writer crashed after open(wx) and before its record was synced.
+      await NodeFS.writeFile(lockPath, partialRecord, { mode: 0o600 });
+      const abandonedAt = DateTime.toEpochMillis(DateTime.nowUnsafe()) / 1000 - 60;
+      await NodeFS.utimes(lockPath, abandonedAt, abandonedAt);
+
+      await store.replaceDocument(privateAccess(), "memory", "Recovered notes.");
+
+      assert.equal(
+        (await store.readDocument(privateAccess(), "memory")).content,
+        "Recovered notes.",
+      );
+      await expect(NodeFS.stat(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
+    },
+  );
+
+  it("does not replace a file after losing its lock while staging the write", async () => {
+    const store = await fixture();
+    const lockPath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock");
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    let lockReads = 0;
+    let stealOnRead = Number.POSITIVE_INFINITY;
+    vi.mocked(NodeFS.readFile).mockImplementation(async (...args) => {
+      const contents = await actual.readFile(...args);
+      if (args[0] === lockPath && ++lockReads === stealOnRead) await takeLockFromOwner(lockPath);
+      return contents;
+    });
+    try {
+      await store.replaceDocument(privateAccess(), "memory", "Kept note.");
+      // The last ownership check passes, then another writer takes the lock.
+      stealOnRead = lockReads * 2 - 1;
+      await expect(
+        store.replaceDocument(privateAccess(), "memory", "Stale note."),
+      ).rejects.toMatchObject({ code: "lock-lost" });
+    } finally {
+      vi.mocked(NodeFS.readFile).mockImplementation(actual.readFile);
+    }
+    assert.include(await NodeFS.readFile(lockPath, "utf8"), "other-owner");
+    await NodeFS.unlink(lockPath);
+    assert.equal((await store.readDocument(privateAccess(), "memory")).content, "Kept note.");
+  });
+
+  it("waits on a fresh partial lock record instead of quarantining it", async () => {
+    const store = await fixture();
+    const lockPath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md.lock");
+    await NodeFS.mkdir(NodePath.dirname(lockPath), { recursive: true });
+    await NodeFS.writeFile(lockPath, '{"pid":', { mode: 0o600 });
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const inspectedTwice = Promise.withResolvers<void>();
+    let lockReads = 0;
+    vi.mocked(NodeFS.readFile).mockImplementation(async (...args) => {
+      if (args[0] === lockPath && ++lockReads === 2) inspectedTwice.resolve();
+      return actual.readFile(...args);
+    });
+    try {
+      const write = store.replaceDocument(privateAccess(), "memory", "Written after release.");
+      await inspectedTwice.promise;
+      // The waiter has inspected the in-progress record and left it alone.
+      assert.equal(await NodeFS.readFile(lockPath, "utf8"), '{"pid":');
+      await NodeFS.unlink(lockPath);
+      await write;
+    } finally {
+      vi.mocked(NodeFS.readFile).mockImplementation(actual.readFile);
+    }
+    assert.equal(
+      (await store.readDocument(privateAccess(), "memory")).content,
+      "Written after release.",
+    );
+  });
+
   it.each(["writeFile", "sync"] as const)(
     "cleans up a failed lock %s before retry",
     async (method) => {
@@ -679,6 +809,83 @@ describe("BotMemoryStore", () => {
     assert.isNotNull(archivedPath);
     assert.equal(await NodeFS.readFile(archivedPath!, "utf8"), "Recoverable group note.");
     assert.equal((await store.readDocument(access, "group")).content, "");
+  });
+
+  it("keeps a corrupt review state in place when its lock is lost", async () => {
+    const store = await fixture();
+    const botId = BotId.make("bot-corrupt-lost-lock");
+    const reservation = await store.reserveReviewCadence(botId);
+    await store.settleReviewCadence(reservation, false);
+    const cadencePath = NodePath.join(store.memoryRoot, "bots", botId, ".memory-review.json");
+    await NodeFS.writeFile(cadencePath, "{", { mode: 0o600 });
+
+    await loseNextLock();
+    await expect(store.readReviewCadence(botId)).rejects.toMatchObject({ code: "lock-lost" });
+
+    assert.equal(await NodeFS.readFile(cadencePath, "utf8"), "{");
+    const files = await NodeFS.readdir(NodePath.dirname(cadencePath));
+    assert.isUndefined(files.find((file) => file.startsWith(".memory-review.corrupt-")));
+  });
+
+  it("keeps another owner's lock when lock initialization fails", async () => {
+    const store = await fixture();
+    const botId = BotId.make("bot-init-lost-lock");
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    let lockPath = "";
+    vi.mocked(NodeFS.open).mockImplementationOnce(async (...args) => {
+      const handle = await actual.open(...args);
+      lockPath = String(args[0]);
+      await takeLockFromOwner(lockPath);
+      handle.writeFile = async () => {
+        throw new Error("disk full");
+      };
+      return handle;
+    });
+
+    await expect(store.readReviewCadence(botId)).rejects.toBeDefined();
+    assert.include(await NodeFS.readFile(lockPath, "utf8"), "other-owner");
+  });
+
+  it("does not archive a group file after its lock is lost", async () => {
+    const store = await fixture();
+    const access = groupAccess();
+    await store.mutate({
+      ...access,
+      target: "group",
+      operations: [{ action: "add", content: "Kept group note." }],
+    });
+
+    await loseNextLock();
+    await expect(store.archiveGroup(access.botId, access.groupId!)).rejects.toMatchObject({
+      code: "lock-lost",
+    });
+
+    assert.equal((await store.readDocument(access, "group")).content, "Kept group note.");
+    await expect(NodeFS.stat(NodePath.join(store.memoryRoot, "archive"))).resolves.toBeDefined();
+    assert.deepEqual(
+      await NodeFS.readdir(
+        NodePath.join(store.memoryRoot, "archive", "bots", access.botId, "groups", access.groupId!),
+      ),
+      [],
+    );
+  });
+
+  it("does not mark a migration complete after its lock is lost mid-migration", async () => {
+    const store = await fixture();
+    const botId = BotId.make("bot-migration-lost-lock");
+    const markerPath = NodePath.join(
+      store.memoryRoot,
+      "bots",
+      botId,
+      ".migrations",
+      "import-v1.done",
+    );
+
+    await expect(
+      store.runMigrationOnce(botId, "import-v1", () => takeLockFromOwner(`${markerPath}.lock`)),
+    ).rejects.toMatchObject({ code: "lock-lost" });
+
+    assert.isFalse(await store.isMigrationComplete(botId, "import-v1"));
   });
 
   it("rejects path traversal identifiers", async () => {

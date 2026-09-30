@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useEffect } from "react";
+import type { EnvironmentId } from "@akeru/contracts";
+import * as Option from "effect/Option";
+import { useCallback, useEffect, useMemo } from "react";
 
 import {
   botEnvironment,
@@ -8,8 +9,10 @@ import {
   environmentGroupsAtom,
   environmentRosterLoadedAtom,
 } from "../../state/bots";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../state/environments";
+import { environmentShell } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { type RosterLoadState, resolveRosterLoadState } from "./rosterRouteSelection";
 import { useRosterStore } from "./rosterStore";
 import type { BotAvatar } from "./types";
 
@@ -38,6 +41,23 @@ export function useServerRosterSync(): void {
   }, [bots, environmentId, groups, loaded]);
 }
 
+/**
+ * What the roster shows before the primary environment's first snapshot:
+ * loading, or a failure with the reason, so a roster that never arrives is
+ * never a blank list.
+ */
+export function useRosterLoadState(): RosterLoadState {
+  const environmentId = usePrimaryEnvironmentId();
+  const shellError = useAtomValue(
+    environmentShell.stateValueAtom(environmentId ?? NO_ENVIRONMENT),
+  ).error;
+  const connection = useEnvironmentConnectionState(environmentId).data;
+  return useMemo(
+    () => resolveRosterLoadState({ shellError: Option.getOrNull(shellError), connection }),
+    [connection, shellError],
+  );
+}
+
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
@@ -57,6 +77,32 @@ export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promis
       }
       useRosterStore.getState().setBotAvatar(botId, avatar);
       return true;
+    },
+    [bots, environmentId, updateBot],
+  );
+}
+
+/**
+ * Moves a bot to Auto Review after the user picks "Enable Auto Review" on an
+ * approval. The server already switched the live session; this keeps later turns there.
+ */
+export function useEnableBotAutoReview(): (botId: string) => Promise<boolean> {
+  const environmentId = usePrimaryEnvironmentId();
+  const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
+  const updateBot = useAtomCommand(botEnvironment.update, {
+    reportFailure: false,
+  });
+
+  return useCallback(
+    async (botId: string) => {
+      const serverBot = bots.find((candidate) => candidate.id === botId);
+      if (environmentId === null || serverBot === undefined) return false;
+      if (serverBot.runtimeMode === "auto") return true;
+      const result = await updateBot({
+        environmentId,
+        input: { botId: serverBot.id, runtimeMode: "auto" },
+      });
+      return result._tag === "Success";
     },
     [bots, environmentId, updateBot],
   );

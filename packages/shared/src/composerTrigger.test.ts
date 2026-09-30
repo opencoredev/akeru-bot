@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { serializeComposerFileLink, serializeComposerMentionPath } from "./composerTrigger.ts";
+import {
+  detectComposerTrigger,
+  serializeComposerFileLink,
+  serializeComposerMentionPath,
+} from "./composerTrigger.ts";
 
 describe("serializeComposerMentionPath", () => {
   it("keeps simple mention paths unquoted", () => {
@@ -39,5 +43,27 @@ describe("serializeComposerFileLink", () => {
     expect(serializeComposerFileLink("@scope/package.json")).toBe(
       "[package.json](@scope/package.json)",
     );
+  });
+});
+
+describe("detectComposerTrigger", () => {
+  it("detects each trigger kind at the caret", () => {
+    expect(detectComposerTrigger("open @bro", 9)).toMatchObject({
+      kind: "path",
+      query: "bro",
+      rangeStart: 5,
+      rangeEnd: 9,
+    });
+    expect(detectComposerTrigger("see @chat:rel", 15)).toMatchObject({
+      kind: "path",
+      query: "chat:rel",
+    });
+    expect(detectComposerTrigger("use $rev", 8)).toMatchObject({ kind: "skill", query: "rev" });
+    expect(detectComposerTrigger("/mod", 4)).toMatchObject({ kind: "slash-command", query: "mod" });
+  });
+
+  it("stays closed for plain text and email addresses", () => {
+    expect(detectComposerTrigger("hello there", 11)).toBeNull();
+    expect(detectComposerTrigger("mail me@browser.dev", 19)).toBeNull();
   });
 });

@@ -15,12 +15,12 @@
  *
  * @module provider/Drivers/GrokSkills
  */
-import type { GrokSettings, ServerProviderSkill } from "@t3tools/contracts";
+import type { GrokSettings, ServerProviderSkill } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ChildProcess } from "effect/unstable/process";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { resolveSpawnCommand } from "@akeru/shared/shell";
 
 import { spawnAndCollect } from "../providerSnapshot.ts";
 
@@ -79,12 +79,14 @@ function decodeGrokInspectSkills(stdout: string): ReadonlyArray<ServerProviderSk
     }
     const scope = typeof source?.type === "string" ? source.type.trim() : "";
     const description = typeof record.description === "string" ? record.description.trim() : "";
+    const icon = typeof record.icon === "string" ? record.icon.trim() : "";
     skillsByName.set(name, {
       name,
       path,
       enabled: record.userInvocable !== false,
       ...(scope ? { scope } : {}),
       ...(description ? { description } : {}),
+      ...(icon ? { icon } : {}),
     });
   }
 

@@ -31,7 +31,7 @@ import type {
   RuntimeMode,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Effect from "effect/Effect";
@@ -78,6 +78,8 @@ export interface ProjectionThreadRuntimeContext {
   readonly botId: BotId | null;
   readonly groupId: GroupId | null;
   readonly respondingBotId: BotId | null;
+  /** The chat that started this one, such as a worker's bot chat. Optional for test doubles. */
+  readonly parentThreadId?: ThreadId | null;
   readonly runtimeMode: RuntimeMode;
 }
 
@@ -276,6 +278,16 @@ export interface ProjectionSnapshotQueryShape {
     ReadonlyArray<ProjectionPendingTurnStart>,
     ProjectionRepositoryError
   >;
+
+  /**
+   * Whether the turn start a thread requested at this time recorded a
+   * `provider.turn.start.failed` activity. Startup recovery uses it to find
+   * delegated results acknowledged by a turn that never reached its provider.
+   */
+  readonly hasTurnStartFailure?: (input: {
+    readonly threadId: ThreadId;
+    readonly requestedAt: string;
+  }) => Effect.Effect<boolean, ProjectionRepositoryError>;
 
   /**
    * Read a single active thread detail snapshot by id.

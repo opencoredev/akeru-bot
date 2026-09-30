@@ -16,9 +16,9 @@
   - changed-files:
       - any-glob-to-any-file:
           - "apps/web/src/components/plugins/**"
-          - "apps/web/src/components/settings/PluginsSettings.*"
           - "apps/web/src/components/sidebar/SidebarChrome.*"
-          - "apps/web/src/components/roster/BotToolsSheet.*"
+          - "apps/web/src/components/roster/BotToolsSection.*"
+          - "apps/web/src/components/roster/botTools.logic.*"
           - "apps/web/src/pluginsDialogStore.ts"
           - "apps/web/src/pluginsDialogStore.test.ts"
           - "docs/user/plugins.md"

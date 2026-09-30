@@ -14,9 +14,9 @@ import {
   SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD,
   SkillId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
-import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
+import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@akeru/contracts";
 
 import { applyShellStreamEvent } from "./shellReducer.ts";
 
@@ -30,15 +30,15 @@ const baseSnapshot: OrchestrationShellSnapshot = {
   updatedAt: "2026-04-01T00:00:00.000Z",
 };
 
-const stubDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord)({
+const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+
+const stubDelegation = decodeDelegationRecord({
   delegationId: "delegation-1",
   parentDelegationId: null,
   parentBotId: "bot-parent",
   childBotId: "bot-child",
   parentThreadId: "thread-parent",
-  childThreadId: null,
   parentTurnId: "turn-parent",
-  childTurnId: null,
   ancestorBotIds: ["bot-parent"],
   depth: 1,
   task: "Compare the release options.",
@@ -54,16 +54,29 @@ const stubDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord)({
     disabledMcpServerIds: [],
     approvalCeiling: "none",
   },
-  state: "queued",
+  phase: { _tag: "Queued" },
   billedBotId: "bot-child",
-  result: null,
-  failure: null,
   keep: false,
   createdAt: "2026-04-01T00:00:00.000Z",
   updatedAt: "2026-04-01T00:00:00.000Z",
-  startedAt: null,
-  completedAt: null,
 });
+
+const completedDelegation = (delegationId: string, createdAt: string, updatedAt: string) =>
+  decodeDelegationRecord({
+    ...stubDelegation,
+    delegationId,
+    createdAt,
+    updatedAt,
+    phase: {
+      _tag: "Completed",
+      childThreadId: "thread-child",
+      childTurnId: null,
+      startedAt: createdAt,
+      completedAt: updatedAt,
+      result: { summary: "Finished", childThreadId: "thread-child", childTurnId: null },
+      acknowledgedAt: null,
+    },
+  });
 
 const stubProject = {
   id: ProjectId.make("project-1"),
@@ -99,6 +112,7 @@ const stubBot = {
   sandbox: "local" as const,
   runtimeMode: "full-access" as const,
   usageCap: null,
+  imageProvider: null,
   voiceEnabled: false,
   channelBindings: [],
   groupId: null,
@@ -161,6 +175,7 @@ const stubRoutine = {
   projectId: stubProject.id,
   sandbox: "local" as const,
   approvalPolicy: "approval-required" as const,
+  delegateToBotId: null,
   procedureVersion: 1,
   approvalVersion: 1,
   enabled: true,
@@ -322,14 +337,21 @@ describe("applyShellStreamEvent", () => {
       expect(updated.snapshotSequence).toBe(2);
     });
 
-    it("removes a routine with its run history", () => {
+    it("keeps a deleted routine's receipt source and run history", () => {
+      const receiptSource = {
+        id: stubRoutine.id,
+        targetThreadId: stubRoutine.targetThreadId,
+        job: stubRoutine.job,
+        createdAt: stubRoutine.createdAt,
+      };
       const next = applyShellStreamEvent(
         { ...baseSnapshot, routines: [stubRoutine], routineRuns: [stubRoutineRun] },
-        { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id },
+        { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id, receiptSource },
       );
 
       expect(next.routines).toEqual([]);
-      expect(next.routineRuns).toEqual([]);
+      expect(next.routineReceiptSources).toEqual([receiptSource]);
+      expect(next.routineRuns).toEqual([stubRoutineRun]);
     });
   });
 
@@ -416,22 +438,40 @@ describe("applyShellStreamEvent", () => {
       const updated = applyShellStreamEvent(added, {
         kind: "delegation-upserted",
         sequence: 10,
-        delegation: { ...stubDelegation, state: "running", startedAt: stubDelegation.createdAt },
+        delegation: {
+          ...stubDelegation,
+          phase: {
+            _tag: "Running",
+            childThreadId: ThreadId.make("thread-child"),
+            childTurnId: null,
+            startedAt: stubDelegation.createdAt,
+            progress: null,
+          },
+        },
       });
 
       expect(updated.delegations).toHaveLength(1);
-      expect(updated.delegations[0]?.state).toBe("running");
+      expect(updated.delegations[0]?.phase._tag).toBe("Running");
       expect(updated.snapshotSequence).toBe(10);
     });
 
     it("keeps only the newest finished delegations per parent thread", () => {
-      const finished = (index: number) => ({
+      const finished = (index: number) =>
+        completedDelegation(
+          `delegation-finished-${index}`,
+          stubDelegation.createdAt,
+          `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
+        );
+      const open = {
         ...stubDelegation,
-        delegationId: DelegationId.make(`delegation-finished-${index}`),
-        state: "completed" as const,
-        updatedAt: `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
-      });
-      const open = { ...stubDelegation, state: "running" as const };
+        phase: {
+          _tag: "Running" as const,
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+          startedAt: stubDelegation.createdAt,
+          progress: null,
+        },
+      };
       const otherThread = {
         ...finished(0),
         delegationId: DelegationId.make("delegation-other-thread"),
@@ -465,13 +505,12 @@ describe("applyShellStreamEvent", () => {
     });
 
     it("breaks finished delegation ties the same way as the shell snapshot", () => {
-      const tied = (index: number) => ({
-        ...stubDelegation,
-        delegationId: DelegationId.make(`delegation-tied-${String(index).padStart(2, "0")}`),
-        state: "completed" as const,
-        createdAt: `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
-        updatedAt: "2026-04-02T00:00:00.000Z",
-      });
+      const tied = (index: number) =>
+        completedDelegation(
+          `delegation-tied-${String(index).padStart(2, "0")}`,
+          `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+          "2026-04-02T00:00:00.000Z",
+        );
       let snapshot = baseSnapshot;
       // Arrive newest-created first, so arrival order disagrees with the ranking.
       for (let index = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD; index >= 0; index--) {

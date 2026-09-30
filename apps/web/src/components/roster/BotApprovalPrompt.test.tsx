@@ -2,7 +2,7 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -39,7 +39,8 @@ describe("BotApprovalPrompt", () => {
     expect(markup).not.toContain("max-w-xl");
     expect(markup).toContain("rounded-t-[1.65rem]");
     expect(markup).toContain("border-b-transparent");
-    expect(markup).toContain("bg-primary");
+    expect(markup).toContain("bg-card");
+    expect(markup).toContain("bg-foreground text-background");
     expect(markup.match(/disabled=""/g)).toHaveLength(2);
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("Could not answer approval.");
@@ -54,9 +55,9 @@ describe("BotApprovalPrompt", () => {
           createdAt: "2026-08-27T00:00:00.000Z",
           args: { command: "pwd" },
           options: [
-            { decision: "acceptForSession", label: "Allow for session" },
-            { decision: "accept", label: "Allow" },
             { decision: "decline", label: "Decline" },
+            { decision: "acceptAlways", label: "Enable Auto Review" },
+            { decision: "accept", label: "Allow" },
           ],
         }}
         pendingCount={1}
@@ -70,6 +71,42 @@ describe("BotApprovalPrompt", () => {
     expect(markup).toContain("Allow once");
     expect(markup).toContain("Never");
     expect(markup).not.toContain("Auto Review paused");
+  });
+
+  it("shows the routine purpose and schedule once, with neutral actions", () => {
+    const markup = renderToStaticMarkup(
+      <BotApprovalPrompt
+        approval={{
+          requestId: ApprovalRequestId.make("review-routine-quote"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-09-27T00:00:00.000Z",
+          detail: "Review routine",
+          args: {
+            name: "Morning quote",
+            instructions: "Send one random positive quote.",
+            schedule: { kind: "daily", time: "08:00" },
+            timezone: "Europe/London",
+          },
+          options: [
+            { decision: "accept", label: "Create routine" },
+            { decision: "decline", label: "Cancel" },
+          ],
+        }}
+        pendingCount={1}
+        responding={false}
+        error={null}
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(markup.match(/Review routine/g)).toHaveLength(1);
+    expect(markup).toContain("Morning quote");
+    expect(markup).toContain("Every day at 08:00");
+    expect(markup).toContain("Europe/London");
+    expect(markup).toContain("Send one random positive quote.");
+    expect(markup).not.toContain("New routine");
+    expect(markup).not.toContain("bg-primary");
   });
 
   it.each([

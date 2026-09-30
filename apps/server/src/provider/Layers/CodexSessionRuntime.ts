@@ -16,9 +16,9 @@ import {
   RuntimeMode,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+} from "@akeru/contracts";
+import { resolveSpawnCommand } from "@akeru/shared/shell";
+import { normalizeModelSlug } from "@akeru/shared/model";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -569,13 +569,13 @@ function buildCodexCollaborationMode(input: {
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL;
   const reasoningEffort = input.effort ?? "medium";
+  // Plan mode is retired; every turn runs in Codex's default collaboration mode.
   return {
-    mode: input.interactionMode,
+    mode: "default",
     settings: {
       model,
       reasoning_effort: reasoningEffort,
       developer_instructions: buildCodexDeveloperInstructions(
-        input.interactionMode,
         { model, reasoningEffort },
         input.browserToolsAvailable ?? true,
       ),

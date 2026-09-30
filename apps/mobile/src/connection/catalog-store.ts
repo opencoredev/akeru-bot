@@ -2,8 +2,8 @@ import {
   ConnectionCatalogDocument,
   type ConnectionCatalogDocument as ConnectionCatalogDocumentType,
   EMPTY_CONNECTION_CATALOG_DOCUMENT,
-} from "@t3tools/client-runtime/platform";
-import { ConnectionTransientError } from "@t3tools/client-runtime/connection";
+} from "@akeru/client-runtime/platform";
+import { ConnectionTransientError } from "@akeru/client-runtime/connection";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -13,8 +13,11 @@ import * as Semaphore from "effect/Semaphore";
 import * as MobileSecureStorage from "../persistence/mobile-secure-storage";
 import { migrateLegacyConnectionCatalog } from "./migration";
 
-export const CONNECTION_CATALOG_KEY = "t3code.connection-catalog.v1";
+export const CONNECTION_CATALOG_KEY = "akeru.connection-catalog.v1";
 export const LEGACY_CONNECTIONS_KEY = "t3code.connections";
+// The catalog itself shipped under the `t3code` prefix; checked once before
+// the legacy flat-connections migration runs.
+const LEGACY_CATALOG_KEY = "t3code.connection-catalog.v1";
 
 function catalogError(operation: string, cause: unknown) {
   return new ConnectionTransientError({
@@ -60,6 +63,18 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
   const lock = yield* Semaphore.make(1);
 
   const loadLegacyCatalog = Effect.fn("mobile.connectionStorage.loadLegacyCatalog")(function* () {
+    // Pre-rebrand catalogs migrate as-is: the document shape did not change.
+    const rebrandedRaw = yield* getItem(LEGACY_CATALOG_KEY);
+    if (rebrandedRaw !== null && rebrandedRaw.trim() !== "") {
+      const decoded = yield* Effect.result(decodeCatalog(rebrandedRaw));
+      if (decoded._tag === "Success") {
+        yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
+        yield* deleteItem(LEGACY_CATALOG_KEY).pipe(Effect.ignore);
+        return decoded.success;
+      }
+      yield* Effect.logWarning("Discarding corrupt legacy mobile connection catalog");
+      yield* deleteItem(LEGACY_CATALOG_KEY);
+    }
     const legacyRaw = yield* getItem(LEGACY_CONNECTIONS_KEY);
     const catalog =
       legacyRaw === null || legacyRaw.trim() === ""
@@ -75,7 +90,7 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
     if (legacyRaw !== null && legacyRaw.trim() !== "") {
       const encoded = yield* encodeCatalog(catalog);
       yield* setItem(CONNECTION_CATALOG_KEY, encoded);
-      yield* deleteItem(LEGACY_CONNECTIONS_KEY);
+      yield* deleteItem(LEGACY_CONNECTIONS_KEY).pipe(Effect.ignore);
     }
     return catalog;
   });

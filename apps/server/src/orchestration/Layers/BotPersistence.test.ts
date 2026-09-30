@@ -9,7 +9,7 @@ import {
   ProviderInstanceId,
   RoutineId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -91,6 +91,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         connectorDependencies: [],
         sandbox: "local",
         approvalPolicy: "approval-required",
+        delegateToBotId: specialistBotId,
         createdAt,
       });
       yield* engine.dispatch({
@@ -127,6 +128,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
+        imageProvider: "chatgpt",
         personalityTone: 50,
         voiceEnabled: true,
       });
@@ -142,6 +144,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       assert.equal(archived.routines?.[0]?.lifecycle, "paused");
       assert.equal(archived.routines?.[0]?.enabled, false);
       assert.equal(archived.routines?.[0]?.nextRunAt, null);
+      assert.equal(archived.routines?.[0]?.delegateToBotId, specialistBotId);
 
       yield* engine.dispatch({
         type: "bot.restore",
@@ -202,6 +205,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         sandbox: null,
         runtimeMode: "approval-required",
         usageCap: { unit: "tokens", limit: 50_000 },
+        imageProvider: "chatgpt",
         personalityTone: 50,
         voiceEnabled: true,
         channelBindings: [],
@@ -244,6 +248,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const rebuiltBot = rebuilt.bots.find((bot) => bot.id === botId);
       assert.equal(rebuiltBot?.name, "Pathfinder");
       assert.equal(rebuiltBot?.voiceEnabled, true);
+      assert.equal(rebuiltBot?.imageProvider, "chatgpt");
       assert.deepEqual(rebuiltBot?.engine, {
         provider: "codex",
         model: "gpt-5.6-sol",
@@ -255,6 +260,52 @@ it.layer(TestLayer)("bot persistence", (it) => {
       assert.equal(rebuiltBot?.groupId, null);
       assert.equal(rebuiltBot?.archivedAt, null);
       assert.deepEqual(rebuilt.groups, []);
+    }),
+  );
+
+  it.effect("persists a nullable per-bot image provider selection", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const botId = BotId.make("bot-image-provider");
+      const createdAt = "2026-01-02T00:00:00.000Z";
+
+      // No selection on create decodes as null — "use the global default" —
+      // and is independent of the chat engine (a Claude bot may use ChatGPT).
+      yield* engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-img-bot-create"),
+        botId,
+        name: "Painter",
+        title: "Illustrator",
+        avatar: { kind: "dither", seed: "painter" },
+        engine: { provider: "claudeAgent", model: "claude-opus-5.5" },
+        sandbox: "local",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+      let bot = (yield* snapshots.getShellSnapshot()).bots.find((entry) => entry.id === botId);
+      assert.equal(bot?.imageProvider, null);
+
+      yield* engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-img-bot-set"),
+        botId,
+        imageProvider: "grok",
+      });
+      bot = (yield* snapshots.getShellSnapshot()).bots.find((entry) => entry.id === botId);
+      assert.equal(bot?.imageProvider, "grok");
+
+      // Clearing back to null restores "use the global default".
+      yield* engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-img-bot-clear"),
+        botId,
+        imageProvider: null,
+      });
+      bot = (yield* snapshots.getShellSnapshot()).bots.find((entry) => entry.id === botId);
+      assert.equal(bot?.imageProvider, null);
     }),
   );
 

@@ -6,7 +6,7 @@ import * as NodeTimersPromises from "node:timers/promises";
 import type { ToolsInput } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import type { ProcessHandle, Workspace, WorkspaceSandbox } from "@mastra/core/workspace";
-import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
+import { redactSensitiveText } from "@akeru/shared/sensitiveDataRedaction";
 import { z } from "zod";
 
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
@@ -69,6 +69,8 @@ export interface BotBrowserProcessInput {
   readonly workspace: Workspace;
   readonly cacheDir: string;
   readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
+  readonly onFailure?: (error: unknown) => void;
+  readonly onReady?: () => void;
 }
 
 export interface CreateBotBrowserInput extends BotBrowserProcessInput {
@@ -236,7 +238,11 @@ function browserRequestTransport(
   };
 }
 
-type BrowserProcess = Pick<ProcessHandle, "kill">;
+type BrowserProcess = Pick<ProcessHandle, "kill"> & { readonly wait?: () => Promise<unknown> };
+
+export function browserMonitorRetryDelayMs(failures: number): number {
+  return Math.min(60_000, 1_000 * 2 ** Math.min(failures - 1, 6));
+}
 
 async function spawnRemoteBrowser(
   sandbox: WorkspaceSandbox,
@@ -252,9 +258,41 @@ async function spawnRemoteBrowser(
   if (!/^[1-9]\d*$/.test(pid)) {
     throw new Error(`Sandbox '${sandbox.provider}' did not return a browser process id.`);
   }
+  let stopped = false;
+  // Aborted on kill so a pending retry delay cannot hold the process open.
+  const stopSignal = new AbortController();
+  const monitorCommand =
+    `count=0; while kill -0 ${pid} 2>/dev/null; do ` +
+    'count=$((count + 1)); if [ "$count" -ge 20 ]; then printf alive; exit 0; fi; sleep 1; ' +
+    "done; printf dead";
   return {
-    kill: async () =>
-      (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false,
+    kill: async () => {
+      stopped = true;
+      stopSignal.abort();
+      return (await sandbox.executeCommand?.("kill", [pid], { timeout: 5_000 }))?.success ?? false;
+    },
+    wait: async () => {
+      let failures = 0;
+      while (true) {
+        if (stopped) return;
+        try {
+          const status = (await execute(sandbox, "sh", ["-lc", monitorCommand])).trim();
+          failures = 0;
+          if (status === "dead") return;
+          if (status !== "alive")
+            throw new Error("Sandbox browser monitor returned an unknown state.");
+        } catch {
+          // A command timeout or transport error does not mean the browser exited.
+          // Keep watching; only an observed dead process settles this waiter.
+          failures += 1;
+          if (!stopped) {
+            await NodeTimersPromises.setTimeout(browserMonitorRetryDelayMs(failures), undefined, {
+              signal: stopSignal.signal,
+            }).catch(() => undefined);
+          }
+        }
+      }
+    },
   };
 }
 
@@ -288,21 +326,37 @@ class LightpandaRpc implements BotBrowserRpc {
   }
 
   async call(name: string, arguments_: Readonly<Record<string, unknown>>): Promise<string> {
-    const result = await this.request("tools/call", { name, arguments: arguments_ });
-    if (name === "goto" || name === "click" || name === "fill") {
-      await this.rememberCurrentUrl().catch(() => undefined);
+    try {
+      const result = await this.request("tools/call", { name, arguments: arguments_ });
+      if (name === "goto" || name === "click" || name === "fill") {
+        await this.rememberCurrentUrl().catch(() => undefined);
+      }
+      this.input.onReady?.();
+      return rpcResultText(result);
+    } catch (error) {
+      this.input.onFailure?.(error);
+      throw error;
     }
-    return rpcResultText(result);
   }
 
   async attachment(): Promise<BotBrowserAttachment | undefined> {
-    await this.ensureStarted();
-    return this.attachmentValue;
+    try {
+      await this.ensureStarted();
+      return this.attachmentValue;
+    } catch (error) {
+      this.input.onFailure?.(error);
+      throw error;
+    }
   }
 
   async reconnect(): Promise<void> {
     if (this.closed) throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
-    await this.stopProcesses();
+    try {
+      await this.stopProcesses();
+    } catch (error) {
+      this.input.onFailure?.(error);
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
@@ -349,10 +403,6 @@ class LightpandaRpc implements BotBrowserRpc {
       throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
     }
     this.processes = processes;
-    if (local) {
-      void (browserHandle as ProcessHandle).wait().then(() => this.processStopped(browserHandle));
-    }
-
     try {
       this.requestTransport = browserRequestTransport(endpoint.url, endpoint.requestHeaders);
       await this.initialize();
@@ -364,6 +414,16 @@ class LightpandaRpc implements BotBrowserRpc {
         localRequestHeaders: endpoint.requestHeaders,
         availableToHostedPlugins: !local,
       };
+      this.input.onReady?.();
+      if (browserHandle.wait)
+        void browserHandle.wait().then(
+          () => this.processStopped(browserHandle),
+          (error: unknown) => {
+            if (!this.closed && this.processes.includes(browserHandle)) {
+              this.input.onFailure?.(error);
+            }
+          },
+        );
     } catch (cause) {
       this.processes = [];
       this.requestTransport = undefined;
@@ -383,6 +443,7 @@ class LightpandaRpc implements BotBrowserRpc {
     this.sessionId = undefined;
     this.startPromise = undefined;
     void Promise.all(remaining.map((candidate) => candidate.kill().catch(() => false)));
+    this.input.onFailure?.(new Error("The managed browser process exited."));
   }
 
   private async stopProcesses(): Promise<void> {

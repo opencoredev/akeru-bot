@@ -1,9 +1,11 @@
 import {
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
 import { RPC_REQUIRED_SCOPES, requiredScopeForRpcMethod } from "./RpcAuthorization.ts";
@@ -48,6 +50,13 @@ describe("RPC authorization scopes", () => {
   it("requires permission to operate on a thread before uploading feedback", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.providerUploadFeedback)).toBe(
       AuthOrchestrationOperateScope,
+    );
+  });
+
+  it("keeps the remote doctor behind administrative scopes", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverGetRemoteDoctor)).toBe(AuthAccessReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverRepairRemoteDoctor)).toBe(
+      AuthAccessWriteScope,
     );
   });
 

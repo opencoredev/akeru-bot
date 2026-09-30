@@ -84,8 +84,8 @@ for (const [needle, label] of [
   ["test -f apps/server/dist/legal/LICENSE", "CLI project license"],
   ["test -f apps/server/dist/legal/THIRD_PARTY_NOTICES.md", "CLI third-party notice"],
   ["test -f apps/server/dist/legal/licenses/Apache-2.0.txt", "CLI license bundle"],
-  ["vp run --filter @t3tools/marketing typecheck", "marketing typecheck"],
-  ["vp run --filter @t3tools/marketing build", "marketing build"],
+  ["vp run --filter @akeru/marketing typecheck", "marketing typecheck"],
+  ["vp run --filter @akeru/marketing build", "marketing build"],
 ] as const) {
   assertContains(releaseSmokeWorkflow, needle, `Release smoke workflow is missing ${label}.`);
 }
@@ -105,7 +105,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["needs: [preflight, desktop]", "build gates"],
+  ["needs: [preflight, desktop, remote]", "build gates"],
   ["label: macOS arm64 DMG", "macOS arm64 DMG"],
   ["label: Windows x64 NSIS", "Windows x64 NSIS"],
   ["label: Linux x64 AppImage", "Linux x64 AppImage"],
@@ -132,8 +132,8 @@ for (const [needle, label] of [
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
-  ["changesets/action@", "Changesets GitHub Action"],
-  ["version: pnpm release:version", "Changesets version command"],
+  ["pnpm release:version", "Changesets version command"],
+  ['select(.head.ref == \\"$RELEASE_BRANCH\\"', "version pull request lookup by head.ref"],
   [
     'gh workflow run ci.yml --ref "$head_ref" -f expected_sha="$head_sha"',
     "version branch CI dispatch",

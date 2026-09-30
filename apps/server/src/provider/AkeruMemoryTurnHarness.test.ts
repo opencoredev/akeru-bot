@@ -3,7 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { BotMemoryStore } from "../memory/BotMemory.ts";
@@ -85,6 +85,28 @@ describe("AkeruMemoryTurnHarness", () => {
       });
       await turn.finishDeferredReview(true);
       expect((await store.readReviewCadence(botId)).reviewedThroughPromptCount).toBe(10);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("releases a review claim when the turn scope closes", async () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-scope-close-"));
+    const store = new BotMemoryStore(root);
+    const botId = BotId.make("bot-scope-close");
+    try {
+      for (let prompt = 0; prompt < 10; prompt += 1) {
+        const seed = await store.reserveReviewCadence(botId);
+        await store.settleReviewCadence(seed, true);
+      }
+      const turn = await new AkeruMemoryTurnHarness(store).admit({
+        access: { botId, groupId: null, groupMemberBotIds: [] },
+        input: { threadId: "current", groupId: null, text: "Remember cats." },
+      });
+      await turn.close();
+      const retry = await new BotMemoryStore(root).reserveReviewCadence(botId);
+      expect(retry.memoryReviewIncluded).toBe(true);
+      await new BotMemoryStore(root).settleReviewCadence(retry, false);
     } finally {
       NodeFS.rmSync(root, { recursive: true, force: true });
     }

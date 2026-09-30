@@ -1,11 +1,14 @@
+import * as NodeCrypto from "node:crypto";
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { HostProcessExecutablePath } from "@t3tools/shared/hostProcess";
+import { HostProcessExecutablePath, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Path from "effect/Path";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as ServerConfig from "../config.ts";
@@ -14,10 +17,29 @@ import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 import * as ServerSelfUpdate from "./selfUpdate.ts";
 
+const ARCHIVE_SHA256 = "a".repeat(64);
+const releaseKeys = NodeCrypto.generateKeyPairSync("ed25519");
+const releaseManifest = new TextEncoder().encode(
+  `${ARCHIVE_SHA256}  Akeru-Remote-1.1.0-win32-x64.zip\n`,
+);
+const releaseSignature = NodeCrypto.sign(null, releaseManifest, releaseKeys.privateKey);
+
+/** Serves the signed stub release that the Windows update verifies. */
+const releaseClient = HttpClient.make((request) =>
+  Effect.succeed(
+    HttpClientResponse.fromWeb(
+      request,
+      new Response(request.url.endsWith(".sig") ? releaseSignature : releaseManifest),
+    ),
+  ),
+);
+
 interface HarnessOptions {
   readonly mode?: "web" | "desktop";
   readonly managed?: boolean;
   readonly preflight?: "ready" | "blocked";
+  readonly platform?: NodeJS.Platform;
+  readonly archiveFailure?: boolean;
   readonly requestUpdate?: ServiceLauncherClient.ServiceLauncherClient["Service"]["requestUpdate"];
 }
 
@@ -28,9 +50,46 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const path = yield* Path.Path;
   const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-self-update-test-" });
   const order: string[] = [];
+  const preflightCommands: string[] = [];
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
+        if (input.command === "sh" || input.command === "powershell.exe") {
+          order.push("archive");
+          expect(input.args).toContain("v1.1.0");
+          expect(input.args).toContain(input.command === "sh" ? "--prepare-only" : "-PrepareOnly");
+          if (input.command === "powershell.exe") {
+            expect(input.args[input.args.indexOf("-ExpectedSha256") + 1]).toBe(ARCHIVE_SHA256);
+          }
+          const installRoot = input.env?.AKERU_INSTALL_ROOT;
+          if (installRoot === undefined) return yield* Effect.die("missing archive install root");
+          const entry = path.join(
+            installRoot,
+            "versions",
+            "1.1.0",
+            "node_modules",
+            "akeru-bot",
+            "dist",
+            "bin.mjs",
+          );
+          yield* fs.makeDirectory(path.dirname(entry), { recursive: true }).pipe(Effect.orDie);
+          yield* fs.writeFileString(entry, "verified archive bytes\n").pipe(Effect.orDie);
+          if (options.platform === "win32") {
+            const node = path.join(installRoot, "versions", "1.1.0", "node", "node.exe");
+            yield* fs.makeDirectory(path.dirname(node), { recursive: true }).pipe(Effect.orDie);
+            yield* fs.writeFileString(node, "bundled node\n").pipe(Effect.orDie);
+          }
+          return {
+            stdout: "",
+            stderr: "",
+            code: ChildProcessSpawner.ExitCode(options.archiveFailure ? 1 : 0),
+            timedOut: false,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            stdoutInvalidUtf8: false,
+            stderrInvalidUtf8: false,
+          };
+        }
         if (input.command === "npm") {
           order.push("install");
           const prefix = input.args[input.args.indexOf("--prefix") + 1];
@@ -50,6 +109,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           };
         }
         order.push("preflight");
+        preflightCommands.push(input.command);
         const result =
           options.preflight === "blocked"
             ? { status: "blocked", version: "1.1.0", reason: "local update required" }
@@ -85,16 +145,58 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const config = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
   );
-  const selfUpdate = yield* ServerSelfUpdate.make().pipe(
+  const selfUpdate = yield* ServerSelfUpdate.make({
+    manifestKey: releaseKeys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+  }).pipe(
+    Effect.provideService(HttpClient.HttpClient, releaseClient),
     Effect.provideService(ProcessRunner.ProcessRunner, runner),
     Effect.provideService(ServiceLauncherClient.ServiceLauncherClient, launcher),
     Effect.provideService(HostProcessExecutablePath, "/usr/bin/node"),
+    Effect.provideService(HostProcessPlatform, options.platform ?? "linux"),
     Effect.provide(ServerConfig.layer({ ...config, mode: options.mode ?? "web" })),
   );
-  return { selfUpdate, order };
+  return { selfUpdate, order, preflightCommands, baseDir };
 });
 
 it.layer(NodeServices.layer)("server self update", (it) => {
+  for (const platform of ["linux", "win32"] as const) {
+    it.effect(`publishes verified archive bytes without npm on ${platform}`, () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const { selfUpdate, order, preflightCommands, baseDir } = yield* makeHarness({ platform });
+        const versionDir = path.join(baseDir, "runtime", "versions", "1.1.0");
+        const entry = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
+        yield* fs.makeDirectory(path.dirname(entry), { recursive: true });
+        yield* fs.writeFileString(entry, "unverified npm bytes\n");
+        yield* fs.writeFileString(path.join(versionDir, ".install-complete"), "1.1.0\n");
+        yield* selfUpdate.update({ targetVersion: "1.1.0", source: "remote-archive" });
+        expect(order).toEqual(["archive", "preflight", "accept"]);
+        expect(yield* fs.readFileString(entry)).toBe("verified archive bytes\n");
+        expect(yield* fs.exists(path.join(versionDir, ".archive-verified"))).toBe(true);
+        // Windows archives preflight on their own Node, the one the launcher will run them on.
+        expect(preflightCommands).toHaveLength(1);
+        if (platform === "win32") {
+          expect(preflightCommands[0]).toMatch(
+            /[/\\]runtime[/\\]versions[/\\].+[/\\]node[/\\]node\.exe$/,
+          );
+        } else {
+          expect(preflightCommands[0]).toBe("/usr/bin/node");
+        }
+      }),
+    );
+  }
+
+  it.effect("does not activate an archive rejected by the installer", () =>
+    Effect.gen(function* () {
+      const { selfUpdate, order } = yield* makeHarness({ archiveFailure: true });
+      const error = yield* selfUpdate
+        .update({ targetVersion: "1.1.0", source: "remote-archive" })
+        .pipe(Effect.flip);
+      expect(error.reason).toContain("Could not prepare");
+      expect(order).toEqual(["archive"]);
+    }),
+  );
   it.effect("stages and preflights before asking the launcher for an update ID", () =>
     Effect.gen(function* () {
       const { selfUpdate, order } = yield* makeHarness();

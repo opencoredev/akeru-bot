@@ -1,4 +1,3 @@
-import { EnvironmentId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => {
@@ -95,9 +94,9 @@ vi.mock("react-native", () => ({
 }));
 
 import {
+  clearAgentAwarenessRegistrationRecord,
   loadPreferences,
   loadSavedConnections,
-  saveConnection,
   savePreferencesPatch,
 } from "../persistence/imperative";
 
@@ -114,14 +113,23 @@ describe("mobile connection storage", () => {
     await expect(loadSavedConnections()).rejects.toMatchObject({
       _tag: "MobileSecureStorageError",
       operation: "read",
-      key: "t3code.connections",
+      key: "akeru.connections",
       cause,
-      message: "Mobile secure storage operation read failed for key t3code.connections.",
+      message: "Mobile secure storage operation read failed for key akeru.connections.",
     });
   });
 
+  it("retires legacy registration data after a direct clear", async () => {
+    await mocks.setItemAsync("t3code.agent-awareness.registration", "stale");
+
+    await clearAgentAwarenessRegistrationRecord();
+
+    expect(mocks.getStoredValue("akeru.agent-awareness.registration")).toBe("");
+    expect(mocks.getStoredValue("t3code.agent-awareness.registration")).toBeNull();
+  });
+
   it("logs structured decode failures before using the empty fallback", async () => {
-    await mocks.setItemAsync("t3code.connections", "{");
+    await mocks.setItemAsync("akeru.connections", "{");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await expect(loadSavedConnections()).resolves.toEqual([]);
@@ -129,9 +137,9 @@ describe("mobile connection storage", () => {
       "[mobile-storage] ignored invalid JSON",
       expect.objectContaining({
         _tag: "MobileStorageDecodeError",
-        key: "t3code.connections",
+        key: "akeru.connections",
         cause: expect.any(SyntaxError),
-        message: "Failed to decode mobile storage value for key t3code.connections.",
+        message: "Failed to decode mobile storage value for key akeru.connections.",
       }),
     );
 
@@ -140,9 +148,57 @@ describe("mobile connection storage", () => {
 
   it("loads legacy preferences when SQLite is unavailable", async () => {
     mocks.setDatabaseFailures(true, true);
-    await mocks.setItemAsync("t3code.preferences", JSON.stringify({ baseFontSize: 17 }));
+    await mocks.setItemAsync("akeru.preferences", JSON.stringify({ baseFontSize: 17 }));
 
     await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17 });
+  });
+
+  it("canonicalizes legacy t3-code and t3-chat theme ids on load", async () => {
+    mocks.setPreferencesJson(
+      JSON.stringify({
+        themeId: "t3-code",
+        lightThemeId: "t3-chat",
+        darkThemeId: "t3-code",
+        themeMode: "system",
+      }),
+      10,
+    );
+
+    await expect(loadPreferences()).resolves.toEqual({
+      themeId: "akeru-classic",
+      lightThemeId: "akeru-chat",
+      darkThemeId: "akeru-classic",
+      themeMode: "system",
+    });
+  });
+
+  it("persists language locally and resets to system without changing other preferences", async () => {
+    mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 17 }), 10);
+    await expect(savePreferencesPatch({ language: "en" })).resolves.toEqual({
+      baseFontSize: 17,
+      language: "en",
+    });
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17, language: "en" });
+    await expect(savePreferencesPatch({ language: "system" })).resolves.toEqual({
+      baseFontSize: 17,
+      language: "system",
+    });
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17, language: "system" });
+    expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({
+      baseFontSize: 17,
+      language: "system",
+    });
+  });
+
+  it("ignores malformed language preferences", async () => {
+    mocks.setPreferencesJson(JSON.stringify({ language: { locale: "en" }, baseFontSize: 17 }), 10);
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17 });
+  });
+
+  it("retains language in the device-local fallback when SQLite is unavailable", async () => {
+    mocks.setDatabaseFailures(true, true);
+    await expect(savePreferencesPatch({ language: "en" })).resolves.toEqual({ language: "en" });
+    await expect(loadPreferences()).resolves.toEqual({ language: "en" });
   });
 
   it("persists independent light and dark theme choices", async () => {
@@ -167,7 +223,7 @@ describe("mobile connection storage", () => {
   it("falls back to secure storage when SQLite cannot save preferences", async () => {
     mocks.setDatabaseFailures(true, true);
     await expect(savePreferencesPatch({ baseFontSize: 19 })).resolves.toEqual({ baseFontSize: 19 });
-    const fallback = JSON.parse(mocks.getStoredValue("t3code.preferences.fallback") ?? "") as {
+    const fallback = JSON.parse(mocks.getStoredValue("akeru.preferences.fallback") ?? "") as {
       readonly payload: string;
       readonly updatedAt: number;
     };
@@ -212,7 +268,7 @@ describe("mobile connection storage", () => {
   it("reconciles fallback preferences after SQLite recovers", async () => {
     mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 15 }), 10);
     await mocks.setItemAsync(
-      "t3code.preferences.fallback",
+      "akeru.preferences.fallback",
       JSON.stringify({
         payload: JSON.stringify({ baseFontSize: 19 }),
         updatedAt: 20,
@@ -221,13 +277,13 @@ describe("mobile connection storage", () => {
 
     await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 19 });
     expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({ baseFontSize: 19 });
-    expect(mocks.getStoredValue("t3code.preferences.fallback")).toBeNull();
+    expect(mocks.getStoredValue("akeru.preferences.fallback")).toBeNull();
   });
 
   it("ignores a stale fallback when its previous deletion failed", async () => {
     mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 21 }), 30);
     await mocks.setItemAsync(
-      "t3code.preferences.fallback",
+      "akeru.preferences.fallback",
       JSON.stringify({
         payload: JSON.stringify({ baseFontSize: 19 }),
         updatedAt: 20,
@@ -236,27 +292,27 @@ describe("mobile connection storage", () => {
 
     await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 21 });
     expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({ baseFontSize: 21 });
-    expect(mocks.getStoredValue("t3code.preferences.fallback")).toBeNull();
+    expect(mocks.getStoredValue("akeru.preferences.fallback")).toBeNull();
   });
 
   it("ignores an invalid fallback even when it has a newer timestamp", async () => {
     mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 21 }), 30);
     await mocks.setItemAsync(
-      "t3code.preferences.fallback",
+      "akeru.preferences.fallback",
       JSON.stringify({ payload: "{", updatedAt: 40 }),
     );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 21 });
     expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({ baseFontSize: 21 });
-    expect(mocks.getStoredValue("t3code.preferences.fallback")).toBeNull();
+    expect(mocks.getStoredValue("akeru.preferences.fallback")).toBeNull();
 
     warn.mockRestore();
   });
 
   it("keeps SQLite authoritative when stale legacy preferences remain", async () => {
     mocks.setPreferencesJson(JSON.stringify({ baseFontSize: 21 }), 30);
-    await mocks.setItemAsync("t3code.preferences", JSON.stringify({ baseFontSize: 19 }));
+    await mocks.setItemAsync("akeru.preferences", JSON.stringify({ baseFontSize: 19 }));
 
     await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 21 });
     expect(JSON.parse(mocks.getPreferencesJson() ?? "")).toEqual({ baseFontSize: 21 });

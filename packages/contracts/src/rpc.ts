@@ -1,10 +1,29 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
+import {
+  ComputerTarget,
+  ComputerSessionInput,
+  ComputerInput,
+  ComputerState,
+  ComputerSession,
+  ComputerEvent,
+  ComputerError,
+} from "./computer.ts";
 
 import { AkeruBotUsageInput, AkeruBotUsageReadError, AkeruBotUsageSnapshot } from "./akeruUsage.ts";
 import {
   AkeruMemoryOperationError,
+  AkeruMemoryArchiveV2,
+  AkeruMemoryExportInput,
+  AkeruMemoryImportPreviewInput,
+  AkeruMemoryImportPreview,
+  AkeruMemoryImportApplyInput,
+  AkeruMemoryImportApplyResult,
+  AkeruMemoryFactsListInput,
+  AkeruMemoryFactsListResult,
+  AkeruMemoryMutateInput,
+  AkeruMemoryMutationResult,
   AkeruMemoryDocumentsInspectInput,
   AkeruMemoryDocumentsSnapshot,
   AkeruMemoryDocumentReplaceInput,
@@ -30,51 +49,16 @@ import {
   HostPowerSnapshot,
 } from "./background.ts";
 import {
-  FilesystemBrowseInput,
-  FilesystemBrowseResult,
-  FilesystemBrowseError,
-} from "./filesystem.ts";
-import {
   AssetAccessError,
   AssetCreateUrlInput,
   AssetCreateUrlResult,
   AttachmentCreateUploadUrlInput,
   AttachmentCreateUploadUrlResult,
   AttachmentDeleteInput,
+  AttachmentNotFoundError,
+  AttachmentRevealInput,
   AttachmentUploadSigningKeyError,
 } from "./assets.ts";
-import {
-  GitActionProgressEvent,
-  VcsSwitchRefInput,
-  VcsSwitchRefResult,
-  GitCommandError,
-  VcsCreateRefInput,
-  VcsCreateRefResult,
-  VcsCreateWorktreeInput,
-  VcsCreateWorktreeResult,
-  VcsInitInput,
-  VcsListRefsInput,
-  VcsListRefsResult,
-  GitManagerServiceError,
-  GitPreparePullRequestThreadInput,
-  GitPreparePullRequestThreadResult,
-  VcsPullInput,
-  GitPullRequestRefInput,
-  VcsPullResult,
-  VcsRemoveWorktreeInput,
-  GitResolvePullRequestResult,
-  GitRunStackedActionInput,
-  VcsStatusInput,
-  VcsStatusResult,
-  VcsStatusStreamEvent,
-} from "./git.ts";
-import {
-  ReviewDiffFileContentsInput,
-  ReviewDiffFileContentsResult,
-  ReviewDiffPreviewError,
-  ReviewDiffPreviewInput,
-  ReviewDiffPreviewResult,
-} from "./review.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
   ClientOrchestrationCommand,
@@ -103,9 +87,6 @@ import {
   ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
-  ProjectSearchContentsError,
-  ProjectSearchContentsInput,
-  ProjectSearchContentsResult,
   ProjectSearchEntriesError,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
@@ -113,20 +94,6 @@ import {
   ProjectWriteFileInput,
   ProjectWriteFileResult,
 } from "./project.ts";
-import {
-  TerminalAttachInput,
-  TerminalAttachStreamEvent,
-  TerminalClearInput,
-  TerminalCloseInput,
-  TerminalError,
-  TerminalEvent,
-  TerminalMetadataStreamEvent,
-  TerminalOpenInput,
-  TerminalResizeInput,
-  TerminalRestartInput,
-  TerminalSessionSnapshot,
-  TerminalWriteInput,
-} from "./terminal.ts";
 import {
   DiscoveredLocalServerList,
   ConfiguredLocalServerUrls,
@@ -179,6 +146,11 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import {
+  RemoteDoctorError,
+  RemoteDoctorRepairInput,
+  RemoteDoctorStatus,
+} from "./remoteDiagnostics.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsRpcPatch } from "./settings.ts";
 import {
   BotInboxItem,
@@ -197,22 +169,28 @@ import {
   SubscriptionAuthStatuses,
 } from "./subscriptionAuth.ts";
 import {
-  SourceControlCloneRepositoryInput,
-  SourceControlCloneRepositoryResult,
-  SourceControlDiscoveryResult,
-  SourceControlPublishRepositoryInput,
-  SourceControlPublishRepositoryResult,
-  SourceControlRepositoryError,
-  SourceControlRepositoryInfo,
-  SourceControlRepositoryLookupInput,
-} from "./sourceControl.ts";
-import { VcsError } from "./vcs.ts";
+  ImageGenerationError,
+  ImageProviderHealthTestInput,
+  ImageProviderListResult,
+} from "./imageGeneration.ts";
 import {
   VoiceCallError,
   VoiceCallHangupInput,
   VoiceCallSnapshot,
   VoiceCallStartInput,
   VoiceCallStartResult,
+  VoiceProviderInput,
+  VoiceConnectInput,
+  VoiceProviderStatus,
+  VoiceProvidersResult,
+  VoiceListVoicesInput,
+  VoiceListVoicesResult,
+  VoiceTranscribeInput,
+  VoiceTranscribeResult,
+  VoiceSynthesizeInput,
+  VoiceSynthesizeResult,
+  VoiceCancelInput,
+  VoiceCancelResult,
 } from "./voiceCall.ts";
 import {
   PortabilityApplyImportInput,
@@ -222,7 +200,14 @@ import {
   PortabilityImportPreview,
   PortabilityPreviewImportInput,
 } from "./portability.ts";
-import { RoutineListRunsInput, RoutineListRunsResult, RoutineReadError } from "./routines.ts";
+import {
+  RoutineListRunsInput,
+  RoutineListRunsResult,
+  RoutineListThreadRunsResult,
+  RoutineListThreadRunsInput,
+  RoutineReadError,
+  RoutineThreadReadError,
+} from "./routines.ts";
 import {
   ComposioAuthorizeInput,
   ComposioAuthorizeResult,
@@ -237,19 +222,16 @@ import {
 export const WS_METHODS = {
   // Project registry methods
   projectsList: "projects.list",
-  projectsAdd: "projects.add",
-  projectsRemove: "projects.remove",
   projectsListEntries: "projects.listEntries",
   projectsReadFile: "projects.readFile",
-  projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
+  shellRevealAttachment: "shell.revealAttachment",
 
   // Filesystem methods
-  filesystemBrowse: "filesystem.browse",
   assetsCreateUrl: "assets.createUrl",
   attachmentsCreateUploadUrl: "attachments.createUploadUrl",
   attachmentsDelete: "attachments.delete",
@@ -257,33 +239,14 @@ export const WS_METHODS = {
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
 
-  // VCS methods
-  vcsPull: "vcs.pull",
-  vcsRefreshStatus: "vcs.refreshStatus",
-  vcsListRefs: "vcs.listRefs",
-  vcsCreateWorktree: "vcs.createWorktree",
-  vcsRemoveWorktree: "vcs.removeWorktree",
-  vcsCreateRef: "vcs.createRef",
-  vcsSwitchRef: "vcs.switchRef",
-  vcsInit: "vcs.init",
-
-  // Git workflow methods
-  gitRunStackedAction: "git.runStackedAction",
-  gitResolvePullRequest: "git.resolvePullRequest",
-  gitPreparePullRequestThread: "git.preparePullRequestThread",
-
-  // Review methods
-  reviewGetDiffPreview: "review.getDiffPreview",
-  reviewGetDiffFileContents: "review.getDiffFileContents",
-
-  // Terminal methods
-  terminalOpen: "terminal.open",
-  terminalAttach: "terminal.attach",
-  terminalWrite: "terminal.write",
-  terminalResize: "terminal.resize",
-  terminalClear: "terminal.clear",
-  terminalRestart: "terminal.restart",
-  terminalClose: "terminal.close",
+  computerGetState: "computer.getState",
+  computerOpen: "computer.open",
+  computerAcquire: "computer.acquire",
+  computerInput: "computer.input",
+  computerRelease: "computer.release",
+  computerClose: "computer.close",
+  computerStop: "computer.stop",
+  computerEvents: "computer.events",
 
   // Preview methods
   previewOpen: "preview.open",
@@ -321,13 +284,24 @@ export const WS_METHODS = {
   subscriptionAuthCancel: "subscriptionAuth.cancel",
   subscriptionAuthLogout: "subscriptionAuth.logout",
   subscriptionAuthHealthTest: "subscriptionAuth.healthTest",
+
+  // Image generation providers
+  imageProviderList: "imageProvider.list",
+  imageProviderHealthTest: "imageProvider.healthTest",
   mcpServerAuthenticate: "mcpServer.authenticate",
   botInboxList: "botInbox.list",
   botInboxResolve: "botInbox.resolve",
+  voiceProviders: "voice.providers",
+  voiceConnect: "voice.connect",
+  voiceDisconnect: "voice.disconnect",
+  voiceTest: "voice.test",
+  voiceListVoices: "voice.listVoices",
+  voiceTranscribe: "voice.transcribe",
+  voiceSynthesize: "voice.synthesize",
+  voiceCancel: "voice.cancel",
   voiceCallGet: "voiceCall.get",
   voiceCallStart: "voiceCall.start",
   voiceCallHangup: "voiceCall.hangup",
-  serverDiscoverSourceControl: "server.discoverSourceControl",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
@@ -338,9 +312,16 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetRemoteDoctor: "server.getRemoteDoctor",
+  serverRepairRemoteDoctor: "server.repairRemoteDoctor",
   memoryExport: "memory.documents.export",
   memoryImportPreview: "memory.documents.importPreview",
   memoryImportApply: "memory.documents.importApply",
+  memoryArchiveExport: "memory.archive.export",
+  memoryArchivePreviewImport: "memory.archive.previewImport",
+  memoryArchiveApplyImport: "memory.archive.applyImport",
+  memoryFactsList: "memory.facts.list",
+  memoryFactMutate: "memory.facts.mutate",
   memoryDocumentsInspect: "memory.documents.inspect",
   memoryDocumentReplace: "memory.document.replace",
   memoryObservationsClear: "memory.observations.clear",
@@ -349,16 +330,9 @@ export const WS_METHODS = {
   portabilityPreviewImport: "portability.previewImport",
   portabilityApplyImport: "portability.applyImport",
   routinesListRuns: "routines.listRuns",
-
-  // Source control methods
-  sourceControlLookupRepository: "sourceControl.lookupRepository",
-  sourceControlCloneRepository: "sourceControl.cloneRepository",
-  sourceControlPublishRepository: "sourceControl.publishRepository",
+  routinesListThreadRuns: "routines.listThreadRuns",
 
   // Streaming subscriptions
-  subscribeVcsStatus: "subscribeVcsStatus",
-  subscribeTerminalEvents: "subscribeTerminalEvents",
-  subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribePreviewEvents: "subscribePreviewEvents",
   subscribeDiscoveredLocalServers: "subscribeDiscoveredLocalServers",
   subscribeServerConfig: "subscribeServerConfig",
@@ -518,6 +492,18 @@ export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionA
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
 });
 
+export const WsImageProviderListRpc = Rpc.make(WS_METHODS.imageProviderList, {
+  payload: Schema.Struct({}),
+  success: ImageProviderListResult,
+  error: Schema.Union([ImageGenerationError, EnvironmentAuthorizationError]),
+});
+
+export const WsImageProviderHealthTestRpc = Rpc.make(WS_METHODS.imageProviderHealthTest, {
+  payload: ImageProviderHealthTestInput,
+  success: ImageProviderListResult,
+  error: Schema.Union([ImageGenerationError, EnvironmentAuthorizationError]),
+});
+
 export const WsMcpServerAuthenticateRpc = Rpc.make(WS_METHODS.mcpServerAuthenticate, {
   payload: McpServerAuthenticateInput,
   success: McpServerAuthenticationProgress,
@@ -537,6 +523,48 @@ export const WsBotInboxResolveRpc = Rpc.make(WS_METHODS.botInboxResolve, {
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
 });
 
+const VoiceRpcError = Schema.Union([VoiceCallError, EnvironmentAuthorizationError]);
+export const WsVoiceProvidersRpc = Rpc.make(WS_METHODS.voiceProviders, {
+  payload: Schema.Struct({}),
+  success: VoiceProvidersResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceConnectRpc = Rpc.make(WS_METHODS.voiceConnect, {
+  payload: VoiceConnectInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceDisconnectRpc = Rpc.make(WS_METHODS.voiceDisconnect, {
+  payload: VoiceProviderInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceTestRpc = Rpc.make(WS_METHODS.voiceTest, {
+  payload: VoiceProviderInput,
+  success: VoiceProviderStatus,
+  error: VoiceRpcError,
+});
+export const WsVoiceListVoicesRpc = Rpc.make(WS_METHODS.voiceListVoices, {
+  payload: VoiceListVoicesInput,
+  success: VoiceListVoicesResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceTranscribeRpc = Rpc.make(WS_METHODS.voiceTranscribe, {
+  payload: VoiceTranscribeInput,
+  success: VoiceTranscribeResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceSynthesizeRpc = Rpc.make(WS_METHODS.voiceSynthesize, {
+  payload: VoiceSynthesizeInput,
+  success: VoiceSynthesizeResult,
+  error: VoiceRpcError,
+});
+export const WsVoiceCancelRpc = Rpc.make(WS_METHODS.voiceCancel, {
+  payload: VoiceCancelInput,
+  success: VoiceCancelResult,
+  error: VoiceRpcError,
+});
+
 export const WsVoiceCallGetRpc = Rpc.make(WS_METHODS.voiceCallGet, {
   payload: Schema.Struct({}),
   success: VoiceCallSnapshot,
@@ -553,12 +581,6 @@ export const WsVoiceCallHangupRpc = Rpc.make(WS_METHODS.voiceCallHangup, {
   payload: VoiceCallHangupInput,
   success: VoiceCallSnapshot,
   error: Schema.Union([VoiceCallError, EnvironmentAuthorizationError]),
-});
-
-export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
-  payload: Schema.Struct({}),
-  success: SourceControlDiscoveryResult,
-  error: EnvironmentAuthorizationError,
 });
 
 export const WsServerGetTraceDiagnosticsRpc = Rpc.make(WS_METHODS.serverGetTraceDiagnostics, {
@@ -603,6 +625,18 @@ export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSumm
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
+export const WsServerGetRemoteDoctorRpc = Rpc.make(WS_METHODS.serverGetRemoteDoctor, {
+  payload: Schema.Struct({}),
+  success: RemoteDoctorStatus,
+  error: Schema.Union([EnvironmentAuthorizationError, RemoteDoctorError]),
+});
+
+export const WsServerRepairRemoteDoctorRpc = Rpc.make(WS_METHODS.serverRepairRemoteDoctor, {
+  payload: RemoteDoctorRepairInput,
+  success: RemoteDoctorStatus,
+  error: Schema.Union([EnvironmentAuthorizationError, RemoteDoctorError]),
+});
+
 export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
@@ -640,6 +674,36 @@ export const WsMemoryImportPreviewRpc = Rpc.make(WS_METHODS.memoryImportPreview,
 export const WsMemoryImportApplyRpc = Rpc.make(WS_METHODS.memoryImportApply, {
   payload: AkeruMarkdownMemoryImportApplyInput,
   success: AkeruMarkdownMemoryImportApplyResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchiveExportRpc = Rpc.make(WS_METHODS.memoryArchiveExport, {
+  payload: AkeruMemoryExportInput,
+  success: AkeruMemoryArchiveV2,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchivePreviewImportRpc = Rpc.make(WS_METHODS.memoryArchivePreviewImport, {
+  payload: AkeruMemoryImportPreviewInput,
+  success: AkeruMemoryImportPreview,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryArchiveApplyImportRpc = Rpc.make(WS_METHODS.memoryArchiveApplyImport, {
+  payload: AkeruMemoryImportApplyInput,
+  success: AkeruMemoryImportApplyResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryFactsListRpc = Rpc.make(WS_METHODS.memoryFactsList, {
+  payload: AkeruMemoryFactsListInput,
+  success: AkeruMemoryFactsListResult,
+  error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryFactMutateRpc = Rpc.make(WS_METHODS.memoryFactMutate, {
+  payload: AkeruMemoryMutateInput,
+  success: AkeruMemoryMutationResult,
   error: Schema.Union([AkeruMemoryOperationError, EnvironmentAuthorizationError]),
 });
 
@@ -690,40 +754,16 @@ export const WsRoutinesListRunsRpc = Rpc.make(WS_METHODS.routinesListRuns, {
   error: Schema.Union([RoutineReadError, EnvironmentAuthorizationError]),
 });
 
-export const WsSourceControlLookupRepositoryRpc = Rpc.make(
-  WS_METHODS.sourceControlLookupRepository,
-  {
-    payload: SourceControlRepositoryLookupInput,
-    success: SourceControlRepositoryInfo,
-    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
-  },
-);
-
-export const WsSourceControlCloneRepositoryRpc = Rpc.make(WS_METHODS.sourceControlCloneRepository, {
-  payload: SourceControlCloneRepositoryInput,
-  success: SourceControlCloneRepositoryResult,
-  error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+export const WsRoutinesListThreadRunsRpc = Rpc.make(WS_METHODS.routinesListThreadRuns, {
+  payload: RoutineListThreadRunsInput,
+  success: RoutineListThreadRunsResult,
+  error: Schema.Union([RoutineThreadReadError, EnvironmentAuthorizationError]),
 });
-
-export const WsSourceControlPublishRepositoryRpc = Rpc.make(
-  WS_METHODS.sourceControlPublishRepository,
-  {
-    payload: SourceControlPublishRepositoryInput,
-    success: SourceControlPublishRepositoryResult,
-    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
-  },
-);
 
 export const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
   payload: ProjectSearchEntriesInput,
   success: ProjectSearchEntriesResult,
   error: Schema.Union([ProjectSearchEntriesError, EnvironmentAuthorizationError]),
-});
-
-export const WsProjectsSearchContentsRpc = Rpc.make(WS_METHODS.projectsSearchContents, {
-  payload: ProjectSearchContentsInput,
-  success: ProjectSearchContentsResult,
-  error: Schema.Union([ProjectSearchContentsError, EnvironmentAuthorizationError]),
 });
 
 export const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries, {
@@ -749,10 +789,13 @@ export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
 });
 
-export const WsFilesystemBrowseRpc = Rpc.make(WS_METHODS.filesystemBrowse, {
-  payload: FilesystemBrowseInput,
-  success: FilesystemBrowseResult,
-  error: Schema.Union([FilesystemBrowseError, EnvironmentAuthorizationError]),
+export const WsShellRevealAttachmentRpc = Rpc.make(WS_METHODS.shellRevealAttachment, {
+  payload: AttachmentRevealInput,
+  error: Schema.Union([
+    AttachmentNotFoundError,
+    ExternalLauncherError,
+    EnvironmentAuthorizationError,
+  ]),
 });
 
 export const WsAssetsCreateUrlRpc = Rpc.make(WS_METHODS.assetsCreateUrl, {
@@ -778,132 +821,47 @@ export const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFee
   error: Schema.Union([ProviderUploadFeedbackError, EnvironmentAuthorizationError]),
 });
 
-export const WsSubscribeVcsStatusRpc = Rpc.make(WS_METHODS.subscribeVcsStatus, {
-  payload: VcsStatusInput,
-  success: VcsStatusStreamEvent,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
+const computerError = Schema.Union([ComputerError, EnvironmentAuthorizationError]);
+export const WsComputerGetStateRpc = Rpc.make(WS_METHODS.computerGetState, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerOpenRpc = Rpc.make(WS_METHODS.computerOpen, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerAcquireRpc = Rpc.make(WS_METHODS.computerAcquire, {
+  payload: ComputerTarget,
+  success: ComputerSession,
+  error: computerError,
+});
+export const WsComputerInputRpc = Rpc.make(WS_METHODS.computerInput, {
+  payload: ComputerInput,
+  success: Schema.Void,
+  error: computerError,
+});
+export const WsComputerReleaseRpc = Rpc.make(WS_METHODS.computerRelease, {
+  payload: ComputerSessionInput,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerCloseRpc = Rpc.make(WS_METHODS.computerClose, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerStopRpc = Rpc.make(WS_METHODS.computerStop, {
+  payload: ComputerTarget,
+  success: ComputerState,
+  error: computerError,
+});
+export const WsComputerEventsRpc = Rpc.make(WS_METHODS.computerEvents, {
+  payload: ComputerTarget,
+  success: ComputerEvent,
+  error: computerError,
   stream: true,
-});
-
-export const WsVcsPullRpc = Rpc.make(WS_METHODS.vcsPull, {
-  payload: VcsPullInput,
-  success: VcsPullResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsRefreshStatusRpc = Rpc.make(WS_METHODS.vcsRefreshStatus, {
-  payload: VcsStatusInput,
-  success: VcsStatusResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsGitRunStackedActionRpc = Rpc.make(WS_METHODS.gitRunStackedAction, {
-  payload: GitRunStackedActionInput,
-  success: GitActionProgressEvent,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
-export const WsGitResolvePullRequestRpc = Rpc.make(WS_METHODS.gitResolvePullRequest, {
-  payload: GitPullRequestRefInput,
-  success: GitResolvePullRequestResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsGitPreparePullRequestThreadRpc = Rpc.make(WS_METHODS.gitPreparePullRequestThread, {
-  payload: GitPreparePullRequestThreadInput,
-  success: GitPreparePullRequestThreadResult,
-  error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsListRefsRpc = Rpc.make(WS_METHODS.vcsListRefs, {
-  payload: VcsListRefsInput,
-  success: VcsListRefsResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsCreateWorktreeRpc = Rpc.make(WS_METHODS.vcsCreateWorktree, {
-  payload: VcsCreateWorktreeInput,
-  success: VcsCreateWorktreeResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsRemoveWorktreeRpc = Rpc.make(WS_METHODS.vcsRemoveWorktree, {
-  payload: VcsRemoveWorktreeInput,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsCreateRefRpc = Rpc.make(WS_METHODS.vcsCreateRef, {
-  payload: VcsCreateRefInput,
-  success: VcsCreateRefResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsSwitchRefRpc = Rpc.make(WS_METHODS.vcsSwitchRef, {
-  payload: VcsSwitchRefInput,
-  success: VcsSwitchRefResult,
-  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
-});
-
-export const WsVcsInitRpc = Rpc.make(WS_METHODS.vcsInit, {
-  payload: VcsInitInput,
-  error: Schema.Union([VcsError, EnvironmentAuthorizationError]),
-});
-
-/**
- * Ephemeral live diff preview for compact/mobile surfaces.
- * Not the persisted T3 Review model. Future review sessions should use
- * review.open* + review.getSnapshot.
- */
-export const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPreview, {
-  payload: ReviewDiffPreviewInput,
-  success: ReviewDiffPreviewResult,
-  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
-});
-
-export const WsReviewGetDiffFileContentsRpc = Rpc.make(WS_METHODS.reviewGetDiffFileContents, {
-  payload: ReviewDiffFileContentsInput,
-  success: ReviewDiffFileContentsResult,
-  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
-  payload: TerminalOpenInput,
-  success: TerminalSessionSnapshot,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalAttachRpc = Rpc.make(WS_METHODS.terminalAttach, {
-  payload: TerminalAttachInput,
-  success: TerminalAttachStreamEvent,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-  stream: true,
-});
-
-export const WsTerminalWriteRpc = Rpc.make(WS_METHODS.terminalWrite, {
-  payload: TerminalWriteInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalResizeRpc = Rpc.make(WS_METHODS.terminalResize, {
-  payload: TerminalResizeInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalClearRpc = Rpc.make(WS_METHODS.terminalClear, {
-  payload: TerminalClearInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalRestartRpc = Rpc.make(WS_METHODS.terminalRestart, {
-  payload: TerminalRestartInput,
-  success: TerminalSessionSnapshot,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
-});
-
-export const WsTerminalCloseRpc = Rpc.make(WS_METHODS.terminalClose, {
-  payload: TerminalCloseInput,
-  error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
 });
 
 export const WsPreviewOpenRpc = Rpc.make(WS_METHODS.previewOpen, {
@@ -1046,20 +1004,6 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
-export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
-  payload: Schema.Struct({}),
-  success: TerminalEvent,
-  error: EnvironmentAuthorizationError,
-  stream: true,
-});
-
-export const WsSubscribeTerminalMetadataRpc = Rpc.make(WS_METHODS.subscribeTerminalMetadata, {
-  payload: Schema.Struct({}),
-  success: TerminalMetadataStreamEvent,
-  error: EnvironmentAuthorizationError,
-  stream: true,
-});
-
 export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerConfig, {
   payload: Schema.Struct({}),
   success: ServerConfigStreamEvent,
@@ -1119,19 +1063,30 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscriptionAuthCancelRpc,
   WsSubscriptionAuthLogoutRpc,
   WsSubscriptionAuthHealthTestRpc,
+  WsImageProviderListRpc,
+  WsImageProviderHealthTestRpc,
   WsMcpServerAuthenticateRpc,
   WsBotInboxListRpc,
   WsBotInboxResolveRpc,
+  WsVoiceProvidersRpc,
+  WsVoiceConnectRpc,
+  WsVoiceDisconnectRpc,
+  WsVoiceTestRpc,
+  WsVoiceListVoicesRpc,
+  WsVoiceTranscribeRpc,
+  WsVoiceSynthesizeRpc,
+  WsVoiceCancelRpc,
   WsVoiceCallGetRpc,
   WsVoiceCallStartRpc,
   WsVoiceCallHangupRpc,
-  WsServerDiscoverSourceControlRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetRemoteDoctorRpc,
+  WsServerRepairRemoteDoctorRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
@@ -1139,6 +1094,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsMemoryExportRpc,
   WsMemoryImportPreviewRpc,
   WsMemoryImportApplyRpc,
+  WsMemoryArchiveExportRpc,
+  WsMemoryArchivePreviewImportRpc,
+  WsMemoryArchiveApplyImportRpc,
+  WsMemoryFactsListRpc,
+  WsMemoryFactMutateRpc,
   WsMemoryDocumentsInspectRpc,
   WsMemoryDocumentReplaceRpc,
   WsMemoryObservationsClearRpc,
@@ -1147,43 +1107,25 @@ export const WsRpcGroup = RpcGroup.make(
   WsPortabilityPreviewImportRpc,
   WsPortabilityApplyImportRpc,
   WsRoutinesListRunsRpc,
-  WsSourceControlLookupRepositoryRpc,
-  WsSourceControlCloneRepositoryRpc,
-  WsSourceControlPublishRepositoryRpc,
+  WsRoutinesListThreadRunsRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
-  WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
-  WsFilesystemBrowseRpc,
+  WsShellRevealAttachmentRpc,
   WsAssetsCreateUrlRpc,
   WsAttachmentsCreateUploadUrlRpc,
   WsAttachmentsDeleteRpc,
   WsProviderUploadFeedbackRpc,
-  WsSubscribeVcsStatusRpc,
-  WsVcsPullRpc,
-  WsVcsRefreshStatusRpc,
-  WsGitRunStackedActionRpc,
-  WsGitResolvePullRequestRpc,
-  WsGitPreparePullRequestThreadRpc,
-  WsVcsListRefsRpc,
-  WsVcsCreateWorktreeRpc,
-  WsVcsRemoveWorktreeRpc,
-  WsVcsCreateRefRpc,
-  WsVcsSwitchRefRpc,
-  WsVcsInitRpc,
-  WsReviewGetDiffPreviewRpc,
-  WsReviewGetDiffFileContentsRpc,
-  WsTerminalOpenRpc,
-  WsTerminalAttachRpc,
-  WsTerminalWriteRpc,
-  WsTerminalResizeRpc,
-  WsTerminalClearRpc,
-  WsTerminalRestartRpc,
-  WsTerminalCloseRpc,
-  WsSubscribeTerminalEventsRpc,
-  WsSubscribeTerminalMetadataRpc,
+  WsComputerGetStateRpc,
+  WsComputerOpenRpc,
+  WsComputerAcquireRpc,
+  WsComputerInputRpc,
+  WsComputerReleaseRpc,
+  WsComputerCloseRpc,
+  WsComputerStopRpc,
+  WsComputerEventsRpc,
   WsPreviewOpenRpc,
   WsPreviewNavigateRpc,
   WsPreviewResizeRpc,

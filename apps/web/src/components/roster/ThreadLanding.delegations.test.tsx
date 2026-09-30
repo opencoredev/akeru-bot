@@ -12,14 +12,14 @@ import {
   type OrchestrationLatestTurn,
   type OrchestrationShellSnapshot,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import { visitElements } from "../../test/reactElementTree";
 import type { Bot, Group } from "./types";
-import type { PendingUserInput } from "../../session-logic";
+import type { PendingApproval, PendingUserInput } from "../../session-logic";
 
 const mocks = vi.hoisted(() => ({
   providersAtom: Symbol("providers"),
@@ -30,8 +30,10 @@ const mocks = vi.hoisted(() => ({
   groups: [] as Group[],
   activities: [] as OrchestrationThreadActivity[],
   messages: [] as OrchestrationMessage[],
+  groupMessages: [] as OrchestrationMessage[],
   pendingUserInputs: [] as PendingUserInput[],
   groupPendingUserInputs: [] as PendingUserInput[],
+  pendingApproval: null as PendingApproval | null,
   latestTurn: null as OrchestrationLatestTurn | null,
 }));
 
@@ -42,6 +44,7 @@ vi.mock("react", async (importOriginal) => {
     ...actual,
     useCallback: reactHookHarness.useCallback,
     useEffect: () => undefined,
+    useId: () => "test-id",
     useMemo: reactHookHarness.useMemo,
     useRef: reactHookHarness.useRef,
     useState: reactHookHarness.useState,
@@ -60,6 +63,11 @@ vi.mock("@effect/atom-react", () => ({
         : [],
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
 vi.mock("../../modelSelection", () => ({
   getCustomModelOptionsByInstance: () => new Map(),
@@ -73,9 +81,18 @@ vi.mock("../../providerInstances", () => ({
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update"), channels: { send: Symbol("send") } },
   environmentPeopleAtom: () => mocks.peopleAtom,
+  environmentBotsAtom: () => Symbol("bots"),
 }));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
+}));
+vi.mock("./detailsPanelOpen", () => ({
+  useBotDetailsOpen: () => [false, () => undefined],
+  useGroupDetailsOpen: () => [false, () => undefined],
+}));
+vi.mock("../chat/ChatActionsMenu", () => ({
+  ChatActionsMenu: () => null,
+  useMarkChatVisited: () => undefined,
 }));
 vi.mock("../../state/entities", () => ({
   useThreadActivities: () => mocks.activities,
@@ -83,12 +100,16 @@ vi.mock("../../state/entities", () => ({
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
-  serverEnvironment: { subscriptionAuth: () => null },
+  serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => mocks.snapshotAtom }));
+vi.mock("./useServerRoster", () => ({
+  useRosterLoadState: () => ({ kind: "loading" }),
+  useEnableBotAutoReview: () => vi.fn(),
+}));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
 vi.mock("../voice/VoiceCall", () => ({
@@ -107,14 +128,30 @@ vi.mock("~/lib/replyPlaybackThread", () => ({
   useReplyPlaybackThread: () => undefined,
   replyPlaybackControlProps: () => undefined,
 }));
-vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
+vi.mock("./useRosterPendingApproval", () => ({
+  useRosterPendingApproval: () => ({
+    pendingApproval: mocks.pendingApproval,
+    pendingCount: mocks.pendingApproval ? 1 : 0,
+    responding: false,
+    responseError: null,
+    respond: vi.fn(),
+  }),
+}));
+vi.mock("./useBotEngineAvailability", () => ({
+  useBotEngineAvailability: () => ({
+    instanceEntries: [],
+    selection: null,
+    unavailability: null,
+    blocked: false,
+  }),
+}));
 vi.mock("./botPresence", () => ({
   useBotPresence: () => "idle",
   useGroupPresence: () => "idle",
 }));
 vi.mock("./rosterStore", () => {
   const useRosterStore = (selector: (state: unknown) => unknown) =>
-    selector({ bots: mocks.bots, groups: mocks.groups });
+    selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
   return { useRosterStore };
 });
@@ -144,7 +181,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
     respondingRequestIds: [],
-    messages: [],
+    messages: mocks.groupMessages,
     error: null,
     defaultProject: null,
     groupReady: true,
@@ -166,6 +203,7 @@ vi.mock("./useGroupThreadRuntime", () => ({
 
 import { AssistantMessageRow } from "./BotChatMessageRows";
 import { BotThreadLanding } from "./BotThreadLanding";
+import { BotPromptComposer } from "./BotPromptComposer";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { DelegationCard } from "./DelegationCard";
 import { GroupThreadLanding } from "./GroupThreadLanding";
@@ -205,7 +243,11 @@ const group: Group = {
   updatedAt: "2026-08-31T00:00:00.000Z",
 };
 
-function delegation(id: string, parentThreadId: string) {
+function delegation(
+  id: string,
+  parentThreadId: string,
+  placement: { readonly parentTurnId?: string; readonly anchorMessageId?: string } = {},
+) {
   return decodeDelegation({
     delegationId: id,
     parentDelegationId: null,
@@ -213,7 +255,8 @@ function delegation(id: string, parentThreadId: string) {
     childBotId: BotId.make(childBot.id),
     parentThreadId,
     childThreadId: null,
-    parentTurnId: "turn-parent",
+    parentTurnId: placement.parentTurnId ?? "turn-parent",
+    anchorMessageId: placement.anchorMessageId ?? null,
     childTurnId: null,
     ancestorBotIds: [BotId.make(parentBot.id)],
     depth: 1,
@@ -242,6 +285,47 @@ function delegation(id: string, parentThreadId: string) {
   });
 }
 
+function message(id: string, role: "user" | "assistant", turn: string, minute: number) {
+  const timestamp = `2026-09-11T12:0${minute}:00.000Z`;
+  return {
+    id: MessageId.make(id),
+    role,
+    text: `${role} ${id}`,
+    turnId: TurnId.make(turn),
+    ...(role === "assistant" ? { respondingBotId: BotId.make(parentBot.id) } : {}),
+    streaming: false,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  } satisfies OrchestrationMessage;
+}
+
+// Three turns, each started by a user message and answered by the parent bot.
+const THREE_TURNS = [
+  message("user-1", "user", "turn-1", 1),
+  message("reply-1", "assistant", "turn-1", 2),
+  message("user-2", "user", "turn-2", 3),
+  message("reply-2", "assistant", "turn-2", 4),
+  message("user-3", "user", "turn-3", 5),
+  message("reply-3", "assistant", "turn-3", 6),
+];
+
+/** Message ids and delegation ids in the order the landing renders them. */
+function timelineOrder(rendered: unknown): string[] {
+  const order: string[] = [];
+  visitElements(rendered, (element) => {
+    if (element.type === DelegationCard) {
+      order.push(
+        `card:${(element.props as Parameters<typeof DelegationCard>[0]).delegation.delegationId}`,
+      );
+      return false;
+    }
+    const key = element.key?.replace(/^message:/, "");
+    if (key && THREE_TURNS.some((entry) => entry.id === key)) order.push(key);
+    return false;
+  });
+  return order;
+}
+
 describe("thread landing delegations", () => {
   beforeEach(() => {
     hooks.reset();
@@ -249,8 +333,10 @@ describe("thread landing delegations", () => {
     mocks.groups = [group];
     mocks.activities = [];
     mocks.messages = [];
+    mocks.groupMessages = [];
     mocks.pendingUserInputs = [];
     mocks.groupPendingUserInputs = [];
+    mocks.pendingApproval = null;
     mocks.latestTurn = null;
     mocks.snapshot = {
       snapshotSequence: 1,
@@ -275,6 +361,83 @@ describe("thread landing delegations", () => {
 
     expect(card?.props.delegation.delegationId).toBe("matching");
     expect(card?.props.childBot).toBe(childBot);
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("places three delegations from three turns at three points in the %s chat", (kind, render) => {
+    if (kind === "bot") mocks.messages = THREE_TURNS;
+    else mocks.groupMessages = THREE_TURNS;
+    mocks.snapshot = {
+      ...mocks.snapshot!,
+      delegations: [
+        delegation("first", "thread-parent", { parentTurnId: "turn-1", anchorMessageId: "user-1" }),
+        delegation("second", "thread-parent", {
+          parentTurnId: "turn-2",
+          anchorMessageId: "user-2",
+        }),
+        delegation("third", "thread-parent", { parentTurnId: "turn-3", anchorMessageId: "user-3" }),
+      ],
+    };
+
+    hooks.beginRender();
+    expect(timelineOrder(render())).toEqual([
+      "user-1",
+      "reply-1",
+      "card:first",
+      "user-2",
+      "reply-2",
+      "card:second",
+      "user-3",
+      "reply-3",
+      "card:third",
+    ]);
+  });
+
+  it("follows the anchor, then the parent turn, then the end of the chat", () => {
+    mocks.messages = THREE_TURNS;
+    mocks.snapshot = {
+      ...mocks.snapshot!,
+      delegations: [
+        delegation("by-anchor", "thread-parent", {
+          parentTurnId: "turn-gone",
+          anchorMessageId: "reply-2",
+        }),
+        delegation("by-turn", "thread-parent", { parentTurnId: "turn-1" }),
+        delegation("unplaced", "thread-parent", { parentTurnId: "turn-gone" }),
+      ],
+    };
+
+    hooks.beginRender();
+    expect(timelineOrder(BotThreadLanding({ botId: parentBot.id }))).toEqual([
+      "user-1",
+      "reply-1",
+      "card:by-turn",
+      "user-2",
+      "reply-2",
+      "card:by-anchor",
+      "user-3",
+      "reply-3",
+      "card:unplaced",
+    ]);
+  });
+
+  it("names the asking bot on group cards", () => {
+    hooks.beginRender();
+    const groupCard = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.type === DelegationCard,
+    ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
+    hooks.reset();
+    const botCard = visitElements(
+      BotThreadLanding({ botId: parentBot.id }),
+      (element) => element.type === DelegationCard,
+    ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
+
+    expect(groupCard?.props.variant).toBe("group");
+    expect(groupCard?.props.parentBot).toBe(parentBot);
+    expect(botCard?.props.variant).toBeUndefined();
   });
 
   it("renders plugin recommendations inside the bot conversation", () => {
@@ -402,6 +565,146 @@ describe("thread landing delegations", () => {
 
     expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
     expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
+  });
+
+  it("keeps the active turn's intermediate answer out of the group transcript", () => {
+    const turnId = TurnId.make("turn-active");
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.groupMessages = [
+      {
+        id: MessageId.make("group-user"),
+        role: "user",
+        text: "Compare the options.",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("group-intermediate"),
+        role: "assistant",
+        text: "Let me look.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+    mocks.latestTurn = {
+      turnId,
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+
+    hooks.beginRender();
+    const rendered = GroupThreadLanding({ groupId: group.id });
+    const provider = visitElements(
+      rendered,
+      (element) => element.props.testId === "group-provider-message",
+    );
+    const sent = visitElements(
+      rendered,
+      (element) => element.props.testId === "group-user-message",
+    );
+
+    expect(sent).not.toBeNull();
+    expect(provider).toBeNull();
+  });
+
+  it("shows the group answer again once the turn settles", () => {
+    const turnId = TurnId.make("turn-settled");
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.groupMessages = [
+      {
+        id: MessageId.make("group-user"),
+        role: "user",
+        text: "Compare the options.",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("group-answer"),
+        role: "assistant",
+        text: "Here is the comparison.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+
+    hooks.beginRender();
+    const provider = visitElements(
+      GroupThreadLanding({ groupId: group.id }),
+      (element) => element.props.testId === "group-provider-message",
+    );
+
+    expect(provider).not.toBeNull();
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("does not report the %s composer as sending while an approval waits", (_kind, render) => {
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.latestTurn = {
+      turnId: TurnId.make("turn-approval"),
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+    mocks.pendingApproval = {
+      requestId: ApprovalRequestId.make("approval-1"),
+      requestKind: "command",
+      createdAt: timestamp,
+      detail: "Run the tests?",
+      options: [
+        { decision: "decline", label: "Decline" },
+        { decision: "accept", label: "Allow" },
+      ],
+    };
+
+    hooks.beginRender();
+    const composer = visitElements(
+      render(),
+      (element) => element.type === BotPromptComposer,
+    ) as ReactElement<Parameters<typeof BotPromptComposer>[0]> | null;
+
+    expect(composer?.props.busy).toBe(false);
+    expect(composer?.props.activitySlot).toBeNull();
+  });
+
+  it.each([
+    ["bot", () => BotThreadLanding({ botId: parentBot.id })],
+    ["group", () => GroupThreadLanding({ groupId: group.id })],
+  ])("reports the %s composer as sending while a turn runs", (_kind, render) => {
+    const timestamp = "2026-09-11T12:00:00.000Z";
+    mocks.latestTurn = {
+      turnId: TurnId.make("turn-running"),
+      state: "running",
+      requestedAt: timestamp,
+      startedAt: timestamp,
+      completedAt: null,
+      assistantMessageId: null,
+    };
+
+    hooks.beginRender();
+    const composer = visitElements(
+      render(),
+      (element) => element.type === BotPromptComposer,
+    ) as ReactElement<Parameters<typeof BotPromptComposer>[0]> | null;
+
+    expect(composer?.props.busy).toBe(true);
+    expect(composer?.props.activitySlot).not.toBeNull();
   });
 
   it.each([

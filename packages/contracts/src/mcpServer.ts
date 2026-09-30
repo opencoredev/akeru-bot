@@ -30,6 +30,16 @@ export const McpServerUrl = TrimmedNonEmptyString.check(
   }),
 );
 
+export const MCP_SERVER_INSTRUCTIONS_MAX_CHARS = 4_000;
+
+/**
+ * Guidance a bot receives about when and how to use one MCP server. Instructions
+ * are plain text, not credentials, and an empty value clears them.
+ */
+export const McpServerInstructions = Schema.String.check(
+  Schema.isMaxLength(MCP_SERVER_INSTRUCTIONS_MAX_CHARS),
+);
+
 const StdioMcpServerConfiguration = Schema.Struct({
   name: TrimmedNonEmptyString,
   transport: Schema.Literal("stdio"),
@@ -58,6 +68,7 @@ export const McpServer = Schema.Union([
   Schema.Struct({
     id: McpServerId,
     ...StdioMcpServerConfiguration.fields,
+    instructions: Schema.optional(McpServerInstructions),
     enabled: Schema.Boolean,
     createdAt: IsoDateTime,
     updatedAt: IsoDateTime,
@@ -65,6 +76,7 @@ export const McpServer = Schema.Union([
   Schema.Struct({
     id: McpServerId,
     ...UrlMcpServerConfiguration.fields,
+    instructions: Schema.optional(McpServerInstructions),
     enabled: Schema.Boolean,
     createdAt: IsoDateTime,
     updatedAt: IsoDateTime,

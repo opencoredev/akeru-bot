@@ -13,9 +13,7 @@ import {
   AuthAdministrativeScopes,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
-  AuthReviewWriteScope,
   AuthStandardClientScopes,
-  AuthTerminalOperateScope,
   type AuthClientSession,
   type AuthEnvironmentScope,
   type AuthPairingLink,
@@ -25,12 +23,13 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
-} from "@t3tools/contracts";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+} from "@akeru/contracts";
+import { translateConnectionStatus } from "@akeru/client-runtime/i18n";
+import { useI18n } from "../../i18n";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
@@ -40,7 +39,9 @@ import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestam
 import { resolveDesktopPairingUrl } from "./pairingUrls";
 import {
   applyWslEnableSelection,
+  isAdvertisedEndpointRemotelyReachable,
   isQrShareableEndpoint,
+  parsePairingUrlFields,
   selectQrEndpointOption,
 } from "./ConnectionsSettings.logic";
 import {
@@ -84,8 +85,7 @@ import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
 import { Textarea } from "../ui/textarea";
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "../../pairingUrl";
-import { readHostedPairingRequest } from "../../hostedPairing";
+import { setPairingTokenOnUrl } from "../../pairingUrl";
 import {
   createServerPairingCredential,
   revokeOtherServerClientSessions,
@@ -125,6 +125,7 @@ import { serverEnvironment } from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
+import { RemoteHealthSection } from "./RemoteHealthSection";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
@@ -157,22 +158,12 @@ const PAIRING_SCOPE_OPTIONS: ReadonlyArray<{
   {
     scope: AuthOrchestrationReadScope,
     title: "View environment",
-    description: "Read conversations, status, diffs, and configuration.",
+    description: "Read conversations, status, and configuration.",
   },
   {
     scope: AuthOrchestrationOperateScope,
     title: "Operate bot work",
     description: "Start bot work and perform changes in the environment.",
-  },
-  {
-    scope: AuthTerminalOperateScope,
-    title: "Use terminals",
-    description: "Create terminals and send input to running shells.",
-  },
-  {
-    scope: AuthReviewWriteScope,
-    title: "Write reviews",
-    description: "Create comments while reviewing changes.",
   },
   {
     scope: AuthAccessReadScope,
@@ -293,42 +284,11 @@ function parseManualDesktopSshTarget(input: {
   };
 }
 
-function parsePairingUrlFields(
-  input: string,
-): { readonly host: string; readonly pairingCode: string } | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  try {
-    const urlLikeInput =
-      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
-        ? trimmed
-        : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
-    const hostedPairingRequest = readHostedPairingRequest(url);
-    if (hostedPairingRequest) {
-      return {
-        host: hostedPairingRequest.host,
-        pairingCode: hostedPairingRequest.token,
-      };
-    }
-
-    const pairingCode = getPairingTokenFromUrl(url);
-    if (!pairingCode) return null;
-    return {
-      host: url.origin,
-      pairingCode,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function parseRemotePairingFields(input: { readonly host: string; readonly pairingCode: string }): {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
+  const parsedPairingUrl = parsePairingUrlFields(input.host, window.location.origin);
   if (parsedPairingUrl) return parsedPairingUrl;
 
   const host = input.host.trim();
@@ -1139,7 +1099,9 @@ const PairingClientsList = memo(function PairingClientsList({
 
       {pairingLinks.length === 0 && clientSessions.length === 0 && !isLoading ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-muted-foreground/60">No pairing links or client sessions.</p>
+          <p className="text-xs text-muted-foreground">
+            No other clients have access. Create a pairing link to connect a device.
+          </p>
         </div>
       ) : null}
     </>
@@ -1174,7 +1136,10 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
   return (
     <div className={endpointRowClassName(presentation, isAvailable)}>
       {isEndpointRail && isDefault ? (
-        <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary" aria-hidden />
+        <span
+          className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-foreground/70"
+          aria-hidden
+        />
       ) : null}
       <div className="flex min-h-6 min-w-0 flex-col gap-2 sm:-my-0.5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-baseline gap-3">
@@ -1203,7 +1168,7 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
         </div>
         <div className="ml-auto flex min-h-6 shrink-0 items-center justify-end gap-2">
           {isDefault ? (
-            <span className="rounded-md border border-primary/30 bg-primary/10 px-1 py-0.5 text-[10px] text-primary">
+            <span className="rounded-md border border-border bg-muted px-1 py-0.5 text-[10px] text-foreground">
               Default
             </span>
           ) : null}
@@ -1298,6 +1263,7 @@ function SavedBackendListRow({
   onConnect,
   onRemove,
 }: SavedBackendListRowProps) {
+  const { t } = useI18n();
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
@@ -1310,7 +1276,7 @@ function SavedBackendListRow({
         : connectionState === "error"
           ? "bg-destructive"
           : "bg-muted-foreground/40";
-  const statusTooltip = connectionStatusText(environment.connection);
+  const statusTooltip = translateConnectionStatus(t, environment.connection);
   const errorTraceId = environment.connection.traceId;
   const { copyToClipboard: copyTraceIdToClipboard } = useCopyToClipboard<{ traceId: string }>({
     target: "trace ID",
@@ -1400,14 +1366,21 @@ function SavedBackendListRow({
           ) : null}
           {environment.connection.error && !resumingServerUpdate ? (
             <p className="flex min-w-0 items-center gap-2 text-destructive text-xs">
-              <span className="truncate">{connectionStatusText(environment.connection)}</span>
+              <Tooltip>
+                <TooltipTrigger render={<span className="truncate" />}>
+                  {statusTooltip}
+                </TooltipTrigger>
+                <TooltipPopup side="top" className="max-w-sm break-words">
+                  {environment.connection.error}
+                </TooltipPopup>
+              </Tooltip>
               {errorTraceId ? (
                 <button
                   type="button"
                   className="shrink-0 underline underline-offset-2"
                   onClick={() => copyTraceId(errorTraceId)}
                 >
-                  Copy trace ID
+                  {t("Copy trace ID")}
                 </button>
               ) : null}
             </p>
@@ -1520,14 +1493,17 @@ function EmptyRemoteEnvironments() {
         <ChevronsLeftRightEllipsisIcon />
       </EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle>No saved remote environments</EmptyTitle>
-        <EmptyDescription>Click “Add environment” to pair another environment.</EmptyDescription>
+        <EmptyTitle>No other environments</EmptyTitle>
+        <EmptyDescription>
+          Add a server to work with its bots, chats, and projects from this client.
+        </EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
 }
 
 export function ConnectionsSettings() {
+  const { t } = useI18n();
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
@@ -2129,8 +2105,11 @@ export function ConnectionsSettings() {
         : visibleDesktopNetworkAdvertisedEndpoints,
     [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
-  const isLocalBackendRemotelyReachable =
-    isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
+  // Desktop reports what it exposes; a browser has no endpoint list and relies
+  // on the server's auth policy.
+  const isLocalBackendRemotelyReachable = desktopBridge
+    ? isAdvertisedEndpointRemotelyReachable(visibleDesktopAdvertisedEndpoints)
+    : currentAuthPolicy === "remote-reachable";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),
@@ -2155,7 +2134,7 @@ export function ConnectionsSettings() {
     [setDefaultAdvertisedEndpointKey],
   );
   const handleSavedBackendHostChange = useCallback((value: string) => {
-    const parsedPairingUrl = parsePairingUrlFields(value);
+    const parsedPairingUrl = parsePairingUrlFields(value, window.location.origin);
     if (parsedPairingUrl) {
       setSavedBackendHost(parsedPairingUrl.host);
       setSavedBackendPairingCode(parsedPairingUrl.pairingCode);
@@ -2177,7 +2156,7 @@ export function ConnectionsSettings() {
         aria-pressed={selected}
         className={cn(
           "group flex min-h-24 items-start gap-3 rounded-lg border p-4 text-left",
-          selected ? "border-primary/50 bg-primary/5" : "border-border/60 hover:bg-muted/40",
+          selected ? "border-foreground/50 bg-muted/70" : "border-border/60 hover:bg-muted/40",
         )}
         disabled={isAddingSavedBackend}
         onClick={() => {
@@ -2189,8 +2168,8 @@ export function ConnectionsSettings() {
             className={cn(
               "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border",
               selected
-                ? "border-primary/30 bg-primary/10 text-primary"
-                : "border-border/70 bg-background text-muted-foreground group-hover:text-foreground",
+                ? "border-foreground/30 bg-secondary text-foreground"
+                : "border-border/70 bg-secondary text-muted-foreground group-hover:text-foreground",
             )}
           >
             {input.icon}
@@ -2769,9 +2748,16 @@ export function ConnectionsSettings() {
     <SettingsRow
       title="Network access"
       description={
-        currentAuthPolicy === "remote-reachable"
-          ? "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
-          : "This backend is only reachable on this machine. Restart it with a non-loopback host to enable remote pairing."
+        currentAuthPolicy === "remote-reachable" ? (
+          "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
+        ) : (
+          <>
+            This server listens only on localhost. Other devices can reach it through Tailscale
+            Serve (<code className="font-mono text-foreground/85">akeru pair --tailscale</code>) or
+            after a restart with a reachable{" "}
+            <code className="font-mono text-foreground/85">--host</code>.
+          </>
+        )
       }
       control={
         <Tooltip>
@@ -2854,6 +2840,10 @@ export function ConnectionsSettings() {
               <>{renderDisabledNetworkAccessRow()}</>
             )}
           </SettingsSection>
+
+          {primaryEnvironmentId !== null ? (
+            <RemoteHealthSection environmentId={primaryEnvironmentId} />
+          ) : null}
 
           {isLocalBackendRemotelyReachable ? (
             <SettingsSection
@@ -3152,14 +3142,14 @@ export function ConnectionsSettings() {
       ) : (
         <SettingsSection title="This environment">
           <SettingsRow
-            title="Administrative access"
-            description="Pairing links and client-session management require the access:write scope for this backend."
+            title="Pairing and device access"
+            description="This device can use your bots, but it can't create pairing links or sign other devices out. Do that from Akeru Bot on the computer that runs this server."
           />
         </SettingsSection>
       )}
 
       <SettingsSection
-        {...searchableSetting("remote-environments")}
+        {...searchableSetting("remote-environments", t)}
         headerAction={
           <Dialog
             open={addBackendDialogOpen}
@@ -3177,8 +3167,8 @@ export function ConnectionsSettings() {
                     render={
                       <Button
                         size="xs"
-                        variant="ghost"
-                        className="h-5 gap-1 rounded-sm px-1 text-[11px] font-normal text-muted-foreground/60 hover:text-muted-foreground"
+                        variant="outline"
+                        className="gap-1"
                         aria-label="Add environment"
                       >
                         <PlusIcon className="size-3" />
@@ -3192,8 +3182,11 @@ export function ConnectionsSettings() {
             </Tooltip>
             <DialogPopup className="max-h-[80dvh] sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Add Environment</DialogTitle>
-                <DialogDescription>Pair another environment to this client.</DialogDescription>
+                <DialogTitle>Add environment</DialogTitle>
+                <DialogDescription>
+                  Connect this client to another server. Its bots, chats, and projects stay on that
+                  server.
+                </DialogDescription>
               </DialogHeader>
               <DialogPanel>
                 <div className="space-y-4">

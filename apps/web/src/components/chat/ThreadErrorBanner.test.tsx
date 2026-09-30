@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { presentThreadError } from "@akeru/client-runtime/errors";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -70,37 +71,91 @@ describe("ThreadErrorBanner", () => {
   it("never shows a null error", () => {
     expect(shouldShowThreadErrorBanner("env:thread-e", null, false)).toBe(false);
   });
-  it("aligns the warning and dismiss icons with the first line of a multi-line error", () => {
+  it("shows a concise summary and keeps technical details collapsed", () => {
     const markup = renderToStaticMarkup(
       <ThreadErrorBanner
         error={"The first error line\ncontinues on a second line"}
+        threadKey="env:thread-summary"
         onDismiss={() => {}}
       />,
     );
 
     expect(markup).toContain('role="alert"');
     expect(markup).toContain('aria-label="Dismiss error"');
-    expect(markup).not.toContain("controlAlignment");
-    expect(markup).toContain("flex gap-2 items-start");
-    expect(markup).toContain("min-h-7 pt-1 sm:min-h-6 sm:pt-0.5");
-    expect(markup).toContain("h-lh w-4");
-    expect(markup).toContain("h-lh self-start");
+    expect(markup).toContain("The bot couldn’t finish that request");
+    expect(markup).toContain("Technical details");
+    expect(markup).not.toContain("continues on a second line");
   });
 
-  it("offers a one-click feedback draft containing the error details", () => {
-    const markup = renderToStaticMarkup(<ThreadErrorBanner error="Provider crashed" />);
+  it("offers a feedback draft without raw provider details", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner error="Provider crashed" threadKey="env:thread-feedback" />,
+    );
 
     expect(markup).toContain("Send feedback");
-    expect(threadErrorFeedbackDraft("Provider crashed")).toBe(
-      "A request failed in a bot chat.\n\nError details:\nProvider crashed",
+    const draft = threadErrorFeedbackDraft(
+      "Provider crashed on request req-123 at file:///home/leo/private.ts:1 with account passphrase winter-heron",
     );
+    expect(draft).toContain("The bot couldn’t finish that request");
+    expect(draft).not.toContain("req-123");
+    expect(draft).not.toContain("/home/leo");
+    expect(draft).not.toContain("winter-heron");
+  });
+
+  it("does not ask for feedback about a rate limit or a dropped connection", () => {
+    for (const error of ["429 Too Many Requests", "WebSocket disconnected"]) {
+      const markup = renderToStaticMarkup(
+        <ThreadErrorBanner error={error} threadKey={`env:thread-${error}`} />,
+      );
+      expect(markup).not.toContain("Send feedback");
+    }
   });
 
   it("offers Resume for a recoverable failed request", () => {
     const markup = renderToStaticMarkup(
-      <ThreadErrorBanner error="Automatic recovery failed" onResume={() => {}} />,
+      <ThreadErrorBanner
+        error="Automatic recovery failed"
+        threadKey="env:thread-resume"
+        onResume={() => {}}
+      />,
     );
 
     expect(markup).toContain(">Resume<");
+  });
+
+  it("turns a disabled provider exception into an actionable message", () => {
+    const error =
+      "ProviderValidationError: Provider validation failed in AgentController.inspectEngine: Provider instance 'codex' is disabled in Akeru Bot settings. at DisabledProviderError (file:///home/leo/app.ts:1:2)";
+
+    expect(presentThreadError(error)).toEqual({
+      title: "Codex is turned off",
+      description: "Turn Codex on in Settings > Providers, then send your message again.",
+      technicalDetails: "Provider instance “codex” is disabled.",
+      action: "providers",
+    });
+
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner error={error} threadKey="env:thread-disabled-provider" />,
+    );
+    expect(markup).toContain("Codex is turned off");
+    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
+    expect(markup).not.toContain("Send feedback");
+    expect(markup).not.toContain("AgentController.inspectEngine");
+    expect(markup).not.toContain("/home/leo");
+  });
+
+  it("uses the server's failure category to name the provider and the fix", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner
+        error="Claude authentication failed."
+        threadKey="env:thread-expired"
+        context={{ unavailability: "expired-login", providerName: "Claude" }}
+      />,
+    );
+
+    expect(markup).toContain("Claude sign-in expired");
+    expect(markup).toContain("Reconnect Claude in Settings &gt; Providers");
+    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
+    expect(markup).not.toContain("Send feedback");
   });
 });

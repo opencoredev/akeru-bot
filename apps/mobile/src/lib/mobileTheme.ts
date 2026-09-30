@@ -6,11 +6,8 @@ import {
   type MobileThemeId as SharedMobileThemeId,
   type ThemeAppearance,
   type ThemeColors,
-} from "@t3tools/shared/themePalettes";
-import {
-  STANDARD_THEME_PREVIEW_COLORS,
-  type ThemePreviewColors,
-} from "@t3tools/shared/themePreview";
+} from "@akeru/shared/themePalettes";
+import { STANDARD_THEME_PREVIEW_COLORS, type ThemePreviewColors } from "@akeru/shared/themePreview";
 import { DEFAULT_MOBILE_THEME_VARIABLES } from "./mobileDefaultTheme";
 
 export const DEFAULT_MOBILE_THEME_ID = MOBILE_DEFAULT_THEME_ID;
@@ -31,10 +28,21 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
 type MobileThemeVariable = `--color-${string}`;
 export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>;
 
+// Theme ids before the rebrand; mapped so stored preferences keep resolving.
+const LEGACY_MOBILE_THEME_IDS: Readonly<Record<string, MobileThemeId>> = {
+  "t3-code": DEFAULT_MOBILE_THEME_ID,
+  "t3-chat": "akeru-chat",
+};
+
 export function normalizeMobileThemeId(value: unknown): MobileThemeId {
-  return typeof value === "string" && (MOBILE_THEME_IDS as readonly string[]).includes(value)
-    ? (value as MobileThemeId)
-    : DEFAULT_MOBILE_THEME_ID;
+  if (typeof value === "string") {
+    if ((MOBILE_THEME_IDS as readonly string[]).includes(value)) {
+      return value as MobileThemeId;
+    }
+    const aliased = LEGACY_MOBILE_THEME_IDS[value];
+    if (aliased !== undefined) return aliased;
+  }
+  return DEFAULT_MOBILE_THEME_ID;
 }
 
 export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {

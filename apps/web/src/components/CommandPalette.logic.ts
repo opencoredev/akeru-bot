@@ -1,281 +1,244 @@
-import {
-  type FilesystemBrowseEntry,
-  type KeybindingCommand,
-  THREAD_JUMP_KEYBINDING_COMMANDS,
-} from "@t3tools/contracts";
-import { filterFilesystemBrowseEntries } from "@t3tools/client-runtime/state/filesystem";
-import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import { type KeybindingCommand, PLACEHOLDER_THREAD_TITLE } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ReactNode } from "react";
-import { sortThreads } from "../lib/threadSort";
-import { formatRelativeTimeLabel } from "../timestampFormat";
-import { type Project, type SidebarThreadSummary, type Thread } from "../types";
 
-export const RECENT_THREAD_LIMIT = 12;
 export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const ADDON_ICON_CLASS = "size-4";
+export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands and chats...";
 
-export function browseInputEndPaddingClass(input: {
-  readonly willCreateProjectPath: boolean;
-  readonly hasHighlightedBrowseItem: boolean;
-}): string {
-  if (input.willCreateProjectPath) {
-    return "*:data-[slot=autocomplete-input]:pe-38!";
-  }
-  if (input.hasHighlightedBrowseItem) {
-    return "*:data-[slot=autocomplete-input]:pe-30!";
-  }
-  return "*:data-[slot=autocomplete-input]:pe-24!";
-}
-
-/**
- * The global search overlay hosts three mutually exclusive surfaces: the
- * command palette (⌘K), the project file picker (⌘P), and project content
- * search (⇧⌘F). One reducer owns open/mode state so the surfaces can never
- * stack and re-triggering a mode's shortcut toggles it closed.
- */
-export type SearchOverlayMode = "command" | "files" | "content";
-
-export interface CommandPaletteOpenIntent {
-  readonly kind: "add-project" | "new-thread-in";
-}
-
-export interface CommandPaletteUiState {
-  readonly open: boolean;
-  readonly mode: SearchOverlayMode;
-  readonly openIntent: CommandPaletteOpenIntent | null;
-}
-
-export type CommandPaletteUiAction =
-  | { readonly _tag: "SetOpen"; readonly open: boolean }
-  | { readonly _tag: "ToggleMode"; readonly mode: SearchOverlayMode }
-  | { readonly _tag: "OpenAddProject" }
-  | { readonly _tag: "OpenNewThreadIn" }
-  | { readonly _tag: "ClearOpenIntent" };
-
-export function reduceCommandPaletteUiState(
-  state: CommandPaletteUiState,
-  action: CommandPaletteUiAction,
-): CommandPaletteUiState {
-  switch (action._tag) {
-    case "SetOpen":
-      return action.open
-        ? { open: true, mode: "command", openIntent: state.openIntent }
-        : { ...state, open: false, openIntent: null };
-    case "ToggleMode":
-      return state.open && state.mode === action.mode
-        ? { ...state, open: false, openIntent: null }
-        : { open: true, mode: action.mode, openIntent: null };
-    case "OpenAddProject":
-      return { open: true, mode: "command", openIntent: { kind: "add-project" } };
-    case "OpenNewThreadIn":
-      return { open: true, mode: "command", openIntent: { kind: "new-thread-in" } };
-    case "ClearOpenIntent":
-      return state.openIntent ? { ...state, openIntent: null } : state;
-  }
-}
-
-export interface CommandPaletteThreadContentMatch {
-  readonly source: "user" | "assistant";
-  readonly snippet: string;
-  readonly query: string;
-}
-
-export interface CommandPaletteItem {
-  readonly kind: "action" | "submenu";
+export interface CommandPaletteActionItem {
   readonly value: string;
   readonly searchTerms: ReadonlyArray<string>;
   readonly title: ReactNode;
   readonly description?: ReactNode;
-  readonly threadContentMatch?: CommandPaletteThreadContentMatch;
-  readonly timestamp?: string;
   readonly icon: ReactNode;
   readonly disabled?: boolean;
-  /** Optional content rendered inline before the title text. */
-  readonly titleLeadingContent?: ReactNode;
-  /** Optional content rendered inline after the title text (before the timestamp). */
-  readonly titleTrailingContent?: ReactNode;
   readonly shortcutCommand?: KeybindingCommand;
-}
-
-export interface CommandPaletteActionItem extends CommandPaletteItem {
-  readonly kind: "action";
-  readonly keepOpen?: boolean;
   readonly run: () => Promise<void>;
-}
-
-export interface CommandPaletteSubmenuItem extends CommandPaletteItem {
-  readonly kind: "submenu";
-  readonly addonIcon: ReactNode;
-  readonly groups: ReadonlyArray<CommandPaletteGroup>;
-  readonly initialQuery?: string;
 }
 
 export interface CommandPaletteGroup {
   readonly value: string;
   readonly label: string;
-  readonly items: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
+  readonly items: ReadonlyArray<CommandPaletteActionItem>;
 }
 
+/**
+ * The open chat's actions as palette rows, in the order its header menu lists
+ * them. Each row matches its translated title as well as its English terms.
+ */
+export function buildChatCommandPaletteItems(input: {
+  readonly actions: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly description?: string;
+    readonly searchTerms: ReadonlyArray<string>;
+    readonly shortcutCommand?: KeybindingCommand;
+    readonly run: () => Promise<void> | void;
+  }>;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem[] {
+  return input.actions.map((action) => ({
+    value: `chat:${action.id}`,
+    searchTerms: [action.title, "chat", ...action.searchTerms],
+    title: action.title,
+    ...(action.description ? { description: action.description } : {}),
+    icon: input.icon,
+    ...(action.shortcutCommand ? { shortcutCommand: action.shortcutCommand } : {}),
+    run: async () => {
+      await action.run();
+    },
+  }));
+}
+
+/** Opens Settings > General at the language row; matches English and translated labels. */
+export function buildLanguageCommandPaletteAction(input: {
+  readonly translate: (message: string) => string;
+  readonly openSettings: (section: "general", targetId: "language") => void;
+  readonly icon: ReactNode;
+}): CommandPaletteActionItem {
+  const title = input.translate("Change language");
+  return {
+    value: "action:language",
+    searchTerms: [
+      title,
+      "language",
+      "locale",
+      "translation",
+      "English",
+      "system default",
+      "preferences",
+      "Chinese",
+      "中文",
+      "简体中文",
+    ],
+    title,
+    icon: input.icon,
+    run: async () => {
+      input.openSettings("general", "language");
+    },
+  };
+}
+
+/**
+ * Opens the model picker of whichever composer registered one. Disabled when no
+ * composer is mounted; the picker opens after the palette closes so focus lands in it.
+ */
 export function buildModelPickerCommandPaletteAction(input: {
   readonly composerHandle: { readonly openModelPicker: () => void } | null;
-  readonly closePalette: () => void;
   readonly scheduleAfterClose: (openModelPicker: () => void) => void;
+  readonly title: string;
   readonly icon: ReactNode;
 }): CommandPaletteActionItem {
   return {
-    kind: "action",
     value: "action:change-model",
-    searchTerms: ["change model", "model", "provider", "reasoning"],
-    title: "Change model",
+    searchTerms: [input.title, "change model", "model", "provider", "reasoning"],
+    title: input.title,
     icon: input.icon,
     disabled: input.composerHandle === null,
-    keepOpen: true,
     shortcutCommand: "modelPicker.toggle",
     run: async () => {
       if (input.composerHandle === null) return;
-      input.closePalette();
       input.scheduleAfterClose(input.composerHandle.openModelPicker);
     },
   };
 }
 
-export interface CommandPaletteView {
-  readonly addonIcon: ReactNode;
-  readonly groups: ReadonlyArray<CommandPaletteGroup>;
-  readonly initialQuery?: string;
+/** A chat the palette can find: its title, owner, and whether this client can open it. */
+export interface CommandPaletteChat {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly title: string;
+  readonly updatedAt: string;
+  /** Bot or group name shown under the title, when known. */
+  readonly ownerName: string | null;
+  /** Null when the chat lives in an environment this client's chat views do not show. */
+  readonly unavailableIn: string | null;
 }
 
-export function enumerateCommandPaletteItems(
-  items: ReadonlyArray<CommandPaletteActionItem>,
-): CommandPaletteActionItem[] {
-  return items.map((item, index) => {
-    const shortcutCommand = THREAD_JUMP_KEYBINDING_COMMANDS[index];
-    if (shortcutCommand) return { ...item, shortcutCommand };
+/** A server-side message match, already limited to one snippet per chat. */
+export interface CommandPaletteChatMatch {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly snippet: string;
+}
 
-    const { shortcutCommand: _shortcutCommand, ...itemWithoutShortcut } = item;
-    return itemWithoutShortcut;
+export const COMMAND_PALETTE_CHAT_LIMIT = 8;
+
+/**
+ * Looks up a bot or group name in the roster of the environment a chat lives
+ * in. Ids are scoped per environment, so a primary-environment name is never
+ * used for another environment's chat.
+ */
+export function buildEnvironmentOwnerNames(
+  rosters: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly bots: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+    readonly groups: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  }>,
+): (
+  environmentId: string,
+  owner: {
+    readonly botId?: string | null | undefined;
+    readonly groupId?: string | null | undefined;
+  },
+) => string | null {
+  const names = new Map<string, string>();
+  const key = (environmentId: string, kind: "bot" | "group", id: string) =>
+    `${environmentId}\u0000${kind}\u0000${id}`;
+  for (const roster of rosters) {
+    for (const bot of roster.bots) names.set(key(roster.environmentId, "bot", bot.id), bot.name);
+    for (const group of roster.groups) {
+      names.set(key(roster.environmentId, "group", group.id), group.name);
+    }
+  }
+  return (environmentId, owner) =>
+    (owner.botId ? names.get(key(environmentId, "bot", owner.botId)) : undefined) ??
+    (owner.groupId ? names.get(key(environmentId, "group", owner.groupId)) : undefined) ??
+    null;
+}
+
+/**
+ * The palette's Chats results for a typed query: chats whose title contains the
+ * query first, tighter matches ahead, then chats the server matched by message,
+ * in its order, with the matching snippet as the description. Chats in another
+ * environment are listed but disabled, because this client cannot open them,
+ * and only after every chat it can open, so they never crowd one out.
+ * A leading ">" asks for actions only, so it yields no chats.
+ */
+export function buildChatSearchCommandPaletteItems(input: {
+  readonly query: string;
+  readonly chats: ReadonlyArray<CommandPaletteChat>;
+  readonly matches: ReadonlyArray<CommandPaletteChatMatch>;
+  readonly untitledLabel: string;
+  readonly unavailableLabel: (environmentLabel: string) => string;
+  readonly icon: ReactNode;
+  readonly openChat: (chat: CommandPaletteChat) => Promise<void>;
+  readonly limit?: number;
+}): CommandPaletteActionItem[] {
+  if (input.query.startsWith(">")) return [];
+  const normalizedQuery = normalizeSearchText(input.query);
+  if (normalizedQuery.length === 0) return [];
+  const limit = input.limit ?? COMMAND_PALETTE_CHAT_LIMIT;
+  const chatKey = (chat: { readonly environmentId: string; readonly threadId: string }) =>
+    `${chat.environmentId}:${chat.threadId}`;
+  const chatsByKey = new Map(input.chats.map((chat) => [chatKey(chat), chat] as const));
+
+  // A placeholder title says nothing about the chat, so only its messages can match.
+  const titleOf = (chat: CommandPaletteChat) =>
+    chat.title === PLACEHOLDER_THREAD_TITLE ? "" : chat.title.trim();
+  const titleMatches = input.chats
+    .map((chat, index) => ({
+      chat,
+      index,
+      rank: rankSearchFieldMatch(titleOf(chat), normalizedQuery),
+    }))
+    .filter((entry) => entry.rank !== Number.NEGATIVE_INFINITY)
+    .toSorted(
+      (left, right) =>
+        right.rank - left.rank ||
+        right.chat.updatedAt.localeCompare(left.chat.updatedAt) ||
+        left.index - right.index,
+    )
+    .map((entry) => ({ chat: entry.chat, snippet: null as string | null }));
+  const seen = new Set(titleMatches.map((entry) => chatKey(entry.chat)));
+  const messageMatches = input.matches.flatMap((match) => {
+    const chat = chatsByKey.get(chatKey(match));
+    if (!chat || seen.has(chatKey(chat))) return [];
+    seen.add(chatKey(chat));
+    return [{ chat, snippet: match.snippet.trim() || null }];
   });
-}
 
-export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-browse";
+  const ranked = [...titleMatches, ...messageMatches];
+  return [
+    ...ranked.filter((entry) => entry.chat.unavailableIn === null),
+    ...ranked.filter((entry) => entry.chat.unavailableIn !== null),
+  ]
+    .slice(0, limit)
+    .map(({ chat, snippet }) => {
+      const description = [
+        chat.ownerName,
+        chat.unavailableIn === null ? null : input.unavailableLabel(chat.unavailableIn),
+        snippet,
+      ]
+        .filter((part): part is string => part !== null && part.length > 0)
+        .join(" · ");
+      return {
+        value: `chat-search:${chatKey(chat)}`,
+        searchTerms: [titleOf(chat), snippet ?? ""],
+        title: titleOf(chat) || input.untitledLabel,
+        ...(description ? { description } : {}),
+        icon: input.icon,
+        ...(chat.unavailableIn === null ? {} : { disabled: true }),
+        run: async () => {
+          await input.openChat(chat);
+        },
+      };
+    });
+}
 
 export function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-export function buildProjectActionItems(input: {
-  projects: ReadonlyArray<Project>;
-  valuePrefix: string;
-  icon: (project: Project) => ReactNode;
-  runProject: (project: Project) => Promise<void>;
-  searchTerms?: (project: Project) => ReadonlyArray<string>;
-  renderDescription?: (project: Project) => ReactNode;
-  shortcutCommand?: KeybindingCommand;
-}): CommandPaletteActionItem[] {
-  return input.projects.map((project) => ({
-    kind: "action",
-    value: `${input.valuePrefix}:${project.environmentId}:${project.id}`,
-    searchTerms: [project.title, project.workspaceRoot, ...(input.searchTerms?.(project) ?? [])],
-    title: project.title,
-    description: input.renderDescription?.(project) ?? project.workspaceRoot,
-    icon: input.icon(project),
-    ...(input.shortcutCommand !== undefined ? { shortcutCommand: input.shortcutCommand } : {}),
-    run: async () => {
-      await input.runProject(project);
-    },
-  }));
-}
-
-export type BuildThreadActionItemsThread = Pick<
-  SidebarThreadSummary,
-  | "archivedAt"
-  | "branch"
-  | "createdAt"
-  | "environmentId"
-  | "id"
-  | "modelSelection"
-  | "projectId"
-  | "session"
-  | "title"
-  | "worktreePath"
-> & {
-  updatedAt: string;
-  latestUserMessageAt?: string | null;
-};
-
-export function buildThreadActionItems<TThread extends BuildThreadActionItemsThread>(input: {
-  threads: ReadonlyArray<TThread>;
-  activeThreadId?: Thread["id"];
-  projectTitleById: ReadonlyMap<Project["id"], string>;
-  sortOrder: SidebarThreadSortOrder;
-  icon: ReactNode;
-  /** Optional content rendered inline before the title text per-thread. */
-  renderLeadingContent?: (thread: TThread) => ReactNode;
-  /** Optional content rendered inline after the title text per-thread. */
-  renderTrailingContent?: (thread: TThread) => ReactNode;
-  /** Optional rich description (e.g. favicon + workspace icons). Falls back to text. */
-  renderDescription?: (thread: TThread, meta: { projectTitle: string | undefined }) => ReactNode;
-  getContentMatch?: (thread: TThread) => CommandPaletteThreadContentMatch | undefined;
-  runThread: (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => Promise<void>;
-  limit?: number;
-}): CommandPaletteActionItem[] {
-  const sortedThreads = sortThreads(
-    input.threads.filter((thread) => thread.archivedAt === null),
-    input.sortOrder,
-  );
-  const visibleThreads =
-    input.limit === undefined ? sortedThreads : sortedThreads.slice(0, input.limit);
-
-  return visibleThreads.map((thread) => {
-    const projectTitle = input.projectTitleById.get(thread.projectId);
-    const descriptionParts: string[] = [];
-
-    if (projectTitle) {
-      descriptionParts.push(projectTitle);
-    }
-    if (thread.branch) {
-      descriptionParts.push(`#${thread.branch}`);
-    }
-    if (thread.id === input.activeThreadId) {
-      descriptionParts.push("Current chat");
-    }
-
-    const leadingContent = input.renderLeadingContent?.(thread);
-    const trailingContent = input.renderTrailingContent?.(thread);
-    const contentMatch = input.getContentMatch?.(thread);
-    const description = input.renderDescription
-      ? input.renderDescription(thread, { projectTitle })
-      : descriptionParts.join(` · `);
-
-    return Object.assign(
-      {
-        kind: "action" as const,
-        value: `thread:${thread.id}`,
-        searchTerms: [
-          thread.title,
-          projectTitle ?? ``,
-          thread.branch ?? ``,
-          contentMatch?.snippet ?? ``,
-        ],
-        title: thread.title,
-        description,
-        timestamp: formatRelativeTimeLabel(
-          thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
-        ),
-        icon: input.icon,
-      },
-      leadingContent ? { titleLeadingContent: leadingContent } : {},
-      trailingContent ? { titleTrailingContent: trailingContent } : {},
-      contentMatch ? { threadContentMatch: contentMatch } : {},
-      {
-        run: async () => {
-          await input.runThread(thread);
-        },
-      },
-    );
-  });
 }
 
 function rankSearchFieldMatch(field: string, normalizedQuery: string): number {
@@ -293,74 +256,40 @@ function rankSearchFieldMatch(field: string, normalizedQuery: string): number {
 }
 
 function rankCommandPaletteItemMatch(
-  item: CommandPaletteActionItem | CommandPaletteSubmenuItem,
+  item: CommandPaletteActionItem,
   normalizedQuery: string,
 ): number {
   const terms = item.searchTerms.filter((term) => term.length > 0);
-  if (terms.length === 0) {
-    return 0;
-  }
-
   for (const [index, field] of terms.entries()) {
     const fieldRank = rankSearchFieldMatch(field, normalizedQuery);
     if (fieldRank !== Number.NEGATIVE_INFINITY) {
       return 1_000 - index * 100 + fieldRank;
     }
   }
-
   return 0;
 }
 
+/**
+ * Filters each group to the items whose search terms contain the query, ranking
+ * earlier and tighter term matches first. A leading ">" is accepted and ignored
+ * so the VS Code habit of typing it still works.
+ */
 export function filterCommandPaletteGroups(input: {
-  activeGroups: ReadonlyArray<CommandPaletteGroup>;
-  query: string;
-  isInSubmenu: boolean;
-  projectSearchItems: ReadonlyArray<CommandPaletteActionItem>;
-  threadSearchItems: ReadonlyArray<CommandPaletteActionItem>;
+  readonly groups: ReadonlyArray<CommandPaletteGroup>;
+  readonly query: string;
 }): CommandPaletteGroup[] {
-  const isActionsFilter = input.query.startsWith(">");
-  const searchQuery = isActionsFilter ? input.query.slice(1) : input.query;
+  const searchQuery = input.query.startsWith(">") ? input.query.slice(1) : input.query;
   const normalizedQuery = normalizeSearchText(searchQuery);
-
   if (normalizedQuery.length === 0) {
-    if (isActionsFilter) {
-      return input.activeGroups.filter((group) => group.value === "actions");
-    }
-    return [...input.activeGroups];
+    return [...input.groups];
   }
 
-  let baseGroups = [...input.activeGroups];
-  if (isActionsFilter) {
-    baseGroups = baseGroups.filter((group) => group.value === "actions");
-  } else if (!input.isInSubmenu) {
-    baseGroups = baseGroups.filter((group) => group.value !== "recent-threads");
-  }
-
-  const searchableGroups = [...baseGroups];
-  if (!input.isInSubmenu && !isActionsFilter) {
-    if (input.projectSearchItems.length > 0) {
-      searchableGroups.push({
-        value: "projects-search",
-        label: "Projects",
-        items: input.projectSearchItems,
-      });
-    }
-    if (input.threadSearchItems.length > 0) {
-      searchableGroups.push({
-        value: "threads-search",
-        label: "Conversations",
-        items: input.threadSearchItems,
-      });
-    }
-  }
-
-  return searchableGroups.flatMap((group) => {
+  return input.groups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
       const haystack = normalizeSearchText(item.searchTerms.join(" "));
       if (!haystack.includes(normalizedQuery)) {
         return Result.failVoid;
       }
-
       return Result.succeed({
         item,
         index,
@@ -370,112 +299,6 @@ export function filterCommandPaletteGroups(input: {
       .toSorted((left, right) => right.rank - left.rank || left.index - right.index)
       .map((entry) => entry.item);
 
-    if (items.length === 0) {
-      return [];
-    }
-
-    return [{ value: group.value, label: group.label, items }];
+    return items.length === 0 ? [] : [{ value: group.value, label: group.label, items }];
   });
-}
-
-export function buildBrowseGroups(input: {
-  browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
-  browseQuery: string;
-  canBrowseUp: boolean;
-  upIcon: ReactNode;
-  directoryIcon: ReactNode;
-  browseUp: () => void | Promise<void>;
-  browseTo: (name: string) => void | Promise<void>;
-}): CommandPaletteGroup[] {
-  const items: CommandPaletteActionItem[] = [];
-
-  if (input.canBrowseUp) {
-    items.push({
-      kind: "action",
-      value: "browse:up",
-      searchTerms: [input.browseQuery, ".."],
-      title: "..",
-      icon: input.upIcon,
-      keepOpen: true,
-      run: async () => {
-        await input.browseUp();
-      },
-    });
-  }
-
-  for (const entry of input.browseEntries) {
-    items.push({
-      kind: "action",
-      value: `browse:${entry.fullPath}`,
-      searchTerms: [input.browseQuery, entry.fullPath, entry.name],
-      title: entry.name,
-      icon: input.directoryIcon,
-      keepOpen: true,
-      run: async () => {
-        await input.browseTo(entry.name);
-      },
-    });
-  }
-
-  return [{ value: "directories", label: "Directories", items }];
-}
-
-export function filterPinnedBrowseEntries(input: {
-  browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
-  filterQuery: string;
-  pinnedDirectoryName: string;
-  caseSensitive: boolean;
-}): ReturnType<typeof filterFilesystemBrowseEntries> {
-  const namesMatch = (left: string, right: string) =>
-    input.caseSensitive ? left === right : left.toLowerCase() === right.toLowerCase();
-  const visibleFilterQuery = namesMatch(input.filterQuery, input.pinnedDirectoryName)
-    ? ""
-    : input.filterQuery;
-  const { visibleEntries } = filterFilesystemBrowseEntries(input.browseEntries, visibleFilterQuery);
-  const exactEntry =
-    input.filterQuery.length > 0
-      ? (input.browseEntries.find((entry) => namesMatch(entry.name, input.filterQuery)) ?? null)
-      : null;
-  return { visibleEntries, exactEntry };
-}
-
-export function getCommandPaletteMode(input: {
-  currentView: CommandPaletteView | null;
-  isBrowsing: boolean;
-}): CommandPaletteMode {
-  if (input.currentView) {
-    return input.isBrowsing ? "submenu-browse" : "submenu";
-  }
-  return input.isBrowsing ? "root-browse" : "root";
-}
-
-export function buildRootGroups(input: {
-  actionItems: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
-  recentThreadItems: ReadonlyArray<CommandPaletteActionItem>;
-}): CommandPaletteGroup[] {
-  const groups: CommandPaletteGroup[] = [];
-  if (input.actionItems.length > 0) {
-    groups.push({ value: "actions", label: "Actions", items: input.actionItems });
-  }
-  if (input.recentThreadItems.length > 0) {
-    groups.push({
-      value: "recent-threads",
-      label: "Recent conversations",
-      items: input.recentThreadItems,
-    });
-  }
-  return groups;
-}
-
-export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): string {
-  switch (mode) {
-    case "root":
-      return "Search commands, projects, and conversations...";
-    case "root-browse":
-      return "Enter project path (e.g. ~/projects/my-app)";
-    case "submenu":
-      return "Search...";
-    case "submenu-browse":
-      return "Enter path (e.g. ~/projects/my-app)";
-  }
 }

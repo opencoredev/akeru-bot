@@ -4,8 +4,7 @@ import {
   type OrchestrationThreadDetailSnapshot,
   type ServerConfig,
   type ThreadId,
-  type VcsListRefsResult,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -28,10 +27,6 @@ export class ConnectionPersistenceError extends Schema.TaggedErrorClass<Connecti
       "remove-thread",
       "load-server-config",
       "save-server-config",
-      "load-vcs-refs",
-      "save-vcs-refs",
-      "remove-vcs-refs",
-      "clear-vcs-refs",
       "clear-environment",
     ]),
     message: Schema.String,
@@ -43,7 +38,7 @@ export class ConnectionTargetStore extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<ConnectionTarget>, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/ConnectionTargetStore") {}
+>()("@akeru/client-runtime/platform/persistence/ConnectionTargetStore") {}
 
 export class ConnectionRegistrationStore extends Context.Service<
   ConnectionRegistrationStore,
@@ -53,7 +48,7 @@ export class ConnectionRegistrationStore extends Context.Service<
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly remove: (target: ConnectionTarget) => Effect.Effect<void, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/ConnectionRegistrationStore") {}
+>()("@akeru/client-runtime/platform/persistence/ConnectionRegistrationStore") {}
 
 export class EnvironmentCacheStore extends Context.Service<
   EnvironmentCacheStore,
@@ -91,40 +86,15 @@ export class EnvironmentCacheStore extends Context.Service<
       environmentId: EnvironmentId,
       config: ServerConfig,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
-    /**
-     * The unfiltered branch list for a workspace. Query-specific lists are not
-     * cached because they are incomplete and unsafe to present as a full picker.
-     */
-    readonly loadVcsRefs: (
-      environmentId: EnvironmentId,
-      cwd: string,
-    ) => Effect.Effect<Option.Option<VcsListRefsResult>, ConnectionPersistenceError>;
-    readonly saveVcsRefs: (
-      environmentId: EnvironmentId,
-      cwd: string,
-      refs: VcsListRefsResult,
-    ) => Effect.Effect<void, ConnectionPersistenceError>;
-    readonly removeVcsRefs: (
-      environmentId: EnvironmentId,
-      cwd: string,
-    ) => Effect.Effect<void, ConnectionPersistenceError>;
-    /**
-     * Removes every persisted branch-list snapshot for an environment. Git ref
-     * mutations are repository-wide, and linked worktrees may have cached the
-     * same refs under different working-directory keys.
-     */
-    readonly clearVcsRefs: (
-      environmentId: EnvironmentId,
-    ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly clear: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<void, ConnectionPersistenceError>;
   }
->()("@t3tools/client-runtime/platform/persistence/EnvironmentCacheStore") {}
+>()("@akeru/client-runtime/platform/persistence/EnvironmentCacheStore") {}
 
 export class EnvironmentOwnedDataCleanup extends Context.Reference<{
   readonly clear: (environmentId: EnvironmentId) => Effect.Effect<void>;
-}>("@t3tools/client-runtime/platform/persistence/EnvironmentOwnedDataCleanup", {
+}>("@akeru/client-runtime/platform/persistence/EnvironmentOwnedDataCleanup", {
   defaultValue: () => ({
     clear: () => Effect.void,
   }),

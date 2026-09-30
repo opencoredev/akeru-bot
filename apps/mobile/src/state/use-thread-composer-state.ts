@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
@@ -7,19 +9,19 @@ import {
   MessageId,
   type EnvironmentId,
   type ModelSelection,
-  type ProviderInteractionMode,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
   type RuntimeMode,
   type ThreadId,
-} from "@t3tools/contracts";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+} from "@akeru/contracts";
+import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
   codexFeedbackMessage,
   parseCodexFeedbackCommand,
   submitCodexFeedback,
   type CodexFeedbackSubmission,
-} from "@t3tools/client-runtime/state/threads";
-import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
-import { deriveActiveWorkStartedAt } from "@t3tools/shared/orchestrationTiming";
+} from "@akeru/client-runtime/state/threads";
+import { isAtomCommandInterrupted } from "@akeru/client-runtime/state/runtime";
+import { deriveActiveWorkStartedAt } from "@akeru/shared/orchestrationTiming";
 
 import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
 import {
@@ -27,12 +29,16 @@ import {
   pasteComposerClipboard,
   pickComposerImages,
 } from "../lib/composerImages";
-import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
-import { buildThreadFeed, unchangedPrefixLength } from "../lib/threadActivity";
+import { useMobileI18n } from "../lib/i18n";
+import {
+  buildThreadFeed,
+  deriveThreadFeedDelegations,
+  unchangedPrefixLength,
+  type ThreadFeedDelegations,
+} from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
-import { appAtomRegistry } from "../state/atom-registry";
 import {
   appendComposerDraftAttachments,
   appendComposerDraftText,
@@ -50,25 +56,11 @@ import {
 import { setPendingConnectionError } from "../state/use-remote-environment-registry";
 import { useSelectedThreadDetail } from "../state/use-thread-detail";
 import { useThreadSelection } from "../state/use-thread-selection";
+import { environmentSnapshotAtom } from "../state/shell";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
-
-export function appendReviewCommentToDraft(input: {
-  readonly environmentId: EnvironmentId;
-  readonly threadId: ThreadId;
-  readonly text: string;
-  readonly attachments?: ReadonlyArray<DraftComposerImageAttachment>;
-}): void {
-  const threadKey = scopedThreadKey(input.environmentId, input.threadId);
-  const existing = appAtomRegistry.get(composerDraftsAtom)[threadKey]?.text ?? "";
-  const separator = existing.trim().length > 0 && !existing.endsWith("\n") ? "\n\n" : "";
-  setComposerDraftText(threadKey, `${existing}${separator}${input.text}`);
-  if (input.attachments && input.attachments.length > 0) {
-    appendComposerDraftAttachments(threadKey, input.attachments);
-  }
-}
 
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;
@@ -86,7 +78,23 @@ export function useThreadDraftForThread(input: {
   };
 }
 
+const feedDelegationsAtom = Atom.family((key: string) => {
+  const [environmentId, threadId] = key.split("\n") as [
+    EnvironmentId | undefined,
+    ThreadId | undefined,
+  ];
+  return Atom.make((get) =>
+    deriveThreadFeedDelegations(
+      threadId,
+      environmentId === undefined
+        ? undefined
+        : (get(environmentSnapshotAtom(environmentId))?.delegations ?? []),
+    ),
+  ).pipe(Atom.withLabel(`mobile-feed-delegations:${key}`));
+});
+
 export function useThreadComposerState() {
+  const { t } = useMobileI18n();
   const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
@@ -135,6 +143,18 @@ export function useThreadComposerState() {
     () => (selectedThreadKey ? (queuedMessagesByThreadKey[selectedThreadKey] ?? []) : []),
     [queuedMessagesByThreadKey, selectedThreadKey],
   );
+  // Delegations live on the environment snapshot, not the thread detail.
+  const selectedThreadDelegations = useAtomValue(
+    feedDelegationsAtom(
+      selectedThreadShell
+        ? `${selectedThreadShell.environmentId}\n${selectedThreadShell.id}`
+        : "\n",
+    ),
+  );
+  const selectedThreadFeedDelegations = useMemo(
+    () => JSON.parse(selectedThreadDelegations) as ThreadFeedDelegations,
+    [selectedThreadDelegations],
+  );
   const selectedThreadFeed = useMemo(() => {
     if (!selectedThreadDetail) {
       return [];
@@ -142,14 +162,21 @@ export function useThreadComposerState() {
     const submissions = selectedThreadKey
       ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? [])
       : [];
+    const { delegations } = selectedThreadFeedDelegations;
     return buildThreadFeed(selectedThreadDetail, {
       localMessages: submissions.flatMap((submission) =>
         submission.status === "interrupted"
           ? []
           : [codexFeedbackMessage(submission), codexFeedbackMessage(submission, "assistant")],
       ),
+      delegations,
     });
-  }, [feedbackSubmissionsByThreadKey, selectedThreadDetail, selectedThreadKey]);
+  }, [
+    feedbackSubmissionsByThreadKey,
+    selectedThreadFeedDelegations,
+    selectedThreadDetail,
+    selectedThreadKey,
+  ]);
 
   // Draft text and attachments are read by the composer itself, so typing
   // re-renders the composer rather than the whole thread route.
@@ -158,7 +185,6 @@ export function useThreadComposerState() {
   const selectedThread = selectedThreadDetail ?? selectedThreadShell;
   const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
   const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
-  const interactionMode = selectedDraft.interactionMode ?? selectedThread?.interactionMode ?? null;
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
@@ -209,7 +235,7 @@ export function useThreadComposerState() {
         : null;
     if (feedbackCommand) {
       if (thread.session === null) {
-        Alert.alert("Start a Codex chat first", "Send a message before you submit feedback.");
+        Alert.alert(t("Start a Codex chat first"), t("Send a message before you submit feedback."));
         return null;
       }
       const metadata = makeQueuedMessageMetadata();
@@ -247,16 +273,16 @@ export function useThreadComposerState() {
         }
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not send feedback to OpenAI",
-          error instanceof Error ? error.message : "An error occurred.",
+          t("Could not send feedback to OpenAI"),
+          error instanceof Error ? error.message : t("An error occurred."),
         );
         return null;
       }
       const feedbackId = result.value.feedbackId;
-      Alert.alert("Feedback sent to OpenAI", `Thread ID: ${feedbackId}`, [
-        { text: "OK", style: "cancel" },
+      Alert.alert(t("Feedback sent to OpenAI"), t("Thread ID: {id}", { id: feedbackId }), [
+        { text: t("OK"), style: "cancel" },
         {
-          text: "Copy ID",
+          text: t("Copy ID"),
           onPress: () => copyTextWithHaptic(feedbackId, { target: "Codex feedback thread ID" }),
         },
       ]);
@@ -279,7 +305,7 @@ export function useThreadComposerState() {
       attachments,
       modelSelection: draft.modelSelection ?? thread.modelSelection,
       runtimeMode: draft.runtimeMode ?? thread.runtimeMode,
-      interactionMode: draft.interactionMode ?? thread.interactionMode,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey);
@@ -299,6 +325,7 @@ export function useThreadComposerState() {
     selectedEnvironmentRuntime?.serverConfig?.providers,
     selectedThreadDetail,
     selectedThreadShell,
+    t,
     uploadThreadFeedback,
   ]);
 
@@ -410,23 +437,15 @@ export function useThreadComposerState() {
     [selectedThreadKey],
   );
 
-  const onUpdateInteractionMode = useCallback(
-    (value: ProviderInteractionMode) => {
-      if (!selectedThreadKey) {
-        return;
-      }
-      updateComposerDraftSettings(selectedThreadKey, { interactionMode: value });
-    },
-    [selectedThreadKey],
-  );
+  const selectedThreadWaitingOnChildren = selectedThreadFeedDelegations.waitingOnChildren;
 
   return {
     selectedThreadFeed,
+    selectedThreadWaitingOnChildren,
     selectedThreadQueueCount,
     activeWorkStartedAt,
     modelSelection,
     runtimeMode,
-    interactionMode,
     onChangeDraftMessage,
     onPickDraftImages,
     onPasteIntoDraft,
@@ -435,6 +454,5 @@ export function useThreadComposerState() {
     onSendMessage,
     onUpdateModelSelection,
     onUpdateRuntimeMode,
-    onUpdateInteractionMode,
   };
 }

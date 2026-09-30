@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
@@ -83,7 +83,14 @@ export class EnvironmentRegistry extends Context.Service<
       | EnvironmentNotRegisteredError
       | PlatformEnvironmentRemovalError
     >;
-    readonly retryNow: (environmentId: EnvironmentId) => Effect.Effect<void>;
+    /**
+     * Reconnects now. Retry restores connection intent, so an automatic caller
+     * passes `onlyIfDesired` to leave an environment the user disconnected alone.
+     */
+    readonly retryNow: (
+      environmentId: EnvironmentId,
+      options?: { readonly onlyIfDesired?: boolean },
+    ) => Effect.Effect<void>;
     readonly state: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<SupervisorConnectionState, EnvironmentNotRegisteredError>;
@@ -111,7 +118,7 @@ export class EnvironmentRegistry extends Context.Service<
       stream: Stream.Stream<A, E, R>,
     ) => Stream.Stream<A, E, Exclude<R, EnvironmentSupervisor.EnvironmentSupervisor>>;
   }
->()("@t3tools/client-runtime/connection/registry/EnvironmentRegistry") {}
+>()("@akeru/client-runtime/connection/registry/EnvironmentRegistry") {}
 
 interface EnvironmentServiceScope {
   readonly entry: ConnectionCatalogEntry;
@@ -596,9 +603,11 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const retryNow = (environmentId: EnvironmentId) =>
+  const retryNow = (environmentId: EnvironmentId, options?: { readonly onlyIfDesired?: boolean }) =>
     acquireSupervisor(environmentId).pipe(
-      Effect.flatMap((supervisor) => supervisor.retryNow),
+      Effect.flatMap((supervisor) =>
+        options?.onlyIfDesired === true ? supervisor.retryIfDesired : supervisor.retryNow,
+      ),
       Effect.catchTag("EnvironmentNotRegisteredError", () => Effect.void),
       Effect.withSpan("EnvironmentRegistry.retryNow"),
     );

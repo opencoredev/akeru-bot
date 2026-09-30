@@ -9,7 +9,7 @@ import {
   GroupId,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import {
@@ -88,6 +88,30 @@ describe("entity memory access", () => {
         }),
       );
       assert.equal(exit._tag, "Failure");
+    }),
+  );
+
+  it.effect("revokes a bot from shared history on the next turn", () =>
+    Effect.gen(function* () {
+      const before = yield* resolveAuthorizedMemoryPartitions({
+        ...base,
+        botId: BotId.make("bot-2"),
+        groupId: GroupId.make("group-1"),
+        respondingBotId: BotId.make("bot-2"),
+        groupMemberBotIds: [BotId.make("bot-1"), BotId.make("bot-2")],
+      });
+      const after = yield* Effect.exit(
+        resolveAuthorizedMemoryPartitions({
+          ...base,
+          botId: BotId.make("bot-2"),
+          groupId: GroupId.make("group-1"),
+          respondingBotId: BotId.make("bot-2"),
+          groupMemberBotIds: [BotId.make("bot-1")],
+        }),
+      );
+
+      assert.isTrue(before.some((candidate) => candidate.scope === "group"));
+      assert.equal(after._tag, "Failure");
     }),
   );
 

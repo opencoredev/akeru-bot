@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { PreparedConnection } from "@t3tools/client-runtime/connection";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { ServerConfig } from "@t3tools/contracts";
+import type { PreparedConnection } from "@akeru/client-runtime/connection";
+import type { EnvironmentId } from "@akeru/contracts";
+import type { ServerConfig } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -17,6 +17,7 @@ import {
 } from "../state/environments";
 import { useWorkspaceState } from "../state/workspace";
 import type { SavedRemoteConnection } from "../lib/connection";
+import { useMobileI18n } from "../lib/i18n";
 import { appAtomRegistry } from "./atom-registry";
 import type { ConnectedEnvironmentSummary, EnvironmentRuntimeState } from "./remote-runtime-types";
 import { environmentSession, usePreparedConnection } from "./session";
@@ -83,6 +84,7 @@ function toRuntimeState(
   return {
     connectionState: environment.connection.phase,
     connectionError: environment.connection.error,
+    connectionErrorCode: environment.connection.errorCode ?? null,
     connectionErrorTraceId: environment.connection.traceId,
     serverConfig,
   };
@@ -131,6 +133,7 @@ export function useRemoteConnectionStatus() {
         displayUrl: environment.displayUrl,
         connectionState: environment.connectionState,
         connectionError: environment.connectionError,
+        connectionErrorCode: environment.connectionErrorCode,
         connectionErrorTraceId: environment.connectionErrorTraceId,
       })),
     [workspace.environments],
@@ -144,6 +147,7 @@ export function useRemoteConnectionStatus() {
 }
 
 export function useRemoteConnections() {
+  const { t } = useMobileI18n();
   const controller = useConnectionController();
   const connectionPairingUrl = useAtomValue(connectionPairingUrlAtom);
   const pendingConnectionError = useAtomValue(pendingConnectionErrorAtom);
@@ -192,12 +196,14 @@ export function useRemoteConnections() {
         return;
       }
       Alert.alert(
-        "Remove environment?",
-        `Disconnect and forget ${environment.environmentLabel} on this device.`,
+        t("Remove environment?"),
+        t("Disconnect and forget {label} on this device.", {
+          label: environment.environmentLabel,
+        }),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("Cancel"), style: "cancel" },
           {
-            text: "Remove",
+            text: t("Remove"),
             style: "destructive",
             onPress: () => {
               void controller.removeEnvironment(environmentId);
@@ -206,7 +212,7 @@ export function useRemoteConnections() {
         ],
       );
     },
-    [connectedEnvironments, controller],
+    [connectedEnvironments, controller, t],
   );
 
   return {

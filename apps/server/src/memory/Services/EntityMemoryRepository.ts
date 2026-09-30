@@ -1,11 +1,14 @@
 import type {
   AkeruMemoryId,
+  AkeruMemoryMutation,
   AkeruMemoryRevision,
   AkeruMemoryRootId,
+  AkeruMemoryTargetScope,
   AkeruMemoryThreadAccess,
   AkeruMemoryImportPreview,
   AkeruMemoryImportApplyResult,
-} from "@t3tools/contracts";
+  MessageId,
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -52,7 +55,7 @@ export interface ListEntityMemoryInput {
 }
 
 export interface ListEntityMemoryPartitionsInput {
-  readonly tenantId: AkeruMemoryThreadAccess["tenantId"];
+  readonly access: AkeruMemoryThreadAccess;
   readonly partitions: ReadonlyArray<AuthorizedMemoryPartition>;
   readonly complete: boolean;
 }
@@ -66,6 +69,28 @@ export interface InsertEntityMemoryInput {
 
 export interface ReviseEntityMemoryInput extends InsertEntityMemoryInput {
   readonly expectedRevision: number;
+}
+
+export interface ApplyEntityMemoryMutationInput {
+  readonly access: AkeruMemoryThreadAccess;
+  readonly mutation: Extract<AkeruMemoryMutation, { readonly operation: `fact.${string}` }>;
+  readonly memoryId: AkeruMemoryId;
+  readonly updatedAt: string;
+  /** Shared-scope policy for a mutation that lands a fact on a shared scope. */
+  readonly sharedProjectApproval: "approved" | "pending";
+}
+
+// Writes a new approved fact to the partition that backs a target scope for
+// the given thread access. Used when a person approves a memory candidate.
+export interface InsertScopedEntityMemoryInput {
+  readonly access: AkeruMemoryThreadAccess;
+  readonly scope: AkeruMemoryTargetScope;
+  readonly fact: string;
+  readonly sensitive: boolean;
+  readonly confidence: number;
+  readonly sourceMessageId: MessageId | null;
+  readonly memoryId: AkeruMemoryId;
+  readonly createdAt: string;
 }
 
 export interface TombstoneEntityMemoryInput {
@@ -84,6 +109,10 @@ export interface ImportEntityMemoryInput {
 
 export interface ApplyEntityMemoryImportInput extends ImportEntityMemoryInput {
   readonly previewHash: string;
+  readonly resolutions?: ReadonlyArray<{
+    readonly rootId: AkeruMemoryRootId;
+    readonly decision: "keep-local" | "use-archive";
+  }>;
 }
 
 export class EntityMemoryImportError extends Schema.TaggedErrorClass<EntityMemoryImportError>()(
@@ -103,6 +132,11 @@ export type EntityMemoryRepositoryError =
   | EntityMemoryImportError;
 
 export interface EntityMemoryRepositoryShape {
+  readonly recordDerivedCopies?: (input: {
+    readonly tenantId: string;
+    readonly threadId: string;
+    readonly revisions: ReadonlyArray<AkeruMemoryRevision>;
+  }) => Effect.Effect<void, EntityMemoryRepositoryError>;
   readonly insert: (
     input: InsertEntityMemoryInput,
   ) => Effect.Effect<AkeruMemoryRevision, EntityMemoryRepositoryError>;
@@ -136,6 +170,12 @@ export interface EntityMemoryRepositoryShape {
   readonly deleteRoot: (
     input: DeleteEntityMemoryInput,
   ) => Effect.Effect<void, EntityMemoryRepositoryError>;
+  readonly insertScopedFact: (
+    input: InsertScopedEntityMemoryInput,
+  ) => Effect.Effect<AkeruMemoryRevision, EntityMemoryRepositoryError>;
+  readonly applyMutation: (
+    input: ApplyEntityMemoryMutationInput,
+  ) => Effect.Effect<AkeruMemoryRevision | null, EntityMemoryRepositoryError>;
 }
 
 export class EntityMemoryRepository extends Context.Service<

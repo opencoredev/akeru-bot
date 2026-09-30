@@ -4,8 +4,8 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
-} from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+} from "@akeru/contracts";
+import { createModelCapabilities } from "@akeru/shared/model";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -23,6 +23,7 @@ const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
 const OPENCODE_DRIVER = ProviderDriverKind.make("opencode");
+const GROK_DRIVER = ProviderDriverKind.make("grok");
 
 const makeProvider = (
   provider: ProviderDriverKind,
@@ -179,6 +180,31 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         skills: cachedCodex.skills,
         message: cachedCodex.message,
       },
+    );
+  });
+
+  it("starts Grok from its last good model list while the first probe runs", () => {
+    const cachedGrok = makeProvider(GROK_DRIVER, {
+      models: [
+        { slug: "grok-build", name: "Grok Build", isCustom: false, capabilities: null },
+        { slug: "grok-code", name: "Grok Code", isCustom: false, capabilities: null },
+      ],
+    });
+    const fallbackGrok = makeProvider(GROK_DRIVER, {
+      status: "warning",
+      auth: { status: "unknown" },
+      models: [
+        { slug: "grok-build", name: "Grok Build", isCustom: false, capabilities: null },
+        { slug: "my-grok", name: "my-grok", isCustom: true, capabilities: null },
+      ],
+    });
+
+    assert.deepStrictEqual(
+      hydrateCachedProvider({
+        cachedProvider: cachedGrok,
+        fallbackProvider: fallbackGrok,
+      }).models.map((model) => model.slug),
+      ["grok-build", "my-grok", "grok-code"],
     );
   });
 

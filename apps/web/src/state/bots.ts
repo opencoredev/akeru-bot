@@ -1,7 +1,9 @@
-import { createBotEnvironmentAtoms } from "@t3tools/client-runtime/state/bots";
-import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@t3tools/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { createBotEnvironmentAtoms } from "@akeru/client-runtime/state/bots";
+import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
+import * as Option from "effect/Option";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
+import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSnapshotAtom } from "./shell";
 
@@ -23,6 +25,23 @@ export const environmentGroupsAtom = Atom.family((environmentId: EnvironmentId) 
       get(environmentSnapshotAtom(environmentId))?.groups ?? EMPTY_GROUPS,
   ).pipe(Atom.withLabel(`web-groups:${environmentId}`)),
 );
+
+export interface EnvironmentRoster {
+  readonly environmentId: EnvironmentId;
+  readonly bots: ReadonlyArray<OrchestrationBot>;
+  readonly groups: ReadonlyArray<OrchestrationGroup>;
+}
+
+/** The bots and groups of every environment whose snapshot has loaded. */
+export const allEnvironmentRostersAtom = Atom.make((get): ReadonlyArray<EnvironmentRoster> => {
+  const catalog = AsyncResult.value(get(environmentCatalog.catalogAtom));
+  if (Option.isNone(catalog)) return [];
+  return Array.from(catalog.value.entries.keys(), (environmentId) => ({
+    environmentId,
+    bots: get(environmentBotsAtom(environmentId)),
+    groups: get(environmentGroupsAtom(environmentId)),
+  }));
+}).pipe(Atom.withLabel("web-all-environment-rosters"));
 
 export const environmentPeopleAtom = Atom.family((environmentId: EnvironmentId) =>
   Atom.make((get) => {

@@ -1,4 +1,4 @@
-import { CommandId, McpServerId } from "@t3tools/contracts";
+import { CommandId, McpServerId } from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -140,6 +140,75 @@ registryLayer("MCP server registry", (it) => {
         snapshot = yield* snapshots.getShellSnapshot();
         assert.deepEqual(snapshot.mcpServers, []);
       }),
+  );
+
+  it.effect("sets, preserves across update, and clears MCP server instructions", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const mcpServerId = McpServerId.make("mcp-instructions");
+
+      yield* engine.dispatch({
+        type: "mcp-server.create",
+        commandId: CommandId.make("cmd-instructions-create"),
+        mcpServerId,
+        name: "Docs",
+        transport: "url",
+        url: "https://mcp.example.com/docs",
+        createdAt: "2026-09-01T10:00:00.000Z",
+      });
+      yield* engine.dispatch({
+        type: "mcp-server.instructions.set",
+        commandId: CommandId.make("cmd-instructions-set"),
+        mcpServerId,
+        instructions: "  Search the docs before answering.  ",
+      });
+      let server = (yield* snapshots.getShellSnapshot()).mcpServers?.find(
+        (candidate) => candidate.id === mcpServerId,
+      );
+      assert.equal(server?.instructions, "Search the docs before answering.");
+
+      yield* engine.dispatch({
+        type: "mcp-server.update",
+        commandId: CommandId.make("cmd-instructions-rename"),
+        mcpServerId,
+        name: "Product docs",
+        transport: "url",
+        url: "https://mcp.example.com/docs",
+      });
+      server = (yield* snapshots.getShellSnapshot()).mcpServers?.find(
+        (candidate) => candidate.id === mcpServerId,
+      );
+      assert.equal(server?.name, "Product docs");
+      assert.equal(server?.instructions, "Search the docs before answering.");
+
+      yield* engine.dispatch({
+        type: "mcp-server.instructions.set",
+        commandId: CommandId.make("cmd-instructions-clear"),
+        mcpServerId,
+        instructions: "",
+      });
+      server = (yield* snapshots.getShellSnapshot()).mcpServers?.find(
+        (candidate) => candidate.id === mcpServerId,
+      );
+      assert.equal(server?.instructions, undefined);
+
+      const missing = yield* engine
+        .dispatch({
+          type: "mcp-server.instructions.set",
+          commandId: CommandId.make("cmd-instructions-missing"),
+          mcpServerId: McpServerId.make("mcp-instructions-missing"),
+          instructions: "Anything",
+        })
+        .pipe(Effect.flip);
+      assert.match(String(missing), /does not exist/);
+
+      yield* engine.dispatch({
+        type: "mcp-server.delete",
+        commandId: CommandId.make("cmd-instructions-delete"),
+        mcpServerId,
+      });
+    }),
   );
 
   it.effect("rejects duplicate creates and commands against a missing id", () =>

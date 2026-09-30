@@ -5,7 +5,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Socket from "effect/unstable/socket/Socket";
 import * as ExpoCrypto from "expo-crypto";
 
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+import { remoteHttpClientLayer } from "@akeru/client-runtime/rpc";
 
 import * as Persistence from "../persistence/layer";
 

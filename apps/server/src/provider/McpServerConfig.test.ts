@@ -1,7 +1,8 @@
-import { McpServerId, type McpServer } from "@t3tools/contracts";
+import { McpServerId, type McpServer } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  formatMcpServerInstructions,
   mcpServerNeedsBrowserAttachment,
   sameMcpServerConfigurations,
   toAcpMcpServers,
@@ -100,5 +101,22 @@ describe("provider MCP configuration", () => {
     expect(sameMcpServerConfigurations([original], [{ ...original }])).toBe(false);
     expect(sameMcpServerConfigurations([original], [changedUrl])).toBe(false);
     expect(sameMcpServerConfigurations([original], [changedHeader])).toBe(false);
+  });
+
+  it("reuses a server when transient HTTP header names only change casing", () => {
+    const lowerCase = withMcpRuntimeHeaders({ ...servers[0]! }, { authorization: "Bearer token" });
+    const titleCase = withMcpRuntimeHeaders({ ...servers[0]! }, { Authorization: "Bearer token" });
+
+    expect(sameMcpServerConfigurations([lowerCase], [titleCase])).toBe(true);
+  });
+
+  it("formats saved MCP server instructions for the bot prompt", () => {
+    expect(formatMcpServerInstructions(servers)).toBe("");
+    expect(
+      formatMcpServerInstructions([
+        { ...servers[0]!, instructions: "  Search before answering.  " },
+        { ...servers[1]!, instructions: "   " },
+      ]),
+    ).toBe("MCP server guidance:\n- Search (search): Search before answering.");
   });
 });

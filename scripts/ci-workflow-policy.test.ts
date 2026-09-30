@@ -105,7 +105,7 @@ describe("CI workflow budget", () => {
       "node scripts/check-public-dependencies.ts",
       "vp install --frozen-lockfile",
       "vp exec changeset status --since=origin/main",
-      "vp run --filter @t3tools/desktop ensure:electron",
+      "vp run --filter @akeru/desktop ensure:electron",
       "node scripts/validate-plugin-catalog.ts",
       "scripts/validate-plugin-catalog.test.ts",
       "scripts/plugin-contribution-policy.test.ts",
@@ -151,10 +151,15 @@ describe("CI workflow budget", () => {
       "pull-requests": "write",
     });
     expect(versionJob?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
+    expect(versionJob?.steps.some((step) => step.uses?.includes("changesets/action@"))).toBe(false);
+    const version = versionJob?.steps.find((step) => step.id === "version");
+    expect(version?.run).toContain("pnpm release:version");
     const changesets = versionJob?.steps.find((step) => step.id === "changesets");
-    expect(changesets?.uses).toContain("changesets/action@");
-    expect(changesets?.with?.version).toBe("pnpm release:version");
-    expect(changesets?.with?.createGithubReleases).toBe(false);
+    expect(changesets?.if).toBe("steps.version.outputs.changed == 'true'");
+    // The PR lookup matches head.ref, since the pulls `head` filter misses this fork's PR.
+    expect(changesets?.run).toContain(".head.ref == ");
+    expect(changesets?.run).toContain("gh pr edit");
+    expect(changesets?.run).not.toContain("gh release");
     const dispatch = versionJob?.steps.find(
       (step) => step.name === "Run checks for the updated version branch",
     );
@@ -231,5 +236,41 @@ describe("CI workflow budget", () => {
     expect(
       steps.find((step) => step.name === "Verify unsigned macOS app signature")?.run,
     ).toContain("grep -Fqx 'Identifier=dev.leodoes.akeru'");
+  });
+
+  it("publishes the Akeru Remote archives and signed manifest the installers download", () => {
+    const release = workflow(".github/workflows/release.yml");
+    const remote = release.jobs.remote as Job & {
+      readonly strategy: {
+        readonly matrix: { readonly include: ReadonlyArray<Record<string, string>> };
+      };
+    };
+    expect(
+      remote.strategy.matrix.include.map((entry) => [entry.runner, entry.platform, entry.arch]),
+    ).toEqual([
+      ["tenki-standard-medium-4c-8g", "linux", "x64"],
+      ["macos-26", "darwin", "arm64"],
+      ["windows-2025", "win32", "x64"],
+    ]);
+    const commands = remote.steps.flatMap((step) => (step.run ? [step.run] : []));
+    expect(commands.join("\n")).not.toMatch(/docker/i);
+    expect(commands).toContain(
+      'node scripts/package-remote.ts archive "$RUNNER_TEMP/akeru-runtime" release "$RELEASE_VERSION" ${{ matrix.platform }} ${{ matrix.arch }}',
+    );
+    const upload = remote.steps.find((step) => step.uses === "actions/upload-artifact@v7");
+    expect(upload?.with?.name).toBe(
+      "${{ needs.preflight.outputs.channel }}-remote-${{ matrix.platform }}-${{ matrix.arch }}",
+    );
+    expect(upload?.with?.path).toBe("release/Akeru-Remote-*");
+
+    const publish = release.jobs.release?.steps ?? [];
+    const names = publish.map((step) => step.name);
+    expect(names.indexOf("Sign the Akeru Remote manifest")).toBeGreaterThan(-1);
+    expect(names.indexOf("Sign the Akeru Remote manifest")).toBeLessThan(
+      names.indexOf("Verify names and hashes"),
+    );
+    expect(publish.find((step) => step.name === "Sign the Akeru Remote manifest")?.run).toBe(
+      'node scripts/package-remote.ts manifest release "$RELEASE_VERSION"',
+    );
   });
 });

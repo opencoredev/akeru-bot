@@ -13,7 +13,7 @@ import {
   RoutineTimeZone,
   ThreadId,
   type Routine,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -49,6 +49,7 @@ function bot(id: BotId): OrchestrationBot {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: null,
@@ -72,6 +73,7 @@ function routine(id: string, overrides: Partial<Routine> = {}): Routine {
     projectId: ProjectId.make("project-1"),
     sandbox: "local",
     approvalPolicy: "approval-required",
+    delegateToBotId: null,
     procedureVersion: PositiveInt.make(1),
     approvalVersion: PositiveInt.make(1),
     enabled: false,

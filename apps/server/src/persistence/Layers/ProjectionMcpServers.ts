@@ -1,4 +1,4 @@
-import { IsoDateTime, McpServer, McpServerId, McpServerTransport } from "@t3tools/contracts";
+import { IsoDateTime, McpServer, McpServerId, McpServerTransport } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -21,6 +21,7 @@ const ProjectionMcpServerDbRow = Schema.Struct({
   command: Schema.NullOr(Schema.String),
   args: Schema.NullOr(Schema.fromJsonString(Schema.Array(Schema.String))),
   url: Schema.NullOr(Schema.String),
+  instructions: Schema.NullOr(Schema.String),
   enabled: Schema.Number,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -31,6 +32,7 @@ type ProjectionMcpServerDbRow = typeof ProjectionMcpServerDbRow.Type;
 const decodeMcpServer = Schema.decodeUnknownEffect(McpServer);
 
 function decodeRow(row: ProjectionMcpServerDbRow) {
+  const instructions = row.instructions !== null ? { instructions: row.instructions } : {};
   const candidate =
     row.transport === "stdio"
       ? {
@@ -39,6 +41,7 @@ function decodeRow(row: ProjectionMcpServerDbRow) {
           transport: row.transport,
           command: row.command,
           ...(row.args !== null ? { args: row.args } : {}),
+          ...instructions,
           enabled: row.enabled === 1,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -48,6 +51,7 @@ function decodeRow(row: ProjectionMcpServerDbRow) {
           name: row.name,
           transport: row.transport,
           url: row.url,
+          ...instructions,
           enabled: row.enabled === 1,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -71,6 +75,7 @@ const makeProjectionMcpServerRepository = Effect.gen(function* () {
           command,
           args_json,
           url,
+          instructions,
           enabled,
           created_at,
           updated_at
@@ -82,6 +87,7 @@ const makeProjectionMcpServerRepository = Effect.gen(function* () {
           ${row.transport === "stdio" ? row.command : null},
           ${row.transport === "stdio" && row.args !== undefined ? JSON.stringify(row.args) : null},
           ${row.transport === "url" ? row.url : null},
+          ${row.instructions ?? null},
           ${row.enabled ? 1 : 0},
           ${row.createdAt},
           ${row.updatedAt}
@@ -93,6 +99,7 @@ const makeProjectionMcpServerRepository = Effect.gen(function* () {
           command = excluded.command,
           args_json = excluded.args_json,
           url = excluded.url,
+          instructions = excluded.instructions,
           enabled = excluded.enabled,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
@@ -111,6 +118,7 @@ const makeProjectionMcpServerRepository = Effect.gen(function* () {
           command,
           args_json AS args,
           url,
+          instructions,
           enabled,
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -131,6 +139,7 @@ const makeProjectionMcpServerRepository = Effect.gen(function* () {
           command,
           args_json AS args,
           url,
+          instructions,
           enabled,
           created_at AS "createdAt",
           updated_at AS "updatedAt"

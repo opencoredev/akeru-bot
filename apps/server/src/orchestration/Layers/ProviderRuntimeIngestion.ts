@@ -3,6 +3,7 @@ import {
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ChatAttachment,
   AkeruCreateRoutineInput,
+  RoutineTimeZone,
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -21,9 +22,15 @@ import {
   type OrchestrationThreadShell,
   type ProviderRuntimeEvent,
   ProductFeedbackToolDraft,
-} from "@t3tools/contracts";
+  PROVIDER_DISPLAY_NAMES,
+  THREAD_SILENT_RUN_ACTIVITY_KIND,
+  THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
+  type ProviderDriverKind,
+  type ThreadSilentRunActivityPayload,
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as DateTime from "effect/DateTime";
@@ -34,7 +41,7 @@ import * as Exit from "effect/Exit";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 
 import { AgentController } from "../../provider/Services/AgentController.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
@@ -62,15 +69,10 @@ import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ServerConfig } from "../../config.ts";
 import { BotInboxService } from "../../bot-inbox/service.ts";
+import { startSilenceWatchdog, type SilenceWatchdogHandle } from "../SilenceWatchdog.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import { resolveControllerBotId } from "./ProviderCommandReactor.ts";
-import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
-import * as ChannelDeliveryStore from "../../channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
-
-type AutomaticChannelReplyTarget = NonNullable<
-  Awaited<ReturnType<typeof ChannelRuntime.resolveCompletedChannelReply>>
->;
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -143,9 +145,15 @@ function runtimeChatAttachment(event: ProviderRuntimeEvent) {
   const data = decodeRuntimeChatAttachment(event.payload.data);
   return Option.isSome(data) ? data.value.chatAttachment : undefined;
 }
-const decodeCreateRoutineInput = Schema.decodeUnknownExit(AkeruCreateRoutineInput, {
-  onExcessProperty: "error",
-});
+const decodeCreateRoutineInput = Schema.decodeUnknownExit(
+  Schema.Struct({
+    ...AkeruCreateRoutineInput.fields,
+    timezone: Schema.optional(RoutineTimeZone),
+  }),
+  {
+    onExcessProperty: "error",
+  },
+);
 
 function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
   if (args === undefined) return undefined;
@@ -439,6 +447,26 @@ export function runtimeEventToActivities(
             ...(event.payload.target ? { target: event.payload.target } : {}),
             ...(event.payload.action ? { action: event.payload.action } : {}),
             ...(event.payload.outcome ? { outcome: event.payload.outcome } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "model.rerouted": {
+      const { fromModel, toModel, reason } = event.payload;
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "model.rerouted",
+          summary: truncateDetail(`Model rerouted from ${fromModel} to ${toModel}`, 120),
+          payload: {
+            fromModel,
+            toModel,
+            reason: truncateDetail(reason),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -942,55 +970,38 @@ const make = Effect.gen(function* () {
   const projectionThreadProposedPlans = yield* ProjectionThreadProposedPlanRepository;
   const botUsageLedger = yield* BotUsageLedger;
   const serverSettingsService = yield* ServerSettingsService;
-  const channelSecretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
-  const channelDeliveryStore = yield* Effect.serviceOption(
-    ChannelDeliveryStore.ChannelDeliveryStore,
+  const channelRuntime = Option.getOrNull(
+    yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime),
   );
-  const channelRuntimeDependencies =
-    Option.isSome(channelSecretStore) && Option.isSome(channelDeliveryStore)
-      ? {
-          engine: orchestrationEngine,
-          secretStore: channelSecretStore.value,
-          settings: serverSettingsService,
-          deliveryStore: channelDeliveryStore.value,
-          readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-          readThread: (threadId: ThreadId) =>
-            Effect.runPromise(
-              projectionSnapshotQuery
-                .getThreadDetailById(threadId, { activityKinds: [] })
-                .pipe(Effect.map(Option.getOrNull)),
-            ),
-          nowIso: () => Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-          randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
-        }
-      : null;
   const channelStatusWorker = yield* makeDrainableWorker(
     (input: {
       threadId: ThreadId;
       turnId: TurnId | undefined;
       requestMessageId?: MessageId;
-      state: "completed" | "failed" | "cancelled";
+      state: "completed" | "failed" | "cancelled" | "waiting" | "resumed";
     }) =>
-      channelRuntimeDependencies
-        ? Effect.promise(() =>
-            ChannelRuntime.finishChannelTurn(
-              channelRuntimeDependencies,
-              input.threadId,
-              input.turnId,
-              input.state,
-              input.requestMessageId,
-            ),
+      channelRuntime
+        ? (input.state === "waiting" || input.state === "resumed"
+            ? channelRuntime.markChannelTurnWaiting(
+                input.threadId,
+                input.turnId,
+                input.state === "waiting",
+              )
+            : channelRuntime.finishChannelTurn(
+                input.threadId,
+                input.turnId,
+                input.state,
+                input.requestMessageId,
+              )
           ).pipe(Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")))
         : Effect.void,
   );
   const automaticChannelReplyWorker = yield* makeDrainableWorker(
-    (input: AutomaticChannelReplyTarget) => {
-      if (!channelRuntimeDependencies) {
+    (input: ChannelRuntime.ChannelReplyTarget) => {
+      if (!channelRuntime) {
         return Effect.void;
       }
-      return Effect.promise(() =>
-        ChannelRuntime.sendChannelMessage(channelRuntimeDependencies, input),
-      ).pipe(
+      return channelRuntime.sendChannelMessage(input).pipe(
         Effect.asVoid,
         Effect.catchCause((cause) =>
           Effect.logWarning("failed to send automatic channel reply", {
@@ -1003,6 +1014,159 @@ const make = Effect.gen(function* () {
   );
   const serverConfig = yield* ServerConfig;
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
+  const silenceWatchdogs = new Map<string, SilenceWatchdogHandle>();
+  // Open requests per watched turn, so a duplicate or unmatched resolution cannot
+  // resume a watchdog while another request still waits on the user.
+  const silenceWaitingRequests = new Map<string, Set<string>>();
+  // Open approval and user-input requests per provider turn, so a channel's waiting
+  // reaction clears only when the last pending request resolves.
+  const channelWaitingRequests = new Map<string, { turnId: TurnId; requestIds: Set<string> }>();
+  const clearChannelWaitingRequests = (threadId: ThreadId) => {
+    for (const key of channelWaitingRequests.keys()) {
+      if (key.startsWith(`${threadId}:`)) channelWaitingRequests.delete(key);
+    }
+  };
+  const silenceIncidentKey = (threadId: ThreadId, turnId: TurnId) =>
+    `silence:${threadId}:${turnId}`;
+  const stopSilenceWatchdog = (threadId: ThreadId, turnId: TurnId) => {
+    const key = providerTurnKey(threadId, turnId);
+    const handle = silenceWatchdogs.get(key);
+    if (!handle) return Effect.void;
+    silenceWatchdogs.delete(key);
+    silenceWaitingRequests.delete(key);
+    return handle.stop;
+  };
+  const stopAllSilenceWatchdogs = (threadId: ThreadId) =>
+    Effect.forEach(
+      [...silenceWatchdogs.entries()].filter(([key]) => key.startsWith(`${threadId}:`)),
+      ([key, handle]) =>
+        Effect.sync(() => {
+          silenceWatchdogs.delete(key);
+          silenceWaitingRequests.delete(key);
+        }).pipe(Effect.andThen(handle.stop)),
+      { concurrency: 1, discard: true },
+    );
+  // Silent-run reports and their resolutions run in order on one worker, so a report
+  // queued just before a turn ends can never reopen the incident the ending closed.
+  const silenceReportWorker = yield* makeDrainableWorker((report: Effect.Effect<void>) => report);
+  const resolveSilenceIncidents = (threadId: ThreadId) =>
+    silenceReportWorker.enqueue(
+      Effect.sync(() => {
+        for (const incident of botInbox.list()) {
+          if (
+            incident.kind === "silence-watchdog-failure" &&
+            incident.status === "open" &&
+            incident.incidentKey.startsWith(`silence:${threadId}:`)
+          ) {
+            botInbox.resolve(incident.incidentKey);
+          }
+        }
+      }),
+    );
+  const startTurnSilenceWatchdog = (
+    thread: Pick<OrchestrationThreadShell, "id" | "botId" | "respondingBotId"> & {
+      readonly title: string;
+    },
+    turnId: TurnId,
+    provider: ProviderDriverKind,
+  ) =>
+    Effect.gen(function* () {
+      // One turn runs per chat, so a new turn retires any watchdog left behind.
+      yield* stopAllSilenceWatchdogs(thread.id);
+      yield* resolveSilenceIncidents(thread.id);
+      const botId = resolveControllerBotId(thread);
+      const incidentKey = silenceIncidentKey(thread.id, turnId);
+      const providerName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+      const appendSilenceActivity = (input: {
+        readonly id: string;
+        readonly kind: string;
+        readonly summary: string;
+        readonly payload: unknown;
+      }) =>
+        Effect.gen(function* () {
+          const createdAt = DateTime.formatIso(yield* DateTime.now);
+          yield* orchestrationEngine.dispatch({
+            type: "thread.activity.append",
+            commandId: CommandId.make(input.id),
+            threadId: thread.id,
+            activity: {
+              id: EventId.make(input.id),
+              tone: "info",
+              kind: input.kind,
+              summary: input.summary,
+              payload: input.payload,
+              turnId,
+              createdAt,
+            },
+            createdAt,
+          });
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("failed to record silent-run state", {
+              threadId: thread.id,
+              turnId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        );
+      const handle = yield* startSilenceWatchdog({
+        callbacks: {
+          onSilent: (lastActivityAtMs) =>
+            silenceReportWorker.enqueue(
+              Effect.gen(function* () {
+                const payload: ThreadSilentRunActivityPayload = {
+                  provider,
+                  lastActivityAt: DateTime.formatIso(DateTime.makeUnsafe(lastActivityAtMs)),
+                };
+                yield* appendSilenceActivity({
+                  id: `silence-watchdog:silent:${thread.id}:${turnId}:${lastActivityAtMs}`,
+                  kind: THREAD_SILENT_RUN_ACTIVITY_KIND,
+                  summary: `No response from ${providerName}`,
+                  payload,
+                });
+                if (botId === null) return;
+                const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+                const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+                if (!bot) return;
+                // Keyed by chat and turn: a later silent window reopens the same item.
+                yield* Effect.sync(() =>
+                  botInbox.ensureOpen({
+                    incidentKey,
+                    kind: "silence-watchdog-failure",
+                    botId,
+                    botName: bot.name,
+                    taskOrRoutine: thread.title,
+                    lastFailure: `No response from ${providerName} for over a minute while the chat is running.`,
+                    nextAction:
+                      "Wait for it to continue, or stop the chat and send your message again. If it keeps happening, check the provider connection.",
+                  }),
+                );
+              }).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning("failed to report silent run", {
+                    threadId: thread.id,
+                    turnId,
+                    cause: Cause.pretty(cause),
+                  }),
+                ),
+              ),
+            ),
+          onResumed: silenceReportWorker.enqueue(
+            Effect.gen(function* () {
+              const now = yield* Clock.currentTimeMillis;
+              yield* appendSilenceActivity({
+                id: `silence-watchdog:cleared:${thread.id}:${turnId}:${now}`,
+                kind: THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
+                summary: `${providerName} responded`,
+                payload: { provider },
+              });
+              yield* Effect.sync(() => botInbox.resolve(incidentKey));
+            }),
+          ),
+        },
+      });
+      silenceWatchdogs.set(providerTurnKey(thread.id, turnId), handle);
+    });
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
@@ -1718,21 +1882,130 @@ const make = Effect.gen(function* () {
 
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
-      if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") {
-        return;
-      }
       const thread = yield* resolveThreadRuntimeContextForEvent(event);
       if (!thread) return;
+      const eventTurnId = toTurnId(event.turnId);
+      // turn.started starts its watchdog only once the lifecycle accepts it, below.
+      if (
+        eventTurnId &&
+        event.type !== "turn.started" &&
+        event.type !== "turn.completed" &&
+        event.type !== "turn.aborted"
+      ) {
+        // A turn ending disposes its watchdog below; it is not output resuming.
+        const handle = silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId));
+        if (handle) yield* handle.touch;
+      }
+      if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") return;
       if (event.type === "request.opened" || event.type === "request.resolved") {
         yield* syncApprovalInbox(event, thread);
       }
 
       const now = event.createdAt;
-      const eventTurnId = toTurnId(event.turnId);
+      if (
+        event.type === "session.exited" ||
+        (event.type === "session.state.changed" &&
+          (event.payload.state === "stopped" || event.payload.state === "error"))
+      ) {
+        // A session that stopped runs no turn, so it cannot go silent.
+        yield* stopAllSilenceWatchdogs(thread.id);
+        yield* resolveSilenceIncidents(thread.id);
+      } else if (
+        (event.type === "turn.completed" || event.type === "turn.aborted") &&
+        eventTurnId
+      ) {
+        // The ending turn's own watchdog always stops. Its inbox item closes below,
+        // once the lifecycle accepts the ending, so a stale ending cannot hide
+        // another turn's silent run.
+        yield* stopSilenceWatchdog(thread.id, eventTurnId);
+      }
+      const watchedTurnKey = eventTurnId ? providerTurnKey(thread.id, eventTurnId) : undefined;
+      const activeWatchdog = watchedTurnKey ? silenceWatchdogs.get(watchedTurnKey) : undefined;
+      if (
+        watchedTurnKey &&
+        activeWatchdog &&
+        (event.type === "request.opened" || event.type === "user-input.requested")
+      ) {
+        const waiting = silenceWaitingRequests.get(watchedTurnKey) ?? new Set<string>();
+        silenceWaitingRequests.set(watchedTurnKey, waiting);
+        const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+        if (requestId === undefined || !waiting.has(requestId)) {
+          if (requestId !== undefined) waiting.add(requestId);
+          yield* activeWatchdog.suspend;
+        }
+      } else if (
+        watchedTurnKey &&
+        activeWatchdog &&
+        (event.type === "request.resolved" || event.type === "user-input.resolved")
+      ) {
+        const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+        if (
+          requestId === undefined ||
+          silenceWaitingRequests.get(watchedTurnKey)?.delete(requestId) === true
+        ) {
+          yield* activeWatchdog.resume;
+        }
+      }
       const respondingBotId = resolveControllerBotId(thread);
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
+      // Requests do not always carry a turn id; they then belong to the active turn.
+      const waitingTurnId = eventTurnId ?? activeTurnId ?? undefined;
+      if (
+        channelRuntime &&
+        waitingTurnId &&
+        !conflictsWithActiveTurn &&
+        (event.type === "request.opened" || event.type === "user-input.requested")
+      ) {
+        const waitingKey = providerTurnKey(thread.id, waitingTurnId);
+        const open = channelWaitingRequests.get(waitingKey) ?? {
+          turnId: waitingTurnId,
+          requestIds: new Set<string>(),
+        };
+        open.requestIds.add(event.requestId ?? event.eventId);
+        channelWaitingRequests.set(waitingKey, open);
+        if (open.requestIds.size === 1) {
+          yield* channelStatusWorker.enqueue({
+            threadId: thread.id,
+            turnId: waitingTurnId,
+            state: "waiting",
+          });
+        }
+      } else if (
+        channelRuntime &&
+        (event.type === "request.resolved" || event.type === "user-input.resolved")
+      ) {
+        // Resolutions do not always carry a turn id, so match the pending request instead.
+        const requestId = event.requestId;
+        for (const [waitingKey, open] of channelWaitingRequests) {
+          if (!waitingKey.startsWith(`${thread.id}:`)) continue;
+          if (eventTurnId && !sameId(open.turnId, eventTurnId)) continue;
+          if (requestId && !open.requestIds.has(requestId)) continue;
+          // Without a request id, one resolution answers one request, never all of them.
+          const resolved = requestId ?? open.requestIds.values().next().value;
+          if (resolved !== undefined) open.requestIds.delete(resolved);
+          if (open.requestIds.size > 0) continue;
+          channelWaitingRequests.delete(waitingKey);
+          yield* channelStatusWorker.enqueue({
+            threadId: thread.id,
+            turnId: open.turnId,
+            state: "resumed",
+          });
+        }
+      } else if (
+        (event.type === "turn.completed" || event.type === "turn.aborted") &&
+        eventTurnId
+      ) {
+        channelWaitingRequests.delete(providerTurnKey(thread.id, eventTurnId));
+      }
+      if (
+        event.type === "session.exited" ||
+        (event.type === "session.state.changed" &&
+          (event.payload.state === "error" || event.payload.state === "stopped"))
+      ) {
+        clearChannelWaitingRequests(thread.id);
+      }
       const needsPendingTurnStart =
         event.type === "session.exited" ||
         event.type === "session.started" ||
@@ -1772,6 +2045,8 @@ const make = Effect.gen(function* () {
               usage.inputTokens ??
               Math.max(0, (usage.lastUsedTokens ?? usage.usedTokens) - outputTokens),
             outputTokens,
+            cachedInputTokens: usage.lastCachedInputTokens ?? usage.cachedInputTokens ?? 0,
+            cacheCreationTokens: usage.lastCacheCreationTokens ?? usage.cacheCreationTokens ?? 0,
             reasoningTokens: usage.lastReasoningOutputTokens ?? usage.reasoningOutputTokens ?? null,
             settledAt: now,
           })
@@ -1792,12 +2067,21 @@ const make = Effect.gen(function* () {
         canReconcileUsage &&
         (event.type === "turn.completed" || event.type === "turn.aborted")
       ) {
+        const cancelled =
+          event.type === "turn.aborted" ||
+          (event.type === "turn.completed" &&
+            (event.payload.state === "cancelled" ||
+              event.payload.state === "interrupted" ||
+              (event.payload.stopReason !== null &&
+                event.payload.stopReason !== undefined &&
+                /cancel|abort|interrupt|killed|stopped/i.test(event.payload.stopReason))));
         yield* botUsageLedger
           .finalizeForTurn({
             botId: respondingBotId,
             threadId: thread.id,
             turnId: eventTurnId,
             settledAt: now,
+            cancelled,
           })
           .pipe(
             Effect.catchCause((cause) =>
@@ -1859,6 +2143,17 @@ const make = Effect.gen(function* () {
             return true;
         }
       })();
+      // Stale turn events must not start watchdogs or close another turn's silent run.
+      if (event.type === "turn.started" && eventTurnId && shouldApplyThreadLifecycle) {
+        yield* startTurnSilenceWatchdog(thread, eventTurnId, event.provider);
+      } else if (
+        (event.type === "turn.completed" || event.type === "turn.aborted") &&
+        eventTurnId &&
+        shouldApplyThreadLifecycle &&
+        !conflictsWithActiveTurn
+      ) {
+        yield* resolveSilenceIncidents(thread.id);
+      }
       const acceptedTurnStartedSourcePlan =
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)
@@ -2409,9 +2704,13 @@ const make = Effect.gen(function* () {
           (event.type === "session.state.changed" &&
             (event.payload.state === "error" || event.payload.state === "stopped")))
       ) {
+        const terminalTurnId = eventTurnId ?? activeTurnId ?? undefined;
+        if (terminalTurnId) {
+          channelWaitingRequests.delete(providerTurnKey(thread.id, terminalTurnId));
+        }
         yield* channelStatusWorker.enqueue({
           threadId: thread.id,
-          turnId: eventTurnId ?? activeTurnId ?? undefined,
+          turnId: terminalTurnId,
           ...(activeTurnId === null && Option.isSome(pendingTurnStart)
             ? { requestMessageId: pendingTurnStart.value.messageId }
             : {}),
@@ -2433,15 +2732,11 @@ const make = Effect.gen(function* () {
         event.payload.state === "completed" &&
         shouldApplyThreadLifecycle &&
         eventTurnId &&
-        channelRuntimeDependencies
+        channelRuntime
       ) {
-        const target = yield* Effect.promise(() =>
-          ChannelRuntime.resolveCompletedChannelReply(
-            channelRuntimeDependencies,
-            thread.id,
-            eventTurnId,
-          ),
-        );
+        const target = yield* channelRuntime
+          .resolveCompletedChannelReply(thread.id, eventTurnId)
+          .pipe(Effect.orDie);
         if (target) yield* automaticChannelReplyWorker.enqueue(target);
       }
     });
@@ -2450,14 +2745,14 @@ const make = Effect.gen(function* () {
     event: ChannelSessionDomainEvent,
   ) {
     const { session, threadId } = event.payload;
-    if (!channelRuntimeDependencies || (session.status !== "error" && session.status !== "stopped"))
-      return;
+    if (!channelRuntime || (session.status !== "error" && session.status !== "stopped")) return;
     const thread = yield* resolveThreadDetail(threadId);
     if (
       thread?.session?.updatedAt !== session.updatedAt ||
       thread.session.status !== session.status
     )
       return;
+    clearChannelWaitingRequests(threadId);
     const request = thread.messages.findLast((message) => message.role === "user");
     if (!request?.channelOrigin) return;
     yield* channelStatusWorker.enqueue({
@@ -2512,6 +2807,8 @@ const make = Effect.gen(function* () {
   return {
     start,
     drain: worker.drain.pipe(
+      Effect.andThen(silenceReportWorker.drain),
+      Effect.andThen(worker.drain),
       Effect.andThen(channelStatusWorker.drain),
       Effect.andThen(automaticChannelReplyWorker.drain),
     ),

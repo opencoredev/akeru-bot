@@ -2,7 +2,7 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   ApprovalRequestId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -23,8 +23,9 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).not.toContain(">Always allow<");
     expect(markup).toContain("h-7");
     expect(markup).toContain("sm:h-6");
-    expect(markup).toContain("bg-primary");
-    expect(markup).toContain("bg-secondary");
+    expect(markup).toContain("bg-foreground text-background");
+    expect(markup).toContain("text-muted-foreground");
+    expect(markup).not.toContain("bg-primary");
     expect(markup).not.toContain("border-input");
   });
 
@@ -82,7 +83,27 @@ describe("ComposerPendingApprovalActions", () => {
     expect(markup).not.toContain(">Decline<");
   });
 
-  it("uses the three clear choices when session approval is available", () => {
+  it("offers Enable Auto Review when the server allows switching to it", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalActions
+        requestId={ApprovalRequestId.make("approval-shell-auto-review")}
+        requestKind="command"
+        isResponding={false}
+        options={[
+          { decision: "decline", label: "Decline" },
+          { decision: "acceptAlways", label: "Enable Auto Review" },
+          { decision: "accept", label: "Allow" },
+        ]}
+        onRespondToApproval={async () => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Enable Auto Review");
+    expect(markup).toContain("Allow once");
+    expect(markup).toContain("Never");
+  });
+
+  it("keeps a session-only approval under its own label", () => {
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalActions
         requestId={ApprovalRequestId.make("approval-shell-session")}
@@ -97,9 +118,8 @@ describe("ComposerPendingApprovalActions", () => {
       />,
     );
 
-    expect(markup).toContain("Enable Auto Review");
-    expect(markup).toContain("Allow once");
-    expect(markup).toContain("Never");
+    expect(markup).toContain("Allow for session");
+    expect(markup).not.toContain("Enable Auto Review");
   });
 
   it("uses one create or cancel choice for a routine", () => {
@@ -118,7 +138,10 @@ describe("ComposerPendingApprovalActions", () => {
     );
 
     expect(markup).toContain("Create routine");
-    expect(markup).toContain(">Cancel<");
+    expect(markup).toContain(">Don&#x27;t create<");
+    expect(markup).toContain("bg-foreground");
+    expect(markup).not.toContain("bg-primary");
+    expect(markup).not.toContain("text-destructive-foreground");
     expect(markup).not.toContain("Enable Auto Review");
     expect(markup).not.toContain("Allow once");
     expect(markup).not.toContain(">Never<");
@@ -133,7 +156,7 @@ describe("ComposerPendingApprovalActions", () => {
       />,
     );
     expect(fallbackMarkup).toContain("Create routine");
-    expect(fallbackMarkup).toContain(">Cancel<");
+    expect(fallbackMarkup).toContain(">Don&#x27;t create<");
     expect(fallbackMarkup).not.toContain("Enable Auto Review");
   });
 

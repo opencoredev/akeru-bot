@@ -6,21 +6,41 @@ import {
   type ChannelProvider,
   type EnvironmentId,
   type OrchestrationBot,
-} from "@t3tools/contracts";
+  type ProjectId,
+} from "@akeru/contracts";
+import {
+  canChangeChannelProject,
+  channelReconnectProject,
+  channelBindingNeedsProject,
+  channelPickerProjectId,
+  channelRepairAction,
+} from "@akeru/client-runtime/channel-presentation";
+import { defaultProjectIdForBot } from "@akeru/shared/channelProject";
+import type * as Cause from "effect/Cause";
+import { LockIcon, MessagesSquareIcon, UnplugIcon } from "lucide-react";
 import { useState } from "react";
 
-import { resolveChannelSettingsAccess } from "../../channelAccess";
+import { isChannelIdentityConflict, resolveChannelSettingsAccess } from "../../channelAccess";
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { environmentSnapshotAtom } from "../../state/shell";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentSessionState } from "../../state/session";
 import { openSettings } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { Badge } from "../ui/badge";
+import { ChannelProjectSelect } from "../settings/ChannelProjectSelect";
+import { channelSettingsTarget } from "../settings/channelProviderMeta";
+import {
+  ChannelRepairButton,
+  ChannelStatusBadge,
+  ChannelStatusNotice,
+  channelWebhookUrl,
+} from "../settings/ChannelStatus";
 import { Button } from "../ui/button";
-import { Sheet, SheetHeader, SheetPanel, SheetPopup, SheetTitle } from "../ui/sheet";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
+import { BotSideSheet, BotSideSheetEmpty } from "./BotSideSheet";
 import type { Bot } from "./types";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
@@ -53,10 +73,12 @@ export function BotChannelsSheet({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const targetEnvironmentId = environmentId ?? NO_ENVIRONMENT;
   const session = useEnvironmentSessionState(targetEnvironmentId);
   const bots = useAtomValue(environmentBotsAtom(targetEnvironmentId));
+  const snapshot = useAtomValue(environmentSnapshotAtom(targetEnvironmentId));
   const connections = usePrimarySettings((settings) => settings.channelConnections);
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
   const disconnect = useAtomCommand(botEnvironment.channels.disconnect, {
@@ -66,46 +88,96 @@ export function BotChannelsSheet({
   const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
     reportFailure: false,
   });
+  const changeProject = useAtomCommand(botEnvironment.channels.changeProject, {
+    reportFailure: false,
+  });
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
+  const liveProjects = snapshot?.projects ?? [];
+  const projectHint = snapshot ? defaultProjectIdForBot(snapshot, BotId.make(bot.id)) : null;
+  const channelState = (connection: ChannelConnectionProfile) => {
+    const owner = assignedBotForConnection(connection.id, bots);
+    const binding = owner?.channelBindings?.find(
+      (candidate) => candidate.connectionId === connection.id,
+    );
+    const ownedByCurrentBot = owner?.id === bot.id;
+    const needsProject =
+      ownedByCurrentBot && binding ? channelBindingNeedsProject(binding, liveProjects) : false;
+    const projectId = channelPickerProjectId({
+      selected: pickedProjects[connection.id],
+      binding: ownedByCurrentBot ? binding : undefined,
+      hint: projectHint,
+      liveProjects,
+    });
+    const canMove =
+      ownedByCurrentBot &&
+      binding !== undefined &&
+      canChangeChannelProject(binding, projectId, liveProjects);
+    const repairAction =
+      ownedByCurrentBot && binding ? channelRepairAction(binding, liveProjects) : "none";
+    return { owner, binding, ownedByCurrentBot, needsProject, projectId, canMove, repairAction };
+  };
   const access = resolveChannelSettingsAccess({
     isPending: session.isPending,
     session: session.data,
   });
 
-  const manage = async (connection: ChannelConnectionProfile) => {
-    if (!environmentId) return;
-    const owner = assignedBotForConnection(connection.id, bots);
-    if (owner && owner.id !== bot.id) return;
-    const binding = owner?.channelBindings?.find(
-      (candidate) => candidate.connectionId === connection.id,
-    );
+  const run = async (
+    connection: ChannelConnectionProfile,
+    command: () => Promise<
+      | { readonly _tag: "Success" }
+      | { readonly _tag: "Failure"; readonly cause?: Cause.Cause<unknown> }
+    >,
+  ) => {
     setBusyId(connection.id);
-    const result =
-      binding?.status === "needs-reconnect" ||
-      binding?.status === "failed" ||
-      binding?.status === "disconnected"
-        ? await reconnect({
-            environmentId,
-            input: { botId: BotId.make(bot.id), provider: connection.provider },
-          })
-        : binding
-          ? await disconnect({
-              environmentId,
-              input: { botId: BotId.make(bot.id), provider: connection.provider },
-            })
-          : await attach({
-              environmentId,
-              input: {
-                botId: BotId.make(bot.id),
-                connectionId: connection.id,
-                provider: connection.provider,
-              },
-            });
+    const result = await command();
     setBusyId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not update channel" });
+      toastManager.add({
+        type: "error",
+        title: t("Could not update channel"),
+        ...(isChannelIdentityConflict(result)
+          ? {
+              description: t(
+                "Another bot already uses this account. Unassign it there, then connect again.",
+              ),
+            }
+          : {}),
+      });
     }
   };
+
+  const moveToProject = (connection: ChannelConnectionProfile) => {
+    const { projectId, canMove } = channelState(connection);
+    if (!environmentId || !canMove || projectId === null) return;
+    void run(connection, () =>
+      changeProject({
+        environmentId,
+        input: { botId: BotId.make(bot.id), provider: connection.provider, projectId },
+      }),
+    );
+  };
+
+  const connect = (connection: ChannelConnectionProfile) => {
+    const { owner, projectId } = channelState(connection);
+    if (!environmentId || owner || projectId === null) return;
+    void run(connection, () =>
+      attach({
+        environmentId,
+        input: {
+          botId: BotId.make(bot.id),
+          connectionId: connection.id,
+          provider: connection.provider,
+          projectId,
+        },
+      }),
+    );
+  };
+
+  const channelInput = (connection: ChannelConnectionProfile) => ({
+    botId: BotId.make(bot.id),
+    provider: connection.provider,
+  });
 
   const unassign = async (connection: ChannelConnectionProfile) => {
     if (!environmentId) return;
@@ -116,139 +188,191 @@ export function BotChannelsSheet({
     });
     setBusyId(null);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not unassign channel" });
+      toastManager.add({ type: "error", title: t("Could not unassign channel") });
     }
   };
 
-  const openChannelSettings = () => {
+  const openChannelSettings = (provider?: ChannelProvider) => {
     onOpenChange(false);
-    openSettings("channels", null, environmentId);
+    // A channel target opens that provider's Settings page.
+    openSettings("channels", provider ? channelSettingsTarget(provider) : null, environmentId);
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetPopup side="right" className="w-[min(94vw,28rem)]">
-        <SheetHeader>
-          <SheetTitle>{bot.name} channels</SheetTitle>
-        </SheetHeader>
-        <SheetPanel className="space-y-2 px-3">
-          {environmentId === null ? (
-            <div className="py-8 text-sm text-muted-foreground">Connect an environment first.</div>
-          ) : access === "pending" ? (
-            <div className="flex justify-center py-8">
-              <Spinner aria-label="Loading channel access" />
-            </div>
-          ) : access === "denied" ? (
-            <div className="py-8 text-sm text-muted-foreground">
-              This client does not have permission to manage channels.
-            </div>
-          ) : connections.length === 0 ? (
-            <div className="space-y-3 py-4">
-              <p className="text-sm text-muted-foreground">Set up a channel connection first.</p>
-              <Button onClick={openChannelSettings}>Set up channels</Button>
-            </div>
-          ) : (
-            <>
-              {connections.map((connection) => {
-                const owner = assignedBotForConnection(connection.id, bots);
-                const binding = owner?.channelBindings?.find(
-                  (candidate) => candidate.connectionId === connection.id,
-                );
-                const ownedByCurrentBot = owner?.id === bot.id;
-                const action =
-                  owner && !ownedByCurrentBot
-                    ? "Assigned"
-                    : binding?.status === "needs-reconnect" ||
-                        binding?.status === "failed" ||
-                        binding?.status === "disconnected"
-                      ? "Reconnect"
-                      : binding
-                        ? "Disconnect"
-                        : "Connect";
-                return (
-                  <div
-                    key={connection.id}
-                    className="flex flex-col gap-3 rounded-xl border px-3 py-2.5"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="truncate text-sm font-medium">{connection.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {providerLabel(connection.provider)}
-                        {(binding?.externalIdentity ?? connection.externalIdentity)
-                          ? ` · ${binding?.externalIdentity ?? connection.externalIdentity}`
-                          : ""}
-                      </div>
-                      {binding?.lastError ? (
-                        <p
-                          role="status"
-                          className="break-words text-xs text-amber-600 dark:text-amber-400"
-                        >
-                          {binding.lastError}
-                        </p>
-                      ) : null}
-                      {owner ? (
-                        <Badge
-                          variant={
-                            binding?.status === "needs-reconnect" ||
-                            binding?.status === "failed" ||
-                            binding?.status === "disconnected"
-                              ? "warning"
-                              : "success"
-                          }
-                          size="sm"
-                        >
-                          {binding?.status === "failed"
-                            ? "Connection failed"
-                            : binding?.status === "needs-reconnect"
-                              ? "Needs reconnect"
-                              : binding?.status === "disconnected"
-                                ? `Disconnected · ${owner.name}`
-                                : `Assigned to ${owner.name}`}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" size="sm">
-                          Unassigned
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {connection.managementUrl ? (
-                        <Button
-                          variant="outline"
-                          render={
-                            <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
-                          }
-                        >
-                          Open provider
-                        </Button>
-                      ) : null}
-                      {ownedByCurrentBot ? (
-                        <Button
-                          variant="outline"
-                          disabled={busyId !== null}
-                          onClick={() => void unassign(connection)}
-                        >
-                          Unassign
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant={ownedByCurrentBot ? "outline" : "default"}
-                        disabled={busyId !== null || (owner !== undefined && !ownedByCurrentBot)}
-                        onClick={() => void manage(connection)}
-                      >
-                        {action}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-              <Button variant="outline" onClick={openChannelSettings}>
-                Manage connections
-              </Button>
-            </>
+    <BotSideSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("Channels")}
+      description={t("Let people reach {name} from messaging apps like Slack or Telegram.", {
+        name: bot.name,
+      })}
+      footer={
+        access === "allowed" && connections.length > 0 ? (
+          <Button variant="outline" onClick={() => openChannelSettings()}>
+            {t("Manage connections")}
+          </Button>
+        ) : undefined
+      }
+    >
+      {environmentId === null ? (
+        <BotSideSheetEmpty
+          icon={UnplugIcon}
+          title={t("No environment connected")}
+          description={t("Connect to an Akeru Bot environment to set up channels.")}
+        />
+      ) : access === "pending" ? (
+        <div className="flex justify-center py-12">
+          <Spinner aria-label={t("Loading channel access")} />
+        </div>
+      ) : access === "denied" ? (
+        <BotSideSheetEmpty
+          icon={LockIcon}
+          title={t("Channels are managed on the host")}
+          description={t(
+            "This device can chat with {name} but can't change its channels. Open Akeru Bot on the computer that runs it to connect a channel.",
+            { name: bot.name },
           )}
-        </SheetPanel>
-      </SheetPopup>
-    </Sheet>
+        />
+      ) : connections.length === 0 ? (
+        <BotSideSheetEmpty
+          icon={MessagesSquareIcon}
+          title={t("No channels set up yet")}
+          description={t(
+            "Add a Slack, Telegram, Discord, WhatsApp, or iMessage connection first. Then assign it to this bot here.",
+          )}
+          action={<Button onClick={() => openChannelSettings()}>{t("Set up channels")}</Button>}
+        />
+      ) : (
+        <div className="space-y-3">
+          {connections.map((connection) => {
+            const {
+              owner,
+              binding,
+              ownedByCurrentBot,
+              needsProject,
+              projectId,
+              canMove,
+              repairAction,
+            } = channelState(connection);
+            return (
+              <div key={connection.id} className="flex flex-col gap-3 rounded-lg border p-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="truncate text-sm font-medium">{connection.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {providerLabel(connection.provider)}
+                    {(binding?.externalIdentity ?? connection.externalIdentity)
+                      ? ` · ${binding?.externalIdentity ?? connection.externalIdentity}`
+                      : ""}
+                  </div>
+                  <ChannelStatusNotice
+                    binding={binding}
+                    needsProject={needsProject}
+                    webhookUrl={channelWebhookUrl(connection)}
+                  />
+                  <ChannelStatusBadge
+                    binding={binding}
+                    ownerName={owner?.name}
+                    needsProject={needsProject}
+                  />
+                </div>
+                {!owner || ownedByCurrentBot ? (
+                  <ChannelProjectSelect
+                    projects={liveProjects}
+                    value={projectId}
+                    onChange={(next) =>
+                      setPickedProjects((current) => ({ ...current, [connection.id]: next }))
+                    }
+                    label={t("Project for {name}", { name: connection.name })}
+                    disabled={busyId !== null}
+                  />
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {connection.managementUrl && repairAction !== "check-delivery" ? (
+                    <Button
+                      variant="outline"
+                      render={
+                        <a href={connection.managementUrl} target="_blank" rel="noreferrer" />
+                      }
+                    >
+                      {t("Open provider")}
+                    </Button>
+                  ) : null}
+                  {ownedByCurrentBot ? (
+                    <Button
+                      variant="outline"
+                      disabled={busyId !== null}
+                      onClick={() => void unassign(connection)}
+                    >
+                      {t("Unassign")}
+                    </Button>
+                  ) : null}
+                  {canMove && repairAction !== "choose-project" ? (
+                    <Button
+                      variant="outline"
+                      disabled={busyId !== null}
+                      onClick={() => moveToProject(connection)}
+                    >
+                      {t("Move to this project")}
+                    </Button>
+                  ) : null}
+                  {ownedByCurrentBot && binding?.status === "connected" ? (
+                    <Button
+                      variant="outline"
+                      disabled={busyId !== null}
+                      onClick={() =>
+                        environmentId &&
+                        void run(connection, () =>
+                          disconnect({ environmentId, input: channelInput(connection) }),
+                        )
+                      }
+                    >
+                      {t("Disconnect")}
+                    </Button>
+                  ) : null}
+                  {owner && !ownedByCurrentBot ? (
+                    <Button disabled>{t("Assigned")}</Button>
+                  ) : !binding ? (
+                    <Button
+                      disabled={busyId !== null || projectId === null}
+                      onClick={() => connect(connection)}
+                    >
+                      {t("Connect")}
+                    </Button>
+                  ) : (
+                    <ChannelRepairButton
+                      action={repairAction}
+                      status={binding.status}
+                      disabled={busyId !== null || (repairAction === "choose-project" && !canMove)}
+                      managementUrl={connection.managementUrl}
+                      onRepair={(action) => {
+                        if (action === "choose-project") return moveToProject(connection);
+                        // Replacing credentials needs the full setup form in Settings.
+                        if (action === "update-credentials")
+                          return openChannelSettings(connection.provider);
+                        if (!environmentId) return;
+                        // A disconnected channel starts in the project the picker shows.
+                        const target = channelReconnectProject(binding, projectId, liveProjects);
+                        void run(connection, () =>
+                          target
+                            ? changeProject({
+                                environmentId,
+                                input: {
+                                  botId: BotId.make(bot.id),
+                                  provider: connection.provider,
+                                  projectId: target,
+                                },
+                              })
+                            : reconnect({ environmentId, input: channelInput(connection) }),
+                        );
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </BotSideSheet>
   );
 }

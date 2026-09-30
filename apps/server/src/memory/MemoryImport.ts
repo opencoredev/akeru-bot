@@ -7,7 +7,7 @@ import type {
   AkeruMemoryImportPreview,
   AkeruMemoryRevision,
   AkeruMemoryThreadAccess,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import { resolveMemoryArchivePartitions } from "./EntityMemoryAccess.ts";
@@ -115,11 +115,6 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
   }
   for (const revisions of revisionsByRoot.values()) {
     const ordered = [...revisions].sort((left, right) => left.revision - right.revision);
-    if (ordered.some((revision) => revision.approvalState !== "approved")) {
-      return yield* new EntityMemoryImportError({
-        detail: "Every imported memory revision must already be approved.",
-      });
-    }
     if (ordered.some((revision) => revision.deletionState === "deleted")) {
       return yield* new EntityMemoryImportError({
         detail: "Deleted memory revisions cannot be restored from an archive.",
@@ -159,6 +154,10 @@ export function applyAkeruMemoryImport(input: {
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
   readonly previewHash: string;
+  readonly resolutions?: ReadonlyArray<{
+    readonly rootId: AkeruMemoryRevision["rootId"];
+    readonly decision: "keep-local" | "use-archive";
+  }>;
 }): Effect.Effect<AkeruMemoryImportApplyResult, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
@@ -166,6 +165,7 @@ export function applyAkeruMemoryImport(input: {
       access: input.access,
       ...prepared,
       previewHash: input.previewHash,
+      resolutions: input.resolutions ?? [],
     });
   });
 }

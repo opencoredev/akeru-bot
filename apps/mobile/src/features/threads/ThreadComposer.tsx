@@ -1,19 +1,19 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentId,
   MessageId,
   ModelSelection,
   OrchestrationThreadShell,
-  ProviderInteractionMode,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import {
   detectComposerTrigger,
   replaceTextRange,
   serializeComposerFileLink,
   type ComposerTrigger,
-} from "@t3tools/shared/composerTrigger";
+} from "@akeru/shared/composerTrigger";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -27,6 +27,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import ImageViewing from "react-native-image-viewing";
+import { SymbolView } from "../../components/AppSymbol";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -40,6 +41,9 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
+import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
+import { DictationControls } from "../../components/DictationControls";
+import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
 import { GlassSurface } from "../../components/GlassSurface";
 import {
   ComposerEditor,
@@ -55,7 +59,7 @@ import {
 import { ControlPill } from "../../components/ControlPill";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
-import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
+import { buildModelOptions, groupByProvider, resolveModelSendBlock } from "../../lib/modelOptions";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { RemoteClientConnectionState } from "../../lib/connection";
@@ -63,15 +67,19 @@ import {
   insertRankedSearchResult,
   normalizeSearchQuery,
   scoreQueryMatch,
-} from "@t3tools/shared/searchRanking";
+} from "@akeru/shared/searchRanking";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
-import { botEnvironment, environmentBotsAtom } from "../../state/bots";
+import { botEnvironment, environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
+import { providerBotName } from "./thread-list-v2-items";
+import { resolveThreadIdentity } from "./threadIdentity";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { composerMentionItemToken, isThreadMentionQuery } from "./composerMentionItems";
+import { ComposerMentionPopover } from "./ComposerMentionPopover";
 import {
   type ExistingThreadSettingsRouteSession,
   useExistingThreadSettingsRoutePresentation,
@@ -123,7 +131,6 @@ export interface ThreadComposerProps {
   readonly onSendMessage: () => Promise<MessageId | null>;
   readonly onUpdateModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onUpdateInteractionMode: (interactionMode: ProviderInteractionMode) => void;
   readonly onReconnectEnvironment: () => void;
   readonly onExpandedChange?: (expanded: boolean) => void;
   /** Fires on editor focus/blur; hosts use it to vet stale keyboard state. */
@@ -141,6 +148,8 @@ export interface ThreadComposerProps {
 // KeyboardStickyView (frame-synced to the IME), and a time-based morph
 // running alongside that translate reads as jitter. Snapping the layout and
 // letting the keyboard-synced slide be the only motion looks native there.
+const NO_PROVIDERS: NonNullable<ThreadComposerProps["serverConfig"]>["providers"] = [];
+
 const COMPOSER_LAYOUT_TRANSITION =
   Platform.OS === "android" ? undefined : LinearTransition.duration(220);
 
@@ -232,7 +241,7 @@ function composerConnectionStatus(input: {
   // cached messages are already visible.
   switch (input.threadSyncPhase) {
     case "loading":
-      return { kind: "syncing", label: "Loading messages..." };
+      return { kind: "syncing", label: "Loading messages…" };
     case "syncing":
       return { kind: "syncing", label: "Syncing messages..." };
     default:
@@ -276,10 +285,12 @@ const ComposerConnectionStatusPill = memo(function ComposerConnectionStatusPill(
 });
 
 export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposerProps) {
+  const { t, plural } = useMobileI18n();
   const navigation = useNavigation();
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
   const foregroundColor = useThemeColor("--color-foreground");
+  const mutedColor = useThemeColor("--color-icon-muted");
   const bodyText = useScaledTextRole("body");
   const fallbackInputRef = useRef<ComposerEditorHandle>(null);
   const inputRef = props.editorRef ?? fallbackInputRef;
@@ -295,6 +306,30 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   );
   const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
+  const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+  // Group chats address the group, direct chats the bot. Threads without a
+  // configured bot still read as a named teammate: fall back to the provider
+  // identity. Until either is known the caller's neutral placeholder stands
+  // in, so the composer never asks a bot called "Bot".
+  const composerProviderDriver =
+    props.serverConfig?.providers.find(
+      (candidate) =>
+        candidate.instanceId ===
+        (props.selectedThread.session?.providerInstanceId ??
+          props.selectedThread.modelSelection.instanceId),
+    )?.driver ?? null;
+  const composerIdentity = resolveThreadIdentity({
+    thread: props.selectedThread,
+    bots,
+    groups,
+    providerDriver: composerProviderDriver,
+    providerName: providerBotName,
+  });
+  // Plain chats without a bot or group get no name prompt — the composer
+  // placeholder stays neutral rather than echoing the chat title.
+  const composerBotName = composerIdentity.isGroup
+    ? composerIdentity.title
+    : (bot?.name ?? providerBotName(composerProviderDriver));
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
@@ -306,7 +341,22 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Opening and presentation count as active so the composer stays expanded
   // while focus moves between its native editor and the settings picker.
   const isExpanded = isFocused || settingsSheetPresentation.isActive;
-  const canSend = hasContent;
+  // The chat keeps its saved model even when it cannot run; Send stays off
+  // and the reason shows above the composer until the provider is repaired.
+  const sendBlock = useMemo(
+    () =>
+      resolveModelSendBlock(
+        props.serverConfig,
+        props.selectedThread.modelSelection,
+        t,
+        subscriptionStatuses,
+      ),
+    [props.serverConfig, props.selectedThread.modelSelection, subscriptionStatuses, t],
+  );
+  const canSend = hasContent && sendBlock === null;
+  const sendBlockHint = sendBlock
+    ? t("{title}. {description}", { title: sendBlock.title, description: sendBlock.description })
+    : undefined;
 
   // Notify the parent from the derived value, not focus events: the parent
   // sizes the feed inset from this, and blur-during-sheet would otherwise
@@ -374,6 +424,40 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     end: props.draftMessage.length,
   }));
 
+  const [dictationGeneration, setDictationGeneration] = useState(0);
+  const dictation = useEnvironmentComposerDictation({
+    environmentId: props.environmentId,
+    connected: props.connectionState === "connected",
+    threadId: props.selectedThread.id,
+    draftId: props.selectedThread.id,
+    generation: dictationGeneration,
+    getDraft: () => ({ text: props.draftMessage, selection: composerSelection }),
+    applyDraft: (next) => {
+      props.onChangeDraftMessage(next.text);
+      setComposerSelection(next.selection);
+      inputRef.current?.setSelection(next.selection);
+    },
+  });
+  const showDictation = composerActionIsDictation({
+    hasDraft: props.draftMessage.trim().length > 0 || props.draftAttachments.length > 0,
+    status: dictation.status,
+  });
+  useEffect(() => {
+    setDictationGeneration((generation) => generation + 1);
+  }, [props.environmentId, props.selectedThread.id]);
+  // The composer owns dictation, so focusing it and swapping the collapsed
+  // control for the expanded one keeps recording. Only the collapsed Stop
+  // action takes the slot away; dictation it hides is cancelled.
+  const dictationBusy =
+    dictation.status === "requesting" ||
+    dictation.status === "recording" ||
+    dictation.status === "transcribing";
+  const dictationHidden = !isExpanded && showStopAction;
+  const cancelDictation = dictation.onCancel;
+  useEffect(() => {
+    if (dictationHidden && dictationBusy) cancelDictation();
+  }, [cancelDictation, dictationBusy, dictationHidden]);
+
   const handleSelectionChange = useCallback((selection: ComposerEditorSelection) => {
     setComposerSelection(selection);
   }, []);
@@ -395,10 +479,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
     return detectComposerTrigger(props.draftMessage, composerSelection.end);
   }, [composerSelection, props.draftMessage]);
+  const mentionQuery = composerTrigger?.kind === "path" ? composerTrigger.query : null;
   const pathSearch = useComposerPathSearch({
     environmentId: props.environmentId,
-    cwd: composerTrigger?.kind === "path" ? props.projectCwd : null,
-    query: composerTrigger?.kind === "path" ? composerTrigger.query : null,
+    cwd: mentionQuery !== null && !isThreadMentionQuery(mentionQuery) ? props.projectCwd : null,
+    query: mentionQuery !== null && !isThreadMentionQuery(mentionQuery) ? mentionQuery : null,
   });
 
   const composerMenuItems: ComposerCommandItem[] = useMemo(() => {
@@ -413,20 +498,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           command: "model",
           label: "/model",
           description: "Switch model",
-        },
-        {
-          id: "cmd:plan",
-          type: "slash-command" as const,
-          command: "plan",
-          label: "/plan",
-          description: "Switch to plan mode",
-        },
-        {
-          id: "cmd:default",
-          type: "slash-command" as const,
-          command: "default",
-          label: "/default",
-          description: "Switch to default mode",
         },
       ];
       const builtIn = allBuiltIn.filter((item) => item.command.includes(q));
@@ -540,7 +611,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
 
     if (composerTrigger.kind === "path") {
-      return pathSearch.entries.map((entry) => {
+      const fileItems = pathSearch.entries.map((entry) => {
         const parts = entry.path.split("/");
         return {
           id: `path:${entry.path}`,
@@ -551,13 +622,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           description: parts.length > 1 ? parts.slice(0, -1).join("/") : "",
         };
       });
+      return fileItems;
     }
 
     return [];
   }, [composerTrigger, pathSearch.entries, selectedProviderStatus]);
 
   // ── Handle command selection ──────────────────────────────
-  const { onChangeDraftMessage, onUpdateInteractionMode, draftMessage, onSendMessage } = props;
+  const { onChangeDraftMessage, draftMessage, onSendMessage } = props;
 
   const handleSend = useCallback(async () => {
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
@@ -568,6 +640,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       if (messageId === null) {
         return;
       }
+      setDictationGeneration((generation) => generation + 1);
     } finally {
       inFlightThreadIdsRef.current.delete(threadKey);
     }
@@ -575,22 +648,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const handleCommandSelect = useCallback(
     (item: ComposerCommandItem) => {
       if (!composerTrigger) return;
-
-      if (
-        item.type === "slash-command" &&
-        (item.command === "plan" || item.command === "default")
-      ) {
-        const result = replaceTextRange(
-          draftMessage,
-          composerTrigger.rangeStart,
-          composerTrigger.rangeEnd,
-          "",
-        );
-        setComposerSelection({ start: result.cursor, end: result.cursor });
-        onChangeDraftMessage(result.text);
-        onUpdateInteractionMode(item.command);
-        return;
-      }
 
       let replacement = "";
       if (item.type === "path") {
@@ -601,6 +658,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         replacement = `/${item.command} `;
       } else if (item.type === "provider-slash-command") {
         replacement = `/${item.command.name} `;
+      } else {
+        const token = composerMentionItemToken(item);
+        if (token !== null) replacement = `${token} `;
       }
 
       const result = replaceTextRange(
@@ -612,13 +672,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       setComposerSelection({ start: result.cursor, end: result.cursor });
       onChangeDraftMessage(result.text);
     },
-    [composerTrigger, draftMessage, onChangeDraftMessage, onUpdateInteractionMode],
+    [composerTrigger, draftMessage, onChangeDraftMessage],
   );
 
   // ── Model menu ───────────────────────────────────────────
   const modelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses),
-    [props.serverConfig, currentModelSelection, subscriptionStatuses],
+    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses, t),
+    [props.serverConfig, currentModelSelection, subscriptionStatuses, t],
   );
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
   // An existing thread is bound to its harness: sessions can't move between
@@ -668,6 +728,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             memoryThreadRef: {
               environmentId: props.environmentId,
               threadId: props.selectedThread.id,
+            },
+            routinesRef: {
+              environmentId: props.environmentId,
+              botId: bot.id,
+              botName: bot.name,
             },
           }
         : {}),
@@ -762,12 +827,30 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         layout={COMPOSER_LAYOUT_TRANSITION}
         style={{ maxWidth: props.contentMaxWidth }}
       >
-        {composerTrigger && composerMenuItems.length > 0 ? (
+        {composerTrigger?.kind === "path" && !composerTrigger.query.startsWith('"') ? (
+          <ComposerMentionPopover
+            environmentId={props.environmentId}
+            threadId={props.selectedThread.id}
+            projectId={props.selectedThread.projectId}
+            groupId={props.selectedThread.groupId ?? null}
+            browserAvailable={props.serverConfig?.settings.enableAgentBrowserAccess === true}
+            providers={props.serverConfig?.providers ?? NO_PROVIDERS}
+            query={composerTrigger.query}
+            fileItems={composerMenuItems}
+            isLoading={pathSearch.isPending}
+            onSelect={handleCommandSelect}
+          />
+        ) : composerTrigger &&
+          // `$` stays open when empty so a missing provider or skill is stated, not silent.
+          (composerMenuItems.length > 0 || composerTrigger.kind === "skill") ? (
           <View className="absolute inset-x-0 bottom-full z-10 mb-2">
             <ComposerCommandPopover
               items={composerMenuItems}
               triggerKind={composerTrigger.kind}
               isLoading={pathSearch.isPending}
+              {...(composerTrigger.kind === "skill" && selectedProviderStatus === null
+                ? { emptyText: t("Connect a provider to use skills.") }
+                : {})}
               onSelect={handleCommandSelect}
             />
           </View>
@@ -778,6 +861,22 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             status={connectionStatus}
             onPress={props.onReconnectEnvironment}
           />
+        ) : sendBlock ? (
+          // In flow, not absolute: the overlay's measured height becomes the
+          // feed's bottom inset, so the notice stacks above the pill instead
+          // of painting over the feed and the waiting line.
+          <View
+            accessibilityRole="alert"
+            className="mb-2 rounded-2xl border border-border bg-card px-4 py-2"
+            pointerEvents="none"
+          >
+            <Text className="text-center text-xs text-foreground-muted">
+              <Text className="text-xs font-t3-bold text-foreground">
+                {t("{title}.", { title: sendBlock.title })}
+              </Text>{" "}
+              {sendBlock.description}
+            </Text>
+          </View>
         ) : null}
 
         <ComposerSurface
@@ -818,6 +917,35 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             </Animated.View>
           ) : null}
 
+          {!isExpanded ? (
+            <Pressable
+              accessibilityLabel="Add attachment"
+              accessibilityRole="button"
+              className="mr-1 size-9 items-center justify-center rounded-full bg-subtle"
+              hitSlop={6}
+              onPress={() => void props.onPickDraftImages()}
+              style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+            >
+              <SymbolView name="plus" size={18} tintColor={mutedColor} type="monochrome" />
+            </Pressable>
+          ) : null}
+          {!isExpanded && !hasContent ? (
+            <Pressable
+              accessibilityLabel="Model and reasoning settings"
+              accessibilityRole="button"
+              className="mr-1 max-w-[112px] flex-row items-center gap-1.5 rounded-full bg-subtle px-2.5 py-2"
+              onPress={openSettings}
+              style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+            >
+              <ProviderIcon provider={currentModelOption?.providerDriver} size={15} />
+              <Text
+                className="shrink text-xs font-t3-medium text-foreground-muted"
+                numberOfLines={1}
+              >
+                {currentModelOption?.label ?? "Model"}
+              </Text>
+            </Pressable>
+          ) : null}
           <View className={isExpanded ? undefined : "min-w-0 flex-1"}>
             <ComposerEditor
               ref={inputRef}
@@ -828,7 +956,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               onChangeText={props.onChangeDraftMessage}
               onSelectionChange={handleSelectionChange}
               onPasteImages={(uris) => void props.onNativePasteImages(uris)}
-              placeholder={props.placeholder}
+              placeholder={
+                composerBotName ? t("Message {name}", { name: composerBotName }) : props.placeholder
+              }
               onFocus={handleFocus}
               onBlur={handleBlur}
               onSubmit={handleSend}
@@ -879,8 +1009,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(100)}>
               {showStopAction ? (
                 <ControlPill icon="stop.fill" variant="danger" onPress={props.onStopThread} />
+              ) : showDictation ? (
+                <DictationControls appearance="send-slot" {...dictation} />
               ) : (
                 <ControlPill
+                  accessibilityLabel={sendLabel}
+                  accessibilityHint={sendBlockHint}
                   icon="arrow.up"
                   variant="primary"
                   disabled={!canSend}
@@ -897,13 +1031,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 contentPaddingRight={8}
               >
                 <ComposerToolbarButton
-                  accessibilityLabel="Add attachment"
+                  accessibilityLabel={t("Add attachment")}
                   icon="plus"
                   onPress={() => void props.onPickDraftImages()}
                   showChevron={false}
                 />
                 <ComposerInlineControl
-                  accessibilityLabel="Model and reasoning settings"
+                  accessibilityLabel={t("Model and reasoning settings")}
                   emphasized
                   iconNode={
                     <ProviderIcon provider={currentModelOption?.providerDriver} size={16} />
@@ -914,7 +1048,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 />
                 {showStopAction ? (
                   <ComposerToolbarButton
-                    accessibilityLabel="Stop"
+                    accessibilityLabel={t("Stop")}
                     icon="stop.fill"
                     variant="danger"
                     onPress={props.onStopThread}
@@ -922,14 +1056,19 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                   />
                 ) : null}
               </ComposerToolbarScroller>
-              <ComposerToolbarButton
-                accessibilityLabel={sendLabel}
-                icon="arrow.up"
-                variant="primary"
-                disabled={!canSend}
-                onPress={handleSend}
-                showChevron={false}
-              />
+              {showDictation ? (
+                <DictationControls appearance="send-slot" {...dictation} />
+              ) : (
+                <ComposerToolbarButton
+                  accessibilityLabel={sendLabel}
+                  accessibilityHint={sendBlockHint}
+                  icon="arrow.up"
+                  variant="primary"
+                  disabled={!canSend}
+                  onPress={handleSend}
+                  showChevron={false}
+                />
+              )}
             </ComposerToolbarRow>
           ) : null}
         </ComposerSurface>
@@ -938,8 +1077,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         {props.queueCount > 0 ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
             <Text className="pt-2 text-xs text-foreground-muted">
-              {props.queueCount} queued message{props.queueCount === 1 ? "" : "s"} will send
-              automatically.
+              {plural(props.queueCount, {
+                one: "{count} queued message will send automatically.",
+                other: "{count} queued messages will send automatically.",
+              })}
             </Text>
           </Animated.View>
         ) : null}

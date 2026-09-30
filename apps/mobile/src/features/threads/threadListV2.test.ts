@@ -1,6 +1,6 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { resolveSnoozePresets } from "@t3tools/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { threadSearchMatchKey } from "@akeru/client-runtime/state/thread-search";
+import { resolveSnoozePresets } from "@akeru/client-runtime/state/thread-settled";
 import {
   CommandId,
   EnvironmentId,
@@ -9,14 +9,13 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import {
   buildThreadListV2Items,
   buildThreadListV2ListItems,
-  resolveThreadListV2Enabled,
   resolveThreadListV2SnoozeMenuSelection,
   resolveThreadListV2SnoozeGateExpiryMs,
   resolveThreadListV2Status,
@@ -98,29 +97,6 @@ describe("resolveThreadListV2SnoozeMenuSelection", () => {
         new Date(selectedAt.getTime() + 60 * 60 * 1_000).toISOString(),
       );
     }
-  });
-});
-
-describe("resolveThreadListV2Enabled", () => {
-  it("defaults on when the device has never chosen", () => {
-    expect(
-      resolveThreadListV2Enabled({ legacyPreference: undefined, preferencesLoaded: true }),
-    ).toBe(true);
-  });
-
-  it("honors an explicit legacy opt-in", () => {
-    expect(resolveThreadListV2Enabled({ legacyPreference: true, preferencesLoaded: true })).toBe(
-      false,
-    );
-    expect(resolveThreadListV2Enabled({ legacyPreference: false, preferencesLoaded: true })).toBe(
-      true,
-    );
-  });
-
-  it("holds the default while preferences are still loading so the list does not remount", () => {
-    expect(
-      resolveThreadListV2Enabled({ legacyPreference: undefined, preferencesLoaded: false }),
-    ).toBe(true);
   });
 });
 

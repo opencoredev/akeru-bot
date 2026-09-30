@@ -4,7 +4,7 @@ import TrustPage from "../components/TrustPage.astro";
 
 <TrustPage
   title="Akeru Bot developer guide"
-  description="Install the Akeru Bot CLI and inspect the public project-file schema and OpenAPI contract."
+  description="Install the Akeru Bot CLI, learn how it runs locally, and report problems to the maintainers."
   heading="Akeru Bot for developers"
 >
   <h2>Akeru Bot CLI</h2>
@@ -13,42 +13,15 @@ import TrustPage from "../components/TrustPage.astro";
     the user controls. It is an independent alternative to the official Grok Bot product. Install the official
     <a href="https://www.npmjs.com/package/akeru-bot">akeru-bot CLI package</a> with
     <code>npx akeru-bot@latest</code>.
-    The CLI starts the local server, opens the web client, and manages project chats. The desktop
+    The CLI starts the local server, opens the web client, and manages chats with your bots. The desktop
     app bundles the same server. Source code, releases, user guides, and contribution rules are in
     the <a href="https://github.com/opencoredev/akeru-bot">Akeru Bot GitHub repository</a>.
   </p>
-  <h2>Akeru Bot public metadata API</h2>
+  <h2>No public API on this website</h2>
   <p>
-    The production website exposes one unauthenticated, read-only metadata endpoint. Send
-    <code>GET /v1/schema/t3.json</code> to retrieve the JSON Schema for <code>t3.json</code> project
-    files. The endpoint does not read user data, run a bot, or change any state. Read the
-    <a href="/openapi.json">Akeru Bot OpenAPI document</a> for its operation identifier, typed
-    response schema, and structured error model. Unsupported <code>/api</code> paths return an RFC
-    9457 JSON problem with a stable code and a resolution link.
-  </p>
-  <h2>Akeru Bot API versioning and deprecation</h2>
-  <p>
-    Every operation lives under a major version prefix in the URL path, starting at <code>/v1</code>.
-    A breaking change to a response shape ships under a new prefix such as <code>/v2</code>, and
-    additive fields ship in place. The unversioned <code>/schema/t3.json</code> path stays available
-    as an alias for <code>$schema</code> references in editors, and it is not part of the version
-    contract.
-  </p>
-  <p>
-    A deprecated operation returns a <code>Deprecation</code> header with the date the deprecation
-    started and a <code>Sunset</code> header with the date it stops serving, is marked
-    <code>deprecated</code> in the OpenAPI document, and keeps serving for at least six months after
-    the deprecation date. The replacement path is linked from the response <code>Link</code> header
-    with <code>rel="successor-version"</code>.
-  </p>
-  <h2>Akeru Bot API rate limits</h2>
-  <p>
-    Metadata responses carry the IETF RateLimit header fields so an agent can self-throttle without
-    guessing. <code>RateLimit-Policy: "default";q=600;w=60</code> is the published quota of 600
-    requests per 60 second window per client, and <code>RateLimit: "default";r=600;t=60</code>
-    reports what is left in the current window. A throttled request returns
-    <code>429 Too Many Requests</code> with <code>Retry-After</code> in seconds. Wait for that many
-    seconds before retrying instead of backing off blindly.
+    This website serves static pages and documents only. It has no public API, metadata endpoint, or
+    OpenAPI contract, and it never runs a bot or reads user data. Requests under <code>/api</code>
+    return an RFC 9457 JSON problem with a stable code and a link back to this guide.
   </p>
   <h2>Akeru Bot local integrations</h2>
   <p>
@@ -62,7 +35,7 @@ import TrustPage from "../components/TrustPage.astro";
   <p>
     Agents and developers report problems the same way. Read
     <a href="/feedback.md">feedback.md</a> for where a report goes, what to include, and what to
-    leave out. A failed command, a wrong page, or a schema that does not match the product all belong
+    leave out. A failed command, a wrong page, or docs that do not match the product all belong
     in the <a href="https://github.com/opencoredev/akeru-bot/issues">Akeru Bot issue tracker</a>.
   </p>
 </TrustPage>

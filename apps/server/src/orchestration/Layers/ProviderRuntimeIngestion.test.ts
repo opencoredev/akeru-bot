@@ -10,7 +10,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   ApprovalRequestId,
   AkeruUsageReservationId,
@@ -27,7 +27,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as ChannelRuntime from "../../channels/ChannelRuntime.ts";
 import {
   ChannelDeliveryStore,
@@ -44,7 +44,7 @@ import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { it as effectIt } from "@effect/vitest";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -250,7 +250,8 @@ describe("ProviderRuntimeIngestion", () => {
     | BotUsageLedger
     | ServerSecretStore.ServerSecretStore
     | ServerSettingsService
-    | ChannelDeliveryStore,
+    | ChannelDeliveryStore
+    | ChannelRuntime.ChannelRuntime,
     unknown
   > | null = null;
   let scope: Scope.Closeable | null = null;
@@ -263,7 +264,6 @@ describe("ProviderRuntimeIngestion", () => {
   }
 
   afterEach(async () => {
-    await ChannelRuntime.shutdownAllChannels();
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
@@ -292,6 +292,34 @@ describe("ProviderRuntimeIngestion", () => {
     const workspaceRoot = NodePath.join(repositoryRoot, options?.workspaceSubdirectory ?? "");
     NodeFS.mkdirSync(workspaceRoot, { recursive: true });
     const provider = createAgentControllerHarness();
+    let startTransport: ChannelRuntime.ChannelRuntimeDependencies["startTransport"];
+    let nextChannelId = 0;
+    const channelRuntimeLayer = Layer.unwrap(
+      Effect.gen(function* () {
+        const snapshotQuery = yield* ProjectionSnapshotQuery;
+        return ChannelRuntime.ChannelRuntime.layerWith({
+          engine: yield* OrchestrationEngineService,
+          secretStore: yield* ServerSecretStore.ServerSecretStore,
+          settings: yield* ServerSettingsService,
+          deliveryStore: yield* ChannelDeliveryStore,
+          readModel: snapshotQuery.getSnapshot(),
+          readThread: (threadId) =>
+            snapshotQuery
+              .getSnapshot()
+              .pipe(
+                Effect.map(
+                  (snapshot) => snapshot.threads.find((thread) => thread.id === threadId) ?? null,
+                ),
+              ),
+          nowIso: Effect.succeed("2026-01-01T00:00:00.000Z"),
+          randomUuid: Effect.sync(() => `channel-test-${++nextChannelId}`),
+          startTransport: (input, onMessage, context) =>
+            startTransport
+              ? startTransport(input, onMessage, context)
+              : Promise.reject(new Error("No test transport configured.")),
+        });
+      }),
+    );
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(OrchestrationProjectionPipelineLive),
@@ -305,6 +333,7 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provide(SqlitePersistenceMemory),
     );
     const layer = ProviderRuntimeIngestionLive.pipe(
+      Layer.provideMerge(channelRuntimeLayer),
       Layer.provideMerge(orchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       // Single shared liveness instance across ingestion (writer), the
@@ -404,6 +433,10 @@ describe("ProviderRuntimeIngestion", () => {
       updatedAt: createdAt,
     });
 
+    const withChannels = <A, E>(
+      use: (channels: ChannelRuntime.ChannelRuntimeShape) => Effect.Effect<A, E>,
+    ) => runtime!.runPromise(ChannelRuntime.ChannelRuntime.pipe(Effect.flatMap(use)));
+
     return {
       engine,
       dispatch,
@@ -415,57 +448,46 @@ describe("ProviderRuntimeIngestion", () => {
           remove: (threadId: string, messageId: string, emoji: string) => Promise<void>;
         },
       ) => {
-        let nextId = 0;
         let inbound:
           | Parameters<NonNullable<ChannelRuntime.ChannelRuntimeDependencies["startTransport"]>>[1]
           | undefined;
-        const dependencies: ChannelRuntime.ChannelRuntimeDependencies = {
-          engine,
-          secretStore: await runtime!.runPromise(
-            Effect.service(ServerSecretStore.ServerSecretStore),
-          ),
-          settings: await runtime!.runPromise(Effect.service(ServerSettingsService)),
-          deliveryStore: await runtime!.runPromise(Effect.service(ChannelDeliveryStore)),
-          readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
-          readThread: async (threadId) =>
-            (await Effect.runPromise(snapshotQuery.getSnapshot())).threads.find(
-              (thread) => thread.id === threadId,
-            ) ?? null,
-          nowIso: async () => createdAt,
-          randomUuid: async () => `channel-test-${++nextId}`,
-          startTransport: async (_input, onMessage) => {
-            inbound = onMessage;
-            return {
-              externalIdentity: "test-channel",
-              runtime: {
-                post,
-                shutdown: async () => {},
-                ...(reactions ? { react: reactions.add, removeReaction: reactions.remove } : {}),
-              },
-            };
-          },
+        startTransport = async (_input, onMessage) => {
+          inbound = onMessage;
+          return {
+            externalIdentity: "test-channel",
+            runtime: {
+              post,
+              shutdown: async () => {},
+              ...(reactions ? { react: reactions.add, removeReaction: reactions.remove } : {}),
+            },
+          };
         };
-        await ChannelRuntime.connectChannel(dependencies, {
-          type: "channel.connect",
-          commandId: CommandId.make("cmd-channel-connect"),
-          botId: BotId.make("bot-akeru"),
-          targetProjectId: asProjectId("project-1"),
-          ...(channelProvider === "telegram"
-            ? ({ provider: "telegram", token: "test-token" } as const)
-            : channelProvider === "slack"
-              ? ({ provider: "slack", botToken: "test-token", appToken: "app-token" } as const)
-              : ({
-                  provider: "discord",
-                  botToken: "test-token",
-                  applicationId: "test-app",
-                  publicKey: "test-key",
-                } as const)),
-        });
+        await withChannels((channels) =>
+          channels.connect({
+            type: "channel.connect",
+            commandId: CommandId.make("cmd-channel-connect"),
+            botId: BotId.make("bot-akeru"),
+            targetProjectId: asProjectId("project-1"),
+            ...(channelProvider === "telegram"
+              ? ({ provider: "telegram", token: "test-token" } as const)
+              : channelProvider === "slack"
+                ? ({ provider: "slack", botToken: "test-token", appToken: "app-token" } as const)
+                : ({
+                    provider: "discord",
+                    botToken: "test-token",
+                    applicationId: "test-app",
+                    publicKey: "test-key",
+                  } as const)),
+          }),
+        );
         return {
-          dependencies,
           inbound: (message: Parameters<NonNullable<typeof inbound>>[0]) => inbound!(message),
         };
       },
+      disconnectChannel: (botId: BotId, channelProvider: "telegram" | "slack" | "discord") =>
+        withChannels((channels) => channels.disconnect(botId, channelProvider)),
+      shutdownChannels: () => withChannels((channels) => channels.shutdown),
+      channels: () => withChannels((channels) => Effect.succeed(channels)),
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       readThreadShell: () =>
         runtime!.runPromise(
@@ -581,8 +603,8 @@ describe("ProviderRuntimeIngestion", () => {
       }
       await inbound;
       await harness.drain();
-      expect([...signals]).toEqual(["white_check_mark"]);
-      await ChannelRuntime.shutdownAllChannels();
+      expect([...signals]).toEqual(["check"]);
+      await harness.shutdownChannels();
       expect([...signals]).toEqual([]);
     },
   );
@@ -674,7 +696,7 @@ describe("ProviderRuntimeIngestion", () => {
       harness.emit(terminal);
       await harness.drain();
       expect([...signals]).toEqual(
-        provider === "telegram" ? [] : [state === "completed" ? "white_check_mark" : "x"],
+        provider === "telegram" ? [] : [state === "completed" ? "check" : "x"],
       );
       expect(posts).toEqual(
         state === "completed" ? ["I finished without a text response. Please try again."] : [],
@@ -684,13 +706,185 @@ describe("ProviderRuntimeIngestion", () => {
       await harness.drain();
       await channel.inbound(message);
       expect(calls).toEqual(completedCalls);
-      await ChannelRuntime.disconnectChannel(
-        channel.dependencies,
-        BotId.make("bot-akeru"),
-        provider,
-      );
+      await harness.disconnectChannel(BotId.make("bot-akeru"), provider);
       expect([...signals]).toEqual([]);
       if (provider === "telegram") expect(calls).toEqual([]);
+    },
+  );
+
+  it.each(["slack", "discord"] as const)(
+    "shows a waiting reaction while approvals and user input are pending: %s",
+    async (provider) => {
+      const harness = await createHarness({ botOwned: true });
+      const signals = new Set<string>();
+      const adds: string[] = [];
+      const channel = await harness.connectChannel(async () => {}, provider, {
+        add: async (_thread, _message, emoji) => {
+          signals.add(emoji);
+          adds.push(emoji);
+        },
+        remove: async (_thread, _message, emoji) => {
+          signals.delete(emoji);
+        },
+      });
+      const message = {
+        externalThreadId: `${provider}:waiting`,
+        externalMessageId: "request-waiting",
+        text: "Deploy it",
+      };
+      await channel.inbound(message);
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        provider,
+        message.externalThreadId,
+      );
+      const turnId = asTurnId("waiting-turn");
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-started"),
+        type: "turn.started",
+        payload: {},
+      });
+      await harness.drain();
+      // The approval carries no turn id; it belongs to the active turn.
+      harness.emit({
+        ...base,
+        eventId: asEventId("waiting-approval"),
+        type: "request.opened",
+        requestId: ApprovalRequestId.make("waiting-approval"),
+        payload: { requestType: "command_execution_approval", detail: "deploy" },
+      });
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-question"),
+        type: "user-input.requested",
+        requestId: ApprovalRequestId.make("waiting-question"),
+        payload: {
+          questions: [
+            {
+              id: "env",
+              header: "Env",
+              question: "Which environment?",
+              options: [{ label: "prod", description: "Production" }],
+            },
+          ],
+        },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      // A resolution without a request id answers one request, not the pending question too.
+      harness.emit({
+        ...base,
+        eventId: asEventId("waiting-approval-resolved"),
+        type: "request.resolved",
+        payload: { requestType: "command_execution_approval", decision: "accept" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-question-resolved"),
+        type: "user-input.resolved",
+        requestId: ApprovalRequestId.make("waiting-question"),
+        payload: { answers: { env: "prod" } },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["eyes"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("waiting-completed"),
+        type: "turn.completed",
+        payload: { state: "completed" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["check"]);
+      expect(adds).toEqual(["eyes", "hourglass", "eyes", "check"]);
+      await harness.disconnectChannel(BotId.make("bot-akeru"), provider);
+    },
+  );
+
+  it.each(["error", "stopped"] as const)(
+    "forgets pending channel requests when the session ends: %s",
+    async (state) => {
+      const harness = await createHarness({ botOwned: true });
+      const signals = new Set<string>();
+      const channel = await harness.connectChannel(async () => {}, "slack", {
+        add: async (_thread, _message, emoji) => {
+          signals.add(emoji);
+        },
+        remove: async (_thread, _message, emoji) => {
+          signals.delete(emoji);
+        },
+      });
+      const markWaiting = vi.spyOn(await harness.channels(), "markChannelTurnWaiting");
+      const message = {
+        externalThreadId: "slack:session-ended",
+        externalMessageId: "request-ended",
+        text: "Deploy it",
+      };
+      await channel.inbound(message);
+      const threadId = ChannelRuntime.channelThreadId(
+        BotId.make("bot-akeru"),
+        asProjectId("project-1"),
+        "slack",
+        message.externalThreadId,
+      );
+      const turnId = asTurnId("ended-turn");
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      };
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-started"),
+        type: "turn.started",
+        payload: {},
+      });
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-approval"),
+        type: "request.opened",
+        requestId: ApprovalRequestId.make("ended-approval"),
+        payload: { requestType: "command_execution_approval", detail: "deploy" },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["hourglass"]);
+      harness.emit({
+        ...base,
+        turnId,
+        eventId: asEventId("ended-session"),
+        type: "session.state.changed",
+        payload: { state },
+      });
+      await harness.drain();
+      expect([...signals]).toEqual(["x"]);
+      markWaiting.mockClear();
+      // A late resolution no longer matches a pending request, so nothing is resumed.
+      harness.emit({
+        ...base,
+        eventId: asEventId("ended-approval-resolved"),
+        type: "request.resolved",
+        requestId: ApprovalRequestId.make("ended-approval"),
+        payload: { requestType: "command_execution_approval", decision: "accept" },
+      });
+      await harness.drain();
+      expect(markWaiting).not.toHaveBeenCalled();
+      expect([...signals]).toEqual(["x"]);
+      markWaiting.mockRestore();
+      await harness.disconnectChannel(BotId.make("bot-akeru"), "slack");
     },
   );
 
@@ -750,9 +944,7 @@ describe("ProviderRuntimeIngestion", () => {
           parentBotId: BotId.make("bot-akeru"),
           childBotId: BotId.make("bot-child"),
           parentThreadId: ownerThreadId,
-          childThreadId,
           parentTurnId: ownerTurnId,
-          childTurnId,
           ancestorBotIds: [BotId.make("bot-akeru")],
           depth: 1,
           task: "Research the answer",
@@ -768,15 +960,14 @@ describe("ProviderRuntimeIngestion", () => {
             disabledMcpServerIds: [],
             approvalCeiling: "send",
           },
-          state: "queued",
+          phase: { _tag: "Queued" as const },
           billedBotId: BotId.make("bot-child"),
-          result: null,
-          failure: null,
           keep: false,
+          anchorMessageId: null,
+          retryOfDelegationId: null,
+          trigger: "bot" as const,
           createdAt,
           updatedAt: createdAt,
-          startedAt: null,
-          completedAt: null,
         },
       });
       for (const [threadId, turnId, text] of [
@@ -1033,6 +1224,41 @@ describe("ProviderRuntimeIngestion", () => {
     expect(usage.entries[0]).toMatchObject({
       state: "unavailable",
       unavailableReason: "Provider completed without token usage.",
+    });
+  });
+
+  it("keeps reported usage from a cancelled turn", async () => {
+    const harness = await createHarness({ botOwned: true });
+    const turnId = asTurnId("turn-cancelled-completed");
+    await harness.reserveBotUsage(turnId);
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-cancelled-completed-usage"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      payload: { usage: { usedTokens: 150, inputTokens: 100, outputTokens: 50 } },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-cancelled-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId,
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: { state: "cancelled", stopReason: "cancelled" },
+    });
+    await harness.drain();
+
+    const usage = await harness.summarizeBotUsage();
+    expect(usage.consumedTokens).toBe(150);
+    expect(usage.reservedTokens).toBe(0);
+    expect(usage.entries[0]).toMatchObject({
+      state: "reported",
+      inputTokens: 100,
+      outputTokens: 50,
     });
   });
 

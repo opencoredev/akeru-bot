@@ -2,7 +2,7 @@ import {
   HostProcessExecutablePath,
   HostProcessPlatform,
   HostProcessUserId,
-} from "@t3tools/shared/hostProcess";
+} from "@akeru/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -29,13 +29,21 @@ import {
   type ServiceState,
 } from "./serviceProtocol.ts";
 
-const BOOT_SERVICE_NAME = "t3code";
+const BOOT_SERVICE_NAME = "akeru-bot";
 export const BOOT_SERVICE_UNIT_FILE = `${BOOT_SERVICE_NAME}.service`;
 // `.service` suffix keeps the label distinct from the desktop app's bundle id
-// (com.t3tools.t3code), so launchd and TCC records never collide.
-export const BOOT_SERVICE_LAUNCHD_LABEL = "com.t3tools.t3code.service";
+// (dev.leodoes.akeru), so launchd and TCC records never collide.
+export const BOOT_SERVICE_LAUNCHD_LABEL = "dev.leodoes.akeru.service";
 export const BOOT_SERVICE_PLIST_FILE = `${BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
-export const BOOT_SERVICE_UNIT_ENV = "T3_BOOT_SERVICE_UNIT";
+export const BOOT_SERVICE_UNIT_ENV = "AKERU_BOOT_SERVICE_UNIT";
+
+/**
+ * Names Akeru installs used before the rename. T3 Code uses the same names, so
+ * install only retires a legacy unit that runs this base dir's launcher; see
+ * {@link isOwnedLegacyBootServiceUnit}.
+ */
+export const LEGACY_BOOT_SERVICE_UNIT_FILE = "t3code.service";
+export const LEGACY_BOOT_SERVICE_LAUNCHD_LABEL = "com.t3tools.t3code.service";
 
 /** systemd expands `%` specifiers, including in unquoted append-log paths. */
 export function escapeSystemdSpecifiers(value: string): string {
@@ -57,6 +65,18 @@ export interface BootServicePlan {
   readonly unitPath: string;
 }
 
+/**
+ * A legacy-named unit belongs to this install only when it launches this base
+ * dir's service launcher. A T3 Code install points at its own `~/.t3` runtime,
+ * so it never matches and is left untouched.
+ */
+export function isOwnedLegacyBootServiceUnit(contents: string, launcherPath: string): boolean {
+  return (
+    contents.includes(quoteSystemdValue(launcherPath)) ||
+    contents.includes(`<string>${escapeXmlText(launcherPath)}</string>`)
+  );
+}
+
 /** Pure renderer: service units cannot rely on the user's shell or PATH. */
 export function renderBootServiceUnit(plan: BootServicePlan): string {
   // The user manager has no reliable network-online target; server networking retries itself.
@@ -69,7 +89,7 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
     "[Service]",
     "Type=simple",
     "WorkingDirectory=%h",
-    `Environment=T3CODE_HOME=${quoteSystemdValue(plan.baseDir)}`,
+    `Environment=AKERU_HOME=${quoteSystemdValue(plan.baseDir)}`,
     `Environment=${BOOT_SERVICE_UNIT_ENV}=${BOOT_SERVICE_UNIT_FILE}`,
     `ExecStart=${quoteSystemdValue(plan.nodePath)} ${quoteSystemdValue(plan.launcherPath)}`,
     // Let the launcher mark an explicit stop before it signals the server.
@@ -129,7 +149,7 @@ export function renderBootServicePlist(
     `  <dict>`,
     `    <key>PATH</key>`,
     `    <string>${escapeXmlText(options.environmentPath)}</string>`,
-    `    <key>T3CODE_HOME</key>`,
+    `    <key>AKERU_HOME</key>`,
     `    <string>${escapeXmlText(plan.baseDir)}</string>`,
     `    <key>${BOOT_SERVICE_UNIT_ENV}</key>`,
     `    <string>${BOOT_SERVICE_PLIST_FILE}</string>`,
@@ -202,14 +222,11 @@ export interface BootServiceManager {
 export function systemdManager(input: {
   readonly path: Path.Path;
   readonly homeDir: string;
+  /** Defaults to the current unit name; the legacy name is used only to retire old units. */
+  readonly unitFile?: string;
 }): BootServiceManager {
-  const unitPath = input.path.join(
-    input.homeDir,
-    ".config",
-    "systemd",
-    "user",
-    BOOT_SERVICE_UNIT_FILE,
-  );
+  const unitFile = input.unitFile ?? BOOT_SERVICE_UNIT_FILE;
+  const unitPath = input.path.join(input.homeDir, ".config", "systemd", "user", unitFile);
   return {
     kind: "systemd",
     unitPath,
@@ -218,7 +235,7 @@ export function systemdManager(input: {
       {
         step: "stopping the installed service",
         command: "systemctl",
-        args: ["--user", "stop", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "stop", unitFile],
         timeout: STOP_STEP_TIMEOUT,
       },
     ],
@@ -231,28 +248,28 @@ export function systemdManager(input: {
       {
         step: "enabling the service",
         command: "systemctl",
-        args: ["--user", "enable", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "enable", unitFile],
       },
       { step: "enabling lingering for this user", command: "loginctl", args: ["enable-linger"] },
       // Start last. No administrative state write occurs after this succeeds.
       {
         step: "starting the service",
         command: "systemctl",
-        args: ["--user", "restart", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "restart", unitFile],
       },
     ],
     restart: [
       {
         step: "restarting the service after a failed update",
         command: "systemctl",
-        args: ["--user", "restart", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "restart", unitFile],
       },
     ],
     deactivate: [
       {
         step: "stopping the service",
         command: "systemctl",
-        args: ["--user", "disable", "--now", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "disable", "--now", unitFile],
         timeout: STOP_STEP_TIMEOUT,
       },
     ],
@@ -271,15 +288,13 @@ export function launchdManager(input: {
   readonly homeDir: string;
   readonly uid: number;
   readonly environmentPath: string;
+  /** Defaults to the current label; the legacy label is used only to retire old agents. */
+  readonly label?: string;
 }): BootServiceManager {
-  const unitPath = input.path.join(
-    input.homeDir,
-    "Library",
-    "LaunchAgents",
-    BOOT_SERVICE_PLIST_FILE,
-  );
+  const label = input.label ?? BOOT_SERVICE_LAUNCHD_LABEL;
+  const unitPath = input.path.join(input.homeDir, "Library", "LaunchAgents", `${label}.plist`);
   const domainTarget = `gui/${input.uid}`;
-  const serviceTarget = `${domainTarget}/${BOOT_SERVICE_LAUNCHD_LABEL}`;
+  const serviceTarget = `${domainTarget}/${label}`;
   // bootout/enable are optional: they fail on not-loaded states that are fine
   // to proceed from. The strict `bootstrap` runs last and is also the start:
   // loading a RunAtLoad/KeepAlive plist starts the job, so a separate
@@ -354,12 +369,18 @@ export function selectBootServiceManager(input: {
   readonly uid: number | undefined;
   readonly path: Path.Path;
   readonly environmentPath: string;
+  /** Select the pre-rename unit so install can retire it. */
+  readonly legacy?: boolean;
 }): BootServiceManager | undefined {
   if (input.homeDir === "") {
     return undefined;
   }
   if (input.platform === "linux") {
-    return systemdManager({ path: input.path, homeDir: input.homeDir });
+    return systemdManager({
+      path: input.path,
+      homeDir: input.homeDir,
+      ...(input.legacy ? { unitFile: LEGACY_BOOT_SERVICE_UNIT_FILE } : {}),
+    });
   }
   if (input.platform === "darwin" && input.uid !== undefined) {
     return launchdManager({
@@ -367,6 +388,7 @@ export function selectBootServiceManager(input: {
       homeDir: input.homeDir,
       uid: input.uid,
       environmentPath: input.environmentPath,
+      ...(input.legacy ? { label: LEGACY_BOOT_SERVICE_LAUNCHD_LABEL } : {}),
     });
   }
   return undefined;
@@ -487,6 +509,14 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     path,
     environmentPath,
   });
+  const legacyManager = selectBootServiceManager({
+    platform,
+    homeDir,
+    uid,
+    path,
+    environmentPath,
+    legacy: true,
+  });
   const unitPath = detectedManager?.unitPath ?? "";
   const logPath = path.join(input.logsDir, "boot-service.log");
   const launcherPath = path.join(input.baseDir, "runtime", SERVICE_LAUNCHER_FILE);
@@ -569,6 +599,25 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       { discard: true },
     );
 
+  // A pre-rename unit that runs this base dir's launcher. Read failures and
+  // units that belong to someone else (a real T3 Code install) count as none.
+  const ownedLegacyManager = Effect.gen(function* () {
+    if (legacyManager === undefined) return undefined;
+    const contents = yield* fs.readFileString(legacyManager.unitPath).pipe(Effect.option);
+    return Option.isSome(contents) && isOwnedLegacyBootServiceUnit(contents.value, launcherPath)
+      ? legacyManager
+      : undefined;
+  });
+
+  // Best effort: the new unit is already running, so a leftover legacy step
+  // only leaves a trace in the boot-service log.
+  const retireLegacy = (legacy: BootServiceManager) =>
+    Effect.gen(function* () {
+      yield* runSteps(legacy.deactivate).pipe(Effect.ignore);
+      yield* fs.remove(legacy.unitPath).pipe(Effect.ignore);
+      yield* runSteps(legacy.finalize).pipe(Effect.ignore);
+    });
+
   const install: BootService["Service"]["install"] = Effect.gen(function* () {
     const manager = yield* requireManager;
     yield* fs
@@ -631,12 +680,18 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     const installed = yield* fs
       .exists(unitPath)
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
+    const legacy = yield* ownedLegacyManager;
     if (installed) {
       yield* runSteps(manager.stop);
     }
+    // Both units would serve the same base dir and port, so the legacy one
+    // stops before the renamed unit starts.
+    if (legacy !== undefined) {
+      yield* runSteps(legacy.stop);
+    }
 
     yield* Effect.gen(function* () {
-      if (installed) {
+      if (installed || legacy !== undefined) {
         const previousStateText = yield* fs.readFileString(statePath).pipe(Effect.option);
         if (
           Option.isSome(previousStateText) &&
@@ -666,20 +721,31 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       yield* runSteps(manager.activate);
     }).pipe(
       Effect.tapError(() =>
-        installed ? runSteps(manager.restart).pipe(Effect.ignore) : Effect.void,
+        installed
+          ? runSteps(manager.restart).pipe(Effect.ignore)
+          : legacy !== undefined
+            ? runSteps(legacy.restart).pipe(Effect.ignore)
+            : Effect.void,
       ),
     );
+    if (legacy !== undefined) {
+      yield* retireLegacy(legacy);
+    }
     return plan;
   }).pipe(Effect.withSpan("cloud.boot_service.install"));
 
   const uninstall: BootService["Service"]["uninstall"] = Effect.gen(function* () {
     const manager = yield* requireManager;
+    const legacy = yield* ownedLegacyManager;
+    if (legacy !== undefined) {
+      yield* retireLegacy(legacy);
+    }
     if (
       !(yield* fs
         .exists(unitPath)
         .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause }))))
     )
-      return false;
+      return legacy !== undefined;
     yield* runSteps(manager.deactivate);
     yield* fs
       .remove(unitPath)
@@ -693,7 +759,12 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       return { supported: false, installed: false, current: false, unitPath, logPath };
     }
     if (!(yield* fs.exists(unitPath))) {
-      return { supported: true, installed: false, current: false, unitPath, logPath };
+      // An upgraded install still running under the legacy name needs a repair,
+      // which renames it.
+      const legacy = yield* ownedLegacyManager;
+      return legacy === undefined
+        ? { supported: true, installed: false, current: false, unitPath, logPath }
+        : { supported: true, installed: true, current: false, unitPath: legacy.unitPath, logPath };
     }
     const [unit, launcherExists, runtimeEntryExists, runtimeSentinel, stateText] =
       yield* Effect.all([

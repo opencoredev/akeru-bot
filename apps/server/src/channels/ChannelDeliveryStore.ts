@@ -1,4 +1,4 @@
-import { BotId, ChannelProvider, IsoDateTime, MessageId, ThreadId } from "@t3tools/contracts";
+import { BotId, ChannelProvider, IsoDateTime, MessageId, ThreadId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,6 +22,11 @@ export interface ChannelDeliveryStoreShape {
   readonly claim: (
     input: ChannelDeliveryClaim,
   ) => Effect.Effect<ChannelDeliveryClaimResult, ProjectionRepositoryError>;
+  /** Open delivery attempts left behind by an interrupted send. */
+  readonly listRequestedClaims: () => Effect.Effect<
+    ReadonlyArray<ChannelDeliveryClaim>,
+    ProjectionRepositoryError
+  >;
   /** Release only before transport starts or after confirmed non-delivery. */
   readonly releaseRequested: (
     messageId: MessageId,
@@ -74,7 +79,46 @@ export const makeChannelDeliveryStore = Effect.gen(function* () {
       WHERE message_id = ${messageId}
     `.pipe(Effect.asVoid, Effect.mapError(toPersistenceSqlError("ChannelDeliveryStore.markSent")));
 
-  return { claim, releaseRequested, markSent } satisfies ChannelDeliveryStoreShape;
+  const listRequestedClaims: ChannelDeliveryStoreShape["listRequestedClaims"] = () =>
+    sql<{
+      readonly messageId: string;
+      readonly botId: string;
+      readonly threadId: string;
+      readonly provider: string;
+      readonly externalThreadId: string;
+      readonly requestedAt: string;
+    }>`
+      SELECT
+        message_id AS "messageId",
+        bot_id AS "botId",
+        thread_id AS "threadId",
+        provider,
+        external_thread_id AS "externalThreadId",
+        requested_at AS "requestedAt"
+      FROM channel_deliveries
+      WHERE status = 'requested'
+    `.pipe(
+      Effect.map((rows) =>
+        rows.map(
+          (row): ChannelDeliveryClaim => ({
+            messageId: MessageId.make(row.messageId),
+            botId: BotId.make(row.botId),
+            threadId: ThreadId.make(row.threadId),
+            provider: row.provider as ChannelDeliveryClaim["provider"],
+            externalThreadId: row.externalThreadId,
+            requestedAt: IsoDateTime.make(row.requestedAt),
+          }),
+        ),
+      ),
+      Effect.mapError(toPersistenceSqlError("ChannelDeliveryStore.listRequestedClaims")),
+    );
+
+  return {
+    claim,
+    listRequestedClaims,
+    releaseRequested,
+    markSent,
+  } satisfies ChannelDeliveryStoreShape;
 });
 
 export const ChannelDeliveryStoreLive = Layer.effect(
@@ -84,17 +128,28 @@ export const ChannelDeliveryStoreLive = Layer.effect(
 
 export function makeMemoryChannelDeliveryStore(): ChannelDeliveryStoreShape {
   const status = new Map<MessageId, "requested" | "sent">();
+  const claims = new Map<MessageId, ChannelDeliveryClaim>();
   return {
     claim: (input) =>
       Effect.sync(() => {
         const existing = status.get(input.messageId);
         if (existing) return existing;
         status.set(input.messageId, "requested");
+        claims.set(input.messageId, input);
         return "claimed";
       }),
+    listRequestedClaims: () =>
+      Effect.sync(() =>
+        [...status.entries()].flatMap(([messageId, value]) =>
+          value === "requested" ? [claims.get(messageId)!] : [],
+        ),
+      ),
     releaseRequested: (messageId) =>
       Effect.sync(() => {
-        if (status.get(messageId) === "requested") status.delete(messageId);
+        if (status.get(messageId) === "requested") {
+          status.delete(messageId);
+          claims.delete(messageId);
+        }
       }),
     markSent: ({ messageId }) =>
       Effect.sync(() => {

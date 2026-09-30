@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -66,7 +66,7 @@ describe("ElectronWindow", () => {
         icon: {} as Electron.NativeImage,
         webPreferences: {
           preload: "/tmp/preload.js",
-          partition: "persist:t3code-preview-test",
+          partition: "persist:akeru-preview-test",
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,
@@ -93,7 +93,7 @@ describe("ElectronWindow", () => {
         backgroundColor: "#101010",
         webPreferences: {
           preload: "/tmp/preload.js",
-          partition: "persist:t3code-preview-test",
+          partition: "persist:akeru-preview-test",
           backgroundThrottling: null,
           sandbox: true,
           contextIsolation: true,

@@ -4,13 +4,12 @@
 
 The screenshot harness runs the real mobile application against three disposable local T3
 environments. It creates an isolated base directory and server for each environment, real Git
-projects with deterministic content, seeded orchestration projections, and persisted terminal
-history. The app pairs with every server through its normal connection flow and React Navigation
-opens the production Home, Thread, ThreadTerminal, ThreadReview, and SettingsEnvironments routes.
+projects with deterministic content and seeded orchestration projections. The app pairs with every
+server through its normal connection flow and React Navigation opens the production Home, Thread,
+and SettingsEnvironments routes.
 
 No screenshot-specific screen recreates application UI. `EXPO_PUBLIC_SHOWCASE=1` only enables the
-non-rendering pairing and readiness coordinator and disables terminal autofocus so captures do not
-contain the software keyboard. The local environment cards always come from real paired servers.
+non-rendering pairing and readiness coordinator. The local environment cards always come from real paired servers.
 
 ## Capture the default matrix
 
@@ -22,10 +21,10 @@ The command:
 
 1. Creates three temporary T3 base directories and starts a local server for each on an available
    port.
-2. Creates Akeru Bot, React, and Linux Git repositories with recognizable favicons, feature branches,
-   and a deterministic Akeru Bot review diff.
-3. Seeds each server's migrated SQLite database with playful threads, messages, activities, and
-   terminal history, then adds two persisted mobile-outbox tasks waiting to send.
+2. Creates Akeru Bot, React, and Linux Git repositories with feature branches and deterministic
+   Akeru Bot changes.
+3. Seeds each server's migrated SQLite database with playful threads, messages, and activities,
+   then adds two persisted mobile-outbox tasks waiting to send.
 4. Starts an isolated Metro server, builds the selected native apps, and boots each device.
 5. Pairs each clean app installation with Moonbase Terminal, Suspense Station, and Kernel Cabin.
 6. Navigates to the real application route for every requested scene.
@@ -39,8 +38,8 @@ capture. Pass `--keep-running` to retain them for inspection; the runner prints 
 paths and server ports.
 
 Captures wait for the real environment snapshot to hydrate and for the requested route to become
-active. Both platforms record readiness in the simulator/emulator app container. A final settle
-delay allows native terminal and Git review data to finish rendering.
+active. Both platforms record readiness in the simulator/emulator app container. A short settle
+delay lets the route finish rendering before capture.
 
 A full capture regenerates the selected native project with Expo's clean production prebuild before
 building it. Use --skip-build for repeated captures after the first build.
@@ -57,7 +56,7 @@ Every configured device defaults to dark appearance and the `t3-code` palette, s
 Pass `--theme <id>` (repeatable) or `--theme all` to capture the app's other palettes: `t3-code`,
 `akeru-paper`, `t3-chat`, `grove`, `ocean`, `ember`, and `iris`. The runner hands the palette to the
 app as a launch argument, the app applies it to both color schemes, and a scene only reports itself
-ready once the requested palette is active — so a capture can never show the previous theme.
+ready once the requested palette is active, so a capture can never show the previous theme.
 `--theme all` multiplies the run by seven; only the native build is shared.
 
 The default matrix is:
@@ -71,9 +70,10 @@ The default matrix is:
 | `google-play/tablet-7/dark/t3-code/`  | Pixel AVD at 600dp width  | 1080×1920         | Google Play 7-inch tablet, portrait 9:16  |
 | `google-play/tablet-10/dark/t3-code/` | Pixel AVD at 800dp width  | 1440×2560         | Google Play 10-inch tablet, portrait 9:16 |
 
-Each target captures thread, terminal, review, thread list, and environments. Each palette folder's
-five screenshots satisfy the configured Apple limit of 1–10, Google
-phone requirement of 2–8, and Google tablet recommendation/slot minimum of 4 with a maximum of 8.
+Each target captures thread, thread list, and environments. Each palette folder's
+three screenshots satisfy the configured Apple limit of 1–10 and the Google phone and tablet limit
+of 2–8. Google Play recommends at least four tablet screenshots before it features an app for
+tablets, so add a fourth scene if tablet promotion matters.
 Every palette gets its own leaf folder so one upload slot never mixes themes and each folder keeps a
 store-legal screenshot count.
 
@@ -81,13 +81,13 @@ The generated tree is deliberately aligned with the store upload fields:
 
     artifacts/app-store/screenshots/
     ├── apple/
-    │   ├── iphone-6.9/dark/t3-code/{thread,terminal,review,threads,environments}.png
-    │   ├── iphone-6.5/dark/t3-code/{thread,terminal,review,threads,environments}.png
-    │   └── ipad-13/dark/t3-code/{thread,terminal,review,threads,environments}.png
+    │   ├── iphone-6.9/dark/t3-code/{thread,threads,environments}.png
+    │   ├── iphone-6.5/dark/t3-code/{thread,threads,environments}.png
+    │   └── ipad-13/dark/t3-code/{thread,threads,environments}.png
     └── google-play/
-        ├── phone/dark/t3-code/{thread,terminal,review,threads,environments}.png
-        ├── tablet-7/dark/t3-code/{thread,terminal,review,threads,environments}.png
-        └── tablet-10/dark/t3-code/{thread,terminal,review,threads,environments}.png
+        ├── phone/dark/t3-code/{thread,threads,environments}.png
+        ├── tablet-7/dark/t3-code/{thread,threads,environments}.png
+        └── tablet-10/dark/t3-code/{thread,threads,environments}.png
 
 A light-only run writes the same tree under `light/`; `--appearance both` writes both appearance
 folders, and each requested theme adds a sibling folder next to `t3-code/`.
@@ -122,7 +122,7 @@ debug APK matches its accelerated emulator.
 Capture one scene or device:
 
     pnpm screenshots:mobile --device iphone-6.9 --scene thread
-    pnpm screenshots:mobile --platform android --scene review
+    pnpm screenshots:mobile --platform android --scene environments
 
 Override the configured appearance or capture both variants:
 
@@ -150,7 +150,7 @@ Then run the capture from the repository root:
 
     pnpm screenshots:mobile --skip-build --skip-metro --device iphone-6.9
 
-`pnpm --filter @t3tools/mobile showcase` starts Expo on its normal port, so it is not compatible with
+`pnpm --filter @akeru/mobile showcase` starts Expo on its normal port, so it is not compatible with
 the harness's `--skip-metro` mode.
 
 List the matrix and flags:
@@ -164,7 +164,7 @@ Validate existing files without starting Metro, servers, simulators, or emulator
 
 ## Customize the seeded environment
 
-- Project repository, thread projections, conversation, terminal transcript, and Git changes:
+- Project repository, thread projections, conversation, and Git changes:
   [mobile-showcase-environment.ts](../../scripts/mobile-showcase-environment.ts)
 - Device and capture matrix:
   [mobile-showcase.config.ts](../../scripts/mobile-showcase.config.ts)

@@ -1,8 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { ServerProvider } from "@akeru/contracts";
 import { CircleCheckIcon, DownloadIcon, LoaderIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
+import { useI18n } from "../../i18n";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { openSettings } from "../../settingsDialogStore";
 import {
@@ -40,6 +41,7 @@ function latestProviderCheckedAt(
 }
 
 export function SidebarProviderUpdatePill() {
+  const { t } = useI18n();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [dismissedKeys, setDismissedKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [renderedView, setRenderedView] = useState<ProviderUpdateSidebarPillView | null>(null);
@@ -193,7 +195,7 @@ export function SidebarProviderUpdatePill() {
               <Button
                 size="icon-micro"
                 variant="ghost"
-                aria-label="Dismiss provider update notice"
+                aria-label={t("Dismiss provider update notice")}
                 className="relative z-[1] mr-1 [--control-icon-color:currentColor] rounded-md text-inherit opacity-70 hover:bg-transparent hover:opacity-100"
                 onClick={() => startExit(displayedView.key, null, displayedView.key)}
               >
@@ -201,7 +203,7 @@ export function SidebarProviderUpdatePill() {
               </Button>
             }
           />
-          <TooltipPopup side="top">Dismiss until provider status changes</TooltipPopup>
+          <TooltipPopup side="top">{t("Dismiss until provider status changes")}</TooltipPopup>
         </Tooltip>
       )}
     </div>

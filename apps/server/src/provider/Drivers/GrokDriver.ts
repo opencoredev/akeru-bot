@@ -1,4 +1,4 @@
-import { GrokSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import { GrokSettings, ProviderDriverKind, type ServerProvider } from "@akeru/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -115,7 +115,12 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
       });
-      const textGeneration = yield* makeGrokTextGeneration(effectiveConfig, processEnv, secretsDir);
+      const textGeneration = yield* makeGrokTextGeneration(
+        effectiveConfig,
+        processEnv,
+        secretsDir,
+        instanceId,
+      );
 
       const checkProvider = checkGrokProviderStatus(effectiveConfig, processEnv).pipe(
         Effect.map(stampIdentity),

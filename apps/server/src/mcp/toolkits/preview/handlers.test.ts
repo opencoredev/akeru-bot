@@ -4,8 +4,6 @@ import { normalizePreviewOpenInput } from "./handlers.ts";
 
 describe("normalizePreviewOpenInput", () => {
   it("leaves an unstated visibility for the client preference to decide", () => {
-    // Filling `open` in here would outrank `browserAutoShowFloatingPreview`,
-    // which is desktop-local and cannot be read from the server.
     expect(normalizePreviewOpenInput({})).toEqual({ reuseExistingTab: true });
   });
 

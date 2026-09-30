@@ -1,9 +1,9 @@
-import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@t3tools/contracts";
-import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
+import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@akeru/contracts";
+import { compareSemverVersions, parseSemver } from "@akeru/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";
-import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
+import { getFirstLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
 export interface VersionMismatch {
   readonly clientVersion: string;
@@ -11,7 +11,9 @@ export interface VersionMismatch {
   readonly hint: string;
 }
 
-export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "t3code:version-mismatch-dismissals:v1";
+export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "akeru:version-mismatch-dismissals:v1";
+// Pre-rebrand key, read as a fallback so dismissed banners stay dismissed.
+const LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "t3code:version-mismatch-dismissals:v1";
 
 const VersionMismatchDismissalsSchema = Schema.Struct({
   keys: Schema.Array(Schema.String),
@@ -107,17 +109,13 @@ export function buildVersionMismatchDismissalKey(
 }
 
 function readVersionMismatchDismissals(): VersionMismatchDismissals {
-  try {
-    return (
-      getLocalStorageItem(
-        VERSION_MISMATCH_DISMISSALS_STORAGE_KEY,
-        VersionMismatchDismissalsSchema,
-      ) ?? { keys: [] }
-    );
-  } catch (error) {
-    console.error("Could not read version-mismatch dismissals.", error);
-    return { keys: [] };
-  }
+  return (
+    getFirstLocalStorageItem(
+      [VERSION_MISMATCH_DISMISSALS_STORAGE_KEY, LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY],
+      VersionMismatchDismissalsSchema,
+      (error) => console.error("Could not read version-mismatch dismissals.", error),
+    ) ?? { keys: [] }
+  );
 }
 
 function writeVersionMismatchDismissals(document: VersionMismatchDismissals): void {
@@ -127,6 +125,11 @@ function writeVersionMismatchDismissals(document: VersionMismatchDismissals): vo
       document,
       VersionMismatchDismissalsSchema,
     );
+    try {
+      window.localStorage.removeItem(LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY);
+    } catch {
+      // Draining the legacy key is best-effort.
+    }
   } catch (error) {
     console.error("Could not persist version-mismatch dismissals.", error);
   }

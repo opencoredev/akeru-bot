@@ -1,9 +1,10 @@
 import {
   resolveProviderSkillSourceKind,
+  resolveProviderSkillTextIcon,
   type ProviderSkillSourceKind,
-} from "@t3tools/client-runtime/providerSkills";
-import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/contracts";
-import type { ComposerTriggerKind } from "@t3tools/shared/composerTrigger";
+} from "@akeru/client-runtime/providerSkills";
+import type { ServerProviderSkill, ServerProviderSlashCommand } from "@akeru/contracts";
+import type { ComposerTriggerKind } from "@akeru/shared/composerTrigger";
 import { memo } from "react";
 import { Pressable, ScrollView, View, type ViewStyle } from "react-native";
 
@@ -41,12 +42,34 @@ export type ComposerCommandItem =
       readonly skill: ServerProviderSkill;
       readonly label: string;
       readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "browser-mention";
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "bot-mention";
+      readonly botId: string;
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
+      readonly type: "thread-mention";
+      readonly threadId: string;
+      readonly label: string;
+      readonly description: string;
     };
 
 interface ComposerCommandPopoverProps {
   readonly items: ReadonlyArray<ComposerCommandItem>;
   readonly triggerKind: ComposerTriggerKind | null;
   readonly isLoading: boolean;
+  /** Replaces the default empty line, for example when no provider is connected. */
+  readonly emptyText?: string;
   readonly onSelect: (item: ComposerCommandItem) => void;
 }
 
@@ -81,19 +104,28 @@ function itemIcon(item: ComposerCommandItem): AppSymbolName | null {
       return "terminal";
     case "skill":
       return SKILL_SOURCE_SYMBOL_BY_KIND[resolveProviderSkillSourceKind(item.skill)];
+    case "browser-mention":
+      return "globe";
+    case "bot-mention":
+      return "person.crop.circle";
+    case "thread-mention":
+      return "text.bubble";
     case "path":
       return null;
   }
 }
 
-function groupLabel(triggerKind: ComposerTriggerKind | null): string | null {
+function groupLabel(
+  triggerKind: ComposerTriggerKind | null,
+  items: ReadonlyArray<ComposerCommandItem>,
+): string | null {
   switch (triggerKind) {
     case "slash-command":
       return "Commands";
     case "skill":
       return "Skills";
     case "path":
-      return "Files";
+      return items.some((item) => item.type !== "path") ? "Mentions" : "Files";
     default:
       return null;
   }
@@ -101,11 +133,11 @@ function groupLabel(triggerKind: ComposerTriggerKind | null): string | null {
 
 function emptyText(triggerKind: ComposerTriggerKind | null, isLoading: boolean): string {
   if (isLoading) {
-    return triggerKind === "path" ? "Searching files…" : "Loading…";
+    return triggerKind === "path" ? "Searching…" : "Loading…";
   }
   switch (triggerKind) {
     case "path":
-      return "No matching files or folders.";
+      return "No matching chats, files, or folders.";
     case "skill":
       return "No skills found.";
     case "slash-command":
@@ -122,11 +154,19 @@ const CommandRow = memo(function CommandRow(props: {
   readonly isSlashSkill: boolean;
 }) {
   const iconName = itemIcon(props.item);
+  // A skill's own emoji wins; named glyphs and provider asset paths fall back
+  // to the source-kind symbol from itemIcon.
+  const skillTextIcon =
+    props.item.type === "skill" ? resolveProviderSkillTextIcon(props.item.skill) : null;
   const iconColor = useThemeColor("--color-icon-subtle");
   const borderColor = useThemeColor("--color-border");
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        props.item.description ? `${props.item.label}, ${props.item.description}` : props.item.label
+      }
       onPress={props.onPress}
       style={({ pressed }) => ({
         flexDirection: "row",
@@ -141,6 +181,14 @@ const CommandRow = memo(function CommandRow(props: {
     >
       {props.item.type === "path" ? (
         <PierreEntryIcon path={props.item.path} kind={props.item.kind} size={16} />
+      ) : skillTextIcon ? (
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          className="w-4 text-center text-sm leading-4"
+        >
+          {skillTextIcon}
+        </Text>
       ) : iconName ? (
         <SymbolView name={iconName} size={14} tintColor={iconColor} type="monochrome" />
       ) : null}
@@ -166,7 +214,7 @@ const CommandRow = memo(function CommandRow(props: {
 export const ComposerCommandPopover = memo(function ComposerCommandPopover(
   props: ComposerCommandPopoverProps,
 ) {
-  const label = groupLabel(props.triggerKind);
+  const label = groupLabel(props.triggerKind, props.items);
 
   return (
     <PopoverSurface>
@@ -196,7 +244,7 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
       ) : (
         <View className="px-3.5 py-2.5">
           <Text className="text-xs text-foreground-tertiary">
-            {emptyText(props.triggerKind, props.isLoading)}
+            {props.emptyText ?? emptyText(props.triggerKind, props.isLoading)}
           </Text>
         </View>
       )}

@@ -1,3 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ProviderDriverKind,
@@ -5,12 +10,13 @@ import {
   ThreadId,
   type ProviderInstanceConfig,
   type ProviderSession,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 import type { SubscriptionProviderId } from "./service.ts";
 import type { ApiKeyCredential } from "./types.ts";
 import { makeApiKeySessionReset } from "./sessionReset.ts";
+import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
 
 function session(driver: string, instanceId?: string): ProviderSession {
   return {
@@ -49,6 +55,36 @@ function fixture(
 }
 
 describe("API-key session reset", () => {
+  it.effect("detects a key another writer saves to the credential file during the operation", () =>
+    Effect.gen(function* () {
+      const directory = NodePath.join(
+        NodeOS.tmpdir(),
+        `akeru-session-reset-${NodeCrypto.randomUUID()}`,
+      );
+      NodeFS.mkdirSync(directory, { recursive: true });
+      const authPath = NodePath.join(directory, "subscription-auth.json");
+      const auth = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
+      const stopped: string[] = [];
+      const reset = makeApiKeySessionReset(
+        auth,
+        {
+          listSessions: () => Effect.succeed([session("claudeAgent"), session("grok")]),
+          stopSession: ({ threadId }) => Effect.sync(() => void stopped.push(threadId)),
+        },
+        Effect.succeed({}),
+      );
+      yield* reset(
+        Effect.sync(() =>
+          NodeFS.writeFileSync(
+            authPath,
+            JSON.stringify({ anthropic: { type: "api-key", access: "external-key" } }),
+          ),
+        ),
+      );
+      expect(stopped).toEqual(["thread-claudeAgent"]);
+    }),
+  );
+
   it.effect("stops the matching bridge after replacing its key", () =>
     Effect.gen(function* () {
       const { credentials, stopped, reset } = fixture();

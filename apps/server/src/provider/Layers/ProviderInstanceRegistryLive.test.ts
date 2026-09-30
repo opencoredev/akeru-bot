@@ -33,9 +33,11 @@ import {
   ProviderDriverKind,
   type ProviderInstanceConfigMap,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+  ThreadId,
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
@@ -50,6 +52,15 @@ import { GrokDriver } from "../Drivers/GrokDriver.ts";
 import { KimiDriver } from "../Drivers/KimiDriver.ts";
 import { OpenCodeDriver } from "../Drivers/OpenCodeDriver.ts";
 import * as ModelManifest from "../ModelManifest.ts";
+import { LegacyProviderBridgeLive } from "./LegacyProviderBridge.ts";
+import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
+import { ProviderAdapterRegistry, makeProviderAdapterRegistry } from "./ProviderAdapterRegistry.ts";
+import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
+import { makeProviderServiceLive } from "./ProviderService.ts";
+import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
+import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
+import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
+
 import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
 import { makeProviderInstanceRegistry } from "./ProviderInstanceRegistryLive.ts";
@@ -514,6 +525,118 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       expect(openCodeSnapshot.continuation?.groupKey).toBe(
         `${openCodeDriverKind}:instance:${openCodeId}`,
       );
+    }).pipe(Effect.provide(testLayer)),
+  );
+});
+
+describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge", () => {
+  // The legacy turn path is `AgentController` → `LegacyProviderBridge` →
+  // `ProviderService` → `ProviderAdapterRegistry.getByInstance` → the
+  // instance's `adapter`. Mastra-native drivers ship `adapter: undefined`,
+  // so the only thing that can carry a Kimi session or turn down the
+  // bridge is a registry defect. This block boots the real stack — real
+  // `KimiDriver` through `ProviderInstanceRegistry`, the real
+  // `ProviderAdapterRegistry` facade, the real `ProviderService`, and the
+  // real `LegacyProviderBridgeLive` layer — and asserts every legacy entry
+  // point fails closed instead of driving a turn.
+  const kimiId = ProviderInstanceId.make("kimi_default");
+  const kimiThread = ThreadId.make("thread-registry-kimi");
+
+  const testLayer = ServerConfig.layerTest(process.cwd(), {
+    prefix: "provider-instance-registry-kimi-no-bridge-test",
+  }).pipe(
+    Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(TestHttpClientLive),
+    Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+    Layer.provideMerge(ModelManifest.layerTest),
+  );
+
+  it.live("fails closed through ProviderService and LegacyProviderBridge", () =>
+    Effect.gen(function* () {
+      const configMap: ProviderInstanceConfigMap = {
+        [kimiId]: {
+          driver: ProviderDriverKind.make("kimi"),
+          displayName: "Kimi For Coding",
+          enabled: true,
+          config: makeKimiConfig({ enabled: true }),
+        },
+      };
+
+      const { registry } = yield* makeProviderInstanceRegistry({
+        drivers: [KimiDriver],
+        configMap,
+      });
+
+      // The instance itself carries no legacy transport closures.
+      const kimi = yield* registry.getInstance(kimiId);
+      expect(kimi).toBeDefined();
+      expect(kimi!.adapter).toBeUndefined();
+      expect(kimi!.textGeneration).toBeUndefined();
+      expect(kimi!.mastraConnection).toBeDefined();
+
+      // The real adapter-registry facade fails closed for the Kimi
+      // instance while non-adapter routing metadata still resolves —
+      // `AgentController` depends on that metadata for Mastra drivers.
+      const adapterRegistry = yield* Effect.provideService(
+        makeProviderAdapterRegistry(),
+        ProviderInstanceRegistry,
+        registry,
+      );
+      const lookup = yield* adapterRegistry.getByInstance(kimiId).pipe(Effect.flip);
+      expect(lookup._tag).toBe("ProviderUnsupportedError");
+      const info = yield* adapterRegistry.getInstanceInfo(kimiId);
+      expect(info.driverKind).toBe("kimi");
+      expect(info.enabled).toBe(true);
+      expect(info.mastraConnection).toBeDefined();
+
+      // Materialize the real ProviderService + LegacyProviderBridge on
+      // top of this registry and push the full legacy surface through it.
+      // Build the layer inside the test scope so the in-memory database
+      // backing the session directory stays open for the whole test.
+      const bridgeContext = yield* Layer.build(
+        LegacyProviderBridgeLive.pipe(
+          Layer.provide(
+            makeProviderServiceLive().pipe(
+              Layer.provide(Layer.succeed(ProviderAdapterRegistry, adapterRegistry)),
+              Layer.provide(
+                ProviderSessionDirectoryLive.pipe(
+                  Layer.provide(
+                    ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      const bridge = Context.get(bridgeContext, LegacyProviderBridge);
+
+      const startError = yield* bridge
+        .startSession(kimiThread, {
+          threadId: kimiThread,
+          provider: ProviderDriverKind.make("kimi"),
+          providerInstanceId: kimiId,
+          runtimeMode: "full-access",
+        })
+        .pipe(Effect.flip);
+      expect(startError._tag).toBe("ProviderUnsupportedError");
+
+      // The directory never saw a binding, so sendTurn fails closed at
+      // routing — before any adapter resolution could produce a turn.
+      const sendError = yield* bridge
+        .sendTurn({ threadId: kimiThread, input: "This must never reach a provider." })
+        .pipe(Effect.flip);
+      expect(sendError._tag).toBe("ProviderValidationError");
+
+      const interruptError = yield* bridge
+        .interruptTurn({ threadId: kimiThread })
+        .pipe(Effect.flip);
+      expect(interruptError._tag).toBe("ProviderValidationError");
+
+      const sessions = yield* bridge.listSessions();
+      expect(sessions).toEqual([]);
     }).pipe(Effect.provide(testLayer)),
   );
 });

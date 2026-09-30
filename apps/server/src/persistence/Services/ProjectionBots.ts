@@ -2,6 +2,7 @@ import {
   BotAvatar,
   BotEngine,
   BotId,
+  ImageProviderId,
   BotPersonalityTone,
   PersistedBotSandbox,
   BotUsageCap,
@@ -10,9 +11,9 @@ import {
   IsoDateTime,
   McpServerId,
   RuntimeMode,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -30,6 +31,9 @@ export const ProjectionBot = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
   usageCap: Schema.NullOr(BotUsageCap),
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),

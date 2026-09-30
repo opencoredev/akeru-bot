@@ -1,8 +1,8 @@
-// @effect-diagnostics globalFetch:off globalDate:off
+// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Live plan windows from Settings → Providers logins.
  *
- * Claude and Codex follow OpenUsage. Cursor uses the dashboard Connect RPC.
+ * Claude and Codex follow OpenUsage.
  * Grok uses the CLI billing credits endpoint. Kimi is attempted last.
  *
  * @module usagePlanLimits
@@ -11,12 +11,15 @@ import type {
   SubscriptionProviderId,
   UsagePlanWindow,
   UsageProviderPlanLimits,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
+import * as Cache from "effect/Cache";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
-const CURSOR_USAGE_URL =
-  "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
 const GROK_CREDITS_URL = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
 const GROK_SETTINGS_URL = "https://cli-chat-proxy.grok.com/v1/settings";
 const KIMI_USAGE_URL = "https://www.kimi.com/api/coding/usage";
@@ -25,16 +28,23 @@ const FETCH_TIMEOUT_MS = 10_000;
 const SESSION_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
+type LiveSubscriptionProviderId = SubscriptionProviderId;
+
+const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "openai-codex",
   "anthropic",
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",
 ];
 
-export type GetAccessToken = (provider: SubscriptionProviderId) => Promise<string | undefined>;
+export interface PlanAccess {
+  /** Null while the stored account's token is temporarily unavailable. */
+  readonly accessToken: string | null;
+  readonly accountId: string;
+}
+
+export type GetPlanAccess = (provider: SubscriptionProviderId) => Promise<PlanAccess | undefined>;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -63,7 +73,7 @@ function isoFromUnknown(value: unknown): string | null {
   const text = asString(value);
   if (text !== null) {
     const parsed = Date.parse(text);
-    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+    if (!Number.isNaN(parsed)) return DateTime.formatIso(DateTime.makeUnsafe(parsed));
     const numeric = asNumber(text);
     if (numeric !== null) return isoFromEpoch(numeric);
     return null;
@@ -76,10 +86,10 @@ function isoFromUnknown(value: unknown): string | null {
   return number === null ? null : isoFromEpoch(number);
 }
 
-/** Cursor sends epoch milliseconds. Codex often sends seconds. */
+/** Accepts epoch milliseconds or seconds (Codex often sends seconds). */
 function isoFromEpoch(value: number): string {
   const millis = Math.abs(value) < 1e11 ? value * 1000 : value;
-  return new Date(millis).toISOString();
+  return DateTime.formatIso(DateTime.makeUnsafe(millis));
 }
 
 function cycleEndFromUsage(root: Record<string, unknown>): string | null {
@@ -255,7 +265,9 @@ function pickCodexWindow(
     isoFromUnknown(candidate.window.reset_at) ??
     (() => {
       const after = asNumber(candidate.window.reset_after_seconds);
-      return after === null ? null : new Date(Date.now() + after * 1000).toISOString();
+      return after === null
+        ? null
+        : DateTime.formatIso(DateTime.add(DateTime.nowUnsafe(), { seconds: after }));
     })();
   return {
     kind,
@@ -276,66 +288,6 @@ function formatCodexPlan(value: unknown): string | null {
     default:
       return raw;
   }
-}
-
-export function parseCursorUsage(body: unknown): {
-  readonly plan: string | null;
-  readonly windows: readonly UsagePlanWindow[];
-} {
-  const root = asRecord(body);
-  const usage = asRecord(root?.usage) ?? root;
-  if (usage === null) return { plan: null, windows: [] };
-  const planUsage =
-    asRecord(usage.planUsage) ??
-    (Array.isArray(usage.planUsage) ? asRecord(usage.planUsage[0]) : null);
-  if (planUsage === null) {
-    return { plan: asString(root?.planName) ?? asString(usage.planName), windows: [] };
-  }
-
-  const cycleEnd = cycleEndFromUsage(usage) ?? cycleEndFromUsage(root ?? {});
-
-  const windows: UsagePlanWindow[] = [];
-  const totalPercent =
-    asNumber(planUsage.totalPercentUsed) ??
-    (() => {
-      const limit = asNumber(planUsage.limit);
-      const remaining = asNumber(planUsage.remaining);
-      const spend = asNumber(planUsage.totalSpend);
-      if (limit === null || limit <= 0) return null;
-      if (spend !== null) return (spend / limit) * 100;
-      if (remaining !== null) return ((limit - remaining) / limit) * 100;
-      return null;
-    })();
-  if (totalPercent !== null) {
-    windows.push({
-      kind: "weekly",
-      label: "Plan",
-      usedPercent: clampPercent(totalPercent),
-      resetsAt: cycleEnd,
-    });
-  }
-  const autoPercent = asNumber(planUsage.autoPercentUsed);
-  if (autoPercent !== null) {
-    windows.push({
-      kind: "model",
-      label: "Cursor models",
-      usedPercent: clampPercent(autoPercent),
-      resetsAt: cycleEnd,
-    });
-  }
-  const apiPercent = asNumber(planUsage.apiPercentUsed);
-  if (apiPercent !== null) {
-    windows.push({
-      kind: "model",
-      label: "Other models",
-      usedPercent: clampPercent(apiPercent),
-      resetsAt: cycleEnd,
-    });
-  }
-  return {
-    plan: asString(root?.planName) ?? asString(usage.planName),
-    windows,
-  };
 }
 
 export function parseGrokUsage(body: unknown): {
@@ -392,19 +344,41 @@ export function parseKimiUsage(body: unknown): {
 
 async function fetchJson(
   url: string,
-  init: RequestInit,
+  init: {
+    readonly method: "GET" | "POST";
+    readonly headers: Record<string, string>;
+    readonly body?: string;
+  },
 ): Promise<{ readonly status: number; readonly body: unknown; readonly headers: Headers }> {
-  const response = await fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  const request = HttpClientRequest.make(init.method)(url, {
+    headers: init.headers,
+  }).pipe(
+    init.body === undefined
+      ? (request) => request
+      : HttpClientRequest.bodyText(init.body, "application/json"),
+  );
+  const response = await Effect.runPromise(
+    HttpClient.execute(request).pipe(
+      Effect.timeout(Duration.millis(FETCH_TIMEOUT_MS)),
+      Effect.provide(FetchHttpClient.layer),
+    ),
+  );
   let body: unknown = null;
   try {
-    body = await response.json();
+    body = await Effect.runPromise(response.json);
   } catch {
     body = null;
   }
-  return { status: response.status, body, headers: response.headers };
+  return {
+    status: response.status,
+    body,
+    headers: new Headers(
+      Object.entries(response.headers).filter(([, value]) => typeof value === "string") as [
+        string,
+        string,
+      ][],
+    ),
+  };
 }
 
 async function fetchClaude(accessToken: string): Promise<UsageProviderPlanLimits | null> {
@@ -448,28 +422,6 @@ async function fetchCodex(accessToken: string): Promise<UsageProviderPlanLimits 
   if (parsed.windows.length === 0) return null;
   return {
     provider: "openai-codex",
-    status: "ok",
-    plan: parsed.plan,
-    message: null,
-    windows: [...parsed.windows],
-  };
-}
-
-async function fetchCursor(accessToken: string): Promise<UsageProviderPlanLimits | null> {
-  const result = await fetchJson(CURSOR_USAGE_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Connect-Protocol-Version": "1",
-    },
-    body: "{}",
-  });
-  if (result.status < 200 || result.status >= 300) return null;
-  const parsed = parseCursorUsage(result.body);
-  if (parsed.windows.length === 0) return null;
-  return {
-    provider: "cursor",
     status: "ok",
     plan: parsed.plan,
     message: null,
@@ -525,7 +477,7 @@ async function fetchKimi(accessToken: string): Promise<UsageProviderPlanLimits |
 }
 
 async function fetchProvider(
-  provider: SubscriptionProviderId,
+  provider: LiveSubscriptionProviderId,
   accessToken: string,
 ): Promise<UsageProviderPlanLimits | null> {
   switch (provider) {
@@ -533,32 +485,97 @@ async function fetchProvider(
       return fetchCodex(accessToken);
     case "anthropic":
       return fetchClaude(accessToken);
-    case "cursor":
-      return fetchCursor(accessToken);
     case "xai":
       return fetchGrok(accessToken);
     case "kimi-for-coding":
       return fetchKimi(accessToken);
     case "opencode-go":
       return null;
+    default:
+      return null;
   }
 }
 
-const PLAN_LIMIT_TTL_MS = 5 * 60 * 1000;
-const PLAN_LIMIT_FAILURE_BACKOFF_MS = 60 * 1000;
+const PLAN_LIMIT_TTL = Duration.minutes(5);
+// Failure backoff is the cache TTL: a failed or unavailable read keeps serving
+// the last good windows and is not retried until this shorter expiry lapses.
+const PLAN_LIMIT_FAILURE_BACKOFF = Duration.minutes(1);
 
-const planLimitCache = new Map<
-  SubscriptionProviderId,
-  { readonly limits: UsageProviderPlanLimits; readonly fetchedAt: number }
->();
-const planLimitFailedAt = new Map<SubscriptionProviderId, number>();
+type CachedPlanLimits = {
+  readonly limits: UsageProviderPlanLimits;
+  readonly fresh: boolean;
+};
 
-export function resetPlanLimitCache(): void {
-  planLimitCache.clear();
-  planLimitFailedAt.clear();
+function makePlanLimitCache(getPlanAccess: GetPlanAccess) {
+  const lastGoodPlanLimits = new Map<string, UsageProviderPlanLimits>();
+  const providerKeys = new Map<LiveSubscriptionProviderId, string>();
+  const connections = new Map<
+    string,
+    { readonly accessToken: string; readonly provider: LiveSubscriptionProviderId }
+  >();
+  const cache = Cache.makeWith<string, CachedPlanLimits>(
+    (key) =>
+      Effect.promise(async () => {
+        const connection = connections.get(key);
+        if (connection === undefined) throw new Error("Plan account is disconnected.");
+        const { provider, accessToken } = connection;
+        try {
+          const fresh = await fetchProvider(provider, accessToken);
+          if (fresh !== null) {
+            if (providerKeys.get(provider) === key) lastGoodPlanLimits.set(key, fresh);
+            return { limits: fresh, fresh: true };
+          }
+        } catch {
+          // Keep the last good windows during provider failures.
+        }
+        return {
+          limits: lastGoodPlanLimits.get(key) ?? emptyConnectedLimits(provider),
+          fresh: false,
+        };
+      }),
+    {
+      capacity: PLAN_PROVIDER_ORDER.length * 2,
+      timeToLive: (exit) =>
+        exit._tag === "Success" && exit.value.fresh ? PLAN_LIMIT_TTL : PLAN_LIMIT_FAILURE_BACKOFF,
+    },
+  );
+  // A disconnected provider, or one reconnected with a different account, drops its cached and
+  // last-good meters instead of serving the old account's windows for the rest of the TTL.
+  return Effect.map(cache, (entries) => {
+    const forget = (key: string) => {
+      lastGoodPlanLimits.delete(key);
+      connections.delete(key);
+      return Cache.invalidate(entries, key);
+    };
+    return {
+      read: (provider: LiveSubscriptionProviderId) =>
+        Effect.promise(() => getPlanAccess(provider).catch(() => null)).pipe(
+          Effect.flatMap((access) =>
+            Effect.gen(function* () {
+              const previous = providerKeys.get(provider);
+              if (access === undefined) {
+                providerKeys.delete(provider);
+                if (previous !== undefined) yield* forget(previous);
+                return null;
+              }
+              // Without a known stored account, no cached meters can be attributed to it.
+              if (access === null) return emptyConnectedLimits(provider);
+              const key = `${provider}:${access.accountId}`;
+              if (previous !== undefined && previous !== key) yield* forget(previous);
+              providerKeys.set(provider, key);
+              // A temporarily unavailable token keeps this same account's last good meters.
+              if (access.accessToken === null)
+                return lastGoodPlanLimits.get(key) ?? emptyConnectedLimits(provider);
+              connections.set(key, { accessToken: access.accessToken, provider });
+              return (yield* Cache.get(entries, key)).limits;
+            }),
+          ),
+        ),
+    };
+  });
 }
 
-function emptyConnectedLimits(provider: SubscriptionProviderId): UsageProviderPlanLimits {
+function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProviderPlanLimits {
   return {
     provider,
     status: "ok",
@@ -568,42 +585,28 @@ function emptyConnectedLimits(provider: SubscriptionProviderId): UsageProviderPl
   };
 }
 
-async function readProviderPlanLimits(
-  provider: SubscriptionProviderId,
-  getAccessToken: GetAccessToken,
-): Promise<UsageProviderPlanLimits | null> {
-  const token = await getAccessToken(provider);
-  if (token === undefined) return null;
+export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
+  return Effect.map(
+    makePlanLimitCache(getPlanAccess),
+    (cache) => (provider?: SubscriptionProviderId) =>
+      Effect.all(
+        (provider === undefined ? PLAN_PROVIDER_ORDER : [provider]).map((selected) =>
+          cache.read(selected),
+        ),
 
-  const now = Date.now();
-  const cached = planLimitCache.get(provider);
-  if (cached !== undefined && now - cached.fetchedAt < PLAN_LIMIT_TTL_MS) {
-    return cached.limits;
-  }
-  const failedAt = planLimitFailedAt.get(provider);
-  if (failedAt !== undefined && now - failedAt < PLAN_LIMIT_FAILURE_BACKOFF_MS) {
-    return cached?.limits ?? emptyConnectedLimits(provider);
-  }
-
-  try {
-    const fresh = await fetchProvider(provider, token);
-    if (fresh !== null) {
-      planLimitCache.set(provider, { limits: fresh, fetchedAt: now });
-      planLimitFailedAt.delete(provider);
-      return fresh;
-    }
-  } catch {
-    // Keep the last good windows. Anthropic 429s this endpoint often.
-  }
-  planLimitFailedAt.set(provider, now);
-  return cached?.limits ?? emptyConnectedLimits(provider);
+        { concurrency: "unbounded" },
+      ).pipe(
+        Effect.map((results) =>
+          results.filter((entry): entry is UsageProviderPlanLimits => entry !== null),
+        ),
+      ),
+  );
 }
 
-export async function readPlanLimits(
-  getAccessToken: GetAccessToken,
-): Promise<readonly UsageProviderPlanLimits[]> {
-  const results = await Promise.all(
-    PLAN_PROVIDER_ORDER.map((provider) => readProviderPlanLimits(provider, getAccessToken)),
-  );
-  return results.filter((entry): entry is UsageProviderPlanLimits => entry !== null);
+export function readPlanLimitsEffect(getPlanAccess: GetPlanAccess) {
+  return Effect.flatMap(makePlanLimitsReader(getPlanAccess), (read) => read());
+}
+
+export async function readPlanLimits(getPlanAccess: GetPlanAccess) {
+  return Effect.runPromise(readPlanLimitsEffect(getPlanAccess));
 }

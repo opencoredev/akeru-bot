@@ -1,6 +1,9 @@
 import { assert, describe, expect, it } from "vite-plus/test";
 
 import {
+  AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
+  AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
+  AkeruMemoryCandidateId,
   AuthSessionId,
   BotId,
   CheckpointRef,
@@ -11,9 +14,10 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import type { OrchestrationThread } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import type { OrchestrationThread } from "@akeru/contracts";
 
+import { pendingMemoryApprovals } from "../durableMemory.ts";
 import { applyThreadDetailEvent } from "./threadReducer.ts";
 
 const baseEventFields = {
@@ -981,6 +985,61 @@ describe("applyThreadDetailEvent", () => {
         expect(result.thread.activities).toHaveLength(1);
         expect(result.thread.activities[0]?.kind).toBe("file-edit");
       }
+    });
+
+    it("opens a memory approval card on request and clears it on decision", () => {
+      const request = {
+        candidateId: AkeruMemoryCandidateId.make("candidate-1"),
+        fact: "Deploys happen on Fridays.",
+        scope: "project" as const,
+        sensitive: false,
+        sourceThreadId: ThreadId.make("thread-1"),
+        authorBotId: BotId.make("bot-1"),
+        affectedBotIds: [BotId.make("bot-1")],
+      };
+      const append = (
+        thread: OrchestrationThread,
+        sequence: number,
+        kind: string,
+        payload: unknown,
+      ) => {
+        const result = applyThreadDetailEvent(thread, {
+          ...baseEventFields,
+          sequence,
+          occurredAt: "2026-04-01T11:00:00.000Z",
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-1"),
+          type: "thread.activity-appended",
+          payload: {
+            threadId: ThreadId.make("thread-1"),
+            activity: {
+              id: EventId.make(`activity-${sequence}`),
+              tone: sequence === 20 ? "approval" : "info",
+              kind,
+              summary: kind,
+              payload,
+              turnId: null,
+              createdAt: "2026-04-01T11:00:00.000Z",
+            },
+          },
+        });
+        assert(result.kind === "updated");
+        return result.thread;
+      };
+
+      const requested = append(baseThread, 20, AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, request);
+      expect(pendingMemoryApprovals(requested.activities)).toEqual([request]);
+
+      const resolved = append(requested, 21, AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY, {
+        candidateId: request.candidateId,
+        status: "approved",
+        fact: request.fact,
+        scope: "project",
+        affectedBotIds: request.affectedBotIds,
+        memoryRootId: "memory-1",
+        createdAt: "2026-04-01T11:00:01.000Z",
+      });
+      expect(pendingMemoryApprovals(resolved.activities)).toEqual([]);
     });
 
     it("appends in-order live activities without dropping earlier rows", () => {

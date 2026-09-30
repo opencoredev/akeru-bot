@@ -1,8 +1,8 @@
-import type { UsageProviderKind, UsageProviderPlanLimits } from "@t3tools/contracts";
+import type { UsageProviderKind, UsageProviderPlanLimits } from "@akeru/contracts";
 import { CheckIcon, RefreshCwIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { DailyTotals, HourlyTotals } from "@t3tools/shared/usageMerge";
+import type { DailyTotals, HourlyTotals } from "@akeru/shared/usageMerge";
 
 import { isElectron } from "../../env";
 import { useClientSettings } from "../../hooks/useSettings";
@@ -19,7 +19,7 @@ import {
   formatTokens,
   formatUsd,
   makeWindow,
-} from "@t3tools/shared/usageFormat";
+} from "@akeru/shared/usageFormat";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -186,24 +186,6 @@ export function UsagePage() {
             </Toggle>
           ))}
         </ToggleGroup>
-        {/* The period does not apply to Limits, so it stays in place but
-            disabled; unmounting it shifted the metric toggle ~300px. */}
-        <ToggleGroup
-          aria-label="Usage period"
-          variant="segmented"
-          value={[String(windowDays)]}
-          disabled={showingLimits}
-          onValueChange={(next) => {
-            const value = next[0];
-            if (value) selectWindow(Number(value));
-          }}
-        >
-          {WINDOW_OPTIONS.map((option) => (
-            <Toggle key={option.days} value={String(option.days)}>
-              {option.label}
-            </Toggle>
-          ))}
-        </ToggleGroup>
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? "Refresh limits" : "Refresh usage"}
@@ -238,29 +220,6 @@ export function UsagePage() {
             ))}
           </SelectPopup>
         </Select>
-        <Select
-          value={String(windowDays)}
-          disabled={showingLimits}
-          onValueChange={(value) => selectWindow(Number(value))}
-        >
-          <SelectTrigger
-            aria-label="Usage period"
-            size="compact"
-            variant="ghost"
-            className="w-auto min-w-0"
-          >
-            <SelectValue>
-              {WINDOW_OPTIONS.find((option) => option.days === windowDays)?.label}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false}>
-            {WINDOW_OPTIONS.map((option) => (
-              <SelectItem key={option.days} value={String(option.days)}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? "Refresh limits" : "Refresh usage"}
@@ -279,7 +238,7 @@ export function UsagePage() {
         <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
+          <WorkspacePageContainer width="readable">
             {showingLimits ? (
               <UsageLimitsOverview
                 planLimits={planLimits}
@@ -378,10 +337,30 @@ export function UsagePage() {
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-3">
-                    <h2 className="text-sm font-medium text-foreground">
-                      {isPast24Hours ? "Hourly" : "Daily"}{" "}
-                      {metric === "tokens" ? "processed tokens" : "cost"}
-                    </h2>
+                    {/* The period only shapes the time series and the breakdown
+                        below it, so it sits with them instead of competing with
+                        the metric control in the top bar. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-medium text-foreground">
+                        {isPast24Hours ? "Hourly" : "Daily"}{" "}
+                        {metric === "tokens" ? "processed tokens" : "cost"}
+                      </h2>
+                      <ToggleGroup
+                        aria-label="Usage period"
+                        variant="segmented"
+                        value={[String(windowDays)]}
+                        onValueChange={(next) => {
+                          const value = next[0];
+                          if (value) selectWindow(Number(value));
+                        }}
+                      >
+                        {WINDOW_OPTIONS.map((option) => (
+                          <Toggle key={option.days} value={String(option.days)}>
+                            {option.label}
+                          </Toggle>
+                        ))}
+                      </ToggleGroup>
+                    </div>
                     <UsageProviderChart
                       providers={activeProviders}
                       days={days}
@@ -439,116 +418,123 @@ export function UsagePage() {
                   </div>
 
                   {breakdown === "model" ? (
-                    <table className="w-full table-fixed text-sm">
-                      <colgroup>
-                        <col className="w-2/5" />
-                        <col className="w-1/5" />
-                        <col className="w-1/5" />
-                        <col className="w-1/5" />
-                      </colgroup>
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                          <th className="py-2 font-normal">Model</th>
-                          <th className="py-2 text-right font-normal">Cost</th>
-                          <th className="py-2 text-right font-normal">Share</th>
-                          <th className="py-2 text-right font-normal">Tokens</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {breakdownModels.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                              No activity in this window.
-                            </td>
+                    // Model names and five numeric columns stop fitting well
+                    // before the narrowest supported width, so the table keeps a
+                    // readable minimum and scrolls rather than crushing columns.
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[34rem] table-fixed text-sm">
+                        <colgroup>
+                          <col className="w-2/5" />
+                          <col className="w-1/5" />
+                          <col className="w-1/5" />
+                          <col className="w-1/5" />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                            <th className="py-2 font-normal">Model</th>
+                            <th className="py-2 text-right font-normal">Cost</th>
+                            <th className="py-2 text-right font-normal">Share</th>
+                            <th className="py-2 text-right font-normal">Tokens</th>
                           </tr>
-                        ) : (
-                          breakdownModels.map((model) => (
-                            <tr
-                              key={`${model.provider}:${model.model}`}
-                              className="border-b border-border/50 transition-colors hover:bg-muted/50"
-                            >
-                              <td className="py-2 text-foreground">
-                                <span className="flex items-center gap-2">
-                                  <ProviderMark provider={model.provider} className="size-3.5" />
-                                  {PROVIDER_PRESENTATION[model.provider].label} · {model.model}
-                                </span>
-                              </td>
-                              <td className="py-2 text-right text-foreground tabular-nums">
-                                {formatUsd(model.costUsd)}
-                              </td>
-                              <td className="py-2 text-right text-muted-foreground tabular-nums">
-                                {formatPercent(model.costShare)}
-                              </td>
-                              <td className="py-2 text-right text-muted-foreground tabular-nums">
-                                {formatTokens(model.totalTokens)}
+                        </thead>
+                        <tbody>
+                          {breakdownModels.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                                No activity in this window.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <table className="w-full table-fixed text-sm">
-                      <colgroup>
-                        <col className="w-2/5" />
-                        {activeProviders.map((provider) => (
-                          <col key={provider} style={{ width: timeValueColumnWidth }} />
-                        ))}
-                        <col style={{ width: timeValueColumnWidth }} />
-                        <col style={{ width: timeValueColumnWidth }} />
-                      </colgroup>
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                          <th className="py-2 font-normal">{isPast24Hours ? "Hour" : "Day"}</th>
-                          {activeProviders.map((provider) => (
-                            <th key={provider} className="py-2 text-right font-normal">
-                              {PROVIDER_PRESENTATION[provider].label}
-                            </th>
-                          ))}
-                          <th className="py-2 text-right font-normal">Total</th>
-                          <th className="py-2 text-right font-normal">Tokens</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {breakdownPeriods.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={activeProviders.length + 3}
-                              className="py-6 text-center text-muted-foreground"
-                            >
-                              No activity in this window.
-                            </td>
-                          </tr>
-                        ) : (
-                          breakdownPeriods.map((period) => (
-                            <tr
-                              key={"hourStart" in period ? period.hourStart : period.day}
-                              className="border-b border-border/50 transition-colors hover:bg-muted/50"
-                            >
-                              <td className="py-2 text-foreground">
-                                {"hourStart" in period
-                                  ? formatHourShort(period.hourStart, window.timeZone)
-                                  : formatDayShort(period.day)}
-                              </td>
-                              {activeProviders.map((provider) => (
-                                <td
-                                  key={provider}
-                                  className="py-2 text-right text-muted-foreground tabular-nums"
-                                >
-                                  {formatUsd(period.byProvider.get(provider)?.costUsd ?? 0)}
+                          ) : (
+                            breakdownModels.map((model) => (
+                              <tr
+                                key={`${model.provider}:${model.model}`}
+                                className="border-b border-border/50 transition-colors hover:bg-muted/50"
+                              >
+                                <td className="py-2 text-foreground">
+                                  <span className="flex items-center gap-2">
+                                    <ProviderMark provider={model.provider} className="size-3.5" />
+                                    {PROVIDER_PRESENTATION[model.provider].label} · {model.model}
+                                  </span>
                                 </td>
-                              ))}
-                              <td className="py-2 text-right text-foreground tabular-nums">
-                                {formatUsd(period.costUsd)}
-                              </td>
-                              <td className="py-2 text-right text-muted-foreground tabular-nums">
-                                {formatTokens(period.totalTokens)}
+                                <td className="py-2 text-right text-foreground tabular-nums">
+                                  {formatUsd(model.costUsd)}
+                                </td>
+                                <td className="py-2 text-right text-muted-foreground tabular-nums">
+                                  {formatPercent(model.costShare)}
+                                </td>
+                                <td className="py-2 text-right text-muted-foreground tabular-nums">
+                                  {formatTokens(model.totalTokens)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[40rem] table-fixed text-sm">
+                        <colgroup>
+                          <col className="w-2/5" />
+                          {activeProviders.map((provider) => (
+                            <col key={provider} style={{ width: timeValueColumnWidth }} />
+                          ))}
+                          <col style={{ width: timeValueColumnWidth }} />
+                          <col style={{ width: timeValueColumnWidth }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                            <th className="py-2 font-normal">{isPast24Hours ? "Hour" : "Day"}</th>
+                            {activeProviders.map((provider) => (
+                              <th key={provider} className="py-2 text-right font-normal">
+                                {PROVIDER_PRESENTATION[provider].label}
+                              </th>
+                            ))}
+                            <th className="py-2 text-right font-normal">Total</th>
+                            <th className="py-2 text-right font-normal">Tokens</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {breakdownPeriods.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={activeProviders.length + 3}
+                                className="py-6 text-center text-muted-foreground"
+                              >
+                                No activity in this window.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            breakdownPeriods.map((period) => (
+                              <tr
+                                key={"hourStart" in period ? period.hourStart : period.day}
+                                className="border-b border-border/50 transition-colors hover:bg-muted/50"
+                              >
+                                <td className="py-2 text-foreground">
+                                  {"hourStart" in period
+                                    ? formatHourShort(period.hourStart, window.timeZone)
+                                    : formatDayShort(period.day)}
+                                </td>
+                                {activeProviders.map((provider) => (
+                                  <td
+                                    key={provider}
+                                    className="py-2 text-right text-muted-foreground tabular-nums"
+                                  >
+                                    {formatUsd(period.byProvider.get(provider)?.costUsd ?? 0)}
+                                  </td>
+                                ))}
+                                <td className="py-2 text-right text-foreground tabular-nums">
+                                  {formatUsd(period.costUsd)}
+                                </td>
+                                <td className="py-2 text-right text-muted-foreground tabular-nums">
+                                  {formatTokens(period.totalTokens)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </section>
               </>

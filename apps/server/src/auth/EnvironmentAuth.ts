@@ -16,8 +16,8 @@ import {
   type ServerAuthDescriptor,
   type ServerAuthSessionMethod,
   type AuthWebSocketTicketResult,
-} from "@t3tools/contracts";
-import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
+} from "@akeru/contracts";
+import { encodeOAuthScope } from "@akeru/shared/oauthScope";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -25,9 +25,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { hasPairedAdminClient } from "./adminClients.ts";
 import * as EnvironmentAuthPolicy from "./EnvironmentAuthPolicy.ts";
 import * as PairingGrantStore from "./PairingGrantStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
@@ -456,6 +458,9 @@ export const make = Effect.gen(function* () {
   const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
   const sessions = yield* SessionStore.SessionStore;
   const descriptor = yield* policy.getDescriptor();
+  // Pairing redemptions run one at a time, so a first admin revokes other admin
+  // links before a concurrent redemption can consume one.
+  const redeemLock = yield* Semaphore.make(1);
 
   const authenticateToken = (
     token: string,
@@ -518,6 +523,31 @@ export const make = Effect.gen(function* () {
       Effect.withSpan("EnvironmentAuth.getSessionState"),
     );
 
+  /**
+   * Issues a session for a redeemed pairing grant. The first person-held admin session closes
+   * first-admin bootstrap, so admin links issued before it stop working.
+   */
+  const issueGrantSession = <A, E, R>(
+    scopes: ReadonlyArray<AuthEnvironmentScope>,
+    client: AuthClientMetadata,
+    issue: Effect.Effect<A, E, R>,
+  ) =>
+    Effect.gen(function* () {
+      const firstAdmin =
+        hasPairedAdminClient([{ scopes, client }]) &&
+        !hasPairedAdminClient(yield* sessions.listActive());
+      const session = yield* issue;
+      if (firstAdmin) {
+        const links = yield* bootstrapCredentials.listActive();
+        yield* Effect.forEach(
+          links.filter((link) => link.scopes.includes(AuthAccessWriteScope)),
+          (link) => bootstrapCredentials.revoke(link.id),
+          { discard: true },
+        );
+      }
+      return session;
+    });
+
   const createBrowserSession: EnvironmentAuth["Service"]["createBrowserSession"] = (
     credential,
     requestMetadata,
@@ -525,8 +555,10 @@ export const make = Effect.gen(function* () {
     bootstrapCredentials.consume(credential).pipe(
       Effect.mapError(toBootstrapExchangeError),
       Effect.flatMap((grant) =>
-        sessions
-          .issue({
+        issueGrantSession(
+          grant.scopes,
+          requestMetadata,
+          sessions.issue({
             method: "browser-session-cookie",
             subject: grant.subject,
             scopes: grant.scopes,
@@ -534,10 +566,8 @@ export const make = Effect.gen(function* () {
               ...requestMetadata,
               ...(grant.label ? { label: grant.label } : {}),
             },
-          })
-          .pipe(
-            Effect.mapError((cause) => new ServerAuthAuthenticatedSessionIssueError({ cause })),
-          ),
+          }),
+        ).pipe(Effect.mapError((cause) => new ServerAuthAuthenticatedSessionIssueError({ cause }))),
       ),
       Effect.map(
         (session) =>
@@ -551,6 +581,7 @@ export const make = Effect.gen(function* () {
             sessionToken: session.token,
           }) satisfies BootstrapExchangeResult,
       ),
+      redeemLock.withPermits(1),
       Effect.withSpan("EnvironmentAuth.createBrowserSession"),
     );
 
@@ -564,8 +595,10 @@ export const make = Effect.gen(function* () {
             if (!grantedScopes.every((scope) => grant.scopes.includes(scope))) {
               return yield* new ServerAuthScopeNotGrantedError({});
             }
-            return yield* sessions
-              .issue({
+            return yield* issueGrantSession(
+              grantedScopes,
+              requestMetadata,
+              sessions.issue({
                 method: "bearer-access-token",
                 subject: grant.subject,
                 scopes: grantedScopes,
@@ -573,12 +606,12 @@ export const make = Effect.gen(function* () {
                   ...requestMetadata,
                   ...(grant.label ? { label: grant.label } : {}),
                 },
-              })
-              .pipe(
-                Effect.mapError(
-                  (cause) => new ServerAuthAuthenticatedAccessTokenIssueError({ cause }),
-                ),
-              );
+              }),
+            ).pipe(
+              Effect.mapError(
+                (cause) => new ServerAuthAuthenticatedAccessTokenIssueError({ cause }),
+              ),
+            );
           }),
         ),
         Effect.flatMap((session) =>
@@ -600,6 +633,7 @@ export const make = Effect.gen(function* () {
             ),
           ),
         ),
+        redeemLock.withPermits(1),
         Effect.withSpan("EnvironmentAuth.exchangeBootstrapCredentialForAccessToken"),
       );
 

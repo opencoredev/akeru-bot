@@ -1,5 +1,5 @@
-import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@t3tools/contracts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@akeru/contracts";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -200,13 +200,11 @@ export const make = Effect.gen(function* () {
       connectionProbe: true,
       attachmentUploads: true,
       fileAttachments: true,
-      pullRequests: true,
       threadSettlement: true,
       threadSnooze: true,
       threadPinning: true,
       threadPinReorder: true,
       threadTitleRegeneration: true,
-      threadPullRequestLinking: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       ...(serverSelfUpdate === "boot-service" ? { serverSelfUpdateProgress: true } : {}),
     },

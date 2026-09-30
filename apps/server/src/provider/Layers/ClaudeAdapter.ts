@@ -20,7 +20,7 @@ import {
   type SDKUserMessage,
   type ModelUsage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
+import { parseCliArgs } from "@akeru/shared/cliArgs";
 import {
   ApprovalRequestId,
   type CanonicalItemType,
@@ -49,18 +49,18 @@ import {
   ThreadId,
   TurnId,
   type UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   applyClaudePromptEffortPrefix,
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   resolvePromptInjectedEffort,
-} from "@t3tools/shared/model";
+} from "@akeru/shared/model";
 import {
   CLAUDE_RESUME_COMPACTION_NEVER_ANSWER,
   formatClaudeResumeCompactionQuestion,
-} from "@t3tools/shared/claudeCompaction";
+} from "@akeru/shared/claudeCompaction";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -636,6 +636,8 @@ function claudeTotalProcessedTokens(value: unknown): number | undefined {
 function makeClaudeTokenUsageSnapshot(input: {
   readonly activeTokens: number;
   readonly inputTokens?: number;
+  readonly cachedInputTokens?: number;
+  readonly cacheCreationTokens?: number;
   readonly outputTokens?: number;
   readonly contextWindow?: number;
   readonly totalProcessedTokens?: number;
@@ -655,6 +657,8 @@ function makeClaudeTokenUsageSnapshot(input: {
     (maxTokens !== undefined ? Math.min(activeTokens, maxTokens) : activeTokens);
   const totalProcessedTokens = finiteNonNegativeInteger(input.totalProcessedTokens);
   const inputTokens = finiteNonNegativeInteger(input.inputTokens);
+  const cachedInputTokens = finiteNonNegativeInteger(input.cachedInputTokens);
+  const cacheCreationTokens = finiteNonNegativeInteger(input.cacheCreationTokens);
   const outputTokens = finiteNonNegativeInteger(input.outputTokens);
 
   return {
@@ -664,6 +668,8 @@ function makeClaudeTokenUsageSnapshot(input: {
       ? { totalProcessedTokens }
       : {}),
     ...(inputTokens !== undefined && inputTokens > 0 ? { inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(cacheCreationTokens !== undefined ? { cacheCreationTokens } : {}),
     ...(outputTokens !== undefined && outputTokens > 0 ? { outputTokens } : {}),
     ...(maxTokens !== undefined ? { maxTokens } : {}),
     ...(input.compactsAutomatically !== undefined
@@ -696,6 +702,8 @@ function normalizeClaudeActiveTokenUsage(
   return makeClaudeTokenUsageSnapshot({
     activeTokens,
     inputTokens,
+    cachedInputTokens: finiteNonNegativeInteger(activeUsage.cache_read_input_tokens) ?? 0,
+    cacheCreationTokens: finiteNonNegativeInteger(activeUsage.cache_creation_input_tokens) ?? 0,
     outputTokens,
     ...(contextWindow !== undefined ? { contextWindow } : {}),
     ...(totalProcessedTokens !== undefined ? { totalProcessedTokens } : {}),
@@ -4206,7 +4214,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           return { behavior: "cancelled" as const };
         }
 
-        // The question copy lives in @t3tools/shared/claudeCompaction because
+        // The question copy lives in @akeru/shared/claudeCompaction because
         // the web client recognizes this exact text (and the "never" answer)
         // to mirror a permanent dismissal.
         const question = formatClaudeResumeCompactionQuestion({
@@ -4471,7 +4479,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...toClaudeMcpServers(input.mcpServers ?? []),
         ...(mcpSession
           ? {
-              "t3-code": {
+              akeru: {
                 type: "http" as const,
                 url: mcpSession.endpoint,
                 headers: { Authorization: mcpSession.authorizationHeader },
@@ -4522,10 +4530,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         canUseTool,
         onUserDialog,
         supportedDialogKinds: ["resume_return"],
-        env: subscriptionRuntimeEnvironment(
+        env: yield* subscriptionRuntimeEnvironment(
           serverConfig.secretsDir,
           "anthropic",
           claudeEnvironment,
+          boundInstanceId,
+        ).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
         ),
         additionalDirectories,
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
@@ -4736,16 +4748,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         getEffectiveClaudeAgentEffort(turnEffort ?? null, modelSelection.model) ?? undefined;
     }
 
-    // Apply interaction mode by switching the SDK's permission mode.
-    // "plan" maps directly to the SDK's "plan" permission mode;
-    // "default" restores the session's original permission mode.
-    // When interactionMode is absent we leave the current mode unchanged.
-    if (input.interactionMode === "plan") {
-      yield* Effect.tryPromise({
-        try: () => context.query.setPermissionMode("plan"),
-        catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
-      });
-    } else if (input.interactionMode === "default") {
+    // Plan mode is retired. "default" restores the session's original
+    // permission mode (a session resumed from plan mode leaves it); when
+    // interactionMode is absent the current mode is left unchanged.
+    if (input.interactionMode !== undefined) {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode(context.basePermissionMode ?? "default"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),

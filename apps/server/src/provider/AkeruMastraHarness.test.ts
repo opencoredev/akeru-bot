@@ -3,19 +3,27 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+import * as NodeSqlite from "node:sqlite";
+
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { MessageList } from "@mastra/core/agent";
+import { MessageList, type Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import { Memory } from "@mastra/memory";
-import { ObservationalMemory } from "@mastra/memory/processors";
+import { ObservationalMemory, type ObserveHooks } from "@mastra/memory/processors";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   AKERU_TOOL_CATALOG,
   ProviderDriverKind,
-} from "@t3tools/contracts";
+  type AkeruConversationMemorySnapshot,
+} from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
-import { assert, describe, expect, it, vi } from "vite-plus/test";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FiberSet from "effect/FiberSet";
+import * as Scope from "effect/Scope";
+import { it } from "@effect/vitest";
+import { assert, describe, expect, vi } from "vite-plus/test";
 
 import {
   createAkeruAgentInstructions,
@@ -27,7 +35,11 @@ import {
   AkeruPassiveObservationalMemoryProcessor,
   akeruActionNeedsApproval,
   createAkeruObserveHooks,
-  createAkeruMastraHarness,
+  makeAkeruMastraHarness,
+  AkeruObservationQueueClosedError,
+  AkeruObservationRestoreError,
+  type AkeruMastraHarness,
+  type AkeruMastraHarnessOptions,
   createAkeruMastraMemory,
   criticalAkeruAction,
   mastraModelId,
@@ -41,6 +53,7 @@ import {
 import { AKERU_RECENT_TURN_LIMIT } from "./RecentConversation.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { invalidateEntityMemoryObservations } from "../memory/EntityMemoryInvalidation.ts";
 
 describe("Akeru action classifier", () => {
   it.each([
@@ -102,7 +115,84 @@ describe("Akeru action classifier", () => {
   });
 });
 
+type OpenHarness = (
+  options: AkeruMastraHarnessOptions,
+) => Promise<AkeruMastraHarness & { readonly close: () => Promise<void> }>;
+
+// Runs an async test body in the Effect test scope. `open` gives each harness a
+// child scope that `close` closes once; the test scope closes any left open.
+const harnessTest = (body: (open: OpenHarness) => Promise<void>) =>
+  Effect.gen(function* () {
+    const testScope = yield* Effect.scope;
+    const run = yield* FiberSet.makeRuntimePromise();
+    const open: OpenHarness = async (options) => {
+      const scope = await run(Scope.fork(testScope));
+      const harness = await run(makeAkeruMastraHarness(options).pipe(Scope.provide(scope)));
+      let closing: Promise<void> | undefined;
+      return { ...harness, close: () => (closing ??= run(Scope.close(scope, Exit.void))) };
+    };
+    yield* Effect.promise(() => body(open));
+  });
+
 describe("AkeruMastraHarness", () => {
+  it.effect("restores original history when rebuilding a conversation fails", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-rebuild-"));
+      const harness = await open({
+        authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+        memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+        getThreadTools: () => ({}),
+        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      });
+      const threadId = "rebuild-history";
+      const messages = [1, 2].map((count) => ({
+        id: `message-${count}`,
+        role: "user" as const,
+        content: { format: 2 as const, parts: [{ type: "text" as const, text: `Turn ${count}` }] },
+        createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-01-01T00:00:00.000Z")),
+        threadId,
+        resourceId: threadId,
+      }));
+      const snapshot = {
+        current: {
+          id: "original-observations",
+          generationCount: 1,
+          originType: "initial" as const,
+          activeObservations: "Facts from both original turns",
+          bufferedObservations: "",
+          bufferedReflection: null,
+          totalTokensObserved: 10,
+          observationTokenCount: 2,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        history: [],
+      };
+      let persist: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        await harness.controller.init();
+        await harness.rebuildConversation!(threadId, messages);
+        await harness.restoreObservationalMemory!(threadId, snapshot);
+        const originalSnapshot = await harness.readObservationalMemory!(threadId);
+        persist = vi
+          .spyOn(Memory.prototype, "persistMessages")
+          .mockRejectedValueOnce(new Error("Persistence failed"));
+        await expect(harness.rebuildConversation!(threadId, messages.slice(0, 1))).rejects.toThrow(
+          "Persistence failed",
+        );
+        const session = await harness.controller.createSession({ resourceId: threadId, threadId });
+        expect((await session.thread.listActiveMessages()).map((message) => message.id)).toEqual([
+          "message-1",
+          "message-2",
+        ]);
+        expect(await harness.readObservationalMemory!(threadId)).toEqual(originalSnapshot);
+      } finally {
+        persist?.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
   it("emits observer and reflector metering callbacks", async () => {
     const started: unknown[] = [];
     const finished: unknown[] = [];
@@ -182,90 +272,159 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
-  it("restores exported observational memory instead of treating import as a no-op", async () => {
-    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restore-"));
-    const harness = await createAkeruMastraHarness({
-      authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
-      memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
-      getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
-    });
-    try {
-      await harness.restoreObservationalMemory!("thread-restored", {
-        current: {
-          id: "restored-observation",
-          generationCount: 2,
-          originType: "reflection",
-          activeObservations: "The restored release note.",
-          bufferedObservations: "The pending release date is Friday.",
-          bufferedReflection: null,
-          totalTokensObserved: 120,
-          observationTokenCount: 7,
-          createdAt: "2026-09-13T12:00:00.000Z",
-          updatedAt: "2026-09-13T12:01:00.000Z",
-        },
-        history: [],
-      });
+  it.effect(
+    "does not give the agent task-list tools, which cost a model round trip per update",
+    () =>
+      harnessTest(async (open) => {
+        const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-no-tasks-"));
+        const harness = await open({
+          authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+          memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+          getThreadTools: () => ({}),
+          toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+        });
+        try {
+          // The controller keeps its agent private; the tool list is what the model sees.
+          const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
+          const requestContext = new RequestContext();
+          requestContext.setRaw("controller", { resourceId: "thread-tools" });
+          const toolIds = Object.keys(await agent.listTools({ requestContext }));
+          assert.isNotEmpty(toolIds);
+          for (const id of ["task_write", "task_update", "task_complete", "task_check"]) {
+            assert.notInclude(toolIds, id);
+          }
+        } finally {
+          await harness.close();
+          NodeFS.rmSync(directory, { recursive: true, force: true });
+        }
+      }),
+  );
 
-      const restored = await harness.readObservationalMemory!("thread-restored");
-      assert.equal(restored.current?.id, "restored-observation");
-      assert.equal(
-        restored.current?.activeObservations,
-        "The restored release note.\n\nThe pending release date is Friday.",
-      );
-      assert.equal(restored.current?.bufferedObservations, "");
-      assert.isAbove(restored.current!.observationTokenCount, 7);
-      await Promise.all([
-        harness.restoreObservationalMemory!("thread-restored", restored),
-        harness.restoreObservationalMemory!("thread-restored", restored),
-      ]);
-      assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
-      assert.equal(restored.current?.generationCount, 2);
-      await harness.restoreObservationalMemory!("other-thread", {
-        current: { ...restored.current!, id: "occupied-observation" },
-        history: [],
+  it.effect("keeps /new thread observational memory isolated", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-new-"));
+      const harness = await open({
+        authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+        memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+        getThreadTools: () => ({}),
+        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       });
-      await expect(
-        harness.restoreObservationalMemory!(
-          "thread-restored",
-          {
-            current: { ...restored.current!, id: "occupied-observation" },
-            history: [],
+      try {
+        await harness.restoreObservationalMemory!("prior-thread", {
+          current: {
+            id: "prior-observation",
+            generationCount: 1,
+            originType: "initial",
+            activeObservations: "Prior chat only.",
+            bufferedObservations: "",
+            bufferedReflection: null,
+            totalTokensObserved: 10,
+            observationTokenCount: 2,
+            createdAt: "2026-09-13T12:00:00.000Z",
+            updatedAt: "2026-09-13T12:01:00.000Z",
           },
+          history: [],
+        });
+        const fresh = await harness.readObservationalMemory!("new-thread");
+        assert.isNull(fresh.current);
+        assert.deepEqual(fresh.history, []);
+        assert.equal(
+          (await harness.readObservationalMemory!("prior-thread")).current?.activeObservations,
+          "Prior chat only.",
+        );
+      } finally {
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("restores exported observational memory instead of treating import as a no-op", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restore-"));
+      const harness = await open({
+        authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+        memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+        getThreadTools: () => ({}),
+        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      });
+      try {
+        await harness.restoreObservationalMemory!("thread-restored", {
+          current: {
+            id: "restored-observation",
+            generationCount: 2,
+            originType: "reflection",
+            activeObservations: "The restored release note.",
+            bufferedObservations: "The pending release date is Friday.",
+            bufferedReflection: null,
+            totalTokensObserved: 120,
+            observationTokenCount: 7,
+            createdAt: "2026-09-13T12:00:00.000Z",
+            updatedAt: "2026-09-13T12:01:00.000Z",
+          },
+          history: [],
+        });
+
+        const restored = await harness.readObservationalMemory!("thread-restored");
+        assert.equal(restored.current?.id, "restored-observation");
+        assert.equal(
+          restored.current?.activeObservations,
+          "The restored release note.\n\nThe pending release date is Friday.",
+        );
+        assert.equal(restored.current?.bufferedObservations, "");
+        assert.isAbove(restored.current!.observationTokenCount, 7);
+        await Promise.all([
+          harness.restoreObservationalMemory!("thread-restored", restored),
+          harness.restoreObservationalMemory!("thread-restored", restored),
+        ]);
+        assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
+        assert.equal(restored.current?.generationCount, 2);
+        await harness.restoreObservationalMemory!("other-thread", {
+          current: { ...restored.current!, id: "occupied-observation" },
+          history: [],
+        });
+        await expect(
+          harness.restoreObservationalMemory!(
+            "thread-restored",
+            {
+              current: { ...restored.current!, id: "occupied-observation" },
+              history: [],
+            },
+            "thread-restored",
+            restored,
+          ),
+        ).rejects.toThrow();
+        assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
+        assert.equal(
+          (await harness.readObservationalMemory!("other-thread")).current?.id,
+          "occupied-observation",
+        );
+        const newer = {
+          current: {
+            ...restored.current!,
+            activeObservations: "New observations completed after preview.",
+          },
+          history: [],
+        };
+        const priorRestore = harness.restoreObservationalMemory!("thread-restored", newer);
+        const staleRestore = harness.restoreObservationalMemory!(
           "thread-restored",
           restored,
-        ),
-      ).rejects.toThrow();
-      assert.deepEqual(await harness.readObservationalMemory!("thread-restored"), restored);
-      assert.equal(
-        (await harness.readObservationalMemory!("other-thread")).current?.id,
-        "occupied-observation",
-      );
-      const newer = {
-        current: {
-          ...restored.current!,
-          activeObservations: "New observations completed after preview.",
-        },
-        history: [],
-      };
-      const priorRestore = harness.restoreObservationalMemory!("thread-restored", newer);
-      const staleRestore = harness.restoreObservationalMemory!(
-        "thread-restored",
-        restored,
-        "thread-restored",
-        restored,
-      );
-      await expect(staleRestore).rejects.toThrow("Observations changed after the import preview");
-      await priorRestore;
-      assert.equal(
-        (await harness.readObservationalMemory!("thread-restored")).current?.activeObservations,
-        newer.current.activeObservations,
-      );
-    } finally {
-      await harness.destroy();
-      NodeFS.rmSync(directory, { recursive: true, force: true });
-    }
-  });
+          "thread-restored",
+          restored,
+        );
+        await expect(staleRestore).rejects.toThrow("Observations changed after the import preview");
+        await priorRestore;
+        assert.equal(
+          (await harness.readObservationalMemory!("thread-restored")).current?.activeObservations,
+          newer.current.activeObservations,
+        );
+      } finally {
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
 
   it("restores a bounded recent message window after reopening", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-message-store-"));
@@ -439,50 +598,1177 @@ describe("AkeruMastraHarness", () => {
     ]);
   });
 
-  it("serializes observations per thread and drains them before close", async () => {
-    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-queue-"));
-    let releaseFirst!: () => void;
-    const firstBlocked = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    let markStarted!: () => void;
-    const firstStarted = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    let calls = 0;
-    const observe = vi
-      .spyOn(ObservationalMemory.prototype, "observe")
-      .mockImplementation(async () => {
-        calls += 1;
-        if (calls === 1) {
-          markStarted();
-          await firstBlocked;
-        }
-        return undefined as never;
-      });
-    const harness = await createAkeruMastraHarness({
+  const makeObservationHarness = (
+    open: OpenHarness,
+    directory: string,
+    options: Pick<
+      AkeruMastraHarnessOptions,
+      "startMemoryCall" | "finishMemoryCall" | "onObservationDropped" | "observationCloseGrace"
+    > = {},
+  ) =>
+    open({
       authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
       memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      ...options,
     });
+
+  const queuedObservations = (directory: string) => {
+    const db = new NodeSqlite.DatabaseSync(
+      NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+    );
     try {
-      const input = { threadId: "thread-queue", modelId: "openai/gpt-5.6-sol" };
-      const first = harness.observeAfterTurn!(input);
-      await firstStarted;
-      const second = harness.observeAfterTurn!(input);
-      expect(observe).toHaveBeenCalledOnce();
-      const close = harness.destroy();
-      releaseFirst();
-      await Promise.all([first, second, close]);
-      expect(observe).toHaveBeenCalledTimes(2);
+      return db
+        .prepare(
+          `SELECT id, thread_id AS threadId, resource_id AS resourceId, model_id AS modelId,
+                  turn_id AS turnId, attempts, claimed_at AS claimedAt,
+                  next_attempt_at AS nextAttemptAt
+             FROM akeru_observation_queue ORDER BY created_at, id`,
+        )
+        .all() as unknown as ReadonlyArray<{
+        id: string;
+        threadId: string;
+        resourceId: string;
+        modelId: string;
+        turnId: string | null;
+        attempts: number;
+        claimedAt: string | null;
+        nextAttemptAt: string;
+      }>;
     } finally {
-      releaseFirst();
-      observe.mockRestore();
-      await harness.destroy();
-      NodeFS.rmSync(directory, { recursive: true, force: true });
+      db.close();
     }
+  };
+
+  it.effect("finishes admitted observations on close and leaves unclaimed rows queued", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-queue-"));
+      const firstBlocked = Promise.withResolvers<void>();
+      const firstStarted = Promise.withResolvers<void>();
+      let calls = 0;
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async () => {
+          calls += 1;
+          if (calls === 1) {
+            firstStarted.resolve();
+            await firstBlocked.promise;
+          }
+          return undefined as never;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        const input = { threadId: "thread-queue", modelId: "openai/gpt-5.6-sol" };
+        const first = harness.observeAfterTurn!(input);
+        await firstStarted.promise;
+        const second = harness.observeAfterTurn!(input);
+        expect(observe).toHaveBeenCalledOnce();
+        const close = harness.close();
+        firstBlocked.resolve();
+        await Promise.all([first, second, close]);
+        // The admitted observation finished; the second row was never claimed,
+        // so it stays durable instead of holding shutdown behind another call.
+        expect(observe).toHaveBeenCalledOnce();
+        assert.deepInclude(queuedObservations(directory)[0], {
+          threadId: "thread-queue",
+          attempts: 0,
+          claimedAt: null,
+        });
+        assert.lengthOf(queuedObservations(directory), 1);
+      } finally {
+        firstBlocked.resolve();
+        await harness.close();
+      }
+      const reopened = await makeObservationHarness(open, directory);
+      try {
+        await reopened.drainObservationQueue!();
+        expect(observe).toHaveBeenCalledTimes(2);
+        assert.lengthOf(queuedObservations(directory), 0);
+      } finally {
+        observe.mockRestore();
+        await reopened.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("serializes memory work per thread and runs other threads alongside", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-keyed-"));
+      const gates = new Map<string, PromiseWithResolvers<void>>();
+      const entered = new Map<string, PromiseWithResolvers<void>>();
+      const order: string[] = [];
+      const gate = (label: string) => {
+        gates.set(label, Promise.withResolvers<void>());
+        entered.set(label, Promise.withResolvers<void>());
+      };
+      for (const label of ["a1", "a2", "b1"]) gate(label);
+      const pending = ["a1", "a2"];
+      const clear = vi
+        .spyOn(ObservationalMemory.prototype, "clear")
+        .mockImplementation(async (threadId: string) => {
+          const label = threadId === "thread-a" ? pending.shift()! : "b1";
+          order.push(`start:${label}`);
+          entered.get(label)!.resolve();
+          await gates.get(label)!.promise;
+          order.push(`end:${label}`);
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        const a1 = harness.clearObservationalMemory!("thread-a");
+        const a2 = harness.clearObservationalMemory!("thread-a");
+        const b1 = harness.clearObservationalMemory!("thread-b");
+        await Promise.all([entered.get("a1")!.promise, entered.get("b1")!.promise]);
+        // thread-b runs while thread-a's first call still holds its permit.
+        assert.deepEqual(order, ["start:a1", "start:b1"]);
+        gates.get("b1")!.resolve();
+        await b1;
+        assert.notInclude(order, "start:a2");
+        gates.get("a1")!.resolve();
+        await entered.get("a2")!.promise;
+        gates.get("a2")!.resolve();
+        await Promise.all([a1, a2]);
+        assert.deepEqual(order, ["start:a1", "start:b1", "end:b1", "end:a1", "start:a2", "end:a2"]);
+      } finally {
+        for (const pendingGate of gates.values()) pendingGate.resolve();
+        clear.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("admits nothing once close begins and waits for work already admitted", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-close-"));
+      const inFlightEntered = Promise.withResolvers<void>();
+      const inFlightGate = Promise.withResolvers<void>();
+      const clear = vi
+        .spyOn(ObservationalMemory.prototype, "clear")
+        .mockImplementation(async () => {
+          inFlightEntered.resolve();
+          await inFlightGate.promise;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        const inFlight = harness.clearObservationalMemory!("thread-close");
+        await inFlightEntered.promise;
+        let closed = false;
+        const close = harness.close().then(() => {
+          closed = true;
+        });
+        const late = await harness.clearObservationalMemory!("thread-close").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        assert.instanceOf(late, AkeruObservationQueueClosedError);
+        const lateOtherThread = await harness.clearObservationalMemory!("thread-other").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        assert.instanceOf(lateOtherThread, AkeruObservationQueueClosedError);
+        expect(clear).toHaveBeenCalledOnce();
+        assert.isFalse(closed);
+        inFlightGate.resolve();
+        await Promise.all([inFlight, close]);
+        assert.isTrue(closed);
+        // A durable drain requested after close is skipped.
+        await harness.drainObservationQueue!();
+        expect(clear).toHaveBeenCalledOnce();
+      } finally {
+        inFlightGate.resolve();
+        clear.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("interrupts hung memory work after the close grace and keeps its row leased", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-hung-"));
+      const observeStarted = Promise.withResolvers<void>();
+      const observe = vi.spyOn(ObservationalMemory.prototype, "observe").mockImplementation(() => {
+        observeStarted.resolve();
+        return new Promise<never>(() => {});
+      });
+      const clear = vi.spyOn(ObservationalMemory.prototype, "clear");
+      const harness = await makeObservationHarness(open, directory, {
+        observationCloseGrace: 0,
+      });
+      try {
+        const turn = harness.observeAfterTurn!({
+          threadId: "thread-hung",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        await observeStarted.promise;
+        // Waits behind the hung observation for the thread's permit.
+        const waiting = harness.clearObservationalMemory!("thread-hung").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        await harness.close();
+        await turn;
+        assert.instanceOf(await waiting, AkeruObservationQueueClosedError);
+        expect(clear).not.toHaveBeenCalled();
+        // Mastra cannot abort observe, so the uncancelled call keeps its claim
+        // and a restarted harness waits for the lease instead of racing it.
+        const rows = queuedObservations(directory);
+        assert.lengthOf(rows, 1);
+        assert.deepInclude(rows[0], { threadId: "thread-hung", attempts: 0 });
+        assert.isNotNull(rows[0]!.claimedAt);
+      } finally {
+        observe.mockRestore();
+        clear.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("releases a claimed row that never started observing when close interrupts it", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-waiting-"));
+      const clearStarted = Promise.withResolvers<void>();
+      const clear = vi.spyOn(ObservationalMemory.prototype, "clear").mockImplementation(() => {
+        clearStarted.resolve();
+        return new Promise<never>(() => {});
+      });
+      const observe = vi.spyOn(ObservationalMemory.prototype, "observe");
+      const harness = await makeObservationHarness(open, directory, {
+        observationCloseGrace: 0,
+      });
+      try {
+        // The hung clear holds the thread's permit, so the claimed row waits.
+        const clearing = harness.clearObservationalMemory!("thread-waiting").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        await clearStarted.promise;
+        const turn = harness.observeAfterTurn!({
+          threadId: "thread-waiting",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        await harness.close();
+        await turn;
+        await clearing;
+        expect(observe).not.toHaveBeenCalled();
+        const rows = queuedObservations(directory);
+        assert.lengthOf(rows, 1);
+        assert.deepInclude(rows[0], { threadId: "thread-waiting", attempts: 0, claimedAt: null });
+      } finally {
+        clear.mockRestore();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("writes no queue row for a turn that completes after close begins", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-late-"));
+      const inFlightEntered = Promise.withResolvers<void>();
+      const inFlightGate = Promise.withResolvers<void>();
+      const clear = vi
+        .spyOn(ObservationalMemory.prototype, "clear")
+        .mockImplementation(async () => {
+          inFlightEntered.resolve();
+          await inFlightGate.promise;
+        });
+      const observe = vi.spyOn(ObservationalMemory.prototype, "observe");
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        const inFlight = harness.clearObservationalMemory!("thread-late");
+        await inFlightEntered.promise;
+        // Admitted work holds close open, so the queue store is still open.
+        const close = harness.close();
+        const late = await harness.clearObservationalMemory!("thread-other").then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        assert.instanceOf(late, AkeruObservationQueueClosedError);
+        await harness.observeAfterTurn!({
+          threadId: "thread-late",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        inFlightGate.resolve();
+        await Promise.all([inFlight, close]);
+        assert.lengthOf(queuedObservations(directory), 0);
+        expect(observe).not.toHaveBeenCalled();
+      } finally {
+        inFlightGate.resolve();
+        clear.mockRestore();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  const restoreSnapshot = (id: string, text: string): AkeruConversationMemorySnapshot => ({
+    current: {
+      id,
+      generationCount: 1,
+      originType: "initial",
+      activeObservations: text,
+      bufferedObservations: "",
+      bufferedReflection: null,
+      totalTokensObserved: 10,
+      observationTokenCount: 2,
+      createdAt: "2026-09-13T12:00:00.000Z",
+      updatedAt: "2026-09-13T12:01:00.000Z",
+    },
+    history: [],
   });
+
+  // Wraps the memory store so the test can fail specific inserts.
+  const failInserts = (shouldFail: (record: { readonly id: string }) => Error | undefined) => {
+    const getStorage = ObservationalMemory.prototype.getStorage;
+    return vi
+      .spyOn(ObservationalMemory.prototype, "getStorage")
+      .mockImplementation(function (this: ObservationalMemory) {
+        const store = getStorage.call(this);
+        return new Proxy(store, {
+          get(target, property, receiver) {
+            if (property === "insertObservationalMemoryRecord") {
+              return async (record: { readonly id: string }) => {
+                const failure = shouldFail(record);
+                if (failure) throw failure;
+                return target.insertObservationalMemoryRecord(record as never);
+              };
+            }
+            const value = Reflect.get(target, property, receiver);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+      });
+  };
+
+  it.effect("rolls back a failed restore and keeps the original failure as the cause", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-rollback-"));
+      const harness = await makeObservationHarness(open, directory);
+      const insertFailure = new Error("disk full while restoring");
+      let spy: ReturnType<typeof failInserts> | undefined;
+      try {
+        await harness.restoreObservationalMemory!(
+          "thread-rollback",
+          restoreSnapshot("original-observation", "Keep me."),
+        );
+        spy = failInserts((record) =>
+          record.id === "incoming-observation" ? insertFailure : undefined,
+        );
+        const failure = await harness.restoreObservationalMemory!(
+          "thread-rollback",
+          restoreSnapshot("incoming-observation", "Replace me."),
+        ).then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        assert.instanceOf(failure, AkeruObservationRestoreError);
+        const restoreError = failure as AkeruObservationRestoreError;
+        assert.isTrue(restoreError.rolledBack);
+        assert.strictEqual(restoreError.cause, insertFailure);
+        assert.isUndefined(restoreError.rollbackCause);
+        assert.include(restoreError.message, "disk full while restoring");
+        assert.equal(
+          (await harness.readObservationalMemory!("thread-rollback")).current?.activeObservations,
+          "Keep me.",
+        );
+      } finally {
+        spy?.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("reports both failures when the restore rollback also fails", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-rollback2-"));
+      const harness = await makeObservationHarness(open, directory);
+      const insertFailure = new Error("restore insert failed");
+      const rollbackFailure = new Error("rollback insert failed");
+      let spy: ReturnType<typeof failInserts> | undefined;
+      try {
+        await harness.restoreObservationalMemory!(
+          "thread-rollback",
+          restoreSnapshot("original-observation", "Original."),
+        );
+        spy = failInserts((record) =>
+          record.id === "incoming-observation" ? insertFailure : rollbackFailure,
+        );
+        const failure = await harness.restoreObservationalMemory!(
+          "thread-rollback",
+          restoreSnapshot("incoming-observation", "Incoming."),
+        ).then(
+          () => undefined,
+          (cause: unknown) => cause,
+        );
+        assert.instanceOf(failure, AkeruObservationRestoreError);
+        const restoreError = failure as AkeruObservationRestoreError;
+        assert.isFalse(restoreError.rolledBack);
+        assert.strictEqual(restoreError.cause, insertFailure);
+        assert.strictEqual(restoreError.rollbackCause, rollbackFailure);
+        assert.include(restoreError.message, "could not be restored");
+      } finally {
+        spy?.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("scopes entity invalidation to the owning harness and thread resources", () =>
+    harnessTest(async (open) => {
+      const firstDirectory = NodeFS.mkdtempSync(
+        NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-a-"),
+      );
+      const secondDirectory = NodeFS.mkdtempSync(
+        NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-b-"),
+      );
+      const first = await makeObservationHarness(open, firstDirectory);
+      const second = await makeObservationHarness(open, secondDirectory);
+      const snapshot = {
+        current: {
+          id: "owned-observation",
+          generationCount: 1,
+          originType: "initial",
+          activeObservations: "Shared fact.",
+          bufferedObservations: "",
+          bufferedReflection: null,
+          totalTokensObserved: 1,
+          observationTokenCount: 1,
+          createdAt: "2026-09-13T12:00:00.000Z",
+          updatedAt: "2026-09-13T12:01:00.000Z",
+        },
+        history: [],
+      } as const;
+      try {
+        await first.restoreObservationalMemory!("thread-a", snapshot);
+        await second.restoreObservationalMemory!("thread-b", snapshot);
+        await invalidateEntityMemoryObservations([["thread-a", "thread-a"]]);
+        assert.isNull((await first.readObservationalMemory!("thread-a")).current);
+        assert.isNotNull((await second.readObservationalMemory!("thread-b")).current);
+      } finally {
+        await first.close();
+        await second.close();
+        NodeFS.rmSync(firstDirectory, { recursive: true, force: true });
+        NodeFS.rmSync(secondDirectory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("invalidates observations for threads no harness has touched since restart", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restart-"));
+      const before = await makeObservationHarness(open, directory);
+      try {
+        await before.restoreObservationalMemory!("thread-idle", {
+          current: {
+            id: "observation-before-restart",
+            generationCount: 1,
+            originType: "initial",
+            activeObservations: "A fact that will be forgotten.",
+            bufferedObservations: "",
+            bufferedReflection: null,
+            totalTokensObserved: 3,
+            observationTokenCount: 1,
+            createdAt: "2026-09-13T12:00:00.000Z",
+            updatedAt: "2026-09-13T12:01:00.000Z",
+          },
+          history: [],
+        });
+      } finally {
+        await before.close();
+      }
+      const after = await makeObservationHarness(open, directory);
+      try {
+        await invalidateEntityMemoryObservations([["thread-idle", "thread-idle"]]);
+        assert.isNull((await after.readObservationalMemory!("thread-idle")).current);
+      } finally {
+        await after.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("clears observational memory used by a tombstone invalidation", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-tombstone-"));
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        await harness.restoreObservationalMemory!("thread-tombstone", {
+          current: {
+            id: "observation-before-forget",
+            generationCount: 1,
+            originType: "initial",
+            activeObservations: "A forgotten fact.",
+            bufferedObservations: "",
+            bufferedReflection: null,
+            totalTokensObserved: 3,
+            observationTokenCount: 1,
+            createdAt: "2026-09-13T12:00:00.000Z",
+            updatedAt: "2026-09-13T12:01:00.000Z",
+          },
+          history: [],
+        });
+        await harness.clearObservationalMemory!("thread-tombstone");
+        const cleared = await harness.readObservationalMemory!("thread-tombstone");
+        assert.isNull(cleared.current);
+        assert.deepEqual(cleared.history, []);
+      } finally {
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("keeps the reply path clear when an observation fails and retries it", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-failure-"));
+      const calls: string[] = [];
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          if (calls.length === 1) throw new Error("observer exploded");
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        // observeAfterTurn returns the drain promise; a failed attempt releases
+        // the row with a backoff so the turn never sees the failure.
+        await expect(
+          harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" }),
+        ).resolves.toBeUndefined();
+        expect(calls).toEqual(["thread-a"]);
+        const pending = queuedObservations(directory)[0]!;
+        assert.equal(pending.attempts, 1);
+        assert.isNull(pending.claimedAt);
+
+        // A second drain observes a newer row instead of blocking behind the
+        // backed-off failure.
+        await harness.observeAfterTurn!({ threadId: "thread-b", modelId: "openai/gpt-5.6-sol" });
+        expect(calls).toEqual(["thread-a", "thread-b"]);
+
+        // Force the backed-off row eligible again; the next drain retries and
+        // removes it on success.
+        const db = new NodeSqlite.DatabaseSync(
+          NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+        );
+        db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+          "2000-01-01T00:00:00.000Z",
+        );
+        db.close();
+        await harness.drainObservationQueue!();
+        expect(calls).toEqual(["thread-a", "thread-b", "thread-a"]);
+        assert.deepEqual(queuedObservations(directory), []);
+      } finally {
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.live("retries a backed-off observation when its backoff elapses without another turn", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-backoff-"));
+      const calls: string[] = [];
+      const retried = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          if (calls.length === 1) throw new Error("observer exploded");
+          retried.resolve();
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        await harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" });
+        expect(calls).toEqual(["thread-a"]);
+        assert.equal(queuedObservations(directory)[0]!.attempts, 1);
+
+        // No turn or explicit drain follows: only the scheduled retry can observe.
+        await vi.advanceTimersByTimeAsync(30_000);
+        await retried.promise;
+        await harness.drainObservationQueue!();
+        expect(calls).toEqual(["thread-a", "thread-a"]);
+        assert.deepEqual(queuedObservations(directory), []);
+      } finally {
+        vi.useRealTimers();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect(
+    "routes a queued observation through its provider instance, including rows queued before instances",
+    () =>
+      harnessTest(async (open) => {
+        const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-instance-"));
+        const legacyQueue = new NodeSqlite.DatabaseSync(
+          NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+        );
+        legacyQueue.exec(`
+        CREATE TABLE akeru_observation_queue (
+          id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, resource_id TEXT NOT NULL,
+          model_id TEXT NOT NULL, turn_id TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+          claimed_at TEXT, next_attempt_at TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        INSERT INTO akeru_observation_queue
+          (id, thread_id, resource_id, model_id, turn_id, next_attempt_at, created_at)
+          VALUES ('legacy', 'thread-legacy', 'thread-legacy', 'openai/gpt-5.6-sol', NULL,
+                  '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        PRAGMA user_version = 1;
+      `);
+        legacyQueue.close();
+        const controllers: Array<{ threadId: string; controller: unknown }> = [];
+        const observe = vi
+          .spyOn(ObservationalMemory.prototype, "observe")
+          .mockImplementation(
+            async (input: {
+              threadId: string;
+              requestContext?: { getRaw: (key: string) => unknown };
+            }) => {
+              controllers.push({
+                threadId: input.threadId,
+                controller: input.requestContext?.getRaw("controller"),
+              });
+              return { observed: false, reflected: false, record: {} } as never;
+            },
+          );
+        const harness = await makeObservationHarness(open, directory);
+        try {
+          await harness.drainObservationQueue!();
+          await harness.observeAfterTurn!({
+            threadId: "thread-a",
+            modelId: "openai/gpt-5.6-sol",
+            providerInstanceId: "codex-work",
+          });
+          expect(controllers).toEqual([
+            {
+              threadId: "thread-legacy",
+              controller: {
+                resourceId: "thread-legacy",
+                session: { modelId: "openai/gpt-5.6-sol" },
+              },
+            },
+            {
+              threadId: "thread-a",
+              controller: {
+                resourceId: "thread-a",
+                session: { modelId: "openai/gpt-5.6-sol" },
+                state: { providerInstanceId: "codex-work" },
+              },
+            },
+          ]);
+          assert.deepEqual(queuedObservations(directory), []);
+        } finally {
+          observe.mockRestore();
+          await harness.close();
+          NodeFS.rmSync(directory, { recursive: true, force: true });
+        }
+      }),
+  );
+
+  it.live("resumes a row left claimed by a stopped harness once its lease expires", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-stale-"));
+      const observed = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async () => {
+          observed.resolve();
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      await (await makeObservationHarness(open, directory)).close();
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      // A harness stopped mid-observation left this row claimed with a live lease.
+      {
+        const now = DateTime.formatIso(DateTime.nowUnsafe());
+        const db = new NodeSqlite.DatabaseSync(
+          NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+        );
+        db.prepare(
+          `INSERT INTO akeru_observation_queue
+            (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at,
+             next_attempt_at, created_at)
+            VALUES ('stale', 'thread-a', 'thread-a', 'openai/gpt-5.6-sol', NULL, 0, ?, ?, ?)`,
+        ).run(now, now, now);
+        db.close();
+      }
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        await harness.drainObservationQueue!();
+        expect(observe).not.toHaveBeenCalled();
+
+        // No turn follows: only the timer armed for the lease expiry can resume it.
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        await observed.promise;
+        await harness.drainObservationQueue!();
+        assert.deepEqual(queuedObservations(directory), []);
+      } finally {
+        vi.useRealTimers();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.live("renews a running observation's lease so another drain cannot reclaim it", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-lease-"));
+      const started = Promise.withResolvers<void>();
+      const finish = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async () => {
+          started.resolve();
+          await finish.promise;
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        const drained = harness.observeAfterTurn!({
+          threadId: "thread-a",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        await started.promise;
+        const firstClaim = queuedObservations(directory)[0]!.claimedAt!;
+
+        // Run past the five-minute lease while the observation is still working.
+        await vi.advanceTimersByTimeAsync(6 * 60_000);
+        const renewedClaim = queuedObservations(directory)[0]!.claimedAt!;
+        assert.isAbove(Date.parse(renewedClaim), Date.parse(firstClaim) + 4 * 60_000);
+
+        finish.resolve();
+        await drained;
+        assert.deepEqual(queuedObservations(directory), []);
+        expect(observe).toHaveBeenCalledOnce();
+      } finally {
+        finish.resolve();
+        vi.useRealTimers();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("discards a backed-off observation when the chat's memory is cleared", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-clear-"));
+      const calls: string[] = [];
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          throw new Error("observer exploded");
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        await harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" });
+        assert.equal(queuedObservations(directory).length, 1);
+
+        await harness.clearObservationalMemory!("thread-a");
+        assert.deepEqual(queuedObservations(directory), []);
+        await harness.drainObservationQueue!();
+        expect(calls).toEqual(["thread-a"]);
+      } finally {
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("drops a queued observation after three attempts and notifies the drop", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-retries-"));
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockRejectedValue(new Error("observer down"));
+      // Effect's default logger writes warnings through console.log.
+      const warnings: ReadonlyArray<unknown>[] = [];
+      const warn = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        warnings.push(args);
+      });
+      const dropped: Array<{
+        readonly threadId: string;
+        readonly turnId?: string;
+        readonly attempts: number;
+      }> = [];
+      const harness = await makeObservationHarness(open, directory, {
+        onObservationDropped: (input) => {
+          dropped.push(input);
+        },
+      });
+      try {
+        const input = {
+          threadId: "thread-retry",
+          turnId: "turn-retry",
+          modelId: "openai/gpt-5.6-sol",
+        };
+        const queuePath = NodePath.join(directory, "observational-memory.sqlite.queue.sqlite");
+        // Each drain performs one attempt, then releases the row with a backoff;
+        // force eligibility so the test does not wait on wall-clock backoff.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          await (attempt === 0
+            ? harness.observeAfterTurn!(input)
+            : harness.drainObservationQueue!());
+          const db = new NodeSqlite.DatabaseSync(queuePath);
+          db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+            "2000-01-01T00:00:00.000Z",
+          );
+          db.close();
+        }
+        expect(observe).toHaveBeenCalledTimes(3);
+        assert.deepEqual(queuedObservations(directory), []);
+        assert.equal(dropped.length, 1);
+        assert.equal(dropped[0]!.threadId, "thread-retry");
+        assert.equal(dropped[0]!.turnId, "turn-retry");
+        assert.equal(dropped[0]!.attempts, 3);
+        assert.isTrue(
+          warnings.some((args) =>
+            args.some(
+              (part) => typeof part === "string" && part.includes("dropped a failed observation"),
+            ),
+          ),
+        );
+      } finally {
+        warn.mockRestore();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("keeps a dropped observation queued until its drop notice lands", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-notice-"));
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockRejectedValue(new Error("observer down"));
+      const warn = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const notices: string[] = [];
+      const errors: string[] = [];
+      let noticeFails = true;
+      const harness = await makeObservationHarness(open, directory, {
+        onObservationDropped: (input) => {
+          notices.push(input.observationId);
+          errors.push(input.error.message);
+          if (noticeFails) throw new Error("orchestration unavailable");
+        },
+      });
+      const queuePath = NodePath.join(directory, "observational-memory.sqlite.queue.sqlite");
+      const makeEligible = () => {
+        const db = new NodeSqlite.DatabaseSync(queuePath);
+        db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+          "2000-01-01T00:00:00.000Z",
+        );
+        db.close();
+      };
+      try {
+        const input = { threadId: "thread-notice", modelId: "openai/gpt-5.6-sol" };
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          await (attempt === 0
+            ? harness.observeAfterTurn!(input)
+            : harness.drainObservationQueue!());
+          makeEligible();
+        }
+        assert.equal(notices.length, 1);
+        const kept = queuedObservations(directory);
+        assert.equal(kept.length, 1);
+        assert.equal(kept[0]!.attempts, 3);
+
+        noticeFails = false;
+        await harness.drainObservationQueue!();
+        assert.deepEqual(notices, [kept[0]!.id, kept[0]!.id]);
+        // The retried notice still carries the observer's failure.
+        assert.deepEqual(errors, ["observer down", "observer down"]);
+        assert.deepEqual(queuedObservations(directory), []);
+        // Retrying the notice does not run the observer again.
+        expect(observe).toHaveBeenCalledTimes(3);
+      } finally {
+        warn.mockRestore();
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("lets a later row drain ahead of a backed-off failure", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-hol-"));
+      const calls: string[] = [];
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          if (input.threadId === "thread-stuck") throw new Error("observer down");
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const harness = await makeObservationHarness(open, directory);
+      try {
+        await harness.observeAfterTurn!({
+          threadId: "thread-stuck",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        assert.equal(calls.length, 1);
+        // The failed row is released, not deleted, and carries a future
+        // next_attempt_at so the next drain skips it for now.
+        const stuck = queuedObservations(directory)[0]!;
+        assert.equal(stuck.attempts, 1);
+        assert.isNull(stuck.claimedAt);
+        assert.isTrue(stuck.nextAttemptAt > "2000-01-01T00:00:00.000Z");
+
+        await harness.observeAfterTurn!({
+          threadId: "thread-fresh",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        assert.deepEqual(calls, ["thread-stuck", "thread-fresh"]);
+        assert.equal(queuedObservations(directory).length, 1);
+      } finally {
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("does not let two simultaneous harnesses observe the same row twice", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-claims-"));
+      const calls: string[] = [];
+      let releaseFirst!: () => void;
+      const firstBlocked = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      let blocked = true;
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          if (blocked) {
+            blocked = false;
+            markStarted();
+            await firstBlocked;
+          }
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const first = await makeObservationHarness(open, directory);
+      try {
+        // Hold the first harness's drain inside observe() so the row is claimed,
+        // then start a second harness on the same store: its startup drain must
+        // not pick up the claimed row.
+        const pending = first.observeAfterTurn!({
+          threadId: "thread-claimed",
+          modelId: "openai/gpt-5.6-sol",
+        });
+        await started;
+        const claimed = queuedObservations(directory)[0]!;
+        assert.isNotNull(claimed.claimedAt);
+
+        const second = await makeObservationHarness(open, directory);
+        try {
+          // The second harness's startup drain ran during construction; an
+          // explicit drain must find nothing left to claim.
+          await second.drainObservationQueue!();
+          assert.equal(calls.length, 1);
+          releaseFirst();
+          await Promise.all([pending, second.drainObservationQueue!()]);
+          assert.equal(calls.length, 1);
+          assert.deepEqual(queuedObservations(directory), []);
+        } finally {
+          releaseFirst();
+          await second.close();
+        }
+      } finally {
+        observe.mockRestore();
+        await first.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("drains a queued observation persisted before a restart", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restart-"));
+      const calls: string[] = [];
+      // Persist a queued row without completing its observation: block the first
+      // harness's drain inside observe() so the row stays in the durable queue,
+      // then close the harness to simulate a restart.
+      let releaseBlocked!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        releaseBlocked = resolve;
+      });
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      let first = true;
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string }) => {
+          calls.push(input.threadId);
+          if (first) {
+            first = false;
+            markStarted();
+            await blocked;
+            throw new Error("interrupted by restart");
+          }
+          return { observed: false, reflected: false, record: {} } as never;
+        });
+      const firstHarness = await makeObservationHarness(open, directory);
+      const drain = firstHarness.observeAfterTurn!({
+        threadId: "thread-restart",
+        modelId: "openai/gpt-5.6-sol",
+      });
+      await started;
+      const closed = firstHarness.close();
+      releaseBlocked();
+      await Promise.allSettled([drain, closed]);
+
+      // The failed attempt was released with a backoff; a restart within that
+      // window finds the row not yet eligible, so make it due before reopening.
+      {
+        const db = new NodeSqlite.DatabaseSync(
+          NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+        );
+        db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
+          "2000-01-01T00:00:00.000Z",
+        );
+        db.close();
+      }
+      const second = await makeObservationHarness(open, directory);
+      try {
+        // The startup drain picks up the row persisted by the previous harness;
+        // awaiting another drain settles behind the in-flight startup drain.
+        await second.drainObservationQueue!();
+        assert.equal(calls.filter((threadId) => threadId === "thread-restart").length, 2);
+        expect(observe).toHaveBeenLastCalledWith(
+          expect.objectContaining({ threadId: "thread-restart", trigger: "manual" }),
+        );
+      } finally {
+        observe.mockRestore();
+        await second.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("meters external turns through the memory-call hooks", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-external-"));
+      const started: ReadonlyArray<unknown>[] = [];
+      const finished: ReadonlyArray<unknown>[] = [];
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockImplementation(async (input: { threadId: string; hooks?: ObserveHooks }) => {
+          await input.hooks?.onObservationStart?.({ threadId: input.threadId });
+          await input.hooks?.onObservationEnd?.({
+            threadId: input.threadId,
+            usage: { inputTokens: 9, outputTokens: 3 },
+          });
+          return { observed: true, reflected: false, record: {} } as never;
+        });
+      const harness = await makeObservationHarness(open, directory, {
+        startMemoryCall: async (input) => {
+          started.push([input.threadId, input.category]);
+          return `${input.category}-call`;
+        },
+        finishMemoryCall: async (input) => {
+          finished.push([input.callId, input.category, input.usage]);
+        },
+      });
+      try {
+        await harness.observeExternalTurn!({
+          threadId: "thread-external",
+          turnId: "turn-external",
+          modelId: "openai/gpt-5.6-sol",
+          userMessages: [{ id: "u1", text: "Remember this." }],
+          assistant: "Noted.",
+          createdAt: "2026-09-20T12:00:00.000Z",
+        });
+        assert.deepEqual(started, [["thread-external", "observer"]]);
+        assert.deepEqual(finished, [
+          ["observer-call", "observer", { inputTokens: 9, outputTokens: 3 }],
+        ]);
+        assert.deepEqual(queuedObservations(directory), []);
+      } finally {
+        observe.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("waits for external-turn persistence before closing memory", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-ext-close-"));
+      const persisting = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const observe = vi
+        .spyOn(ObservationalMemory.prototype, "observe")
+        .mockResolvedValue({ observed: true, reflected: false, record: {} } as never);
+      const persist = vi.spyOn(Memory.prototype, "persistMessages").mockImplementation(async () => {
+        persisting.resolve();
+        await release.promise;
+        return [] as never;
+      });
+      const harness = await makeObservationHarness(open, directory);
+      const turn = {
+        threadId: "thread-external-close",
+        turnId: "turn-external-close",
+        modelId: "openai/gpt-5.6-sol",
+        userMessages: [{ id: "u1", text: "Remember this." }],
+        assistant: "Noted.",
+        createdAt: "2026-09-20T12:00:00.000Z",
+      };
+      try {
+        const observed = harness.observeExternalTurn!(turn).catch((cause: unknown) => cause);
+        await persisting.promise;
+        let closedStore = false;
+        const closing = harness.close().then(() => {
+          closedStore = true;
+        });
+        await Promise.resolve();
+        assert.isFalse(closedStore);
+        release.resolve();
+        await closing;
+        await observed;
+        // The persisted turn left its observation for the next start.
+        assert.lengthOf(queuedObservations(directory), 1);
+        // A turn arriving after close is refused and leaves no callback behind.
+        assert.instanceOf(
+          await harness.observeExternalTurn!(turn).catch((cause: unknown) => cause),
+          AkeruObservationQueueClosedError,
+        );
+        await invalidateEntityMemoryObservations([[turn.threadId, turn.threadId]]);
+        assert.strictEqual(persist.mock.calls.length, 1);
+      } finally {
+        observe.mockRestore();
+        persist.mockRestore();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
 
   it("routes Codex API keys through OpenAI Responses instead of the OAuth transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-api-key-auth.json");
@@ -532,6 +1818,30 @@ describe("AkeruMastraHarness", () => {
       ),
     ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
     expect(getCredential).not.toHaveBeenCalled();
+  });
+
+  it("resolves a saved API key for the selected account instance", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-bound-auth.json");
+    const getCredential = vi.fn((_provider: string, instanceId?: string) =>
+      instanceId === "grok_work" ? { type: "api-key" as const, access: "work-key" } : undefined,
+    );
+    expect(
+      resolveAkeruMastraModel(
+        "xai/grok-code-fast-1",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        getCredential,
+        {
+          environment: {},
+          instanceEnvironment: {},
+          useSavedCredential: true,
+          instanceId: "grok_work",
+        },
+      ),
+    ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
+    expect(getCredential).toHaveBeenCalledWith("xai", "grok_work");
   });
 
   it("does not leak provider-wide credentials into an isolated instance", () => {
@@ -718,6 +2028,22 @@ describe("AkeruMastraHarness", () => {
     assert.include(resolveAkeruInstructions(bot, now), "20/100, a 80% chill");
     assert.include(resolveAkeruInstructions(bot, now), "Before you use a tool");
     assert.include(resolveAkeruInstructions(bot, now), "automatic continuation");
+  });
+
+  it("appends saved MCP server guidance to the system prompt", () => {
+    const now = DateTime.makeUnsafe("2026-09-02T12:00:00.000Z");
+    const context = new RequestContext();
+    context.setRaw("controller", {
+      state: {
+        botConversation: false,
+        mcpInstructions: "MCP server guidance:\n- Docs (docs): Search first.",
+      },
+    });
+
+    assert.equal(
+      resolveAkeruInstructions(context, now),
+      `${createAkeruAgentInstructions({ now })}\n\nMCP server guidance:\n- Docs (docs): Search first.`,
+    );
   });
 
   it("selects implemented runtime tools without dropping approval-aware plugins", async () => {

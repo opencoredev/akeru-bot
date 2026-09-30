@@ -4,12 +4,42 @@ import {
   RuntimeRequestId,
   ThreadId,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { runtimeEventToActivities } from "./ProviderRuntimeIngestion.ts";
 
 describe("runtimeEventToActivities approval details", () => {
+  it("preserves a routine draft and its server supplied timezone", () => {
+    const args = {
+      name: "Morning announcement",
+      instructions: "Share today's schedule with the team.",
+      schedule: { kind: "weekdays", time: "08:00" },
+      timezone: "America/New_York",
+    };
+    const event = {
+      type: "request.opened",
+      eventId: EventId.make("evt-routine-request"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-08-30T00:00:00.000Z",
+      threadId: ThreadId.make("thread-1"),
+      requestId: RuntimeRequestId.make("approval-routine"),
+      payload: {
+        requestType: "dynamic_tool_call",
+        toolName: "akeru_create_routine",
+        args,
+      },
+    } satisfies ProviderRuntimeEvent;
+
+    expect(runtimeEventToActivities(event)[0]?.payload).toMatchObject({ args });
+    expect(
+      runtimeEventToActivities({
+        ...event,
+        payload: { ...event.payload, args: { ...args, timezone: "invalid/timezone" } },
+      })[0]?.payload,
+    ).not.toHaveProperty("args");
+  });
+
   it("preserves a dynamic tool name and bounded draft arguments", () => {
     const args = { feedback: "Add a shortcut." };
     const event = {

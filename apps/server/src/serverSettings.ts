@@ -28,7 +28,7 @@ import {
   ServerSettings,
   ServerSettingsError,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -50,15 +50,14 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import * as ServerConfig from "./config.ts";
-import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
-import { fromJsonStringPretty, fromLenientJson } from "@t3tools/shared/schemaJson";
+import { type DeepPartial, deepMerge } from "@akeru/shared/Struct";
+import { fromJsonStringPretty, fromLenientJson } from "@akeru/shared/schemaJson";
 import {
   applyServerSettingsPatch,
   isModelSelectionProviderEnabled,
-} from "@t3tools/shared/serverSettings";
+} from "@akeru/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
-
-export { resolveSourceControlWriterModelSelection } from "@t3tools/shared/serverSettings";
+import { normalizeImageGenerationPatch } from "./image-generation/service.ts";
 
 const encodeServerSettings = Schema.encodeEffect(ServerSettings);
 const encodeServerSettingsJson = Schema.encodeUnknownEffect(fromJsonStringPretty(ServerSettings));
@@ -275,7 +274,6 @@ const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson
 const PersistedOptionalProviderSettings = Schema.Struct({
   providers: Schema.optionalKey(
     Schema.Struct({
-      cursor: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
       grok: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
       kimi: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
       opencode: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
@@ -307,9 +305,7 @@ function restoreUsedProviders(
     Object.entries(settings.providerInstances).map(([instanceId, instance]) => [
       instanceId,
       instance.enabled === undefined &&
-      (instance.driver === "cursor" ||
-        instance.driver === "grok" ||
-        instance.driver === "opencode") &&
+      (instance.driver === "grok" || instance.driver === "opencode") &&
       usedProviderInstances.has(instanceId)
         ? { ...instance, enabled: true }
         : instance,
@@ -320,10 +316,6 @@ function restoreUsedProviders(
     ...settings,
     providers: {
       ...settings.providers,
-      cursor: {
-        ...settings.providers.cursor,
-        enabled: persisted.providers?.cursor?.enabled ?? usedProviders.has("cursor"),
-      },
       grok: {
         ...settings.providers.grok,
         enabled: persisted.providers?.grok?.enabled ?? usedProviders.has("grok"),
@@ -345,8 +337,20 @@ function restoreUsedProviders(
   };
 }
 
+// Drivers kept in settings for compatibility that no longer have a runtime.
+const RETIRED_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["cursor"]);
+// Live drivers whose instances expose no text generation.
+const NO_TEXT_GENERATION_DRIVERS: ReadonlySet<string> = new Set(["kimi", "opencodeGo"]);
+
+function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
+  const driver = settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver;
+  return RETIRED_PROVIDER_DRIVERS.has(driver ?? instanceId);
+}
+
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  return isModelSelectionProviderEnabled(settings, settings.textGenerationModelSelection)
+  const selection = settings.textGenerationModelSelection;
+  return !isRetiredProviderInstance(settings, selection.instanceId) &&
+    isModelSelectionProviderEnabled(settings, selection)
     ? settings
     : fallbackTextGenerationProvider(settings);
 }
@@ -356,6 +360,9 @@ function fallbackTextGenerationProvider(settings: ServerSettings): ServerSetting
   // instance wins over the legacy providers map, which decodes to defaults
   // (codex enabled) when the Providers UI has only written providerInstances.
   const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
+    if (RETIRED_PROVIDER_DRIVERS.has(driver) || NO_TEXT_GENERATION_DRIVERS.has(driver)) {
+      return false;
+    }
     const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
     return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
   });
@@ -390,7 +397,6 @@ const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
   ...DEFAULT_SERVER_SETTINGS,
   providers: {
     ...DEFAULT_SERVER_SETTINGS.providers,
-    cursor: { ...DEFAULT_SERVER_SETTINGS.providers.cursor, enabled: undefined },
     grok: { ...DEFAULT_SERVER_SETTINGS.providers.grok, enabled: undefined },
     opencode: { ...DEFAULT_SERVER_SETTINGS.providers.opencode, enabled: undefined },
   },
@@ -1212,7 +1218,16 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* bumpMaterializedGeneration;
           const current = yield* getSettingsFromCache;
-          const patched = applyServerSettingsPatch(current, patch);
+          const normalizedPatch = patch.imageGeneration
+            ? {
+                ...patch,
+                imageGeneration: normalizeImageGenerationPatch(
+                  current.imageGeneration,
+                  patch.imageGeneration,
+                ),
+              }
+            : patch;
+          const patched = applyServerSettingsPatch(current, normalizedPatch);
           const sandboxMaterialized = yield* materializeSandboxEnvironmentSecrets(patched);
           yield* validateSandboxSettings(sandboxMaterialized);
           const secretSnapshots = yield* snapshotSettingsSecrets(current, patched);

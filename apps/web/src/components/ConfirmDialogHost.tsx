@@ -7,6 +7,7 @@ import {
   respondToConfirmDialog,
   subscribeConfirmDialog,
 } from "../confirmDialog";
+import { useI18n } from "../i18n";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -23,10 +24,17 @@ type ConfirmationCopy = {
   readonly description: string | null;
 };
 
-export function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
+export function resolveConfirmDialogCopy(
+  message: string,
+  fallback: ConfirmationCopy = {
+    title: "Confirm action",
+    description: "This action requires your confirmation.",
+  },
+): ConfirmationCopy {
   const normalizedMessage = message.trim();
   const lines = normalizedMessage.split("\n");
-  const questionLineIndex = lines.findIndex((line) => line.trim().endsWith("?"));
+  // Chinese copy ends questions with a fullwidth question mark.
+  const questionLineIndex = lines.findIndex((line) => /[?？]$/.test(line.trim()));
 
   if (questionLineIndex >= 0) {
     const title = lines[questionLineIndex]!.trim();
@@ -37,7 +45,7 @@ export function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
     return { title, description: description || null };
   }
 
-  const questionMarkIndex = normalizedMessage.indexOf("?");
+  const questionMarkIndex = normalizedMessage.search(/[?？]/);
   if (questionMarkIndex >= 0) {
     return {
       title: normalizedMessage.slice(0, questionMarkIndex + 1).trim(),
@@ -46,12 +54,13 @@ export function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
   }
 
   return {
-    title: "Confirm action",
-    description: normalizedMessage || "This action requires your confirmation.",
+    title: fallback.title,
+    description: normalizedMessage || fallback.description,
   };
 }
 
 export function ConfirmDialogHost() {
+  const { t } = useI18n();
   const state = useSyncExternalStore(
     subscribeConfirmDialog,
     readConfirmDialogState,
@@ -60,8 +69,12 @@ export function ConfirmDialogHost() {
 
   useEffect(() => registerConfirmDialogHost(), []);
 
-  const copy = resolveConfirmDialogCopy(state.status === "idle" ? "" : state.message);
+  const copy = resolveConfirmDialogCopy(state.status === "idle" ? "" : state.message, {
+    title: t("Confirm action"),
+    description: t("This action requires your confirmation."),
+  });
   const confirmVariant = state.status === "idle" ? "default" : state.variant;
+  const confirmLabel = state.status === "idle" ? null : state.confirmLabel;
   const onCancel = () => respondToConfirmDialog(false);
   const onConfirm = () => respondToConfirmDialog(true);
 
@@ -85,9 +98,9 @@ export function ConfirmDialogHost() {
           ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+          <AlertDialogClose render={<Button variant="outline" />}>{t("Cancel")}</AlertDialogClose>
           <Button variant={confirmVariant} onClick={onConfirm}>
-            Confirm
+            {confirmLabel ?? t("Confirm")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>

@@ -1,5 +1,5 @@
-import type { EnvironmentRpcSubscriptionObservation } from "@t3tools/client-runtime/rpc";
-import { type BackgroundScope, type EnvironmentId, WS_METHODS } from "@t3tools/contracts";
+import type { EnvironmentRpcSubscriptionObservation } from "@akeru/client-runtime/rpc";
+import { type BackgroundScope, type EnvironmentId, WS_METHODS } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 interface RetainedScope {
@@ -39,14 +39,9 @@ function stableScopeKey(environmentId: EnvironmentId, scope: BackgroundScope): s
 function scopeForSubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): BackgroundScope | null {
-  if (observation.method === WS_METHODS.subscribeResourceTelemetry) {
-    return { type: "diagnostics" };
-  }
-  if (observation.method !== WS_METHODS.subscribeVcsStatus) {
-    return null;
-  }
-  const input = observation.input as { readonly cwd?: unknown };
-  return typeof input.cwd === "string" ? { type: "vcs-status", cwd: input.cwd } : null;
+  return observation.method === WS_METHODS.subscribeResourceTelemetry
+    ? { type: "diagnostics" }
+    : null;
 }
 
 export function retainedMobileBackgroundScopes(

@@ -5,8 +5,8 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { type ServerProviderSkill } from "@t3tools/contracts";
-import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { type ServerProviderSkill } from "@akeru/contracts";
+import { serializeComposerFileLink } from "@akeru/shared/composerTrigger";
 import {
   $applyNodeReplacement,
   $createRangeSelectionFromDom,
@@ -70,18 +70,17 @@ import {
 } from "~/lib/terminalContext";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
-import {
-  COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_ICON_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME,
-  COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME,
-  SKILL_CHIP_ICON_SVG,
-} from "./composerInlineChip";
+import { COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME } from "./composerInlineChip";
 import { FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTerminalContexts";
-import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/providerSkills";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { registerComposerInlineTokenPaste } from "./composerInlineTokenPaste";
+import {
+  $createComposerSkillNode,
+  ComposerSkillNode,
+  skillMetadataByName,
+  type ComposerSkillMetadata,
+} from "./composerSkillNode";
 
 const COMPOSER_EDITOR_HMR_KEY = `composer-editor-${Math.random().toString(36).slice(2)}`;
 const SURROUND_SYMBOLS: [string, string][] = [
@@ -104,17 +103,6 @@ type SerializedComposerMentionNode = Spread<
   {
     path: string;
     type: "composer-mention";
-    version: 1;
-  },
-  SerializedLexicalNode
->;
-
-type SerializedComposerSkillNode = Spread<
-  {
-    skillName: string;
-    skillLabel?: string;
-    skillDescription?: string;
-    type: "composer-skill";
     version: 1;
   },
   SerializedLexicalNode
@@ -212,153 +200,6 @@ class ComposerMentionNode extends DecoratorNode<React.ReactElement> {
 
 function $createComposerMentionNode(path: string): ComposerMentionNode {
   return $applyNodeReplacement(new ComposerMentionNode(path));
-}
-
-function resolveSkillDescription(
-  skill: Pick<ServerProviderSkill, "shortDescription" | "description">,
-): string | null {
-  const shortDescription = skill.shortDescription?.trim();
-  if (shortDescription) {
-    return shortDescription;
-  }
-  const description = skill.description?.trim();
-  return description || null;
-}
-
-type ComposerSkillMetadata = {
-  label: string;
-  description: string | null;
-};
-
-function skillMetadataByName(
-  skills: ReadonlyArray<ServerProviderSkill>,
-): ReadonlyMap<string, ComposerSkillMetadata> {
-  return new Map(
-    skills.map((skill) => [
-      skill.name,
-      {
-        label: formatProviderSkillDisplayName(skill),
-        description: resolveSkillDescription(skill),
-      },
-    ]),
-  );
-}
-
-function ComposerSkillDecorator(props: { skillLabel: string; skillDescription: string | null }) {
-  const chip = (
-    <span
-      className={COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME}
-      contentEditable={false}
-      spellCheck={false}
-      data-composer-skill-chip="true"
-    >
-      <span
-        aria-hidden="true"
-        className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME}
-        dangerouslySetInnerHTML={{ __html: SKILL_CHIP_ICON_SVG }}
-      />
-      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{props.skillLabel}</span>
-    </span>
-  );
-
-  if (!props.skillDescription) {
-    return chip;
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger render={chip} />
-      <TooltipPopup side="top" className="max-w-120 whitespace-normal leading-tight">
-        {props.skillDescription}
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
-
-class ComposerSkillNode extends DecoratorNode<React.ReactElement> {
-  __skillName: string;
-  __skillLabel: string;
-  __skillDescription: string | null;
-
-  static override getType(): string {
-    return "composer-skill";
-  }
-
-  static override clone(node: ComposerSkillNode): ComposerSkillNode {
-    return new ComposerSkillNode(
-      node.__skillName,
-      node.__skillLabel,
-      node.__skillDescription,
-      node.__key,
-    );
-  }
-
-  static override importJSON(serializedNode: SerializedComposerSkillNode): ComposerSkillNode {
-    return $createComposerSkillNode(
-      serializedNode.skillName,
-      serializedNode.skillLabel ?? serializedNode.skillName,
-      serializedNode.skillDescription ?? null,
-    ).updateFromJSON(serializedNode);
-  }
-
-  constructor(
-    skillName: string,
-    skillLabel: string,
-    skillDescription: string | null,
-    key?: NodeKey,
-  ) {
-    super(key);
-    const normalizedSkillName = skillName.startsWith("$") ? skillName.slice(1) : skillName;
-    this.__skillName = normalizedSkillName;
-    this.__skillLabel = skillLabel;
-    this.__skillDescription = skillDescription;
-  }
-
-  override exportJSON(): SerializedComposerSkillNode {
-    return {
-      ...super.exportJSON(),
-      skillName: this.__skillName,
-      skillLabel: this.__skillLabel,
-      ...(this.__skillDescription ? { skillDescription: this.__skillDescription } : {}),
-      type: "composer-skill",
-      version: 1,
-    };
-  }
-
-  override createDOM(): HTMLElement {
-    const dom = document.createElement("span");
-    dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
-    return dom;
-  }
-
-  override updateDOM(): false {
-    return false;
-  }
-
-  override getTextContent(): string {
-    return `$${this.__skillName}`;
-  }
-
-  override isInline(): true {
-    return true;
-  }
-
-  override decorate(): React.ReactElement {
-    return (
-      <ComposerSkillDecorator
-        skillLabel={this.__skillLabel}
-        skillDescription={this.__skillDescription}
-      />
-    );
-  }
-}
-
-function $createComposerSkillNode(
-  skillName: string,
-  skillLabel: string,
-  skillDescription: string | null,
-): ComposerSkillNode {
-  return $applyNodeReplacement(new ComposerSkillNode(skillName, skillLabel, skillDescription));
 }
 
 function ComposerTerminalContextDecorator(props: { context: TerminalContextDraft }) {
@@ -467,6 +308,7 @@ function skillSignature(skills: ReadonlyArray<ServerProviderSkill>): string {
         skill.displayName ?? "",
         skill.shortDescription ?? "",
         skill.description ?? "",
+        skill.icon ?? "",
         skill.path,
         skill.scope ?? "",
         skill.enabled ? "1" : "0",
@@ -835,14 +677,7 @@ function $setComposerEditorPrompt(
       continue;
     }
     if (segment.type === "skill") {
-      const metadata = skillMetadata.get(segment.name);
-      paragraph.append(
-        $createComposerSkillNode(
-          segment.name,
-          metadata?.label ?? formatProviderSkillDisplayName({ name: segment.name }),
-          metadata?.description ?? null,
-        ),
-      );
+      paragraph.append($createComposerSkillNode(segment.name, skillMetadata.get(segment.name)));
       continue;
     }
     if (segment.type === "terminal-context") {

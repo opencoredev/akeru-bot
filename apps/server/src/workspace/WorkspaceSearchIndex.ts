@@ -3,7 +3,6 @@ import {
   type DirSearchResult,
   type FileItem,
   FileFinder,
-  type GrepCursor,
   type MixedItem,
   type MixedSearchResult,
   type Result,
@@ -19,19 +18,15 @@ import type {
   ProjectEntry,
   ProjectEntryKind,
   ProjectListEntriesResult,
-  ProjectSearchContentsInput,
-  ProjectSearchContentsResult,
   ProjectSearchEntriesResult,
-} from "@t3tools/contracts";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+} from "@akeru/contracts";
+import { isWorkspaceImagePreviewPath } from "@akeru/shared/filePreview";
 
 const WORKSPACE_INDEX_MAX_ENTRIES = 25_000;
 const WORKSPACE_INDEX_PAGE_SIZE = WORKSPACE_INDEX_MAX_ENTRIES + 2;
 const WORKSPACE_INDEX_SCAN_TIMEOUT = "15 seconds";
 const WORKSPACE_INDEX_SCAN_TIMEOUT_MS = 15_000;
 const WORKSPACE_INDEX_IDLE_TTL = "15 minutes";
-const CONTENT_SEARCH_TIME_BUDGET_MS = 250;
-const CONTENT_SEARCH_MAX_MATCHES_PER_FILE = 100;
 
 export class WorkspaceSearchIndexCreateFailed extends Schema.TaggedErrorClass<WorkspaceSearchIndexCreateFailed>()(
   "WorkspaceSearchIndexCreateFailed",
@@ -114,9 +109,6 @@ export class WorkspaceSearchIndex extends Context.Service<
       kind?: ProjectEntryKind,
       imageOnly?: boolean,
     ) => Effect.Effect<ProjectSearchEntriesResult, WorkspaceSearchIndexSearchFailed>;
-    readonly searchContents: (
-      input: Omit<ProjectSearchContentsInput, "cwd">,
-    ) => Effect.Effect<ProjectSearchContentsResult, WorkspaceSearchIndexSearchFailed>;
     readonly refresh: () => Effect.Effect<
       void,
       WorkspaceSearchIndexRefreshFailed | WorkspaceSearchIndexScanTimedOut
@@ -215,74 +207,6 @@ function mapMixedSearchResult(
   };
 }
 
-const WORD_CHARACTER = /[\p{Letter}\p{Mark}\p{Number}_]/u;
-
-function codePointAt(line: string, index: number): string | undefined {
-  const codePoint = line.codePointAt(index);
-  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
-}
-
-function codePointBefore(line: string, index: number): string | undefined {
-  if (index <= 0) return undefined;
-  const previousCodeUnit = line.charCodeAt(index - 1);
-  const previousIndex =
-    previousCodeUnit >= 0xdc00 && previousCodeUnit <= 0xdfff ? index - 2 : index - 1;
-  return codePointAt(line, previousIndex);
-}
-
-function buildContentSearchQuery(input: Omit<ProjectSearchContentsInput, "cwd">): {
-  readonly searchQuery: string;
-  readonly regexMode: boolean;
-} {
-  if (input.caseSensitive) {
-    return { searchQuery: input.query, regexMode: input.useRegex };
-  }
-  // Plain mode relies on smart case: an all-lowercase needle matches
-  // case-insensitively. Regex mode needs an explicit inline flag instead.
-  return input.useRegex
-    ? { searchQuery: `(?i)${input.query}`, regexMode: true }
-    : { searchQuery: input.query.toLowerCase(), regexMode: false };
-}
-
-function mapContentMatchRanges(
-  line: string,
-  byteRanges: ReadonlyArray<readonly [number, number]>,
-): Array<{ readonly start: number; readonly end: number }> {
-  const lineBytes = Buffer.from(line);
-  const toStringIndex = (byteOffset: number) => lineBytes.subarray(0, byteOffset).toString().length;
-  return byteRanges.map(([startByte, endByte]) => ({
-    start: toStringIndex(startByte),
-    end: toStringIndex(endByte),
-  }));
-}
-
-/**
- * Whole-word filtering happens after the grep rather than by wrapping the
- * pattern in boundary regex: consuming boundaries such as `(?:^|\W)` swallow
- * the separator between adjacent matches and widen the reported ranges, and
- * `\b` cannot match punctuation-edged queries at all. Matching VS Code, a
- * match edge is a word boundary when it touches the line edge, the
- * neighbouring character is not a word character, or the match's own edge
- * character is not a word character.
- */
-function isWholeWordRange(
-  line: string,
-  range: { readonly start: number; readonly end: number },
-): boolean {
-  if (range.end <= range.start) return false;
-  const isWord = (character: string | undefined) =>
-    character !== undefined && WORD_CHARACTER.test(character);
-  const leftIsBoundary =
-    range.start === 0 ||
-    !isWord(codePointBefore(line, range.start)) ||
-    !isWord(codePointAt(line, range.start));
-  const rightIsBoundary =
-    range.end >= line.length ||
-    !isWord(codePointAt(line, range.end)) ||
-    !isWord(codePointBefore(line, range.end));
-  return leftIsBoundary && rightIsBoundary;
-}
-
 function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
   const entryByPath = new Map(entries.map((entry) => [entry.path, entry]));
   for (const entry of entries) {
@@ -297,19 +221,14 @@ function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEn
   return [...entryByPath.values()];
 }
 
-const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (
-  cwd: string,
-  variant: WorkspaceSearchIndexVariant,
-) {
+const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (cwd: string) {
   const result = yield* Effect.try({
     try: () =>
       FileFinder.create({
         basePath: cwd,
         disableMmapCache: true,
-        // Content indexing costs scan CPU and memory, so only the on-demand
-        // content-search index pays for it; path-only consumers (file tree,
-        // composer path search, file picker) keep the lightweight index.
-        disableContentIndexing: variant !== "content",
+        // Only paths are searched, so skip the content index's scan CPU and memory.
+        disableContentIndexing: true,
         aiMode: false,
         enableFsRootScanning: true,
         enableHomeDirScanning: true,
@@ -352,11 +271,8 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
-  cwd: string,
-  variant: WorkspaceSearchIndexVariant = "paths",
-) {
-  const finder = yield* Effect.acquireRelease(createFinder(cwd, variant), (finder) =>
+export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: string) {
+  const finder = yield* Effect.acquireRelease(createFinder(cwd), (finder) =>
     Effect.try({
       try: () => finder.destroy(),
       catch: (cause) => new WorkspaceSearchIndexDestroyFailed({ cwd, cause }),
@@ -470,97 +386,16 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
     return mapMixedSearchResult(result, limit);
   });
 
-  const searchContents: WorkspaceSearchIndex["Service"]["searchContents"] = Effect.fn(
-    "WorkspaceSearchIndex.searchContents",
-  )(function* (input) {
-    const { searchQuery, regexMode } = buildContentSearchQuery(input);
-    const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
-    // Grep cursors advance by file, so whole-word post-filtering needs enough
-    // raw candidates from the current file before moving to the next one.
-    const rawPageSize = input.wholeWord
-      ? Math.max(input.limit, CONTENT_SEARCH_MAX_MATCHES_PER_FILE)
-      : input.limit;
-    const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
-    let nextCursor: GrepCursor | null = null;
-    let regexFallbackError: string | undefined;
-
-    do {
-      if (nextCursor !== null) {
-        // Filtered pages must not monopolize the server for the full search budget.
-        yield* Effect.yieldNow;
-        if (performance.now() >= deadline) break;
-      }
-      const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
-      const result = yield* runSearch(input.query, input.limit, "grep", () =>
-        finder.grep(searchQuery, {
-          mode: regexMode ? "regex" : "plain",
-          smartCase: !input.caseSensitive && !regexMode,
-          // A single dense file must not consume the whole result page.
-          maxMatchesPerFile: Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
-          pageSize: rawPageSize,
-          cursor: nextCursor,
-          timeBudgetMs: remainingTimeBudgetMs,
-        }),
-      );
-
-      for (const match of result.items) {
-        const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
-          (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
-        );
-        if (matchRanges.length === 0) continue;
-        matches.push({
-          path: toPosixPath(match.relativePath),
-          lineNumber: match.lineNumber,
-          lineContent: match.lineContent,
-          matchRanges,
-        });
-      }
-      nextCursor = result.nextCursor;
-      regexFallbackError ??= result.regexFallbackError;
-    } while (matches.length < input.limit && nextCursor !== null && performance.now() < deadline);
-
-    return {
-      matches: matches.slice(0, input.limit),
-      truncated: matches.length > input.limit || nextCursor !== null,
-      ...(regexFallbackError !== undefined ? { regexFallbackError } : {}),
-    };
-  });
-
-  return WorkspaceSearchIndex.of({ list, refresh, search, searchContents });
+  return WorkspaceSearchIndex.of({ list, refresh, search });
 });
-
-export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths", "content"] as const;
-export type WorkspaceSearchIndexVariant = (typeof WORKSPACE_SEARCH_INDEX_VARIANTS)[number];
-
-/**
- * Composite LayerMap key so the lightweight path index and the on-demand
- * content-search index of the same workspace are separate resources with
- * independent lifecycles. "\n" cannot appear in a filesystem path.
- */
-export const workspaceSearchIndexKey = (cwd: string, variant: WorkspaceSearchIndexVariant) =>
-  `${variant}\n${cwd}`;
-
-function parseWorkspaceSearchIndexKey(key: string): {
-  readonly cwd: string;
-  readonly variant: WorkspaceSearchIndexVariant;
-} {
-  const separatorIndex = key.indexOf("\n");
-  return {
-    variant: key.slice(0, separatorIndex) as WorkspaceSearchIndexVariant,
-    cwd: key.slice(separatorIndex + 1),
-  };
-}
 
 /**
  * A layer factory is required because every index is scoped to a concrete
- * workspace root and variant. WorkspaceSearchIndexMap owns memoization and
- * idle cleanup; using a default cwd here would mix resources from different
- * workspaces.
+ * workspace root, which is also its key. WorkspaceSearchIndexMap owns
+ * memoization and idle cleanup; using a default cwd here would mix resources
+ * from different workspaces.
  */
-export const layer = (key: string) => {
-  const { cwd, variant } = parseWorkspaceSearchIndexKey(key);
-  return Layer.effect(WorkspaceSearchIndex, make(cwd, variant));
-};
+export const layer = (cwd: string) => Layer.effect(WorkspaceSearchIndex, make(cwd));
 
 export class WorkspaceSearchIndexMap extends LayerMap.Service<WorkspaceSearchIndexMap>()(
   "akeru-bot/workspace/WorkspaceSearchIndexMap",

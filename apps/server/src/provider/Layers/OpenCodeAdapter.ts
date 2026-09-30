@@ -11,7 +11,7 @@ import {
   type ToolLifecycleItemType,
   TurnId,
   type UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -26,7 +26,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type { OpencodeClient, Part, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
@@ -62,7 +62,7 @@ const PROVIDER = ProviderDriverKind.make("opencode");
 /**
  * Version tag stamped into the OpenCode resume cursor. Bump if the cursor
  * shape changes so stale-shaped cursors written by older builds are ignored
- * rather than misread (mirrors GROK_RESUME_VERSION / CURSOR_RESUME_VERSION).
+ * rather than misread (mirrors GROK_RESUME_VERSION).
  */
 const OPENCODE_RESUME_VERSION = 1 as const;
 
@@ -87,13 +87,14 @@ function parseOpenCodeResume(raw: unknown): { readonly sessionId: string } | und
 }
 
 /**
- * Whether an error definitively reports a missing session. Only a confirmed
+ * Whether an error definitively reports a missing session or request. Only a confirmed
  * miss may silently start a fresh session; any other failure (the SDK client
  * is `throwOnError: true`, so `session.get` rejects on every non-2xx) must
  * propagate, or a transient blip resets a live thread to an empty one — the
  * #3604 silent context loss. Decides on structured signals only, never free
- * text: a numeric 404 or the exact `NotFoundError` name, found via a bounded walk
- * over `cause`/`body`/`error`/`data`. An explicit non-404 status seals its
+ * text: a numeric 404, the exact `NotFoundError` name, or a question/permission
+ * not-found tag, found via a bounded walk over `cause`/`body`/`error`/`data`.
+ * An explicit non-404 status seals its
  * subtree so a wrapped "NotFound" name can't reclassify a real failure.
  * Exported for unit testing.
  */
@@ -125,6 +126,9 @@ export function isOpenCodeNotFound(cause: unknown): boolean {
 
     const name = record.name;
     if (typeof name === "string" && name.toLowerCase() === "notfounderror") {
+      return true;
+    }
+    if (record._tag === "QuestionNotFoundError" || record._tag === "PermissionNotFoundError") {
       return true;
     }
 
@@ -1586,10 +1590,14 @@ export function makeOpenCodeAdapter(
               const server = yield* openCodeRuntime.connectToOpenCodeServer({
                 binaryPath,
                 serverUrl,
-                environment: subscriptionRuntimeEnvironment(
+                environment: yield* subscriptionRuntimeEnvironment(
                   serverConfig.secretsDir,
                   "opencode-go",
                   options?.environment,
+                  boundInstanceId,
+                ).pipe(
+                  Effect.provideService(FileSystem.FileSystem, fileSystem),
+                  Effect.provideService(Path.Path, path),
                 ),
               });
               const client = openCodeRuntime.createOpenCodeSdkClient({
@@ -1625,7 +1633,7 @@ export function makeOpenCodeAdapter(
               if (mcpSession && !server.external) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
-                    name: "t3-code",
+                    name: "akeru",
                     config: {
                       type: "remote",
                       url: mcpSession.endpoint,
@@ -1868,7 +1876,7 @@ export function makeOpenCodeAdapter(
       const variant = getModelSelectionStringOptionValue(modelSelection, "variant");
 
       context.activeTurnId = turnId;
-      context.activeAgent = agent ?? (input.interactionMode === "plan" ? "plan" : undefined);
+      context.activeAgent = agent;
       context.activeVariant = variant;
       yield* updateProviderSession(
         context,
@@ -2026,7 +2034,37 @@ export function makeOpenCodeAdapter(
           requestID: requestId,
           answers: toOpenCodeQuestionAnswers(request, answers),
         }),
-      ).pipe(Effect.mapError(toRequestError));
+      ).pipe(
+        // OpenCode no longer has the question, so drop it and let the reactor close it.
+        Effect.catchIf(
+          (cause) => isOpenCodeNotFound(cause),
+          (cause) =>
+            Effect.sync(() => context.pendingQuestions.delete(requestId)).pipe(
+              Effect.andThen(
+                Effect.fail(
+                  new ProviderAdapterRequestError({
+                    provider: PROVIDER,
+                    method: cause.operation,
+                    detail: `Unknown pending user-input request: ${requestId}`,
+                    cause: cause.cause,
+                  }),
+                ),
+              ),
+            ),
+        ),
+        // The question stays pending until OpenCode reports it replied, so the answer can be sent again.
+        Effect.mapError((cause) =>
+          cause._tag === "ProviderAdapterRequestError"
+            ? cause
+            : new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: cause.operation,
+                detail: cause.detail,
+                cause: cause.cause,
+                retryable: true,
+              }),
+        ),
+      );
     });
 
     const stopSession: OpenCodeAdapterShape["stopSession"] = Effect.fn("stopSession")(

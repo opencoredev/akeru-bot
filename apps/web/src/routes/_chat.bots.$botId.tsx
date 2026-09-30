@@ -8,19 +8,27 @@ import {
   RoutineRunId,
   SkillAssignmentId,
   SkillId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
+import {
+  botRoutinesView,
+  toRoutineSchedule,
+  type RoutineAdapterDraft,
+} from "@akeru/client-runtime/routines";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { BotThreadLanding } from "../components/roster/BotThreadLanding";
 import { BotDetailsPanel } from "../components/roster/BotDetailsPanel";
+import { routineDelegateOptions } from "../components/roster/botEngineSelection";
 import { useBotThreadRef } from "../components/roster/useBotThreadRef";
-import type { RoutineAdapterDraft } from "../components/roster/RoutinePanel";
-import { toRoutinePanelItem, toRoutineSchedule } from "../components/roster/routineAdapter";
+import { useThreadShell } from "../state/entities";
+import { resolveRoutedBot } from "../components/roster/rosterRouteSelection";
 import { useRosterStore } from "../components/roster/rosterStore";
 import { toastManager } from "../components/ui/toast";
+import { useI18n } from "../i18n";
 import { randomUUID } from "../lib/utils";
-import { botRoutePanelKeys } from "./botRoutePanelKeys";
+import { deriveProviderInstanceEntries } from "../providerInstances";
+import { botRoutePanelKeys } from "./-botRoutePanelKeys";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { routineEnvironment } from "../state/routines";
 import { primaryServerProvidersAtom } from "../state/server";
@@ -30,6 +38,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {
+  const { t } = useI18n();
   const { botId } = Route.useParams();
   const panelKeys = botRoutePanelKeys(botId);
   const navigate = useNavigate();
@@ -44,10 +53,27 @@ function BotThreadRouteView() {
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [busyRoutineId, setBusyRoutineId] = useState<string | null>(null);
-  const bot = useRosterStore((state) =>
-    state.bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null),
-  );
+  const [routinePanelRequest, setRoutinePanelRequest] = useState(0);
+  /*
+   * The roster store is not scoped to the active environment, so a bot found by
+   * id alone can still belong to the environment we just left. Judging the id
+   * only once the store mirrors this environment keeps the panel from showing
+   * one environment's bot while its saves address another.
+   */
+  const bots = useRosterStore((state) => state.bots);
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const routedBot = resolveRoutedBot(environmentId, rosterEnvironmentId, bots, botId);
+  const bot = routedBot.status === "available" ? routedBot.bot : null;
   const threadRef = useBotThreadRef(botId);
+  // A remembered chat that no longer loads cannot take a routine.
+  const routineThreadRef = useThreadShell(threadRef) ? threadRef : null;
+  // A routine can hand its work to any other active bot in this environment.
+  // Bots whose provider cannot take handed-off work stay listed but disabled.
+  const delegateOptions = useMemo(
+    () =>
+      bot ? routineDelegateOptions(bot.id, bots, deriveProviderInstanceEntries(providers)) : [],
+    [bot, bots, providers],
+  );
   const botAssignments = useMemo(
     () => (snapshot?.skillAssignments ?? []).filter((assignment) => assignment.botId === botId),
     [botId, snapshot?.skillAssignments],
@@ -70,20 +96,8 @@ function BotThreadRouteView() {
       ].sort(),
     [botAssignments, providerSkills],
   );
-  const routines = useMemo(
-    () =>
-      (snapshot?.routines ?? [])
-        .filter((routine) => routine.botId === botId && routine.lifecycle !== "deleted")
-        .map((routine) =>
-          toRoutinePanelItem(
-            routine,
-            snapshot?.routineRuns ?? [],
-            snapshot?.skillAssignments ?? [],
-            snapshot?.mcpServers ?? [],
-          ),
-        ),
-    [botId, snapshot],
-  );
+  const routinesView = useMemo(() => botRoutinesView(snapshot, botId), [botId, snapshot]);
+  const routines = routinesView.kind === "ready" ? routinesView.routines : [];
 
   const requireSuccess = (result: { readonly _tag: string }, message: string) => {
     if (result._tag === "Success") return;
@@ -125,7 +139,7 @@ function BotThreadRouteView() {
           createdAt: new Date().toISOString(),
         },
       });
-      requireSuccess(result, `Could not assign ${name}`);
+      requireSuccess(result, t("Could not assign {name}", { name }));
       ids.push(assignmentId);
     }
     return ids;
@@ -145,23 +159,24 @@ function BotThreadRouteView() {
     projectId: ProjectId.make(draft.projectId),
     sandbox: draft.sandbox,
     approvalPolicy: draft.approval,
+    delegateToBotId: draft.delegateToBotId === null ? null : BotId.make(draft.delegateToBotId),
   });
 
   return (
     <>
-      <BotThreadLanding key={panelKeys.thread} botId={botId} />
+      <BotThreadLanding
+        key={panelKeys.thread}
+        botId={botId}
+        onOpenRoutines={() => setRoutinePanelRequest((request) => request + 1)}
+      />
       {bot ? (
         <BotDetailsPanel
           key={panelKeys.details}
           bot={bot}
           threadRef={threadRef}
+          routinePanelRequest={routinePanelRequest}
           routinePanel={{
-            status:
-              snapshot === null
-                ? "loading"
-                : snapshot.routines === undefined
-                  ? "unavailable"
-                  : "ready",
+            status: routinesView.kind,
             routines,
             skillOptions,
             connectorOptions: (snapshot?.mcpServers ?? []).map((server) => server.name),
@@ -169,7 +184,32 @@ function BotThreadRouteView() {
               id: project.id,
               name: project.title,
             })),
+            delegateOptions,
             busyRoutineId,
+            // A new routine reports back into the bot's own chat, so it can only be
+            // created once that thread exists.
+            createNeedsChat: routineThreadRef === null,
+            ...(routineThreadRef
+              ? {
+                  onCreate: async (draft: RoutineAdapterDraft) => {
+                    if (!environmentId) throw new Error("The routine environment is unavailable.");
+                    const routineId = RoutineId.make(randomUUID());
+                    await withBusy(routineId, async () => {
+                      const result = await draftRoutine({
+                        environmentId,
+                        input: {
+                          routineId,
+                          targetThreadId: routineThreadRef.threadId,
+                          ...(await routineDefinition(draft)),
+                          createdAt: new Date().toISOString(),
+                        },
+                      });
+                      requireSuccess(result, t("Could not create routine"));
+                      toastManager.add({ type: "success", title: t("Routine draft created") });
+                    });
+                  },
+                }
+              : {}),
             onUpdate: async (routineId, draft) => {
               if (!environmentId) throw new Error("The routine environment is unavailable.");
               const current = snapshot?.routines?.find((routine) => routine.id === routineId);
@@ -185,8 +225,8 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not save routine");
-                toastManager.add({ type: "success", title: "Routine draft saved" });
+                requireSuccess(result, t("Could not save routine"));
+                toastManager.add({ type: "success", title: t("Routine draft saved") });
               });
             },
             onApproveProcedure: (routineId) => {
@@ -201,7 +241,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not approve procedure");
+                requireSuccess(result, t("Could not approve procedure"));
               });
             },
             onDryRun: (routineId) => {
@@ -216,7 +256,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not start dry run");
+                requireSuccess(result, t("Could not start dry run"));
               });
             },
             onRunNow: (routineId) => {
@@ -231,7 +271,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not start routine");
+                requireSuccess(result, t("Could not start routine"));
               });
             },
             onSetEnabled: (routineId, enabled) => {
@@ -253,7 +293,7 @@ function BotThreadRouteView() {
                     });
                 requireSuccess(
                   result,
-                  enabled ? "Could not enable routine" : "Could not pause routine",
+                  enabled ? t("Could not enable routine") : t("Could not pause routine"),
                 );
               });
             },
@@ -276,13 +316,13 @@ function BotThreadRouteView() {
                     });
                 requireSuccess(
                   result,
-                  paused ? "Could not pause routine" : "Could not resume routine",
+                  paused ? t("Could not pause routine") : t("Could not resume routine"),
                 );
               });
             },
-            onDelete: (routineId) => {
-              if (!environmentId) return;
-              startBusy(routineId, async () => {
+            onDelete: async (routineId) => {
+              if (!environmentId) throw new Error("The routine environment is unavailable.");
+              await withBusy(routineId, async () => {
                 const result = await deleteRoutine({
                   environmentId,
                   input: {
@@ -290,7 +330,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
-                requireSuccess(result, "Could not delete routine");
+                requireSuccess(result, t("Could not delete routine"));
               });
             },
           }}

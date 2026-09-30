@@ -1,4 +1,4 @@
-import type { ConfirmDialogOptions, ConfirmDialogVariant } from "@t3tools/contracts";
+import type { ConfirmDialogOptions, ConfirmDialogVariant } from "@akeru/contracts";
 
 export type ConfirmDialogState =
   | { readonly status: "idle" }
@@ -6,16 +6,19 @@ export type ConfirmDialogState =
       readonly status: "confirming";
       readonly message: string;
       readonly variant: ConfirmDialogVariant;
+      readonly confirmLabel: string | null;
     }
   | {
       readonly status: "closing";
       readonly message: string;
       readonly variant: ConfirmDialogVariant;
+      readonly confirmLabel: string | null;
     };
 
 type PendingConfirmation = {
   readonly message: string;
   readonly variant: ConfirmDialogVariant;
+  readonly confirmLabel: string | null;
   readonly resolve: (confirmed: boolean) => void;
 };
 
@@ -87,6 +90,7 @@ export function requestConfirmDialog(
     const pending = {
       message,
       variant: options?.variant ?? "default",
+      confirmLabel: options?.confirmLabel ?? null,
       resolve,
     } satisfies PendingConfirmation;
     if (activeConfirmation || state.status === "closing") {
@@ -95,7 +99,12 @@ export function requestConfirmDialog(
     }
 
     activeConfirmation = pending;
-    publish({ status: "confirming", message, variant: pending.variant });
+    publish({
+      status: "confirming",
+      message,
+      variant: pending.variant,
+      confirmLabel: pending.confirmLabel,
+    });
   });
 
   return confirmation;
@@ -107,7 +116,12 @@ export function respondToConfirmDialog(confirmed: boolean): void {
   const confirmation = activeConfirmation;
   activeConfirmation = null;
   confirmation.resolve(confirmed);
-  publish({ status: "closing", message: state.message, variant: state.variant });
+  publish({
+    status: "closing",
+    message: state.message,
+    variant: state.variant,
+    confirmLabel: state.confirmLabel,
+  });
 }
 
 export function completeConfirmDialogClose(): void {
@@ -120,7 +134,12 @@ export function completeConfirmDialogClose(): void {
   }
 
   activeConfirmation = next;
-  publish({ status: "confirming", message: next.message, variant: next.variant });
+  publish({
+    status: "confirming",
+    message: next.message,
+    variant: next.variant,
+    confirmLabel: next.confirmLabel,
+  });
 }
 
 export function resetConfirmDialogForTests(): void {

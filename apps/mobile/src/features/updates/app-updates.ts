@@ -6,7 +6,7 @@ import {
   reportAtomCommandResult,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 
 export type AppUpdateCheckState =
   | "idle"
@@ -447,13 +447,16 @@ async function applyDeferredAppUpdateInstall(
 
 async function defaultConfirmInstallNow(): Promise<boolean> {
   const { Alert } = await import("react-native");
+  const { translateOutsideReact: translate } = await import("../../lib/i18n");
   return new Promise<boolean>((resolve) => {
     Alert.alert(
-      "Update ready",
-      "A new version has been downloaded and installs automatically the next time you leave the app. Install it now instead?",
+      translate("Update ready"),
+      translate(
+        "A new version has been downloaded and installs automatically the next time you leave the app. Install it now instead?",
+      ),
       [
-        { onPress: () => resolve(false), style: "cancel", text: "Later" },
-        { onPress: () => resolve(true), text: "Install Now" },
+        { onPress: () => resolve(false), style: "cancel", text: translate("Later") },
+        { onPress: () => resolve(true), text: translate("Install Now") },
       ],
       { cancelable: true, onDismiss: () => resolve(false) },
     );

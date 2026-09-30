@@ -8,28 +8,28 @@ the task commands.
 ## apps
 
 - `apps/server` (`t3`): the execution runtime and the published CLI. Owns orchestration, provider
-  drivers, checkpointing, VCS, terminals, filesystem access, auth, and the HTTP + WebSocket surface.
+  drivers, checkpointing, VCS, filesystem access, auth, and the HTTP + WebSocket surface.
   Also serves the built web app.
-- `apps/web` (`@t3tools/web`): React + Vite UI. Consumes the shared client runtime and adds routing,
+- `apps/web` (`@akeru/web`): React + Vite UI. Consumes the shared client runtime and adds routing,
   components, and web-specific platform layers.
-- `apps/desktop` (`@t3tools/desktop`): Electron shell. Supervises a desktop-scoped `t3` backend,
+- `apps/desktop` (`@akeru/desktop`): Electron shell. Supervises a desktop-scoped `t3` backend,
   loads the web bundle over the `akeru://` protocol, and owns SSH-managed remote environments.
-- `apps/mobile` (`@t3tools/mobile`): Expo/React Native client. Same client runtime composition as
+- `apps/mobile` (`@akeru/mobile`): Expo/React Native client. Same client runtime composition as
   web, different platform layer and UI.
-- `apps/marketing` (`@t3tools/marketing`): Astro marketing site.
+- `apps/marketing` (`@akeru/marketing`): Astro marketing site.
 
 ## packages
 
-- `packages/contracts` (`@t3tools/contracts`): shared Effect Schema definitions. RPC group,
+- `packages/contracts` (`@akeru/contracts`): shared Effect Schema definitions. RPC group,
   orchestration commands/events/read model, auth scopes, environment descriptors, settings.
-- `packages/shared` (`@t3tools/shared`): framework-agnostic utilities used by server and clients
-  (`DrainableWorker`, git and source-control helpers, semver, logging, observability, and more).
-- `packages/client-runtime` (`@t3tools/client-runtime`): connection lifecycle, authorization, RPC
+- `packages/shared` (`@akeru/shared`): framework-agnostic utilities used by server and clients
+  (`DrainableWorker`, git and remote-URL helpers, semver, logging, observability, and more).
+- `packages/client-runtime` (`@akeru/client-runtime`): connection lifecycle, authorization, RPC
   session, environment registry, and Atom-based domain state shared by web and mobile. See its
   [README](../../packages/client-runtime/README.md).
-- `packages/ssh` (`@t3tools/ssh`): SSH config parsing, auth prompts, command execution, and the
+- `packages/ssh` (`@akeru/ssh`): SSH config parsing, auth prompts, command execution, and the
   tunnel/environment manager behind desktop-managed SSH environments.
-- `packages/tailscale` (`@t3tools/tailscale`): Tailscale CLI wrapper, including the
+- `packages/tailscale` (`@akeru/tailscale`): Tailscale CLI wrapper, including the
   `ensureTailscaleServe` / `disableTailscaleServe` serve lifecycle the server drives.
 - `packages/effect-acp` (`effect-acp`): Effect client and agent implementation of the Agent Client
   Protocol, used by ACP-speaking provider drivers.
@@ -42,13 +42,13 @@ the task commands.
   helpers, mobile static checks and showcase capture, update-manifest merging.
 - `assets/`: brand and app icon sources for development and production builds.
 - `patches/`: pnpm patches for pinned upstream dependencies.
-- `oxlint-plugin-t3code/`: repo-specific lint rules.
+- `oxlint-plugin-akeru/`: repo-specific lint rules.
 - `experiments/`: throwaway prototypes. Not part of the shipped build.
 - `docs/`: this documentation tree.
 
 ## Import conventions
 
-`@t3tools/shared` and `@t3tools/client-runtime` use explicit subpath exports with no barrel index and
-no root export. Import the narrow path (`@t3tools/shared/DrainableWorker`,
-`@t3tools/client-runtime/state/threads`) rather than the package root. Files that are not exported
-are implementation details. `@t3tools/contracts` exports a root alongside `./settings`.
+`@akeru/shared` and `@akeru/client-runtime` use explicit subpath exports with no barrel index and
+no root export. Import the narrow path (`@akeru/shared/DrainableWorker`,
+`@akeru/client-runtime/state/threads`) rather than the package root. Files that are not exported
+are implementation details. `@akeru/contracts` exports a root alongside `./settings`.

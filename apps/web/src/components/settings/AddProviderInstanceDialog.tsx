@@ -8,7 +8,7 @@ import {
   ProviderDriverKind,
   type EnvironmentId,
   type ProviderInstanceConfig,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -51,7 +51,7 @@ const PROVIDER_ACCENT_SWATCHES = [
  * The full id is formed by prefixing the driver slug — e.g. label "Work" on
  * driver "codex" becomes `codex_work`. Output is trimmed to 48 chars so the
  * final composed id stays under the 64-char slug cap enforced by
- * `ProviderInstanceId` in `@t3tools/contracts`.
+ * `ProviderInstanceId` in `@akeru/contracts`.
  */
 function slugifyLabel(value: string): string {
   return value
@@ -119,6 +119,8 @@ interface AddProviderInstanceDialogProps {
   readonly open: boolean;
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
+  /** Driver preselected in the first step, such as the provider whose page opened the dialog. */
+  readonly initialDriver?: ProviderDriverKind;
   readonly onOpenChange: (open: boolean) => void;
 }
 
@@ -126,13 +128,16 @@ export function AddProviderInstanceDialog({
   open,
   environmentId,
   environmentLabel,
+  initialDriver,
   onOpenChange,
 }: AddProviderInstanceDialogProps) {
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
 
   const [wizardStep, setWizardStep] = useState(0);
-  const [driver, setDriver] = useState<ProviderDriverKind>(DEFAULT_DRIVER_KIND);
+  const [driver, setDriver] = useState<ProviderDriverKind>(
+    initialDriver && DRIVER_OPTION_BY_VALUE[initialDriver] ? initialDriver : DEFAULT_DRIVER_KIND,
+  );
   const [label, setLabel] = useState("");
   const [accentColor, setAccentColor] = useState<string>("");
   const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
@@ -235,8 +240,8 @@ export function AddProviderInstanceDialog({
           <DialogHeader>
             <DialogTitle>Add provider instance</DialogTitle>
             <DialogDescription>
-              Configure an additional provider instance on {environmentLabel} — for example, a
-              second Codex install pointed at a different workspace.
+              Configure an additional provider instance on {environmentLabel}, such as a second
+              Codex install pointed at a different workspace.
             </DialogDescription>
             <AddProviderInstanceWizardSteps
               currentStep={wizardStep}

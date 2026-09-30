@@ -6,7 +6,7 @@ import {
   RoutineTimeZone,
   ThreadId,
   type AkeruCreateRoutineInput,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -147,6 +147,7 @@ const make = Effect.gen(function* () {
         projectId: thread.projectId,
         sandbox: "local",
         approvalPolicy: thread.runtimeMode,
+        delegateToBotId: null,
         createdAt: now,
       });
       return { routineId, sequence: result.sequence, status: "approved" as const };

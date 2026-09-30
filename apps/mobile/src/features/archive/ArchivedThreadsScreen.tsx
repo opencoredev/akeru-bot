@@ -1,9 +1,6 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { LegendList } from "@legendapp/list/react-native";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { SymbolView } from "../../components/AppSymbol";
@@ -24,8 +21,8 @@ import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSw
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { EmptyState } from "../../components/EmptyState";
-import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMobileI18n } from "../../lib/i18n";
 import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
@@ -66,6 +63,7 @@ function ArchivedThreadsHeader(props: {
   readonly onSearchQueryChange: (query: string) => void;
   readonly onSortOrderChange: (sortOrder: ArchivedThreadSortOrder) => void;
 }) {
+  const { t } = useMobileI18n();
   const { width } = useWindowDimensions();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -79,11 +77,11 @@ function ArchivedThreadsHeader(props: {
     () => [
       {
         id: "environment",
-        title: "Environment",
+        title: t("Environment"),
         subactions: [
           {
             id: "environment:all",
-            title: "All environments",
+            title: t("All environments"),
             state: props.selectedEnvironmentId === null ? ("on" as const) : undefined,
           },
           ...props.environments.map((environment) => ({
@@ -98,22 +96,22 @@ function ArchivedThreadsHeader(props: {
       },
       {
         id: "sort",
-        title: "Sort by archived date",
+        title: t("Sort by archived date"),
         subactions: [
           {
             id: "sort:newest",
-            title: "Newest first",
+            title: t("Newest first"),
             state: props.sortOrder === "newest" ? ("on" as const) : undefined,
           },
           {
             id: "sort:oldest",
-            title: "Oldest first",
+            title: t("Oldest first"),
             state: props.sortOrder === "oldest" ? ("on" as const) : undefined,
           },
         ],
       },
     ],
-    [props.environments, props.selectedEnvironmentId, props.sortOrder],
+    [props.environments, props.selectedEnvironmentId, props.sortOrder, t],
   );
   const handleAndroidFilterAction = useCallback(
     (event: { nativeEvent: { event: string } }) => {
@@ -145,7 +143,7 @@ function ArchivedThreadsHeader(props: {
         >
           <View className="min-h-12 flex-row items-center gap-2">
             <Pressable
-              accessibilityLabel="Navigate up"
+              accessibilityLabel={t("Navigate up")}
               accessibilityRole="button"
               hitSlop={8}
               onPress={() => navigation.goBack()}
@@ -166,11 +164,11 @@ function ArchivedThreadsHeader(props: {
                 type="monochrome"
               />
               <TextInput
-                accessibilityLabel="Search archived conversations"
+                accessibilityLabel={t("Search archived chats")}
                 autoCapitalize="none"
                 onChangeText={props.onSearchQueryChange}
                 value={props.searchQuery}
-                placeholder="Search archived conversations"
+                placeholder={t("Search archived chats")}
                 placeholderTextColorClassName="accent-placeholder"
                 className="flex-1 py-2 text-base font-sans text-foreground"
               />
@@ -181,7 +179,7 @@ function ArchivedThreadsHeader(props: {
               onPressAction={handleAndroidFilterAction}
             >
               <Pressable
-                accessibilityLabel="Filter and sort archived conversations"
+                accessibilityLabel={t("Filter and sort archived chats")}
                 accessibilityRole="button"
                 className="size-11 items-center justify-center rounded-full bg-subtle"
               >
@@ -203,15 +201,15 @@ function ArchivedThreadsHeader(props: {
     );
   }
   const archiveFilterMenu = {
-    title: "Archived conversation options",
+    title: t("Archived chat options"),
     items: [
       {
         type: "submenu" as const,
-        title: "Environment",
+        title: t("Environment"),
         items: [
           {
             type: "action" as const,
-            title: "All environments",
+            title: t("All environments"),
             state: props.selectedEnvironmentId === null ? ("on" as const) : ("off" as const),
             onPress: () => props.onEnvironmentChange(null),
           },
@@ -228,17 +226,17 @@ function ArchivedThreadsHeader(props: {
       },
       {
         type: "submenu" as const,
-        title: "Sort by archived date",
+        title: t("Sort by archived date"),
         items: [
           {
             type: "action" as const,
-            title: "Newest first",
+            title: t("Newest first"),
             state: props.sortOrder === "newest" ? ("on" as const) : ("off" as const),
             onPress: () => props.onSortOrderChange("newest"),
           },
           {
             type: "action" as const,
-            title: "Oldest first",
+            title: t("Oldest first"),
             state: props.sortOrder === "oldest" ? ("on" as const) : ("off" as const),
             onPress: () => props.onSortOrderChange("oldest"),
           },
@@ -265,7 +263,7 @@ function ArchivedThreadsHeader(props: {
                     : "line.3.horizontal.decrease",
                   onComposePress: props.onRefresh,
                   onSearchTextChange: props.onSearchQueryChange,
-                  placeholder: "Search",
+                  placeholder: t("Search"),
                   searchTextChangeId: "archived-search-text",
                 }),
               ]
@@ -288,7 +286,7 @@ function ArchivedThreadsHeader(props: {
                 autoCapitalize: "none",
                 hideNavigationBar: false,
                 obscureBackground: false,
-                placeholder: "Search archived conversations",
+                placeholder: t("Search archived chats"),
                 onChangeText: (event) => {
                   props.onSearchQueryChange(event.nativeEvent.text);
                 },
@@ -303,29 +301,29 @@ function ArchivedThreadsHeader(props: {
         <NativeHeaderToolbar placement="right">
           {usesNativeChrome ? (
             <NativeHeaderToolbar.Button
-              accessibilityLabel="Refresh archived conversations"
+              accessibilityLabel={t("Refresh archived chats")}
               icon="arrow.clockwise"
               onPress={props.onRefresh}
               separateBackground
             />
           ) : null}
           <NativeHeaderToolbar.Menu
-            accessibilityLabel="Filter and sort archived conversations"
+            accessibilityLabel={t("Filter and sort archived chats")}
             icon={
               hasCustomFilter
                 ? "line.3.horizontal.decrease.circle.fill"
                 : "line.3.horizontal.decrease.circle"
             }
             separateBackground
-            title="Archived conversation options"
+            title={t("Archived chat options")}
           >
-            <NativeHeaderToolbar.Menu title="Environment">
-              <NativeHeaderToolbar.Label>Environment</NativeHeaderToolbar.Label>
+            <NativeHeaderToolbar.Menu title={t("Environment")}>
+              <NativeHeaderToolbar.Label>{t("Environment")}</NativeHeaderToolbar.Label>
               <NativeHeaderToolbar.MenuAction
                 isOn={props.selectedEnvironmentId === null}
                 onPress={() => props.onEnvironmentChange(null)}
               >
-                <NativeHeaderToolbar.Label>All environments</NativeHeaderToolbar.Label>
+                <NativeHeaderToolbar.Label>{t("All environments")}</NativeHeaderToolbar.Label>
               </NativeHeaderToolbar.MenuAction>
               {props.environments.map((environment) => (
                 <NativeHeaderToolbar.MenuAction
@@ -338,19 +336,19 @@ function ArchivedThreadsHeader(props: {
               ))}
             </NativeHeaderToolbar.Menu>
 
-            <NativeHeaderToolbar.Menu title="Sort by archived date">
-              <NativeHeaderToolbar.Label>Sort by archived date</NativeHeaderToolbar.Label>
+            <NativeHeaderToolbar.Menu title={t("Sort by archived date")}>
+              <NativeHeaderToolbar.Label>{t("Sort by archived date")}</NativeHeaderToolbar.Label>
               <NativeHeaderToolbar.MenuAction
                 isOn={props.sortOrder === "newest"}
                 onPress={() => props.onSortOrderChange("newest")}
               >
-                <NativeHeaderToolbar.Label>Newest first</NativeHeaderToolbar.Label>
+                <NativeHeaderToolbar.Label>{t("Newest first")}</NativeHeaderToolbar.Label>
               </NativeHeaderToolbar.MenuAction>
               <NativeHeaderToolbar.MenuAction
                 isOn={props.sortOrder === "oldest"}
                 onPress={() => props.onSortOrderChange("oldest")}
               >
-                <NativeHeaderToolbar.Label>Oldest first</NativeHeaderToolbar.Label>
+                <NativeHeaderToolbar.Label>{t("Oldest first")}</NativeHeaderToolbar.Label>
               </NativeHeaderToolbar.MenuAction>
             </NativeHeaderToolbar.Menu>
           </NativeHeaderToolbar.Menu>
@@ -366,13 +364,6 @@ function ProjectGroupLabel(props: {
 }) {
   return (
     <View className="flex-row items-center gap-2.5 px-1 pb-2">
-      <ProjectFavicon
-        environmentId={props.project.environmentId}
-        faviconPath={props.project.faviconPath}
-        projectTitle={props.project.title}
-        size={18}
-        workspaceRoot={props.project.workspaceRoot}
-      />
       <Text
         className="flex-1 text-xs font-t3-medium tracking-[0.5px] uppercase text-foreground-muted"
         numberOfLines={1}
@@ -401,6 +392,7 @@ function ArchivedThreadRow(props: {
   readonly onUnarchive: () => void;
   readonly thread: EnvironmentThreadShell;
 }) {
+  const { t } = useMobileI18n();
   const { width: windowWidth } = useWindowDimensions();
   const cardColor = useThemeColor("--color-card");
   const iconColor = useThemeColor("--color-icon-subtle");
@@ -426,9 +418,9 @@ function ArchivedThreadRow(props: {
       onSwipeableClose={props.onSwipeableClose}
       onSwipeableWillOpen={props.onSwipeableWillOpen}
       primaryAction={{
-        accessibilityLabel: `Unarchive ${props.thread.title}`,
+        accessibilityLabel: t("Unarchive {title}", { title: props.thread.title }),
         icon: "arrow.uturn.backward",
-        label: "Unarchive",
+        label: t("Unarchive"),
         onPress: props.onUnarchive,
       }}
       simultaneousWithExternalGesture={props.simultaneousSwipeGesture}
@@ -482,14 +474,15 @@ function ArchivedThreadRow(props: {
 }
 
 function ArchiveError(props: { readonly message: string; readonly onRetry: () => void }) {
+  const { t } = useMobileI18n();
   return (
     <View className="rounded-[20px] border border-danger-border bg-danger p-4">
       <Text className="text-base font-t3-bold text-danger-foreground">
-        Could not load every archive
+        {t("Could not load every archive")}
       </Text>
       <Text className="mt-1 text-sm text-foreground-muted">{props.message}</Text>
       <Pressable className="mt-3 self-start active:opacity-60" onPress={props.onRetry}>
-        <Text className="text-sm font-t3-bold text-danger-foreground">Try again</Text>
+        <Text className="text-sm font-t3-bold text-danger-foreground">{t("Try again")}</Text>
       </Pressable>
     </View>
   );
@@ -513,6 +506,7 @@ export function ArchivedThreadsScreen(props: {
   const { onDeleteThread, onUnarchiveThread } = props;
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const archiveScrollGesture = useMemo(() => Gesture.Native(), []);
+  const { t } = useMobileI18n();
   const refreshTint = useThemeColor("--color-icon");
   const environmentLabelsById = useMemo(
     () =>
@@ -595,7 +589,7 @@ export function ArchivedThreadsScreen(props: {
       return (
         <View className="items-center py-16">
           <ActivityIndicator color={refreshTint} />
-          <Text className="mt-3 text-sm text-foreground-muted">Loading archive...</Text>
+          <Text className="mt-3 text-sm text-foreground-muted">{t("Loading archive…")}</Text>
         </View>
       );
     }
@@ -603,12 +597,14 @@ export function ArchivedThreadsScreen(props: {
     return (
       <EmptyState
         detail={
-          isFiltered ? "Try another search or environment." : "Chats you archive will appear here."
+          isFiltered
+            ? t("Try another search or environment.")
+            : t("Chats you archive will appear here.")
         }
-        title={isFiltered ? "No matching conversations" : "No archived conversations"}
+        title={isFiltered ? t("No matching chats") : t("No archived chats")}
       />
     );
-  }, [isFiltered, isInitialLoad, refreshTint]);
+  }, [isFiltered, isInitialLoad, refreshTint, t]);
 
   return (
     <View className="flex-1 bg-sheet">

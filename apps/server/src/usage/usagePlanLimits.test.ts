@@ -1,10 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+// @effect-diagnostics preferSchemaOverJson:off
+import { describe, expect, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   parseClaudeUsage,
   parseCodexUsage,
   readPlanLimits,
-  resetPlanLimitCache,
+  readPlanLimitsEffect,
+  makePlanLimitsReader,
 } from "./usagePlanLimits.ts";
 
 describe("parseClaudeUsage", () => {
@@ -95,111 +101,163 @@ describe("readPlanLimits cache", () => {
     five_hour: { utilization: 37, resets_at: "2026-08-27T12:00:00.000Z" },
     seven_day: { utilization: 12, resets_at: "2026-08-31T08:00:00.000Z" },
   };
-  let now = 1_000_000;
+  it.effect("reads only the requested provider for a bot usage view", () =>
+    Effect.gen(function* () {
+      const getAccessToken = vi.fn(async () => ({
+        accessToken: "go-key",
+        accountId: "go-account",
+      }));
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const read = yield* makePlanLimitsReader(getAccessToken);
+      const limits = yield* read("opencode-go");
+      expect(limits.map((limit) => limit.provider)).toEqual(["opencode-go"]);
+      expect(getAccessToken.mock.calls).toEqual([["opencode-go"]]);
+      expect(fetchMock).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    }),
+  );
 
-  beforeEach(() => {
-    resetPlanLimitCache();
-    now = 1_000_000;
-    vi.spyOn(Date, "now").mockImplementation(() => now);
-  });
+  it.effect("backs off failures for one minute and keeps last-good Claude windows", () =>
+    Effect.gen(function* () {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(claudeBody), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
+            status: 429,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+      const getAccessToken = async (provider: "anthropic" | string) =>
+        provider === "anthropic"
+          ? { accessToken: "token", accountId: "claude-account" }
+          : undefined;
 
-  it("keeps the last Claude windows when Anthropic rate-limits", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(claudeBody), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        }),
+      const read = yield* makePlanLimitsReader(getAccessToken);
+      const first = yield* read();
+      expect(first).toEqual([
+        {
+          provider: "anthropic",
+          status: "ok",
+          plan: null,
+          message: null,
+          windows: [
+            {
+              kind: "session",
+              label: "5-hour",
+              usedPercent: 37,
+              resetsAt: "2026-08-27T12:00:00.000Z",
+            },
+            {
+              kind: "weekly",
+              label: "Weekly",
+              usedPercent: 12,
+              resetsAt: "2026-08-31T08:00:00.000Z",
+            },
+          ],
+        },
+      ]);
+
+      yield* TestClock.adjust(Duration.minutes(5));
+      const failed = yield* read();
+      expect(failed).toEqual(first);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      yield* TestClock.adjust(Duration.seconds(30));
+      const inside = yield* read();
+      expect(inside).toEqual(failed);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      yield* TestClock.adjust(Duration.seconds(31));
+      const after = yield* read();
+      expect(after).toEqual(first);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("still shows a Claude card when the first read is rate-limited", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
+            status: 429,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
       );
-    vi.stubGlobal("fetch", fetchMock);
 
-    const getAccessToken = async (provider: "anthropic" | string) =>
-      provider === "anthropic" ? "token" : undefined;
+      const limits = yield* readPlanLimitsEffect(async (provider) =>
+        provider === "anthropic"
+          ? { accessToken: "token", accountId: "claude-account" }
+          : undefined,
+      );
+      expect(limits).toEqual([
+        {
+          provider: "anthropic",
+          status: "ok",
+          plan: null,
+          message: null,
+          windows: [],
+        },
+      ]);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
 
-    const first = await readPlanLimits(getAccessToken);
-    expect(first).toEqual([
-      {
-        provider: "anthropic",
-        status: "ok",
-        plan: null,
-        message: null,
-        windows: [
+  it.effect(
+    "shows a connected OpenCode Go card without calling an unsupported usage endpoint",
+    () =>
+      Effect.gen(function* () {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const limits = yield* readPlanLimitsEffect(async (provider) =>
+          provider === "opencode-go"
+            ? { accessToken: "go-key", accountId: "go-account" }
+            : undefined,
+        );
+
+        expect(limits).toEqual([
           {
-            kind: "session",
-            label: "5-hour",
-            usedPercent: 37,
-            resetsAt: "2026-08-27T12:00:00.000Z",
+            provider: "opencode-go",
+            status: "ok",
+            plan: null,
+            message: null,
+            windows: [],
           },
-          {
-            kind: "weekly",
-            label: "Weekly",
-            usedPercent: 12,
-            resetsAt: "2026-08-31T08:00:00.000Z",
-          },
-        ],
-      },
-    ]);
+        ]);
+        expect(fetchMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(TestClock.layer())),
+  );
 
-    now += 6 * 60 * 1000;
-    const second = await readPlanLimits(getAccessToken);
-    expect(second).toEqual(first);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("still shows a Claude card when the first read is rate-limited", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
-
-    const limits = await readPlanLimits(async (provider) =>
-      provider === "anthropic" ? "token" : undefined,
-    );
-    expect(limits).toEqual([
-      {
-        provider: "anthropic",
-        status: "ok",
-        plan: null,
-        message: null,
-        windows: [],
-      },
-    ]);
-  });
-
-  it("shows a connected OpenCode Go card without calling an unsupported usage endpoint", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const limits = await readPlanLimits(async (provider) =>
-      provider === "opencode-go" ? "go-key" : undefined,
-    );
-
-    expect(limits).toEqual([
-      {
-        provider: "opencode-go",
-        status: "ok",
-        plan: null,
-        message: null,
-        windows: [],
-      },
-    ]);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  it.effect("stops serving cached windows once a provider disconnects", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify(claudeBody), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+        ),
+      );
+      let connected = true;
+      const read = yield* makePlanLimitsReader(async (provider) =>
+        provider === "anthropic" && connected
+          ? { accessToken: "disconnect-token", accountId: "claude-account" }
+          : undefined,
+      );
+      expect((yield* read("anthropic")).map((limit) => limit.provider)).toEqual(["anthropic"]);
+      connected = false;
+      expect(yield* read("anthropic")).toEqual([]);
+      vi.unstubAllGlobals();
+    }),
+  );
 });

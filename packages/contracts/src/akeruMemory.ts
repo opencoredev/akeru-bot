@@ -16,6 +16,12 @@ import {
 export const AKERU_MEMORY_PACKET_MAX_FACTS = 24;
 export const AKERU_MEMORY_PACKET_MAX_CHARS = 12_000;
 export const AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS = 3_000;
+export const AKERU_MEMORY_FACT_MAX_CHARS = 2_048;
+// New facts are capped. Stored revisions and candidates keep the uncapped
+// shape so rows written before the cap still decode.
+const AkeruMemoryFactText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(AKERU_MEMORY_FACT_MAX_CHARS),
+);
 
 export const AKERU_USER_MEMORY_MAX_CHARS = 1_375;
 export const AKERU_BOT_MEMORY_MAX_CHARS = 2_200;
@@ -264,7 +270,7 @@ export const AkeruMemoryCandidateDecision = Schema.Union([
   Schema.Struct({
     candidateId: AkeruMemoryCandidateId,
     decision: Schema.Literal("approve"),
-    fact: Schema.optional(TrimmedNonEmptyString),
+    fact: Schema.optional(AkeruMemoryFactText),
     scope: Schema.optional(AkeruMemoryTargetScope),
   }),
   Schema.Struct({
@@ -277,13 +283,34 @@ export type AkeruMemoryCandidateDecision = typeof AkeruMemoryCandidateDecision.T
 export const AkeruMemoryDecisionReceipt = Schema.Struct({
   candidateId: AkeruMemoryCandidateId,
   status: Schema.Literals(["approved", "rejected"]),
-  fact: TrimmedNonEmptyString,
+  fact: AkeruMemoryFactText,
   scope: AkeruMemoryTargetScope,
   affectedBotIds: Schema.Array(BotId),
   memoryRootId: Schema.NullOr(AkeruMemoryRootId),
   createdAt: IsoDateTime,
 });
 export type AkeruMemoryDecisionReceipt = typeof AkeruMemoryDecisionReceipt.Type;
+
+// Thread activity kinds for shared-memory approvals. A requested activity with
+// no resolved activity for the same candidate is a pending approval card.
+export const AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY = "memory.approval.requested";
+export const AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY = "memory.approval.resolved";
+
+export const AkeruMemoryApprovalRequest = Schema.Struct({
+  candidateId: AkeruMemoryCandidateId,
+  fact: AkeruMemoryFactText,
+  scope: AkeruMemoryTargetScope,
+  sensitive: Schema.Boolean,
+  sourceThreadId: ThreadId,
+  authorBotId: Schema.NullOr(BotId),
+  affectedBotIds: Schema.Array(BotId),
+});
+export type AkeruMemoryApprovalRequest = typeof AkeruMemoryApprovalRequest.Type;
+
+// Scopes a bot may propose through the memory tool. Private and bot-only
+// facts belong in the bot's own memory documents.
+export const AkeruMemoryShareScope = Schema.Literals(["project", "group", "workspace"]);
+export type AkeruMemoryShareScope = typeof AkeruMemoryShareScope.Type;
 
 export const AkeruMemoryArchiveFile = Schema.Struct({
   path: TrimmedNonEmptyString,
@@ -366,7 +393,13 @@ export const AkeruMarkdownMemoryArchiveV3 = Schema.Struct({
 });
 export type AkeruMarkdownMemoryArchiveV3 = typeof AkeruMarkdownMemoryArchiveV3.Type;
 
-export const AkeruMarkdownMemoryExportInput = Schema.Struct({ threadId: ThreadId });
+export const AkeruMarkdownMemoryExportInput = Schema.Struct({
+  threadId: ThreadId,
+  target: AkeruMemoryArchiveTarget.pipe(
+    Schema.withDecodingDefault(Effect.succeed("thread" as const)),
+  ),
+  complete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
 export type AkeruMarkdownMemoryExportInput = typeof AkeruMarkdownMemoryExportInput.Type;
 
 export const AkeruMarkdownMemoryImportPreviewInput = Schema.Struct({
@@ -480,6 +513,12 @@ export type AkeruMemoryImportPreview = typeof AkeruMemoryImportPreview.Type;
 export const AkeruMemoryImportApplyInput = Schema.Struct({
   ...AkeruMemoryImportPreviewInput.fields,
   previewHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  resolutions: Schema.Array(
+    Schema.Struct({
+      rootId: AkeruMemoryRootId,
+      decision: Schema.Literals(["keep-local", "use-archive"]),
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type AkeruMemoryImportApplyInput = typeof AkeruMemoryImportApplyInput.Type;
 
@@ -514,6 +553,12 @@ export const AkeruMemoryMutation = Schema.Union([
     scope: AkeruMemoryTargetScope,
   }),
   Schema.Struct({
+    operation: Schema.Literal("fact.decide"),
+    memoryId: AkeruMemoryRootId,
+    expectedRevision: PositiveInt,
+    decision: Schema.Literals(["approve", "reject"]),
+  }),
+  Schema.Struct({
     operation: Schema.Literal("fact.forget"),
     memoryId: AkeruMemoryRootId,
     expectedRevision: PositiveInt,
@@ -540,6 +585,33 @@ export const AkeruMemoryMutationResult = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("conversation-cleared") }),
 ]);
 export type AkeruMemoryMutationResult = typeof AkeruMemoryMutationResult.Type;
+
+export const AkeruMemoryFactsListInput = Schema.Struct({
+  threadId: ThreadId,
+  target: AkeruMemoryArchiveTarget,
+});
+export type AkeruMemoryFactsListInput = typeof AkeruMemoryFactsListInput.Type;
+
+export const AkeruMemoryFactRead = Schema.Struct({
+  rootId: AkeruMemoryRootId,
+  fact: TrimmedNonEmptyString,
+  scope: AkeruMemoryScope,
+  sourceThreadId: Schema.NullOr(ThreadId),
+  affectedBotIds: Schema.Array(BotId),
+  approvalState: AkeruMemoryApprovalState,
+  deletionState: AkeruMemoryDeletionState,
+  pinned: Schema.Boolean,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  revision: PositiveInt,
+  supersededFact: Schema.NullOr(Schema.String),
+});
+export type AkeruMemoryFactRead = typeof AkeruMemoryFactRead.Type;
+
+export const AkeruMemoryFactsListResult = Schema.Struct({
+  facts: Schema.Array(AkeruMemoryFactRead),
+});
+export type AkeruMemoryFactsListResult = typeof AkeruMemoryFactsListResult.Type;
 
 export class AkeruMemoryOperationError extends Schema.TaggedErrorClass<AkeruMemoryOperationError>()(
   "AkeruMemoryOperationError",

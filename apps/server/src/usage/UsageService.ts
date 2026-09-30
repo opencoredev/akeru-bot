@@ -16,10 +16,11 @@ import {
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
+  type UsageProviderPlanLimits,
   type UsageSummaryInput,
   type UsageTokenTotals,
   UsageReadError,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -38,7 +39,7 @@ import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, priceUsage, type PricedUsage, type RateTable } from "./usagePricing.ts";
-import { readPlanLimits } from "./usagePlanLimits.ts";
+import { makePlanLimitsReader } from "./usagePlanLimits.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
@@ -63,7 +64,6 @@ const encodeRatesCache = Schema.encodeEffect(
 const DRIVER_CONNECTIONS = {
   claudeAgent: { provider: "claude", connection: "anthropic" },
   codex: { provider: "codex", connection: "openai-codex" },
-  cursor: { provider: "cursor", connection: "cursor" },
   grok: { provider: "grok", connection: "xai" },
   kimi: { provider: "kimi", connection: "kimi-for-coding" },
   opencode: { provider: "opencode", connection: "opencode-go" },
@@ -84,6 +84,9 @@ export class UsageService extends Context.Service<
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
     readonly priceStepUsage: (input: PriceStepUsageInput) => Effect.Effect<PricedUsage>;
+    readonly readPlanLimits: (
+      provider?: SubscriptionProviderId,
+    ) => Effect.Effect<readonly UsageProviderPlanLimits[]>;
   }
 >()("akeru-bot/usage/UsageService") {}
 
@@ -106,9 +109,14 @@ export function usageRecordFromEntry(
     model: entry.model,
     sessionId: entry.threadId ?? entry.botId,
     totals: {
-      uncachedInputTokens: entry.inputTokens ?? 0,
-      cachedInputTokens: 0,
-      cacheCreationTokens: 0,
+      uncachedInputTokens: Math.max(
+        0,
+        (entry.inputTokens ?? 0) -
+          (entry.cachedInputTokens ?? 0) -
+          (entry.cacheCreationTokens ?? 0),
+      ),
+      cachedInputTokens: entry.cachedInputTokens ?? 0,
+      cacheCreationTokens: entry.cacheCreationTokens ?? 0,
       outputTokens,
       reasoningTokens: Math.min(entry.reasoningTokens ?? 0, outputTokens),
     },
@@ -153,6 +161,7 @@ export const layerTestWithRates = (rateTable: RateTable) =>
           planLimits: [],
           connectedProviders: [],
         }),
+      readPlanLimits: () => Effect.succeed([]),
       priceStepUsage: (input) =>
         Effect.succeed(priceUsage(rateTable, input.model, input.totals, input.reportedCostUsd)),
     }),
@@ -190,7 +199,10 @@ export const make = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const httpClient = yield* HttpClient.HttpClient;
   const providerUsageHistory = yield* ProviderUsageHistory;
-  const subscriptionAuth = SubscriptionAuthService.forSecretsDir(config.secretsDir);
+  const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
+  const readPlanLimits = yield* makePlanLimitsReader((provider) =>
+    subscriptionAuth.getPlanAccess(provider),
+  );
 
   const scope = yield* Scope.Scope;
   const shareSummary = singleFlight<UsageSummary, UsageReadError>(scope);
@@ -333,7 +345,7 @@ export const make = Effect.gen(function* () {
 
     const startedAtMs = yield* Clock.currentTimeMillis;
     yield* ensureRates();
-    subscriptionAuth.reload();
+    yield* subscriptionAuth.reload();
     const connectedProviders = subscriptionAuth
       .statuses()
       .filter((status) => status.connected)
@@ -401,9 +413,7 @@ export const make = Effect.gen(function* () {
     const aggregated = aggregator.finish();
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
-    const planLimits = yield* Effect.promise(() =>
-      readPlanLimits((provider) => subscriptionAuth.getPlanAccessToken(provider)),
-    ).pipe(Effect.catchCause(() => Effect.succeed([])));
+    const planLimits = yield* readPlanLimits().pipe(Effect.catchCause(() => Effect.succeed([])));
 
     return {
       contractVersion: USAGE_CONTRACT_VERSION,
@@ -442,6 +452,7 @@ export const make = Effect.gen(function* () {
         readSummary(input),
       ),
     priceStepUsage,
+    readPlanLimits,
   } as const;
 });
 

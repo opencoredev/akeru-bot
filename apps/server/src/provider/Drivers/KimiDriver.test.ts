@@ -4,7 +4,7 @@ import * as NodePath from "node:path";
 
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -32,7 +32,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>
@@ -49,6 +49,9 @@ describe("KimiDriver", () => {
               expect.objectContaining({ slug: "k3" }),
               expect.objectContaining({ slug: "k3-256k" }),
             ]),
+            // Kimi For Coding has no skill-loading mechanism, so the catalog
+            // is intentionally empty rather than silently missing.
+            skills: [],
           });
         }),
       ),
@@ -87,7 +90,7 @@ describe("KimiDriver", () => {
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
       Effect.tap((result) =>

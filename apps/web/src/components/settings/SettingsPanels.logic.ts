@@ -8,16 +8,23 @@ import type {
   ServerSettings,
   SidebarProjectGroupingMode,
   UnifiedSettings,
-} from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+} from "@akeru/contracts";
+import {
+  createTranslator,
+  type MessageKey,
+  type TranslationParams,
+} from "@akeru/client-runtime/i18n";
+import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import {
   getBackgroundActivityBaseProfile,
   normalizeBackgroundActivitySettings,
   normalizeServerBackgroundActivitySettings,
   resolveServerBackgroundActivitySettings,
-} from "@t3tools/shared/backgroundActivitySettings";
+} from "@akeru/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
+
+const englishTranslate = createTranslator("en").t;
 
 export function isProjectGroupingEnabled(mode: SidebarProjectGroupingMode): boolean {
   return mode !== "separate";
@@ -31,13 +38,16 @@ export function projectGroupingModeFromToggle(
   return lastEnabledMode === "repository_path" ? "repository_path" : "repository";
 }
 
-const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
+const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "akeru:last-enabled-project-grouping-mode";
+// Pre-rebrand key, kept as a read fallback so the grouping preference survives.
+const LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
 
 export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
   try {
-    return localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) === "repository_path"
-      ? "repository_path"
-      : "repository";
+    const stored =
+      localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) ??
+      localStorage.getItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
+    return stored === "repository_path" ? "repository_path" : "repository";
   } catch {
     return "repository";
   }
@@ -47,6 +57,7 @@ export function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingM
   if (mode === "separate") return;
   try {
     localStorage.setItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY, mode);
+    localStorage.removeItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
   } catch {
     // Storage can be unavailable in restricted browser contexts.
   }
@@ -111,10 +122,7 @@ export function getChangedTypographySettingLabels(settings: TypographySettings):
 
 export type BrowserDefaultSettings = Pick<
   UnifiedSettings,
-  | "browserDefaultViewport"
-  | "browserDefaultZoomFactor"
-  | "browserDefaultAppearance"
-  | "browserAutoShowFloatingPreview"
+  "browserDefaultViewport" | "browserDefaultZoomFactor" | "browserDefaultAppearance"
 >;
 
 /**
@@ -150,10 +158,6 @@ export function getChangedBrowserSettingLabels(settings: BrowserDefaultSettings)
       : []),
     ...(settings.browserDefaultAppearance !== DEFAULT_UNIFIED_SETTINGS.browserDefaultAppearance
       ? ["Browser appearance"]
-      : []),
-    ...(settings.browserAutoShowFloatingPreview !==
-    DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview
-      ? ["Floating preview"]
       : []),
   ];
 }
@@ -213,33 +217,40 @@ function collapseOtelSignalsUrl(input: {
   return `${tracesBase}/{traces,metrics}`;
 }
 
-export function formatDiagnosticsDescription(input: {
-  readonly localTracingEnabled: boolean;
-  readonly otlpTracesEnabled: boolean;
-  readonly otlpTracesUrl?: string | undefined;
-  readonly otlpMetricsEnabled: boolean;
-  readonly otlpMetricsUrl?: string | undefined;
-}): string {
-  const mode = input.localTracingEnabled ? "Local trace file" : "Terminal logs only";
+export function formatDiagnosticsDescription(
+  input: {
+    readonly localTracingEnabled: boolean;
+    readonly otlpTracesEnabled: boolean;
+    readonly otlpTracesUrl?: string | undefined;
+    readonly otlpMetricsEnabled: boolean;
+    readonly otlpMetricsUrl?: string | undefined;
+  },
+  t: (message: MessageKey, params?: TranslationParams) => string = englishTranslate,
+): string {
+  const mode = input.localTracingEnabled ? t("Local trace file") : t("Terminal logs only");
   const tracesUrl = input.otlpTracesEnabled ? input.otlpTracesUrl : undefined;
   const metricsUrl = input.otlpMetricsEnabled ? input.otlpMetricsUrl : undefined;
 
   if (tracesUrl && metricsUrl) {
     const collapsedUrl = collapseOtelSignalsUrl({ tracesUrl, metricsUrl });
     return collapsedUrl
-      ? `${mode}. Exporting OTEL to ${collapsedUrl}.`
-      : `${mode}. Exporting OTEL traces to ${tracesUrl} and metrics to ${metricsUrl}.`;
+      ? t("{mode}. Exporting OTEL to {url}.", { mode, url: collapsedUrl })
+      : t("{mode}. Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.", {
+          mode,
+          tracesUrl,
+          metricsUrl,
+        });
   }
 
   if (tracesUrl) {
-    return `${mode}. Exporting OTEL traces to ${tracesUrl}.`;
+    return t("{mode}. Exporting OTEL traces to {url}.", { mode, url: tracesUrl });
   }
 
   if (metricsUrl) {
-    return `${mode}. Exporting OTEL metrics to ${metricsUrl}.`;
+    return t("{mode}. Exporting OTEL metrics to {url}.", { mode, url: metricsUrl });
   }
 
-  return `${mode}.`;
+  return t("{mode}.", { mode });
 }
 
 export function buildProviderInstanceUpdatePatch(input: {

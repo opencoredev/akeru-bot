@@ -5,7 +5,7 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
-import { EnvironmentAuthInvalidError } from "@t3tools/contracts";
+import { EnvironmentAuthInvalidError } from "@akeru/contracts";
 import {
   bootstrapRemoteBearerSession,
   fetchRemoteSessionState,
@@ -211,6 +211,7 @@ describe("remote environment authorization", () => {
               sessionMethods: ["browser-session-cookie", "bearer-access-token"],
               sessionCookieName: "t3_session",
             },
+            // Older servers still report the retired review:write and terminal:operate scopes.
             scopes: [
               "orchestration:read",
               "orchestration:operate",
@@ -245,7 +246,7 @@ describe("remote environment authorization", () => {
       }).pipe(provideRemoteHttp(fetch.fetchFn));
       expect(session).toMatchObject({
         authenticated: true,
-        scopes: ["orchestration:read", "orchestration:operate", "terminal:operate", "review:write"],
+        scopes: ["orchestration:read", "orchestration:operate"],
       });
 
       const ticket = yield* issueRemoteWebSocketTicket({

@@ -1,4 +1,4 @@
-import { BotId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
+import { BotId, ThreadId, type OrchestrationCommand } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createEmptyReadModel } from "../orchestration/projector.ts";
@@ -24,6 +24,7 @@ function snapshot(archivedAt: string | null = null) {
         sandbox: "local" as const,
         runtimeMode: "approval-required" as const,
         usageCap: null,
+        imageProvider: null,
         voiceEnabled: false,
         channelBindings: [],
         groupId: null,
@@ -43,6 +44,7 @@ function snapshot(archivedAt: string | null = null) {
         sandbox: "local" as const,
         runtimeMode: "approval-required" as const,
         usageCap: null,
+        imageProvider: null,
         voiceEnabled: false,
         channelBindings: [],
         groupId: null,

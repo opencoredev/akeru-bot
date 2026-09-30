@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { ProviderDriverKind } from "@t3tools/contracts";
+import { ProviderDriverKind } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ComposerCommandMenu } from "./ComposerCommandMenu";
@@ -56,7 +56,7 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain("text-left");
   });
 
-  it("renders the skill source icon inside its badge", () => {
+  it("falls back to the skill source icon ahead of the row when the skill has none", () => {
     const markup = renderToStaticMarkup(
       <ComposerCommandMenu
         items={[
@@ -90,15 +90,70 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain("max-w-[48ch]");
     expect(markup).toContain("text-secondary-label text-xs");
     expect(markup).toContain("ms-auto");
-    expect(markup).toContain("text-current");
     expect(markup.indexOf("Open and control the in-app browser")).toBeLessThan(
       markup.indexOf(">App Skill</span>"),
     );
-    expect(markup).toContain("<svg");
-    expect(markup.indexOf('data-slot="badge"')).toBeLessThan(markup.indexOf("<svg"));
+    expect(markup).toContain('data-skill-icon="source"');
+    expect(markup).toContain("lucide-blocks");
+    expect(markup.indexOf("<svg")).toBeLessThan(markup.indexOf("Browser"));
+    expect(markup.indexOf("<svg")).toBeLessThan(markup.indexOf('data-slot="badge"'));
   });
 
-  it("keeps slash skills aligned with the source icon inside the badge", () => {
+  it("renders the skill's own emoji icon instead of the source glyph", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerCommandMenu
+        items={[
+          {
+            id: "skill:claude:review",
+            type: "skill",
+            provider: ProviderDriverKind.make("claudeAgent"),
+            skill: {
+              name: "review",
+              path: "/home/maria/.claude/skills/review/SKILL.md",
+              scope: "user",
+              enabled: true,
+              icon: "🔍",
+            },
+            label: "Review",
+            description: "Review the current diff",
+          },
+          {
+            id: "skill:codex:deploy",
+            type: "skill",
+            provider: ProviderDriverKind.make("codex"),
+            skill: {
+              name: "deploy",
+              path: "/home/maria/.codex/skills/deploy/SKILL.md",
+              scope: "user",
+              enabled: true,
+              icon: "/home/maria/.codex/skills/deploy/assets/icon.png",
+            },
+            label: "Deploy",
+            description: "Ship it",
+          },
+        ]}
+        resolvedTheme="dark"
+        isLoading={false}
+        triggerKind="skill"
+        activeItemId="skill:claude:review"
+        onHighlightedItemChange={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+
+    const [reviewRow = "", deployRow = ""] = markup.split(
+      'data-composer-item-id="skill:codex:deploy"',
+    );
+    expect(reviewRow).toContain('<span aria-hidden="true" class="flex size-[1.6em]');
+    expect(reviewRow).toContain('data-skill-icon="own">🔍</span>');
+    expect(reviewRow).not.toContain("lucide-user-round");
+    expect(reviewRow).toContain(">Personal Skill</span>");
+    expect(deployRow).toContain('data-skill-icon="source"');
+    expect(deployRow).toContain("lucide-user-round");
+    expect(deployRow).not.toContain("icon.png");
+  });
+
+  it("keeps slash skills aligned with the source icon ahead of the row", () => {
     const markup = renderToStaticMarkup(
       <ComposerCommandMenu
         items={[

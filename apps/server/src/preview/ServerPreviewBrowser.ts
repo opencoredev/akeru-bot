@@ -16,14 +16,18 @@ import {
   type PreviewRenderedViewportSize,
   type PreviewTabId,
   type ThreadId,
-} from "@t3tools/contracts";
-import { normalizePreviewUrl } from "@t3tools/shared/preview";
-import { resolvePreviewViewport } from "@t3tools/shared/previewViewport";
+} from "@akeru/contracts";
+import { normalizePreviewUrl } from "@akeru/shared/preview";
+import { resolvePreviewViewport } from "@akeru/shared/previewViewport";
 import * as Context from "effect/Context";
+import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as RcMap from "effect/RcMap";
+import * as Scope from "effect/Scope";
 import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { chromium, type BrowserContext, type Page } from "playwright-core";
 
 import * as ServerSettings from "../serverSettings.ts";
 import * as PreviewManager from "./Manager.ts";
@@ -59,6 +63,11 @@ const selectorFor = (input: {
   readonly selector?: string | undefined;
 }) => input.locator ?? input.selector ?? null;
 
+export class BrowserConfigurationError extends Schema.TaggedErrorClass<BrowserConfigurationError>()(
+  "BrowserConfigurationError",
+  { message: Schema.String },
+) {}
+
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : "Browser operation failed.";
 
@@ -76,49 +85,100 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const tabs = new Map<PreviewTabId, BrowserTab>();
   const activeByThread = new Map<string, PreviewTabId>();
-  let contextPromise: Promise<BrowserContext> | null = null;
-  let browserPromise: Promise<Browser> | null = null;
 
-  const requireApiKey = async () => {
-    const settings = await Effect.runPromise(settingsService.getSettings);
+  const requireApiKey = Effect.gen(function* () {
+    const settings = yield* settingsService.getSettings;
     if (!settings.browserProvider.enabled) {
-      throw new Error("Browserbase is disabled. Enable it in Settings > Browser.");
+      return yield* Effect.fail(
+        new BrowserConfigurationError({
+          message: "Browserbase is disabled. Enable it in Settings > Browser.",
+        }),
+      );
     }
     const apiKey = settings.browserProvider.browserbaseApiKey || process.env.BROWSERBASE_API_KEY;
-    if (!apiKey) throw new Error("Browserbase is not configured.");
-    return apiKey;
-  };
-
-  const getContext = () => {
-    contextPromise ??= (async () => {
-      const apiKey = await requireApiKey();
-      const session = await Effect.runPromise(
-        httpClient
-          .post("https://api.browserbase.com/v1/sessions", {
-            headers: {
-              "Content-Type": "application/json",
-              "X-BB-API-Key": apiKey,
-            },
-            body: HttpBody.jsonUnsafe({
-              browserSettings: { viewport: DEFAULT_VIEWPORT, recordSession: true },
-            }),
-          })
-          .pipe(
-            Effect.flatMap(HttpClientResponse.filterStatusOk),
-            Effect.flatMap((response) => response.json),
-            Effect.map((value) => value as unknown as BrowserbaseSession),
-          ),
+    if (!apiKey)
+      return yield* Effect.fail(
+        new BrowserConfigurationError({ message: "Browserbase is not configured." }),
       );
-      browserPromise = chromium.connectOverCDP(session.connectUrl);
-      const browser = await browserPromise;
-      const context = browser.contexts()[0];
-      if (!context) throw new Error("Browserbase returned no browser context.");
-      return context;
-    })().catch((cause) => {
-      contextPromise = null;
+    return apiKey;
+  });
+
+  const contexts = yield* RcMap.make({
+    lookup: (_key: string) =>
+      Effect.acquireRelease(
+        requireApiKey.pipe(
+          Effect.flatMap((apiKey) =>
+            httpClient
+              .post("https://api.browserbase.com/v1/sessions", {
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-BB-API-Key": apiKey,
+                },
+                body: HttpBody.jsonUnsafe({
+                  browserSettings: { viewport: DEFAULT_VIEWPORT, recordSession: true },
+                }),
+              })
+              .pipe(
+                Effect.flatMap(HttpClientResponse.filterStatusOk),
+                Effect.flatMap((response) => response.json),
+                Effect.map((value) => value as unknown as BrowserbaseSession),
+              ),
+          ),
+          Effect.flatMap((session) =>
+            Effect.tryPromise(() => chromium.connectOverCDP(session.connectUrl)),
+          ),
+          Effect.flatMap((browser) => {
+            const context = browser.contexts()[0];
+            return context
+              ? Effect.succeed({ browser, context })
+              : Effect.tryPromise(() => browser.close()).pipe(
+                  Effect.andThen(
+                    Effect.fail(
+                      new BrowserConfigurationError({
+                        message: "Browserbase returned no browser context.",
+                      }),
+                    ),
+                  ),
+                );
+          }),
+        ),
+        ({ browser }) => Effect.promise(() => browser.close()).pipe(Effect.orDie),
+      ),
+  });
+
+  // One lease holds the shared browser open. close() releases it, which closes the
+  // Browserbase session; the next getContext() opens a fresh one.
+  let lease: { readonly scope: Scope.Closeable; readonly context: Promise<BrowserContext> } | null =
+    null;
+  // Bumped by close() so an open that raced it does not leave a tab behind.
+  let closeGeneration = 0;
+
+  const getContext = (): Promise<BrowserContext> => {
+    if (lease) return lease.context;
+    const scope = Effect.runSync(Scope.make());
+    const context = Effect.runPromise(
+      RcMap.get(contexts, "browser").pipe(
+        Effect.map(({ context }) => context),
+        Scope.provide(scope),
+      ),
+    ).catch(async (cause: unknown) => {
+      if (lease === current) lease = null;
+      await Effect.runPromise(Scope.close(scope, Exit.void));
       throw cause;
     });
-    return contextPromise;
+    const current = { scope, context };
+    lease = current;
+    return context;
+  };
+
+  // A request that raced close() must not open a new session: nothing would
+  // close it again. getContext() claims the lease synchronously, so checking
+  // right before the call leaves no gap.
+  const contextFor = (generation: number): Promise<BrowserContext> => {
+    if (generation !== closeGeneration) {
+      return Promise.reject(new Error("The browser was closed while this request was running."));
+    }
+    return getContext();
   };
 
   const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
@@ -225,7 +285,8 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   };
 
   const handle = async (request: PreviewAutomationRequest): Promise<unknown> => {
-    await requireApiKey();
+    const generation = closeGeneration;
+    await Effect.runPromise(requireApiKey);
     if (request.operation === "status") {
       const tabId = request.tabId ?? activeByThread.get(request.threadId);
       return await status(tabId ? (tabs.get(tabId) ?? null) : null);
@@ -243,7 +304,11 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           }),
         );
         tabId = snapshot.tabId;
-        const page = await (await getContext()).newPage();
+        const page = await (await contextFor(generation)).newPage();
+        if (generation !== closeGeneration) {
+          await page.close().catch(() => undefined);
+          throw new Error("The browser was closed while this tab was opening.");
+        }
         tab = { threadId: request.threadId, page, loading: false };
         tabs.set(tabId, tab);
       }
@@ -356,7 +421,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
       case "evaluate": {
         const input = request.input as PreviewAutomationEvaluateInput;
-        const session = await (await getContext()).newCDPSession(tab.page);
+        const session = await (await contextFor(generation)).newCDPSession(tab.page);
         try {
           const result = await session.send("Runtime.evaluate", {
             expression: input.expression,
@@ -414,8 +479,15 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   };
 
   const close = async () => {
-    const browser = await browserPromise?.catch(() => null);
-    await browser?.close();
+    closeGeneration += 1;
+    const current = lease;
+    lease = null;
+    // Pages die with the browser session.
+    tabs.clear();
+    activeByThread.clear();
+    if (!current) return;
+    await current.context.catch(() => undefined);
+    await Effect.runPromise(Scope.close(current.scope, Exit.void));
   };
 
   return ServerPreviewBrowser.of({ handle, close });

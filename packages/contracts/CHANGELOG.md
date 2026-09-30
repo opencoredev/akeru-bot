@@ -1,4 +1,4 @@
-## @t3tools/contracts@0.0.41
+## @akeru/contracts@0.0.41
 
 ## 0.1.1
 
@@ -73,7 +73,7 @@
 - [#253](https://github.com/opencoredev/akeru-bot/pull/253) feat(shared): map text generation models by provider identity
 - [#254](https://github.com/opencoredev/akeru-bot/pull/254) fix(claude): run composer-picked skills as slash commands
 
-## @t3tools/contracts@0.0.40
+## @akeru/contracts@0.0.40
 
 ### Changes
 
@@ -90,7 +90,7 @@
 - [#192](https://github.com/opencoredev/akeru-bot/pull/192) fix(plugins): renew stale Hoplite OAuth registrations
 - [#190](https://github.com/opencoredev/akeru-bot/pull/190) feat(channels): connect external conversations to bots
 
-## @t3tools/contracts@0.0.39
+## @akeru/contracts@0.0.39
 
 ### Changes
 
@@ -108,7 +108,7 @@
 - [#162](https://github.com/opencoredev/akeru-bot/pull/162) fix(plugins): complete OAuth connections
 - [#163](https://github.com/opencoredev/akeru-bot/pull/163) feat(marketing): add Grok search pages
 
-## @t3tools/contracts@0.0.38
+## @akeru/contracts@0.0.38
 
 ### Changes
 
@@ -132,13 +132,13 @@
 - [#123](https://github.com/opencoredev/akeru-bot/pull/123) fix(macos): install unsigned Mac builds from a checksummed GitHub DMG
 - [#133](https://github.com/opencoredev/akeru-bot/pull/133) feat(approvals): add auto review and bot prompts
 
-## @t3tools/contracts@0.0.37
+## @akeru/contracts@0.0.37
 
 ### Changes
 
 - [#124](https://github.com/opencoredev/akeru-bot/pull/124) fix(web): prevent duplicate bot panes
 
-## @t3tools/contracts@0.0.36
+## @akeru/contracts@0.0.36
 
 ### Changes
 
@@ -147,7 +147,7 @@
 - [#116](https://github.com/opencoredev/akeru-bot/pull/116) feat(marketing): explain unsigned macOS downloads
 - [#117](https://github.com/opencoredev/akeru-bot/pull/117) fix(release): launch packaged desktop apps before publishing
 
-## @t3tools/contracts@0.0.35
+## @akeru/contracts@0.0.35
 
 ### Changes
 

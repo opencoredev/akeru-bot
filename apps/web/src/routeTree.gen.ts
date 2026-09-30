@@ -17,7 +17,8 @@ import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsSectionRouteImport } from './routes/settings.$section'
 import { Route as SettingsSplatRouteImport } from './routes/settings.$'
-import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
+import { Route as SettingsProvidersProviderIdRouteImport } from './routes/settings.providers.$providerId'
+import { Route as SettingsChannelsChannelRouteImport } from './routes/settings.channels.$channel'
 import { Route as BotsBotIdSettingsRouteImport } from './routes/bots.$botId.settings'
 import { Route as ChatGroupsGroupIdRouteImport } from './routes/_chat.groups.$groupId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
@@ -63,10 +64,16 @@ const SettingsSplatRoute = SettingsSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => SettingsRoute,
 } as any)
-const ProjectsProjectKeyRoute = ProjectsProjectKeyRouteImport.update({
-  id: '/projects/$projectKey',
-  path: '/projects/$projectKey',
-  getParentRoute: () => rootRouteImport,
+const SettingsProvidersProviderIdRoute =
+  SettingsProvidersProviderIdRouteImport.update({
+    id: '/providers/$providerId',
+    path: '/providers/$providerId',
+    getParentRoute: () => SettingsRoute,
+  } as any)
+const SettingsChannelsChannelRoute = SettingsChannelsChannelRouteImport.update({
+  id: '/channels/$channel',
+  path: '/channels/$channel',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const BotsBotIdSettingsRoute = BotsBotIdSettingsRouteImport.update({
   id: '/bots/$botId/settings',
@@ -101,7 +108,6 @@ export interface FileRoutesByFullPath {
   '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
-  '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -109,13 +115,14 @@ export interface FileRoutesByFullPath {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/groups/$groupId': typeof ChatGroupsGroupIdRoute
   '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
+  '/settings/channels/$channel': typeof SettingsChannelsChannelRoute
+  '/settings/providers/$providerId': typeof SettingsProvidersProviderIdRoute
 }
 export interface FileRoutesByTo {
   '/pair': typeof PairRoute
   '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
-  '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/': typeof ChatIndexRoute
@@ -124,6 +131,8 @@ export interface FileRoutesByTo {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/groups/$groupId': typeof ChatGroupsGroupIdRoute
   '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
+  '/settings/channels/$channel': typeof SettingsChannelsChannelRoute
+  '/settings/providers/$providerId': typeof SettingsProvidersProviderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -132,7 +141,6 @@ export interface FileRoutesById {
   '/plugins': typeof PluginsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
-  '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/_chat/': typeof ChatIndexRoute
@@ -141,6 +149,8 @@ export interface FileRoutesById {
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/groups/$groupId': typeof ChatGroupsGroupIdRoute
   '/bots/$botId/settings': typeof BotsBotIdSettingsRoute
+  '/settings/channels/$channel': typeof SettingsChannelsChannelRoute
+  '/settings/providers/$providerId': typeof SettingsProvidersProviderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -150,7 +160,6 @@ export interface FileRouteTypes {
     | '/plugins'
     | '/settings'
     | '/usage'
-    | '/projects/$projectKey'
     | '/settings/$'
     | '/settings/$section'
     | '/$environmentId/$threadId'
@@ -158,13 +167,14 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/groups/$groupId'
     | '/bots/$botId/settings'
+    | '/settings/channels/$channel'
+    | '/settings/providers/$providerId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/pair'
     | '/plugins'
     | '/settings'
     | '/usage'
-    | '/projects/$projectKey'
     | '/settings/$'
     | '/settings/$section'
     | '/'
@@ -173,6 +183,8 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/groups/$groupId'
     | '/bots/$botId/settings'
+    | '/settings/channels/$channel'
+    | '/settings/providers/$providerId'
   id:
     | '__root__'
     | '/_chat'
@@ -180,7 +192,6 @@ export interface FileRouteTypes {
     | '/plugins'
     | '/settings'
     | '/usage'
-    | '/projects/$projectKey'
     | '/settings/$'
     | '/settings/$section'
     | '/_chat/'
@@ -189,6 +200,8 @@ export interface FileRouteTypes {
     | '/_chat/draft/$draftId'
     | '/_chat/groups/$groupId'
     | '/bots/$botId/settings'
+    | '/settings/channels/$channel'
+    | '/settings/providers/$providerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -197,7 +210,6 @@ export interface RootRouteChildren {
   PluginsRoute: typeof PluginsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   UsageRoute: typeof UsageRoute
-  ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
   BotsBotIdSettingsRoute: typeof BotsBotIdSettingsRoute
 }
 
@@ -259,12 +271,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsSplatRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/projects/$projectKey': {
-      id: '/projects/$projectKey'
-      path: '/projects/$projectKey'
-      fullPath: '/projects/$projectKey'
-      preLoaderRoute: typeof ProjectsProjectKeyRouteImport
-      parentRoute: typeof rootRouteImport
+    '/settings/providers/$providerId': {
+      id: '/settings/providers/$providerId'
+      path: '/providers/$providerId'
+      fullPath: '/settings/providers/$providerId'
+      preLoaderRoute: typeof SettingsProvidersProviderIdRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/channels/$channel': {
+      id: '/settings/channels/$channel'
+      path: '/channels/$channel'
+      fullPath: '/settings/channels/$channel'
+      preLoaderRoute: typeof SettingsChannelsChannelRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/bots/$botId/settings': {
       id: '/bots/$botId/settings'
@@ -325,11 +344,15 @@ const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 interface SettingsRouteChildren {
   SettingsSplatRoute: typeof SettingsSplatRoute
   SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsChannelsChannelRoute: typeof SettingsChannelsChannelRoute
+  SettingsProvidersProviderIdRoute: typeof SettingsProvidersProviderIdRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsSplatRoute: SettingsSplatRoute,
   SettingsSectionRoute: SettingsSectionRoute,
+  SettingsChannelsChannelRoute: SettingsChannelsChannelRoute,
+  SettingsProvidersProviderIdRoute: SettingsProvidersProviderIdRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
@@ -342,7 +365,6 @@ const rootRouteChildren: RootRouteChildren = {
   PluginsRoute: PluginsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   UsageRoute: UsageRoute,
-  ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
   BotsBotIdSettingsRoute: BotsBotIdSettingsRoute,
 }
 export const routeTree = rootRouteImport

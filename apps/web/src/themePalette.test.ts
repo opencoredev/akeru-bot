@@ -3,7 +3,7 @@ import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@akeru/shared/themePalettes";
 
 import {
   AKERU_PAPER_THEME,
@@ -38,6 +38,7 @@ import {
   OCEAN_THEME,
   updateCustomTheme,
   CUSTOM_THEMES_STORAGE_KEY,
+  LEGACY_CUSTOM_THEMES_STORAGE_KEY,
   createManagedThemeColors,
   createVividThemeColors,
   getDefaultThemeColors,
@@ -447,16 +448,16 @@ describe("theme files", () => {
       [...THEME_COLOR_ROLES].sort(),
     );
     expectThemeColors(AKERU_PAPER_THEME.colors, {
-      canvas: "#f4f1ea",
-      text: "#2a2724",
+      canvas: "#fafaf9",
+      text: "#1f1e1d",
       accent: "#8b6fc9",
       focus: "#8b6fc9",
       update: "#8b6fc9",
       messageAction: "#8b6fc9",
       terminalCursor: "#8b6fc9",
       messageSurface: "#f0eaf8",
-      codeBackground: "#ece8e0",
-      sidebar: "#ece8df",
+      codeBackground: "#f4f4f3",
+      sidebar: "#f3f2f1",
     });
     expectThemeColors(AKERU_PAPER_THEME.variants!.dark!, {
       canvas: "#050505",
@@ -556,6 +557,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => (key === CUSTOM_THEMES_STORAGE_KEY ? storedThemes : null),
         setItem,
+        removeItem: () => {},
       },
     });
     invalidateCustomThemes();
@@ -706,6 +708,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -784,6 +787,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -820,6 +824,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -902,6 +907,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -937,6 +943,7 @@ describe("theme files", () => {
           return storedThemes;
         },
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -968,6 +975,7 @@ describe("theme files", () => {
           throw new Error("storage unavailable");
         },
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -997,6 +1005,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: () => storedThemes,
         setItem,
+        removeItem: () => {},
       },
     });
 
@@ -1035,6 +1044,7 @@ describe("theme files", () => {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {},
       },
     });
 
@@ -1091,6 +1101,17 @@ describe("stored theme preferences", () => {
     }
   });
 
+  it("migrates a stored t3-chat preference to Akeru Chat", () => {
+    expect(getThemeDefinition("t3-chat")).toBe(T3_CHAT_THEME);
+    expect(T3_CHAT_THEME.id).toBe("akeru-chat");
+    expect(isKnownThemePreference("t3-chat")).toBe(true);
+    expect(canonicalThemePreference("t3-chat")).toBe("akeru-chat");
+    expect(parseThemeHalves(JSON.stringify({ light: "t3-chat", dark: "t3-chat" }))).toEqual({
+      light: "akeru-chat",
+      dark: "akeru-chat",
+    });
+  });
+
   it("resolves the legacy t3-chat-dark preference to dark T3 Chat", () => {
     expect(getThemeDefinition("t3-chat-dark")).toBe(T3_CHAT_THEME);
     expect(getThemePreferenceMode("t3-chat-dark")).toBe("dark");
@@ -1144,6 +1165,7 @@ describe("stored theme preferences", () => {
       localStorage: {
         getItem: (key: string) => (key === CUSTOM_THEMES_STORAGE_KEY ? storedThemes : null),
         setItem,
+        removeItem: () => {},
       },
     });
     invalidateCustomThemes();
@@ -1165,5 +1187,68 @@ describe("stored theme preferences", () => {
 
     vi.unstubAllGlobals();
     invalidateCustomThemes();
+  });
+  it("removes the legacy storage key when saving custom themes", () => {
+    const stored = new Map<string, string>([
+      [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
+    ]);
+    const removeItem = vi.fn((key: string) => stored.delete(key));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem,
+      },
+    });
+    invalidateCustomThemes();
+    try {
+      installCustomTheme(
+        parseThemeFile({
+          version: THEME_FILE_VERSION,
+          id: "legacy-cleanup",
+          name: "Legacy Cleanup",
+          appearance: "dark",
+          colors: { canvas: "#101010" },
+        }),
+      );
+      expect(removeItem).toHaveBeenCalledWith(LEGACY_CUSTOM_THEMES_STORAGE_KEY);
+      expect(stored.has(LEGACY_CUSTOM_THEMES_STORAGE_KEY)).toBe(false);
+      expect(getCustomThemes().map((theme) => theme.id)).toEqual(["legacy-cleanup"]);
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateCustomThemes();
+    }
+  });
+
+  it("still saves when legacy key removal throws", () => {
+    const stored = new Map<string, string>([
+      [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
+    ]);
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: () => {
+          throw new Error("storage blocked");
+        },
+      },
+    });
+    invalidateCustomThemes();
+    try {
+      const theme = installCustomTheme(
+        parseThemeFile({
+          version: THEME_FILE_VERSION,
+          id: "resilient-save",
+          name: "Resilient Save",
+          appearance: "light",
+          colors: { canvas: "#fafafa" },
+        }),
+      );
+      expect(theme.id).toBe("resilient-save");
+      expect(getCustomThemes().map((entry) => entry.id)).toEqual(["resilient-save"]);
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateCustomThemes();
+    }
   });
 });

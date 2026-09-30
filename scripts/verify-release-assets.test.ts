@@ -9,7 +9,7 @@ import { expectedReleaseAssetNames, verifyReleaseAssets } from "./verify-release
 import { verifyReleaseCandidate } from "./verify-release-candidate.ts";
 
 describe("verify-release-assets", () => {
-  it("matches the native desktop artifact names", () => {
+  it("matches the native desktop and Akeru Remote artifact names", () => {
     NodeAssert.deepEqual(expectedReleaseAssetNames("1.2.3"), [
       "Akeru-Bot-1.2.3-arm64.dmg",
       "Akeru-Bot-1.2.3-arm64.dmg.blockmap",
@@ -21,6 +21,13 @@ describe("verify-release-assets", () => {
       "latest-mac.yml",
       "latest.yml",
       "latest-linux.yml",
+      "Akeru-Remote-1.2.3-linux-x64.tar.gz",
+      "Akeru-Remote-1.2.3-darwin-arm64.tar.gz",
+      "Akeru-Remote-1.2.3-win32-x64.zip",
+      "AKERU-REMOTE-MANIFEST.txt",
+      "AKERU-REMOTE-MANIFEST.sig",
+      "install-remote.sh",
+      "install-remote.ps1",
     ]);
   });
 

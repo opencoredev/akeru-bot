@@ -1,12 +1,14 @@
 import {
+  type AkeruDelegationRecord,
   CommandId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ModelSelection,
+  PLACEHOLDER_THREAD_TITLE,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
@@ -24,8 +26,6 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as ServerConfig from "./config.ts";
-import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
-import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
@@ -41,7 +41,9 @@ import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDi
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import { isRemoteInstall } from "./remote/remoteMode.ts";
 import {
+  announceRemoteStartup,
   formatHeadlessServeOutput,
   formatHostForUrl,
   isWildcardHost,
@@ -212,7 +214,7 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
           commandId: CommandId.make(yield* randomUUID),
           threadId: createdThreadId,
           projectId: nextProjectId,
-          title: "New chat",
+          title: PLACEHOLDER_THREAD_TITLE,
           modelSelection: nextProjectDefaultModelSelection,
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
           runtimeMode: "full-access",
@@ -357,11 +359,101 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   ),
 );
 
+export const DELEGATION_RESTART_FAILURE_MESSAGE = "The server restarted before this work finished.";
+
+/**
+ * Fails bot work that was queued or running when the server last stopped. Its completion watch
+ * lived in memory and did not survive, so nothing else would ever settle the card. Runs before the
+ * reactors start, while no delegation of this process can exist yet. Blocked work waits on the
+ * user and stays; terminal work is untouched, so a second run changes nothing.
+ */
+export const reconcileDelegations = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+
+  const { delegations } = yield* query.getCommandReadModel();
+  for (const delegation of delegations) {
+    const phase = delegation.phase;
+    if (phase._tag !== "Queued" && phase._tag !== "Running") {
+      continue;
+    }
+    yield* Effect.gen(function* () {
+      const reconciledAt = DateTime.formatIso(yield* DateTime.now);
+      const completedAt =
+        Date.parse(reconciledAt) >= Date.parse(delegation.updatedAt)
+          ? reconciledAt
+          : delegation.updatedAt;
+      const failed: AkeruDelegationRecord = {
+        ...delegation,
+        phase: {
+          _tag: "Failed",
+          childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
+          childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
+          startedAt: phase._tag === "Queued" ? null : phase.startedAt,
+          completedAt,
+          failure: { failureCode: "internal", message: DELEGATION_RESTART_FAILURE_MESSAGE },
+          acknowledgedAt: null,
+        },
+        updatedAt: completedAt,
+      };
+      yield* orchestrationEngine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make(yield* crypto.randomUUIDv4),
+        delegation: failed,
+      });
+    }).pipe(
+      Effect.retry({ times: 1 }),
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("failed to settle orphaned delegation", {
+              delegationId: delegation.delegationId,
+              cause,
+            }),
+      ),
+    );
+  }
+}).pipe(
+  Effect.catchCause((cause) =>
+    Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : Effect.logWarning("delegation startup reconciliation failed", { cause }),
+  ),
+);
+
 interface StartupOptions {
   readonly activate?: Effect.Effect<void>;
   readonly awaitAuxiliaryParked?: Effect.Effect<void>;
   readonly abort?: (error: ServerRuntimeStartupError) => Effect.Effect<void>;
 }
+
+/**
+ * Reconnects saved channel bindings at startup. Restore errors can wrap provider responses, so
+ * the logs carry only the bot, provider, and failure category, never the error or its cause.
+ */
+export const restoreExternalChannels = (
+  runtime: Pick<ChannelRuntime.ChannelRuntimeShape, "restoreConnectedChannels">,
+) =>
+  runtime.restoreConnectedChannels.pipe(
+    Effect.flatMap((failures) =>
+      Effect.forEach(
+        failures,
+        (failure) =>
+          Effect.logWarning("failed to restore external channel", {
+            botId: failure.botId,
+            provider: failure.provider,
+            category: failure.category,
+          }),
+        { discard: true },
+      ),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.logWarning("external channel startup restore failed", {
+        interrupted: Cause.hasInterruptsOnly(cause),
+      }),
+    ),
+  );
 
 export const make = (options?: StartupOptions) =>
   Effect.gen(function* () {
@@ -375,21 +467,13 @@ export const make = (options?: StartupOptions) =>
     const crypto = yield* Crypto.Crypto;
     const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
     const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
-    const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
-    const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
-    const channelDeliveryStore = yield* Effect.serviceOption(
-      ChannelDeliveryStore.ChannelDeliveryStore,
-    );
+    const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
 
     const commandGate = yield* makeCommandGate;
     const httpListening = yield* Deferred.make<void>();
     const reactorScope = yield* Scope.make("sequential");
 
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(ChannelRuntime.shutdownAllChannels).pipe(
-        Effect.andThen(Scope.close(reactorScope, Exit.void)),
-      ),
-    );
+    yield* Effect.addFinalizer(() => Scope.close(reactorScope, Exit.void));
 
     const startup = Effect.gen(function* () {
       yield* Effect.logDebug("startup phase: starting keybindings runtime");
@@ -422,15 +506,21 @@ export const make = (options?: StartupOptions) =>
         ),
       );
 
+      // Before the reactors start, so no delegation this process creates can be mistaken for an
+      // orphan, and startup recovery sees the settled records.
+      yield* runStartupPhase("delegations.reconcile", reconcileDelegations);
+
       yield* Effect.logDebug("startup phase: parking orchestration roots at activation");
       yield* runStartupPhase(
         "reactors.start",
         Effect.gen(function* () {
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
-          yield* forkParked(
-            ChannelRuntime.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
-          ).pipe(Scope.provide(reactorScope));
+          if (Option.isSome(channelRuntime)) {
+            yield* forkParked(
+              channelRuntime.value.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
+            ).pipe(Scope.provide(reactorScope));
+          }
           const routineRuntime = yield* Effect.serviceOption(RoutineRuntime);
           if (Option.isSome(routineRuntime)) {
             yield* routineRuntime.value.start.pipe(Scope.provide(reactorScope));
@@ -442,46 +532,10 @@ export const make = (options?: StartupOptions) =>
 
       yield* runStartupPhase(
         "channels.restore",
-        Option.all({ secretStore, channelDeliveryStore }).pipe(
-          Option.match({
-            onNone: () => Effect.void,
-            onSome: ({ secretStore, channelDeliveryStore }) =>
-              Effect.promise(() =>
-                ChannelRuntime.restoreConnectedChannels({
-                  engine: orchestrationEngine,
-                  secretStore,
-                  settings: serverSettings,
-                  deliveryStore: channelDeliveryStore,
-                  readModel: () => Effect.runPromise(projectionSnapshotQuery.getCommandReadModel()),
-                  readThread: (threadId) =>
-                    Effect.runPromise(
-                      projectionSnapshotQuery
-                        .getThreadDetailById(threadId)
-                        .pipe(Effect.map(Option.getOrNull)),
-                    ),
-                  nowIso: () =>
-                    Effect.runPromise(DateTime.now.pipe(Effect.map(DateTime.formatIso))),
-                  randomUuid: () => Effect.runPromise(crypto.randomUUIDv4),
-                }),
-              ).pipe(
-                Effect.flatMap((failures) =>
-                  Effect.forEach(
-                    failures,
-                    (failure) =>
-                      Effect.logWarning("failed to restore external channel", {
-                        botId: failure.botId,
-                        provider: failure.provider,
-                        cause: failure.cause,
-                      }),
-                    { discard: true },
-                  ),
-                ),
-                Effect.catchCause((cause) =>
-                  Effect.logWarning("external channel startup restore failed", { cause }),
-                ),
-              ),
-          }),
-        ),
+        Option.match(channelRuntime, {
+          onNone: () => Effect.void,
+          onSome: restoreExternalChannels,
+        }),
       );
 
       const welcomeBase = yield* resolveWelcomeBase;
@@ -531,7 +585,19 @@ export const make = (options?: StartupOptions) =>
 
       yield* forkParked(
         Effect.gen(function* () {
-          if (serverConfig.startupPresentation === "headless") {
+          if (isRemoteInstall({ launcherManaged: launcher.managed, env: process.env })) {
+            // Remote installs run headless under the boot service or in a container, so the
+            // first admin link goes to stdout, which `akeru remote logs` and `docker logs` show.
+            const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+            yield* runStartupPhase(
+              "remote.first-boot",
+              announceRemoteStartup({
+                listSessions: serverAuth.listSessions(),
+                issueAccessInfo: issueHeadlessServeAccessInfo(),
+                print: Console.log,
+              }),
+            );
+          } else if (serverConfig.startupPresentation === "headless") {
             const accessInfo = yield* issueHeadlessServeAccessInfo();
             yield* runStartupPhase(
               "headless.output",

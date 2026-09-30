@@ -5,17 +5,26 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
-import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
+import type { SidebarProjectGroupingMode } from "@akeru/contracts";
+import {
+  normalizeMobileThemeId,
+  type MobileThemeId,
+  type MobileThemeMode,
+} from "../lib/mobileTheme";
 
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
 
-const PREFERENCES_KEY = "t3code.preferences";
-const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const PREFERENCES_KEY = "akeru.preferences";
+const PREFERENCES_FALLBACK_KEY = "akeru.preferences.fallback";
+// Keys written before the rebrand; reads fall back once and the next write
+// lands on the Akeru keys, draining the old entries.
+const LEGACY_PREFERENCES_KEY = "t3code.preferences";
+const LEGACY_PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
+  readonly language?: string;
   readonly reviewedPrivacyPolicyVersion?: string;
   readonly reviewedTermsVersion?: string;
   readonly liveActivitiesEnabled?: boolean;
@@ -24,24 +33,13 @@ export interface Preferences {
   readonly darkThemeId?: MobileThemeId;
   readonly themeMode?: MobileThemeMode;
   readonly baseFontSize?: number;
-  readonly terminalFontSize?: number | null;
   readonly markdownFontSize?: number;
-  readonly codeFontSize?: number | null;
-  readonly codeWordBreak?: boolean;
-  readonly collapsedProjectGroups?: readonly string[];
   /** @deprecated Kept temporarily so older OTA bundles retain the selected mode. */
   readonly projectGroupingEnabled?: boolean;
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
-  /**
-   * Device-local mirror of the web `legacySidebarEnabled` setting. Mobile has
-   * no client-settings sync, so the legacy grouped thread list is opted into
-   * per device. Deliberately a fresh key (was `threadListV2Enabled`, an
-   * opt-out): sanitizing drops the old key, so every device resets to the
-   * default flat list — see `resolveThreadListV2Enabled`.
-   */
-  readonly legacyThreadListEnabled?: boolean;
-  /** Device-local counterpart of desktop's `planModeEnabled` legacy flag. */
-  readonly planModeEnabled?: boolean;
+  // Retired keys (legacyThreadListEnabled, planModeEnabled, terminalFontSize,
+  // codeFontSize, codeWordBreak, collapsedProjectGroups) are dropped by
+  // sanitizing on the next load.
   /** Undefined preserves the default expanded Settled shelf. */
   readonly threadListV2SettledShelfExpanded?: boolean;
   /** Undefined preserves the default collapsed Snoozed shelf. */
@@ -83,10 +81,11 @@ export class MobilePreferencesStore extends Context.Service<
       transform: (current: Preferences) => Partial<Preferences>,
     ) => Effect.Effect<Preferences, MobilePreferencesSaveError>;
   }
->()("@t3tools/mobile/persistence/MobilePreferencesStore") {}
+>()("@akeru/mobile/persistence/MobilePreferencesStore") {}
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    language?: string;
     reviewedPrivacyPolicyVersion?: string;
     reviewedTermsVersion?: string;
     liveActivitiesEnabled?: boolean;
@@ -95,19 +94,14 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     darkThemeId?: MobileThemeId;
     themeMode?: MobileThemeMode;
     baseFontSize?: number;
-    terminalFontSize?: number | null;
     markdownFontSize?: number;
-    codeFontSize?: number | null;
-    codeWordBreak?: boolean;
-    collapsedProjectGroups?: readonly string[];
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
-    legacyThreadListEnabled?: boolean;
-    planModeEnabled?: boolean;
     threadListV2SettledShelfExpanded?: boolean;
     threadListV2SnoozedShelfExpanded?: boolean;
   } = {};
 
+  if (typeof parsed.language === "string") preferences.language = parsed.language;
   if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
     preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
   }
@@ -117,23 +111,16 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
-  if (
-    typeof parsed.themeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.themeId)
-  ) {
-    preferences.themeId = parsed.themeId as MobileThemeId;
+  // Legacy ids (`t3-code`, `t3-chat`) canonicalize through the alias table so a
+  // persisted selection survives the rebrand instead of being dropped.
+  if (typeof parsed.themeId === "string") {
+    preferences.themeId = normalizeMobileThemeId(parsed.themeId);
   }
-  if (
-    typeof parsed.lightThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.lightThemeId)
-  ) {
-    preferences.lightThemeId = parsed.lightThemeId as MobileThemeId;
+  if (typeof parsed.lightThemeId === "string") {
+    preferences.lightThemeId = normalizeMobileThemeId(parsed.lightThemeId);
   }
-  if (
-    typeof parsed.darkThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.darkThemeId)
-  ) {
-    preferences.darkThemeId = parsed.darkThemeId as MobileThemeId;
+  if (typeof parsed.darkThemeId === "string") {
+    preferences.darkThemeId = normalizeMobileThemeId(parsed.darkThemeId);
   }
   if (
     parsed.themeMode === "system" ||
@@ -143,20 +130,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.themeMode = parsed.themeMode;
   }
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
-  if (typeof parsed.terminalFontSize === "number" || parsed.terminalFontSize === null) {
-    preferences.terminalFontSize = parsed.terminalFontSize;
-  }
   if (typeof parsed.markdownFontSize === "number") {
     preferences.markdownFontSize = parsed.markdownFontSize;
-  }
-  if (typeof parsed.codeFontSize === "number" || parsed.codeFontSize === null) {
-    preferences.codeFontSize = parsed.codeFontSize;
-  }
-  if (typeof parsed.codeWordBreak === "boolean") preferences.codeWordBreak = parsed.codeWordBreak;
-  if (Array.isArray(parsed.collapsedProjectGroups)) {
-    preferences.collapsedProjectGroups = parsed.collapsedProjectGroups.filter(
-      (key): key is string => typeof key === "string",
-    );
   }
   if (typeof parsed.projectGroupingEnabled === "boolean") {
     preferences.projectGroupingEnabled = parsed.projectGroupingEnabled;
@@ -167,12 +142,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     parsed.projectGroupingMode === "separate"
   ) {
     preferences.projectGroupingMode = parsed.projectGroupingMode;
-  }
-  if (typeof parsed.legacyThreadListEnabled === "boolean") {
-    preferences.legacyThreadListEnabled = parsed.legacyThreadListEnabled;
-  }
-  if (typeof parsed.planModeEnabled === "boolean") {
-    preferences.planModeEnabled = parsed.planModeEnabled;
   }
   if (typeof parsed.threadListV2SettledShelfExpanded === "boolean") {
     preferences.threadListV2SettledShelfExpanded = parsed.threadListV2SettledShelfExpanded;
@@ -249,6 +218,20 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     return [next, next] as const;
   });
 
+  const clearFallbacks = Effect.fn("MobilePreferencesStore.clearFallbacks")(function* (
+    warning: string,
+  ) {
+    for (const key of [PREFERENCES_FALLBACK_KEY, LEGACY_PREFERENCES_FALLBACK_KEY]) {
+      yield* secureStorage
+        .removeItem(key)
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(warning).pipe(Effect.annotateLogs({ key, error })),
+          ),
+        );
+    }
+  });
+
   const saveJson = Effect.fn("MobilePreferencesStore.saveJson")(function* (
     payload: string,
     updatedAt?: number,
@@ -264,15 +247,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       yield* secureStorage.setItem(PREFERENCES_FALLBACK_KEY, fallback);
       return;
     }
-    yield* secureStorage
-      .removeItem(PREFERENCES_FALLBACK_KEY)
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Could not remove the mobile preferences fallback.").pipe(
-            Effect.annotateLogs({ error }),
-          ),
-        ),
-      );
+    yield* clearFallbacks("Could not remove the mobile preferences fallback.");
   });
 
   const loadUnlocked = Effect.gen(function* () {
@@ -287,7 +262,17 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       );
     }
 
-    const fallbackResult = yield* Effect.result(secureStorage.getItem(PREFERENCES_FALLBACK_KEY));
+    const fallbackResult = yield* Effect.result(
+      secureStorage
+        .getItem(PREFERENCES_FALLBACK_KEY)
+        .pipe(
+          Effect.flatMap((value) =>
+            value !== null
+              ? Effect.succeed(value)
+              : secureStorage.getItem(LEGACY_PREFERENCES_FALLBACK_KEY),
+          ),
+        ),
+    );
     let fallbackJson: string | null = null;
     if (fallbackResult._tag === "Success") {
       fallbackJson = fallbackResult.success;
@@ -317,26 +302,28 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       parsed = storedPreferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, storedJson.value.updatedAt));
       if (fallbackJson !== null) {
-        yield* secureStorage
-          .removeItem(PREFERENCES_FALLBACK_KEY)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Could not remove a stale mobile preferences fallback.").pipe(
-                Effect.annotateLogs({ error }),
-              ),
-            ),
-          );
+        yield* clearFallbacks("Could not remove a stale mobile preferences fallback.");
       }
     }
 
     if (parsed === null) {
-      const legacyJson = yield* secureStorage.getItem(PREFERENCES_KEY);
+      const legacyJson = yield* secureStorage
+        .getItem(PREFERENCES_KEY)
+        .pipe(
+          Effect.flatMap((value) =>
+            value !== null ? Effect.succeed(value) : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
+          ),
+        );
       const legacyPreferences = parsePayload(legacyJson);
       parsed = legacyPreferences;
       if (legacyJson !== null && legacyPreferences !== null && databaseAvailable) {
         yield* saveJson(legacyJson);
         yield* secureStorage
           .removeItem(PREFERENCES_KEY)
+          .pipe(
+            Effect.andThen(secureStorage.removeItem(LEGACY_PREFERENCES_KEY)),
+            Effect.catch(() => Effect.void),
+          )
           .pipe(
             Effect.catch((error) =>
               Effect.logWarning("Could not remove migrated mobile preferences.").pipe(

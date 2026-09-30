@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { memo } from "react";
 import { type AppSymbolName, SymbolView } from "../../components/AppSymbol";
@@ -155,6 +156,7 @@ export function threadWorkLogPropsEqual(
 }
 
 export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogProps) {
+  const { t } = useMobileI18n();
   const pressedBackground = useThemeColor("--color-subtle");
   const rows = visibleWorkLogActivities(props.activities).map((activity) => ({
     ...activity,
@@ -171,7 +173,7 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
     <View className="-mx-1 mb-1 px-1 py-0">
       {!onlyToolRows ? (
         <Text className="px-0.5 pb-0.5 font-t3-medium text-2xs text-foreground-muted opacity-60">
-          work log
+          {t("work log")}
         </Text>
       ) : null}
 
@@ -193,8 +195,8 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
                 accessibilityLabel={displayText}
                 accessibilityHint={
                   canExpand
-                    ? "Double tap to show full details. Long press to copy."
-                    : "Long press to copy."
+                    ? t("Double tap to show full details. Long press to copy.")
+                    : t("Long press to copy.")
                 }
                 accessibilityState={canExpand ? { expanded } : undefined}
                 hitSlop={4}
@@ -238,7 +240,7 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
                   <View className="shrink-0 flex-row items-center gap-px">
                     {props.copiedRowId === row.id ? (
                       <Text className="pr-1 font-t3-medium text-3xs text-emerald-600 dark:text-emerald-400">
-                        Copied
+                        {t("Copied")}
                       </Text>
                     ) : null}
                     <View className="h-4 w-4 items-center justify-center">

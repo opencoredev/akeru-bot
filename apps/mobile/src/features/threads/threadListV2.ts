@@ -5,15 +5,15 @@ import {
   QUEUED_TURN_START_GRACE_MS,
   resolveSnoozePresets,
   snoozeWakeLabel,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
+} from "@akeru/client-runtime/state/thread-settled";
+import type { SnoozePreset } from "@akeru/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { threadSearchMatchKey } from "@akeru/client-runtime/state/thread-search";
 import {
   activeThreadAnchorTimestampMs,
   sortPinnedThreadsByOrderKey,
-} from "@t3tools/client-runtime/state/thread-sort";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/thread-sort";
+import type { EnvironmentId, ProjectId } from "@akeru/contracts";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 
@@ -104,26 +104,6 @@ export function resolveThreadListV2SnoozeGateExpiryMs(
 // the iPad sidebar so both page identically.
 export const THREAD_LIST_V2_SETTLED_INITIAL_COUNT = 10;
 export const THREAD_LIST_V2_SETTLED_PAGE_COUNT = 25;
-
-/**
- * The flat Thread List v2 is the default on every app variant; the Settings →
- * Legacy toggle opts a device back into the grouped legacy list. Preferences
- * persist as sparse patches, so `undefined` genuinely means "never chosen".
- *
- * `preferencesLoaded` guards the startup window: preferences load
- * asynchronously, and rendering one list before the stored choice arrives would
- * remount the whole thing a tick later. While loading, hold the default — that
- * is where every device without an explicit legacy opt-in lands anyway.
- */
-export function resolveThreadListV2Enabled(input: {
-  readonly legacyPreference: boolean | undefined;
-  readonly preferencesLoaded: boolean;
-}): boolean {
-  if (!input.preferencesLoaded) {
-    return true;
-  }
-  return input.legacyPreference !== true;
-}
 
 export function resolveThreadListV2Status(
   thread: Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput" | "session">,

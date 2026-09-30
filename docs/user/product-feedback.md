@@ -16,8 +16,8 @@ A failed send keeps the draft. A confirmed send clears it. No account is require
 keep accepted feedback for up to 90 days and post it publicly to the Akeru Bot GitHub Issues tab.
 Do not include secrets or private data. A GitHub issue remains until a maintainer removes it.
 
-Turn off **Product feedback** under **Settings > Privacy** to disable sending. A self-hosted
-environment can set an HTTPS endpoint under **Settings > General > About**. Loopback HTTP is allowed
+Turn off **Product feedback** under **Settings > Privacy & data** to disable sending. A self-hosted
+environment can set an HTTPS endpoint under **Settings > Advanced > Feedback endpoint**. Loopback HTTP is allowed
 for local testing.
 
 ## Bot-proposed feedback

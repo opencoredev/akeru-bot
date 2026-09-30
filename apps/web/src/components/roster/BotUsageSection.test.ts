@@ -1,4 +1,4 @@
-import { BotId, EnvironmentId } from "@t3tools/contracts";
+import { BotId, EnvironmentId } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -36,7 +36,7 @@ const snapshot = {
   entries: [],
   usageCap: { unit: "tokens", limit: 20_000 },
   estimatedCost: { status: "available", usd: 1.25 },
-  subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
+  subscriptionPool: { status: "available", used: 34, limit: 100, unit: "percent" },
 } as const;
 
 describe("formatUsageMeasurement", () => {
@@ -95,12 +95,28 @@ describe("formatUsageMeasurement", () => {
     ]) {
       expect(markup).toContain(value);
     }
-    expect(markup).toContain("12,345 / 20,000");
+    expect(markup).toContain("12,345 / 20,000 tokens");
     expect(markup).toContain("$1.25");
-    expect(markup).toContain("4,000 / 10,000 tokens");
+    expect(markup).toContain("34% of pool");
     expect(markup).toContain("Reserved");
     expect(markup).toContain("750");
     expect(markup).not.toContain("Some provider usage is unavailable.");
+    // The settings row that hosts this section already carries the "Usage" title.
+    expect(markup).not.toContain(">Usage</div>");
+  });
+
+  it("renders token-unit subscription pools as counts", () => {
+    state.query.mockReturnValue({
+      data: {
+        ...snapshot,
+        subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
+      },
+      error: null,
+      isPending: false,
+      refresh: vi.fn(),
+    });
+
+    expect(render()).toContain("4,000 / 10,000 tokens");
   });
 
   it("marks partial and unavailable provider measurements without inventing values", () => {

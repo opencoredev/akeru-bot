@@ -1,14 +1,24 @@
-import { BotId, type AkeruBotUsageSnapshot, type EnvironmentId } from "@t3tools/contracts";
+import { BotId, type AkeruBotUsageSnapshot, type EnvironmentId } from "@akeru/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 import { useMemo } from "react";
 
+import { useI18n } from "../../i18n";
 import { botUsageEnvironment } from "../../state/botUsage";
 import { useEnvironmentQuery } from "../../state/query";
 
 type UsageMeasurement = AkeruBotUsageSnapshot["measurements"]["input"];
 
-export function formatUsageMeasurement(measurement: UsageMeasurement): string {
-  if (measurement.unavailableEntries === 0) return measurement.tokens.toLocaleString();
-  return measurement.tokens === 0 ? "Unavailable" : `${measurement.tokens.toLocaleString()}+`;
+type Translate = ReturnType<typeof useI18n>["t"];
+
+const translateEnglish: Translate = createTranslator("en").translate;
+
+export function formatUsageMeasurement(
+  measurement: UsageMeasurement,
+  t: Translate = translateEnglish,
+  formatNumber: (value: number) => string = (value) => value.toLocaleString(),
+): string {
+  if (measurement.unavailableEntries === 0) return formatNumber(measurement.tokens);
+  return measurement.tokens === 0 ? t("Unavailable") : `${formatNumber(measurement.tokens)}+`;
 }
 
 export function BotUsageSection({
@@ -18,6 +28,7 @@ export function BotUsageSection({
   readonly environmentId: EnvironmentId | null;
   readonly botId: string;
 }) {
+  const { t, formatNumber } = useI18n();
   const usageAtom = useMemo(
     () =>
       environmentId
@@ -35,58 +46,77 @@ export function BotUsageSection({
     : false;
 
   return (
-    <div className="space-y-2" aria-label="Bot usage">
-      <div className="text-sm font-medium">Usage</div>
+    <div aria-label={t("Bot usage")}>
       <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm">
         {usage.error ? (
-          <span className="text-muted-foreground">Usage unavailable</span>
+          <span className="text-muted-foreground">{t("Usage unavailable")}</span>
         ) : !snapshot ? (
-          <span className="text-muted-foreground">{usage.isPending ? "Loading…" : "No usage"}</span>
+          <span className="text-muted-foreground">
+            {usage.isPending ? t("Loading…") : t("No usage")}
+          </span>
         ) : (
           <div className="grid grid-cols-2 gap-x-5 gap-y-2">
-            <span className="text-muted-foreground">Input</span>
+            <span className="text-muted-foreground">{t("Input")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.input)}
+              {formatUsageMeasurement(snapshot.measurements.input, t, formatNumber)}
             </span>
-            <span className="text-muted-foreground">Output</span>
+            <span className="text-muted-foreground">{t("Output")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.output)}
+              {formatUsageMeasurement(snapshot.measurements.output, t, formatNumber)}
             </span>
-            <span className="text-muted-foreground">Observer</span>
+            <span className="text-muted-foreground">{t("Observer")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.observer)}
+              {formatUsageMeasurement(snapshot.measurements.observer, t, formatNumber)}
             </span>
-            <span className="text-muted-foreground">Reflector</span>
+            <span className="text-muted-foreground">{t("Reflector")}</span>
             <span className="text-right">
-              {formatUsageMeasurement(snapshot.measurements.reflector)}
+              {formatUsageMeasurement(snapshot.measurements.reflector, t, formatNumber)}
             </span>
-            <span className="text-muted-foreground">Cap</span>
+            <span className="text-muted-foreground">{t("Cap")}</span>
             <span className="text-right">
               {snapshot.usageCap
-                ? `${snapshot.consumedTokens.toLocaleString()} / ${snapshot.usageCap.limit.toLocaleString()}`
-                : "No cap"}
+                ? t("{consumed} / {limit} tokens", {
+                    consumed: formatNumber(snapshot.consumedTokens),
+                    limit: formatNumber(snapshot.usageCap.limit),
+                  })
+                : t("No cap")}
             </span>
-            <span className="text-muted-foreground">Estimated cost</span>
+            <span className="text-muted-foreground">{t("Estimated cost")}</span>
             <span className="text-right">
               {snapshot.estimatedCost.status === "available"
-                ? `$${snapshot.estimatedCost.usd.toLocaleString()}`
-                : "Unavailable"}
+                ? `$${formatNumber(snapshot.estimatedCost.usd, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : t("Unavailable")}
             </span>
-            <span className="text-muted-foreground">Subscription pool</span>
+            <span className="col-span-2 text-xs text-muted-foreground">
+              {t("Estimated from reported model usage; this is not subscription spend.")}
+            </span>
+            <span className="text-muted-foreground">{t("Subscription pool")}</span>
             <span className="text-right">
               {snapshot.subscriptionPool.status === "available"
-                ? `${snapshot.subscriptionPool.used.toLocaleString()} / ${snapshot.subscriptionPool.limit.toLocaleString()} ${snapshot.subscriptionPool.unit}`
-                : "Unavailable"}
+                ? snapshot.subscriptionPool.unit === "percent"
+                  ? t("{percent}% of pool", {
+                      percent: formatNumber(snapshot.subscriptionPool.used),
+                    })
+                  : snapshot.subscriptionPool.unit === "tokens"
+                    ? t("{consumed} / {limit} tokens", {
+                        consumed: formatNumber(snapshot.subscriptionPool.used),
+                        limit: formatNumber(snapshot.subscriptionPool.limit),
+                      })
+                    : `${formatNumber(snapshot.subscriptionPool.used)} / ${formatNumber(snapshot.subscriptionPool.limit)} ${snapshot.subscriptionPool.unit}`
+                : t("Unavailable")}
             </span>
             {snapshot.reservedTokens > 0 ? (
               <>
-                <span className="text-muted-foreground">Reserved</span>
-                <span className="text-right">{snapshot.reservedTokens.toLocaleString()}</span>
+                <span className="text-muted-foreground">{t("Reserved")}</span>
+                <span className="text-right">{formatNumber(snapshot.reservedTokens)}</span>
               </>
             ) : null}
             {hasUnavailable ? (
               <span className="col-span-2 text-xs text-muted-foreground">
-                Some provider usage is unavailable.
+                {t("Some provider usage is unavailable.")}
               </span>
             ) : null}
           </div>

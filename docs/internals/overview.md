@@ -4,8 +4,8 @@
 
 Akeru Bot is a server runtime that owns agent sessions, workspaces, and version control, plus clients
 (web, desktop, mobile) that talk to it over one authenticated Effect RPC WebSocket. The server is the
-execution boundary: every provider process, terminal, git operation, and filesystem read happens
-there, never in the client.
+execution boundary: every provider process, bot command, git operation, and filesystem read
+happens there, never in the client.
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -18,13 +18,13 @@ there, never in the client.
 ┌──────────────────▼─────────────────────────────┐
 │ apps/server                                    │
 │  orchestration engine (event-sourced)          │
-│  provider driver registry (5 built-in drivers) │
-│  checkpointing, VCS, terminals, filesystem     │
+│  provider driver registry (6 built-in drivers) │
+│  checkpointing, VCS, filesystem                │
 └──────────────────┬─────────────────────────────┘
                    │ per-driver transport
 ┌──────────────────▼─────────────────────────────┐
 │ Provider transports: Codex, Claude, Grok,      │
-│ Kimi For Coding, OpenCode                      │
+│ Kimi For Coding, OpenCode, OpenCode Go         │
 └────────────────────────────────────────────────┘
 ```
 
@@ -33,9 +33,8 @@ there, never in the client.
 The client/server contract is an Effect RPC group, not a hand-rolled push protocol. [`rpc.ts`][rpc]
 declares `WS_METHODS` and assembles `WsRpcGroup`; each member is either unary or a server stream
 (`stream: true`). Streaming members such as `orchestration.subscribeShell`,
-`orchestration.subscribeThread`, `subscribeServerConfig`, and `terminal.attach` replace what used to
-be a broadcast push bus: a client subscribes to what it needs and the server pushes only on that
-subscription.
+`orchestration.subscribeThread`, and `subscribeServerConfig` replace what used to be a broadcast push
+bus: a client subscribes to what it needs and the server pushes only on that subscription.
 
 [`ws.ts`][ws] serves the group. `websocketRpcRouteLayer` mounts `GET /ws`, authenticates the upgrade
 through `EnvironmentAuth.authenticateWebSocketUpgrade`, then hands the socket to
@@ -119,7 +118,7 @@ Provider event logs in [`EventNdjsonLogger.ts`][event-log] drop canonical deltas
 streaming chunks (Codex item/realtime methods, Claude content-block deltas, ACP
 `agent_message_chunk`/`agent_thought_chunk`, OpenCode text/reasoning part updates) before
 serialization. ACP request diagnostics stay on by default; full protocol logging is opt-in through
-the Cursor and Grok provider settings and filters the same transient session updates. Async drain/close behavior for this file is owned
+the Grok provider settings and filters the same transient session updates. Async drain/close behavior for this file is owned
 separately by the desktop log-drain work and is not changed here.
 
 ## Provider drivers
@@ -170,3 +169,48 @@ already dispatch.
 [checkpoint]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
 [receipts]: ../../apps/server/src/orchestration/Layers/RuntimeReceiptBus.ts
 [drivers]: ../../apps/server/src/provider/builtInDrivers.ts
+
+## Effect conventions and migration metric
+
+Server code should keep effectful work inside `Effect.gen` and named `Effect.fn` functions, model
+resources with scoped layers and `Effect.acquireRelease`, and use Effect services such as `Clock`,
+`DateTime`, `FileSystem`, `HttpClient`, and `ChildProcessSpawner` at system boundaries. Decode
+untrusted data with `Schema` and represent expected failures with `Schema.TaggedErrorClass`.
+`ManagedRuntime` is the bridge for legacy callbacks; do not scatter `Effect.runPromise` calls through
+library code.
+
+The migration tracks three signals in production `.ts` files under `apps/server/src`:
+
+1. Runtime escapes: `Effect.runPromise`, `Effect.runSync`, and `Effect.runFork` in library code.
+2. Promise bridges: `Effect.tryPromise` and `Effect.promise` used to cross an imperative boundary.
+3. Each rule token in `@effect-diagnostics <rule>:off` and
+   `@effect-diagnostics-next-line <rule>:off` suppressions.
+
+Tests (`*.test.ts`) and the standalone `serviceLauncher.ts` bundle are excluded from all
+three counts. Runtime escapes and Promise bridges count each matching call site. Suppressions
+count each disabled rule token, so one directive that disables three rules contributes three
+suppression counts.
+
+Run `node scripts/effect-migration-metric.ts` for a production-source report. It is a
+reporting tool rather than a CI gate. The 2026-09-22 audit baseline for diagnostic suppressions was:
+
+| Rule                   | Suppressions |
+| ---------------------- | -----------: |
+| `cryptoRandomUUID`     |            1 |
+| `globalConsole`        |            1 |
+| `globalDate`           |           18 |
+| `globalFetch`          |           12 |
+| `globalRandom`         |            5 |
+| `globalTimers`         |            4 |
+| `nodeBuiltinImport`    |           35 |
+| `preferSchemaOverJson` |            1 |
+| `returnEffectInGen`    |            2 |
+
+The same audit counted 58 runtime escapes and 76 Promise bridges. Each follow-up migration issue
+should report how many suppression tokens and boundary calls it removes against this baseline.
+
+Pure data and mapping modules are not migration targets when they have no I/O or lifetime state.
+`apps/server/src/serviceLauncher.ts` is also excluded: it is a deliberately Node-only standalone
+bundle packed separately by `build:bundle`, and adding Effect imports would break that deployment
+boundary. The audit also leaves type-only provider service shapes and the legitimate
+`returnEffectInGen` cases in place.

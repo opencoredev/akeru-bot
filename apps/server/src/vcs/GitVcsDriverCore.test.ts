@@ -14,9 +14,9 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { GitCommandError, type ReviewDiffFileContentsInput } from "@t3tools/contracts";
+import { GitCommandError } from "@akeru/contracts";
 import { ServerConfig } from "../config.ts";
-import { makeGitVcsDriverCore, splitNullSeparatedGitStdoutPaths } from "./GitVcsDriverCore.ts";
+import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
@@ -77,20 +77,6 @@ const writeTextFile = (
     yield* fileSystem.makeDirectory(pathService.dirname(filePath), { recursive: true });
     yield* fileSystem.writeFileString(filePath, contents);
   });
-
-const makeReviewDiffFileContentsInput = (
-  cwd: string,
-  overrides: Partial<Omit<ReviewDiffFileContentsInput, "cwd">> = {},
-): ReviewDiffFileContentsInput => ({
-  cwd,
-  sourceKind: "working-tree",
-  changeType: "change",
-  baseRef: "HEAD",
-  headRef: null,
-  oldPath: "README.md",
-  newPath: "README.md",
-  ...overrides,
-});
 
 const git = (
   cwd: string,
@@ -773,166 +759,6 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
     );
   });
 
-  describe("review diff previews", () => {
-    it.effect("drops an unterminated path from truncated NUL-separated git output", () =>
-      Effect.sync(() => {
-        const paths = splitNullSeparatedGitStdoutPaths({
-          stdout: "complete.txt\0partial",
-          stdoutTruncated: true,
-        });
-
-        assert.deepStrictEqual(paths, ["complete.txt"]);
-      }),
-    );
-
-    it.effect("keeps the final path when NUL-separated git output is complete", () =>
-      Effect.sync(() => {
-        const paths = splitNullSeparatedGitStdoutPaths({
-          stdout: "complete.txt\0final.txt",
-          stdoutTruncated: false,
-        });
-
-        assert.deepStrictEqual(paths, ["complete.txt", "final.txt"]);
-      }),
-    );
-
-    it.effect("honors whitespace filtering for worktree and branch previews", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        const { initialBranch } = yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        yield* git(cwd, ["checkout", "-b", "feature/whitespace"]);
-        yield* writeTextFile(cwd, "README.md", "#  test\n");
-        yield* git(cwd, ["add", "README.md"]);
-        yield* git(cwd, ["commit", "-m", "change whitespace"]);
-        yield* writeTextFile(cwd, "README.md", "#   test\n");
-
-        const included = yield* driver.getReviewDiffPreview({
-          cwd,
-          baseRef: initialBranch,
-          ignoreWhitespace: false,
-        });
-        const ignored = yield* driver.getReviewDiffPreview({
-          cwd,
-          baseRef: initialBranch,
-          ignoreWhitespace: true,
-        });
-
-        assert.isNotEmpty(included.sources.find((source) => source.kind === "working-tree")?.diff);
-        assert.isNotEmpty(included.sources.find((source) => source.kind === "branch-range")?.diff);
-        assert.strictEqual(
-          ignored.sources.find((source) => source.kind === "working-tree")?.diff,
-          "",
-        );
-        assert.strictEqual(
-          ignored.sources.find((source) => source.kind === "branch-range")?.diff,
-          "",
-        );
-      }),
-    );
-
-    it.effect("loads full file contents for working-tree diff expansion", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        const pathService = yield* Path.Path;
-        yield* writeTextFile(cwd, "nested/.keep", "");
-        yield* writeTextFile(cwd, "README.md", "# changed\nunchanged context\n");
-
-        const contents = yield* driver.getReviewDiffFileContents(
-          makeReviewDiffFileContentsInput(pathService.join(cwd, "nested")),
-        );
-
-        assert.strictEqual(contents.oldContents, "# test\n");
-        assert.strictEqual(contents.newContents, "# changed\nunchanged context\n");
-      }),
-    );
-
-    it.effect("attributes working-tree filesystem failures to the failing operation", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-
-        const error = yield* driver
-          .getReviewDiffFileContents(
-            makeReviewDiffFileContentsInput(cwd, {
-              changeType: "new",
-              oldPath: "missing.ts",
-              newPath: "missing.ts",
-            }),
-          )
-          .pipe(Effect.flip);
-
-        assert.deepInclude(error, {
-          _tag: "GitCommandError",
-          operation: "GitVcsDriver.getReviewDiffFileContents.workingTree.fs.realPath",
-          command: "fs.realPath",
-          cwd,
-          detail: "Could not resolve diff file 'missing.ts'.",
-        });
-      }),
-    );
-
-    it.effect("loads new and deleted files without reading their missing side", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const pathService = yield* Path.Path;
-        yield* writeTextFile(cwd, "added.ts", "export const added = true;\n");
-        yield* fileSystem.remove(pathService.join(cwd, "README.md"));
-
-        const [added, deleted] = yield* Effect.all([
-          driver.getReviewDiffFileContents(
-            makeReviewDiffFileContentsInput(cwd, {
-              changeType: "new",
-              oldPath: "added.ts",
-              newPath: "added.ts",
-            }),
-          ),
-          driver.getReviewDiffFileContents(
-            makeReviewDiffFileContentsInput(cwd, { changeType: "deleted" }),
-          ),
-        ]);
-
-        assert.deepStrictEqual(added, {
-          oldContents: "",
-          newContents: "export const added = true;\n",
-        });
-        assert.deepStrictEqual(deleted, {
-          oldContents: "# test\n",
-          newContents: "",
-        });
-      }),
-    );
-
-    it.effect("loads merge-base and head contents for branch diff expansion", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        const { initialBranch } = yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-        yield* git(cwd, ["checkout", "-b", "feature/context"]);
-        yield* writeTextFile(cwd, "README.md", "# branch change\nunchanged context\n");
-        yield* git(cwd, ["add", "README.md"]);
-        yield* git(cwd, ["commit", "-m", "change readme"]);
-
-        const contents = yield* driver.getReviewDiffFileContents(
-          makeReviewDiffFileContentsInput(cwd, {
-            sourceKind: "branch-range",
-            baseRef: initialBranch,
-            headRef: "feature/context",
-          }),
-        );
-
-        assert.strictEqual(contents.oldContents, "# test\n");
-        assert.strictEqual(contents.newContents, "# branch change\nunchanged context\n");
-      }),
-    );
-  });
-
   describe("repository status", () => {
     it.effect("reports non-repository directories without failing", () =>
       Effect.gen(function* () {
@@ -1608,49 +1434,6 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
     );
   });
 
-  describe("commit context", () => {
-    it.effect("stages selected files and commits only those files", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-
-        yield* writeTextFile(cwd, "a.txt", "a\n");
-        yield* writeTextFile(cwd, "b.txt", "b\n");
-
-        const context = yield* driver.prepareCommitContext(cwd, ["a.txt"]);
-        assert.include(context?.stagedSummary ?? "", "a.txt");
-        assert.notInclude(context?.stagedSummary ?? "", "b.txt");
-
-        const commit = yield* driver.commit(cwd, "Add a", "");
-        assert.match(commit.commitSha, /^[a-f0-9]{40}$/);
-        assert.equal(yield* git(cwd, ["log", "-1", "--pretty=%s"]), "Add a");
-
-        const status = yield* git(cwd, ["status", "--porcelain"]);
-        assert.include(status, "?? b.txt");
-        assert.notInclude(status, "a.txt");
-      }),
-    );
-
-    it.effect("treats selected file paths literally", () =>
-      Effect.gen(function* () {
-        const cwd = yield* makeTmpDir();
-        yield* initRepoWithCommit(cwd);
-        const driver = yield* GitVcsDriver.GitVcsDriver;
-
-        yield* writeTextFile(cwd, "selected[1].txt", "literal\n");
-        yield* writeTextFile(cwd, "selected1.txt", "pattern match\n");
-
-        yield* driver.prepareCommitContext(cwd, ["selected[1].txt"]);
-
-        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "selected[1].txt");
-
-        const status = yield* git(cwd, ["status", "--porcelain"]);
-        assert.include(status, "?? selected1.txt");
-      }),
-    );
-  });
-
   describe("remote operations", () => {
     it.effect("creates a worktree from the latest fetched remote commit", () =>
       Effect.gen(function* () {
@@ -1739,8 +1522,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           refName: "feature/push",
         });
         yield* writeTextFile(cwd, "feature.txt", "feature\n");
-        yield* (yield* GitVcsDriver.GitVcsDriver).prepareCommitContext(cwd);
-        yield* (yield* GitVcsDriver.GitVcsDriver).commit(cwd, "Add feature", "");
+        yield* git(cwd, ["add", "-A"]);
+        yield* git(cwd, ["commit", "-m", "Add feature"]);
 
         const pushed = yield* (yield* GitVcsDriver.GitVcsDriver).pushCurrentBranch(cwd, null);
         assert.deepInclude(pushed, {
@@ -1811,8 +1594,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           yield* git(cwd, ["remote", "add", "origin", remote]);
           yield* git(cwd, ["push", "-u", "origin", "main"]);
           yield* writeTextFile(cwd, "upstream.txt", "upstream\n");
-          yield* driver.prepareCommitContext(cwd);
-          yield* driver.commit(cwd, "Add upstream update", "");
+          yield* git(cwd, ["add", "-A"]);
+          yield* git(cwd, ["commit", "-m", "Add upstream update"]);
 
           const pushed = yield* driver.pushCurrentBranch(cwd, null);
 
@@ -1852,8 +1635,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const devSha = yield* git(cwd, ["rev-parse", "HEAD"]);
         yield* git(cwd, ["checkout", "-b", "feature/x", "origin/dev"]);
         yield* writeTextFile(cwd, "feature.txt", "feature\n");
-        yield* driver.prepareCommitContext(cwd);
-        yield* driver.commit(cwd, "Add feature", "");
+        yield* git(cwd, ["add", "-A"]);
+        yield* git(cwd, ["commit", "-m", "Add feature"]);
 
         const pushed = yield* driver.pushCurrentBranch(cwd, null);
 
@@ -1886,8 +1669,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* git(cwd, ["checkout", "-b", "feature/y", "origin/main"]);
         yield* git(cwd, ["config", "branch.feature/y.gh-merge-base", "release/v2"]);
         yield* writeTextFile(cwd, "feature.txt", "feature\n");
-        yield* driver.prepareCommitContext(cwd);
-        yield* driver.commit(cwd, "Add feature", "");
+        yield* git(cwd, ["add", "-A"]);
+        yield* git(cwd, ["commit", "-m", "Add feature"]);
 
         const pushed = yield* driver.pushCurrentBranch(cwd, null);
 
@@ -1924,8 +1707,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           "upstream/effect-atom",
         );
         yield* writeTextFile(cwd, "alias.txt", "alias\n");
-        yield* driver.prepareCommitContext(cwd);
-        yield* driver.commit(cwd, "Add alias update", "");
+        yield* git(cwd, ["add", "-A"]);
+        yield* git(cwd, ["commit", "-m", "Add alias update"]);
 
         const pushed = yield* driver.pushCurrentBranch(cwd, null);
 

@@ -3,14 +3,14 @@ import {
   type OpenCodeSettings,
   type ServerProviderModel,
   type ServerProviderSkill,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import { createModelCapabilities } from "@t3tools/shared/model";
-import { compareSemverVersions } from "@t3tools/shared/semver";
+import { createModelCapabilities } from "@akeru/shared/model";
+import { compareSemverVersions } from "@akeru/shared/semver";
 import {
   buildServerProvider,
   nonEmptyTrimmed,
@@ -258,6 +258,8 @@ function trimOptional(value: string | null | undefined): string | undefined {
 }
 
 function flattenOpenCodeSkills(input: OpenCodeInventory): ReadonlyArray<ServerProviderSkill> {
+  // The OpenCode SDK's `/skill` endpoint and `debug skill` CLI only return
+  // name, description, and location — there is no icon field to map.
   const skills: ServerProviderSkill[] = [];
   for (const skill of input.skills ?? []) {
     const name = trimOptional(skill.name);

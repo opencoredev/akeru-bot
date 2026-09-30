@@ -14,7 +14,7 @@ import {
   ProjectionThreadRepository,
   type ProjectionThreadRepositoryShape,
 } from "../Services/ProjectionThreads.ts";
-import { ModelSelection, ThreadLinkedPullRequest } from "@t3tools/contracts";
+import { ModelSelection, ThreadLinkedPullRequest } from "@akeru/contracts";
 
 const ProjectionThreadDbRow = ProjectionThread.mapFields(
   Struct.assign({
@@ -36,6 +36,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           project_id,
           bot_id,
           group_id,
+          parent_thread_id,
+          parent_delegation_id,
           responding_bot_id,
           title,
           model_selection_json,
@@ -68,6 +70,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.projectId},
           ${row.botId ?? null},
           ${row.groupId ?? null},
+          ${row.parentThreadId ?? null},
+          ${row.parentDelegationId ?? null},
           ${row.respondingBotId ?? null},
           ${row.title},
           ${JSON.stringify(row.modelSelection)},
@@ -100,6 +104,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           project_id = excluded.project_id,
           bot_id = excluded.bot_id,
           group_id = excluded.group_id,
+          parent_thread_id = excluded.parent_thread_id,
+          parent_delegation_id = excluded.parent_delegation_id,
           responding_bot_id = excluded.responding_bot_id,
           title = excluded.title,
           model_selection_json = excluded.model_selection_json,
@@ -139,6 +145,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",
@@ -180,6 +188,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           project_id AS "projectId",
           bot_id AS "botId",
           group_id AS "groupId",
+          parent_thread_id AS "parentThreadId",
+          parent_delegation_id AS "parentDelegationId",
           responding_bot_id AS "respondingBotId",
           title,
           model_selection_json AS "modelSelection",

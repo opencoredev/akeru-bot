@@ -1,4 +1,4 @@
-import type { ChannelProvider } from "@t3tools/contracts";
+import { CHANNEL_PROVIDERS, type ChannelProvider } from "@akeru/contracts";
 
 import {
   DiscordIcon,
@@ -181,4 +181,12 @@ export function slackPasteTarget(pasted: string): "botToken" | "appToken" | null
   if (value.startsWith("xoxb-")) return "botToken";
   if (value.startsWith("xapp-")) return "appToken";
   return null;
+}
+
+/** The settings target that opens the channels panel on one provider. */
+export const channelSettingsTarget = (provider: ChannelProvider) => `channel-${provider}`;
+
+/** The provider a `channelSettingsTarget` names, or null for any other target. */
+export function channelProviderFromSettingsTarget(target: string | null): ChannelProvider | null {
+  return CHANNEL_PROVIDERS.find((provider) => channelSettingsTarget(provider) === target) ?? null;
 }

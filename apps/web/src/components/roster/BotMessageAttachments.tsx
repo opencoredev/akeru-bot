@@ -1,8 +1,9 @@
-import type { ChatAttachment, EnvironmentId } from "@t3tools/contracts";
+import type { ChatAttachment, EnvironmentId } from "@akeru/contracts";
 import { FileTextIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
+import { useI18n } from "../../i18n";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "../chat/ExpandedImagePreview";
 
@@ -35,6 +36,7 @@ export function BotMessageAttachments({
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly environmentId: EnvironmentId;
 }) {
+  const { t } = useI18n();
   const resources = useMemo(
     () =>
       attachments.map((attachment) => ({
@@ -78,7 +80,7 @@ export function BotMessageAttachments({
               {canPreview ? (
                 <button
                   type="button"
-                  aria-label={`Preview ${attachment.name}`}
+                  aria-label={t("Preview {name}", { name: attachment.name })}
                   className="size-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   onClick={() =>
                     setPreview(
@@ -96,14 +98,20 @@ export function BotMessageAttachments({
                 </button>
               ) : (
                 <span className="flex size-full items-center justify-center text-xs text-muted-foreground">
-                  Image unavailable
+                  {t("Image unavailable")}
                 </span>
               )}
             </div>
           );
         })}
       </div>
-      {preview ? <ExpandedImageDialog preview={preview} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <ExpandedImageDialog
+          preview={preview}
+          environmentId={environmentId}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
     </>
   );
 }

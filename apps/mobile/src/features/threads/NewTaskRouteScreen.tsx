@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   StackActions,
@@ -6,7 +7,7 @@ import {
   type StaticScreenProps,
 } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentProject } from "@akeru/client-runtime/state/shell";
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,7 +16,6 @@ import { cn } from "../../lib/cn";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
-import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { useProjects } from "../../state/entities";
 import type { WorkspaceState } from "../../state/workspaceModel";
 import { useWorkspaceState } from "../../state/workspace";
@@ -84,6 +84,7 @@ function deriveProjectEmptyState(catalogState: WorkspaceState): {
 }
 
 export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRouteParams | undefined>) {
+  const { t } = useMobileI18n();
   const projects = useProjects();
   const { projectScopes, selectedEnvironmentId, setProject } = useNewTaskFlow();
   const { state: catalogState } = useWorkspaceState();
@@ -122,10 +123,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         await releaseShareReservation(incomingShare.id, incomingShare.destination);
       } catch (error) {
         Alert.alert(
-          "Could not change project",
+          t("Could not change project"),
           error instanceof Error
             ? error.message
-            : "The shared content reservation could not be updated.",
+            : t("The shared content reservation could not be updated."),
         );
         return;
       }
@@ -188,17 +189,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
             title={screenTitle}
             subtitle={incomingShareSubtitle}
             onBack={layout.usesSplitView ? () => navigation.goBack() : undefined}
-            actions={
-              catalogState.hasReadyEnvironment
-                ? [
-                    {
-                      accessibilityLabel: "Add project",
-                      icon: "plus",
-                      onPress: () => navigation.dispatch(StackActions.push("AddProject")),
-                    },
-                  ]
-                : []
-            }
           />
         </>
       ) : (
@@ -212,16 +202,9 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
           <NativeHeaderToolbar placement="right">
             {layout.usesSplitView ? (
               <NativeHeaderToolbar.Button
-                accessibilityLabel="Close new chat"
+                accessibilityLabel={t("Close chat")}
                 icon="xmark"
                 onPress={() => navigation.goBack()}
-                separateBackground
-              />
-            ) : null}
-            {catalogState.hasReadyEnvironment ? (
-              <NativeHeaderToolbar.Button
-                icon="plus"
-                onPress={() => navigation.dispatch(StackActions.push("AddProject"))}
                 separateBackground
               />
             ) : null}
@@ -255,19 +238,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                 onPress={() => navigation.navigate("ConnectionsNew")}
               >
                 <Text className="text-sm font-t3-bold text-primary-foreground">
-                  Add environment
+                  {t("Add environment")}
                 </Text>
               </Pressable>
-            ) : (
-              <Pressable
-                className="mt-1 rounded-full bg-primary px-4 py-2.5 active:opacity-70"
-                onPress={() => navigation.dispatch(StackActions.push("AddProject"))}
-              >
-                <Text className="text-sm font-t3-bold text-primary-foreground">
-                  Add new project
-                </Text>
-              </Pressable>
-            )}
+            ) : null}
           </View>
         ) : (
           <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">
@@ -284,15 +258,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                     onPress={() => void selectProject(selectionTarget)}
                     className="flex-row items-center gap-3 bg-card px-4 py-3.5"
                   >
-                    <View className="h-7 w-7 items-center justify-center">
-                      <ProjectFavicon
-                        environmentId={scope.representative.environmentId}
-                        faviconPath={scope.representative.faviconPath}
-                        size={20}
-                        projectTitle={scope.title}
-                        workspaceRoot={scope.representative.workspaceRoot}
-                      />
-                    </View>
                     <View className="min-w-0 flex-1">
                       <Text className="text-base leading-snug font-t3-bold">{scope.title}</Text>
                       <Text

@@ -14,7 +14,7 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
   isGroupBotMember,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -44,6 +44,7 @@ function makeBot(input: {
     sandbox: "local",
     runtimeMode: "full-access",
     usageCap: null,
+    imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],
     groupId: null,
@@ -281,6 +282,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           routine: {
             id: RoutineId.make("routine-1"),
             botId: BOT_ID,
+            delegateToBotId: null,
             targetThreadId: ThreadId.make("thread-1"),
             job: "Daily brief",
             procedure: "Summarize this chat.",

@@ -9,7 +9,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   CommandId,
   CheckpointRef,
@@ -19,7 +19,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
 import * as Clock from "effect/Clock";
@@ -37,7 +37,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
-import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
+import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { CheckpointReactorLive } from "./CheckpointReactor.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
@@ -64,6 +64,11 @@ import {
   type AgentControllerShape,
 } from "../../provider/Services/AgentController.ts";
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
+import {
+  type AgentControllerError,
+  AgentControllerRollbackUnsupportedError,
+  ProviderAdapterRequestError,
+} from "../../provider/Errors.ts";
 import { ServerConfig } from "../../config.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../../workspace/WorkspacePaths.ts";
@@ -93,7 +98,10 @@ function createAgentControllerHarness(
   const now = "2026-01-01T00:00:00.000Z";
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
   const rollbackConversation = vi.fn(
-    (_input: { readonly threadId: ThreadId; readonly numTurns: number }) => Effect.void,
+    (_input: {
+      readonly threadId: ThreadId;
+      readonly numTurns: number;
+    }): Effect.Effect<void, AgentControllerError> => Effect.void,
   );
 
   const unsupported = <A>() =>
@@ -320,25 +328,26 @@ describe("CheckpointReactor", () => {
     const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
       prefix: "t3-checkpoint-reactor-test-",
     });
-    const vcsStatusBroadcasterLayer = Layer.succeed(VcsStatusBroadcaster, {
-      getStatus: () => Effect.die("getStatus should not be called in this test"),
-      refreshLocalStatus: (cwd: string) =>
+    const gitVcsDriverLayer = Layer.mock(GitVcsDriver.GitVcsDriver)({
+      statusDetailsLocal: (cwd: string) =>
         Effect.sync(() => {
           options?.gitStatusRefreshCalls?.push(cwd);
         }).pipe(
           Effect.andThen(options?.gitStatusRefresh ?? Effect.void),
           Effect.as({
             isRepo: true,
-            hasPrimaryRemote: false,
-            isDefaultRef: true,
-            refName:
-              options?.localStatusRefName !== undefined ? options.localStatusRefName : "main",
+            hasOriginRemote: false,
+            isDefaultBranch: true,
+            branch: options?.localStatusRefName !== undefined ? options.localStatusRefName : "main",
+            upstreamRef: null,
             hasWorkingTreeChanges: false,
             workingTree: { files: [], insertions: 0, deletions: 0 },
+            hasUpstream: false,
+            aheadCount: 0,
+            behindCount: 0,
+            aheadOfDefaultCount: 0,
           }),
         ),
-      refreshStatus: () => Effect.die("refreshStatus should not be called in this test"),
-      streamStatus: () => Stream.empty,
     });
 
     const layer = CheckpointReactorLive.pipe(
@@ -346,7 +355,7 @@ describe("CheckpointReactor", () => {
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(RuntimeReceiptBusTest),
       Layer.provideMerge(Layer.succeed(AgentController, provider.service)),
-      Layer.provideMerge(vcsStatusBroadcasterLayer),
+      Layer.provideMerge(gitVcsDriverLayer),
       Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistry.layer))),
       Layer.provideMerge(
         WorkspaceEntries.layer.pipe(
@@ -1823,11 +1832,99 @@ describe("CheckpointReactor", () => {
     });
   });
 
+  async function seedTwoTurnsAndRevertToFirst(harness: Awaited<ReturnType<typeof createHarness>>) {
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    const threadId = ThreadId.make("thread-1");
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      }),
+    );
+    for (const turnCount of [1, 2]) {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.diff.complete",
+          commandId: CommandId.make(`cmd-diff-${turnCount}`),
+          threadId,
+          turnId: asTurnId(`turn-${turnCount}`),
+          completedAt: createdAt,
+          checkpointRef: checkpointRefForThreadTurn(threadId, turnCount),
+          status: "ready",
+          files: [],
+          checkpointTurnCount: turnCount,
+          createdAt,
+        }),
+      );
+    }
+    await runtime!.runPromise(
+      harness.engine.dispatch({
+        type: "thread.checkpoint.revert",
+        commandId: CommandId.make("cmd-revert-request"),
+        threadId,
+        turnCount: 1,
+        createdAt,
+      }),
+    );
+  }
+
+  it("fails the revert instead of keeping stale context when provider rollback is unsupported", async () => {
+    const harness = await createHarness();
+    harness.provider.rollbackConversation.mockImplementationOnce((input) =>
+      Effect.fail(
+        new AgentControllerRollbackUnsupportedError({
+          threadId: input.threadId,
+          detail: "Mastra conversation rollback is not available.",
+        }),
+      ),
+    );
+
+    await seedTwoTurnsAndRevertToFirst(harness);
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+    );
+    expect(thread.checkpoints).toHaveLength(2);
+    expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the revert when the provider rollback itself fails", async () => {
+    const harness = await createHarness({ providerName: ProviderDriverKind.make("claudeAgent") });
+    harness.provider.rollbackConversation.mockImplementationOnce((input) =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: "claudeAgent",
+          method: "rollbackThread",
+          detail: `Unknown session for thread '${input.threadId}'.`,
+        }),
+      ),
+    );
+
+    await seedTwoTurnsAndRevertToFirst(harness);
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+    );
+    expect(thread.checkpoints).toHaveLength(2);
+    expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
+  });
+
   it("appends an error activity when revert is requested without an active session", async () => {
     const harness = await createHarness({ hasSession: false });
     const createdAt = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
+    await runtime!.runPromise(
       harness.engine.dispatch({
         type: "thread.checkpoint.revert",
         commandId: CommandId.make("cmd-revert-no-session"),

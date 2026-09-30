@@ -1,4 +1,4 @@
-import { WS_METHODS } from "@t3tools/contracts";
+import { WS_METHODS } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import { createEnvironmentRpcCommand } from "./runtime.ts";
@@ -11,6 +11,10 @@ export function createShellEnvironmentAtoms<R, E>(
     openInEditor: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:shell:open-in-editor",
       tag: WS_METHODS.shellOpenInEditor,
+    }),
+    revealAttachment: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:shell:reveal-attachment",
+      tag: WS_METHODS.shellRevealAttachment,
     }),
   };
 }

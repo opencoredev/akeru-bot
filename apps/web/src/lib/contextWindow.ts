@@ -1,4 +1,4 @@
-import type { OrchestrationThreadActivity, ThreadTokenUsageSnapshot } from "@t3tools/contracts";
+import type { OrchestrationThreadActivity, ThreadTokenUsageSnapshot } from "@akeru/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
@@ -34,8 +34,6 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
       return "Claude";
     case "codex":
       return "Codex";
-    case "cursor":
-      return "Cursor";
     case "opencode":
       return "OpenCode";
     case "opencodeGo":

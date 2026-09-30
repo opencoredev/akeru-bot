@@ -1,4 +1,10 @@
-import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
+import {
+  BROWSER_MENTION_LABEL,
+  collectComposerInlineTokens,
+  type ComposerInlineToken,
+  UNKNOWN_BOT_MENTION_LABEL,
+  UNKNOWN_CHAT_MENTION_LABEL,
+} from "@akeru/shared/composerInlineTokens";
 import { requireNativeView } from "expo";
 import {
   useCallback,
@@ -12,8 +18,10 @@ import {
 import type { NativeSyntheticEvent, StyleProp, ViewProps, ViewStyle } from "react-native";
 import { Image, StyleSheet } from "react-native";
 
-import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
-import { resolveMarkdownFileIcon } from "@t3tools/mobile-markdown-text/links";
+import { markdownFileIconSource } from "@akeru/mobile-markdown-text/file-icons";
+import { resolveMarkdownFileIcon } from "@akeru/mobile-markdown-text/links";
+import { useBotNames } from "../state/bots";
+import { useThreadTitles } from "../state/entities";
 import { useThemeColor } from "../lib/useThemeColor";
 import { useFontFamily } from "../lib/useFontFamily";
 import { useScaledTextRole } from "../features/settings/appearance/useScaledTextRole";
@@ -81,6 +89,26 @@ function basename(path: string): string {
   return separator >= 0 ? path.slice(separator + 1) : path;
 }
 
+function tokenLabel(
+  token: ComposerInlineToken,
+  skillLabels: ReadonlyMap<string, string>,
+  threadTitles: ReadonlyMap<string, string>,
+  botNames: ReadonlyMap<string, string>,
+): string {
+  switch (token.type) {
+    case "skill":
+      return skillLabels.get(token.value) ?? token.value;
+    case "browser-mention":
+      return BROWSER_MENTION_LABEL;
+    case "thread-mention":
+      return threadTitles.get(token.value) ?? UNKNOWN_CHAT_MENTION_LABEL;
+    case "bot-mention":
+      return botNames.get(token.value) ?? UNKNOWN_BOT_MENTION_LABEL;
+    default:
+      return basename(token.value);
+  }
+}
+
 function fileIconUri(path: string): string {
   return Image.resolveAssetSource(markdownFileIconSource(resolveMarkdownFileIcon(path))).uri;
 }
@@ -136,25 +164,37 @@ export function ComposerEditor({
     () => new Map(skills.map((skill) => [skill.name, skill.displayName?.trim() || skill.name])),
     [skills],
   );
-  const tokensJson = useMemo(() => {
-    const tokens = collectComposerInlineTokens(props.value, {
+  const tokens = useMemo(() => {
+    const next = collectComposerInlineTokens(props.value, {
       preserveTrailingFrom: confirmedTokensRef.current,
     });
-    confirmedTokensRef.current = tokens;
-    return JSON.stringify(
-      tokens.map((token) => ({
-        type: token.type,
-        source: token.source,
-        start: token.start,
-        end: token.end,
-        label:
-          token.type === "skill"
-            ? (skillLabels.get(token.value) ?? token.value)
-            : basename(token.value),
-        iconUri: token.type === "mention" ? fileIconUri(token.value) : null,
-      })),
-    );
-  }, [props.value, skillLabels]);
+    confirmedTokensRef.current = next;
+    return next;
+  }, [props.value]);
+  const mentionedThreadIds = useMemo(
+    () => tokens.flatMap((token) => (token.type === "thread-mention" ? [token.value] : [])),
+    [tokens],
+  );
+  const threadTitles = useThreadTitles(mentionedThreadIds);
+  const mentionedBotIds = useMemo(
+    () => tokens.flatMap((token) => (token.type === "bot-mention" ? [token.value] : [])),
+    [tokens],
+  );
+  const botNames = useBotNames(mentionedBotIds);
+  const tokensJson = useMemo(
+    () =>
+      JSON.stringify(
+        tokens.map((token) => ({
+          type: token.type,
+          source: token.source,
+          start: token.start,
+          end: token.end,
+          label: tokenLabel(token, skillLabels, threadTitles, botNames),
+          iconUri: token.type === "mention" ? fileIconUri(token.value) : null,
+        })),
+      ),
+    [botNames, skillLabels, threadTitles, tokens],
+  );
   // Every render resolves against the snapshot history, so a render whose
   // (value, selection) lags the acknowledged native state is stamped behind
   // the native revision and rejected by the editor instead of re-applying a

@@ -14,7 +14,7 @@
  * before publishing, so every path that produces models (pending, probe,
  * error fallbacks) is classified the same way.
  */
-import type { ProviderDriverKind, ServerProviderModel } from "@t3tools/contracts";
+import type { ProviderDriverKind, ServerProviderModel } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -49,7 +49,7 @@ const FETCH_TIMEOUT_MS = 10_000;
  * map have no legacy concept and their models are left unflagged.
  */
 const ModelManifestSchema = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
   currentModels: Schema.Record(Schema.String, Schema.Array(Schema.String)),
 });
 export type ModelManifestData = typeof ModelManifestSchema.Type;

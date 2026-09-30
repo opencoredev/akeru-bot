@@ -6,7 +6,7 @@ import {
   type AkeruMemoryArchiveTarget,
   type AkeruMemoryRevision,
   type AkeruMemoryThreadAccess,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -60,7 +60,7 @@ export function exportAkeruMemory(input: {
   return Effect.gen(function* () {
     const partitions = yield* resolveMemoryArchivePartitions(input.access, input.target);
     const revisions = yield* input.repository.listByPartitions({
-      tenantId: input.access.tenantId,
+      access: input.access,
       partitions,
       complete: input.complete,
     });

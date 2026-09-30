@@ -7,7 +7,7 @@ import {
   ThreadId,
   type AkeruUsageEntry,
   type SubscriptionProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -20,16 +20,34 @@ import * as ServerConfig from "../config.ts";
 import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import * as UsageService from "./UsageService.ts";
 
-vi.mock("../subscription-auth/service.ts", () => ({
-  SubscriptionAuthService: {
-    forSecretsDir: () => ({
-      reload: () => {},
-      statuses: () => [],
-      getPlanAccessToken: async () => undefined,
-    }),
-  },
-}));
-vi.mock("./usagePlanLimits.ts", () => ({ readPlanLimits: async () => [] }));
+vi.mock("../subscription-auth/service.ts", async () => {
+  const Effect = await import("effect/Effect");
+  return {
+    SubscriptionAuthService: {
+      forSecretsDir: () =>
+        Effect.succeed({
+          reload: () => Effect.void,
+          statuses: () => [],
+          getPlanAccess: async () => undefined,
+        }),
+    },
+  };
+});
+const planLimits = vi.hoisted(() => ({ readerCreations: 0, reads: 0 }));
+vi.mock("./usagePlanLimits.ts", async () => {
+  const Effect = await import("effect/Effect");
+  return {
+    makePlanLimitsReader: () =>
+      Effect.sync(() => {
+        planLimits.readerCreations += 1;
+        return () =>
+          Effect.sync(() => {
+            planLimits.reads += 1;
+            return [];
+          });
+      }),
+  };
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -101,7 +119,6 @@ describe("usageRecordFromEntry", () => {
   it.each([
     ["claudeAgent", "anthropic", "claude"],
     ["codex", "openai-codex", "codex"],
-    ["cursor", "cursor", "cursor"],
     ["grok", "xai", "grok"],
     ["kimi", "kimi-for-coding", "kimi"],
     ["opencode", "opencode-go", "opencode"],
@@ -129,6 +146,18 @@ it.layer(NodeServices.layer)("UsageService pricing", (it) => {
       expect(yield* UsageService.readUsageStoreVolumeId(fs, `${directory}/missing.sqlite`)).toBe(
         "",
       );
+    }),
+  );
+
+  it.effect("builds one plan-limits reader per service and reads through it", () =>
+    Effect.gen(function* () {
+      const before = { ...planLimits };
+      const { service } = yield* makeFixture(Effect.succeed(Response.json(rateDocument)));
+      expect(planLimits.readerCreations).toBe(before.readerCreations + 1);
+      expect(yield* service.readPlanLimits()).toEqual([]);
+      expect(yield* service.readPlanLimits()).toEqual([]);
+      expect(planLimits.readerCreations).toBe(before.readerCreations + 1);
+      expect(planLimits.reads).toBe(before.reads + 2);
     }),
   );
 

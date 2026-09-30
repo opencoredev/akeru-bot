@@ -1,6 +1,7 @@
-import type { UsagePlanWindow, UsageProviderPlanLimits } from "@t3tools/contracts";
-import type { MergedUsage } from "@t3tools/shared/usageMerge";
-import { makeWindow } from "@t3tools/shared/usageFormat";
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId, UsagePlanWindow, UsageProviderPlanLimits } from "@akeru/contracts";
+import type { MergedUsage } from "@akeru/shared/usageMerge";
+import { makeWindow } from "@akeru/shared/usageFormat";
 import { useEffect, useState } from "react";
 import { Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,13 +10,14 @@ import { useNavigation } from "@react-navigation/native";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
+import { environmentBotsAtom } from "../../state/bots";
 import { useUsage, type EnvironmentUsageStatus } from "../../state/usage";
+import { SettingsRow } from "../settings/components/SettingsRow";
 import { SettingsSection } from "../settings/components/SettingsSection";
 
 const PLAN_LABELS = {
   "openai-codex": "ChatGPT",
   anthropic: "Claude",
-  cursor: "Cursor",
   xai: "Grok",
   "kimi-for-coding": "Kimi For Coding",
   "opencode-go": "OpenCode Go",
@@ -72,6 +74,15 @@ export function UsageRouteScreen() {
         ) : (
           planLimits.map((limits) => <PlanCard key={limits.provider} limits={limits} />)
         )}
+
+        {environments.map((environment) => (
+          <EnvironmentBotUsageSection
+            key={environment.environmentId}
+            environmentId={environment.environmentId}
+            label={environment.label}
+            multipleEnvironments={environments.length > 1}
+          />
+        ))}
       </ScrollView>
     </View>
   );
@@ -156,5 +167,44 @@ function UsageCoverageNotice(props: {
         </Text>
       ))}
     </View>
+  );
+}
+
+/**
+ * Per-bot usage entry points for one environment. Plan limits above describe the
+ * subscription; these rows lead to what each bot spent against it.
+ */
+function EnvironmentBotUsageSection(props: {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+  readonly multipleEnvironments: boolean;
+}) {
+  const navigation = useNavigation();
+  const bots = useAtomValue(environmentBotsAtom(props.environmentId));
+  if (bots.length === 0) return null;
+
+  return (
+    <SettingsSection title={props.multipleEnvironments ? `Bots · ${props.label}` : "Bots"} card>
+      {bots.map((bot) => (
+        <SettingsRow
+          key={bot.id}
+          icon="person.crop.circle"
+          label={bot.archivedAt === null ? bot.name : `${bot.name} (archived)`}
+          onPress={() =>
+            navigation.navigate("SettingsSheet", {
+              screen: "SettingsContent",
+              params: {
+                screen: "SettingsBotUsage",
+                params: {
+                  environmentId: props.environmentId,
+                  botId: bot.id,
+                  botName: bot.name,
+                },
+              },
+            })
+          }
+        />
+      ))}
+    </SettingsSection>
   );
 }

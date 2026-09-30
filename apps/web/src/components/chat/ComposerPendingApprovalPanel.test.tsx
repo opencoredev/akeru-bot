@@ -1,11 +1,11 @@
-import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@t3tools/contracts";
+import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 
 describe("ComposerPendingApprovalPanel", () => {
-  it("shows a complete highlighted command without a duplicate disclosure", () => {
+  it("shows the complete command without a duplicate disclosure", () => {
     const detail = `bun run release -- ${"x".repeat(500)}\nsecond line`;
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
@@ -163,6 +163,7 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).toContain("Review routine");
     expect(markup).toContain("Daily brief");
     expect(markup).toContain("Weekdays at 09:00");
+    expect(markup).toContain("What it does");
     expect(markup).toContain("Summarize the work in this chat.");
     expect(markup).not.toContain("Command approval");
     expect(markup).not.toContain("Allow akeru_create_routine?");
@@ -187,6 +188,79 @@ describe("ComposerPendingApprovalPanel", () => {
       />,
     );
 
-    expect(markup).toContain("Friday at 14:00 (America/New_York)");
+    expect(markup).toContain("Every Friday at 14:00");
+    expect(markup).toContain("America/New_York");
+  });
+
+  it("does not repeat schedule wording in a routine's task summary", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-daily-routine"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-09-27T00:00:00.000Z",
+          args: {
+            name: "Morning quote",
+            instructions:
+              "Every day at 8:00 AM America/New_York, send me one short positive quote.",
+            schedule: { kind: "daily", time: "08:00" },
+            timezone: "America/New_York",
+          },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("Send me one short positive quote.");
+    expect(markup).not.toContain("Every day at 8:00 AM America/New_York,");
+  });
+
+  it("does not invent a name or schedule when the draft args are missing", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-routine-empty"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-09-27T00:00:00.000Z",
+          detail: "Review routine",
+        }}
+        pendingCount={1}
+        hideLabel
+      />,
+    );
+
+    expect(markup).toContain("The routine details did not come through.");
+    expect(markup).not.toContain("New routine");
+    expect(markup).not.toContain("Daily");
+    expect(markup).not.toContain("Every day");
+    // The prompt owns the heading, so the panel must not repeat it.
+    expect(markup).not.toContain("Review routine");
+  });
+
+  it("omits a schedule it cannot read instead of defaulting to daily", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-routine-partial"),
+          requestKind: "command",
+          toolName: AKERU_CREATE_ROUTINE_TOOL_NAME,
+          createdAt: "2026-09-27T00:00:00.000Z",
+          args: {
+            name: "Morning quote",
+            instructions: "Send a random positive quote.",
+            schedule: { kind: "hourly", time: "08:00" },
+            skillNames: ["Quotes"],
+          },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("Morning quote");
+    expect(markup).toContain("Send a random positive quote.");
+    expect(markup).toContain("Uses Quotes");
+    expect(markup).not.toContain("08:00");
   });
 });

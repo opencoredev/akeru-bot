@@ -1,4 +1,4 @@
-import { BotId } from "@t3tools/contracts";
+import { BotId } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -125,7 +125,9 @@ describe("voice channel messages", () => {
       }),
       handlers,
     );
-    expect(handlers.sessionFailed).toHaveBeenCalledWith("Session expired.");
+    expect(handlers.sessionFailed).toHaveBeenCalledWith(
+      "The voice session failed. Start a new call to continue.",
+    );
   });
 
   it("delegates workspace work to the existing chat runtime", async () => {

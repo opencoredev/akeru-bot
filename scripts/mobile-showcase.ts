@@ -26,7 +26,6 @@ import showcaseConfig, {
 import {
   SHOWCASE_ENVIRONMENTS,
   SHOWCASE_PROJECTS,
-  SHOWCASE_TERMINAL_ID,
   SHOWCASE_THREAD_ID,
   seedShowcaseEnvironment,
 } from "./mobile-showcase-environment.ts";
@@ -414,7 +413,7 @@ function printUsage(config: ShowcaseConfig): void {
   NodeProcess.stdout.write(`App screenshot showcase
 
 Usage:
-  pnpm --filter @t3tools/mobile screenshots [options]
+  pnpm --filter @akeru/mobile screenshots [options]
 
 Options:
   --platform ios|android|all  Capture one platform (repeatable)
@@ -671,11 +670,7 @@ export function showcaseSceneUrl(scene: ShowcaseScene, environmentId: string): s
   if (scene === "threads") return `${APP_SCHEME}://`;
   if (scene === "environments") return `${APP_SCHEME}://settings/environments`;
   const threadPath = `threads/${encodeURIComponent(environmentId)}/${SHOWCASE_THREAD_ID}`;
-  if (scene === "thread") return `${APP_SCHEME}://${threadPath}`;
-  if (scene === "terminal") {
-    return `${APP_SCHEME}://${threadPath}/terminal?terminalId=${SHOWCASE_TERMINAL_ID}`;
-  }
-  return `${APP_SCHEME}://${threadPath}/review`;
+  return `${APP_SCHEME}://${threadPath}`;
 }
 
 export function encodeAndroidPairingUrls(pairingUrls: ReadonlyArray<string>): string {
@@ -1008,7 +1003,7 @@ async function captureIos(
     } else {
       await waitForIosShowcaseScene(simulator.udid, scene);
     }
-    await delay(scene === "review" ? Math.max(config.settleDelayMs, 8_000) : config.settleDelayMs);
+    await delay(config.settleDelayMs);
     const destination = NodePath.join(
       showcaseCaptureDirectory(outputDirectory, capture),
       `${scene}.png`,
@@ -1245,7 +1240,7 @@ async function captureAndroid(
   for (const [sceneIndex, scene] of capture.scenes.entries()) {
     if (sceneIndex > 0) await writeAndroidShowcaseScene(serial, scene);
     await waitForAndroidShowcaseScene(serial, scene);
-    await delay(Math.max(config.settleDelayMs, scene === "review" ? 8_000 : 5_000));
+    await delay(Math.max(config.settleDelayMs, 5_000));
     const destination = NodePath.join(
       showcaseCaptureDirectory(outputDirectory, capture),
       `${scene}.png`,

@@ -1,4 +1,4 @@
-import { BotId, McpServerId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { BotId, McpServerId, ProjectId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -42,6 +42,7 @@ const RoutineRow = Schema.Struct({
   connectorDependencies: Schema.fromJsonString(Schema.Array(McpServerId)),
   sandbox: Schema.String,
   approvalPolicy: Schema.String,
+  delegateToBotId: Schema.NullOr(BotId),
   enabled: Schema.Number,
   lifecycle: Schema.Literals([
     "draft",
@@ -118,7 +119,8 @@ const make = Effect.gen(function* () {
             approval_version AS "approvalVersion", schedule_json AS schedule, timezone,
             skill_assignment_ids_json AS "skillAssignmentIds",
             connector_dependencies_json AS "connectorDependencies", sandbox,
-            approval_policy AS "approvalPolicy", enabled, lifecycle,
+            approval_policy AS "approvalPolicy", delegate_to_bot_id AS "delegateToBotId",
+            enabled, lifecycle,
             next_run_at AS "nextRunAt", last_run_at AS "lastRunAt",
             latest_result_json AS "latestResult", latest_failure_json AS "latestFailure",
             created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"
@@ -131,7 +133,8 @@ const make = Effect.gen(function* () {
             approval_version AS "approvalVersion", schedule_json AS schedule, timezone,
             skill_assignment_ids_json AS "skillAssignmentIds",
             connector_dependencies_json AS "connectorDependencies", sandbox,
-            approval_policy AS "approvalPolicy", enabled, lifecycle,
+            approval_policy AS "approvalPolicy", delegate_to_bot_id AS "delegateToBotId",
+            enabled, lifecycle,
             next_run_at AS "nextRunAt", last_run_at AS "lastRunAt",
             latest_result_json AS "latestResult", latest_failure_json AS "latestFailure",
             created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"
@@ -175,6 +178,33 @@ const make = Effect.gen(function* () {
     `.pipe(
       Effect.map((rows) => rows.map((row) => decodeRun(row) as RoutineRun)),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.listRuns")),
+    );
+
+  const listThreadRuns: RoutineRepositoryShape["listThreadRuns"] = (threadId, beforeRunId) =>
+    sql<Record<string, unknown>>`
+      SELECT run.run_id AS id, run.routine_id AS "routineId",
+        run.procedure_version AS "procedureVersion", run.trigger,
+        run.scheduled_for AS "scheduledFor", run.status, run.thread_ref AS "threadRef",
+        run.result_json AS result, run.failure_json AS failure, run.usage_ref AS "usageRef",
+        run.started_at AS "startedAt", run.completed_at AS "completedAt",
+        run.created_at AS "createdAt", run.updated_at AS "updatedAt"
+      FROM projection_routine_runs AS run
+      JOIN projection_routines AS routine ON routine.routine_id = run.routine_id
+      WHERE routine.target_thread_id = ${threadId}
+        AND (${beforeRunId ?? null} IS NULL OR
+          (run.created_at, run.run_id) < (
+            SELECT previous.created_at, previous.run_id
+            FROM projection_routine_runs AS previous
+            WHERE previous.run_id = ${beforeRunId ?? null}
+          ))
+      ORDER BY run.created_at DESC, run.run_id DESC
+      LIMIT 101
+    `.pipe(
+      Effect.map((rows) => {
+        const runs = rows.slice(0, 100).map((row) => decodeRun(row) as RoutineRun);
+        return { runs, nextCursor: rows.length > 100 ? (runs[99]?.id ?? null) : null };
+      }),
+      Effect.mapError(toPersistenceSqlError("RoutineRepository.listThreadRuns")),
     );
 
   const listAllRuns: RoutineRepositoryShape["listAllRuns"] = sql<Record<string, unknown>>`
@@ -322,6 +352,7 @@ const make = Effect.gen(function* () {
     listEnabled,
     getById,
     listRuns,
+    listThreadRuns,
     listAllRuns,
     getActiveRunByThreadRef,
     listSkillAssignments,

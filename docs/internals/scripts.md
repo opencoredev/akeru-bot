@@ -31,7 +31,7 @@ authenticated.
   `T3CODE_NO_BROWSER` itself from this flag, so setting `T3CODE_NO_BROWSER=0` in your environment has
   no effect; use `--browser`.
 - `vp run dev:server`: Starts just the server. It runs on Node (`node --watch src/bin.ts`), so
-  without Bun present it selects `NodePtyAdapter` and `NodeHttpServer`.
+  without Bun present it selects `NodeHttpServer`.
 - `vp run dev:web`: Starts just the Vite dev server for the web app.
 - `vp run dev:desktop`: Starts the Electron shell against the dev server.
 - `vp run dev:marketing`: Starts the Astro marketing site.
@@ -87,7 +87,7 @@ from app configuration rather than copied identifiers.
 
 ## Build, check, test
 
-- `vp run build`: Fans out over `apps/*`, `packages/*`, `oxlint-plugin-t3code`, and `scripts`.
+- `vp run build`: Fans out over `apps/*`, `packages/*`, `oxlint-plugin-akeru`, and `scripts`.
   Workspaces that define a build task run one: desktop, marketing, server (which depends on web), and
   web. Shared packages are consumed and bundled transitively rather than built separately.
 - `vp run build:desktop`: Builds the desktop pipeline (desktop plus server).

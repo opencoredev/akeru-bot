@@ -1,7 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "currentModels": {
     "codex": [
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-6-astra",
       "gpt-5.6-luna",
       "gpt-5.6-terra",
       "gpt-5.6-sol",

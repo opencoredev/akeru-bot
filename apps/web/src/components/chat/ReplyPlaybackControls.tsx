@@ -4,8 +4,9 @@ import {
   sameReplyPlaybackIdentity,
   type ReplyPlaybackController,
   type ReplyPlaybackRequest,
-} from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/client-runtime/reply-playback";
 
+import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 
 export interface ReplyPlaybackControlsProps {
@@ -21,6 +22,7 @@ export function ReplyPlaybackControls({
   unavailableReason,
   disclosure,
 }: ReplyPlaybackControlsProps) {
+  const { t } = useI18n();
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -32,14 +34,14 @@ export function ReplyPlaybackControls({
       : "idle";
   const label =
     state === "loading"
-      ? "Preparing audio"
+      ? t("Preparing audio")
       : state === "playing"
-        ? "Pause readout"
+        ? t("Pause readout")
         : state === "paused"
-          ? "Resume readout"
+          ? t("Resume readout")
           : state === "error"
-            ? "Retry readout"
-            : "Read aloud";
+            ? t("Retry readout")
+            : t("Read aloud");
   const activate = () => {
     if (state === "playing") controller.pause();
     else if (state === "paused") void controller.resume();
@@ -47,7 +49,7 @@ export function ReplyPlaybackControls({
     else void controller.start(request);
   };
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Reply playback">
+    <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label={t("Reply playback")}>
       <Button
         aria-label={label}
         aria-busy={state === "loading"}
@@ -67,13 +69,18 @@ export function ReplyPlaybackControls({
         {label}
       </Button>
       {state === "loading" || state === "playing" || state === "paused" ? (
-        <Button aria-label="Stop readout" size="icon-xs" variant="ghost" onClick={controller.stop}>
+        <Button
+          aria-label={t("Stop readout")}
+          size="icon-xs"
+          variant="ghost"
+          onClick={controller.stop}
+        >
           <SquareIcon className="size-3.5" />
         </Button>
       ) : null}
       {state === "error" ? (
         <span role="status" className="text-xs text-muted-foreground">
-          Audio could not play. Retry, or check voice settings.
+          {t("Audio could not play. Retry, or check voice settings.")}
         </span>
       ) : null}
       {disclosure ? <span className="text-xs text-muted-foreground">{disclosure}</span> : null}

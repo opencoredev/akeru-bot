@@ -3,11 +3,11 @@ import {
   PreviewAutomationUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview" | "memory";
+export type McpCapability = "preview" | "memory" | "image";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;

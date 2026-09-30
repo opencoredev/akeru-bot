@@ -6,7 +6,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createAkeruChannelRuntime } from "./AkeruChannelRuntime.ts";
@@ -30,6 +30,7 @@ const bot = (id: BotId, groupId: GroupId | null) => ({
   sandbox: "local" as const,
   runtimeMode: "approval-required" as const,
   usageCap: null,
+  imageProvider: null,
   voiceEnabled: false,
   channelBindings: [],
   groupId,

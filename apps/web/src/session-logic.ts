@@ -1,3 +1,4 @@
+import { isSilentRunActivity } from "@akeru/client-runtime/silent-run";
 import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
@@ -7,28 +8,19 @@ import {
   requestKindFromRequestType,
   type PendingApproval,
   type PendingUserInput,
-} from "@t3tools/client-runtime/pending-requests";
-import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@akeru/client-runtime/pending-requests";
+import { isBackgroundTaskActivity } from "@akeru/client-runtime/state/subagentRuntime";
 import {
   AkeruPluginSearchResult,
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
-  type OrchestrationProposedPlanId,
   ProviderDriverKind,
   type ToolLifecycleItemType,
-  type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
-import type {
-  ChatMessage,
-  ProposedPlan,
-  SessionPhase,
-  Thread,
-  ThreadSession,
-  TurnDiffSummary,
-} from "./types";
+import type { ChatMessage, SessionPhase, Thread, ThreadSession, TurnDiffSummary } from "./types";
 
 export type ProviderPickerKind = ProviderDriverKind;
 
@@ -142,28 +134,12 @@ export interface ActivePlanState {
   }>;
 }
 
-export interface LatestProposedPlanState {
-  id: OrchestrationProposedPlanId;
-  createdAt: string;
-  updatedAt: string;
-  turnId: TurnId | null;
-  planMarkdown: string;
-  implementedAt: string | null;
-  implementationThreadId: ThreadId | null;
-}
-
 export type TimelineEntry =
   | {
       id: string;
       kind: "message";
       createdAt: string;
       message: ChatMessage;
-    }
-  | {
-      id: string;
-      kind: "proposed-plan";
-      createdAt: string;
-      proposedPlan: ProposedPlan;
     }
   | {
       id: string;
@@ -325,31 +301,7 @@ export function workEntryIndicatesToolNeutralStatus(entry: WorkLogEntry): boolea
   return true;
 }
 
-export function formatDuration(durationMs: number): string {
-  if (!Number.isFinite(durationMs) || durationMs < 0) return "0ms";
-  if (durationMs < 1_000) return `${Math.max(1, Math.round(durationMs))}ms`;
-  if (durationMs < 10_000) {
-    const tenths = Math.round(durationMs / 100) / 10;
-    // 9.95s+ rounds up to the next bucket — render "10s", not "10.0s".
-    return tenths >= 10 ? "10s" : `${tenths.toFixed(1)}s`;
-  }
-  if (durationMs < 60_000) return `${Math.round(durationMs / 1_000)}s`;
-  const minutes = Math.floor(durationMs / 60_000);
-  const seconds = Math.round((durationMs % 60_000) / 1_000);
-  if (seconds === 0) return `${minutes}m`;
-  if (seconds === 60) return `${minutes + 1}m`;
-  return `${minutes}m ${seconds}s`;
-}
-
-export function formatElapsed(startIso: string, endIso: string | undefined): string | null {
-  if (!endIso) return null;
-  const startedAt = Date.parse(startIso);
-  const endedAt = Date.parse(endIso);
-  if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) {
-    return null;
-  }
-  return formatDuration(endedAt - startedAt);
-}
+export { formatDuration, formatElapsed } from "@akeru/shared/orchestrationTiming";
 
 type LatestTurnTiming = Pick<OrchestrationLatestTurn, "turnId" | "startedAt" | "completedAt">;
 type SessionActivityState = Pick<NonNullable<Thread["session"]>, "status" | "activeTurnId">;
@@ -567,42 +519,6 @@ export function deriveTurnPlans(
   }));
 }
 
-export function findLatestProposedPlan(
-  proposedPlans: ReadonlyArray<ProposedPlan>,
-  latestTurnId: TurnId | string | null | undefined,
-): LatestProposedPlanState | null {
-  if (latestTurnId) {
-    const matchingTurnPlan = [...proposedPlans]
-      .filter((proposedPlan) => proposedPlan.turnId === latestTurnId)
-      .toSorted(
-        (left, right) =>
-          left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
-      )
-      .at(-1);
-    if (matchingTurnPlan) {
-      return toLatestProposedPlanState(matchingTurnPlan);
-    }
-  }
-
-  const latestPlan = [...proposedPlans]
-    .toSorted(
-      (left, right) =>
-        left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
-    )
-    .at(-1);
-  if (!latestPlan) {
-    return null;
-  }
-
-  return toLatestProposedPlanState(latestPlan);
-}
-
-export function hasActionableProposedPlan(
-  proposedPlan: LatestProposedPlanState | Pick<ProposedPlan, "implementedAt"> | null,
-): boolean {
-  return proposedPlan !== null && proposedPlan.implementedAt === null;
-}
-
 /**
  * Quiet-timeline guarantee: the work log carries the parent's narrative plus
  * at most one row per agent. Everything an agent does internally lives in the
@@ -680,6 +596,8 @@ export function deriveWorkLogEntries(
     if (activity.kind === "tool.progress") continue;
     if (activity.kind === "context-window.updated") continue;
     if (activity.summary === "Checkpoint captured") continue;
+    // Silent-run state drives the status line; it is not work the bot did.
+    if (isSilentRunActivity(activity)) continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
@@ -1073,18 +991,6 @@ function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | un
 
 function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
-}
-
-function toLatestProposedPlanState(proposedPlan: ProposedPlan): LatestProposedPlanState {
-  return {
-    id: proposedPlan.id,
-    createdAt: proposedPlan.createdAt,
-    updatedAt: proposedPlan.updatedAt,
-    turnId: proposedPlan.turnId,
-    planMarkdown: proposedPlan.planMarkdown,
-    implementedAt: proposedPlan.implementedAt,
-    implementationThreadId: proposedPlan.implementationThreadId,
-  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1637,7 +1543,6 @@ function compareActivityLifecycleRank(kind: string): number {
 
 export function deriveTimelineEntries(
   messages: ReadonlyArray<ChatMessage>,
-  proposedPlans: ReadonlyArray<ProposedPlan>,
   workEntries: ReadonlyArray<WorkLogEntry>,
   turnPlans: ReadonlyArray<TurnPlanEntry> = [],
 ): TimelineEntry[] {
@@ -1646,12 +1551,6 @@ export function deriveTimelineEntries(
     kind: "message",
     createdAt: message.createdAt,
     message,
-  }));
-  const proposedPlanRows: TimelineEntry[] = proposedPlans.map((proposedPlan) => ({
-    id: proposedPlan.id,
-    kind: "proposed-plan",
-    createdAt: proposedPlan.createdAt,
-    proposedPlan,
   }));
   const turnPlanRows: TimelineEntry[] = turnPlans.map((turnPlan) => ({
     id: turnPlan.id,
@@ -1665,7 +1564,7 @@ export function deriveTimelineEntries(
     createdAt: entry.createdAt,
     entry,
   }));
-  return [...messageRows, ...proposedPlanRows, ...turnPlanRows, ...workRows].toSorted((a, b) =>
+  return [...messageRows, ...turnPlanRows, ...workRows].toSorted((a, b) =>
     a.createdAt.localeCompare(b.createdAt),
   );
 }

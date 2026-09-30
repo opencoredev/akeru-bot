@@ -5,21 +5,35 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@akeru/shared/Net";
 import { assert, describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Cause from "effect/Cause";
+import * as Runtime from "effect/Runtime";
+import * as Exit from "effect/Exit";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
 
+import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { cli } from "../bin.ts";
+import * as ServerConfig from "../config.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import {
   makePersistedServerRuntimeState,
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
 import {
+  AdminAlreadyPairedError,
   DevServerNotProxiableError,
+  InvalidPublicUrlError,
+  issueAdminPairingLink,
+  PairStdoutIsTerminal,
+  parsePublicPairingBaseUrl,
   resolveDirectPairingBaseUrl,
   resolveTailscaleLocalTarget,
 } from "./pair.ts";
@@ -47,6 +61,96 @@ describe("pair base URL selection", () => {
     );
     expect(resolveDirectPairingBaseUrl(baseState)).toBe("http://localhost:3773");
   });
+});
+
+describe("pair public URL", () => {
+  it("accepts an http or https origin", () => {
+    expect(parsePublicPairingBaseUrl("https://akeru.example.com")).toBe(
+      "https://akeru.example.com",
+    );
+    expect(parsePublicPairingBaseUrl("https://akeru.example.com:8443/")).toBe(
+      "https://akeru.example.com:8443",
+    );
+    expect(parsePublicPairingBaseUrl("http://192.168.1.10:3773")).toBe("http://192.168.1.10:3773");
+  });
+
+  it("rejects anything that is not a bare http or https origin", () => {
+    for (const raw of [
+      "akeru.example.com",
+      "ftp://akeru.example.com",
+      "javascript:alert(1)",
+      "https://user:pass@akeru.example.com",
+      "https://akeru.example.com/akeru",
+      "https://akeru.example.com/?token=abc",
+    ]) {
+      expect(parsePublicPairingBaseUrl(raw)).toBeInstanceOf(InvalidPublicUrlError);
+    }
+  });
+});
+
+const InMemoryEnvironmentAuthLayer = EnvironmentAuth.layer.pipe(
+  Layer.provide(SqlitePersistenceMemory),
+  Layer.provide(ServerSecretStore.layer),
+  Layer.provide(ServerEnvironment.identityLayer),
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-pair-admin-test-" })),
+  Layer.provide(NodeServices.layer),
+);
+
+describe("pair admin link", () => {
+  it.effect("is offered until a person pairs an admin client, then refused", () =>
+    Effect.gen(function* () {
+      const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const noOverrides = { ttl: Option.none(), label: Option.none() };
+
+      // CLI bearer sessions for bots and scripts do not close the admin bootstrap.
+      yield* environmentAuth.issueSession({ label: "script" });
+      const issued = yield* issueAdminPairingLink(noOverrides);
+      expect(issued.scopes).toContain("access:write");
+
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        issued.credential,
+        undefined,
+        { deviceType: "mobile" },
+      );
+      const refused = yield* issueAdminPairingLink(noOverrides).pipe(Effect.flip);
+
+      expect(refused).toBeInstanceOf(AdminAlreadyPairedError);
+    }).pipe(Effect.provide(InMemoryEnvironmentAuthLayer)),
+  );
+});
+
+describe("first admin pairing", () => {
+  it.effect("revokes admin links issued before it", () =>
+    Effect.gen(function* () {
+      const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const noOverrides = { ttl: Option.none(), label: Option.none() };
+      const first = yield* issueAdminPairingLink(noOverrides);
+      const second = yield* issueAdminPairingLink(noOverrides);
+      const startup = yield* environmentAuth.issueStartupPairingCredential();
+      const standard = yield* environmentAuth.createPairingLink();
+
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        first.credential,
+        undefined,
+        { deviceType: "mobile" },
+      );
+
+      for (const credential of [second.credential, startup.credential]) {
+        const refused = yield* environmentAuth
+          .exchangeBootstrapCredentialForAccessToken(credential, undefined, {
+            deviceType: "mobile",
+          })
+          .pipe(Effect.flip);
+        expect(refused._tag).toBe("ServerAuthInvalidCredentialError");
+      }
+      // Standard links for adding devices stay valid.
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        standard.credential,
+        undefined,
+        { deviceType: "mobile" },
+      );
+    }).pipe(Effect.provide(InMemoryEnvironmentAuthLayer)),
+  );
 });
 
 describe("pair tailscale local target", () => {
@@ -84,6 +188,17 @@ describe("pair tailscale local target", () => {
 });
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
+
+const runCliCaptured = (args: ReadonlyArray<string>) =>
+  provideCliTestLayers(
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(runCli(args));
+      const errorLines = (yield* TestConsole.errorLines).filter(
+        (line): line is string => typeof line === "string",
+      );
+      return { exit, errorLines };
+    }),
+  );
 
 const provideCliTestLayers = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.provide(effect, Layer.mergeAll(CliRuntimeLayer, TestConsole.layer));
@@ -150,7 +265,9 @@ describe("akeru pair", () => {
           }),
         });
 
-        const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+        const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir])).pipe(
+          Effect.provideService(PairStdoutIsTerminal, true),
+        );
 
         assert.include(output, `Pairing with pair-test (${origin})`);
         assert.include(output, `Pairing URL: ${origin}/pair#token=`);
@@ -169,6 +286,122 @@ describe("akeru pair", () => {
         const credentials = JSON.parse(listed) as ReadonlyArray<{ readonly label?: string }>;
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "akeru pair");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("prints the QR code only on a terminal and never with --no-qr", () =>
+    withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-qr-test-"));
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+        const hasQrCode = (output: string) => /[█▀▄]/.test(output);
+
+        const onTerminal = yield* captureStdout(runCli(["pair", "--base-dir", baseDir])).pipe(
+          Effect.provideService(PairStdoutIsTerminal, true),
+        );
+        const optedOut = yield* captureStdout(
+          runCli(["pair", "--base-dir", baseDir, "--no-qr"]),
+        ).pipe(Effect.provideService(PairStdoutIsTerminal, true));
+        const piped = yield* captureStdout(runCli(["pair", "--base-dir", baseDir])).pipe(
+          Effect.provideService(PairStdoutIsTerminal, false),
+        );
+
+        assert.isTrue(hasQrCode(onTerminal));
+        for (const output of [optedOut, piped]) {
+          assert.isFalse(hasQrCode(output));
+          // The full URL with its token is always printed, QR code or not.
+          assert.match(output, /Pairing URL: http:\/\/127\.0\.0\.1:\d+\/pair#token=[A-Z2-9]+/);
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("builds the pairing URL on --public-url for a loopback server behind a tunnel", () =>
+    withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-test-"));
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+
+        const output = yield* captureStdout(
+          runCli(["pair", "--base-dir", baseDir, "--public-url", "https://akeru.example.com"]),
+        );
+
+        assert.match(output, /Pairing URL: https:\/\/akeru\.example\.com\/pair#token=[A-Z2-9]+/);
+        assert.notInclude(output, "only reachable from this machine");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("refuses a non-http --public-url and --public-url with --tailscale", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-bad-"));
+      const badScheme = yield* runCliCaptured([
+        "pair",
+        "--base-dir",
+        baseDir,
+        "--public-url",
+        "ftp://example.com",
+      ]);
+      const both = yield* runCliCaptured([
+        "pair",
+        "--base-dir",
+        baseDir,
+        "--public-url",
+        "https://example.com",
+        "--tailscale",
+      ]);
+
+      for (const { exit, errorLines } of [badScheme, both]) {
+        if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+        assert.equal(exit.cause.reasons.filter(Cause.isFailReason).length, 1);
+        assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+        assert.isAbove(errorLines.length, 0);
+      }
+      assert.include(badScheme.errorLines.at(-1) ?? "", "must use http or https");
+      assert.include(both.errorLines.at(-1) ?? "", "not both");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("mints an admin-scope link with --admin and says so", () =>
+    withDescriptorServer((origin) =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-admin-cli-"));
+        yield* persistServerRuntimeState({
+          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          state: yield* makePersistedServerRuntimeState({
+            config: { host: "127.0.0.1", devUrl: undefined },
+            port: Number(new URL(origin).port),
+          }),
+        });
+
+        const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir, "--admin"]));
+        const listed = yield* captureStdout(
+          runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
+        );
+
+        assert.include(output, "grants admin scope");
+        assert.match(output, /Pairing URL: http:\/\/127\.0\.0\.1:\d+\/pair#token=[A-Z2-9]+/);
+        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
+        const credentials = JSON.parse(listed) as ReadonlyArray<{
+          readonly label?: string;
+          readonly scopes: ReadonlyArray<string>;
+        }>;
+        assert.equal(credentials.length, 1);
+        assert.equal(credentials[0]?.label, "akeru pair --admin");
+        assert.include(credentials[0]?.scopes ?? [], "access:write");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -198,13 +431,12 @@ describe("akeru pair", () => {
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-none-test-"));
 
-      const error = yield* provideCliTestLayers(
-        runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
-      );
+      const { exit, errorLines } = yield* runCliCaptured(["pair", "--base-dir", baseDir]);
 
-      const rendered = String(
-        typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
-      );
+      if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+      assert.equal(exit.cause.reasons.filter(Cause.isFailReason).length, 1);
+      assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+      const rendered = errorLines.at(-1) ?? "";
       assert.include(rendered, "No running Akeru Bot server found.");
       assert.include(rendered, "npx akeru-bot serve");
     }).pipe(Effect.provide(NodeServices.layer)),
@@ -228,14 +460,14 @@ describe("akeru pair", () => {
           state: { ...state, pid: 4_194_305 },
         });
 
-        const error = yield* provideCliTestLayers(
-          runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
-        );
-
-        const rendered = String(
-          typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
-        );
+        const { exit, errorLines } = yield* runCliCaptured(["pair", "--base-dir", baseDir]);
+        if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
+        assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
+        assert.isAbove(errorLines.length, 0);
+        // Expected errors print their message only; stack frames belong to defects.
+        const rendered = errorLines.at(-1) ?? "";
         assert.include(rendered, "No running Akeru Bot server found.");
+        assert.notMatch(rendered, /\n\s+at /);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -258,6 +490,7 @@ describe("akeru pair", () => {
         runCli(["pair", "--base-dir", baseDir]).pipe(Effect.flip),
       );
 
+      assert.isFalse(Runtime.getErrorReported(error));
       const rendered = String(
         typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
       );

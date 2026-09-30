@@ -1,11 +1,12 @@
 import * as Effect from "effect/Effect";
 import {
   defaultInstanceIdForDriver,
+  ProviderDriverKind,
   SubscriptionAuthError,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
   type ProviderSession,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { AgentControllerShape } from "../provider/Services/AgentController.ts";
 import { instanceUsesSavedCredential } from "./runtime.ts";
@@ -16,8 +17,6 @@ const BRIDGE_PROVIDERS = [
   { provider: "xai", driver: "grok" },
   { provider: "opencode-go", driver: "opencode" },
 ] as const satisfies ReadonlyArray<{ provider: SubscriptionProviderId; driver: string }>;
-
-type BridgeProvider = (typeof BRIDGE_PROVIDERS)[number];
 
 function sessionInstanceId(session: ProviderSession): ProviderInstanceId {
   return session.providerInstanceId ?? defaultInstanceIdForDriver(session.provider);
@@ -31,28 +30,50 @@ export function makeApiKeySessionReset(
 ) {
   const usesChangedCredential = (
     session: ProviderSession,
-    changed: ReadonlyArray<BridgeProvider>,
+    changed: ReadonlySet<string>,
     instances: Readonly<Record<string, ProviderInstanceConfig>>,
   ) =>
-    changed.some(
+    BRIDGE_PROVIDERS.some(
       ({ provider, driver }) =>
         driver === session.provider &&
+        changed.has(`${provider}:${sessionInstanceId(session)}`) &&
         instanceUsesSavedCredential(provider, instances[sessionInstanceId(session)]),
     );
 
   return Effect.fn("subscriptionAuth.resetChangedApiKeySessions")(function* <A, E, R>(
     operation: Effect.Effect<A, E, R>,
   ) {
-    const before = BRIDGE_PROVIDERS.map(({ provider }) => auth.getApiKeyCredential(provider));
+    const instances = yield* loadInstances;
+    // Default instances run even when settings do not list them.
+    const bindings = [
+      ...BRIDGE_PROVIDERS.filter(
+        ({ driver }) =>
+          !Object.hasOwn(instances, defaultInstanceIdForDriver(ProviderDriverKind.make(driver))),
+      ).map(({ provider, driver }) => ({
+        provider,
+        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make(driver)) as string,
+      })),
+      ...Object.entries(instances).flatMap(([instanceId, instance]) => {
+        const match = BRIDGE_PROVIDERS.find(({ driver }) => driver === instance.driver);
+        return match ? [{ provider: match.provider, instanceId }] : [];
+      }),
+    ];
+    const before = bindings.map(({ provider, instanceId }) =>
+      auth.getApiKeyCredential(provider, instanceId),
+    );
     const result = yield* operation;
-    const changed = BRIDGE_PROVIDERS.filter(({ provider }, index) => {
-      const previous = before[index];
-      const current = auth.getApiKeyCredential(provider);
-      return previous?.access !== current?.access || previous?.baseUrl !== current?.baseUrl;
-    });
-    if (changed.length === 0) return result;
+    const changed = new Set(
+      bindings.flatMap(({ provider, instanceId }, index) => {
+        const previous = before[index];
+        const current = auth.getApiKeyCredential(provider, instanceId);
+        return previous?.access !== current?.access || previous?.baseUrl !== current?.baseUrl
+          ? [`${provider}:${instanceId}`]
+          : [];
+      }),
+    );
+    if (changed.size === 0) return result;
 
-    const [sessions, instances] = yield* Effect.all([controller.listSessions(), loadInstances]);
+    const sessions = yield* controller.listSessions();
     yield* Effect.forEach(
       sessions.filter((session) => usesChangedCredential(session, changed, instances)),
       (session) => controller.stopSession({ threadId: session.threadId }),

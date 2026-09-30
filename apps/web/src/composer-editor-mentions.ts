@@ -5,7 +5,7 @@ import {
 import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
-} from "@t3tools/shared/composerInlineTokens";
+} from "@akeru/shared/composerInlineTokens";
 
 export type ComposerPromptSegment =
   | {
@@ -147,8 +147,11 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
         path: match.value,
         source: match.source,
       });
-    } else {
+    } else if (match.type === "skill") {
       segments.push({ type: "skill", name: match.value });
+    } else {
+      // Bot, browser, and chat mentions have no editor node; they stay as typed.
+      pushTextSegment(segments, match.source);
     }
 
     cursor = match.end;

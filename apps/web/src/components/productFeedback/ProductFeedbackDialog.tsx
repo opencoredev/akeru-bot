@@ -1,4 +1,4 @@
-import { PRODUCT_FEEDBACK_TEXT_MAX_CHARS } from "@t3tools/contracts";
+import { PRODUCT_FEEDBACK_TEXT_MAX_CHARS } from "@akeru/contracts";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -18,7 +18,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
-import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 
@@ -154,7 +153,7 @@ export function ProductFeedbackDialog() {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
       <DialogPopup
-        className="flex max-h-[min(36rem,90dvh)] max-w-lg flex-col overflow-hidden"
+        className="flex max-h-[min(32rem,90dvh)] max-w-lg flex-col overflow-hidden"
         data-akeru-feedback-ui="composer"
       >
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -162,19 +161,17 @@ export function ProductFeedbackDialog() {
             <DialogTitle>Send feedback</DialogTitle>
           </DialogHeader>
 
-          <DialogPanel className="space-y-3 px-5 py-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="product-feedback-text">Feedback</Label>
-              <Textarea
-                autoFocus
-                className="min-h-52"
-                id="product-feedback-text"
-                maxLength={PRODUCT_FEEDBACK_TEXT_MAX_CHARS}
-                placeholder="What happened?"
-                value={draft.feedback}
-                onChange={(event) => updateDraft({ feedback: event.currentTarget.value })}
-              />
-            </div>
+          <DialogPanel className="space-y-3">
+            <Textarea
+              aria-label="Feedback"
+              autoFocus
+              className="min-h-52"
+              id="product-feedback-text"
+              maxLength={PRODUCT_FEEDBACK_TEXT_MAX_CHARS}
+              placeholder="What happened?"
+              value={draft.feedback}
+              onChange={(event) => updateDraft({ feedback: event.currentTarget.value })}
+            />
             {draft.element ? (
               <div className="flex min-w-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs">
                 <span className="min-w-0 flex-1 truncate">
@@ -214,9 +211,7 @@ export function ProductFeedbackDialog() {
                 {status.message}
               </p>
             ) : null}
-            <p className="text-xs text-muted-foreground">
-              Feedback is posted publicly to GitHub Issues. Do not include secrets or private data.
-            </p>
+            <p className="text-xs text-muted-foreground">Avoid secrets or private data.</p>
             {!settings.productFeedbackEnabled ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Product feedback is disabled in Settings.
@@ -232,13 +227,13 @@ export function ProductFeedbackDialog() {
                 variant="outline"
                 onClick={startPicking}
               >
-                Choose an element
+                Attach an element
               </Button>
-              <Button type="button" variant="ghost-muted" onClick={handleClose}>
+              <Button type="button" variant="ghost" onClick={handleClose}>
                 Cancel
               </Button>
               <Button disabled={!canSend} type="submit">
-                {submitting ? "Sending..." : "Send"}
+                {submitting ? "Sending…" : "Send"}
               </Button>
             </div>
           </DialogFooter>

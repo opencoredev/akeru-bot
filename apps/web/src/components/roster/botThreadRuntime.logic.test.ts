@@ -1,4 +1,11 @@
-import { BotId, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  BotId,
+  EnvironmentId,
+  GroupId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -6,9 +13,18 @@ import {
   buildGroupTurnStartInput,
   createBotTurnSubmissionQueue,
   findLatestBotThreadTarget,
+  findLatestGroupThreadIds,
   findLatestGroupThreadTarget,
   findUnhandledMcpAuthorization,
+  isBotOwnChatShell,
   joinOrStartThreadCreate,
+  latestGroupThreadKey,
+  listBotChats,
+  nextRetainedChat,
+  pickBotChatTarget,
+  preferRetainedChatTarget,
+  resolveBotThreadTarget,
+  shouldTitlePlaceholderChat,
 } from "./botThreadRuntime.logic";
 
 describe.each([
@@ -261,6 +277,15 @@ describe("bot thread runtime", () => {
           deletedAt: null,
         },
         {
+          environmentId: "env-a",
+          id: "delegated-child",
+          botId: "bot-akeru",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          archivedAt: null,
+          deletedAt: null,
+        },
+        {
           environmentId: "env-b",
           id: "thread-new",
           botId: "bot-akeru",
@@ -270,6 +295,79 @@ describe("bot thread runtime", () => {
         },
       ]),
     ).toEqual({ environmentId: "env-a", threadId: "thread-old" });
+  });
+
+  it("does not target a parent-linked child thread", () => {
+    expect(
+      findLatestBotThreadTarget("bot-akeru", "env-a", [
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          botId: "bot-akeru",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          archivedAt: null,
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  describe("bot chat resolution with child work", () => {
+    const child = (id: string, updatedAt: string) => ({
+      environmentId: "env-a",
+      id,
+      botId: "bot-ren",
+      parentThreadId: "thread-mira",
+      updatedAt,
+      archivedAt: null,
+    });
+    const direct = {
+      environmentId: "env-a",
+      id: "thread-ren",
+      botId: "bot-ren",
+      parentThreadId: null,
+      updatedAt: "2026-08-27T00:00:00.000Z",
+      archivedAt: null,
+    };
+    // Mirrors the roster hooks: the shell list leaves out child work, and the
+    // resolved target's own shell (which does include child work) decides.
+    const resolveChat = (
+      allThreads: ReadonlyArray<typeof direct | ReturnType<typeof child>>,
+      rememberedPath?: string,
+    ) => {
+      const listed = allThreads.filter((thread) => thread.parentThreadId == null);
+      const target = resolveBotThreadTarget("bot-ren", "env-a", listed, rememberedPath);
+      if (!target) return null;
+      const shell = allThreads.find((thread) => thread.id === target.threadId) ?? null;
+      return isBotOwnChatShell("bot-ren", shell) ? target.threadId : null;
+    };
+
+    it("gives a bot whose only threads are child work no chat, even when remembered", () => {
+      const threads = [
+        child("child-1", "2026-08-28T00:00:00.000Z"),
+        child("child-2", "2026-08-29T00:00:00.000Z"),
+      ];
+      expect(resolveChat(threads)).toBeNull();
+      expect(resolveChat(threads, "/env-a/child-2")).toBeNull();
+    });
+
+    it("keeps the direct chat when a newer child thread exists", () => {
+      const threads = [direct, child("child-new", "2026-08-29T00:00:00.000Z")];
+      expect(resolveChat(threads)).toBe("thread-ren");
+      expect(resolveChat(threads, "/env-a/child-new")).toBe("thread-ren");
+    });
+
+    it("rejects child work and other owners' threads as a bot's chat", () => {
+      expect(
+        isBotOwnChatShell("bot-ren", { botId: "bot-ren", parentThreadId: "thread-mira" }),
+      ).toBe(false);
+      expect(isBotOwnChatShell("bot-ren", { botId: "bot-mira", parentThreadId: null })).toBe(false);
+      expect(isBotOwnChatShell("bot-ren", { botId: "bot-ren", parentThreadId: null })).toBe(true);
+    });
+
+    it("still follows a remembered chat the shell list has not caught up to", () => {
+      expect(resolveChat([], "/env-a/thread-new")).toBe("thread-new");
+    });
   });
 
   it("restores the latest durable thread owned by a group", () => {
@@ -289,7 +387,294 @@ describe("bot thread runtime", () => {
           updatedAt: "2026-08-27T00:00:00.000Z",
           archivedAt: null,
         },
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          groupId: "group-product",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+          archivedAt: null,
+        },
       ]),
     ).toEqual({ environmentId: "env-a", threadId: "thread-new" });
+  });
+
+  it("finds every group's latest chat in one pass, per environment", () => {
+    const shell = (id: string, groupId: string | null, updatedAt: string, extra = {}) => ({
+      environmentId: "env-a",
+      id,
+      groupId,
+      updatedAt,
+      archivedAt: null as string | null,
+      ...extra,
+    });
+    const threads = [
+      shell("product-old", "group-product", "2026-08-26T00:00:00.000Z"),
+      shell("product-new", "group-product", "2026-08-27T00:00:00.000Z"),
+      shell("product-child", "group-product", "2026-08-28T00:00:00.000Z", {
+        parentThreadId: "product-new",
+      }),
+      shell("product-archived", "group-product", "2026-08-29T00:00:00.000Z", {
+        archivedAt: "2026-08-30T00:00:00.000Z",
+      }),
+      shell("product-remote", "group-product", "2026-08-25T00:00:00.000Z", {
+        environmentId: "env-b",
+      }),
+      shell("design", "group-design", "2026-08-20T00:00:00.000Z"),
+      shell("bot-chat", null, "2026-08-31T00:00:00.000Z"),
+    ];
+    const latest = findLatestGroupThreadIds(threads);
+    expect(Object.fromEntries(latest)).toEqual({
+      [latestGroupThreadKey("env-a", "group-product")]: "product-new",
+      [latestGroupThreadKey("env-b", "group-product")]: "product-remote",
+      [latestGroupThreadKey("env-a", "group-design")]: "design",
+    });
+    for (const [environmentId, groupId] of [
+      ["env-a", "group-product"],
+      ["env-b", "group-product"],
+      ["env-a", "group-design"],
+    ] as const) {
+      expect(latest.get(latestGroupThreadKey(environmentId, groupId))).toBe(
+        findLatestGroupThreadTarget(groupId, environmentId, threads)?.threadId,
+      );
+    }
+  });
+
+  it("does not target a parent-linked group child thread", () => {
+    expect(
+      findLatestGroupThreadTarget("group-product", "env-a", [
+        {
+          environmentId: "env-a",
+          id: "delegated-child",
+          groupId: "group-product",
+          parentThreadId: "parent-thread",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+          archivedAt: null,
+        },
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("picked bot chat", () => {
+  const shell = (id: string, updatedAt: string, archivedAt: string | null = null) => ({
+    environmentId: "env-a",
+    id,
+    botId: "bot-ren",
+    parentThreadId: null,
+    updatedAt,
+    archivedAt,
+  });
+  // Chat A replied after the user picked chat B, so A is the latest.
+  const shells = [
+    shell("thread-b", "2026-09-01T00:00:00.000Z"),
+    shell("thread-a", "2026-09-02T00:00:00.000Z"),
+  ];
+
+  it("keeps the remembered chat after a remount even when another chat replied later", () => {
+    // A fresh runtime starts with nothing retained, as after a page refresh.
+    const empty = { ownerId: "bot-ren", threadRef: null, linked: false };
+    const resolved = resolveBotThreadTarget("bot-ren", "env-a", shells, "/env-a/thread-b");
+    expect(preferRetainedChatTarget(empty, resolved, shells)).toEqual({
+      environmentId: "env-a",
+      threadId: "thread-b",
+    });
+  });
+
+  it("gives the side panel the same chat as the conversation", () => {
+    const remembered = { environmentId: "env-a", threadId: "thread-b" };
+    // The side panel resolves from the latest id and the remembered chat's own shell.
+    const panel = pickBotChatTarget(
+      "bot-ren",
+      "env-a",
+      { environmentId: "env-a", threadId: "thread-a" },
+      remembered,
+      shells[0],
+    );
+    expect(panel).toEqual(resolveBotThreadTarget("bot-ren", "env-a", shells, "/env-a/thread-b"));
+    expect(panel).toEqual(remembered);
+  });
+
+  it("follows the chat opened on purpose", () => {
+    expect(resolveBotThreadTarget("bot-ren", "env-a", shells, "/env-a/thread-a")).toEqual({
+      environmentId: "env-a",
+      threadId: "thread-a",
+    });
+  });
+
+  it("releases the pick once the remembered chat is archived, deleted, or not the bot's", () => {
+    const latest = { environmentId: "env-a", threadId: "thread-a" };
+    const remembered = { environmentId: "env-a", threadId: "thread-b" };
+    const live = shells[0]!;
+    expect(
+      pickBotChatTarget("bot-ren", "env-a", latest, remembered, {
+        ...live,
+        archivedAt: "2026-09-03T00:00:00.000Z",
+      }),
+    ).toBe(latest);
+    expect(
+      pickBotChatTarget("bot-ren", "env-a", latest, remembered, {
+        ...live,
+        deletedAt: "2026-09-03T00:00:00.000Z",
+      }),
+    ).toBe(latest);
+    expect(
+      pickBotChatTarget("bot-ren", "env-a", latest, remembered, { ...live, botId: "bot-mira" }),
+    ).toBe(latest);
+    expect(
+      pickBotChatTarget("bot-ren", "env-a", latest, remembered, {
+        ...live,
+        parentThreadId: "thread-mira",
+      }),
+    ).toBe(latest);
+    expect(pickBotChatTarget("bot-ren", "env-a", latest, remembered, null)).toBe(latest);
+    expect(
+      resolveBotThreadTarget(
+        "bot-ren",
+        "env-a",
+        [shell("thread-b", "2026-09-01T00:00:00.000Z", "2026-09-03T00:00:00.000Z"), shells[1]!],
+        "/env-a/thread-b",
+      ),
+    ).toEqual(latest);
+  });
+});
+
+describe("preferRetainedChatTarget", () => {
+  const created = {
+    ownerId: "bot-1",
+    threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("new") },
+    linked: false,
+  };
+  const older = { environmentId: "env-1", threadId: "old" };
+  const shell = (id: string) => ({ environmentId: "env-1", id, archivedAt: null });
+
+  it("shows a just-created chat once its shell arrives, even when an older chat updated later", () => {
+    expect(preferRetainedChatTarget(created, older, [shell("old"), shell("new")])).toEqual({
+      environmentId: "env-1",
+      threadId: "new",
+    });
+  });
+
+  it("keeps the resolved chat before the new shell arrives or once the new chat is linked", () => {
+    expect(preferRetainedChatTarget(created, older, [shell("old")])).toBe(older);
+    expect(
+      preferRetainedChatTarget({ ...created, linked: true }, older, [shell("old"), shell("new")]),
+    ).toBe(older);
+  });
+});
+
+describe("shouldTitlePlaceholderChat", () => {
+  it("titles a placeholder chat and leaves renamed chats alone", () => {
+    expect(shouldTitlePlaceholderChat("new", "New chat", null)).toBe(true);
+    expect(shouldTitlePlaceholderChat("new", "Trip plans", "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", undefined, "new")).toBe(true);
+    expect(shouldTitlePlaceholderChat("other", undefined, "new")).toBe(false);
+  });
+
+  it("keeps the first title when a second send runs before the shell updates", () => {
+    expect(shouldTitlePlaceholderChat("new", "New chat", null, "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", undefined, "new", "new")).toBe(false);
+    expect(shouldTitlePlaceholderChat("new", "New chat", null, "older")).toBe(true);
+  });
+});
+
+describe("opening an older bot chat", () => {
+  const chat = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({
+    environmentId: "env-a",
+    id,
+    botId: "bot-ren",
+    parentThreadId: null as string | null,
+    updatedAt,
+    archivedAt: null as string | null,
+    ...extra,
+  });
+  const threads = [
+    chat("chat-old", "2026-08-01T00:00:00.000Z"),
+    chat("chat-new", "2026-08-03T00:00:00.000Z"),
+    chat("chat-mid", "2026-08-02T00:00:00.000Z"),
+    chat("chat-archived", "2026-08-04T00:00:00.000Z", { archivedAt: "2026-08-05T00:00:00.000Z" }),
+    chat("chat-child", "2026-08-06T00:00:00.000Z", { parentThreadId: "chat-new" }),
+    chat("chat-other", "2026-08-07T00:00:00.000Z", { botId: "bot-mira" }),
+    chat("chat-elsewhere", "2026-08-08T00:00:00.000Z", { environmentId: "env-b" }),
+  ];
+
+  it("lists only the bot's active direct chats, newest first", () => {
+    expect(listBotChats("bot-ren", "env-a", threads).map((thread) => thread.id)).toEqual([
+      "chat-new",
+      "chat-mid",
+      "chat-old",
+    ]);
+  });
+
+  it("shows the opened chat instead of the newest one", () => {
+    expect(resolveBotThreadTarget("bot-ren", "env-a", threads, undefined, "chat-old")).toEqual({
+      environmentId: "env-a",
+      threadId: "chat-old",
+    });
+  });
+
+  it("falls back to the newest chat when the opened one is not an active chat of the bot", () => {
+    for (const openThreadId of ["chat-archived", "chat-child", "chat-other", "missing", null]) {
+      expect(
+        resolveBotThreadTarget("bot-ren", "env-a", threads, undefined, openThreadId)?.threadId,
+      ).toBe("chat-new");
+    }
+  });
+});
+
+describe("nextRetainedChat", () => {
+  const chat = (threadId: string) => ({
+    environmentId: EnvironmentId.make("env-1"),
+    threadId: ThreadId.make(threadId),
+  });
+
+  it("keeps a just-created chat until its shell arrives", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, null, true)).toBe(created);
+  });
+
+  it("keeps a just-created chat while the list still shows the previous chat", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, chat("old"), true)).toBe(created);
+    expect(nextRetainedChat(created, chat("new"), true)).toEqual({
+      ownerId: "bot-1",
+      threadRef: chat("new"),
+      linked: true,
+    });
+  });
+
+  it("releases a just-created chat when another chat is opened on purpose", () => {
+    const created = { ownerId: "bot-1", threadRef: chat("new"), linked: false };
+    expect(nextRetainedChat(created, chat("older"), true, "older")).toEqual({
+      ownerId: "bot-1",
+      threadRef: chat("older"),
+      linked: true,
+    });
+    expect(nextRetainedChat(created, chat("old"), true, "new")).toBe(created);
+  });
+
+  it("follows the linked chat once the shell list shows it", () => {
+    const linked = chat("new");
+    const next = nextRetainedChat(
+      { ownerId: "bot-1", threadRef: null, linked: false },
+      linked,
+      true,
+    );
+    expect(next).toEqual({ ownerId: "bot-1", threadRef: linked, linked: true });
+    expect(nextRetainedChat(next, linked, true)).toBe(next);
+  });
+
+  it("releases a chat that left the shell list, so the next send starts a new one", () => {
+    const shown = { ownerId: "bot-1", threadRef: chat("archived"), linked: true };
+    expect(nextRetainedChat(shown, null, true)).toEqual({
+      ownerId: "bot-1",
+      threadRef: null,
+      linked: false,
+    });
+  });
+
+  it("holds a shown chat while the shell list is still loading", () => {
+    const shown = { ownerId: "bot-1", threadRef: chat("current"), linked: true };
+    expect(nextRetainedChat(shown, null, false)).toBe(shown);
   });
 });

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type AppSymbolName } from "./AppSymbol";
 import { AppText as Text } from "./AppText";
 import { cn } from "../lib/cn";
+import { useMobileI18n } from "../lib/i18n";
 import { useThemeColor } from "../lib/useThemeColor";
 
 export interface AndroidHeaderAction {
@@ -53,6 +54,7 @@ export function AndroidScreenHeader(props: {
   readonly onBack?: () => void;
   readonly embedded?: boolean;
 }) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const foregroundColor = useThemeColor("--color-foreground");
 
@@ -66,7 +68,7 @@ export function AndroidScreenHeader(props: {
       <View className="min-h-12 flex-row items-center gap-2">
         {props.onBack ? (
           <Pressable
-            accessibilityLabel="Navigate up"
+            accessibilityLabel={t("Navigate up")}
             accessibilityRole="button"
             hitSlop={8}
             onPress={props.onBack}

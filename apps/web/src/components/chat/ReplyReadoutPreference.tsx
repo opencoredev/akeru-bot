@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { ReplyReadoutPreference as Preference } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyReadoutPreference as Preference } from "@akeru/client-runtime/reply-playback";
 
 export function ReplyReadoutPreference({ preference }: { readonly preference: Preference }) {
   const state = useSyncExternalStore(

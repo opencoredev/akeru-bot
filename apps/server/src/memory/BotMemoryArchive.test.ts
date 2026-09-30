@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterEach, assert, describe, expect, it, vi } from "@effect/vitest";
-import { BotId, GroupId, ThreadId, type AkeruConversationMemorySnapshot } from "@t3tools/contracts";
+import { BotId, GroupId, ThreadId, type AkeruConversationMemorySnapshot } from "@akeru/contracts";
 
 import { BotMemoryStore } from "./BotMemory.ts";
 import {
@@ -150,6 +150,42 @@ describe("Markdown memory archive", () => {
     expect(restoreConversation).toHaveBeenLastCalledWith(conversation, emptyConversation);
     assert.equal((await store.readDocument(access, "user")).content, "Original user notes.");
     assert.equal((await store.readDocument(access, "memory")).content, "Original work notes.");
+  });
+
+  it("restores other files while Private bot memory is off unless MEMORY.md changes", async () => {
+    const store = await fixture();
+    await store.replaceDocument(access, "user", "Archived user notes.");
+    await store.replaceDocument(access, "memory", "Private work notes.");
+    const archive = await exportBotMemoryArchive({
+      store,
+      access,
+      threadId: ThreadId.make("thread-1"),
+      conversation: emptyConversation,
+      createdAt: "2026-09-13T12:02:00.000Z",
+    });
+    await store.replaceDocument(access, "user", "Newer user notes.");
+    const input = {
+      store,
+      access,
+      threadId: ThreadId.make("thread-1"),
+      archive,
+      currentConversation: emptyConversation,
+      privateBotMemory: false,
+    };
+    const preview = await previewBotMemoryImport(input);
+    const result = await applyBotMemoryImport({
+      ...input,
+      previewHash: preview.previewHash,
+      restoreConversation: async () => undefined,
+    });
+    assert.equal(result.changedDocuments, 1);
+    assert.equal((await store.readDocument(access, "user")).content, "Archived user notes.");
+
+    await store.replaceDocument(access, "memory", "Changed private notes.");
+    await expect(previewBotMemoryImport(input)).rejects.toMatchObject({
+      code: "invalid-operation",
+    });
+    assert.equal((await store.readDocument(access, "memory")).content, "Changed private notes.");
   });
 
   it("rejects cross-chat imports before changing notes or clearing observations", async () => {

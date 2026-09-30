@@ -1,11 +1,12 @@
+import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
 import {
   DEFAULT_SERVER_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
   type ProviderInstanceConfig,
-} from "@t3tools/contracts";
-import { getBackgroundActivityPresetSettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@akeru/contracts";
+import { getBackgroundActivityPresetSettings } from "@akeru/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -188,6 +189,21 @@ describe("formatDiagnosticsDescription", () => {
       }),
     ).toBe("Local trace file.");
   });
+
+  it("describes diagnostics in the user's language", async () => {
+    const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+    expect(
+      formatDiagnosticsDescription(
+        {
+          localTracingEnabled: false,
+          otlpTracesEnabled: true,
+          otlpTracesUrl: "http://localhost:4318/v1/traces",
+          otlpMetricsEnabled: false,
+        },
+        zh.translate,
+      ),
+    ).toBe("仅终端日志。正在将 OTEL 跟踪导出到 http://localhost:4318/v1/traces。");
+  });
 });
 
 describe("buildProviderInstanceUpdatePatch", () => {
@@ -268,9 +284,8 @@ describe("getChangedBrowserSettingLabels", () => {
         browserDefaultViewport: { _tag: "freeform", width: 900, height: 600 },
         browserDefaultZoomFactor: 1.5,
         browserDefaultAppearance: "dark",
-        browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
       }),
-    ).toEqual(["Browser viewport", "Browser zoom", "Browser appearance", "Floating preview"]);
+    ).toEqual(["Browser viewport", "Browser zoom", "Browser appearance"]);
   });
 });
 

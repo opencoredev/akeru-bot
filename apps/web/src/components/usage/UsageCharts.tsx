@@ -3,9 +3,9 @@ import type {
   UsagePlanWindow,
   UsageProviderKind,
   UsageProviderPlanLimits,
-} from "@t3tools/contracts";
-import { enumerateDays, formatDayShort, formatTokens } from "@t3tools/shared/usageFormat";
-import type { DailyTotals } from "@t3tools/shared/usageMerge";
+} from "@akeru/contracts";
+import { enumerateDays, formatDayShort, formatTokens } from "@akeru/shared/usageFormat";
+import type { DailyTotals } from "@akeru/shared/usageMerge";
 
 import { Line } from "../dither-kit/area";
 import { LineChart } from "../dither-kit/area-chart";
@@ -16,11 +16,13 @@ import { Grid } from "../dither-kit/grid";
 import { Tooltip } from "../dither-kit/tooltip";
 import { XAxis } from "../dither-kit/x-axis";
 import { YAxis } from "../dither-kit/y-axis";
-import { ClaudeAI, CursorIcon, GrokIcon, OpenCodeIcon, type Icon, OpenAI } from "../Icons";
+import { ClaudeAI, GrokIcon, OpenCodeIcon, type Icon, OpenAI } from "../Icons";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION, providersWithUsage } from "./usageProviders";
 
+type LiveSubscriptionProviderId = Exclude<SubscriptionProviderId, "cursor">;
+
 export const PLAN_PROVIDER_PRESENTATION: Record<
-  SubscriptionProviderId,
+  LiveSubscriptionProviderId,
   {
     readonly label: string;
     readonly icon: Icon | string;
@@ -29,7 +31,6 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
 > = {
   "openai-codex": { label: "ChatGPT", icon: OpenAI, color: "green" },
   anthropic: { label: "Claude", icon: ClaudeAI, color: "orange" },
-  cursor: { label: "Cursor", icon: CursorIcon, color: "blue" },
   xai: { label: "Grok", icon: GrokIcon, color: "grey" },
   "kimi-for-coding": {
     label: "Kimi For Coding",
@@ -39,10 +40,9 @@ export const PLAN_PROVIDER_PRESENTATION: Record<
   "opencode-go": { label: "OpenCode Go", icon: OpenCodeIcon, color: "grey" },
 };
 
-export const PLAN_PROVIDER_ORDER: readonly SubscriptionProviderId[] = [
+export const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "openai-codex",
   "anthropic",
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",
@@ -130,7 +130,6 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
 const ACTIVITY_COLOR: Record<UsageProviderKind, DitherColor> = {
   claude: "orange",
   codex: "green",
-  cursor: "purple",
   grok: "grey",
   kimi: "blue",
   opencode: "green",

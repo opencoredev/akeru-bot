@@ -1,8 +1,5 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ThreadId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { EnvironmentId, ThreadId, type SidebarProjectGroupingMode } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -370,19 +367,6 @@ function AdaptiveWorkspaceLayoutContent(
     setFocusedAuxiliaryPaneRole("supplementary");
     setSupplementaryPanePreferredVisible(true);
   }, []);
-  const handleOpenFilesCommand = useCallback(() => {
-    const activeThread = parseActiveThreadPath(pathname);
-    if (!layout.usesSplitView || !fileInspector.supported || activeThread === null) {
-      return false;
-    }
-    showAuxiliaryPane("inspector");
-    if (/\/files(?:\/|$)/.test(pathname)) {
-      return true;
-    }
-    navigation.navigate("ThreadFiles", activeThread);
-    return true;
-  }, [fileInspector.supported, layout.usesSplitView, pathname, navigation, showAuxiliaryPane]);
-  useHardwareKeyboardCommand("files", handleOpenFilesCommand);
   const toggleAuxiliaryPane = useCallback(() => {
     if (auxiliaryPaneRole === "inspector") {
       setFileInspectorPreferredVisible((current) => !current);
@@ -453,20 +437,6 @@ function AdaptiveWorkspaceLayoutContent(
       params: { screen: "SettingsEnvironments" },
     });
   }, [navigation]);
-
-  const handleNewThreadInProject = useCallback(
-    (project: EnvironmentProject) => {
-      navigation.navigate("NewTaskSheet", {
-        screen: "NewTaskDraft",
-        params: {
-          environmentId: String(project.environmentId),
-          projectId: String(project.id),
-          title: project.title,
-        },
-      });
-    },
-    [navigation],
-  );
 
   const renderedSidebarWidth = useSharedValue(
     panes.primarySidebarVisible ? (layout.listPaneWidth ?? 0) : 0,
@@ -547,7 +517,6 @@ function AdaptiveWorkspaceLayoutContent(
                     selectedThreadKey={selectedThreadKey}
                     onOpenSettings={handleOpenSettings}
                     onOpenEnvironmentSettings={handleOpenEnvironmentSettings}
-                    onNewThreadInProject={handleNewThreadInProject}
                     onSelectThread={handleSelectThread}
                     onSearchQueryChange={setPrimarySidebarSearchQuery}
                     searchQuery={primarySidebarSearchQuery}

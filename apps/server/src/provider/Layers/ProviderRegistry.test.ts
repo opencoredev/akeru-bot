@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -24,13 +25,13 @@ import {
   type ServerProvider,
   type ServerProviderSlashCommand,
   type ServerSettings as ContractServerSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as PlatformError from "effect/PlatformError";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { deepMerge } from "@t3tools/shared/Struct";
-import { createModelCapabilities } from "@t3tools/shared/model";
-import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
+import { deepMerge } from "@akeru/shared/Struct";
+import { createModelCapabilities } from "@akeru/shared/model";
+import { applyServerSettingsPatch } from "@akeru/shared/serverSettings";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
@@ -709,6 +710,68 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         assert.deepStrictEqual(mergeProviderSnapshot(previousProvider, refreshedProvider).models, [
           ...previousProvider.models,
         ]);
+      });
+
+      it("drops Grok models only after a complete probe", () => {
+        const model = (slug: string) => ({
+          slug,
+          name: slug,
+          isCustom: false,
+          capabilities: null,
+        });
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("grok"),
+          driver: ProviderDriverKind.make("grok"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-07-17T00:00:00.000Z",
+          version: "1.0.0",
+          models: [model("grok-build"), model("stale-alias")],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const cleanProbe = {
+          ...previousProvider,
+          checkedAt: "2026-07-17T00:01:00.000Z",
+          models: [model("grok-build")],
+        } satisfies ServerProvider;
+        const failedProbe = {
+          ...previousProvider,
+          status: "error",
+          auth: { status: "unknown" },
+          checkedAt: "2026-07-17T00:01:00.000Z",
+          models: [model("grok-build")],
+          message: "Failed to execute Grok CLI health check.",
+        } satisfies ServerProvider;
+        const partialProbe = {
+          ...cleanProbe,
+          status: "warning",
+          message: "Grok ACP initialize failed. Model options may be incomplete.",
+        } satisfies ServerProvider;
+        const signedOut = {
+          ...failedProbe,
+          auth: { status: "unauthenticated" },
+          message: "Grok CLI is installed but not logged in. Run `grok login`.",
+        } satisfies ServerProvider;
+
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, cleanProbe).models.map((entry) => entry.slug),
+          ["grok-build"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, failedProbe).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, partialProbe).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, signedOut).models.map((entry) => entry.slug),
+          ["grok-build", "stale-alias"],
+        );
       });
 
       it("classifies pending, logout, uninstall, and reconnect OpenCode inventories", () => {
@@ -1684,7 +1747,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   // machine's PATH.
                   codex: { enabled: false },
                   claudeAgent: { enabled: false },
-                  cursor: { enabled: false },
                   grok: { enabled: false },
                   opencode: { enabled: false },
                 },
@@ -1797,7 +1859,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 providers: {
                   codex: { enabled: true, binaryPath: firstMissing },
                   claudeAgent: { enabled: false },
-                  cursor: { enabled: false },
                   grok: { enabled: false },
                   opencode: { enabled: false },
                 },
@@ -1870,31 +1931,27 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // instanceRegistry.streamChanges, () => syncLiveSources)`
             // fires `syncLiveSources`, which subscribes and launches a fresh
             // background refresh on the rebuilt instance.
+            const nextProbe = yield* Stream.runHead(
+              registry.streamChanges.pipe(
+                Stream.filter(
+                  (providers) =>
+                    spawnedCommands.includes(secondMissing) &&
+                    providers.find((provider) => provider.instanceId === "codex")?.status ===
+                      "error",
+                ),
+              ),
+            ).pipe(Effect.forkChild({ startImmediately: true }));
+            yield* Effect.yieldNow;
             yield* serverSettings.updateSettings({
               providers: {
                 codex: { enabled: true, binaryPath: secondMissing },
               },
             });
 
-            // Poll until the injected process boundary observes the new
-            // executable. This verifies the public settings-to-probe behavior
-            // without depending on timestamps assigned by TestClock.
-            const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < 60; attempts += 1) {
-                const providers = yield* registry.getProviders;
-                const codex = providers.find((provider) => provider.instanceId === "codex");
-                if (
-                  codex !== undefined &&
-                  codex.status === "error" &&
-                  spawnedCommands.includes(secondMissing)
-                ) {
-                  return providers;
-                }
-                yield* TestClock.adjust("50 millis");
-                yield* Effect.yieldNow;
-              }
-              return yield* registry.getProviders;
-            });
+            // The registry publishes the completed probe after updating its
+            // snapshot. Wait for that receipt instead of racing the real
+            // child-process event against a fixed number of scheduler turns.
+            const refreshed = Option.getOrThrow(yield* Fiber.join(nextProbe));
 
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
             assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
@@ -1912,7 +1969,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 providers: {
                   codex: { enabled: false },
                   claudeAgent: { enabled: false },
-                  cursor: { enabled: false },
                   grok: { enabled: false },
                   opencode: { enabled: false },
                 },
@@ -2048,7 +2104,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 "codex",
                 "grok",
                 "kimi",
-                "opencode",
                 "opencodeGo",
               ]);
               assert.strictEqual(cursorSpawned, false);

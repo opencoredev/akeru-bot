@@ -16,16 +16,20 @@ import {
   type EnvironmentId,
   ServerSettings,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   type ClientSettingsPatch,
   type ClientSettings,
   DEFAULT_CLIENT_SETTINGS,
   type EnvironmentIdentificationMode,
   type UnifiedSettings,
-} from "@t3tools/contracts/settings";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+} from "@akeru/contracts/settings";
+import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import { ensureLocalApi } from "~/localApi";
+import {
+  CLIENT_SETTINGS_STORAGE_KEY,
+  readBrowserClientSettings,
+} from "../clientPersistenceStorage";
 import {
   getThemeDefinition,
   getThemePreviewSidebarArtwork,
@@ -79,11 +83,29 @@ function setClientSettingsHydrated(nextHydrated: boolean): void {
   emitClientSettingsHydrationChange();
 }
 
+// Counts local writes, so another tab's change applied after a later local edit
+// cannot replace that edit.
+let clientSettingsLocalWrites = 0;
+
+function onClientSettingsStorage(event: StorageEvent): void {
+  if (window.desktopBridge || (event.key !== CLIENT_SETTINGS_STORAGE_KEY && event.key !== null))
+    return;
+  const localWrites = clientSettingsLocalWrites;
+  void hydrateClientSettings().then(() => {
+    if (localWrites !== clientSettingsLocalWrites) return;
+    replaceClientSettingsSnapshot({ ...DEFAULT_CLIENT_SETTINGS, ...readBrowserClientSettings() });
+  });
+}
+
 function subscribeClientSettings(listener: () => void): () => void {
+  if (clientSettingsListeners.size === 0)
+    window.addEventListener("storage", onClientSettingsStorage);
   clientSettingsListeners.add(listener);
   void hydrateClientSettings();
   return () => {
     clientSettingsListeners.delete(listener);
+    if (clientSettingsListeners.size === 0)
+      window.removeEventListener("storage", onClientSettingsStorage);
   };
 }
 
@@ -140,6 +162,7 @@ async function hydrateClientSettings(): Promise<void> {
 }
 
 function persistClientSettings(settings: ClientSettings): void {
+  clientSettingsLocalWrites += 1;
   replaceClientSettingsSnapshot(settings);
   void ensureLocalApi()
     .persistence.setClientSettings(settings)
@@ -272,21 +295,6 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
     paletteThemeActive: previewSidebarArtwork !== null || activeThemeDefinition !== null,
     paletteThemeAllowsArtwork: previewSidebarArtwork ?? themeAllowsSidebarArtwork(activeTheme),
   });
-}
-
-/**
- * Whether the legacy sidebar (Settings → General → Legacy features) replaces
- * the default one.
- *
- * Held at the default sidebar until client settings hydrate: the pre-hydration
- * snapshot is just the schema defaults, so resolving against it could mount one
- * sidebar and then swap it out once persisted settings land — remounting the
- * whole tree for everyone instead of only for legacy opt-ins.
- */
-export function useLegacySidebarEnabled(): boolean {
-  const settingsHydrated = useClientSettingsHydrated();
-  const legacySidebarEnabled = useClientSettingsValue().legacySidebarEnabled;
-  return settingsHydrated && legacySidebarEnabled;
 }
 
 /** Read current settings for one environment, merged with client-local preferences. */

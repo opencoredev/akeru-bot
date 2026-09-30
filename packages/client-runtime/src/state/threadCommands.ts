@@ -1,6 +1,6 @@
 import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
-import { WS_METHODS } from "@t3tools/contracts";
+import { WS_METHODS } from "@akeru/contracts";
 
 import {
   createAtomCommandScheduler,
@@ -15,7 +15,6 @@ import {
   type InterruptThreadTurnInput,
   type RespondToThreadApprovalInput,
   type RespondToThreadUserInputInput,
-  type RevertThreadCheckpointInput,
   type ResumeThreadTurnInput,
   type SetThreadInteractionModeInput,
   type SetThreadMessageReactionInput,
@@ -38,7 +37,6 @@ import {
   interruptThreadTurn,
   respondToThreadApproval,
   respondToThreadUserInput,
-  revertThreadCheckpoint,
   resumeThreadTurn,
   setThreadInteractionMode,
   setThreadMessageReaction,
@@ -64,7 +62,6 @@ export type {
   InterruptThreadTurnInput,
   RespondToThreadApprovalInput,
   RespondToThreadUserInputInput,
-  RevertThreadCheckpointInput,
   ResumeThreadTurnInput,
   SetThreadInteractionModeInput,
   SetThreadMessageReactionInput,
@@ -215,12 +212,6 @@ export function createThreadEnvironmentAtoms<R, E>(
     respondToUserInput: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:respond-to-user-input",
       execute: (input: RespondToThreadUserInputInput) => respondToThreadUserInput(input),
-      scheduler,
-      concurrency,
-    }),
-    revertCheckpoint: createEnvironmentCommand(runtime, {
-      label: "environment-data:commands:thread:revert-checkpoint",
-      execute: (input: RevertThreadCheckpointInput) => revertThreadCheckpoint(input),
       scheduler,
       concurrency,
     }),

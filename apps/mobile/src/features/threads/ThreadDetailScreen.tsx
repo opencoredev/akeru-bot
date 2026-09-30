@@ -1,5 +1,8 @@
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
+import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
+import { useMobileI18n } from "../../lib/i18n";
+import { type EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
+import { presentThreadError, type ThreadErrorContext } from "@akeru/client-runtime/errors";
+import type { EnvironmentThreadStatus } from "@akeru/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -8,14 +11,16 @@ import type {
   EnvironmentId,
   MessageId,
   ModelSelection,
+  OrchestrationBot,
   OrchestrationThreadShell,
   ProviderApprovalDecision,
-  ProviderInteractionMode,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
   ThreadId,
+  ServerProviderUnavailability,
   UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@akeru/contracts";
 import * as Haptics from "expo-haptics";
 import {
   memo,
@@ -52,6 +57,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAtomValue } from "@effect/atom-react";
 
 import { ControlPill } from "../../components/ControlPill";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -61,6 +67,7 @@ import { useThreadDraftForThread } from "../../state/use-thread-composer-state";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { environmentGroupsAtom } from "../../state/bots";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -68,6 +75,7 @@ import type {
   ThreadFeedEntry,
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
+import { ComputerDesktopNotice } from "./ComputerDesktopNotice";
 import { PendingUserInputCard } from "./PendingUserInputCard";
 import {
   derivePendingUserInputMaxHeight,
@@ -91,7 +99,15 @@ export interface ThreadDetailScreenProps {
   readonly connectionError: string | null;
   readonly environmentLabel: string | null;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
+  /** Bots by id, so delegation cards can name the child bot. */
+  readonly botsById?: ReadonlyMap<string, OrchestrationBot>;
+  /**
+   * The turn ended while delegated children still run; mobile renders the
+   * same waiting line as web above the composer.
+   */
+  readonly waitingOnChildren?: boolean;
   readonly activeWorkStartedAt: string | null;
+  readonly silentRun: ThreadSilentRun | null;
   readonly activePendingApproval: PendingApproval | null;
   readonly respondingApprovalId: ApprovalRequestId | null;
   readonly activePendingUserInput: PendingUserInput | null;
@@ -119,12 +135,13 @@ export interface ThreadDetailScreenProps {
   readonly onStopThread: () => void;
   readonly onResumeThread: () => void;
   readonly canResumeThread: boolean;
+  /** Why the last request failed, when the server recorded a category. */
+  readonly resumeFailureUnavailability?: ServerProviderUnavailability | null;
   readonly resumingThread: boolean;
   readonly onSendMessage: () => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateThreadRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onUpdateThreadInteractionMode: (interactionMode: ProviderInteractionMode) => void;
   readonly onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -258,7 +275,16 @@ const ThreadDraftComposer = memo(function ThreadDraftComposer(
 });
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
+  const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+  const groupId = props.selectedThread.groupId ?? null;
+  const groupBossBotId =
+    groupId === null ? null : (groups.find((group) => group.id === groupId)?.bossBotId ?? null);
+  const speakerGroup = useMemo(
+    () => (groupId === null ? null : { bossBotId: groupBossBotId }),
+    [groupBossBotId, groupId],
+  );
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can swallow the IME hide callbacks when the app is backgrounded
@@ -490,6 +516,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const contentMaxWidth = isSplitLayout ? CHAT_CONTENT_MAX_WIDTH : undefined;
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
+  const selectedProvider = props.serverConfig?.providers.find(
+    (provider) => provider.instanceId === selectedInstanceId,
+  );
+  const selectedProviderName =
+    selectedProvider?.displayName ??
+    PROVIDER_DISPLAY_NAMES[
+      selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId)
+    ] ??
+    selectedInstanceId;
   const selectedProviderSkills = useMemo(
     () =>
       props.serverConfig?.providers.find((provider) => provider.instanceId === selectedInstanceId)
@@ -660,10 +695,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             botId={props.selectedThread.botId ?? null}
             workspaceRoot={props.threadCwd}
             feed={props.selectedThreadFeed}
+            botsById={props.botsById}
+            speakerGroup={speakerGroup}
             contentPresentation={props.contentPresentation}
             agentLabel={agentLabel}
             latestTurn={props.selectedThread.latestTurn}
             activeWorkStartedAt={props.activeWorkStartedAt}
+            silentRun={props.silentRun}
             listRef={listRef}
             freeze={freeze}
             anchorMessageId={anchorMessageId}
@@ -723,7 +761,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                     }}
                   >
                     <ControlPill
-                      accessibilityLabel="Scroll to end"
+                      accessibilityLabel={t("Scroll to end")}
                       activateOnPressIn
                       className="h-9 w-9 bg-transparent"
                       icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
@@ -732,7 +770,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   </LiquidGlassView>
                 ) : (
                   <ControlPill
-                    accessibilityLabel="Scroll to end"
+                    accessibilityLabel={t("Scroll to end")}
                     activateOnPressIn
                     className="h-9 w-9 border border-border bg-card shadow-md shadow-black/10"
                     icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
@@ -742,12 +780,23 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               </Animated.View>
             ) : null}
             <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
-              {props.canResumeThread ? (
-                <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-                  <Text className="min-w-0 flex-1 text-sm text-foreground">
-                    {props.selectedThread.session?.lastError ??
-                      "The request stopped before it could finish."}
+              {props.waitingOnChildren === true && props.activeWorkStartedAt === null ? (
+                <View className="mx-4 mb-2 self-start rounded-full border border-border bg-card px-3 py-1">
+                  <Text accessibilityLiveRegion="polite" className="text-xs text-foreground-muted">
+                    {t("Waiting on delegated work")}
                   </Text>
+                </View>
+              ) : null}
+              {props.canResumeThread ? (
+                <View className="mx-4 mb-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+                  <ResumeErrorSummary
+                    error={props.selectedThread.session?.lastError ?? null}
+                    context={{
+                      unavailability: props.resumeFailureUnavailability ?? null,
+                      providerName: selectedProviderName,
+                      modelName: props.selectedThread.modelSelection.model,
+                    }}
+                  />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Resume interrupted request"
@@ -803,13 +852,20 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               ) : null}
             </View>
 
+            <ComputerDesktopNotice
+              environmentId={props.environmentId}
+              threadId={props.selectedThread.id}
+              botId={props.selectedThread.botId ?? null}
+              turnActivity={`${props.selectedThread.latestTurn?.turnId ?? ""}:${props.selectedThread.latestTurn?.state ?? ""}`}
+            />
+
             {/* Hidden (not unmounted) while a user-input request owns the
                 composer slot, so composer drafts and editor state survive. */}
             <View style={activeUserInputRequestId !== null ? { display: "none" } : undefined}>
               <ThreadDraftComposer
                 threadId={props.selectedThread.id}
                 editorRef={composerEditorRef}
-                placeholder="Ask the bot, or run a command…"
+                placeholder={t("Message, or run a command…")}
                 contentMaxWidth={contentMaxWidth}
                 connectionState={props.connectionStateLabel}
                 connectionError={props.connectionError}
@@ -830,7 +886,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 onReconnectEnvironment={props.onReconnectEnvironment}
                 onUpdateModelSelection={props.onUpdateThreadModelSelection}
                 onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
-                onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                 onExpandedChange={setComposerExpanded}
                 onEditorFocusChange={handleOwnedInputFocusChange}
               />
@@ -841,3 +896,24 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     </View>
   );
 });
+
+function ResumeErrorSummary(props: {
+  readonly error: string | null;
+  readonly context: ThreadErrorContext;
+}) {
+  const { t } = useMobileI18n();
+  if (!props.error && !props.context.unavailability) {
+    return (
+      <Text className="min-w-0 flex-1 text-sm text-foreground">
+        {t("The request stopped before it could finish.")}
+      </Text>
+    );
+  }
+  const presentation = presentThreadError(props.error ?? "", props.context, t);
+  return (
+    <View className="min-w-0 flex-1 gap-0.5">
+      <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>
+      <Text className="text-sm text-foreground-muted">{presentation.description}</Text>
+    </View>
+  );
+}

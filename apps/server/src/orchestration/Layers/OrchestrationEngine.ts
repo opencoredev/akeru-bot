@@ -2,8 +2,8 @@ import type {
   OrchestrationClientOrigin,
   OrchestrationEvent,
   OrchestrationReadModel,
-} from "@t3tools/contracts";
-import { OrchestrationCommand } from "@t3tools/contracts";
+} from "@akeru/contracts";
+import { OrchestrationCommand } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
@@ -28,6 +28,7 @@ import {
   orchestrationCommandDuration,
 } from "../../observability/Metrics.ts";
 import { toPersistenceSqlError } from "../../persistence/Errors.ts";
+import { tryAdmitTurnStart, type TurnStartAdmission } from "../../remote/updateGate.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepository } from "../../persistence/Services/OrchestrationCommandReceipts.ts";
 import {
@@ -58,6 +59,8 @@ interface CommandEnvelope {
   origin: OrchestrationClientOrigin | undefined;
   result: Deferred.Deferred<{ sequence: number }, OrchestrationDispatchError>;
   startedAtMs: number;
+  /** Turn-start admission owned by this envelope, released once the worker finishes it. */
+  admission: TurnStartAdmission | undefined;
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
@@ -96,6 +99,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       };
     case "mcp-server.create":
     case "mcp-server.update":
+    case "mcp-server.instructions.set":
     case "mcp-server.delete":
     case "mcp-server.enable":
     case "mcp-server.disable":
@@ -110,6 +114,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateId: command.delegation.delegationId,
       };
     case "delegation.cancel":
+    case "delegation.retry":
       return {
         aggregateKind: "delegation",
         aggregateId: command.delegationId,
@@ -397,6 +402,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           yield* Deferred.fail(envelope.result, error);
         }),
       ),
+      Effect.ensuring(Effect.sync(() => envelope.admission?.release())),
     );
   };
 
@@ -428,18 +434,39 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       aggregateId: threadId,
     });
 
+  // Every turn start, whatever surface sent it, is admitted here so a server
+  // update cannot begin while a turn is being committed. The admission moves
+  // into the queued envelope in the same uninterruptible step as the offer, so
+  // an interrupted caller cannot release it while the worker still owns the
+  // turn. A caller that already holds an admission passes it to skip the
+  // maintenance check. A blocked start is rejected without a receipt, so the
+  // same command can be retried afterwards.
   const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) =>
-    Effect.gen(function* () {
-      const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
-      yield* Queue.offer(commandQueue, {
-        command,
-        actor: options?.actor,
-        origin: options?.origin,
-        result,
-        startedAtMs: yield* Clock.currentTimeMillis,
-      });
-      return yield* Deferred.await(result);
-    });
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const admission =
+          command.type === "thread.turn.start" || command.type === "thread.turn.resume"
+            ? (options?.admission?.retain() ?? tryAdmitTurnStart())
+            : undefined;
+        if (admission === null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "The server is installing an update. Try again in a moment.",
+          });
+        }
+        const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
+        const offered = yield* Queue.offer(commandQueue, {
+          command,
+          actor: options?.actor,
+          origin: options?.origin,
+          result,
+          startedAtMs: yield* Clock.currentTimeMillis,
+          admission,
+        });
+        if (!offered) admission?.release();
+        return yield* restore(Deferred.await(result));
+      }),
+    );
 
   return {
     readEvents,

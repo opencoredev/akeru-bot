@@ -1,18 +1,19 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { canSettle, canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
+import { canSettle, canSnooze } from "@akeru/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
 import * as Haptics from "expo-haptics";
 import { useCallback, useRef } from "react";
 import { Alert } from "react-native";
 
 import { showConfirmDialog } from "../../components/ConfirmDialogHost";
+import { useMobileI18n } from "../../lib/i18n";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { refreshArchivedThreadsForEnvironment } from "../archive/useArchivedThreadSnapshots";
 import {
   pinOrderKeyBetween,
   planPinnedMove,
   sortPinnedThreadsByOrderKey,
-} from "@t3tools/client-runtime/state/thread-sort";
+} from "@akeru/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
@@ -58,39 +59,41 @@ function environmentSupportsTitleRegeneration(
 }
 
 type ThreadListAction = "archive" | "unarchive" | "delete" | "settle" | "unsettle";
+type Translate = ReturnType<typeof useMobileI18n>["t"];
 
-const ACTION_VERBS: Record<ThreadListAction, string> = {
-  archive: "archived",
-  unarchive: "unarchived",
-  delete: "deleted",
-  settle: "settled",
-  unsettle: "un-settled",
-};
-
-function actionFailureMessage(action: ThreadListAction, cause: Cause.Cause<unknown>): string {
+function actionFailureMessage(
+  action: ThreadListAction,
+  cause: Cause.Cause<unknown>,
+  t: Translate,
+): string {
   const error = Cause.squash(cause);
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
-  return `The chat could not be ${ACTION_VERBS[action]}.`;
+  if (action === "archive") return t("The chat could not be archived.");
+  if (action === "unarchive") return t("The chat could not be unarchived.");
+  if (action === "settle") return t("The chat could not be settled.");
+  if (action === "unsettle") return t("The chat could not be un-settled.");
+  return t("The chat could not be deleted.");
 }
 
 function selectionHaptic(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 }
 
-function actionFailureTitle(action: ThreadListAction): string {
-  if (action === "archive") return "Could not archive chat";
-  if (action === "unarchive") return "Could not unarchive chat";
-  if (action === "settle") return "Could not settle chat";
-  if (action === "unsettle") return "Could not un-settle chat";
-  return "Could not delete chat";
+function actionFailureTitle(action: ThreadListAction, t: Translate): string {
+  if (action === "archive") return t("Could not archive chat");
+  if (action === "unarchive") return t("Could not unarchive chat");
+  if (action === "settle") return t("Could not settle chat");
+  if (action === "unsettle") return t("Could not un-settle chat");
+  return t("Could not delete chat");
 }
 
 /** Resolves to true iff the action was dispatched and succeeded. */
 function useThreadActionExecutor(
   onCompleted?: (action: ThreadListAction, thread: EnvironmentThreadShell) => void,
 ) {
+  const { t } = useMobileI18n();
   const archiveMutation = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
   const unarchiveMutation = useAtomCommand(threadEnvironment.unarchive, { reportFailure: false });
   const deleteMutation = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
@@ -113,8 +116,10 @@ function useThreadActionExecutor(
           !environmentSupportsSettlement(thread.environmentId)
         ) {
           Alert.alert(
-            actionFailureTitle(action),
-            "This environment's server does not support settling yet. Update the server to use Settle.",
+            actionFailureTitle(action, t),
+            t(
+              "This environment's server does not support settling yet. Update the server to use Settle.",
+            ),
           );
           return false;
         }
@@ -123,8 +128,8 @@ function useThreadActionExecutor(
         // approvals or user input. Anything else would hide live work.
         if (action === "settle" && !canSettle(thread, { now: new Date().toISOString() })) {
           Alert.alert(
-            actionFailureTitle(action),
-            "This chat still needs attention. Resolve or interrupt it first, then try again.",
+            actionFailureTitle(action, t),
+            t("This chat still needs attention. Resolve or interrupt it first, then try again."),
           );
           return false;
         }
@@ -136,8 +141,8 @@ function useThreadActionExecutor(
           thread.session.activeTurnId != null
         ) {
           Alert.alert(
-            actionFailureTitle(action),
-            "This chat is working. Interrupt it first, then try again.",
+            actionFailureTitle(action, t),
+            t("This chat is working. Interrupt it first, then try again."),
           );
           return false;
         }
@@ -160,7 +165,7 @@ function useThreadActionExecutor(
                 input: { threadId: thread.id },
               });
         if (result._tag === "Failure") {
-          Alert.alert(actionFailureTitle(action), actionFailureMessage(action, result.cause));
+          Alert.alert(actionFailureTitle(action, t), actionFailureMessage(action, result.cause, t));
           return false;
         }
         // Settled threads stay in the live shell stream; only the archive
@@ -179,6 +184,7 @@ function useThreadActionExecutor(
       deleteMutation,
       onCompleted,
       settleMutation,
+      t,
       unarchiveMutation,
       unsettleMutation,
     ],
@@ -190,15 +196,18 @@ function useThreadActionExecutor(
 function useConfirmDeleteThread(
   executeAction: (action: ThreadListAction, thread: EnvironmentThreadShell) => Promise<boolean>,
 ) {
+  const { t } = useMobileI18n();
   return useCallback(
     (thread: EnvironmentThreadShell) => {
-      const title = "Delete chat?";
-      const message = `“${thread.title}” will be permanently deleted, including its terminal history.`;
+      const title = t("Delete chat?");
+      const message = t("“{title}” will be permanently deleted, including its terminal history.", {
+        title: thread.title,
+      });
       if (process.env.EXPO_OS === "ios") {
         Alert.alert(title, message, [
-          { text: "Cancel", style: "cancel" },
+          { text: t("Cancel"), style: "cancel" },
           {
-            text: "Delete",
+            text: t("Delete"),
             style: "destructive",
             onPress: () => {
               void executeAction("delete", thread);
@@ -210,14 +219,14 @@ function useConfirmDeleteThread(
       showConfirmDialog({
         title,
         message,
-        confirmText: "Delete",
+        confirmText: t("Delete"),
         destructive: true,
         onConfirm: () => {
           void executeAction("delete", thread);
         },
       });
     },
-    [executeAction],
+    [executeAction, t],
   );
 }
 
@@ -236,6 +245,7 @@ export function useThreadListActions(): {
   ) => Promise<boolean>;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
 } {
+  const { t } = useMobileI18n();
   const executeAction = useThreadActionExecutor();
   const snoozeMutation = useAtomCommand(threadEnvironment.snooze, { reportFailure: false });
   const unsnoozeMutation = useAtomCommand(threadEnvironment.unsnooze, { reportFailure: false });
@@ -267,17 +277,19 @@ export function useThreadListActions(): {
       try {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
-            "Could not snooze chat",
-            "This environment's server does not support snoozing yet. Update the server to use Snooze.",
+            t("Could not snooze chat"),
+            t(
+              "This environment's server does not support snoozing yet. Update the server to use Snooze.",
+            ),
           );
           return false;
         }
         if (!canSnooze(thread, { now: new Date().toISOString() })) {
           Alert.alert(
-            "Could not snooze chat",
+            t("Could not snooze chat"),
             thread.hasPendingApprovals || thread.hasPendingUserInput
-              ? "This chat is waiting on you. Respond to the pending request before snoozing it."
-              : "This chat is still starting a turn. Try again once it's running.",
+              ? t("This chat is waiting on you. Respond to the pending request before snoozing it.")
+              : t("This chat is still starting a turn. Try again once it's running."),
           );
           return false;
         }
@@ -293,10 +305,10 @@ export function useThreadListActions(): {
         if (result._tag === "Failure") {
           const error = Cause.squash(result.cause);
           Alert.alert(
-            "Could not snooze chat",
+            t("Could not snooze chat"),
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The chat could not be snoozed.",
+              : t("The chat could not be snoozed."),
           );
           return false;
         }
@@ -305,7 +317,7 @@ export function useThreadListActions(): {
         snoozeInFlightThreadKeys.current.delete(key);
       }
     },
-    [snoozeMutation],
+    [snoozeMutation, t],
   );
   const unsnoozeThread = useCallback(
     async (thread: EnvironmentThreadShell) => {
@@ -317,8 +329,10 @@ export function useThreadListActions(): {
       try {
         if (!environmentSupportsSnooze(thread.environmentId)) {
           Alert.alert(
-            "Could not wake chat",
-            "This environment's server does not support snoozing yet. Update the server to wake this chat.",
+            t("Could not wake chat"),
+            t(
+              "This environment's server does not support snoozing yet. Update the server to wake this chat.",
+            ),
           );
           return false;
         }
@@ -331,10 +345,10 @@ export function useThreadListActions(): {
         if (result._tag === "Failure") {
           const error = Cause.squash(result.cause);
           Alert.alert(
-            "Could not wake chat",
+            t("Could not wake chat"),
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The chat could not be woken.",
+              : t("The chat could not be woken."),
           );
           return false;
         }
@@ -343,7 +357,7 @@ export function useThreadListActions(): {
         snoozeInFlightThreadKeys.current.delete(key);
       }
     },
-    [unsnoozeMutation],
+    [unsnoozeMutation, t],
   );
   const unsettleThread = useCallback(
     async (thread: EnvironmentThreadShell) => (await executeAction("unsettle", thread)) === true,
@@ -353,8 +367,10 @@ export function useThreadListActions(): {
     async (thread: EnvironmentThreadShell) => {
       if (!environmentSupportsPinning(thread.environmentId)) {
         Alert.alert(
-          "Could not pin chat",
-          "This environment's server does not support pinning yet. Update the server to use Pin.",
+          t("Could not pin chat"),
+          t(
+            "This environment's server does not support pinning yet. Update the server to use Pin.",
+          ),
         );
         return false;
       }
@@ -378,23 +394,25 @@ export function useThreadListActions(): {
       if (result._tag === "Failure") {
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not pin chat",
+          t("Could not pin chat"),
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : "The chat could not be pinned.",
+            : t("The chat could not be pinned."),
         );
         return false;
       }
       return true;
     },
-    [pinMutation],
+    [pinMutation, t],
   );
   const unpinThread = useCallback(
     async (thread: EnvironmentThreadShell) => {
       if (!environmentSupportsPinning(thread.environmentId)) {
         Alert.alert(
-          "Could not unpin chat",
-          "This environment's server does not support pinning yet. Update the server to use Pin.",
+          t("Could not unpin chat"),
+          t(
+            "This environment's server does not support pinning yet. Update the server to use Pin.",
+          ),
         );
         return false;
       }
@@ -406,16 +424,16 @@ export function useThreadListActions(): {
       if (result._tag === "Failure") {
         const error = Cause.squash(result.cause);
         Alert.alert(
-          "Could not unpin chat",
+          t("Could not unpin chat"),
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : "The chat could not be unpinned.",
+            : t("The chat could not be unpinned."),
         );
         return false;
       }
       return true;
     },
-    [unpinMutation],
+    [unpinMutation, t],
   );
   const regenerateThreadTitle = useCallback(
     async (thread: EnvironmentThreadShell) => {
@@ -428,8 +446,10 @@ export function useThreadListActions(): {
       }
       if (!environmentSupportsTitleRegeneration(thread.environmentId)) {
         Alert.alert(
-          "Could not regenerate title",
-          "This environment's server does not support title regeneration yet. Update the server to regenerate chat titles.",
+          t("Could not regenerate title"),
+          t(
+            "This environment's server does not support title regeneration yet. Update the server to regenerate chat titles.",
+          ),
         );
         return false;
       }
@@ -444,10 +464,10 @@ export function useThreadListActions(): {
         if (result._tag === "Failure") {
           const error = Cause.squash(result.cause);
           Alert.alert(
-            "Could not regenerate title",
+            t("Could not regenerate title"),
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : "The chat title could not be regenerated.",
+              : t("The chat title could not be regenerated."),
           );
           return false;
         }
@@ -456,7 +476,7 @@ export function useThreadListActions(): {
         titleRegenerationInFlightThreadKeys.current.delete(key);
       }
     },
-    [updateThreadMetadata],
+    [updateThreadMetadata, t],
   );
 
   // Move up / Move down for the pinned block. Computed against the CANONICAL
@@ -476,8 +496,10 @@ export function useThreadListActions(): {
       if (movePinnedInFlightRef.current) return false;
       if (!environmentSupportsPinReorder(thread.environmentId)) {
         Alert.alert(
-          "Could not move chat",
-          "This environment's server does not support pinned reordering yet. Update the server to reorder pins.",
+          t("Could not move chat"),
+          t(
+            "This environment's server does not support pinned reordering yet. Update the server to reorder pins.",
+          ),
         );
         return false;
       }
@@ -519,10 +541,10 @@ export function useThreadListActions(): {
           if (result._tag === "Failure") {
             const error = Cause.squash(result.cause);
             Alert.alert(
-              "Could not move chat",
+              t("Could not move chat"),
               error instanceof Error && error.message.trim().length > 0
                 ? error.message
-                : "The pinned chat could not be moved.",
+                : t("The pinned chat could not be moved."),
             );
             // No rollback: keys already written are valid orderings on their
             // own (each write is a complete, consistent placement), so a
@@ -535,7 +557,7 @@ export function useThreadListActions(): {
         movePinnedInFlightRef.current = false;
       }
     },
-    [reorderPinnedMutation],
+    [reorderPinnedMutation, t],
   );
 
   const confirmDeleteThread = useConfirmDeleteThread(executeAction);

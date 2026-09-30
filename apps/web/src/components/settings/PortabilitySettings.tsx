@@ -2,16 +2,17 @@ import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import type {
   PortabilityApplyImportResult,
   PortabilityImportItem,
   PortabilityImportPreview,
   PortabilityProjectFolderMap,
   ProjectId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useRef, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
 import { readLocalApi } from "../../localApi";
 import { portabilityEnvironment } from "../../state/portability";
@@ -38,6 +39,8 @@ import {
 import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
+type Translate = ReturnType<typeof useI18n>["t"];
+
 interface ImportPreviewState {
   readonly contents: string;
   readonly filename: string;
@@ -54,13 +57,17 @@ function downloadArchive(filename: string, contents: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-function reportFailure(title: string, result: AtomCommandResult<unknown, unknown>): void {
+function reportFailure(
+  title: string,
+  result: AtomCommandResult<unknown, unknown>,
+  t: Translate,
+): void {
   if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
   const error = squashAtomCommandFailure(result);
   toastManager.add({
     type: "error",
     title,
-    description: error instanceof Error ? error.message : "The command failed.",
+    description: error instanceof Error ? error.message : t("The command failed."),
   });
 }
 
@@ -105,15 +112,17 @@ function ImportPreview({
   readonly onProjectFolderChange: (projectId: ProjectId, destination: string) => void;
   readonly onProjectFolderPick: (projectId: ProjectId, destination: string | null) => void;
 }) {
+  const { t } = useI18n();
   const unsupported = preview.unsupported.filter((item) => item.count > 0);
   return (
     <div className="space-y-5">
       {preview.projectFolders.length > 0 ? (
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold text-foreground">Project locations</h3>
+          <h3 className="text-xs font-semibold text-foreground">{t("Project locations")}</h3>
           <p className="text-xs text-muted-foreground">
-            Choose an existing folder for each project. Akeru Bot links the project to the folder
-            without copying its files.
+            {t(
+              "Choose an existing folder for each project. Akeru Bot links the project to the folder without copying its files.",
+            )}
           </p>
           {preview.projectFolders.map((project) => (
             <div key={project.projectId} className="space-y-1">
@@ -136,7 +145,7 @@ function ImportPreview({
                     disabled={pending}
                     onClick={() => onProjectFolderPick(project.projectId, project.destination)}
                   >
-                    Choose
+                    {t("Choose")}
                   </Button>
                 ) : null}
               </div>
@@ -146,14 +155,14 @@ function ImportPreview({
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <ImportItems title="Additions" items={preview.additions} />
-        <ImportItems title="Changes" items={preview.changes} />
-        <ImportItems title="Conflicts" items={preview.conflicts} />
+        <ImportItems title={t("Additions")} items={preview.additions} />
+        <ImportItems title={t("Changes")} items={preview.changes} />
+        <ImportItems title={t("Conflicts")} items={preview.conflicts} />
       </div>
 
       <section className="space-y-1.5">
         <h3 className="text-xs font-semibold text-foreground">
-          Missing providers{" "}
+          {t("Missing providers")}{" "}
           <span className="text-muted-foreground">{preview.missingProviders.length}</span>
         </h3>
         {preview.missingProviders.length > 0 ? (
@@ -162,20 +171,22 @@ function ImportPreview({
       </section>
 
       <section className="space-y-1.5">
-        <h3 className="text-xs font-semibold text-foreground">Not transferred</h3>
+        <h3 className="text-xs font-semibold text-foreground">{t("Not transferred")}</h3>
         <ul className="space-y-1 text-xs text-muted-foreground">
           {preview.skippedSecrets.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">
-          After restore, sign in to providers and reconnect imported MCP servers on this device.
+          {t(
+            "After restore, sign in to providers and reconnect imported MCP servers on this device.",
+          )}
         </p>
       </section>
 
       {unsupported.length > 0 ? (
         <section className="space-y-1.5">
-          <h3 className="text-xs font-semibold text-foreground">Not restored</h3>
+          <h3 className="text-xs font-semibold text-foreground">{t("Not restored")}</h3>
           <ul className="space-y-2 text-xs text-muted-foreground">
             {unsupported.map((item) => (
               <li key={item.kind}>
@@ -192,18 +203,19 @@ function ImportPreview({
   );
 }
 
-function importResultDescription(result: PortabilityApplyImportResult): string {
+function importResultDescription(result: PortabilityApplyImportResult, t: Translate): string {
   const counts = [
-    `${result.applied} restored`,
-    ...(result.skipped > 0 ? [`${result.skipped} skipped`] : []),
-    ...(result.failed > 0 ? [`${result.failed} failed`] : []),
-    ...(result.partial > 0 ? [`${result.partial} partly restored`] : []),
+    t("{count} restored.", { count: result.applied }),
+    ...(result.skipped > 0 ? [t("{count} skipped.", { count: result.skipped })] : []),
+    ...(result.failed > 0 ? [t("{count} failed.", { count: result.failed })] : []),
+    ...(result.partial > 0 ? [t("{count} partly restored.", { count: result.partial })] : []),
   ];
   const firstFailure = result.failures[0];
-  return `${counts.join(". ")}.${firstFailure ? ` ${firstFailure.title}: ${firstFailure.message}` : ""}`;
+  return `${counts.join(" ")}${firstFailure ? ` ${firstFailure.title}: ${firstFailure.message}` : ""}`;
 }
 
 export function PortabilitySettings() {
+  const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const primaryEnvironment = usePrimaryEnvironment();
   const projectPickerTarget = portabilityProjectPickerTarget(
@@ -232,11 +244,11 @@ export function PortabilitySettings() {
     const result = await exportArchive({ environmentId, input: {} });
     setPending(null);
     if (result._tag === "Failure") {
-      reportFailure("Could not export archive", result);
+      reportFailure(t("Could not export archive"), result, t);
       return;
     }
     downloadArchive(result.value.filename, result.value.contents);
-    toastManager.add({ type: "success", title: "Archive exported" });
+    toastManager.add({ type: "success", title: t("Archive exported") });
   };
 
   const handleFile = async (file: File) => {
@@ -244,7 +256,11 @@ export function PortabilitySettings() {
     setApplyResult(null);
     const fileError = portabilityArchiveFileError(file.size);
     if (fileError) {
-      toastManager.add({ type: "error", title: "Could not read archive", description: fileError });
+      toastManager.add({
+        type: "error",
+        title: t("Could not read archive"),
+        description: fileError,
+      });
       return;
     }
     importSessionIdRef.current += 1;
@@ -257,7 +273,7 @@ export function PortabilitySettings() {
       if (requestId !== previewRequestIdRef.current) return;
       setPending(null);
       if (result._tag === "Failure") {
-        reportFailure("Could not preview archive", result);
+        reportFailure(t("Could not preview archive"), result, t);
         return;
       }
       setImportState({ contents, filename: file.name, preview: result.value, projectFolders: {} });
@@ -266,8 +282,8 @@ export function PortabilitySettings() {
       setPending(null);
       toastManager.add({
         type: "error",
-        title: "Could not read archive",
-        description: error instanceof Error ? error.message : "The file could not be read.",
+        title: t("Could not read archive"),
+        description: error instanceof Error ? error.message : t("The file could not be read."),
       });
     }
   };
@@ -300,7 +316,7 @@ export function PortabilitySettings() {
           ? { ...current, projectFolders: reviewedProjectFolders }
           : current,
       );
-      reportFailure("Could not use project folder", result);
+      reportFailure(t("Could not use project folder"), result, t);
       return;
     }
     setImportState((current) =>
@@ -316,8 +332,8 @@ export function PortabilitySettings() {
     if (!window.desktopBridge || projectPickerTarget === undefined) {
       toastManager.add({
         type: "error",
-        title: "Folder picker unavailable",
-        description: "Enter an absolute folder path, or open Akeru Bot on desktop.",
+        title: t("Folder picker unavailable"),
+        description: t("Enter an absolute folder path, or open Akeru Bot on desktop."),
       });
       return;
     }
@@ -341,8 +357,9 @@ export function PortabilitySettings() {
       if (importSessionId !== importSessionIdRef.current) return;
       toastManager.add({
         type: "error",
-        title: "Could not choose project folder",
-        description: error instanceof Error ? error.message : "The folder could not be selected.",
+        title: t("Could not choose project folder"),
+        description:
+          error instanceof Error ? error.message : t("The folder could not be selected."),
       });
     }
   };
@@ -361,7 +378,7 @@ export function PortabilitySettings() {
     });
     setPending(null);
     if (result._tag === "Failure") {
-      reportFailure("Could not import archive", result);
+      reportFailure(t("Could not import archive"), result, t);
       return;
     }
     const hasFailures = result.value.failed > 0 || result.value.partial > 0;
@@ -373,16 +390,18 @@ export function PortabilitySettings() {
     }
     toastManager.add({
       type: hasFailures ? "error" : "success",
-      title: hasFailures ? "Archive partly restored" : "Archive restored",
-      description: importResultDescription(result.value),
+      title: hasFailures ? t("Archive partly restored") : t("Archive restored"),
+      description: importResultDescription(result.value, t),
     });
   };
 
   return (
     <>
       <SettingsRow
-        {...searchableSetting("data-portability")}
-        description="Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included."
+        {...searchableSetting("data-portability", t)}
+        description={t(
+          "Export Akeru settings, project links, and history, or restore them on another environment. Project files and credentials are not included.",
+        )}
         control={
           <div className="flex items-center gap-1.5">
             <Button
@@ -391,7 +410,7 @@ export function PortabilitySettings() {
               disabled={environmentId === null || pending !== null}
               onClick={() => fileInputRef.current?.click()}
             >
-              {pending === "preview" ? "Reading..." : "Import"}
+              {pending === "preview" ? t("Reading...") : t("Import")}
             </Button>
             <Button
               size="xs"
@@ -399,14 +418,14 @@ export function PortabilitySettings() {
               disabled={environmentId === null || pending !== null}
               onClick={() => void handleExport()}
             >
-              {pending === "export" ? "Exporting..." : "Export"}
+              {pending === "export" ? t("Exporting...") : t("Export")}
             </Button>
             <input
               ref={fileInputRef}
               className="sr-only"
               type="file"
               accept=".archive,application/json"
-              aria-label="Import Akeru archive"
+              aria-label={t("Import Akeru archive")}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = "";
@@ -432,9 +451,11 @@ export function PortabilitySettings() {
       >
         <DialogPopup className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Restore preview</DialogTitle>
+            <DialogTitle>{t("Restore preview")}</DialogTitle>
             <DialogDescription>
-              {importState?.filename}. Review what Akeru Bot will restore on this environment.
+              {t("{filename}. Review what Akeru Bot will restore on this environment.", {
+                filename: importState?.filename ?? "",
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -456,13 +477,13 @@ export function PortabilitySettings() {
             ) : null}
             {applyResult && applyResult.failures.length > 0 ? (
               <section className="mt-5 space-y-1.5">
-                <h3 className="text-xs font-semibold text-destructive">Restore failures</h3>
+                <h3 className="text-xs font-semibold text-destructive">{t("Restore failures")}</h3>
                 <ul className="space-y-2 text-xs text-muted-foreground">
                   {applyResult.failures.map((failure) => (
                     <li key={`${failure.recordType}:${failure.id}`}>
                       <span className="font-medium text-foreground/80">{failure.title}</span>
                       <span className="block">
-                        {failure.partial ? "Partly restored. " : "Not restored. "}
+                        {failure.partial ? t("Partly restored.") : t("Not restored.")}{" "}
                         {failure.message}
                       </span>
                     </li>
@@ -483,7 +504,7 @@ export function PortabilitySettings() {
                 setImportState(null);
               }}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               disabled={
@@ -494,7 +515,7 @@ export function PortabilitySettings() {
               }
               onClick={() => void handleApply()}
             >
-              {pending === "apply" ? "Restoring..." : "Restore"}
+              {pending === "apply" ? t("Restoring...") : t("Restore")}
             </Button>
           </DialogFooter>
         </DialogPopup>

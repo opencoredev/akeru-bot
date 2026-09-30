@@ -10,9 +10,14 @@ import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, GroupId } from "@t3tools/contracts";
+import { PencilEdit02Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import { BotId, GroupId, PLACEHOLDER_THREAD_TITLE, type ScopedThreadRef } from "@akeru/contracts";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   BotIcon,
@@ -37,20 +42,29 @@ import { useShallow } from "zustand/react/shallow";
 
 import { isElectron } from "../../env";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
 import { isPreviewFocused } from "../../lib/previewFocus";
-import { isTerminalFocused } from "../../lib/terminalFocus";
 import { cn, randomUUID } from "../../lib/utils";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { botEnvironment } from "../../state/bots";
-import { useThreadMessages } from "../../state/entities";
+import { useLatestGroupThreadId, useThreadMessages } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
-import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
+import { SidebarChromeFooter, SidebarStatusStack } from "../sidebar/SidebarChrome";
 import { AkeruWordmark } from "../AkeruWordmark";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarContent, SidebarGroup, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
@@ -60,10 +74,12 @@ import { BotAvatarView } from "./BotAvatarView";
 import { DEFAULT_BOT_RUNTIME_MODE } from "./botSandbox";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 import { useBotPresence } from "./botPresence";
+import { useBotRosterUnread, useChatUnread } from "../chat/useChatUnread";
 import { NewBotDialog } from "./NewBotDialog";
 import { NewGroupDialog, type NewGroupInput } from "./NewGroupDialog";
 import { GroupMemberStack } from "./GroupMemberStack";
 import {
+  archivedRosterBots,
   buildRosterListItems,
   filterRosterBots,
   filterRosterGroups,
@@ -78,7 +94,9 @@ import {
   rosterItemsForZone,
   rosterListItemId,
   rosterMarkerId,
+  rosterZoneHeading,
   orderRosterBotsForShortcuts,
+  resolveAdjacentRosterBot,
   resolveRosterShortcutBot,
   type RosterItemRef,
   type RosterLastMessage,
@@ -96,10 +114,13 @@ import {
 import { createRosterListMotion } from "./roster.motion";
 import { RosterDragLifecycle, RosterPointerSensor } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
+import { resolveRosterListState } from "./rosterRouteSelection";
+import { RosterLoadStatus } from "./RosterLoadStatus";
+import { useRosterLoadState } from "./useServerRoster";
 import type { Bot, BotAvatar, Group } from "./types";
-import { useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
+import { useBotChatTarget, useBotThreadCandidate, useBotThreadRef } from "./useBotThreadRef";
 
-/** Avatar with a yellow needs-you light and a green working light. */
+/** Avatar with a warning needs-you light and an accent working light. */
 function RosterAvatar({
   bot,
   presence,
@@ -121,7 +142,7 @@ function RosterAvatar({
           data-status={indicator}
           className={cn(
             "absolute -bottom-px -right-px rounded-full ring-1 ring-sidebar",
-            indicator === "working" ? "bg-success" : "bg-warning",
+            indicator === "working" ? "bg-primary" : "bg-warning",
             dotClassName ?? "size-2",
           )}
         />
@@ -144,6 +165,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewBot: () => void;
   onNewGroup: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <SidebarHeader
       className={cn(
@@ -166,7 +188,7 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
             <MenuTrigger
               render={
                 <Button
-                  aria-label="Create"
+                  aria-label={t("Create")}
                   data-testid="roster-new-bot"
                   className="size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]"
                   size="icon"
@@ -179,11 +201,11 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
             <MenuPopup align="end">
               <MenuItem onClick={onNewBot}>
                 <BotIcon />
-                New bot
+                {t("New bot")}
               </MenuItem>
               <MenuItem onClick={onNewGroup}>
                 <UsersIcon />
-                New group
+                {t("New group")}
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -193,17 +215,102 @@ const RosterSidebarHeader = memo(function RosterSidebarHeader({
   );
 });
 
+/**
+ * Header for the roster when it sits inside the experimental rail layout:
+ * the wordmark as the panel title, with search and create beside it.
+ */
+export function RosterPanelHeader({
+  onNewBot,
+  onNewGroup,
+  onSearch,
+}: {
+  onNewBot: () => void;
+  onNewGroup: () => void;
+  onSearch: () => void;
+}) {
+  const { t } = useI18n();
+  const iconButton =
+    "size-8! rounded-lg text-sidebar-muted-foreground hover:text-sidebar-foreground [-webkit-app-region:no-drag]";
+  return (
+    <SidebarHeader
+      className={cn(
+        "h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5",
+        isElectron && "drag-region",
+      )}
+    >
+      <Link
+        to="/"
+        className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]"
+      >
+        <AkeruWordmark className="text-[26px]" />
+      </Link>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-label={t("Search")}
+              className={iconButton}
+              size="icon"
+              variant="ghost"
+              onClick={onSearch}
+            >
+              <AppIcon icon={Search01Icon} className="size-[18px]" />
+            </Button>
+          }
+        />
+        <TooltipPopup>{t("Search")}</TooltipPopup>
+      </Tooltip>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={t("Create")}
+              data-testid="roster-new-bot"
+              className={iconButton}
+              size="icon"
+              variant="ghost"
+            >
+              <AppIcon icon={PencilEdit02Icon} className="size-[18px]" />
+            </Button>
+          }
+        />
+        <MenuPopup align="end">
+          <MenuItem onClick={onNewBot}>
+            <BotIcon />
+            {t("New bot")}
+          </MenuItem>
+          <MenuItem onClick={onNewGroup}>
+            <UsersIcon />
+            {t("New group")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </SidebarHeader>
+  );
+}
+
 function useLatestBotMessage(
   botId: string,
   fallback: RosterLastMessage | null,
-): RosterLastMessage | null {
-  const threadRef = useBotThreadCandidate(botId);
+): {
+  message: RosterLastMessage | null;
+  taskTitle: string | null;
+  threadRef: ScopedThreadRef | null;
+} {
+  const candidate = useBotThreadCandidate(botId);
+  const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
-  return useMemo(
-    () => resolveLatestRosterMessage(fallback, visibleMessages),
-    [fallback, visibleMessages],
+  const message = useMemo(
+    () => resolveLatestRosterMessage(fallback, visibleMessages, threadRef?.threadId),
+    [fallback, visibleMessages, threadRef?.threadId],
   );
+  // The chat title reads as the bot's current task; the placeholder title of
+  // a brand-new chat says nothing, so the chip stays hidden until a real
+  // title lands.
+  const shellTitle = shell?.title ?? null;
+  const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
+  return useMemo(() => ({ message, taskTitle, threadRef }), [message, taskTitle, threadRef]);
 }
 
 type SortableRosterRowBag = Pick<
@@ -249,10 +356,87 @@ const setRosterItemPinned = (item: RosterItemRef, pinned: boolean) =>
 const nudgeRosterItem = (item: RosterItemRef, delta: -1 | 1) =>
   useRosterStore.getState().nudgeRosterItem(item, delta);
 
+function commandFailureMessage(
+  result: Parameters<typeof squashAtomCommandFailure>[0],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const error = squashAtomCommandFailure(result);
+  return error instanceof Error ? error.message : t("The environment rejected the change.");
+}
+
+/**
+ * The roster row focus lands on once an archived one is gone: the row that takes
+ * its place, else the row above it, else nothing — meaning the roster list
+ * itself, because the row focus would have returned to is on its way out.
+ * Keys are `rosterItemKey` values, so a surviving group can take the focus too.
+ */
+export function focusTargetAfterRosterArchive(
+  rowKeys: readonly string[],
+  archivedKey: string,
+): string | null {
+  const index = rowKeys.indexOf(archivedKey);
+  if (index === -1) return rowKeys[0] ?? null;
+  return rowKeys[index + 1] ?? rowKeys[index - 1] ?? null;
+}
+
+/**
+ * Runs one create-bot submission at a time. `NewBotDialog` stays mounted while
+ * the command is awaited, so a second submit would dispatch a second create and
+ * leave the pending-selection id on whichever request happened to settle last.
+ * The latch is a ref rather than state because both submits land before React
+ * has re-rendered the dialog with `submitting`.
+ */
+export async function runCreateBotOnce(
+  inFlight: { current: boolean },
+  create: () => Promise<void>,
+): Promise<void> {
+  if (inFlight.current) return;
+  inFlight.current = true;
+  try {
+    await create();
+  } finally {
+    inFlight.current = false;
+  }
+}
+
+const rosterFullTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/** Unabbreviated date for the roster row's compact timestamp tooltip. */
+function formatRosterFullTimestamp(isoDate: string): string {
+  const parsed = new Date(isoDate);
+  return Number.isNaN(parsed.getTime()) ? "" : rosterFullTimestampFormatter.format(parsed);
+}
+
+/** The group's current chat: its newest chat on the primary environment. */
+function useGroupChatRef(groupId: string): ScopedThreadRef | null {
+  const environmentId = usePrimaryEnvironmentId();
+  const threadId = useLatestGroupThreadId(environmentId, groupId);
+  return useMemo(
+    () => (environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null),
+    [environmentId, threadId],
+  );
+}
+
+function UnreadDot() {
+  const { t } = useI18n();
+  return (
+    <span
+      role="img"
+      aria-label={t("Unread")}
+      data-testid="roster-unread-dot"
+      className="size-2 shrink-0 rounded-full bg-sidebar-foreground"
+    />
+  );
+}
+
 const BotRosterRow = memo(function BotRosterRow({
   bot,
   lastMessage,
   isActive,
+  chatOpen,
   onSelect,
   onOpenSettings,
   pinned,
@@ -260,11 +444,14 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveUp,
   canMoveDown,
   onNudge,
+  onArchive,
   sortable,
 }: {
   bot: Bot;
   lastMessage: RosterLastMessage | null;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
   onOpenSettings: (bot: Bot) => void;
   pinned: boolean;
@@ -272,13 +459,20 @@ const BotRosterRow = memo(function BotRosterRow({
   canMoveUp: boolean;
   canMoveDown: boolean;
   onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
+  onArchive: (bot: Bot) => void;
   sortable: SortableRosterRowBag;
 }) {
+  const { t, formatDate } = useI18n();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
-  const latestMessage = useLatestBotMessage(bot.id, lastMessage);
+  const {
+    message: latestMessage,
+    taskTitle,
+    threadRef: chatRef,
+  } = useLatestBotMessage(bot.id, lastMessage);
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <li
       role="listitem"
@@ -312,6 +506,7 @@ const BotRosterRow = memo(function BotRosterRow({
       >
         <button
           type="button"
+          data-roster-row={rosterItemKey({ kind: "bot", id: bot.id })}
           aria-current={isActive || undefined}
           onClick={() => onSelect(bot)}
           className={cn(
@@ -323,20 +518,44 @@ const BotRosterRow = memo(function BotRosterRow({
         >
           <RosterAvatar bot={bot} presence={presence} className={pinned ? "size-12" : "size-10"} />
           {pinned ? (
-            <span className="max-w-full truncate text-xs font-medium">{bot.name}</span>
+            <span className="flex max-w-full items-center gap-1">
+              {unread ? <UnreadDot /> : null}
+              <span className="truncate text-xs font-medium">{bot.name}</span>
+            </span>
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="flex items-baseline gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{bot.name}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold">{bot.name}</span>
+                <span className="min-w-2 flex-1" />
+                {unread ? <UnreadDot /> : null}
                 {latestMessage ? (
-                  <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                    {formatRosterTimestamp(latestMessage.at, timestampFormat)}
-                  </span>
+                  // The compact label collapses to a bare numeric date once a
+                  // chat is over a week old ("1/15"), which reads like a count
+                  // rather than a date. Keep the compact form — the roster has
+                  // no room for more — and let the machine-readable datetime
+                  // plus hover text say what it actually is.
+                  <time
+                    dateTime={latestMessage.at}
+                    aria-label={t("Last message {time}", {
+                      time: formatRosterFullTimestamp(latestMessage.at),
+                    })}
+                    className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground"
+                  >
+                    {formatRosterTimestamp(
+                      latestMessage.at,
+                      timestampFormat,
+                      Date.now(),
+                      t,
+                      formatDate,
+                    )}
+                  </time>
                 ) : null}
               </span>
-              {latestMessage ? (
-                <span className="truncate text-[13px] text-sidebar-muted-foreground">
-                  {latestMessage.text}
+              {latestMessage || taskTitle ? (
+                // Messenger preview: the last thing said. A chat with no
+                // messages yet shows its title instead.
+                <span className="truncate text-sm text-sidebar-muted-foreground">
+                  {latestMessage ? latestMessage.text : taskTitle}
                 </span>
               ) : null}
             </span>
@@ -348,7 +567,7 @@ const BotRosterRow = memo(function BotRosterRow({
               <button
                 ref={menuTriggerRef}
                 type="button"
-                aria-label={`Actions for ${bot.name}`}
+                aria-label={t("Actions for {name}", { name: bot.name })}
                 className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
               />
             }
@@ -356,19 +575,23 @@ const BotRosterRow = memo(function BotRosterRow({
           <MenuPopup align="end">
             <MenuItem onClick={() => onOpenSettings(bot)}>
               <SettingsIcon />
-              Bot settings
+              {t("Bot settings")}
             </MenuItem>
             <MenuItem onClick={() => onPin(item, !pinned)}>
               <PinIcon />
-              {pinned ? "Unpin" : "Pin"}
+              {pinned ? t("Unpin") : t("Pin")}
             </MenuItem>
             <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
               <ArrowUpIcon />
-              Move up
+              {t("Move up")}
             </MenuItem>
             <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
               <ArrowDownIcon />
-              Move down
+              {t("Move down")}
+            </MenuItem>
+            <MenuItem variant="destructive" onClick={() => onArchive(bot)}>
+              <ArchiveIcon />
+              {t("Archive bot")}
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -381,13 +604,19 @@ const BotRosterRow = memo(function BotRosterRow({
 function RailBotButton({
   bot,
   isActive,
+  chatOpen,
   onSelect,
 }: {
   bot: Bot;
   isActive: boolean;
+  /** Only an open chat counts as seen; bot settings still show unread replies. */
+  chatOpen: boolean;
   onSelect: (bot: Bot) => void;
 }) {
   const presence = useBotPresence(bot.id);
+  // The collapsed rail marks unread replies like the expanded row does.
+  const { ref: chatRef } = useBotChatTarget(bot.id, useBotThreadCandidate(bot.id));
+  const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -398,7 +627,7 @@ function RailBotButton({
             aria-current={isActive || undefined}
             onClick={() => onSelect(bot)}
             className={cn(
-              "flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-9 cursor-pointer items-center justify-center rounded-lg outline-none select-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive ? "bg-sidebar-row-active" : "bg-transparent hover:bg-sidebar-row-hover",
             )}
           >
@@ -408,10 +637,55 @@ function RailBotButton({
               className="size-7"
               dotClassName="size-1.5"
             />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
           </button>
         }
       />
       <TooltipPopup side="right">{bot.name}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/** One group in the icon-collapsed rail, with a name tooltip and its unread dot. */
+function RailGroupButton({
+  group,
+  bots,
+  isActive,
+  onSelect,
+}: {
+  group: Group;
+  bots: readonly Bot[];
+  isActive: boolean;
+  onSelect: (group: Group) => void;
+}) {
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-current={isActive || undefined}
+            onClick={() => onSelect(group)}
+            className={cn(
+              "relative flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive ? "bg-sidebar-row-active" : "hover:bg-sidebar-row-hover",
+            )}
+          >
+            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
+            {unread ? (
+              <span className="absolute top-0.5 right-0.5 flex">
+                <UnreadDot />
+              </span>
+            ) : null}
+          </button>
+        }
+      />
+      <TooltipPopup side="right">{group.name}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -439,12 +713,14 @@ const GroupRosterRow = memo(function GroupRosterRow({
   onNudge: (item: RosterItemRef, delta: -1 | 1) => void;
   sortable: SortableRosterRowBag;
 }) {
+  const { t, plural } = useI18n();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "group" as const, id: group.id }), [group.id]);
   const members = group.members.filter(
     (member) =>
       member.kind === "bot" && bots.some((bot) => bot.id === member.botId && !bot.archivedAt),
   ).length;
+  const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
   return (
     <li
       role="listitem"
@@ -467,6 +743,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
     >
       <button
         type="button"
+        data-roster-row={rosterItemKey({ kind: "group", id: group.id })}
         aria-current={isActive || undefined}
         onClick={() => onSelect(group)}
         className={cn(
@@ -489,7 +766,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
         >
           {group.name}
         </span>
-        {pinned ? null : <span className="text-xs text-sidebar-muted-foreground">{members}</span>}
+        {unread ? <UnreadDot /> : null}
       </button>
       <Menu>
         <MenuTrigger
@@ -497,7 +774,7 @@ const GroupRosterRow = memo(function GroupRosterRow({
             <button
               ref={menuTriggerRef}
               type="button"
-              aria-label={`Actions for ${group.name}`}
+              aria-label={t("Actions for {name}", { name: group.name })}
               className="absolute right-2 top-1/2 size-px -translate-y-1/2 overflow-hidden opacity-0 outline-none focus-visible:size-7 focus-visible:overflow-visible focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
@@ -505,15 +782,15 @@ const GroupRosterRow = memo(function GroupRosterRow({
         <MenuPopup align="end">
           <MenuItem onClick={() => onPin(item, !pinned)}>
             <PinIcon />
-            {pinned ? "Unpin" : "Pin"}
+            {pinned ? t("Unpin") : t("Pin")}
           </MenuItem>
           <MenuItem disabled={!canMoveUp} onClick={() => onNudge(item, -1)}>
             <ArrowUpIcon />
-            Move up
+            {t("Move up")}
           </MenuItem>
           <MenuItem disabled={!canMoveDown} onClick={() => onNudge(item, 1)}>
             <ArrowDownIcon />
-            Move down
+            {t("Move down")}
           </MenuItem>
         </MenuPopup>
       </Menu>
@@ -626,7 +903,10 @@ function RosterSectionPlaceholder(props: {
   );
 }
 
-export default function BotRosterSidebar() {
+/** `panel` drops the roster's own chrome for the experimental rail layout. */
+export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" | "panel" } = {}) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { t } = useI18n();
   const navigate = useNavigate();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const environmentId = usePrimaryEnvironmentId();
@@ -636,6 +916,8 @@ export default function BotRosterSidebar() {
   const createGroupCommand = useAtomCommand(botEnvironment.groups.create, {
     reportFailure: false,
   });
+  const archiveBotCommand = useAtomCommand(botEnvironment.archive, { reportFailure: false });
+  const restoreBotCommand = useAtomCommand(botEnvironment.restore, { reportFailure: false });
   const pathname = useLocation({ select: (location) => location.pathname });
   const { bots, groups, lastMessageByBotId, selectedBotId, pinnedItems, unassignedItems } =
     useRosterStore(
@@ -648,15 +930,12 @@ export default function BotRosterSidebar() {
         unassignedItems: state.unassignedItems,
       })),
     );
+  const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
+  const rosterListState = resolveRosterListState(environmentId, rosterEnvironmentId, bots);
+  const rosterLoadState = useRosterLoadState();
   const [query, setQuery] = useState("");
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
-  );
-  const terminalOpen = useTerminalUiStateStore((state) =>
-    activeBotThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, activeBotThreadRef)
-          .terminalOpen
-      : false,
   );
   const previewOpen = useRightPanelStore((state) =>
     activeBotThreadRef
@@ -668,11 +947,13 @@ export default function BotRosterSidebar() {
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
     [bots, query],
   );
+  const archivedBots = useMemo(() => archivedRosterBots(bots), [bots]);
   const visibleGroups = useMemo(
     () => filterRosterGroups(groups, bots, query),
     [bots, groups, query],
   );
   const groupRouteActive = pathname.startsWith("/groups/");
+  const botRouteActive = pathname.startsWith("/bots/");
   const searching = query.trim().length > 0;
   const pinnedKeys = useMemo(
     () => new Set(pinnedItems.map((item) => rosterItemKey(item))),
@@ -917,14 +1198,18 @@ export default function BotRosterSidebar() {
       if (event.defaultPrevented || event.repeat) return;
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
-          terminalFocus: isTerminalFocused(),
-          terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
           modelPickerOpen: isModelPickerOpen(),
         },
       });
-      const bot = resolveRosterShortcutBot(command ?? "", shortcutBots);
+      const bot =
+        resolveRosterShortcutBot(command ?? "", shortcutBots) ??
+        resolveAdjacentRosterBot(
+          command ?? "",
+          shortcutBots,
+          botRouteActive ? useRosterStore.getState().selectedBotId : null,
+        );
       if (!bot) return;
 
       event.preventDefault();
@@ -936,51 +1221,155 @@ export default function BotRosterSidebar() {
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [keybindings, navigate, previewOpen, shortcutBots, terminalOpen]);
+  }, [botRouteActive, keybindings, navigate, previewOpen, shortcutBots]);
 
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
-  const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
-  const handleNewBot = () => setNewBotOpen(true);
-  const handleNewGroup = () => setNewGroupOpen(true);
-  const handleCreateBot = async ({ name, avatar }: { name: string; avatar: BotAvatar }) => {
+  const [archivingBot, setArchivingBot] = useState<Bot | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [pendingArchivedBotId, setPendingArchivedBotId] = useState<string | null>(null);
+  // Archiving is the one close that cannot go back where it came from: the row
+  // menu button focus was on leaves with the row. The confirm names its survivor
+  // here and holds it past the close, so the dialog does not restore focus onto
+  // a button the projection is about to remove.
+  const archivedFocusTarget = useRef<string | null | undefined>(undefined);
+  const rosterSearchRef = useRef<HTMLInputElement | null>(null);
+
+  /** Row keys in the order the roster renders them, so the survivor is the next one down. */
+  const rosterRowKeys = useMemo(
+    () =>
+      rosterListItems.flatMap((item) => (item.kind === "entry" ? [rosterItemKey(item.item)] : [])),
+    [rosterListItems],
+  );
+
+  const focusRosterRow = useCallback((rowKey: string | null) => {
+    const list = rosterListRef.current;
+    for (const row of rowKey === null
+      ? []
+      : (list?.querySelectorAll<HTMLElement>("[data-roster-row]") ?? [])) {
+      if (row.dataset.rosterRow === rowKey) {
+        row.focus();
+        return;
+      }
+    }
+    // Nothing survived in the list, or the last bot took the list with it.
+    (list ?? rosterSearchRef.current)?.focus();
+  }, []);
+
+  const handleArchiveBot = async (bot: Bot) => {
     if (environmentId === null) {
+      // Nothing was archived, so the dialog restores focus to the row menu itself.
+      setArchivingBot(null);
+      toastManager.add({ type: "error", title: t("Connect an environment first") });
+      return;
+    }
+    const botKey = rosterItemKey({ kind: "bot", id: bot.id });
+    archivedFocusTarget.current = focusTargetAfterRosterArchive(rosterRowKeys, botKey);
+    setArchivingBot(null);
+    const result = await archiveBotCommand({
+      environmentId,
+      input: { botId: BotId.make(bot.id) },
+    });
+    if (result._tag === "Failure") {
+      // The row stayed, so focus goes back to it rather than to its replacement.
+      archivedFocusTarget.current = undefined;
+      focusRosterRow(botKey);
+      // Archiving is refused with a reason (a group boss, a group left too small), so say it.
       toastManager.add({
         type: "error",
-        title: "Connect an environment first",
+        title: t("Could not archive {name}", { name: bot.name }),
+        description: commandFailureMessage(result, t),
       });
       return;
     }
-    const botId = BotId.make(`bot-${randomUUID()}`);
-    const result = await createBotCommand({
-      environmentId,
-      input: {
-        botId,
-        name: name.trim(),
-        title: "Assistant",
-        label: null,
-        description: null,
-        avatar,
-        engine: null,
-        sandbox: null,
-        runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
-        usageCap: null,
-        groupId: null,
-      },
-    });
-    if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not create bot" });
+    setPendingArchivedBotId(bot.id);
+  };
+
+  // The exit waits for the roster projection. Navigating on the command's reply
+  // sends `/` a selection it still resolves to the archived bot, which bounces
+  // straight back into the chat being left; focus would land on a row that is
+  // about to be removed. Once the bot is gone from the live roster the survivor
+  // is real, and the selection is re-read because the user may have opened
+  // another bot while the archive was in flight.
+  useEffect(() => {
+    if (pendingArchivedBotId === null) return;
+    if (bots.some((bot) => bot.id === pendingArchivedBotId && bot.archivedAt === null)) return;
+    const focusTarget = archivedFocusTarget.current ?? null;
+    archivedFocusTarget.current = undefined;
+    setPendingArchivedBotId(null);
+    focusRosterRow(focusTarget);
+    if (useRosterStore.getState().selectedBotId === pendingArchivedBotId) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [bots, focusRosterRow, navigate, pendingArchivedBotId]);
+
+  const handleRestoreBot = async (bot: Bot) => {
+    if (environmentId === null) {
+      toastManager.add({ type: "error", title: t("Connect an environment first") });
       return;
     }
-    setNewBotOpen(false);
-    setPendingCreatedBotId(botId);
+    const result = await restoreBotCommand({
+      environmentId,
+      input: { botId: BotId.make(bot.id) },
+    });
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: t("Could not restore {name}", { name: bot.name }),
+        description: commandFailureMessage(result, t),
+      });
+    }
   };
+
+  const [pendingCreatedBotId, setPendingCreatedBotId] = useState<string | null>(null);
+  const [creatingBot, setCreatingBot] = useState(false);
+  const creatingBotRef = useRef(false);
+  const handleNewBot = () => setNewBotOpen(true);
+  const handleNewGroup = () => setNewGroupOpen(true);
+  const handleCreateBot = ({ name, avatar }: { name: string; avatar: BotAvatar }) =>
+    runCreateBotOnce(creatingBotRef, async () => {
+      if (environmentId === null) {
+        toastManager.add({
+          type: "error",
+          title: t("Connect an environment first"),
+        });
+        return;
+      }
+      setCreatingBot(true);
+      try {
+        const botId = BotId.make(`bot-${randomUUID()}`);
+        const result = await createBotCommand({
+          environmentId,
+          input: {
+            botId,
+            name: name.trim(),
+            title: "Assistant",
+            label: null,
+            description: null,
+            avatar,
+            engine: null,
+            sandbox: null,
+            runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
+            usageCap: null,
+            groupId: null,
+          },
+        });
+        if (result._tag === "Failure") {
+          toastManager.add({ type: "error", title: t("Could not create bot") });
+          return;
+        }
+        setNewBotOpen(false);
+        setPendingCreatedBotId(botId);
+      } finally {
+        setCreatingBot(false);
+      }
+    });
 
   const handleCreateGroup = async (input: NewGroupInput) => {
     if (environmentId === null) {
       toastManager.add({
         type: "error",
-        title: "Connect an environment first",
+        title: t("Connect an environment first"),
       });
       return;
     }
@@ -995,7 +1384,7 @@ export default function BotRosterSidebar() {
       },
     });
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: "Could not create group" });
+      toastManager.add({ type: "error", title: t("Could not create group") });
       return;
     }
     setNewGroupOpen(false);
@@ -1021,34 +1410,53 @@ export default function BotRosterSidebar() {
 
   return (
     <>
-      <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
+      {chrome === "panel" ? (
+        <RosterPanelHeader
+          onNewBot={handleNewBot}
+          onNewGroup={handleNewGroup}
+          onSearch={() => setSearchOpen(true)}
+        />
+      ) : (
+        <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
+      )}
       <SidebarContent
         className="gap-0 [overflow-anchor:none]"
         fixedHeader={
-          <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
-            <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
-              <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
-              <input
-                type="text"
-                data-testid="roster-search-input"
-                placeholder="Search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && query.length > 0) {
-                    event.stopPropagation();
-                    setQuery("");
-                  }
-                }}
-                className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
-              />
-            </label>
-          </SidebarGroup>
+          chrome === "panel" && !searchOpen && query.length === 0 ? null : (
+            <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
+              <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
+                <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
+                <input
+                  type="text"
+                  ref={rosterSearchRef}
+                  data-testid="roster-search-input"
+                  placeholder={t("Search")}
+                  autoFocus={chrome === "panel"}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onBlur={() => {
+                    if (query.length === 0) setSearchOpen(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && query.length > 0) {
+                      event.stopPropagation();
+                      setQuery("");
+                    } else if (event.key === "Escape") {
+                      setSearchOpen(false);
+                    }
+                  }}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground"
+                />
+              </label>
+            </SidebarGroup>
+          )
         }
       >
-        {bots.every((bot) => bot.archivedAt !== null) ? (
+        {rosterListState === "loading" ? (
+          <RosterLoadStatus state={rosterLoadState} variant="sidebar" />
+        ) : rosterListState === "empty" ? (
           <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-            No bots yet
+            {t("No bots yet")}
           </div>
         ) : (
           <>
@@ -1057,31 +1465,17 @@ export default function BotRosterSidebar() {
               <ul data-testid="roster-rail" className="flex flex-col items-center gap-1">
                 {visibleGroups.map((group) => (
                   <li key={group.id} className="list-none">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-current={pathname === `/groups/${group.id}` || undefined}
-                            onClick={() =>
-                              void navigate({
-                                to: "/groups/$groupId",
-                                params: { groupId: group.id },
-                              })
-                            }
-                            className={cn(
-                              "flex size-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              pathname === `/groups/${group.id}`
-                                ? "bg-sidebar-row-active"
-                                : "hover:bg-sidebar-row-hover",
-                            )}
-                          >
-                            <GroupMemberStack group={group} bots={bots} sizeClassName="size-5" />
-                          </button>
-                        }
-                      />
-                      <TooltipPopup side="right">{group.name}</TooltipPopup>
-                    </Tooltip>
+                    <RailGroupButton
+                      group={group}
+                      bots={bots}
+                      isActive={pathname === `/groups/${group.id}`}
+                      onSelect={(selected) =>
+                        void navigate({
+                          to: "/groups/$groupId",
+                          params: { groupId: selected.id },
+                        })
+                      }
+                    />
                   </li>
                 ))}
                 {visibleBots.map((bot) => (
@@ -1089,6 +1483,7 @@ export default function BotRosterSidebar() {
                     <RailBotButton
                       bot={bot}
                       isActive={!groupRouteActive && selectedBotId === bot.id}
+                      chatOpen={pathname === `/bots/${bot.id}`}
                       onSelect={handleSelect}
                     />
                   </li>
@@ -1113,7 +1508,10 @@ export default function BotRosterSidebar() {
                   <ul
                     ref={attachListMotionRef}
                     role="list"
-                    aria-label="Bots and groups"
+                    // Focusable only on purpose: where focus lands when an
+                    // archived row leaves and no sibling row survives it.
+                    tabIndex={-1}
+                    aria-label={t("Bots and groups")}
                     className="relative flex flex-wrap justify-center gap-x-1 gap-y-px"
                   >
                     {rosterListItems.map((item) => {
@@ -1148,6 +1546,7 @@ export default function BotRosterSidebar() {
                                         bot={bot}
                                         lastMessage={lastMessageByBotId[bot.id] ?? null}
                                         isActive={!groupRouteActive && selectedBotId === bot.id}
+                                        chatOpen={pathname === `/bots/${bot.id}`}
                                         onSelect={handleSelect}
                                         onOpenSettings={handleOpenBotSettings}
                                         pinned={pinned}
@@ -1155,6 +1554,7 @@ export default function BotRosterSidebar() {
                                         canMoveUp={canMoveUp}
                                         canMoveDown={canMoveDown}
                                         onNudge={nudgeRosterItem}
+                                        onArchive={setArchivingBot}
                                         sortable={bag}
                                       />
                                     );
@@ -1191,7 +1591,7 @@ export default function BotRosterSidebar() {
                             <RosterDragBoundary
                               key="pinned-header"
                               marker="pinned-header"
-                              label="Pinned"
+                              label={t("Pinned")}
                               visible={dragging}
                               isDropTarget={dragTargetZone === "pinned"}
                             />
@@ -1207,43 +1607,22 @@ export default function BotRosterSidebar() {
                             />
                           );
                         case "unassigned-header":
+                          // Unlabeled drop anchor: the pinned divider marks the
+                          // boundary while dragging, so the list needs no heading.
                           return (
                             <SortableRosterMarker
                               key="unassigned-header"
                               marker="unassigned-header"
                               data-testid="roster-unassigned-header"
-                              className="relative w-full flex-none"
-                            >
-                              <div
-                                className={cn(
-                                  "flex h-8 items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground",
-                                  dragging && "text-sidebar-foreground/80",
-                                  dragTargetZone === "unassigned" && "text-primary",
-                                )}
-                              >
-                                <ChevronDownIcon className="size-3.5" />
-                                <span>Bots</span>
-                                <span className="tabular-nums">
-                                  {visibleUnassignedItems.length}
-                                </span>
-                                <span
-                                  aria-hidden
-                                  className={cn(
-                                    "h-px min-w-2 flex-1",
-                                    dragTargetZone === "unassigned"
-                                      ? "bg-primary/50"
-                                      : "bg-sidebar-border/60",
-                                  )}
-                                />
-                              </div>
-                            </SortableRosterMarker>
+                              className="relative -mb-px h-0 w-full flex-none"
+                            />
                           );
                         case "unassigned-placeholder":
                           return (
                             <RosterSectionPlaceholder
                               key="unassigned-placeholder"
                               marker="unassigned-placeholder"
-                              label="Bots"
+                              label={t("Bots")}
                               showHint={
                                 dragging &&
                                 (visibleUnassignedItems.length === 0 ||
@@ -1264,12 +1643,71 @@ export default function BotRosterSidebar() {
               </DndContext>
               {visibleBots.length === 0 && visibleGroups.length === 0 ? (
                 <div className="px-2 py-6 text-center text-sm text-sidebar-muted-foreground">
-                  No bots match
+                  {t("No bots match")}
                 </div>
               ) : null}
             </SidebarGroup>
           </>
         )}
+        {/* Archiving is reversible, so the way back stays in the roster itself. */}
+        {archivedBots.length > 0 ? (
+          <SidebarGroup
+            data-testid="roster-archived"
+            className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden"
+          >
+            <button
+              type="button"
+              aria-expanded={archivedOpen}
+              onClick={() => setArchivedOpen((open) => !open)}
+              className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronDownIcon
+                className={cn("size-3.5 transition-transform", !archivedOpen && "-rotate-90")}
+              />
+              <span>{t("Archived")}</span>
+              <span
+                className="tabular-nums"
+                aria-label={t("{count} archived", { count: archivedBots.length })}
+              >
+                {archivedBots.length}
+              </span>
+            </button>
+            {archivedOpen ? (
+              <ul role="list" aria-label={t("Archived bots")} className="flex flex-col gap-px">
+                {archivedBots.map((bot) => (
+                  <li
+                    key={bot.id}
+                    className="flex list-none items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-sidebar-row-hover"
+                  >
+                    <BotAvatarView
+                      avatar={bot.avatar}
+                      name={bot.name}
+                      className="size-8 opacity-60"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-sidebar-muted-foreground">
+                      {bot.name}
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label={t("Restore {name}", { name: bot.name })}
+                            onClick={() => void handleRestoreBot(bot)}
+                            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <ArchiveRestoreIcon className="size-4" />
+                          </button>
+                        }
+                      />
+                      <TooltipPopup side="top">{t("Restore")}</TooltipPopup>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
       {/* Rail create menu sits above the footer, like the expanded header's plus. */}
       <div className="hidden shrink-0 flex-col items-center pb-1 group-data-[collapsible=icon]:flex">
@@ -1278,7 +1716,7 @@ export default function BotRosterSidebar() {
             render={
               <button
                 type="button"
-                aria-label="Create"
+                aria-label={t("Create")}
                 className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none select-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlusIcon className="size-4" />
@@ -1288,11 +1726,11 @@ export default function BotRosterSidebar() {
           <MenuPopup align="end" side="right">
             <MenuItem onClick={handleNewBot}>
               <BotIcon />
-              New bot
+              {t("New bot")}
             </MenuItem>
             <MenuItem onClick={handleNewGroup}>
               <UsersIcon />
-              New group
+              {t("New group")}
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -1300,6 +1738,7 @@ export default function BotRosterSidebar() {
       {newBotOpen ? (
         <NewBotDialog
           open
+          submitting={creatingBot}
           onOpenChange={setNewBotOpen}
           onCreate={(input) => void handleCreateBot(input)}
         />
@@ -1312,7 +1751,46 @@ export default function BotRosterSidebar() {
           onCreate={(input) => void handleCreateGroup(input)}
         />
       ) : null}
-      <SidebarChromeFooter />
+      <AlertDialog
+        open={archivingBot !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchivingBot(null);
+        }}
+      >
+        {archivingBot ? (
+          <AlertDialogPopup
+            // Cancelling belongs back on the row menu it came from. Archiving does
+            // not: that row is on its way out of the projection, so the archive
+            // effect places focus on the survivor and this must not move it after.
+            finalFocus={() => archivedFocusTarget.current === undefined}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("Archive {name}?", { name: archivingBot.name })}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t(
+                  "{name} leaves the roster and stops taking messages. Its chat history is kept, and you can restore it from Archived at any time.",
+                  { name: archivingBot.name },
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="outline" />}>
+                {t("Cancel")}
+              </AlertDialogClose>
+              <Button variant="destructive" onClick={() => void handleArchiveBot(archivingBot)}>
+                {t("Archive")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        ) : null}
+      </AlertDialog>
+      {chrome === "panel" ? (
+        <SidebarStatusStack className="shrink-0 p-2" />
+      ) : (
+        <SidebarChromeFooter />
+      )}
     </>
   );
 }

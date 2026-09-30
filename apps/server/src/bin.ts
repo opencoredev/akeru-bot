@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Command } from "effect/unstable/cli";
 
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@akeru/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
 import { pairCommand } from "./cli/pair.ts";
@@ -15,6 +15,7 @@ import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { serviceCommand } from "./cli/service.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
 import { triageCommand } from "./cli/triage.ts";
+import { remoteDoctorCommand } from "./cli/remoteDoctor.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
@@ -31,6 +32,7 @@ export const makeCli = () =>
       serviceCommand,
       servicePreflightCommand,
       triageCommand,
+      remoteDoctorCommand,
     ]),
   );
 

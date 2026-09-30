@@ -1,14 +1,15 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { scopedThreadKey } from "@akeru/client-runtime/environment";
+import type { ScopedThreadRef } from "@akeru/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
-import { normalizePreviewUrl } from "@t3tools/shared/preview";
+import { normalizePreviewUrl } from "@akeru/shared/preview";
 import { readPreparedConnection } from "~/state/session";
 
 import { isLocalLoopbackHost, normalizeHostname } from "./browser/browserTargetResolver";
 import { resolveStorage } from "./lib/storage";
+import { createMigratingStorage } from "./lib/storageKeyMigration";
 
 export type BrowserHistoryEntry = { url: string; lastVisitedAt: number; title?: string };
 
@@ -138,7 +139,9 @@ export function migratePersistedBrowserHistoryState(persistedState: unknown): {
   return { byProjectKey: evictExcessProjects(byProjectKey) };
 }
 
-const BROWSER_HISTORY_STORAGE_KEY = "t3code:browser-history:v1";
+const BROWSER_HISTORY_STORAGE_KEY = "akeru:browser-history:v1";
+// Pre-rebrand key; migrated through the wrapping storage on first write.
+const LEGACY_BROWSER_HISTORY_STORAGE_KEY = "t3code:browser-history:v1";
 
 const PENDING_MAX_PER_THREAD = 10;
 const PENDING_MAX_THREADS = 20;
@@ -280,7 +283,11 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
       name: BROWSER_HISTORY_STORAGE_KEY,
       version: 1,
       storage: createJSONStorage(() =>
-        resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+        createMigratingStorage(
+          resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+          BROWSER_HISTORY_STORAGE_KEY,
+          LEGACY_BROWSER_HISTORY_STORAGE_KEY,
+        ),
       ),
       partialize: (state) => ({
         byProjectKey: state.byProjectKey,

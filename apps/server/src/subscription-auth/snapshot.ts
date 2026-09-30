@@ -5,20 +5,18 @@ import type {
   McpServerId,
   ProviderAccessStatus,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { ProviderStatus, RequestHealthStatus, SubscriptionProviderId } from "./service.ts";
 
 const SUBSCRIPTION_ACCESS = [
   { id: "chatgpt", label: "ChatGPT", provider: "openai-codex" },
   { id: "claude-max", label: "Claude Max", provider: "anthropic" },
-  { id: "cursor-pro", label: "Cursor Pro", provider: "cursor" },
 ] as const;
 
-const SUBSCRIPTION_DRIVER: Readonly<Record<SubscriptionProviderId, string>> = {
+const SUBSCRIPTION_DRIVER: Readonly<Partial<Record<SubscriptionProviderId, string>>> = {
   anthropic: "claudeAgent",
   "openai-codex": "codex",
-  cursor: "cursor",
   xai: "grok",
   "kimi-for-coding": "kimi",
   "opencode-go": "opencodeGo",

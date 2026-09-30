@@ -1,5 +1,6 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@t3tools/contracts/settings";
+import { AKERU_PRIVACY_POLICY_VERSION, AKERU_TERMS_VERSION } from "@akeru/contracts/settings";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -15,6 +16,7 @@ import {
 } from "./MobilePolicyNotice.logic";
 
 export function MobilePolicyNotice() {
+  const { t } = useMobileI18n();
   const preferences = useAtomValue(mobilePreferencesAtom);
   const updatePreferences = useAtomSet(updateMobilePreferencesAtom);
   const pressedOverlay = useThemeColor("--color-subtle");
@@ -31,24 +33,25 @@ export function MobilePolicyNotice() {
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View className="flex-1 items-center justify-center bg-backdrop px-8">
         <View className="w-full rounded-[24px] bg-card px-6 pb-4 pt-5">
-          <AppText className="text-lg font-t3-medium">Review Akeru Bot policies</AppText>
+          <AppText className="text-lg font-t3-medium">{t("Review Akeru Bot policies")}</AppText>
           <AppText className="mt-2 text-sm text-foreground-secondary">
-            Akeru Bot runs locally. Provider prompts and enabled online features still send data to
-            their listed services.
+            {t(
+              "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.",
+            )}
           </AppText>
           <View className="mt-5 flex-row flex-wrap justify-end gap-1">
             <PolicyButton
-              label="Terms of Use"
+              label={t("Terms of Use")}
               onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL).catch(() => undefined)}
               pressedOverlay={pressedOverlay}
             />
             <PolicyButton
-              label="Privacy Policy"
+              label={t("Privacy Policy")}
               onPress={() => void Linking.openURL(PRIVACY_POLICY_URL).catch(() => undefined)}
               pressedOverlay={pressedOverlay}
             />
             <PolicyButton
-              label="I reviewed these drafts"
+              label={t("I reviewed these drafts")}
               onPress={() =>
                 updatePreferences({
                   reviewedPrivacyPolicyVersion: AKERU_PRIVACY_POLICY_VERSION,

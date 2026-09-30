@@ -1,9 +1,15 @@
-import type { BotEngine, ChannelBinding, GroupMembership, McpServerId } from "@t3tools/contracts";
+import type {
+  BotEngine,
+  ChannelBinding,
+  GroupMembership,
+  ImageProviderId,
+  McpServerId,
+} from "@akeru/contracts";
 
 /**
  * Local mirror of the bot roster wire shape the server-side persistence work
  * is building in parallel. Field-for-field identical so integration becomes a
- * type-import swap to `@t3tools/contracts`; do not diverge from that shape
+ * type-import swap to `@akeru/contracts`; do not diverge from that shape
  * here.
  */
 
@@ -37,6 +43,8 @@ export interface Bot {
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */
   personalityTone?: number;
   voiceEnabled: boolean;
+  /** Image provider override; null or absent uses the environment's image generation default. */
+  imageProvider?: ImageProviderId | null;
   channelBindings?: ReadonlyArray<ChannelBinding>;
   groupId: string | null;
   pinned: boolean;

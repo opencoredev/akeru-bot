@@ -1,13 +1,14 @@
 // @effect-diagnostics nodeBuiltinImport:off - The route contract reads its source.
 import * as NodeFS from "node:fs";
 
+import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   BotDetailsPanel,
+  BotOverview,
   parseBotUsageCapInput,
-  reduceBotDetailsPanelState,
   resolveBotUsageCapForProvider,
 } from "./BotDetailsPanel";
 import type { Bot } from "./types";
@@ -35,8 +36,8 @@ const bot: Bot = {
 describe("BotDetailsPanel", () => {
   it("shows a compact overview that hands settings off to the full page", () => {
     const markup = renderToStaticMarkup(<BotDetailsPanel bot={bot} />);
-    expect(markup).toContain("Akeru&#x27;s browser");
-    expect(markup).toContain('data-testid="bot-browser-preview"');
+    // No bot thread yet, so the empty browser preview stays hidden.
+    expect(markup).not.toContain('data-testid="bot-browser-preview"');
     expect(markup).toContain(">Bot</h2>");
     expect(markup).toContain("Akeru");
     expect(markup).toContain("Research");
@@ -44,18 +45,30 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Open bot settings");
     expect(markup).toContain("Personality");
     expect(markup).toContain("Balanced");
-    expect(markup).toContain("App default");
+    // No providers are loaded in this render, so the panel says so plainly.
+    expect(markup).toContain("No provider ready");
+    expect(markup).not.toContain("App default");
     expect(markup).toContain("Sandbox");
     expect(markup).not.toContain('aria-label="Bot name"');
     expect(markup).not.toContain('aria-label="Bot description"');
     expect(markup).not.toContain("Token hard stop");
-    expect(markup).toContain('aria-label="Collapse Akeru bot sidebar"');
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain('data-state="closed"');
     expect(markup).toContain('aria-label="Open Akeru bot sidebar"');
-    expect(markup).toContain("Routines");
-    expect(markup).toContain("Routines are not available for this environment.");
+    expect(markup).not.toContain("Routines");
     expect(markup).not.toContain("mock data");
     expect(markup).not.toContain("border-b border-border");
-    expect(markup).toContain("border-t border-border");
+  });
+
+  it("keeps an unavailable model on the overview without a second warning", () => {
+    const markup = renderToStaticMarkup(
+      <BotOverview
+        bot={{ ...bot, engine: { provider: "claudeAgent", model: "claude-fable-5" } }}
+        routinePanelRef={createRef<HTMLDivElement>()}
+      />,
+    );
+    expect(markup).toContain("claude-fable-5");
+    expect(markup).not.toContain("Unavailable");
   });
 
   it("sets, clears, and rejects invalid hard stops", () => {
@@ -69,11 +82,6 @@ describe("BotDetailsPanel", () => {
   });
 
   it("clears hard stops for occupancy-only providers", () => {
-    expect(resolveBotUsageCapForProvider("50000", "cursor")).toEqual({
-      available: false,
-      valid: true,
-      value: null,
-    });
     expect(resolveBotUsageCapForProvider("50000", "grok")).toEqual({
       available: false,
       valid: true,
@@ -119,38 +127,13 @@ describe("BotDetailsPanel", () => {
     expect(composerSource).not.toContain("reasoningPicker");
   });
 
-  it("collapses and reopens desktop without changing the mobile sheet", () => {
-    const collapsed = reduceBotDetailsPanelState(
-      { desktopOpen: true, mobileOpen: false },
-      { type: "toggle-desktop" },
-    );
-    expect(collapsed).toEqual({ desktopOpen: false, mobileOpen: false });
-
-    expect(reduceBotDetailsPanelState(collapsed, { type: "toggle-desktop" })).toEqual({
-      desktopOpen: true,
-      mobileOpen: false,
-    });
-  });
-
-  it("toggles the mobile sheet without changing desktop", () => {
-    const opened = reduceBotDetailsPanelState(
-      { desktopOpen: false, mobileOpen: false },
-      { type: "toggle-mobile" },
-    );
-    expect(opened).toEqual({ desktopOpen: false, mobileOpen: true });
-    expect(reduceBotDetailsPanelState(opened, { type: "toggle-mobile" })).toEqual({
-      desktopOpen: false,
-      mobileOpen: false,
-    });
-  });
-
-  it("sets the mobile sheet state without changing desktop", () => {
-    expect(
-      reduceBotDetailsPanelState(
-        { desktopOpen: true, mobileOpen: true },
-        { type: "set-mobile", open: false },
-      ),
-    ).toEqual({ desktopOpen: true, mobileOpen: false });
+  it("stores the desktop preference under the bot id", () => {
+    const source = NodeFS.readFileSync(new URL("./BotDetailsPanel.tsx", import.meta.url), "utf8");
+    const storage = NodeFS.readFileSync(new URL("./detailsPanelOpen.ts", import.meta.url), "utf8");
+    expect(source).toContain("useBotDetailsOpen(bot.id)");
+    expect(storage).toContain("`akeru:bot-details-open:${botId}`");
+    expect(storage).toContain("Schema.Boolean");
+    expect(source).toContain("setDesktopOpen((open) => !open)");
   });
 
   it("mounts from the bot route instead of the generic panel", () => {

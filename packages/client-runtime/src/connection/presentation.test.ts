@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 
@@ -59,6 +59,7 @@ describe("connection presentation", () => {
     expect(presentConnectionState(supervisorState({ phase: "connecting", attempt: 1 }))).toEqual({
       phase: "connecting",
       error: null,
+      errorCode: null,
       traceId: null,
     });
     expect(
@@ -76,6 +77,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "reconnecting",
       error: "Socket closed.",
+      errorCode: "transport",
       traceId: "trace-previous",
     });
     expect(
@@ -94,6 +96,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "reconnecting",
       error: "Disconnected.",
+      errorCode: "transport",
       traceId: "trace-1",
     });
   });
@@ -115,6 +118,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "reconnecting",
       error: "Relay connection timed out.",
+      errorCode: "transport",
       traceId: "trace-retry",
     });
   });
@@ -147,6 +151,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "offline",
       error: null,
+      errorCode: null,
       traceId: null,
     });
   });
@@ -163,6 +168,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "connected",
       error: null,
+      errorCode: null,
       traceId: null,
     });
   });
@@ -181,6 +187,7 @@ describe("connection presentation", () => {
     ).toEqual({
       phase: "available",
       error: null,
+      errorCode: null,
       traceId: null,
     });
   });

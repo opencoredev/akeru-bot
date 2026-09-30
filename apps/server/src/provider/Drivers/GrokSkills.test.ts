@@ -49,6 +49,28 @@ describe("parseGrokInspectSkills", () => {
     ]);
   });
 
+  it("carries the reported icon and omits it when absent", () => {
+    const skills = parseGrokInspectSkills(
+      inspectPayload([
+        {
+          name: "with-icon",
+          description: "Has an icon.",
+          icon: "wrench",
+          source: { type: "user", path: "/home/dev/.grok/skills/with-icon/SKILL.md" },
+          userInvocable: true,
+        },
+        {
+          name: "no-icon",
+          source: { type: "user", path: "/home/dev/.grok/skills/no-icon/SKILL.md" },
+          userInvocable: true,
+        },
+      ]),
+    );
+
+    expect(skills.find((skill) => skill.name === "with-icon")?.icon).toBe("wrench");
+    expect(skills.find((skill) => skill.name === "no-icon")?.icon).toBeUndefined();
+  });
+
   it("disables skills the CLI marks as not user-invocable", () => {
     const skills = parseGrokInspectSkills(
       inspectPayload([

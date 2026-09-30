@@ -11,8 +11,8 @@ import {
   EnvironmentOrchestrationHttpApi,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
-import * as NetService from "@t3tools/shared/Net";
+} from "@akeru/contracts";
+import * as NetService from "@akeru/shared/Net";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
@@ -25,7 +25,7 @@ import * as CliError from "effect/unstable/cli/CliError";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
 
-import { cli, makeCli } from "./bin.ts";
+import { cli } from "./bin.ts";
 import * as ServerConfig from "./config.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
@@ -73,7 +73,7 @@ const makeCliTestServerConfig = (baseDir: string) =>
       otlpTracesUrl: undefined,
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
-      otlpServiceName: "t3-server",
+      otlpServiceName: "akeru-server",
       mode: "web",
       port: 0,
       host: "127.0.0.1",
@@ -90,6 +90,7 @@ const makeCliTestServerConfig = (baseDir: string) =>
       logWebSocketEvents: false,
       tailscaleServeEnabled: false,
       tailscaleServePort: 443,
+      publicOrigin: undefined,
     } satisfies ServerConfig.ServerConfig["Service"];
   });
 
@@ -257,8 +258,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       assert.deepEqual(issued.scopes, [
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);
@@ -267,8 +266,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       assert.deepEqual(listed[0]?.scopes, [
         "orchestration:read",
         "orchestration:operate",
-        "terminal:operate",
-        "review:write",
         "access:read",
         "access:write",
       ]);

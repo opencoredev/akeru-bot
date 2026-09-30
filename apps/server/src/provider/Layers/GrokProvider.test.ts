@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { GrokSettings } from "@t3tools/contracts";
+import { GrokSettings } from "@akeru/contracts";
 
 import {
   buildGrokModelsFromSessionModelState,
@@ -240,7 +240,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
     }),
   );
 
-  it.effect("falls back to CLI-listed models with a warning when ACP initialize fails", () =>
+  it.effect("warns while using the CLI model list when ACP initialize fails", () =>
     Effect.gen(function* () {
       const snapshot = yield* Effect.scoped(
         Effect.gen(function* () {

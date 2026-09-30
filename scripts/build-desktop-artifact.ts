@@ -11,9 +11,9 @@ import {
   type DirectoryRecord,
 } from "@electron/asar";
 
-import { fromYaml } from "@t3tools/shared/schemaYaml";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { fromYaml } from "@akeru/shared/schemaYaml";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
+import { resolveSpawnCommand } from "@akeru/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
@@ -1876,7 +1876,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "akeru.icon",
       category: "public.app-category.developer-tools",
       extendInfo: {
-        NSMicrophoneUsageDescription: "Akeru Bot uses the microphone for calls with your bots.",
+        NSMicrophoneUsageDescription:
+          "Akeru Bot uses the microphone for calls and dictation with your bots.",
       },
       protocols: [
         {
@@ -2857,7 +2858,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const builderArgs = [
     "exec",
     "--filter",
-    "@t3tools/desktop",
+    "@akeru/desktop",
     "--",
     "electron-builder",
     "--projectDir",
@@ -2875,7 +2876,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       shell: builderCommand.shell,
     }),
     {
-      label: `vp exec --filter @t3tools/desktop -- electron-builder --projectDir ${stageAppDir} ${platformConfig.cliFlag} --${options.arch} --publish never`,
+      label: `vp exec --filter @akeru/desktop -- electron-builder --projectDir ${stageAppDir} ${platformConfig.cliFlag} --${options.arch} --publish never`,
       verbose: options.verbose,
     },
   );
