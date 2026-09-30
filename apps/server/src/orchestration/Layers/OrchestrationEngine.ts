@@ -79,6 +79,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "bot.update":
     case "bot.archive":
     case "bot.restore":
+    case "bot.delete":
       return {
         aggregateKind: "bot",
         aggregateId: command.botId,

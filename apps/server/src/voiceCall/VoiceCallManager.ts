@@ -21,6 +21,7 @@ import {
   VOICE_API_PROVIDERS,
   VoiceTranscribeInput as TranscribeSchema,
   VoiceSynthesizeInput as SynthesizeSchema,
+  type OrchestrationEvent,
 } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -28,6 +29,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
@@ -261,6 +263,8 @@ export class VoiceCallManager extends Context.Service<
       ownerId: string,
     ) => Effect.Effect<VoiceCallSnapshot, VoiceCallError>;
     readonly hangupOwner: (ownerId: string) => Effect.Effect<void>;
+    /** Ends the active call when it belongs to `botId`, freeing the single call slot. */
+    readonly hangupBot: (botId: BotId) => Effect.Effect<void>;
   }
 >()("akeru-bot/voiceCall/VoiceCallManager") {}
 
@@ -762,6 +766,15 @@ const make = (options?: VoiceCallManagerOptions) =>
         }),
       );
 
+    const hangupBot = (botId: BotId) =>
+      lock.withPermits(1)(
+        Effect.sync(() => {
+          if (active?.botId !== botId) return;
+          active.abortController.abort();
+          active = null;
+        }),
+      );
+
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         for (const operation of operations.values()) operation.controller.abort();
@@ -784,8 +797,18 @@ const make = (options?: VoiceCallManagerOptions) =>
       start,
       hangup,
       hangupOwner,
+      hangupBot,
     });
   });
+
+/** Ends a deleted bot's call as its `bot.deleted` event arrives. */
+export const hangupDeletedBotCalls = <E, R>(
+  voiceCalls: VoiceCallManager["Service"],
+  events: Stream.Stream<OrchestrationEvent, E, R>,
+) =>
+  Stream.runForEach(events, (event) =>
+    event.type === "bot.deleted" ? voiceCalls.hangupBot(event.payload.botId) : Effect.void,
+  );
 
 export const layer = (options?: VoiceCallManagerOptions) =>
   Layer.effect(VoiceCallManager, make(options));
