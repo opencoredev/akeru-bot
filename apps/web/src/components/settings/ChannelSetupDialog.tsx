@@ -225,6 +225,7 @@ export function ChannelSetupDialog({
     setBusy(false);
   };
 
+  const botName = bots.find((bot) => bot.id === botId)?.name ?? t("the bot");
   const conflictCopy = t(
     "Another bot already uses this account. Unassign it there, then connect again.",
   );
