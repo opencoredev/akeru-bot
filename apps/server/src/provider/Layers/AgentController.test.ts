@@ -953,10 +953,10 @@ describe("provider access health", () => {
     }
   });
 
-  it("records the model a failed turn ran on with the instance failure", () => {
+  it("records the model a failed turn ran on with the instance failure", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-model-"));
     try {
-      const service = new SubscriptionAuthService(
+      const service = await makeTestSubscriptionAuthService(
         NodePath.join(directory, "subscription-auth.json"),
       );
       recordProviderAccessHealth(
