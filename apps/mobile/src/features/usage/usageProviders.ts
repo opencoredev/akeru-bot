@@ -8,7 +8,6 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 export const PROVIDER_ORDER: readonly UsageProviderKind[] = [
   "codex",
   "claude",
-  "cursor",
   "grok",
   "kimi",
   "opencode",
@@ -17,7 +16,6 @@ export const PROVIDER_ORDER: readonly UsageProviderKind[] = [
 export const PROVIDER_LABEL: Record<UsageProviderKind, string> = {
   claude: "Claude",
   codex: "Codex",
-  cursor: "Cursor",
   grok: "Grok",
   kimi: "Kimi For Coding",
   opencode: "OpenCode",
@@ -32,7 +30,6 @@ export function useProviderColors(): Record<UsageProviderKind, string> {
   return {
     claude: "#d97757",
     codex: scheme === "dark" ? "#e6e6e6" : "#3c3c43",
-    cursor: "#a78bfa",
     grok: "#94a3b8",
     kimi: "#60a5fa",
     opencode: "#34d399",

@@ -8,7 +8,7 @@ the task commands.
 ## apps
 
 - `apps/server` (`t3`): the execution runtime and the published CLI. Owns orchestration, provider
-  drivers, checkpointing, VCS, terminals, filesystem access, auth, and the HTTP + WebSocket surface.
+  drivers, checkpointing, VCS, filesystem access, auth, and the HTTP + WebSocket surface.
   Also serves the built web app.
 - `apps/web` (`@t3tools/web`): React + Vite UI. Consumes the shared client runtime and adds routing,
   components, and web-specific platform layers.
@@ -23,7 +23,7 @@ the task commands.
 - `packages/contracts` (`@t3tools/contracts`): shared Effect Schema definitions. RPC group,
   orchestration commands/events/read model, auth scopes, environment descriptors, settings.
 - `packages/shared` (`@t3tools/shared`): framework-agnostic utilities used by server and clients
-  (`DrainableWorker`, git and source-control helpers, semver, logging, observability, and more).
+  (`DrainableWorker`, git and remote-URL helpers, semver, logging, observability, and more).
 - `packages/client-runtime` (`@t3tools/client-runtime`): connection lifecycle, authorization, RPC
   session, environment registry, and Atom-based domain state shared by web and mobile. See its
   [README](../../packages/client-runtime/README.md).

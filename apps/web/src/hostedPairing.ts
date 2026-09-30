@@ -1,70 +1,107 @@
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "./pairingUrl";
+import {
+  readHashParams,
+  readHostedPairingRequest,
+  resolveRemotePairingTarget,
+  type HostedPairingRequest,
+} from "@t3tools/shared/remote";
 
-const DEFAULT_HOSTED_APP_URL = "https://app.t3.codes";
+import type { PairingPanelStatus } from "./components/auth/PairingPanel";
 
-export interface HostedPairingRequest {
-  readonly host: string;
-  readonly token: string;
-  readonly label: string;
+/**
+ * Whether a URL is a hosted pairing link: `/pair?host=…#token=…` opened on any
+ * Akeru web origin, such as a tunnel, to save the remote server named by `host`
+ * in this browser. A link with a host but no token still counts, so the page
+ * can say what is missing instead of pairing with the origin that served it.
+ * A link whose host is the page's own origin is ordinary pairing: the browser
+ * signs in to this origin and the app opens here. A `?token=` query value on
+ * any link with a host keeps the hosted path, so the page refuses it as
+ * incomplete instead of submitting a token the request already exposed.
+ */
+export function isHostedPairingLink(href: string): boolean {
+  const url = new URL(href);
+  if (url.pathname !== "/pair" || !url.searchParams.has("host")) return false;
+  return url.searchParams.has("token") || !namesPageOrigin(url);
 }
 
-export function configuredHostedAppUrl(): string {
-  return import.meta.env.VITE_HOSTED_APP_URL?.trim() || DEFAULT_HOSTED_APP_URL;
-}
-
-function configuredBackendUrl(): string {
-  return import.meta.env.VITE_HTTP_URL?.trim() || import.meta.env.VITE_WS_URL?.trim() || "";
-}
-
-function originFromUrl(value: string): string | null {
+function namesPageOrigin(url: URL): boolean {
+  const host = url.searchParams.get("host")?.trim() ?? "";
+  if (!host) return false;
   try {
-    return new URL(value).origin;
+    // A scheme-free host would default to HTTPS; on an HTTP LAN origin it
+    // still names this page, so resolve it against the page's protocol.
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(host) ? host : `${url.protocol}//${host}`;
+    const { httpBaseUrl } = resolveRemotePairingTarget({
+      host: withScheme,
+      pairingCode: "origin-check",
+    });
+    return new URL(httpBaseUrl).origin === url.origin;
   } catch {
-    return null;
-  }
-}
-
-export function isHostedStaticApp(url: URL = new URL(window.location.href)): boolean {
-  if (configuredBackendUrl()) {
     return false;
   }
-
-  const hostedOrigin = originFromUrl(configuredHostedAppUrl());
-  return hostedOrigin !== null && url.origin === hostedOrigin;
 }
 
-export function readHostedPairingRequest(url: URL = new URL(window.location.href)) {
-  const host = url.searchParams.get("host")?.trim() ?? "";
-  const token = getPairingTokenFromUrl(url)?.trim() ?? "";
-  const label = url.searchParams.get("label")?.trim() ?? "";
-
-  if (!host || !token) {
-    return null;
-  }
-
-  return {
-    host,
-    token,
-    label,
-  } satisfies HostedPairingRequest;
+/**
+ * The server and token a hosted pairing link carries, or null when either is
+ * missing. The token must sit in the fragment: a `?token=` query value already
+ * reached the page-serving origin in the request, so it is never submitted.
+ */
+export function readHostedPairingLink(href: string): HostedPairingRequest | null {
+  const url = new URL(href);
+  if (url.pathname !== "/pair" || url.searchParams.has("token")) return null;
+  const request = readHostedPairingRequest(url);
+  return request && readHashParams(url).get("token")?.trim() === request.token ? request : null;
 }
 
-export function hasHostedPairingRequest(url: URL = new URL(window.location.href)): boolean {
-  return readHostedPairingRequest(url) !== null;
+export interface PairingHashOptions<T> {
+  readonly read: () => T | null;
+  readonly isBusy: () => boolean;
+  readonly strip: () => void;
+  readonly submit: (value: T) => void;
 }
 
-export function buildHostedPairingUrl(input: {
-  readonly host: string;
-  readonly token: string;
-  readonly label?: string | null;
-}): string {
-  const url = new URL("/pair", configuredHostedAppUrl());
-  url.searchParams.set("host", input.host);
+/**
+ * Submits the pairing link in the address bar. Reads it with `read`, leaves it
+ * in place while a submission is in flight, strips the token from the address
+ * bar, then hands it to `submit`. Call it again when a submission fails so a
+ * link opened meanwhile is not lost.
+ */
+export function takePairingHash<T>(options: PairingHashOptions<T>): void {
+  const value = options.read();
+  if (value === null || options.isBusy()) return;
+  options.strip();
+  options.submit(value);
+}
 
-  const label = input.label?.trim();
-  if (label) {
-    url.searchParams.set("label", label);
-  }
+/**
+ * Resubmits a pairing link opened again in this tab with its `#token`, a
+ * same-document navigation that only fires `hashchange`. See
+ * `takePairingHash`. Returns the unsubscribe function.
+ */
+export function listenForPairingHash<T>(
+  target: Pick<EventTarget, "addEventListener" | "removeEventListener">,
+  options: PairingHashOptions<T>,
+): () => void {
+  const onHashChange = () => takePairingHash(options);
+  target.addEventListener("hashchange", onHashChange);
+  return () => target.removeEventListener("hashchange", onHashChange);
+}
 
-  return setPairingTokenOnUrl(url, input.token).toString();
+export type HostedPairingOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly message: string };
+
+/**
+ * Hands a hosted link's host and token to `connect` once, and reports the page
+ * state that follows. An incomplete link never reaches `connect`.
+ */
+export async function runHostedPairing(
+  request: HostedPairingRequest | null,
+  connect: (input: {
+    readonly host: string;
+    readonly pairingCode: string;
+  }) => Promise<HostedPairingOutcome>,
+): Promise<PairingPanelStatus> {
+  if (!request) return { kind: "incomplete" };
+  const outcome = await connect({ host: request.host, pairingCode: request.token });
+  return outcome.ok ? { kind: "paired" } : { kind: "failed", message: outcome.message };
 }

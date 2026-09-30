@@ -10,13 +10,16 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
 import { PersistenceSqlError } from "../../persistence/Errors.ts";
@@ -40,6 +43,7 @@ import {
 } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ServerConfig } from "../../config.ts";
+import { finishMaintenance, tryBeginMaintenance } from "../../remote/updateGate.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
@@ -318,6 +322,196 @@ describe("OrchestrationEngine", () => {
     expect(readModelB).toEqual(readModelA);
     await system.dispose();
   });
+
+  it("holds turn starts from every surface while a server update is in progress", async () => {
+    const createdAt = now();
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-project-maintenance-create"),
+        projectId: asProjectId("project-maintenance"),
+        title: "Project",
+        workspaceRoot: "/tmp/project-maintenance",
+        defaultModelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        createdAt,
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-thread-maintenance-create"),
+        threadId: ThreadId.make("thread-maintenance"),
+        projectId: asProjectId("project-maintenance"),
+        title: "Thread",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      }),
+    );
+    const turnStart = {
+      type: "thread.turn.start" as const,
+      commandId: CommandId.make("cmd-turn-start-maintenance"),
+      threadId: ThreadId.make("thread-maintenance"),
+      message: {
+        messageId: asMessageId("msg-maintenance"),
+        role: "user" as const,
+        text: "hello",
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required" as const,
+      createdAt,
+    };
+
+    expect(tryBeginMaintenance()).toBe(true);
+    try {
+      const sequenceBefore = await system.run(engine.latestSequence);
+      await expect(system.run(engine.dispatch(turnStart))).rejects.toThrow(/installing an update/);
+      expect(await system.run(engine.latestSequence)).toBe(sequenceBefore);
+      // Other commands keep flowing during maintenance.
+      await system.run(
+        engine.dispatch({
+          type: "thread.meta.update",
+          commandId: CommandId.make("cmd-thread-maintenance-rename"),
+          threadId: ThreadId.make("thread-maintenance"),
+          title: "Renamed",
+        }),
+      );
+    } finally {
+      finishMaintenance();
+    }
+
+    // The blocked command left no rejection receipt, so a retry is admitted.
+    await system.run(engine.dispatch(turnStart));
+    const thread = (await system.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-maintenance"),
+    );
+    expect(thread?.messages.map((message) => message.id)).toContain(asMessageId("msg-maintenance"));
+    await system.dispose();
+  });
+
+  effectIt.effect("keeps a queued turn start admitted after its caller is interrupted", () =>
+    Effect.gen(function* () {
+      const workerReachedBlocker = yield* Deferred.make<void>();
+      const releaseBlocker = yield* Deferred.make<void>();
+      const blockingProjectionPipeline: OrchestrationProjectionPipelineShape = {
+        bootstrap: Effect.void,
+        projectEvent: (event) =>
+          event.commandId === CommandId.make("cmd-blocker")
+            ? Deferred.succeed(workerReachedBlocker, undefined).pipe(
+                Effect.andThen(Deferred.await(releaseBlocker)),
+              )
+            : Effect.void,
+        projectEventDeferred: (event) =>
+          blockingProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
+      };
+      const engineLayer = OrchestrationEngineLive.pipe(
+        Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+        Layer.provide(ThreadBackgroundLiveness.layer),
+        Layer.provide(ThreadPlanProgress.layer),
+        Layer.provide(Layer.succeed(OrchestrationProjectionPipeline, blockingProjectionPipeline)),
+        Layer.provide(OrchestrationEventStoreLive),
+        Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+        Layer.provide(RepositoryIdentityResolver.layer),
+        Layer.provide(SqlitePersistenceMemory),
+        Layer.provide(NodeServices.layer),
+      );
+
+      yield* Effect.gen(function* () {
+        const engine = yield* OrchestrationEngineService;
+        const createdAt = now();
+        const threadId = ThreadId.make("thread-interrupted-start");
+
+        yield* engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-project-interrupted-start"),
+          projectId: asProjectId("project-interrupted-start"),
+          title: "Project",
+          workspaceRoot: "/tmp/project-interrupted-start",
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          createdAt,
+        });
+        yield* engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cmd-thread-interrupted-start"),
+          threadId,
+          projectId: asProjectId("project-interrupted-start"),
+          title: "Thread",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt,
+        });
+
+        // Occupy the worker so the turn start waits in the queue.
+        const blocker = yield* engine
+          .dispatch({
+            type: "thread.meta.update",
+            commandId: CommandId.make("cmd-blocker"),
+            threadId,
+            title: "Blocked",
+          })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Deferred.await(workerReachedBlocker);
+
+        const caller = yield* engine
+          .dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-turn-start-interrupted"),
+            threadId,
+            message: {
+              messageId: asMessageId("msg-interrupted"),
+              role: "user",
+              text: "hello",
+              attachments: [],
+            },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "approval-required",
+            createdAt,
+          })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Fiber.interrupt(caller);
+        // The worker still owns the queued turn, so an update cannot begin.
+        expect(tryBeginMaintenance()).toBe(false);
+
+        yield* Deferred.succeed(releaseBlocker, undefined);
+        yield* Fiber.join(blocker);
+        // The queue is FIFO: once this returns, the turn start has committed.
+        yield* engine.dispatch({
+          type: "thread.meta.update",
+          commandId: CommandId.make("cmd-after-interrupted-start"),
+          threadId,
+          title: "After",
+        });
+        const turnEvents = Array.from(yield* Stream.runCollect(engine.readEvents(0))).filter(
+          (event) => event.commandId === CommandId.make("cmd-turn-start-interrupted"),
+        );
+        expect(turnEvents.length).toBeGreaterThan(0);
+        expect(tryBeginMaintenance()).toBe(true);
+        finishMaintenance();
+      }).pipe(Effect.provide(engineLayer));
+    }),
+  );
 
   it("archives and unarchives threads through orchestration commands", async () => {
     const system = await createOrchestrationSystem();

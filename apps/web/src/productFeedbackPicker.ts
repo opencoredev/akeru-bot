@@ -165,11 +165,11 @@ export function startProductFeedbackElementPicker(input: {
     boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
     font: "13px system-ui, sans-serif",
   });
-  instructionText.textContent = "Choose an element. Press Escape to cancel.";
+  instructionText.textContent = "Click an element to attach it · Esc to cancel";
   instructions.setAttribute("role", "status");
   instructions.setAttribute("aria-live", "polite");
   cancelButton.type = "button";
-  cancelButton.textContent = "Cancel";
+  cancelButton.textContent = "Exit picker";
   cancelButton.dataset.akeruFeedbackUi = "picker-cancel";
   Object.assign(cancelButton.style, {
     border: "1px solid var(--border)",

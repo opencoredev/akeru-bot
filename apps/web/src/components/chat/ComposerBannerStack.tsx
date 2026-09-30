@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { XIcon } from "lucide-react";
 
+import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
@@ -192,6 +193,7 @@ function ComposerBannerStackAlert({
   readonly exiting: boolean;
   readonly onDismissRequest: () => void;
 }) {
+  const { t } = useI18n();
   const dismissOnly = item.onDismiss && !item.actions;
   const visualVariant =
     item.variant === "info" || item.variant === "success" ? "default" : item.variant;
@@ -224,7 +226,7 @@ function ComposerBannerStackAlert({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label={item.dismissLabel ?? "Dismiss warning"}
+              aria-label={item.dismissLabel ?? t("Dismiss warning")}
               disabled={exiting}
               onClick={onDismissRequest}
             >

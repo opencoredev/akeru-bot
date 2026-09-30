@@ -1,15 +1,21 @@
+import * as NodeUtil from "node:util";
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { BotId, DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
+import * as References from "effect/References";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
+import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as ServerConfig from "./config.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -365,3 +371,37 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
     assert.deepStrictEqual(yield* Ref.get(dispatchCalls), []);
   }).pipe(Effect.provide(NodeServices.layer)),
 );
+
+it.effect("channel restore logs never carry provider errors or secrets", () => {
+  const secret = "xoxb-secret-token";
+  const logs: Array<unknown> = [];
+  const logger = Logger.make(({ fiber, message }) => {
+    logs.push({ message, annotations: fiber.getRef(References.CurrentLogAnnotations) });
+  });
+  const providerFailure = new ChannelRuntime.ChannelTransportError({
+    message: "Channel provider request failed.",
+    cause: new Error(`401 Unauthorized for token ${secret}`),
+  });
+
+  return Effect.gen(function* () {
+    yield* ServerRuntimeStartup.restoreExternalChannels({
+      restoreConnectedChannels: Effect.succeed([
+        { botId: BotId.make("bot-slack"), provider: "slack", category: "restore" },
+      ]),
+    });
+    yield* ServerRuntimeStartup.restoreExternalChannels({
+      restoreConnectedChannels: Effect.fail(providerFailure),
+    });
+    yield* ServerRuntimeStartup.restoreExternalChannels({
+      restoreConnectedChannels: Effect.die(providerFailure),
+    });
+
+    assert.lengthOf(logs, 3);
+    // inspect walks Error messages and causes, which JSON.stringify would drop.
+    const logged = NodeUtil.inspect(logs, { depth: 20 });
+    assert.include(logged, "failed to restore external channel");
+    assert.include(logged, "external channel startup restore failed");
+    assert.notInclude(logged, secret);
+    assert.notInclude(logged, "Unauthorized");
+  }).pipe(Effect.provide(Logger.layer([logger], { mergeWithExisting: false })));
+});

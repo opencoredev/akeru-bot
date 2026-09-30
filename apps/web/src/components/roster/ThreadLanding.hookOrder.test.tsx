@@ -1,6 +1,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, MessageId, ThreadId, type OrchestrationMessage } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  MessageId,
+  RoutineId,
+  ThreadId,
+  type OrchestrationMessage,
+  type OrchestrationShellSnapshot,
+} from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Bot, Group } from "./types";
 
@@ -13,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   clearContextIf: vi.fn(),
   observe: vi.fn(),
   landing: vi.fn(),
+  refreshHistory: vi.fn(),
+  queryData: { inbox: [], runs: [], nextCursor: null },
+  snapshot: null as OrchestrationShellSnapshot | null,
+  rosterLoadState: { kind: "loading" } as { kind: "loading" } | { kind: "failed"; message: string },
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -29,22 +40,54 @@ vi.mock("../../providerInstances", () => ({
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
-vi.mock("./botEngineSelection", () => ({ resolveStickyBotEngine: () => null }));
-vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) => (atom === "people" ? { current: null, host: null } : null),
+vi.mock("./useBotEngineAvailability", () => ({
+  useBotEngineAvailability: () => ({
+    instanceEntries: [],
+    selection: null,
+    unavailability: null,
+    blocked: false,
+  }),
 }));
-vi.mock("../../state/bots", () => ({ environmentPeopleAtom: () => "people" }));
+vi.mock("./useServerRoster", () => ({
+  useRosterLoadState: () => mocks.rosterLoadState,
+  useEnableBotAutoReview: () => vi.fn(),
+}));
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: (atom: unknown) =>
+    atom === "people"
+      ? { current: null, host: null }
+      : atom === "snapshot"
+        ? mocks.snapshot
+        : atom === "bots"
+          ? []
+          : null,
+}));
+vi.mock("../../state/bots", () => ({
+  environmentPeopleAtom: () => "people",
+  environmentBotsAtom: () => "bots",
+  botEnvironment: { update: null },
+}));
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
   useEnvironmentConnectionState: () => ({ data: null }),
 }));
+vi.mock("./detailsPanelOpen", () => ({
+  useBotDetailsOpen: () => [false, () => undefined],
+  useGroupDetailsOpen: () => [false, () => undefined],
+}));
+vi.mock("../chat/ChatActionsMenu", () => ({
+  ChatActionsMenu: () => null,
+  useMarkChatVisited: () => undefined,
+}));
 vi.mock("../../state/entities", () => ({ useThreadActivities: () => [] }));
-vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
+vi.mock("../../state/query", () => ({
+  useEnvironmentQuery: () => ({ data: mocks.queryData, refresh: mocks.refreshHistory }),
+}));
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,
-  serverEnvironment: { subscriptionAuth: () => null },
+  serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
-vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => null }));
+vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { setMessageReaction: null } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
@@ -55,8 +98,11 @@ vi.mock("../voice/VoiceCall", () => ({
   voiceEnvironmentConnectionLost: () => false,
 }));
 vi.mock("../chat/ReplyPlaybackProvider", () => {
+  const synthesis = { provider: "test-provider", voice: "test-voice" };
   const session = {
-    synthesis: { provider: "test-provider", voice: "test-voice" },
+    synthesisFor: () => synthesis,
+    subscribeSynthesis: () => () => {},
+    getSynthesisSnapshot: () => synthesis,
     setContext: mocks.setContext,
     clearContextIf: mocks.clearContextIf,
     observe: mocks.observe,
@@ -75,8 +121,9 @@ vi.mock("./botPresence", () => ({
   useGroupPresence: () => "idle",
 }));
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: { groups: Group[]; bots: Bot[] }) => unknown) =>
-    selector({ groups: mocks.groups, bots: mocks.bots });
+  const useRosterStore = (
+    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => unknown,
+  ) => selector({ groups: mocks.groups, bots: mocks.bots, environmentId: "environment-1" });
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
   return { useRosterStore };
 });
@@ -216,9 +263,16 @@ beforeEach(() => {
   mocks.bots = [];
   mocks.messages = [];
   mocks.mediaBlocked = false;
+  mocks.snapshot = null;
+  mocks.rosterLoadState = { kind: "loading" };
   const document = new TestNode("#document", null, 9);
   vi.stubGlobal("document", document);
-  vi.stubGlobal("window", { document, HTMLIFrameElement: TestNode });
+  vi.stubGlobal("window", {
+    document,
+    HTMLIFrameElement: TestNode,
+    addEventListener() {},
+    removeEventListener() {},
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   root = createRoot(document.createElement("div") as unknown as Element);
 });
@@ -233,6 +287,42 @@ async function render() {
 }
 
 describe("thread landing reply playback hook order", () => {
+  it("refreshes routine history when an open chat receives a new run", async () => {
+    mocks.bots = [bot];
+    const source = {
+      id: RoutineId.make("routine-1"),
+      targetThreadId: ThreadId.make("thread-bot"),
+      job: "Daily report",
+      createdAt: "2026-09-29T09:00:00.000Z",
+    };
+    mocks.snapshot = {
+      routineReceiptSources: [source],
+      routineRuns: [],
+      delegations: [],
+    } as unknown as OrchestrationShellSnapshot;
+    const renderBot = async () => {
+      await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
+    };
+    await renderBot();
+    expect(mocks.refreshHistory).not.toHaveBeenCalled();
+
+    mocks.snapshot = {
+      routineReceiptSources: [source],
+      delegations: [],
+      routineRuns: [
+        {
+          id: "run-1",
+          routineId: source.id,
+          status: "queued",
+          startedAt: null,
+          updatedAt: "2026-09-29T09:01:00.000Z",
+        },
+      ],
+    } as unknown as OrchestrationShellSnapshot;
+    await renderBot();
+    expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["missing", "archived"] as const)(
     "renders an initially %s bot then its available bot without a hook ordering error",
     async (state) => {
@@ -268,6 +358,14 @@ describe("thread landing reply playback hook order", () => {
       expect(mocks.observe).toHaveBeenLastCalledWith([]);
     },
   );
+  it("offers the roster failure page for a missing group when the first load failed", async () => {
+    mocks.rosterLoadState = { kind: "failed", message: "Snapshot failed" };
+    await render();
+    expect(mocks.landing).toHaveBeenCalledWith(
+      expect.objectContaining({ "aria-label": "Could not load bots" }),
+    );
+  });
+
   it("renders an initially missing group then its hydrated group without a hook ordering error", async () => {
     mocks.messages = [message];
     await render();

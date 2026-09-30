@@ -287,6 +287,34 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
     }),
   );
 
+  it.effect("carries the frontmatter icon and survives an icon-less skill", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const skillsDir = path.join(tempDir, "claude-home", "skills");
+
+      yield* writeSkill(
+        skillsDir,
+        "with-icon",
+        ["---", "name: with-icon", "description: Has an icon.", "icon: 🔧", "---"].join("\n"),
+      );
+      yield* writeSkill(
+        skillsDir,
+        "no-icon",
+        ["---", "name: no-icon", "description: No icon field.", "---"].join("\n"),
+      );
+
+      const skills = yield* discoverClaudeSkills(
+        { homePath: path.join(tempDir, "claude-home") },
+        undefined,
+      );
+
+      assert.equal(skills.find((skill) => skill.name === "with-icon")?.icon, "🔧");
+      assert.equal(skills.find((skill) => skill.name === "no-icon")?.icon, undefined);
+    }),
+  );
+
   it.effect("returns an empty list when no skill roots exist", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

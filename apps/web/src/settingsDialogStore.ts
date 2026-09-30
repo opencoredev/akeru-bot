@@ -4,38 +4,43 @@
  * `/settings` deep links) lands on the same surface.
  */
 import { create } from "zustand";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { ChannelProvider, EnvironmentId } from "@t3tools/contracts";
 
 import { usePrimaryEnvironmentId } from "./state/environments";
 
 /**
- * Every panel the dialog can render. Some sections are reachable only from a
- * link inside another panel, so this is wider than the visible nav.
+ * Every settings page. `diagnostics` has no nav row and is reached from
+ * links, so this is wider than the visible nav.
  */
 export const SETTINGS_SECTIONS = [
   "general",
-  "inbox",
   "appearance",
+  "keybindings",
+  "connections",
+  "privacy",
+  "archived",
+  "advanced",
   "providers",
-  "browser",
-  "plugins",
   "channels",
   "sandbox",
-  "voice",
-  "privacy",
-  "connections",
-  "keybindings",
-  "source-control",
+  "browser",
+  "image-generation",
   "diagnostics",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
+/** The page bare `/settings`, `openSettings()`, and unknown slugs land on. */
+export const DEFAULT_SETTINGS_SECTION: SettingsSection = "general";
 
 interface SettingsDialogState {
   /** The open section, or null while the dialog is closed. */
   readonly section: SettingsSection | null;
   readonly targetId: string | null;
   readonly environmentId: EnvironmentId | null;
+  /** The Bot channels tab. It outlives the dialog so closing and reopening keeps the user's place. */
+  readonly channelProvider: ChannelProvider;
+  readonly setChannelProvider: (provider: ChannelProvider) => void;
   readonly openSettings: (
     section?: SettingsSection,
     targetId?: string | null,
@@ -51,7 +56,9 @@ export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   section: null,
   targetId: null,
   environmentId: null,
-  openSettings: (section = "general", targetId = null, environmentId) =>
+  channelProvider: "imessage",
+  setChannelProvider: (channelProvider) => set({ channelProvider }),
+  openSettings: (section = DEFAULT_SETTINGS_SECTION, targetId = null, environmentId) =>
     set((state) => ({
       section,
       targetId,
@@ -94,11 +101,36 @@ export function clearSettingsEnvironment(): void {
   useSettingsDialogStore.getState().clearEnvironment();
 }
 
-/** Map a legacy `/settings/...` pathname onto a dialog section. */
+/**
+ * Retired section slugs and the page (plus anchor) that now owns them, so old
+ * links and bookmarks keep working.
+ */
+export const LEGACY_SETTINGS_SECTIONS: Readonly<
+  Record<string, { readonly section: SettingsSection; readonly targetId?: string }>
+> = {
+  bots: { section: "channels" },
+  inbox: { section: "advanced", targetId: "errors" },
+  errors: { section: "advanced", targetId: "errors" },
+  voice: { section: "providers", targetId: "voice" },
+  "source-control": { section: "general" },
+};
+
+/** Map a `/settings/...` pathname, current or legacy, onto a settings page. */
 export function settingsSectionFromPathname(pathname: string): SettingsSection {
   const slug = pathname.replace(/^\/settings\/?/, "").split("/")[0] ?? "";
-  if (slug === "bots") return "channels";
+  const legacy = LEGACY_SETTINGS_SECTIONS[slug];
+  if (legacy) return legacy.section;
   return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
     ? (slug as SettingsSection)
-    : "general";
+    : DEFAULT_SETTINGS_SECTION;
+}
+
+/** The selected Bot channels tab and its setter. */
+export function useSettingsChannelProvider(): readonly [
+  ChannelProvider,
+  (provider: ChannelProvider) => void,
+] {
+  const provider = useSettingsDialogStore((state) => state.channelProvider);
+  const setProvider = useSettingsDialogStore((state) => state.setChannelProvider);
+  return [provider, setProvider];
 }

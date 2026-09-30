@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { collectComposerInlineTokens } from "./composerInlineTokens.ts";
+import {
+  collectComposerInlineTokens,
+  collectComposerMentionDisplays,
+  collectComposerMentionReferences,
+  serializeComposerBotMention,
+  serializeComposerThreadMention,
+} from "./composerInlineTokens.ts";
 
 describe("collectComposerInlineTokens", () => {
   it("collects file links, mentions, and skills with source ranges", () => {
@@ -187,5 +193,65 @@ describe("collectComposerInlineTokens", () => {
     const started = performance.now();
     expect(collectComposerInlineTokens(" [[".repeat(40_000))).toEqual([]);
     expect(performance.now() - started).toBeLessThan(1_000);
+  });
+});
+
+describe("composer mention tokens", () => {
+  it("parses @browser and @chat: mentions instead of path mentions", () => {
+    expect(collectComposerInlineTokens("Use @browser and @chat:abc-123 please")).toEqual([
+      { type: "browser-mention", value: "browser", source: "@browser", start: 4, end: 12 },
+      {
+        type: "thread-mention",
+        value: "abc-123",
+        source: "@chat:abc-123",
+        start: 17,
+        end: 30,
+      },
+    ]);
+  });
+
+  it("keeps quoted browser paths as file mentions", () => {
+    expect(collectComposerInlineTokens('Open @"browser" now')).toEqual([
+      { type: "mention", value: "browser", source: '@"browser"', start: 5, end: 15 },
+    ]);
+  });
+
+  it("round trips a thread mention through serialization", () => {
+    const token = serializeComposerThreadMention("thread-9f");
+    expect(token).toBe("@chat:thread-9f");
+    expect(collectComposerMentionReferences(`see ${token}`)).toEqual({
+      browser: false,
+      threadIds: ["thread-9f"],
+    });
+    expect(serializeComposerThreadMention("bad id")).toBeNull();
+  });
+
+  it("collects trailing and repeated references once", () => {
+    expect(collectComposerMentionReferences("@chat:a @browser @chat:a @chat:b @browser")).toEqual({
+      browser: true,
+      threadIds: ["a", "b"],
+    });
+    expect(collectComposerMentionReferences("@browsers @chats")).toEqual({
+      browser: false,
+      threadIds: [],
+    });
+  });
+
+  it("parses @bot:<id> as a bot mention and labels it by name", () => {
+    const token = serializeComposerBotMention("bot-2");
+    expect(token).toBe("@bot:bot-2");
+    expect(collectComposerInlineTokens(`ask ${token} now`)).toEqual([
+      { type: "bot-mention", value: "bot-2", source: "@bot:bot-2", start: 4, end: 14 },
+    ]);
+    expect(serializeComposerBotMention("bad id")).toBeNull();
+    const name = (id: string) => (id === "bot-2" ? "Mika" : null);
+    expect(
+      collectComposerMentionDisplays("@bot:bot-2 and @bot:gone", () => null, name).map(
+        (display) => [display.kind, display.label, display.botId],
+      ),
+    ).toEqual([
+      ["bot", "Mika", "bot-2"],
+      ["bot", "Unknown bot", "gone"],
+    ]);
   });
 });

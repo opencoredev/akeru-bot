@@ -20,9 +20,22 @@ import * as NodeCrypto from "node:crypto";
 import {
   SubscriptionBaseUrl,
   type BotId,
+  type ProviderInstanceId,
   type SubscriptionAuthStartInput,
 } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+
+import {
+  isSubscriptionCredential,
+  subscriptionCredentialStore,
+  type SubscriptionAuthData,
+  type SubscriptionCredential,
+  type SubscriptionCredentialStore,
+  type SubscriptionCredentialStoreError,
+} from "./credentialStore.ts";
 
 import {
   completeAnthropicLogin,
@@ -36,12 +49,7 @@ import {
   type CodexDeviceLoginPending,
 } from "./providers/openaiCodex.ts";
 import {
-  pollCursorLogin,
-  refreshCursorToken,
-  startCursorLogin,
-  type CursorLoginPending,
-} from "./providers/cursor.ts";
-import {
+  getKimiCodingDeviceHeaders,
   isKimiCodingDeviceId,
   pollKimiDeviceLogin,
   refreshKimiToken,
@@ -54,12 +62,7 @@ import {
   startXAIDeviceLogin,
   type XAIDeviceLoginPending,
 } from "./providers/xai.ts";
-import type {
-  ApiKeyCredential,
-  OAuthCredential,
-  OAuthCredentials,
-  SubscriptionAuthData,
-} from "./types.ts";
+import type { ApiKeyCredential, OAuthCredential, OAuthCredentials } from "./types.ts";
 
 const decodeBaseUrl = Schema.decodeUnknownSync(SubscriptionBaseUrl);
 
@@ -75,7 +78,6 @@ const OPENCODE_GO_USER_AGENT = "akeru-bot/0.0.37";
 export const SUBSCRIPTION_PROVIDER_IDS = [
   "anthropic",
   "openai-codex",
-  "cursor",
   "xai",
   "kimi-for-coding",
   "opencode-go",
@@ -102,13 +104,15 @@ export interface StartedLogin {
 }
 
 export type LoginPollStatus =
-  | { status: "connected" }
+  | { status: "connected"; health?: "checking" }
   | { status: "pending"; nextPollMs: number }
   | { status: "failed"; error: string };
 
 export interface ProviderStatus {
   provider: SubscriptionProviderId;
+  instanceId?: ProviderInstanceId;
   connected: boolean;
+  accountLabel?: string;
   authMode?: "oauth" | "api-key";
   baseUrl?: string;
   /** ms epoch when the current access token expires; refreshed on demand. */
@@ -122,9 +126,11 @@ export interface ProviderStatus {
     | "failed"
     | "failed-first-request"
     | "recovered";
+  healthChecking?: boolean;
   lastSuccessfulRequestAt?: string;
   lastFailedRequest?: { at: string; message: string };
   nextRetryAt?: string;
+  credentialWarning?: { at: string; message: string };
   reconnectAction: string;
   healthTest: { status: "not-run" | "passed" | "failed"; checkedAt?: string };
   oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
@@ -134,19 +140,88 @@ export interface ProviderStatus {
 
 interface ProviderHealthRecord {
   lastSuccessfulRequestAt?: string;
-  lastFailedRequest?: { at: string; message: string };
+  lastCredentialProbeAt?: string;
+  lastCredentialProbeFailure?: {
+    at: string;
+    message: string;
+    failureKind: "request" | "revoked";
+  };
+  // Provider-instance failures also keep the model that failed, so preflight
+  // can tell whether the current selection is the one the provider rejected.
+  lastFailedRequest?: { at: string; message: string; model?: string };
   nextRetryAt?: string;
   healthTest?: { status: "passed" | "failed"; checkedAt: string };
   oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
   failureKind?: "request" | "revoked";
+  /** Set while the post-login health check runs; shared across service instances. */
+  healthCheckStartedAt?: string;
+  /** Image providers only: the last request that produced an image. */
+  lastGenerationAt?: string;
+}
+
+/** A post-login check older than this is treated as abandoned (for example, the server restarted). */
+const HEALTH_CHECK_STALE_MS = 60_000;
+const HEALTH_CHECK_TIMEOUT_MS = 30_000;
+
+/** OAuth-only endpoints that prove a subscription token can reach the provider. */
+function oauthHealthRequest(
+  provider: SubscriptionProviderId,
+  credential: OAuthCredentials,
+): { readonly url: string; readonly headers: Record<string, string> } | undefined {
+  switch (provider) {
+    case "anthropic":
+      // Claude Pro/Max OAuth tokens are rejected by /v1/models; the usage endpoint accepts them.
+      return {
+        url: "https://api.anthropic.com/api/oauth/usage",
+        headers: {
+          Authorization: `Bearer ${credential.access}`,
+          Accept: "application/json",
+          "anthropic-beta": "oauth-2025-04-20",
+          "User-Agent": "claude-code/2.1.69",
+        },
+      };
+    case "openai-codex":
+      return {
+        url: "https://chatgpt.com/backend-api/wham/usage",
+        headers: { Authorization: `Bearer ${credential.access}` },
+      };
+    case "xai":
+      return {
+        url: "https://api.x.ai/v1/models",
+        headers: { Authorization: `Bearer ${credential.access}` },
+      };
+    case "kimi-for-coding":
+      return {
+        url: "https://api.kimi.com/coding/v1/models",
+        headers: {
+          Authorization: `Bearer ${credential.access}`,
+          ...getKimiCodingDeviceHeaders(
+            typeof credential.deviceId === "string" ? credential.deviceId : "",
+          ),
+        },
+      };
+    default:
+      return undefined;
+  }
 }
 
 export interface RequestHealthStatus {
   readonly health: "healthy" | "failed" | "failed-first-request" | "recovered";
   readonly lastSuccessfulRequestAt?: string;
-  readonly lastFailedRequest?: { readonly at: string; readonly message: string };
+  readonly lastFailedRequest?: {
+    readonly at: string;
+    readonly message: string;
+    readonly model?: string;
+  };
   readonly nextRetryAt?: string;
 }
+
+type ImageRequestHealthStatus = Omit<RequestHealthStatus, "health"> & {
+  readonly health: RequestHealthStatus["health"] | "detected";
+  readonly lastCredentialProbeAt?: string;
+  readonly lastCredentialProbeFailure?: ProviderHealthRecord["lastCredentialProbeFailure"];
+  readonly healthTest?: ProviderHealthRecord["healthTest"];
+};
 
 type ProviderHealthData = Record<string, ProviderHealthRecord | undefined>;
 
@@ -157,58 +232,171 @@ function oauthFailureKind(cause: unknown): "request" | "revoked" {
     : "request";
 }
 
+/** Shown on every row while the store serves the last good state over a damaged file. */
+function lastGoodWarning(error: SubscriptionCredentialStoreError): string {
+  return error.reason === "unreadable"
+    ? "Saved subscription credentials could not be reread. Akeru Bot keeps using the credentials it loaded earlier. Check the secrets directory permissions."
+    : "Saved subscription credentials changed on disk and are damaged. Akeru Bot keeps using the credentials it loaded earlier; the next sign-in or sign-out rewrites the file.";
+}
+
+/** Status for every provider when the credential file was damaged before any good load. */
+function storeErrorStatus(
+  provider: SubscriptionProviderId,
+  lastFailedRequest: { readonly at: string; readonly message: string },
+  dependentBots: ReadonlyArray<{
+    readonly id: BotId;
+    readonly name: string;
+    readonly provider: SubscriptionProviderId;
+  }>,
+): ProviderStatus {
+  return {
+    provider,
+    connected: false,
+    health: "failed-first-request",
+    lastFailedRequest,
+    reconnectAction: provider === "opencode-go" ? "Connect API key" : "Connect account",
+    healthTest: { status: "not-run" },
+    dependentBots: dependentBots
+      .filter((bot) => bot.provider === provider)
+      .map(({ id, name }) => ({ id, name })),
+    dependentRoutines: [],
+  };
+}
+
 type PendingLogin =
   | { provider: SubscriptionProviderId; authMode: "api-key"; baseUrl?: string }
   | { provider: "anthropic"; verifier: string }
   | { provider: "openai-codex"; pending: CodexDeviceLoginPending }
-  | { provider: "cursor"; pending: CursorLoginPending }
   | { provider: "xai"; pending: XAIDeviceLoginPending }
   | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending }
   | { provider: "opencode-go" };
+
+type BoundLogin = PendingLogin & { instanceId?: string };
+
+const defaultInstanceByProvider: Record<SubscriptionProviderId, string> = {
+  anthropic: "claudeAgent",
+  "openai-codex": "codex",
+  xai: "grok",
+  "kimi-for-coding": "kimi",
+  "opencode-go": "opencodeGo",
+};
+
+/** The default instance keeps the bare provider key; other instances get their own account. */
+function credentialKey(provider: SubscriptionProviderId, instanceId?: string): string {
+  return !instanceId || instanceId === defaultInstanceByProvider[provider]
+    ? provider
+    : `instance:${provider}:${instanceId}`;
+}
+
+function credentialAt(data: SubscriptionAuthData, key: string): SubscriptionCredential | undefined {
+  const value = (data as Record<string, unknown>)[key];
+  return isSubscriptionCredential(value) ? value : undefined;
+}
+
+/** Refreshed tokens keep the stored connection identity and account ID. */
+function refreshedCredential(
+  previous: OAuthCredential,
+  refreshed: OAuthCredentials,
+): OAuthCredential {
+  return {
+    ...refreshed,
+    type: "oauth",
+    ...(refreshed.connectionId === undefined && previous.connectionId !== undefined
+      ? { connectionId: previous.connectionId }
+      : {}),
+    ...(refreshed.accountId === undefined && previous.accountId !== undefined
+      ? { accountId: previous.accountId }
+      : {}),
+  };
+}
 
 /** A completed login that the client has not observed yet must not be re-runnable. */
 const PENDING_LOGIN_CAP = 16;
 
 export class SubscriptionAuthService {
-  private data: SubscriptionAuthData = {};
   private readonly authPath: string;
+  private readonly store: SubscriptionCredentialStore;
   private readonly pendingPath: string;
   private readonly healthPath: string;
   private health: ProviderHealthData = {};
-  private readonly pendingLogins = new Map<string, PendingLogin>();
+  private readonly pendingLogins = new Map<string, BoundLogin>();
   private readonly refreshInFlight = new Map<string, Promise<string | undefined>>();
+  private readonly healthChecks = new Map<string, Promise<void>>();
+  private readonly healthProbeVersions = new Map<string, number>();
+  private readonly checkHealthOnConnect: boolean;
 
-  constructor(authPath: string) {
-    this.authPath = authPath;
-    this.pendingPath = `${authPath}.pending`;
-    this.healthPath = `${authPath}.health`;
-    this.reload();
+  /**
+   * `checkHealthOnConnect` runs a provider health check on the server as soon as a
+   * login stores credentials, so the result does not depend on the client staying connected.
+   */
+  private constructor(
+    store: SubscriptionCredentialStore,
+    options: { readonly checkHealthOnConnect?: boolean },
+  ) {
+    this.store = store;
+    this.authPath = store.path;
+    this.checkHealthOnConnect = options.checkHealthOnConnect ?? false;
+    this.pendingPath = `${this.authPath}.pending`;
+    this.healthPath = `${this.authPath}.health`;
+    this.reloadLocal();
   }
 
-  static forSecretsDir(secretsDir: string): SubscriptionAuthService {
-    return new SubscriptionAuthService(NodePath.join(secretsDir, "subscription-auth.json"));
+  /** A service over the credential file at `authPath`, loaded from disk. */
+  static make(
+    authPath: string,
+    options: { readonly checkHealthOnConnect?: boolean } = {},
+  ): Effect.Effect<SubscriptionAuthService, never, FileSystem.FileSystem | Path.Path> {
+    return Effect.gen(function* () {
+      const store = yield* subscriptionCredentialStore(authPath);
+      yield* store.reload;
+      return new SubscriptionAuthService(store, options);
+    });
   }
 
-  reload(): void {
-    if (!NodeFS.existsSync(this.authPath)) {
-      this.data = {};
-    } else {
-      try {
-        this.data = JSON.parse(NodeFS.readFileSync(this.authPath, "utf-8")) as SubscriptionAuthData;
-      } catch {
-        this.data = {};
-      }
-    }
+  static forSecretsDir(
+    secretsDir: string,
+    options?: { readonly checkHealthOnConnect?: boolean },
+  ): Effect.Effect<SubscriptionAuthService, never, FileSystem.FileSystem | Path.Path> {
+    return Effect.gen(function* () {
+      const path = yield* Path.Path;
+      return yield* SubscriptionAuthService.make(
+        path.join(secretsDir, "subscription-auth.json"),
+        options,
+      );
+    });
+  }
 
+  /** Reread credentials, pending logins, and health from disk. */
+  reload(): Effect.Effect<void> {
+    return this.store.reload.pipe(Effect.andThen(Effect.sync(() => this.reloadLocal())));
+  }
+
+  private reloadAsync(): Promise<void> {
+    return Effect.runPromise(this.reload());
+  }
+
+  private get data(): SubscriptionAuthData {
+    return this.store.current().data;
+  }
+
+  private updateCredentials(
+    f: (data: SubscriptionAuthData) => SubscriptionAuthData,
+  ): Promise<SubscriptionAuthData> {
+    return Effect.runPromise(this.store.update(f));
+  }
+
+  private reloadLocal(): void {
     this.reloadHealth();
 
     this.pendingLogins.clear();
     if (!NodeFS.existsSync(this.pendingPath)) return;
     try {
       const entries = JSON.parse(NodeFS.readFileSync(this.pendingPath, "utf-8")) as Array<
-        readonly [string, PendingLogin]
+        readonly [string, BoundLogin]
       >;
       for (const [loginId, pending] of entries.slice(-PENDING_LOGIN_CAP)) {
+        // Logins for a retired provider (Cursor) can linger in the file.
+        if (!isSubscriptionProviderId(pending.provider)) continue;
         this.pendingLogins.set(loginId, pending);
       }
     } catch {
@@ -242,10 +430,6 @@ export class SubscriptionAuthService {
     NodeFS.chmodSync(filePath, 0o600);
   }
 
-  private save(): void {
-    this.writeSecureJson(this.authPath, this.data);
-  }
-
   private savePending(): void {
     this.writeSecureJson(this.pendingPath, [...this.pendingLogins.entries()]);
   }
@@ -261,10 +445,25 @@ export class SubscriptionAuthService {
       readonly provider: SubscriptionProviderId;
     }> = [],
     now = Date.now(),
+    instanceId?: ProviderInstanceId,
   ): ProviderStatus[] {
+    const { data, loadError, loadErrorAt, servingLastGood } = this.store.current();
+    const damagedAt = loadErrorAt ?? new Date(now).toISOString();
+    const credentialWarning =
+      loadError && servingLastGood
+        ? { at: damagedAt, message: lastGoodWarning(loadError) }
+        : undefined;
     return SUBSCRIPTION_PROVIDER_IDS.map((provider) => {
-      const credential = this.data[provider];
-      const health = this.health[provider];
+      if (loadError && !servingLastGood) {
+        return storeErrorStatus(
+          provider,
+          { at: damagedAt, message: loadError.message },
+          dependentBots,
+        );
+      }
+      const key = credentialKey(provider, instanceId);
+      const credential = credentialAt(data, key);
+      const health = this.health[key];
       const expired = credential?.type === "oauth" && credential.expires <= now;
       const failedAfterSuccess =
         health?.lastFailedRequest !== undefined &&
@@ -274,6 +473,9 @@ export class SubscriptionAuthService {
         health?.lastSuccessfulRequestAt !== undefined &&
         health.lastFailedRequest !== undefined &&
         health.lastSuccessfulRequestAt > health.lastFailedRequest.at;
+      const checking =
+        health?.healthCheckStartedAt !== undefined &&
+        now - Date.parse(health.healthCheckStartedAt) < HEALTH_CHECK_STALE_MS;
       const state = !credential
         ? "missing"
         : failedAfterSuccess
@@ -289,20 +491,30 @@ export class SubscriptionAuthService {
               : health?.lastSuccessfulRequestAt
                 ? "healthy"
                 : "detected";
+      const accountLabel =
+        credential?.type === "oauth"
+          ? [credential.email, credential.accountId].find(
+              (value): value is string => typeof value === "string" && value.trim().length > 0,
+            )
+          : undefined;
       return {
         provider,
+        ...(instanceId ? { instanceId } : {}),
         connected: credential !== undefined,
+        ...(accountLabel ? { accountLabel } : {}),
         ...(credential ? { authMode: credential.type } : {}),
         ...(credential?.type === "api-key" && credential.baseUrl
           ? { baseUrl: credential.baseUrl }
           : {}),
         ...(credential?.type === "oauth" ? { expiresAt: credential.expires } : {}),
         health: state,
+        ...(credential && checking ? { healthChecking: true } : {}),
         ...(health?.lastSuccessfulRequestAt
           ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
           : {}),
         ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
         ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
+        ...(credentialWarning ? { credentialWarning } : {}),
         reconnectAction:
           credential?.type === "api-key" || provider === "opencode-go"
             ? credential
@@ -321,8 +533,30 @@ export class SubscriptionAuthService {
     });
   }
 
+  accountStatus(
+    provider: SubscriptionProviderId,
+    instanceId: ProviderInstanceId,
+    dependentBots: ReadonlyArray<{
+      readonly id: BotId;
+      readonly name: string;
+      readonly provider: SubscriptionProviderId;
+    }> = [],
+  ): ProviderStatus {
+    return this.statuses(dependentBots, Date.now(), instanceId).find(
+      (status) => status.provider === provider,
+    )!;
+  }
+
   recordRequestSuccess(provider: SubscriptionProviderId, at = new Date().toISOString()): void {
     this.recordHealthSuccess(provider, at);
+  }
+
+  recordAccountRequestSuccess(
+    provider: SubscriptionProviderId,
+    instanceId: string,
+    at: string,
+  ): void {
+    this.recordHealthSuccess(credentialKey(provider, instanceId), at);
   }
 
   recordProviderInstanceSuccess(instanceId: string, at = new Date().toISOString()): void {
@@ -332,7 +566,11 @@ export class SubscriptionAuthService {
   private recordHealthSuccess(key: string, at: string): void {
     this.reloadHealth();
     const previous = this.health[key];
-    const { nextRetryAt: _nextRetryAt, ...rest } = previous ?? {};
+    const {
+      nextRetryAt: _nextRetryAt,
+      lastCredentialProbeFailure: _probeFailure,
+      ...rest
+    } = previous ?? {};
     this.health[key] = {
       ...rest,
       lastSuccessfulRequestAt: at,
@@ -350,12 +588,22 @@ export class SubscriptionAuthService {
     this.recordHealthFailure(provider, message, at, failureKind);
   }
 
+  recordAccountRequestFailure(
+    provider: SubscriptionProviderId,
+    instanceId: string,
+    message: string,
+    at: string,
+  ): void {
+    this.recordHealthFailure(credentialKey(provider, instanceId), message, at, "request");
+  }
+
   recordProviderInstanceFailure(
     instanceId: string,
     message: string,
     at = new Date().toISOString(),
+    model?: string,
   ): void {
-    this.recordHealthFailure(`provider:${instanceId}`, message, at, "request");
+    this.recordHealthFailure(`provider:${instanceId}`, message, at, "request", model);
   }
 
   recordMcpRequestSuccess(serverId: string, at = new Date().toISOString()): void {
@@ -366,15 +614,91 @@ export class SubscriptionAuthService {
     this.recordHealthFailure(`mcp:${serverId}`, message, at, "request");
   }
 
-  private recordHealthFailure(
-    key: string,
-    message: string,
-    at: string,
-    failureKind: "request" | "revoked",
+  recordImageRequestSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`image:${provider}`, at);
+  }
+
+  recordImageCredentialProbeSuccess(
+    provider: "chatgpt" | "grok",
+    at = new Date().toISOString(),
   ): void {
-    this.reload();
-    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
-    for (const credential of Object.values(this.data)) {
+    this.reloadHealth();
+    const key = `image:${provider}`;
+    const { lastCredentialProbeFailure: _failure, ...previous } = this.health[key] ?? {};
+    this.health[key] = {
+      ...previous,
+      lastCredentialProbeAt: at,
+      healthTest: { status: "passed", checkedAt: at },
+    };
+    this.saveHealth();
+  }
+
+  recordImageCredentialProbeFailure(
+    provider: "chatgpt" | "grok",
+    message: string,
+    at = new Date().toISOString(),
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    message = this.redactHealthMessage(message);
+    const key = `image:${provider}`;
+    this.health[key] = {
+      ...this.health[key],
+      lastCredentialProbeFailure: {
+        at,
+        message,
+        failureKind,
+      },
+      healthTest: { status: "failed", checkedAt: at },
+    };
+    this.saveHealth();
+  }
+
+  recordImageRequestFailure(
+    provider: "chatgpt" | "grok",
+    message: string,
+    at = new Date().toISOString(),
+    failureKind: "request" | "revoked" = "request",
+  ): void {
+    this.recordHealthFailure(`image:${provider}`, message, at, failureKind);
+  }
+
+  /** A completed image generation, which also proves the provider healthy. */
+  recordImageGenerationSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`image:${provider}`, at);
+    this.health[`image:${provider}`] = {
+      ...this.health[`image:${provider}`],
+      lastGenerationAt: at,
+    };
+    this.saveHealth();
+  }
+
+  imageLastGenerationAt(provider: "chatgpt" | "grok"): string | undefined {
+    return this.health[`image:${provider}`]?.lastGenerationAt;
+  }
+
+  /** Image-provider request health, keyed separately from the chat driver. */
+  imageRequestHealth(provider: "chatgpt" | "grok"): ImageRequestHealthStatus | undefined {
+    const key = `image:${provider}`;
+    const requestHealth = this.requestHealth(key);
+    const record = this.health[key];
+    if (!record) return requestHealth;
+    return {
+      ...(requestHealth ?? { health: "detected" }),
+      ...(record.lastCredentialProbeAt
+        ? { lastCredentialProbeAt: record.lastCredentialProbeAt }
+        : {}),
+      ...(record.lastCredentialProbeFailure
+        ? { lastCredentialProbeFailure: record.lastCredentialProbeFailure }
+        : {}),
+      ...(record.healthTest ? { healthTest: record.healthTest } : {}),
+    };
+  }
+
+  private redactHealthMessage(message: string): string {
+    this.reloadHealth();
+    for (const credentialId of Object.keys(this.data)) {
+      const credential = credentialAt(this.data, credentialId);
+      if (!credential) continue;
       for (const secret of [
         credential.access,
         credential.type === "oauth" ? credential.refresh : undefined,
@@ -382,9 +706,21 @@ export class SubscriptionAuthService {
         if (secret) message = message.replaceAll(secret, "[redacted]");
       }
     }
+    return message;
+  }
+
+  private recordHealthFailure(
+    key: string,
+    message: string,
+    at: string,
+    failureKind: "request" | "revoked",
+    model?: string,
+  ): void {
+    message = this.redactHealthMessage(message);
+    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
     this.health[key] = {
       ...previous,
-      lastFailedRequest: { at, message },
+      lastFailedRequest: { at, message, ...(model ? { model } : {}) },
       failureKind,
       healthTest: { status: "failed", checkedAt: at },
     };
@@ -448,18 +784,40 @@ export class SubscriptionAuthService {
       : undefined;
   }
 
-  async testHealth(provider: SubscriptionProviderId): Promise<void> {
-    this.reload();
-    const credential = this.data[provider];
+  private async isCurrentHealthCredential(
+    key: string,
+    credential: ApiKeyCredential | OAuthCredential,
+    version: number,
+  ): Promise<boolean> {
+    if (this.healthProbeVersions.get(key) !== version) return false;
+    await this.reloadAsync();
+    if (this.healthProbeVersions.get(key) !== version) return false;
+    const current = credentialAt(this.data, key);
+    if (current?.type !== credential.type || current.access !== credential.access) return false;
+    return credential.type === "api-key"
+      ? current.type === "api-key" && current.baseUrl === credential.baseUrl
+      : current.type === "oauth" && current.refresh === credential.refresh;
+  }
+
+  async testHealth(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
+    await this.reloadAsync();
+    const key = credentialKey(provider, instanceId);
+    const version = (this.healthProbeVersions.get(key) ?? 0) + 1;
+    this.healthProbeVersions.set(key, version);
+    const credential = credentialAt(this.data, key);
     if (!credential) {
-      this.recordOAuthFailure(provider, "No account is connected.");
+      this.recordOAuthFailure(
+        provider,
+        this.store.current().loadError?.message ?? "No account is connected.",
+        "request",
+        instanceId,
+      );
       return;
     }
     if (credential.type === "api-key") {
-      const defaultBaseUrls: Record<SubscriptionProviderId, string> = {
+      const defaultBaseUrls: Partial<Record<SubscriptionProviderId, string>> = {
         anthropic: "https://api.anthropic.com/v1",
         "openai-codex": "https://api.openai.com/v1",
-        cursor: "https://api.cursor.com",
         xai: "https://api.x.ai/v1",
         "kimi-for-coding": "https://api.kimi.com/coding/v1",
         "opencode-go": "https://opencode.ai/zen/go/v1",
@@ -473,6 +831,7 @@ export class SubscriptionAuthService {
       try {
         const response = await fetch(url, {
           redirect: "error",
+          signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
           headers: {
             ...(provider === "anthropic"
               ? { "x-api-key": credential.access, "anthropic-version": "2023-06-01" }
@@ -481,58 +840,125 @@ export class SubscriptionAuthService {
             ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
           },
         });
+        if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
         if (!response.ok) {
-          this.recordRequestFailure(
-            provider,
+          this.recordHealthFailure(
+            key,
             `The provider rejected the API-key check (${response.status}).`,
-            undefined,
+            new Date().toISOString(),
             response.status === 401 || response.status === 403 ? "revoked" : "request",
           );
         } else {
-          this.recordRequestSuccess(provider);
+          this.recordHealthSuccess(key, new Date().toISOString());
         }
       } catch {
-        this.recordRequestFailure(
-          provider,
+        if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
+        this.recordHealthFailure(
+          key,
           "The API-key check failed. Check the base URL and connection.",
+          new Date().toISOString(),
+          "request",
         );
       }
       return;
     }
+    let testedCredential = credential;
     try {
-      const refreshed = await this.runRefresh(provider, credential);
-      this.reload();
-      const current = this.data[provider];
-      if (current?.type !== "oauth" || current.refresh !== credential.refresh) return;
-      this.setCredential(provider, refreshed);
-      // Refresh proves the OAuth grant is usable. It does not prove that the
-      // subscription can make a model request, so keep access detected until
-      // the runtime records the first successful provider request.
+      const refreshed =
+        credential.expires > Date.now() ? credential : await this.runRefresh(provider, credential);
+      if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
+      if (refreshed !== credential) {
+        // Save under the store lock only while the tested credential is still stored,
+        // so a logout or replacement that lands meanwhile is never undone.
+        const saved = await this.updateCredentials((data) => {
+          const latest = credentialAt(data, key);
+          return latest?.type === "oauth" &&
+            latest.access === credential.access &&
+            latest.refresh === credential.refresh
+            ? { ...data, [key]: refreshedCredential(latest, refreshed) }
+            : data;
+        });
+        const stored = credentialAt(saved, key);
+        if (stored?.type !== "oauth" || stored.access !== refreshed.access) return;
+      }
+      testedCredential = { type: "oauth", ...refreshed };
+      const request = oauthHealthRequest(provider, refreshed);
+      if (!request) throw new Error("This subscription does not expose a health endpoint.");
+      const response = await fetch(request.url, {
+        redirect: "error",
+        headers: request.headers,
+        signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+      });
+      if (!(await this.isCurrentHealthCredential(key, testedCredential, version))) return;
+      if (!response.ok) {
+        throw new Error(`The provider rejected the health request (${response.status}).`);
+      }
+      this.recordHealthSuccess(key, new Date().toISOString());
       const checkedAt = new Date().toISOString();
       this.reloadHealth();
-      this.health[provider] = {
-        ...this.health[provider],
+      this.health[key] = {
+        ...this.health[key],
         oauthCheck: { status: "passed", checkedAt },
       };
       this.saveHealth();
     } catch (cause) {
-      this.recordOAuthFailure(
-        provider,
+      if (!(await this.isCurrentHealthCredential(key, testedCredential, version))) return;
+      this.recordHealthFailure(
+        key,
         cause instanceof Error ? cause.message : "The provider rejected the health request.",
+        new Date().toISOString(),
         oauthFailureKind(cause),
       );
     }
+  }
+
+  /**
+   * Start the post-login health check in the background. It keeps running when the
+   * client that finished the login disconnects; `awaitHealthCheck` observes it.
+   */
+  private startHealthCheck(provider: SubscriptionProviderId, instanceId?: string): LoginPollStatus {
+    if (!this.checkHealthOnConnect) return { status: "connected" };
+    const key = credentialKey(provider, instanceId);
+    this.reloadHealth();
+    this.health[key] = {
+      ...this.health[key],
+      healthCheckStartedAt: new Date().toISOString(),
+    };
+    this.saveHealth();
+    const check = this.testHealth(provider, instanceId)
+      .finally(() => {
+        if (this.healthChecks.get(key) !== check) return;
+        this.reloadHealth();
+        const current = this.health[key];
+        if (current?.healthCheckStartedAt === undefined) return;
+        const { healthCheckStartedAt: _startedAt, ...rest } = current;
+        this.health[key] = rest;
+        this.saveHealth();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.healthChecks.get(key) === check) this.healthChecks.delete(key);
+      });
+    this.healthChecks.set(key, check);
+    return { status: "connected", health: "checking" };
+  }
+
+  /** Resolves when the post-login health check for `provider` has recorded its result. */
+  awaitHealthCheck(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
+    return this.healthChecks.get(credentialKey(provider, instanceId)) ?? Promise.resolve();
   }
 
   private recordOAuthFailure(
     provider: SubscriptionProviderId,
     message: string,
     failureKind: "request" | "revoked" = "request",
+    instanceId?: string,
   ): void {
+    const key = credentialKey(provider, instanceId);
     const checkedAt = new Date().toISOString();
     this.reloadHealth();
-    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[provider] ?? {};
-    this.health[provider] = {
+    const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
+    this.health[key] = {
       ...previous,
       lastFailedRequest: { at: checkedAt, message },
       failureKind,
@@ -541,21 +967,27 @@ export class SubscriptionAuthService {
     this.saveHealth();
   }
 
-  isConnected(provider: SubscriptionProviderId): boolean {
-    return this.data[provider] !== undefined;
+  isConnected(provider: SubscriptionProviderId, instanceId?: string): boolean {
+    return credentialAt(this.data, credentialKey(provider, instanceId)) !== undefined;
+  }
+
+  hasOpenAICodexAccount(): boolean {
+    const credential = this.data["openai-codex"];
+    return (
+      credential?.type === "oauth" &&
+      typeof credential.accountId === "string" &&
+      credential.accountId.length > 0
+    );
   }
 
   async startLogin(
     provider: SubscriptionProviderId,
     options: Omit<SubscriptionAuthStartInput, "provider"> = {},
   ): Promise<StartedLogin> {
-    this.reload();
+    await this.reloadAsync();
     const authMode = options.authMode ?? (provider === "opencode-go" ? "api-key" : "oauth");
     if (options.baseUrl !== undefined && authMode !== "api-key") {
       throw new Error("Custom base URLs require API-key authentication. Select API key first.");
-    }
-    if (authMode === "api-key" && provider === "cursor") {
-      throw new Error("Cursor API-key authentication is not supported. Use OAuth.");
     }
     if (options.baseUrl !== undefined && provider === "xai") {
       throw new Error(
@@ -570,10 +1002,16 @@ export class SubscriptionAuthService {
         ? undefined
         : decodeBaseUrl(options.baseUrl).replace(/\/+$/, "");
     const loginId = NodeCrypto.randomUUID();
+    const binding = options.instanceId ? { instanceId: options.instanceId } : {};
     let started: StartedLogin;
 
     if (authMode === "api-key") {
-      this.pendingLogins.set(loginId, { provider, authMode, ...(baseUrl ? { baseUrl } : {}) });
+      this.pendingLogins.set(loginId, {
+        provider,
+        authMode,
+        ...binding,
+        ...(baseUrl ? { baseUrl } : {}),
+      });
       started = {
         loginId,
         provider,
@@ -585,13 +1023,13 @@ export class SubscriptionAuthService {
       switch (provider) {
         case "anthropic": {
           const { url, verifier } = await startAnthropicLogin();
-          this.pendingLogins.set(loginId, { provider, verifier });
+          this.pendingLogins.set(loginId, { provider, verifier, ...binding });
           started = { loginId, provider, url, completion: "paste" };
           break;
         }
         case "openai-codex": {
           const pending = await startCodexDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending });
+          this.pendingLogins.set(loginId, { provider, pending, ...binding });
           started = {
             loginId,
             provider,
@@ -602,21 +1040,9 @@ export class SubscriptionAuthService {
           };
           break;
         }
-        case "cursor": {
-          const pending = await startCursorLogin();
-          this.pendingLogins.set(loginId, { provider, pending });
-          started = {
-            loginId,
-            provider,
-            url: pending.url,
-            instructions: "Approve the Cursor login in your browser.",
-            completion: "poll",
-          };
-          break;
-        }
         case "xai": {
           const pending = await startXAIDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending });
+          this.pendingLogins.set(loginId, { provider, pending, ...binding });
           started = {
             loginId,
             provider,
@@ -629,7 +1055,7 @@ export class SubscriptionAuthService {
         }
         case "kimi-for-coding": {
           const pending = await startKimiDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending });
+          this.pendingLogins.set(loginId, { provider, pending, ...binding });
           started = {
             loginId,
             provider,
@@ -641,7 +1067,7 @@ export class SubscriptionAuthService {
           break;
         }
         case "opencode-go": {
-          this.pendingLogins.set(loginId, { provider });
+          this.pendingLogins.set(loginId, { provider, ...binding });
           started = {
             loginId,
             provider,
@@ -665,7 +1091,7 @@ export class SubscriptionAuthService {
 
   /** One upstream poll for a started login. Persists credentials on success. */
   async pollLogin(loginId: string): Promise<LoginPollStatus> {
-    this.reload();
+    await this.reloadAsync();
     const login = this.pendingLogins.get(loginId);
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
@@ -680,18 +1106,14 @@ export class SubscriptionAuthService {
         const result = await pollCodexDeviceLogin(login.pending);
         return this.foldPoll(loginId, login.provider, result);
       }
-      case "cursor": {
-        const result = await pollCursorLogin(login.pending);
-        if (result.status === "pending") {
-          this.pendingLogins.set(loginId, { provider: "cursor", pending: result.pending });
-          this.savePending();
-        }
-        return this.foldPoll(loginId, login.provider, result);
-      }
       case "xai": {
         const result = await pollXAIDeviceLogin(login.pending);
         if (result.status === "pending") {
-          this.pendingLogins.set(loginId, { provider: "xai", pending: result.pending });
+          this.pendingLogins.set(loginId, {
+            provider: "xai",
+            pending: result.pending,
+            ...(login.instanceId ? { instanceId: login.instanceId } : {}),
+          });
           this.savePending();
         }
         return this.foldPoll(loginId, login.provider, result);
@@ -699,7 +1121,11 @@ export class SubscriptionAuthService {
       case "kimi-for-coding": {
         const result = await pollKimiDeviceLogin(login.pending);
         if (result.status === "pending") {
-          this.pendingLogins.set(loginId, { provider: "kimi-for-coding", pending: result.pending });
+          this.pendingLogins.set(loginId, {
+            provider: "kimi-for-coding",
+            pending: result.pending,
+            ...(login.instanceId ? { instanceId: login.instanceId } : {}),
+          });
           this.savePending();
         }
         return this.foldPoll(loginId, login.provider, result);
@@ -709,7 +1135,7 @@ export class SubscriptionAuthService {
     }
   }
 
-  private foldPoll(
+  private async foldPoll(
     loginId: string,
     provider: SubscriptionProviderId,
     result:
@@ -717,16 +1143,21 @@ export class SubscriptionAuthService {
       | { status: "pending"; nextPollMs: number }
       | { status: "pending"; nextPollMs: number; pending: unknown }
       | { status: "failed"; error: string },
-  ): LoginPollStatus {
+  ): Promise<LoginPollStatus> {
     switch (result.status) {
-      case "complete":
-        this.reload();
-        if (!this.pendingLogins.has(loginId))
-          return { status: "failed", error: "Login cancelled. Start again." };
+      case "complete": {
+        await this.reloadAsync();
+        const login = this.pendingLogins.get(loginId);
+        if (!login) return { status: "failed", error: "Login cancelled. Start again." };
         this.pendingLogins.delete(loginId);
         this.savePending();
-        this.setCredential(provider, result.credentials);
-        return { status: "connected" };
+        this.reloadHealth();
+        delete this.health[credentialKey(provider, login.instanceId)];
+        this.clearImageHealth(provider, login.instanceId);
+        this.saveHealth();
+        await this.setCredential(provider, result.credentials, login.instanceId);
+        return this.startHealthCheck(provider, login.instanceId);
+      }
       case "failed":
         this.pendingLogins.delete(loginId);
         this.savePending();
@@ -738,7 +1169,7 @@ export class SubscriptionAuthService {
 
   /** Finish a paste-completion login (Anthropic) with the pasted code. */
   async completeLogin(loginId: string, code: string): Promise<LoginPollStatus> {
-    this.reload();
+    await this.reloadAsync();
     const login = this.pendingLogins.get(loginId);
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
@@ -749,20 +1180,35 @@ export class SubscriptionAuthService {
         return { status: "failed", error: "Paste a non-empty API key on one line." };
       }
       const baseUrl = "baseUrl" in login ? login.baseUrl : undefined;
-      this.reload();
-      this.data[login.provider] = {
-        type: "api-key",
-        access: apiKey,
-        ...(baseUrl ? { baseUrl } : {}),
-      };
-      delete this.health[login.provider];
-      this.save();
+      const key = credentialKey(login.provider, login.instanceId);
+      // Claim the login inside the store update, so a cancel that lands while the
+      // update waits for the file wins and nothing is saved.
+      let claimed = false;
+      await this.updateCredentials((data) => {
+        this.reloadLocal();
+        if (!this.pendingLogins.has(loginId)) return data;
+        claimed = true;
+        for (const [id, pending] of this.pendingLogins) {
+          if (credentialKey(pending.provider, pending.instanceId) === key)
+            this.pendingLogins.delete(id);
+        }
+        this.savePending();
+        return {
+          ...data,
+          [key]: {
+            type: "api-key",
+            access: apiKey,
+            connectionId: NodeCrypto.randomUUID(),
+            ...(baseUrl ? { baseUrl } : {}),
+          },
+        };
+      });
+      if (!claimed) return { status: "failed", error: "Login cancelled. Start again." };
+      this.reloadHealth();
+      delete this.health[key];
+      this.clearImageHealth(login.provider, login.instanceId);
       this.saveHealth();
-      for (const [id, pending] of this.pendingLogins) {
-        if (pending.provider === login.provider) this.pendingLogins.delete(id);
-      }
-      this.savePending();
-      return { status: "connected" };
+      return this.startHealthCheck(login.provider, login.instanceId);
     }
     if (login.provider !== "anthropic") {
       return { status: "failed", error: "This login completes by polling, not with a code." };
@@ -770,13 +1216,16 @@ export class SubscriptionAuthService {
 
     try {
       const credentials = await completeAnthropicLogin(code, login.verifier);
-      this.reload();
+      await this.reloadAsync();
       if (!this.pendingLogins.has(loginId))
         return { status: "failed", error: "Login cancelled. Start again." };
       this.pendingLogins.delete(loginId);
       this.savePending();
-      this.setCredential("anthropic", credentials);
-      return { status: "connected" };
+      this.reloadHealth();
+      delete this.health[credentialKey("anthropic", login.instanceId)];
+      this.saveHealth();
+      await this.setCredential("anthropic", credentials, login.instanceId);
+      return this.startHealthCheck("anthropic", login.instanceId);
     } catch (error) {
       // Keep the pending login: a mangled paste should not force a restart.
       return {
@@ -787,32 +1236,65 @@ export class SubscriptionAuthService {
   }
 
   cancelLogin(loginId: string): void {
-    this.reload();
+    this.reloadLocal();
     this.pendingLogins.delete(loginId);
     this.savePending();
   }
 
-  logout(provider: SubscriptionProviderId): void {
-    this.reload();
+  async logout(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
+    this.reloadLocal();
+    const key = credentialKey(provider, instanceId);
     for (const [loginId, pending] of this.pendingLogins) {
-      if (pending.provider === provider) this.pendingLogins.delete(loginId);
+      if (credentialKey(pending.provider, pending.instanceId) === key)
+        this.pendingLogins.delete(loginId);
     }
     this.savePending();
-    delete this.data[provider];
+    await this.updateCredentials(({ [key]: _removed, ...rest }) => rest);
     this.reloadHealth();
-    delete this.health[provider];
-    this.save();
+    delete this.health[key];
+    this.clearImageHealth(provider, instanceId);
     this.saveHealth();
   }
 
-  private setCredential(provider: SubscriptionProviderId, credentials: OAuthCredentials): void {
-    if (this.data[provider]?.type === "api-key") {
+  private clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
+    if (instanceId !== undefined) return;
+    if (provider === "openai-codex") delete this.health["image:chatgpt"];
+    if (provider === "xai") delete this.health["image:grok"];
+  }
+
+  /** Sign out accounts that belonged to provider instances removed from settings. */
+  async pruneDeletedInstanceCredentials(
+    previous: Readonly<Record<string, { readonly driver: string }>>,
+    current: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    for (const [instanceId, instance] of Object.entries(previous)) {
+      if (Object.hasOwn(current, instanceId)) continue;
+      const provider = SUBSCRIPTION_PROVIDER_IDS.find(
+        (candidate) => defaultInstanceByProvider[candidate] === instance.driver,
+      );
+      if (!provider || instanceId === defaultInstanceByProvider[provider]) continue;
+      await this.logout(provider, instanceId);
+    }
+  }
+
+  private async setCredential(
+    provider: SubscriptionProviderId,
+    credentials: OAuthCredentials,
+    instanceId?: string,
+    preserveHealth = false,
+  ): Promise<void> {
+    const key = credentialKey(provider, instanceId);
+    if (!preserveHealth && credentialAt(this.data, key)?.type === "api-key") {
       this.reloadHealth();
-      delete this.health[provider];
+      delete this.health[key];
+      this.clearImageHealth(provider, instanceId);
       this.saveHealth();
     }
-    this.data[provider] = { type: "oauth", ...credentials };
-    this.save();
+    // A login is a new connection, so usage readings from the previous account do not carry over.
+    await this.updateCredentials((data) => ({
+      ...data,
+      [key]: { ...credentials, type: "oauth", connectionId: NodeCrypto.randomUUID() },
+    }));
   }
 
   /**
@@ -820,8 +1302,12 @@ export class SubscriptionAuthService {
    * Concurrent callers share one refresh; a failed refresh clears nothing —
    * the user re-connects from Settings.
    */
-  async getAccessToken(provider: SubscriptionProviderId): Promise<string | undefined> {
-    const credential = this.data[provider];
+  async getAccessToken(
+    provider: SubscriptionProviderId,
+    instanceId?: string,
+  ): Promise<string | undefined> {
+    const key = credentialKey(provider, instanceId);
+    const credential = credentialAt(this.data, key);
     if (!credential) return undefined;
 
     if (credential.type === "api-key") return credential.access;
@@ -830,47 +1316,98 @@ export class SubscriptionAuthService {
       return credential.access;
     }
 
-    const inFlight = this.refreshInFlight.get(provider);
+    const inFlight = this.refreshInFlight.get(key);
     if (inFlight) return inFlight;
 
-    const refresh = this.refreshCredential(provider, credential).finally(() => {
-      this.refreshInFlight.delete(provider);
+    const refresh = this.refreshCredential(provider, credential, instanceId).finally(() => {
+      this.refreshInFlight.delete(key);
     });
-    this.refreshInFlight.set(provider, refresh);
+    this.refreshInFlight.set(key, refresh);
     return refresh;
   }
 
-  async getPlanAccessToken(provider: SubscriptionProviderId): Promise<string | undefined> {
-    const apiKey = this.getApiKeyCredential(provider);
+  async getPlanAccessToken(
+    provider: SubscriptionProviderId,
+    instanceId?: string,
+  ): Promise<string | undefined> {
+    const apiKey = this.getApiKeyCredential(provider, instanceId);
     if (apiKey && (provider !== "opencode-go" || apiKey.baseUrl)) return undefined;
-    return this.getAccessToken(provider);
+    return this.getAccessToken(provider, instanceId);
   }
 
-  getApiKeyCredential(provider: SubscriptionProviderId): ApiKeyCredential | undefined {
-    this.reload();
-    const credential = this.data[provider];
+  /**
+   * The stored plan account and its access token. `accessToken` is null while the token is
+   * temporarily unavailable, so callers still know which account is connected.
+   */
+  async getPlanAccess(
+    provider: SubscriptionProviderId,
+  ): Promise<{ readonly accessToken: string | null; readonly accountId: string } | undefined> {
+    const key = credentialKey(provider);
+    await this.reloadAsync();
+    const credential = credentialAt(this.data, key);
+    if (
+      !credential ||
+      (credential.type === "api-key" && (provider !== "opencode-go" || credential.baseUrl))
+    )
+      return undefined;
+    if (typeof credential.connectionId !== "string" || !credential.connectionId) {
+      await this.updateCredentials((data) => {
+        const current = credentialAt(data, key);
+        if (!current || (typeof current.connectionId === "string" && current.connectionId))
+          return data;
+        return { ...data, [key]: { ...current, connectionId: NodeCrypto.randomUUID() } };
+      });
+    }
+    const accessToken = await this.getPlanAccessToken(provider).catch(() => undefined);
+    await this.reloadAsync();
+    const current = credentialAt(this.data, key);
+    if (!current) return undefined;
+    const accountId =
+      current.type === "oauth" && typeof current.accountId === "string" && current.accountId
+        ? current.accountId
+        : current.connectionId;
+    if (typeof accountId !== "string" || !accountId)
+      throw new Error("Plan account identity is unavailable.");
+    return { accessToken: accessToken ? current.access : null, accountId };
+  }
+
+  getApiKeyCredential(
+    provider: SubscriptionProviderId,
+    instanceId?: string,
+  ): ApiKeyCredential | undefined {
+    const credential = credentialAt(this.data, credentialKey(provider, instanceId));
     return credential?.type === "api-key" ? credential : undefined;
   }
 
-  async getOpenAICodexAccess(): Promise<
-    { readonly accessToken: string; readonly accountId: string } | undefined
-  > {
-    this.reload();
-    const accessToken = await this.getAccessToken("openai-codex");
-    const credential = this.data["openai-codex"];
+  getOAuthCredential(
+    provider: SubscriptionProviderId,
+    instanceId?: string,
+  ): OAuthCredential | undefined {
+    const credential = credentialAt(this.data, credentialKey(provider, instanceId));
+    return credential?.type === "oauth" ? credential : undefined;
+  }
+
+  async getOpenAICodexAccess(
+    instanceId?: string,
+  ): Promise<{ readonly accessToken: string; readonly accountId: string } | undefined> {
+    await this.reloadAsync();
+    const accessToken = await this.getAccessToken("openai-codex", instanceId);
+    const credential = credentialAt(this.data, credentialKey("openai-codex", instanceId));
     const accountId = credential?.type === "oauth" ? credential.accountId : undefined;
     return accessToken && typeof accountId === "string" && accountId.length > 0
       ? { accessToken, accountId }
       : undefined;
   }
 
-  async getKimiForCodingAccess(): Promise<
+  async getKimiForCodingAccess(
+    instanceId?: string,
+  ): Promise<
     | { readonly accessToken: string; readonly deviceId?: string; readonly baseUrl?: string }
     | undefined
   > {
-    this.reload();
-    const accessToken = await this.getAccessToken("kimi-for-coding");
-    const credential = this.data["kimi-for-coding"];
+    await this.reloadAsync();
+    const accessToken = await this.getAccessToken("kimi-for-coding", instanceId);
+    const credential = credentialAt(this.data, credentialKey("kimi-for-coding", instanceId));
     if (credential?.type === "api-key" && accessToken) {
       return { accessToken, ...(credential.baseUrl ? { baseUrl: credential.baseUrl } : {}) };
     }
@@ -881,16 +1418,32 @@ export class SubscriptionAuthService {
   private async refreshCredential(
     provider: SubscriptionProviderId,
     credential: OAuthCredential,
+    instanceId?: string,
   ): Promise<string | undefined> {
+    const key = credentialKey(provider, instanceId);
     try {
       const refreshed = await this.runRefresh(provider, credential);
-      this.reload();
-      const current = this.data[provider];
-      if (current?.type !== "oauth" || current.refresh !== credential.refresh) {
+      await this.reloadAsync();
+      // Another service may have refreshed the same login meanwhile. Providers
+      // that do not rotate refresh tokens leave `refresh` unchanged, so only the
+      // access token shows whether the stored credential is still the one refreshed.
+      const current = credentialAt(this.data, key);
+      if (
+        current?.type !== "oauth" ||
+        current.access !== credential.access ||
+        current.refresh !== credential.refresh
+      ) {
         return current?.access;
       }
-      this.setCredential(provider, refreshed);
-      return refreshed.access;
+      const saved = await this.updateCredentials((data) => {
+        const latest = credentialAt(data, key);
+        return latest?.type === "oauth" &&
+          latest.access === credential.access &&
+          latest.refresh === credential.refresh
+          ? { ...data, [key]: refreshedCredential(latest, refreshed) }
+          : data;
+      });
+      return credentialAt(saved, key)?.access;
     } catch (cause) {
       // Refresh failed — the user must re-connect. Keep the stored credential
       // so status still shows which account was linked.
@@ -898,6 +1451,7 @@ export class SubscriptionAuthService {
         provider,
         cause instanceof Error ? cause.message : "The provider rejected the token refresh.",
         oauthFailureKind(cause),
+        instanceId,
       );
       return undefined;
     }
@@ -912,8 +1466,6 @@ export class SubscriptionAuthService {
         return refreshAnthropicToken(credential.refresh);
       case "openai-codex":
         return refreshCodexToken(credential);
-      case "cursor":
-        return refreshCursorToken(credential);
       case "xai":
         return refreshXAIToken(credential.refresh);
       case "kimi-for-coding":

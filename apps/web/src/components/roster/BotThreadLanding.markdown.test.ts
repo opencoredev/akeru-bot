@@ -40,7 +40,8 @@ describe("BotThreadLanding message formatting", () => {
     expect(assistantRow).toContain('className="min-w-0 flex-1"');
     expect(assistantRow).not.toContain("onTaskListChange");
     const userRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "UserMessageRow");
-    expect(userRow).toContain('className="whitespace-pre-wrap"');
+    // Sent text goes through SentMessageText, which keeps a reply's backlink compact.
+    expect(userRow).toContain("<SentMessageText");
   });
 
   it("renders step meters for bot and group replies", () => {
@@ -61,8 +62,8 @@ describe("BotThreadLanding message formatting", () => {
       "utf8",
     );
 
-    expect(botSource).toContain("<BotConversationScrollArea>");
-    expect(groupSource).toContain("<BotConversationScrollArea>");
+    expect(botSource).toContain("<BotConversationScrollArea");
+    expect(groupSource).toContain("<BotConversationScrollArea");
     expect(botSource).not.toContain("justify-end gap-4");
     expect(groupSource).not.toContain("justify-end gap-4");
   });
@@ -96,8 +97,8 @@ describe("BotThreadLanding message formatting", () => {
     }
     // Only the "Unavailable bot" layout omits reactions.
     const assistantControls = rowComponent(source, "AssistantMessageRow").split("<MessageControls");
-    expect(assistantControls[2]).toContain("onReactionChange=");
-    expect(rowComponent(source, "UserMessageRow")).toContain("onReactionChange=");
+    expect(assistantControls[2]).toContain("{...reactions.controls}");
+    expect(rowComponent(source, "UserMessageRow")).toContain("{...reactions.controls}");
   });
 
   it("mounts the voice action in the live bot chat header", () => {
@@ -110,5 +111,39 @@ describe("BotThreadLanding message formatting", () => {
     expect(source).toContain('runtime.latestTurn?.state === "running"');
     expect(source).toContain("voiceCall.activeCall?.botId === bot.id");
     expect(source).toContain("voiceCall.startingBotId === bot.id");
+  });
+
+  it("disables reactions with an accessible reason while the linked thread is unavailable", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+    const rows = readSibling("BotChatMessageRows.tsx");
+
+    expect(source).toContain(
+      "const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;",
+    );
+    expect(rows).toContain("<UnavailableReactionControl");
+    expect(rows).toContain("aria-label={unavailableReason}");
+    expect(rows).toContain("disabled:pointer-events-auto");
+    expect(rows).toContain("if (!onReactionChange) return { controls: {}, chips: {} };");
+    expect(source).not.toContain(
+      'if (!threadRef) {\n      toastManager.add({ type: "error", title: t("Could not update reaction") });',
+    );
+  });
+
+  it("renders routine receipts as readable actions with an explicit failed tone", () => {
+    const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
+    const start = source.indexOf("function RoutineReceiptRow");
+    const end = source.indexOf("const NO_ENVIRONMENT", start);
+    const receiptRow = source.slice(start, end);
+
+    expect(receiptRow).toContain('const Row = opensRoutines ? "button" : "div"');
+    expect(receiptRow).toContain("onClick={opensRoutines ? onOpenRoutines : undefined}");
+    expect(source).toContain("{...(onOpenRoutines ? { onOpenRoutines } : {})}");
+    // The foreground token keeps failed text at WCAG AA on its tinted row in
+    // every built-in theme; the saturated destructive color does not in dark mode.
+    expect(receiptRow).toContain('error && "bg-destructive/8 text-destructive-foreground"');
+    expect(receiptRow).toContain("hover:bg-destructive/12 hover:text-destructive-foreground");
+    expect(receiptRow).not.toMatch(/text-destructive(?!-foreground)/);
+    expect(receiptRow).toContain("whitespace-normal break-words");
+    expect(receiptRow).not.toContain("truncate");
   });
 });

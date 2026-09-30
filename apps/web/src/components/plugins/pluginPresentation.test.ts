@@ -9,6 +9,7 @@ import {
   buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
+  pluginBlocker,
   pluginBrokerName,
   pluginConnectionLabel,
   pluginMatchesQuery,
@@ -215,12 +216,22 @@ describe("plugin presentation", () => {
   });
 
   it("uses state-correct actions without claiming a successful connection", () => {
-    expect(pluginPrimaryAction(firecrawl, undefined).label).toBe("Connect");
+    expect(pluginPrimaryAction(firecrawl, undefined)).toEqual({
+      label: "Connect",
+      enable: null,
+      blocker:
+        firecrawl.connection.type === "verification-pending"
+          ? firecrawl.connection.blocker
+          : undefined,
+    });
     expect(pluginPrimaryAction(apiKeyPlugin, undefined)).toEqual({
       label: "Add key",
       enable: true,
     });
     expect(pluginPrimaryAction(firecrawl, server(true)).label).toBe("Disable");
+    // A pending entry keeps Disable for installed servers, even when their
+    // access needs reconnecting, but never reconnects into a connection
+    // recipe that has not passed the lifecycle.
     expect(
       pluginPrimaryAction(firecrawl, server(true), {
         id: "mcp-builtin-firecrawl",
@@ -233,9 +244,16 @@ describe("plugin presentation", () => {
         dependentBots: [],
         dependentRoutines: [],
       }),
-    ).toEqual({ label: "Reconnect", enable: true });
-    expect(pluginPrimaryAction(firecrawl, server(false)).label).toBe("Reconnect");
-    expect(pluginConnectionLabel(firecrawl)).toBe("OAuth");
+    ).toEqual({ label: "Disable", enable: false });
+    expect(pluginPrimaryAction(firecrawl, server(false))).toEqual({
+      label: "Connect",
+      enable: null,
+      blocker:
+        firecrawl.connection.type === "verification-pending"
+          ? firecrawl.connection.blocker
+          : undefined,
+    });
+    expect(pluginConnectionLabel(firecrawl)).toBe("Verification pending");
   });
 
   it("blocks unavailable plugins and names the approval blocker", () => {
@@ -266,5 +284,20 @@ describe("plugin presentation", () => {
       enable: true,
     });
     expect(pluginConnectionLabel(brokeredPlugin)).toBe("OAuth");
+    const pendingBrokered = {
+      ...brokeredPlugin,
+      connection: {
+        ...brokeredPlugin.connection,
+        pendingBlocker: "The brokered lifecycle still needs verification.",
+      },
+    } satisfies PluginDirectoryDefinition;
+    expect(pluginPrimaryAction(pendingBrokered, undefined)).toEqual({
+      label: "Connect",
+      enable: null,
+      blocker: "The brokered lifecycle still needs verification.",
+    });
+    expect(pluginBlocker(pendingBrokered)).toBe("The brokered lifecycle still needs verification.");
+    expect(pluginConnectionLabel(pendingBrokered)).toBe("Verification pending");
+    expect(pluginPrimaryAction(pendingBrokered, server(true)).label).toBe("Disable");
   });
 });

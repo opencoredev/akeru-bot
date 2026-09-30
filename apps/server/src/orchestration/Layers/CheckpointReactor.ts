@@ -8,7 +8,6 @@ import {
   TurnId,
   type OrchestrationEvent,
   type ProviderRuntimeEvent,
-  type VcsStatusLocalResult,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -35,7 +34,7 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import { RuntimeReceiptBus } from "../Services/RuntimeReceiptBus.ts";
 import type { CheckpointStoreError } from "../../checkpointing/Errors.ts";
 import type { OrchestrationDispatchError } from "../Errors.ts";
-import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
+import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -86,7 +85,7 @@ const make = Effect.gen(function* () {
   const checkpointStore = yield* CheckpointStore.CheckpointStore;
   const receiptBus = yield* RuntimeReceiptBus;
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
-  const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
+  const git = yield* GitVcsDriver.GitVcsDriver;
   const startedTurns = new Map<ThreadId, TurnId>();
   const pending = new Set<ThreadId>();
 
@@ -494,17 +493,18 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const refreshLocalGitStatusFromTurnCompletion = Effect.fn(
-    "refreshLocalGitStatusFromTurnCompletion",
-  )(function* (event: Extract<ProviderRuntimeEvent, { type: "turn.completed" }>) {
+  const followBranchFromTurnCompletion = Effect.fn("followBranchFromTurnCompletion")(function* (
+    event: Extract<ProviderRuntimeEvent, { type: "turn.completed" }>,
+  ) {
     const sessionRuntime = yield* resolveSessionRuntimeForThread(event.threadId);
     if (Option.isNone(sessionRuntime)) {
       return;
     }
 
-    const local = yield* vcsStatusBroadcaster.refreshLocalStatus(sessionRuntime.value.cwd).pipe(
+    const checkedOutBranch = yield* git.statusDetailsLocal(sessionRuntime.value.cwd).pipe(
+      Effect.map((details) => (details.isRepo ? details.branch : null)),
       Effect.catch((error) =>
-        Effect.logWarning("failed to refresh local git status after turn completion", {
+        Effect.logWarning("failed to read the worktree branch after turn completion", {
           threadId: event.threadId,
           turnId: event.turnId ?? null,
           cwd: sessionRuntime.value.cwd,
@@ -512,13 +512,11 @@ const make = Effect.gen(function* () {
         }).pipe(Effect.as(null)),
       ),
     );
-    if (local !== null) {
-      yield* followWorktreeBranchDrift({
-        threadId: event.threadId,
-        cwd: sessionRuntime.value.cwd,
-        local,
-      });
-    }
+    yield* followWorktreeBranchDrift({
+      threadId: event.threadId,
+      cwd: sessionRuntime.value.cwd,
+      checkedOutBranch,
+    });
   });
 
   // A `git checkout` run inside a thread's dedicated worktree (by an agent or
@@ -531,11 +529,11 @@ const make = Effect.gen(function* () {
   const followWorktreeBranchDrift = Effect.fn("followWorktreeBranchDrift")(function* (input: {
     readonly threadId: ThreadId;
     readonly cwd: string;
-    readonly local: VcsStatusLocalResult;
+    readonly checkedOutBranch: string | null;
   }) {
     // Detached HEAD has no branch to adopt; a temporary placeholder checkout
     // means the first-turn auto-rename is still in flight — don't race it.
-    const checkedOutBranch = input.local.refName;
+    const checkedOutBranch = input.checkedOutBranch;
     if (checkedOutBranch === null || isTemporaryWorktreeBranch(checkedOutBranch)) {
       return;
     }
@@ -591,16 +589,16 @@ const make = Effect.gen(function* () {
     );
   });
 
-  // Refreshing git status can wait on remote lookups under the vcs status
-  // write lock. Run it on its own worker so file capture for this turn (and
-  // checkpoints for other threads) never wait behind that work.
+  // Reading the worktree branch shells out to git. Run it on its own worker so
+  // file capture for this turn (and checkpoints for other threads) never wait
+  // behind that work.
   const statusRefreshWorker = yield* makeDrainableWorker(
     (event: Extract<ProviderRuntimeEvent, { type: "turn.completed" }>) =>
-      refreshLocalGitStatusFromTurnCompletion(event).pipe(
+      followBranchFromTurnCompletion(event).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : Effect.logWarning("failed to refresh git status after turn completion", {
+            : Effect.logWarning("failed to follow the worktree branch after turn completion", {
                 threadId: event.threadId,
                 cause: Cause.pretty(cause),
               }),

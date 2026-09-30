@@ -189,6 +189,7 @@ const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(function* (opt
     connect: Effect.void,
     disconnect: Effect.void,
     retryNow: Effect.void,
+    retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
   const cache = Persistence.EnvironmentCacheStore.of({
     loadShell: () => Effect.succeed(Option.none()),
@@ -200,10 +201,6 @@ const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(function* (opt
     removeThread: () => Effect.void,
     loadServerConfig: () => Effect.succeed(Option.none()),
     saveServerConfig: () => Effect.void,
-    loadVcsRefs: () => Effect.succeed(Option.none()),
-    saveVcsRefs: () => Effect.void,
-    removeVcsRefs: () => Effect.void,
-    clearVcsRefs: () => Effect.void,
     clear: () => Effect.void,
   });
   const threadState = yield* makeEnvironmentThreadState(THREAD_ID).pipe(

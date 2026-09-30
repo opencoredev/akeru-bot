@@ -20,6 +20,11 @@ describe("subscription auth contracts", () => {
     expect(
       decode({ provider: "anthropic", authMode: "api-key", baseUrl: "https://proxy.example/v1" }),
     ).toEqual({ provider: "anthropic", authMode: "api-key", baseUrl: "https://proxy.example/v1" });
+    expect(decode({ provider: "anthropic", instanceId: "claude_work" })).toEqual({
+      provider: "anthropic",
+      instanceId: "claude_work",
+    });
+    expect(() => decode({ provider: "anthropic", instanceId: "bad instance" })).toThrow();
   });
 
   it.each([
@@ -36,6 +41,38 @@ describe("subscription auth contracts", () => {
         baseUrl,
       }),
     ).toThrow();
+  });
+
+  it("decodes inbox items with and without a memory approval", () => {
+    const item = {
+      id: "item-1",
+      incidentKey: "approval:request-1",
+      kind: "approval-request",
+      status: "open",
+      botId: "bot-1",
+      botName: "Ada",
+      taskOrRoutine: "Planning",
+      lastFailure: "This request needs approval.",
+      nextAction: "Open the chat.",
+      firstSeenAt: "2026-09-01T00:00:00.000Z",
+      lastSeenAt: "2026-09-01T00:00:00.000Z",
+      occurrenceCount: 1,
+    };
+    const memoryApproval = {
+      candidateId: "candidate-1",
+      fact: "The project uses Bun.",
+      scope: "project",
+      sensitive: false,
+      sourceThreadId: "thread-1",
+      authorBotId: "bot-1",
+      affectedBotIds: ["bot-1"],
+    };
+    const decoded = decodeStatuses({
+      providers: [],
+      inbox: [item, { ...item, id: "item-2", memoryApproval }],
+    });
+    expect(decoded.inbox[0]?.memoryApproval).toBeUndefined();
+    expect(decoded.inbox[1]?.memoryApproval).toEqual(memoryApproval);
   });
 
   it("exposes API-key metadata but strips secrets from status", () => {
@@ -55,6 +92,28 @@ describe("subscription auth contracts", () => {
     expect(decoded.providers[0]).toMatchObject({
       authMode: "api-key",
       baseUrl: "http://localhost:8080/v1",
+    });
+    expect(JSON.stringify(decoded)).not.toContain("secret");
+    expect(decoded.accounts).toEqual([]);
+  });
+
+  it("exposes separate account status without credentials", () => {
+    const decoded = decodeStatuses({
+      providers: [],
+      accounts: [
+        {
+          provider: "xai",
+          instanceId: "grok_work",
+          connected: true,
+          accountLabel: "work@example.com",
+          access: "secret",
+        },
+      ],
+    });
+    expect(decoded.accounts[0]).toMatchObject({
+      provider: "xai",
+      instanceId: "grok_work",
+      accountLabel: "work@example.com",
     });
     expect(JSON.stringify(decoded)).not.toContain("secret");
   });
@@ -118,6 +177,25 @@ describe("subscription auth contracts", () => {
         }).access[0],
       ).toMatchObject({ health, temporary: true });
     }
+  });
+
+  it("decodes the optional health-checking flag", () => {
+    expect(
+      decodeStatuses({
+        providers: [
+          {
+            provider: "kimi-for-coding",
+            connected: true,
+            health: "detected",
+            healthChecking: true,
+          },
+        ],
+      }).providers[0],
+    ).toMatchObject({ health: "detected", healthChecking: true });
+    expect(
+      decodeStatuses({ providers: [{ provider: "xai", connected: true, health: "healthy" }] })
+        .providers[0],
+    ).not.toHaveProperty("healthChecking");
   });
 
   it("decodes a remote-safe device login", () => {

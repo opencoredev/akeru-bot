@@ -26,6 +26,7 @@ import {
   RoutineRunningPayload,
   RoutineSkillAssignedPayload,
   RoutineSkillUnassignedPayload,
+  ThreadChannelDeliverySetPayload,
   ThreadTurnResumeRequestedPayload,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -406,6 +407,7 @@ export function projectEvent(
             sandbox: payload.sandbox,
             runtimeMode: payload.runtimeMode,
             usageCap: payload.usageCap,
+            imageProvider: payload.imageProvider,
             personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
             channelBindings: payload.channelBindings,
@@ -441,6 +443,9 @@ export function projectEvent(
             ...(payload.sandbox !== undefined ? { sandbox: payload.sandbox } : {}),
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
             ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
+            ...(payload.imageProvider !== undefined
+              ? { imageProvider: payload.imageProvider }
+              : {}),
             ...(payload.personalityTone !== undefined
               ? { personalityTone: payload.personalityTone }
               : {}),
@@ -774,6 +779,8 @@ export function projectEvent(
             projectId: payload.projectId,
             botId: payload.botId ?? null,
             groupId: payload.groupId ?? null,
+            parentThreadId: payload.parentThreadId ?? null,
+            parentDelegationId: payload.parentDelegationId ?? null,
             respondingBotId: null,
             title: payload.title,
             modelSelection: payload.modelSelection,
@@ -820,6 +827,8 @@ export function projectEvent(
           threads: updateThread(nextBase.threads, payload.threadId, {
             botId: payload.botId,
             groupId: payload.groupId,
+            // A new owner makes the last responder stale, so a detached chat cannot route to it.
+            respondingBotId: payload.botId,
             updatedAt: payload.updatedAt,
           }),
         })),
@@ -1078,6 +1087,30 @@ export function projectEvent(
         };
       });
 
+    case "thread.channel-delivery-set":
+      return decodeForEvent(
+        ThreadChannelDeliverySetPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = findProjectedThread(nextBase.threads, payload.threadId);
+          if (!thread) return nextBase;
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              messages: thread.messages.map((entry) =>
+                entry.id === payload.messageId
+                  ? { ...entry, channelDelivery: payload.delivery }
+                  : entry,
+              ),
+              updatedAt: event.occurredAt,
+            }),
+          };
+        }),
+      );
+
     case "thread.message-reaction-set":
       return decodeForEvent(
         ThreadMessageReactionSetPayload,
@@ -1148,11 +1181,12 @@ export function projectEvent(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
           if (!thread?.session) return nextBase;
+          const { unavailability: _staleUnavailability, ...session } = thread.session;
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
               session: {
-                ...thread.session,
+                ...session,
                 status: "starting",
                 lastError: null,
                 updatedAt: payload.createdAt,
@@ -1209,6 +1243,8 @@ export function projectEvent(
                         ? thread.latestTurn.assistantMessageId
                         : null,
                     respondingBotId: thread.respondingBotId ?? null,
+                    ...(session.lastError ? { errorMessage: session.lastError } : {}),
+                    ...(session.unavailability ? { unavailability: session.unavailability } : {}),
                   }
                 : thread.latestTurn !== null &&
                     thread.latestTurn.state === "running" &&
@@ -1216,6 +1252,8 @@ export function projectEvent(
                   ? {
                       ...thread.latestTurn,
                       state: settledTurnState,
+                      ...(session.lastError ? { errorMessage: session.lastError } : {}),
+                      ...(session.unavailability ? { unavailability: session.unavailability } : {}),
                       // A running turn's completedAt can only hold a mid-turn
                       // placeholder checkpoint timestamp — the session leaving
                       // "running" is the authoritative turn end.

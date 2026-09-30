@@ -18,6 +18,7 @@ function environment(
     displayUrl,
     connectionState: "connected",
     connectionError: null,
+    connectionErrorCode: null,
     connectionErrorTraceId: null,
   };
 }

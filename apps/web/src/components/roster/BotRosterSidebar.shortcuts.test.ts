@@ -10,8 +10,7 @@ describe("bot roster shortcuts", () => {
       source.indexOf("const bot = resolveRosterShortcutBot"),
     );
 
-    expect(shortcutContext).toContain("terminalFocus: isTerminalFocused()");
-    expect(shortcutContext).toContain("terminalOpen");
+    expect(shortcutContext).not.toContain("terminalFocus");
     expect(shortcutContext).toContain("previewFocus: isPreviewFocused()");
     expect(shortcutContext).toContain("previewOpen");
     expect(shortcutContext).toContain("modelPickerOpen: isModelPickerOpen()");

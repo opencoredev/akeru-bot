@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import type {
   NativeStackHeaderItem,
   NativeStackNavigationOptions,
@@ -13,6 +14,7 @@ import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useWorkspaceState } from "../../state/workspace";
 import {
   workspaceConnectionStatusPresentation,
+  type TranslateMessage,
   type WorkspaceConnectionStatusPresentation,
 } from "./workspace-connection-status";
 
@@ -28,9 +30,11 @@ const FADE_IN_MS = 250;
  * workspace has been in a non-connected state for STATUS_SHOW_DELAY_MS,
  * then live-updating until the workspace reconnects (null again immediately).
  */
-function useDelayedConnectionStatus(): WorkspaceConnectionStatusPresentation | null {
+function useDelayedConnectionStatus(
+  t: TranslateMessage,
+): WorkspaceConnectionStatusPresentation | null {
   const { state } = useWorkspaceState();
-  const presentation = workspaceConnectionStatusPresentation(state);
+  const presentation = workspaceConnectionStatusPresentation(state, t);
   const hasStatus = presentation !== null;
   const [visible, setVisible] = useState(false);
 
@@ -98,8 +102,9 @@ export function WorkspaceConnectionTitle(props: {
   /** Horizontal correction so the status aligns with the brand in native title slots. */
   readonly statusOffset?: number;
 }) {
+  const { t } = useMobileI18n();
   const iconColor = String(useThemeColor("--color-icon-muted"));
-  const status = useDelayedConnectionStatus();
+  const status = useDelayedConnectionStatus(t);
   const size = props.size ?? "navbar";
 
   if (status === null) {
@@ -115,7 +120,7 @@ export function WorkspaceConnectionTitle(props: {
   return (
     <StatusFadeIn grow={props.grow}>
       <Pressable
-        accessibilityHint="Opens environment settings"
+        accessibilityHint={t("Opens environment settings")}
         accessibilityLabel={status.label}
         accessibilityRole="button"
         disabled={props.onPress === undefined}
@@ -161,9 +166,9 @@ export function getConnectionAwareBrandHeaderOptions(opts: {
 }): NativeStackNavigationOptions {
   if (Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED) {
     return {
-      headerTitle: "Chats",
+      headerTitle: "Bots",
       headerTitleStyle: { color: "transparent", fontSize: 18, fontWeight: "800" },
-      title: "Chats",
+      title: "Bots",
       unstable_headerLeftItems: (): NativeStackHeaderItem[] => [
         {
           element: (
@@ -189,6 +194,6 @@ export function getConnectionAwareBrandHeaderOptions(opts: {
       />
     ),
     headerTitleStyle: opts.fallbackTitleStyle,
-    title: "Chats",
+    title: "Bots",
   };
 }

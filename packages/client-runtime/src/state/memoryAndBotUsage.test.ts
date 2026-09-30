@@ -54,6 +54,7 @@ const runtimeFor = Effect.fn("memoryAndBotUsage.runtimeFor")(function* (
     connect: Effect.void,
     disconnect: Effect.void,
     retryNow: Effect.void,
+    retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
   const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
     Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);

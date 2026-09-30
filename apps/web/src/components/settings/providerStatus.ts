@@ -1,4 +1,8 @@
-import type { ServerProvider, ServerProviderVersionAdvisory } from "@t3tools/contracts";
+import type {
+  ServerProvider,
+  ServerProviderVersionAdvisory,
+  SubscriptionProviderStatus,
+} from "@t3tools/contracts";
 
 /**
  * Visual treatment for each server-reported provider status. Centralized so
@@ -115,4 +119,70 @@ export function getProviderVersionAdvisoryPresentation(
     updateCommand: advisory.updateCommand,
     emphasis: "normal" as const,
   };
+}
+
+/** Tone of the one-line status shown next to a provider or channel. */
+export type ConnectionTone = "positive" | "neutral" | "attention" | "pending";
+
+export interface ProviderConnectionState {
+  readonly tone: ConnectionTone;
+  readonly label: string;
+  /** Why the provider needs attention, when the server said so. */
+  readonly detail: string | null;
+}
+
+const ACCOUNT_PROBLEM_LABELS: Partial<
+  Record<NonNullable<SubscriptionProviderStatus["health"]>, string>
+> = {
+  expired: "Sign-in expired",
+  revoked: "Access revoked",
+  failed: "Check failed",
+  "failed-first-request": "First request failed",
+};
+
+/** Headline state of a subscription or API key account. */
+export function accountConnectionState(
+  status: SubscriptionProviderStatus | undefined,
+  pending: boolean,
+): ProviderConnectionState {
+  if (!status) {
+    return pending
+      ? { tone: "pending", label: "Checking", detail: null }
+      : { tone: "neutral", label: "Not connected", detail: null };
+  }
+  if (!status.connected) return { tone: "neutral", label: "Not connected", detail: null };
+  // The server checks a new login on its own; say so rather than claiming it is ready.
+  if (status.healthChecking === true) {
+    return { tone: "pending", label: "Checking access", detail: null };
+  }
+  const problem = status.health ? ACCOUNT_PROBLEM_LABELS[status.health] : undefined;
+  if (problem) {
+    return {
+      tone: "attention",
+      label: "Needs attention",
+      detail: problem,
+    };
+  }
+  return { tone: "positive", label: "Connected", detail: null };
+}
+
+/** Headline state of a CLI-backed provider that has no account of its own. */
+export function runtimeConnectionState(
+  provider: ServerProvider | undefined,
+): ProviderConnectionState {
+  if (!provider) return { tone: "pending", label: "Checking", detail: null };
+  if (!provider.enabled) return { tone: "neutral", label: "Disabled", detail: null };
+  if (!provider.installed) {
+    return { tone: "neutral", label: "Not installed", detail: provider.message ?? null };
+  }
+  if (provider.auth.status === "authenticated") {
+    return { tone: "positive", label: "Connected", detail: null };
+  }
+  if (provider.status === "error" || provider.status === "warning") {
+    return { tone: "attention", label: "Needs attention", detail: provider.message ?? null };
+  }
+  if (provider.auth.status === "unauthenticated") {
+    return { tone: "neutral", label: "Not connected", detail: provider.message ?? null };
+  }
+  return { tone: "positive", label: "Available", detail: null };
 }

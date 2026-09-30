@@ -156,6 +156,8 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 // names on Android so React Native and the native composer use one set of
 // family names without waiting for runtime font loading.
 
+const MICROPHONE_PERMISSION = "Allow Akeru Bot to use your microphone to dictate messages.";
+
 const config: ExpoConfig = {
   name: variant.appName,
   slug: "akeru-bot",
@@ -284,15 +286,26 @@ const config: ExpoConfig = {
       },
     ],
     [
+      "expo-audio",
+      {
+        microphonePermission: MICROPHONE_PERMISSION,
+        recordAudioAndroid: true,
+        enableBackgroundPlayback: false,
+        enableBackgroundRecording: false,
+      },
+    ],
+    // Camera and image picker never record audio, but each plugin rewrites the microphone
+    // usage string, and `false` would delete it (and block RECORD_AUDIO) for dictation.
+    [
       "expo-camera",
       {
         cameraPermission: "Allow Akeru Bot to access your camera so you can scan pairing QR codes.",
-        microphonePermission: false,
+        microphonePermission: MICROPHONE_PERMISSION,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
       },
     ],
-    ["expo-image-picker", { photosPermission: false, microphonePermission: false }],
+    ["expo-image-picker", { photosPermission: false, microphonePermission: MICROPHONE_PERMISSION }],
     [
       "expo-splash-screen",
       {

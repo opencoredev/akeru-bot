@@ -5,6 +5,7 @@ import {
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
   resolveProviderSkillSourceKind,
+  resolveProviderSkillTextIcon,
 } from "./providerSkills.ts";
 
 describe("formatProviderSkillDisplayName", () => {
@@ -116,5 +117,52 @@ describe("resolveProviderSkillSourceKind", () => {
         path: "/opt/skills/team-review/SKILL.md",
       }),
     ).toBe("other");
+  });
+});
+
+describe("resolveProviderSkillTextIcon", () => {
+  it.each([
+    ["a single emoji", "🔧"],
+    ["a pictographic symbol", "★"],
+    ["an emoji with a variation selector", "❤️"],
+    ["a skin-tone modifier", "👍🏽"],
+    ["a ZWJ sequence", "🧑‍💻"],
+    ["a ZWJ sequence with selector and modifier", "🏳️‍🌈"],
+    ["a regional-indicator flag", "🇯🇵"],
+    ["a subdivision tag flag", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
+    ["a digit keycap", "1️⃣"],
+    ["a hash keycap", "#️⃣"],
+    ["an asterisk keycap", "*️⃣"],
+  ])("accepts %s", (_label, icon) => {
+    expect(resolveProviderSkillTextIcon({ icon })).toBe(icon);
+  });
+
+  it("strips surrounding spaces", () => {
+    expect(resolveProviderSkillTextIcon({ icon: " 🧑‍💻 " })).toBe("🧑‍💻");
+  });
+
+  it.each([
+    ["a missing icon", undefined],
+    ["a named glyph", "wrench"],
+    ["an absolute asset path", "/icons/small.png"],
+    ["a relative asset path", "./assets/icon.svg"],
+    ["a bare digit", "1"],
+    ["multi-glyph text", "あいう"],
+    ["several emoji", "🔧🔨"],
+    ["a bidi embedding", "‪🔧"],
+    ["a bidi override", "‮‮"],
+    ["a bidi isolate", "🔧⁦"],
+    ["a left-to-right mark", "‎🔧"],
+    ["a right-to-left mark", "🔧‏"],
+    ["a C0 control", "🔧\u0007"],
+    ["a C1 control", "\u0085"],
+    ["a line separator", "🔧 "],
+    ["a paragraph separator", " "],
+    ["a zero-width space", "🔧​"],
+    ["a word joiner", "⁠🔧"],
+    ["a trailing ZWJ", "🔧‍"],
+    ["a ZWJ joining non-emoji", "a‍b"],
+  ])("rejects %s", (_label, icon) => {
+    expect(resolveProviderSkillTextIcon(icon === undefined ? {} : { icon })).toBeNull();
   });
 });

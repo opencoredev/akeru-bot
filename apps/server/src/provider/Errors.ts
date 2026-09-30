@@ -61,6 +61,8 @@ export class ProviderAdapterRequestError extends Schema.TaggedErrorClass<Provide
     method: Schema.String,
     detail: Schema.String,
     cause: Schema.optional(Schema.Defect()),
+    // True when the request is still pending after the failure and can be sent again.
+    retryable: Schema.optional(Schema.Boolean),
   },
 ) {
   override get message(): string {
@@ -207,10 +209,29 @@ export class AgentControllerRuntimeError extends Schema.TaggedErrorClass<AgentCo
     operation: Schema.String,
     detail: Schema.String,
     cause: Schema.optional(Schema.Defect()),
+    // True when the request is still pending after the failure and can be sent again.
+    retryable: Schema.optional(Schema.Boolean),
   },
 ) {
   override get message(): string {
     return `AgentController failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
+/**
+ * The session's runtime cannot rewind its own conversation. Mastra-backed
+ * sessions raise this from `rollbackConversation`; checkpoint revert treats it
+ * as expected and still completes the workspace revert.
+ */
+export class AgentControllerRollbackUnsupportedError extends Schema.TaggedErrorClass<AgentControllerRollbackUnsupportedError>()(
+  "AgentControllerRollbackUnsupportedError",
+  {
+    threadId: Schema.String,
+    detail: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `AgentController cannot roll back thread '${this.threadId}': ${this.detail}`;
   }
 }
 
@@ -233,4 +254,37 @@ export type ProviderServiceError =
 export type AgentControllerError =
   | AgentControllerUnsupportedEngineError
   | AgentControllerRuntimeError
+  | AgentControllerRollbackUnsupportedError
   | ProviderServiceError;
+
+const hasReadableIssue = Schema.is(
+  Schema.Union([ProviderValidationError, ProviderAdapterValidationError]),
+);
+const hasReadableDetail = Schema.is(
+  Schema.Union([
+    ProviderAdapterRequestError,
+    ProviderAdapterProcessError,
+    ProviderDriverError,
+    ProviderSessionDirectoryPersistenceError,
+    AgentControllerUnsupportedEngineError,
+    AgentControllerRuntimeError,
+    AgentControllerRollbackUnsupportedError,
+  ]),
+);
+
+/**
+ * The part of a provider or controller error a user can act on. Drops the
+ * class name, operation prefix, and stack so chats and bot work cards never
+ * show server paths. Log the full cause separately.
+ */
+export function readableErrorDetail(error: unknown): string {
+  if (hasReadableIssue(error)) return error.issue;
+  if (hasReadableDetail(error)) return error.detail;
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+  const firstLine = message
+    ?.split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !line.startsWith("at "));
+  return firstLine ?? "Something went wrong.";
+}

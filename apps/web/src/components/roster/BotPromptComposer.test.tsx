@@ -2,6 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { visitElements } from "../../test/reactElementTree";
+
+vi.mock("../../i18n", async () => {
+  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const translator = createTranslator("en");
+  return { useI18n: () => ({ ...translator, t: translator.translate }) };
+});
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -10,10 +16,18 @@ import {
   type BotPromptAttachment,
 } from "./BotPromptAttachments";
 import {
+  applyBotPromptMention,
+  botPromptMention,
+  botPromptMentionTrigger,
+  buildBotPromptMentionItems,
+} from "./botPromptMentions.logic";
+import {
   appendBotMention,
   BotPromptComposer,
+  botPromptCommandMenuTrigger,
   canSubmitBotPrompt,
-  findMentionedBotId,
+  botMentionHint,
+  resolveBotMention,
   isBotPromptSubmissionCurrent,
   isBotPromptExpanded,
   restoreBotStashPrompt,
@@ -41,8 +55,19 @@ describe("bot prompt composer", () => {
   });
 
   it("preserves new draft text when inserting a mention", () => {
-    expect(appendBotMention("new draft", "Mori")).toBe("new draft @Mori ");
-    expect(appendBotMention("", "Mori")).toBe("@Mori ");
+    expect(appendBotMention("new draft", "@Mori")).toBe("new draft @Mori ");
+    expect(appendBotMention("", "@bot:mori-2")).toBe("@bot:mori-2 ");
+  });
+
+  it("opens the $ and / pickers when no provider catalog is connected", () => {
+    const open = (draft: string, commandCatalog: null | undefined, readOnly = false) =>
+      botPromptCommandMenuTrigger({ draft, caret: draft.length, readOnly, commandCatalog })?.kind;
+    expect(open("$", null)).toBe("skill");
+    expect(open("hi $", null)).toBe("skill");
+    expect(open("/", null)).toBe("slash-command");
+    // Onboarding previews omit the catalog and read-only chats never type.
+    expect(open("$", undefined)).toBeUndefined();
+    expect(open("/", null, true)).toBeUndefined();
   });
 
   it("expands for long or multiline prompts", () => {
@@ -53,12 +78,79 @@ describe("bot prompt composer", () => {
 
   it("routes the latest complete group mention to its bot", () => {
     expect(
-      findMentionedBotId("Ask @Mori then @Path Finder ", [
+      resolveBotMention("Ask @Mori then @Path Finder ", [
         { id: "mori", name: "Mori" },
         { id: "pathfinder", name: "Path Finder" },
       ]),
-    ).toBe("pathfinder");
-    expect(findMentionedBotId("Email a@Mori.com", [{ id: "mori", name: "Mori" }])).toBeUndefined();
+    ).toEqual({ kind: "bot", botId: "pathfinder" });
+    expect(resolveBotMention("Email a@Mori.com", [{ id: "mori", name: "Mori" }])).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("prefers the longer bot name when two names start at the same mention", () => {
+    expect(
+      resolveBotMention("@Path Finder look", [
+        { id: "path", name: "Path" },
+        { id: "pathfinder", name: "Path Finder" },
+      ]),
+    ).toEqual({ kind: "bot", botId: "pathfinder" });
+  });
+
+  it("keeps a person mention as plain text so the boss answers", () => {
+    const groupBots = [
+      { id: "boss", name: "Akeru" },
+      { id: "mori", name: "Mori" },
+    ];
+    expect(resolveBotMention("Thanks @Leo, can you check this?", groupBots)).toEqual({
+      kind: "none",
+    });
+    expect(resolveBotMention("@Leo asked for this. @Mori please review", groupBots)).toEqual({
+      kind: "bot",
+      botId: "mori",
+    });
+  });
+
+  it("refuses to route a name two group bots share, whatever their order", () => {
+    const mori = { id: "mori-claude", name: "Mori" };
+    const otherMori = { id: "mori-grok", name: "Mori" };
+    const akeru = { id: "boss", name: "Akeru" };
+    for (const bots of [
+      [akeru, mori, otherMori],
+      [otherMori, akeru, mori],
+    ]) {
+      const mention = resolveBotMention("@Mori check the logs", bots);
+      expect(mention).toEqual({ kind: "ambiguous", name: "Mori" });
+      expect(botMentionHint(mention)).toBe(
+        "More than one bot here is named Mori. Pick one from the @ menu to mention it.",
+      );
+      expect(resolveBotMention("@Mori then @Akeru", bots)).toEqual({ kind: "bot", botId: "boss" });
+    }
+    expect(botMentionHint({ kind: "bot", botId: "boss" })).toBeNull();
+  });
+
+  it("submits to the exact Mika picked from either menu", () => {
+    const mikas = [
+      { id: "mika-claude", name: "Mika", title: "Designer" },
+      { id: "mika-grok", name: "Mika", title: "Reviewer" },
+    ];
+    const trigger = botPromptMentionTrigger("@mika", 5)!;
+    const rows = buildBotPromptMentionItems({
+      query: trigger.query,
+      browserAvailable: false,
+      bots: mikas,
+      threads: [],
+    });
+    expect(rows).toHaveLength(2);
+    for (const [index, bot] of mikas.entries()) {
+      const picked = applyBotPromptMention("@mika", trigger, rows[index]!).text;
+      const draft = `${picked}please review`;
+      expect(resolveBotMention(draft, mikas)).toEqual({ kind: "bot", botId: bot.id });
+      expect(botMentionHint(resolveBotMention(draft, mikas))).toBeNull();
+
+      const appended = appendBotMention("please review", botPromptMention(bot, mikas).source);
+      expect(resolveBotMention(appended, mikas)).toEqual({ kind: "bot", botId: bot.id });
+    }
   });
 
   it("focuses the prompt for unmodified printable typing outside an editor", () => {
@@ -88,13 +180,12 @@ describe("bot prompt composer", () => {
     expect(restoreBotStashPrompt("Current draft", "")).toBe("Current draft");
   });
 
-  it("uses the available chat width", () => {
+  it("centers on the same 48rem reading column as the conversation", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
-    expect(markup).toContain('class="w-full px-4');
-    expect(markup).not.toContain("max-w-4xl");
+    expect(markup).toContain("px-[max(1rem,calc((100%-48rem)/2))]");
   });
 
   it("attaches a pending question above the custom answer field", () => {
@@ -103,14 +194,14 @@ describe("bot prompt composer", () => {
         botName="Akeru"
         disabled={false}
         pendingActionSlot={<div data-testid="pending-question">Question</div>}
-        placeholder="Write a custom answer..."
+        placeholder="Write a custom answer…"
         onSubmit={vi.fn(async () => true)}
       />,
     );
 
     expect(markup).toContain('data-testid="pending-question"');
     expect(markup).toContain('data-testid="bot-pending-action-motion"');
-    expect(markup).toContain('placeholder="Write a custom answer..."');
+    expect(markup).toContain('placeholder="Write a custom answer…"');
     expect(markup).toContain("rounded-t-md border-t-transparent");
   });
 
@@ -133,6 +224,24 @@ describe("bot prompt composer", () => {
     expect(withApproval).toContain("border-t-transparent");
   });
 
+  it("puts dictation in the send slot when the draft is empty", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Mori" disabled={false} onSubmit={async () => true} />,
+    );
+    expect(markup).toContain("data-bot-prompt-dictation");
+    expect(markup).toContain('aria-label="Start dictation"');
+    expect(markup).toContain("lucide-mic");
+    expect(markup).not.toContain('aria-label="Send message"');
+  });
+
+  it("keeps send in the slot for an inert preview", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Mori" disabled readOnly onSubmit={async () => true} />,
+    );
+    expect(markup).not.toContain("data-bot-prompt-dictation");
+    expect(markup).toContain('aria-label="Send message"');
+  });
+
   it("renders an inert preview with the production composer", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer
@@ -148,6 +257,28 @@ describe("bot prompt composer", () => {
     expect(markup).toContain('tabindex="-1"');
     expect(markup).toContain('aria-label="Send message"');
     expect(markup).toContain('aria-label="Attach files"');
+  });
+
+  it("opens the file picker directly when attaching is the only prompt action", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
+    );
+
+    expect(markup).toContain('aria-label="Attach file"');
+    expect(markup).not.toContain('aria-label="Add to prompt"');
+  });
+
+  it("keeps the add menu when a group chat can mention other bots", () => {
+    const markup = renderToStaticMarkup(
+      <BotPromptComposer
+        botName="Group"
+        disabled={false}
+        mentionBots={[{ id: "bot-2", name: "Nova" }]}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="Add to prompt"');
   });
 
   it("does not render model or reasoning controls", () => {
@@ -176,8 +307,8 @@ describe("bot prompt composer", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(2);
     expect(buildBotPromptAttachmentPreview(attachments, attachments[1]!.id)).toEqual({
       images: [
-        { src: "blob:first", name: "same-name.png" },
-        { src: "blob:second", name: "same-name.png" },
+        { id: attachments[0]!.id, src: "blob:first", name: "same-name.png" },
+        { id: attachments[1]!.id, src: "blob:second", name: "same-name.png" },
       ],
       index: 1,
     });
@@ -188,7 +319,7 @@ describe("bot prompt composer", () => {
         new Set([attachments[0]!.id]),
       ),
     ).toEqual({
-      images: [{ src: "blob:second", name: "same-name.png" }],
+      images: [{ id: attachments[1]!.id, src: "blob:second", name: "same-name.png" }],
       index: 0,
     });
 

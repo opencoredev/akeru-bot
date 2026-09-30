@@ -19,7 +19,7 @@
  *
  * @module ProviderAdapterRegistry
  */
-import type { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import type { ProviderDriverKind, ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as PubSub from "effect/PubSub";
@@ -38,6 +38,13 @@ export interface ProviderInstanceRoutingInfo {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly continuationIdentity: ProviderContinuationIdentity;
+  /**
+   * The instance's latest advertised provider snapshot when the registry has
+   * one. `models` here already includes custom models configured in settings.
+   * Callers must treat an absent snapshot or an empty `models` list as
+   * "unknown catalog", not "no models exist".
+   */
+  readonly instanceSnapshot?: ServerProvider | undefined;
   /** Server-only. Never include this in a client projection or persisted event. */
   readonly mastraConnection?: {
     readonly environment: NodeJS.ProcessEnv;

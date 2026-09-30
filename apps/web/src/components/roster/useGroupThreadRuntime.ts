@@ -1,8 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   BotId,
+  type BotEngine,
   type ApprovalRequestId,
   EnvironmentId,
   GroupId,
@@ -16,6 +16,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
 import { resolveAppModelSelectionState } from "../../modelSelection";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  isProviderInstancePickerSelectable,
+  NO_PROVIDER_MODEL_SELECTION,
+} from "../../providerInstances";
 import { environmentGroupsAtom } from "../../state/bots";
 import {
   useAllEnvironmentShellsBootstrapped,
@@ -39,17 +45,24 @@ import {
 import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
-import { buildGroupTurnStartInput, findLatestGroupThreadTarget } from "./botThreadRuntime.logic";
+import {
+  buildGroupTurnStartInput,
+  createBotTurnSubmissionQueue,
+  findLatestGroupThreadTarget,
+  nextRetainedChat,
+  type RetainedChat,
+} from "./botThreadRuntime.logic";
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import {
+  type BotThreadFailure,
+  commandFailure,
+  latestBotThreadFailure,
+  localFailure,
+} from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-
-function errorMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
-  const error = squashAtomCommandFailure(result);
-  return error instanceof Error ? error.message : "Could not send the message.";
-}
 
 function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
@@ -76,6 +89,20 @@ function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
   });
 }
 
+function groupModelSelection(
+  engine: BotEngine | null | undefined,
+  projectDefault: ModelSelection | null | undefined,
+  appDefault: ModelSelection | null,
+): ModelSelection | null {
+  return engine
+    ? {
+        instanceId: ProviderInstanceId.make(engine.provider),
+        model: engine.model,
+        ...(engine.options ? { options: engine.options } : {}),
+      }
+    : (projectDefault ?? appDefault);
+}
+
 export function useGroupThreadRuntime(groupId: string) {
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -84,6 +111,10 @@ export function useGroupThreadRuntime(groupId: string) {
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const providerEntries = useMemo(
+    () => applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+    [providers, settings],
+  );
   const bots = useRosterStore((state) => state.bots);
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
@@ -109,14 +140,22 @@ export function useGroupThreadRuntime(groupId: string) {
   );
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
-  const retainedThreadRef = useRef<{ groupId: string; threadRef: ScopedThreadRef | null }>({
-    groupId,
+  const retainedThreadRef = useRef<RetainedChat>({
+    ownerId: groupId,
     threadRef: null,
+    linked: false,
   });
-  if (retainedThreadRef.current.groupId !== groupId) {
-    retainedThreadRef.current = { groupId, threadRef: null };
+  // Chats created by queued sends, keyed by the retention state they were submitted from, so
+  // sends queued together share one chat even after the user leaves the group.
+  const createdChatsRef = useRef(new WeakMap<RetainedChat, ScopedThreadRef>());
+  if (retainedThreadRef.current.ownerId !== groupId) {
+    retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
-  if (linkedThreadRef) retainedThreadRef.current.threadRef = linkedThreadRef;
+  retainedThreadRef.current = nextRetainedChat(
+    retainedThreadRef.current,
+    linkedThreadRef,
+    bootstrapped,
+  );
   const messages = useThreadMessages(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
@@ -150,7 +189,8 @@ export function useGroupThreadRuntime(groupId: string) {
     reportFailure: false,
   });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
-  const sendInFlightRef = useRef(false);
+  const sendQueueRef = useRef(createBotTurnSubmissionQueue());
+  const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
@@ -159,7 +199,7 @@ export function useGroupThreadRuntime(groupId: string) {
     Record<string, PendingUserInputDraftAnswer>
   >({});
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<BotThreadFailure | null>(null);
   const [resuming, setResuming] = useState(false);
   const canResume =
     linkedThreadRef !== null &&
@@ -179,7 +219,7 @@ export function useGroupThreadRuntime(groupId: string) {
     });
     setResuming(false);
     if (result._tag === "Failure") {
-      setError(errorMessage(result));
+      setError(commandFailure(result));
       return false;
     }
     return true;
@@ -202,7 +242,7 @@ export function useGroupThreadRuntime(groupId: string) {
       if (result._tag === "Failure") {
         respondingRequestIdsRef.current.delete(requestId);
         setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-        setError(errorMessage(result));
+        setError(commandFailure(result));
         return false;
       }
       return true;
@@ -212,7 +252,6 @@ export function useGroupThreadRuntime(groupId: string) {
 
   const send = useCallback(
     async (prompt: string, files: readonly File[], requestedBotId?: string): Promise<boolean> => {
-      if (sendInFlightRef.current) return false;
       const pendingUserInput = pendingUserInputs[0];
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
         if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
@@ -232,108 +271,150 @@ export function useGroupThreadRuntime(groupId: string) {
         return submitPendingUserInput(pendingUserInput.requestId, answers);
       }
       if (!groupReady || !group) {
-        setError("The group is still connecting.");
+        setError(localFailure("The group is still connecting."));
         return false;
       }
       if (!activeProject) {
-        setError("Add a project before you message a group.");
+        setError(localFailure("Your workspace is still loading. Try again in a moment."));
         return false;
       }
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);
       if (unsupported) {
-        setError(`This file type is not supported: ${unsupported.name}`);
+        setError(localFailure(`This file type is not supported: ${unsupported.name}`));
         return false;
       }
       if (
         files.some((file) => resolveBotFileAttachment(file)?.type === "file") &&
         !readEnvironmentSupportsFileAttachments(activeProject.environmentId)
       ) {
-        setError("Update the connected Akeru server to attach files.");
+        setError(localFailure("Update the connected Akeru server to attach files."));
         return false;
       }
 
       const respondingBotId = requestedBotId ?? group.bossBotId;
       const respondingBot = bots.find(
-        (bot) => bot.id === respondingBotId && groupContainsBot(group, bot.id),
+        (bot) =>
+          bot.id === respondingBotId && bot.archivedAt === null && groupContainsBot(group, bot.id),
       );
       if (!respondingBot) {
-        setError("Choose a current group member.");
+        setError(localFailure("Choose a current group member."));
         return false;
       }
-      const modelSelection: ModelSelection = respondingBot.engine
-        ? {
-            instanceId: ProviderInstanceId.make(respondingBot.engine.provider),
-            model: respondingBot.engine.model,
-            ...(respondingBot.engine.options ? { options: respondingBot.engine.options } : {}),
-          }
-        : (activeProject.defaultModelSelection ?? appDefaultModelSelection);
+      const modelSelection = groupModelSelection(
+        respondingBot.engine,
+        activeProject.defaultModelSelection,
+        appDefaultModelSelection,
+      );
+      if (
+        !modelSelection ||
+        modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId ||
+        !providerEntries.some(
+          (entry) =>
+            entry.instanceId === modelSelection.instanceId &&
+            isProviderInstancePickerSelectable(entry),
+        )
+      ) {
+        setError(
+          localFailure(
+            "Mention a group member with a connected provider, or connect the boss's provider.",
+          ),
+        );
+        return false;
+      }
 
-      sendInFlightRef.current = true;
+      queuedSendCountRef.current += 1;
       setSending(true);
       setError(null);
-      const createdAt = new Date().toISOString();
-      const currentThreadRef = retainedThreadRef.current.threadRef;
-      const threadId = currentThreadRef?.threadId ?? newThreadId();
-      const runtimeMode = respondingBot.runtimeMode;
+      // Bind the queued send to the chat selected at submission; the ref moves on if the user
+      // switches groups.
+      const queuedRetained = retainedThreadRef.current;
+      const queuedThreadRef = queuedRetained.threadRef;
+      return sendQueueRef.current.enqueue(async () => {
+        setError(null);
+        const createdAt = new Date().toISOString();
+        // Leaving and returning to this group replaces the ref. A send queued before the
+        // group had a chat joins the one an earlier send created there.
+        const live = retainedThreadRef.current;
+        const currentThreadRef =
+          queuedThreadRef ??
+          createdChatsRef.current.get(queuedRetained) ??
+          (live.ownerId === groupId ? live.threadRef : null);
+        const threadId = currentThreadRef?.threadId ?? newThreadId();
+        const runtimeMode = respondingBot.runtimeMode;
 
-      try {
-        const attachments = await Promise.all(
-          files.map(async (file) => {
-            const attachment = resolveBotFileAttachment(file);
-            if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
-            return {
-              ...attachment,
-              name: file.name,
-              sizeBytes: file.size,
-              dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
-            };
-          }),
-        );
-        const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
-        if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
-          const modeResult = await setRuntimeMode({
+        try {
+          const attachments = await Promise.all(
+            files.map(async (file) => {
+              const attachment = resolveBotFileAttachment(file);
+              if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
+              return {
+                ...attachment,
+                name: file.name,
+                sizeBytes: file.size,
+                dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
+              };
+            }),
+          );
+          const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
+          if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
+            const modeResult = await setRuntimeMode({
+              environmentId,
+              input: { threadId, runtimeMode },
+            });
+            if (modeResult._tag === "Failure") {
+              setError(commandFailure(modeResult));
+              return false;
+            }
+          }
+          const result = await startTurn({
             environmentId,
-            input: { threadId, runtimeMode },
+            input: buildGroupTurnStartInput({
+              groupId: GroupId.make(groupId),
+              respondingBotId: BotId.make(respondingBot.id),
+              threadId,
+              projectId: activeProject.id,
+              title: threadTitle(prompt, files),
+              message: {
+                messageId: newMessageId(),
+                role: "user",
+                text: prompt,
+                attachments,
+              },
+              modelSelection,
+              runtimeMode,
+              interactionMode: DEFAULT_INTERACTION_MODE,
+              createdAt,
+              createThread: currentThreadRef === null,
+            }),
           });
-          if (modeResult._tag === "Failure") {
-            setError(errorMessage(modeResult));
+          if (result._tag === "Failure") {
+            setError(commandFailure(result));
             return false;
           }
-        }
-        const result = await startTurn({
-          environmentId,
-          input: buildGroupTurnStartInput({
-            groupId: GroupId.make(groupId),
-            respondingBotId: BotId.make(respondingBot.id),
-            threadId,
-            projectId: activeProject.id,
-            title: threadTitle(prompt, files),
-            message: {
-              messageId: newMessageId(),
-              role: "user",
-              text: prompt,
-              attachments,
-            },
-            modelSelection,
-            runtimeMode,
-            interactionMode: DEFAULT_INTERACTION_MODE,
-            createdAt,
-            createThread: currentThreadRef === null,
-          }),
-        });
-        if (result._tag === "Failure") {
-          setError(errorMessage(result));
+          // Only a new chat restarts retention; a chat the shell list already showed stays
+          // linked so archiving it releases it. Skip it if the user moved to another group.
+          if (currentThreadRef === null) {
+            const createdThreadRef = scopeThreadRef(environmentId, threadId);
+            createdChatsRef.current.set(queuedRetained, createdThreadRef);
+            if (retainedThreadRef.current.ownerId === groupId) {
+              retainedThreadRef.current = {
+                ownerId: groupId,
+                threadRef: createdThreadRef,
+                linked: false,
+              };
+            }
+          }
+          return true;
+        } catch (cause) {
+          setError(
+            localFailure(cause instanceof Error ? cause.message : "Could not send the message."),
+          );
           return false;
+        } finally {
+          queuedSendCountRef.current -= 1;
+          if (queuedSendCountRef.current === 0) setSending(false);
         }
-        retainedThreadRef.current.threadRef = scopeThreadRef(environmentId, threadId);
-        return true;
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not send the message.");
-        return false;
-      } finally {
-        sendInFlightRef.current = false;
-        setSending(false);
-      }
+      });
     },
     [
       activeProject,
@@ -346,6 +427,7 @@ export function useGroupThreadRuntime(groupId: string) {
       pendingUserInputAnswers,
       pendingUserInputQuestionIndex,
       pendingUserInputs,
+      providerEntries,
       rememberedThread?.runtimeMode,
       respondingRequestIds,
       settings.localExecutionMode,
@@ -429,12 +511,47 @@ export function useGroupThreadRuntime(groupId: string) {
     submitPendingUserInput,
   ]);
 
+  const providerAvailable =
+    group !== undefined &&
+    bots.some((bot) => {
+      if (bot.archivedAt !== null || !groupContainsBot(group, bot.id)) return false;
+      const selection = groupModelSelection(
+        bot.engine,
+        activeProject?.defaultModelSelection,
+        appDefaultModelSelection,
+      );
+      return (
+        selection !== null &&
+        selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId &&
+        providerEntries.some(
+          (entry) =>
+            entry.instanceId === selection.instanceId && isProviderInstancePickerSelectable(entry),
+        )
+      );
+    });
+  const session = rememberedThread?.session ?? null;
+  const turnFailure = latestBotThreadFailure({
+    activities,
+    latestTurn: rememberedThread?.latestTurn ?? null,
+    session,
+    lastUserMessageAt: messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
+  });
+  const failure: BotThreadFailure | null =
+    error ??
+    turnFailure ??
+    (session?.lastError
+      ? { message: session.lastError, unavailability: session.unavailability ?? null }
+      : null);
+
   return {
     bootstrapped,
     canResume,
     defaultProject: activeProject,
-    error: error ?? rememberedThread?.session?.lastError ?? null,
+    error: failure?.message ?? null,
+    failure,
+    turnFailure,
     groupReady,
+    providerAvailable,
     linkedThreadRef,
     latestTurn: rememberedThread?.latestTurn ?? null,
     messages,

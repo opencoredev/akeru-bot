@@ -10,13 +10,12 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
-import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vite-plus/test";
 
@@ -34,11 +33,7 @@ import { makeSqlitePersistenceLive } from "../persistence/Layers/Sqlite.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
-import {
-  dispatchInboundChannelMessage,
-  shutdownAllChannels,
-  type ChannelRuntimeDependencies,
-} from "./ChannelRuntime.ts";
+import { ChannelRuntime, type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
 
 const NOW = "2026-09-04T12:00:00.000Z";
 const LATER = "2026-09-04T13:00:00.000Z";
@@ -64,30 +59,13 @@ function makeLayer(dbPath: string) {
 const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
   const engine = yield* OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery;
-  const queries = yield* Queue.unbounded<Effect.Effect<void>>();
-  yield* Queue.take(queries).pipe(Effect.flatten, Effect.forever, Effect.forkScoped);
-
-  // Promise callbacks submit projection reads to the scoped test worker.
-  const readAsPromise = <A, E>(query: Effect.Effect<A, E>): Promise<A> =>
-    new Promise((resolve, reject) => {
-      Queue.offerUnsafe(
-        queries,
-        query.pipe(
-          Effect.matchCause({
-            onSuccess: resolve,
-            onFailure: (cause) => reject(Cause.squash(cause)),
-          }),
-        ),
-      );
-    });
-
   return {
     engine,
-    readModel: () => readAsPromise(snapshots.getCommandReadModel()),
+    readModel: snapshots.getCommandReadModel(),
     readThread: (threadId) =>
-      readAsPromise(snapshots.getThreadDetailById(threadId).pipe(Effect.map(Option.getOrNull))),
-    nowIso: async () => now,
-    randomUuid: async () => NodeCrypto.randomUUID(),
+      snapshots.getThreadDetailById(threadId).pipe(Effect.map(Option.getOrNull)),
+    nowIso: Effect.succeed(now),
+    randomUuid: Effect.sync(() => NodeCrypto.randomUUID()),
     deliveryStore: makeMemoryChannelDeliveryStore(),
     secretStore: {
       get: () => Effect.die("Inbound dispatch must not read secrets."),
@@ -136,6 +114,12 @@ const seedProjectsAndBot = Effect.fn("seedProjectsAndBot")(function* (root: stri
   });
 });
 
+/** Builds a runtime in the current scope, as the server layer does. */
+const makeRuntime = Effect.fn("makeRuntime")(function* (deps: ChannelRuntimeDependencies) {
+  const context = yield* Layer.build(ChannelRuntime.layerWith(deps));
+  return Context.get(context, ChannelRuntime);
+});
+
 const readReceipt = Effect.fn("readReceipt")(function* (commandId: CommandId) {
   const receipts = yield* OrchestrationCommandReceiptRepository;
   return Option.getOrThrow(yield* receipts.getByCommandId({ commandId }));
@@ -151,7 +135,6 @@ describe("channel inbound persistence across restart", () => {
           const path = yield* Path.Path;
           const root = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-channel-inbound-" });
           const dbPath = path.join(root, "state.sqlite");
-          yield* Effect.addFinalizer(() => Effect.promise(shutdownAllChannels));
           const input = {
             botId: BOT_ID,
             projectId: TARGET_PROJECT_ID,
@@ -166,7 +149,8 @@ describe("channel inbound persistence across restart", () => {
           const original = yield* Effect.gen(function* () {
             const before = yield* makeDependencies(NOW);
             yield* seedProjectsAndBot(root);
-            yield* Effect.promise(() => dispatchInboundChannelMessage(before, input));
+            const runtime = yield* makeRuntime(before);
+            yield* runtime.dispatchInbound(input);
 
             const originalEvents = yield* Stream.runCollect(before.engine.readEvents(0));
             const originalTurns = originalEvents.filter(
@@ -182,7 +166,7 @@ describe("channel inbound persistence across restart", () => {
               aggregateKind: "thread",
               aggregateId: threadId,
             });
-            const originalThread = yield* Effect.promise(() => before.readThread(threadId));
+            const originalThread = yield* before.readThread(threadId);
             expect(originalThread).toMatchObject({ projectId: TARGET_PROJECT_ID, botId: BOT_ID });
             expect(
               originalThread?.messages.filter((message) => message.role === "user"),
@@ -213,7 +197,6 @@ describe("channel inbound persistence across restart", () => {
               authorDisplayName: input.externalSenderName,
             });
             const originalSequence = yield* before.engine.latestSequence;
-            yield* Effect.promise(shutdownAllChannels);
             return {
               before,
               commandId,
@@ -240,21 +223,17 @@ describe("channel inbound persistence across restart", () => {
             expect(after.engine).not.toBe(before.engine);
             expect(after.deliveryStore).not.toBe(before.deliveryStore);
             expect(yield* readReceipt(commandId)).toEqual(originalReceipt);
-            expect(yield* Effect.promise(() => after.readThread(threadId))).toEqual(originalThread);
+            expect(yield* after.readThread(threadId)).toEqual(originalThread);
 
-            yield* Effect.promise(() => dispatchInboundChannelMessage(after, input));
+            const runtime = yield* makeRuntime(after);
+            yield* runtime.dispatchInbound(input);
 
             expect(yield* after.engine.latestSequence).toBe(originalSequence);
             expect(yield* readReceipt(commandId)).toEqual(originalReceipt);
             expect(yield* Stream.runCollect(after.engine.readEvents(0))).toEqual(originalEvents);
-            expect(yield* Effect.promise(() => after.readThread(threadId))).toEqual(originalThread);
+            expect(yield* after.readThread(threadId)).toEqual(originalThread);
 
-            yield* Effect.promise(() =>
-              dispatchInboundChannelMessage(after, {
-                ...input,
-                externalMessageId: "external-message-2",
-              }),
-            );
+            yield* runtime.dispatchInbound({ ...input, externalMessageId: "external-message-2" });
 
             const events = yield* Stream.runCollect(after.engine.readEvents(0));
             const turns = events.filter((event) => event.type === "thread.turn-start-requested");
@@ -268,7 +247,7 @@ describe("channel inbound persistence across restart", () => {
             expect(
               messageEvents.map((event) => event.payload.channelOrigin?.externalMessageId),
             ).toEqual([input.externalMessageId, "external-message-2"]);
-            const thread = yield* Effect.promise(() => after.readThread(threadId));
+            const thread = yield* after.readThread(threadId);
             expect(thread).toMatchObject({ projectId: TARGET_PROJECT_ID, botId: BOT_ID });
             const messages = thread?.messages.filter((message) => message.role === "user") ?? [];
             expect(messages.map((message) => message.id)).toEqual(
@@ -276,9 +255,9 @@ describe("channel inbound persistence across restart", () => {
             );
             expect(messages.map((message) => message.text)).toEqual([input.text, input.text]);
             expect(new Set(messages.map((message) => message.id)).size).toBe(2);
-            expect(
-              (yield* Effect.promise(after.readModel)).threads.map((entry) => entry.projectId),
-            ).toEqual([TARGET_PROJECT_ID]);
+            expect((yield* after.readModel).threads.map((entry) => entry.projectId)).toEqual([
+              TARGET_PROJECT_ID,
+            ]);
             expect(yield* readReceipt(turns[1]!.commandId!)).toMatchObject({
               status: "accepted",
               aggregateId: threadId,

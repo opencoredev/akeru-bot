@@ -66,7 +66,7 @@ export function resolveBotUsageCapForProvider(
   input: string,
   providerDriver?: string,
 ): { readonly available: boolean; readonly limit: number | null | undefined } {
-  if (providerDriver === "cursor" || providerDriver === "grok") {
+  if (providerDriver === "grok") {
     return { available: false, limit: null };
   }
   return { available: true, limit: parseBotUsageCapInput(input) };

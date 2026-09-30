@@ -1,11 +1,9 @@
 import {
   isProviderDriverKind,
-  isProviderAvailable,
   resolveProviderInstanceEnabled,
   type ModelSelection,
   type ProviderDriverKind,
   ProviderInstanceId,
-  type ServerProvider,
   ServerSettings,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
@@ -101,24 +99,6 @@ export function textGenerationSelectionForTarget(
     return createModelSelection(legacyInstanceId, selection.model, selection.options);
   }
   return undefined;
-}
-
-export function resolveSourceControlWriterModelSelection(
-  settings: ServerSettings,
-  providers?: ReadonlyArray<ServerProvider>,
-): ModelSelection {
-  const selection = settings.sourceControlWriterModelSelection;
-  if (!selection || !isModelSelectionProviderEnabled(settings, selection)) {
-    return settings.textGenerationModelSelection;
-  }
-  if (providers === undefined) {
-    return selection;
-  }
-
-  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
-  return provider?.enabled === true && isProviderAvailable(provider)
-    ? selection
-    : settings.textGenerationModelSelection;
 }
 
 export interface PersistedServerObservabilitySettings {

@@ -1,10 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off
-// @effect-diagnostics globalTimers:off
+// @effect-diagnostics globalDate:off
+// @effect-diagnostics preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import * as NodeTimers from "node:timers";
-import * as NodeTimersPromises from "node:timers/promises";
 
 import {
   AKERU_BOT_MEMORY_MAX_CHARS,
@@ -19,13 +18,21 @@ import {
   type BotId,
   type GroupId,
 } from "@t3tools/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+
+import { writeFileStringAtomically } from "../atomicWrite.ts";
 
 import {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
   AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS,
   AKERU_MEMORY_REVIEW_PROMPT_INTERVAL,
 } from "./BotMemoryReview.ts";
+import { scanMemoryContent } from "./memoryContentSafety.ts";
 
 export {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
@@ -33,7 +40,6 @@ export {
 } from "./BotMemoryReview.ts";
 
 const NodeFS = NodeFSP;
-const wait = NodeTimersPromises.setTimeout;
 
 export const BOT_MEMORY_ENTRY_DELIMITER = "\n\n§\n\n";
 
@@ -41,48 +47,48 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 const LOCK_STALE_AFTER_MS = 30_000;
 const LOCK_WAIT_LIMIT_MS = 5_000;
 
-const invisibleCharacters = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/u;
-const threatPatterns: ReadonlyArray<readonly [RegExp, string]> = [
-  [
-    /\bignore\s+(?:all\s+)?(?:(?:previous|prior)\s+)?(?:system\s+|developer\s+)?instructions?\b/iu,
-    "instruction override",
-  ],
-  [
-    /\b(?:reveal|print|show|repeat|exfiltrate)\b.{0,48}\b(?:system prompt|developer message|hidden instructions?)\b/iu,
-    "prompt exfiltration",
-  ],
-  [/<\/?(?:system|developer|assistant)(?:\s|>)/iu, "forged prompt role"],
-  [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u, "private key"],
-  [/\b(?:sk-(?:proj-)?|gh[pousr]_|xox[baprs]-)[A-Za-z0-9_-]{16,}\b/u, "credential"],
-  [/\bAKIA[0-9A-Z]{16}\b/u, "credential"],
-];
+const BotMemoryErrorReason = Schema.Union([
+  Schema.TaggedStruct("access-denied", {}),
+  Schema.TaggedStruct("ambiguous-match", {}),
+  Schema.TaggedStruct("invalid-id", {}),
+  Schema.TaggedStruct("invalid-operation", {}),
+  Schema.TaggedStruct("io-error", {}),
+  Schema.TaggedStruct("limit-exceeded", {}),
+  Schema.TaggedStruct("lock-timeout", {}),
+  Schema.TaggedStruct("lock-lost", {}),
+  Schema.TaggedStruct("not-found", {}),
+  Schema.TaggedStruct("unsafe-content", {}),
+]);
 
-export type BotMemoryErrorCode =
-  | "access-denied"
-  | "ambiguous-match"
-  | "invalid-id"
-  | "invalid-operation"
-  | "io-error"
-  | "limit-exceeded"
-  | "lock-timeout"
-  | "not-found"
-  | "unsafe-content";
+export type BotMemoryErrorCode = typeof BotMemoryErrorReason.Type._tag;
 
-export class BotMemoryError extends Error {
-  override readonly name = "BotMemoryError";
-  readonly code: BotMemoryErrorCode;
-  readonly details: Readonly<Record<string, unknown>> | undefined;
-
-  constructor(
-    code: BotMemoryErrorCode,
-    message: string,
-    details?: Readonly<Record<string, unknown>>,
-  ) {
-    super(message);
-    this.code = code;
-    this.details = details;
+export class BotMemoryError extends Schema.TaggedErrorClass<BotMemoryError>()("BotMemoryError", {
+  reason: BotMemoryErrorReason,
+  message: Schema.String,
+  details: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+}) {
+  get code(): BotMemoryErrorCode {
+    return this.reason._tag;
   }
 }
+
+export const makeBotMemoryError = (
+  code: BotMemoryErrorCode,
+  message: string,
+  details?: Readonly<Record<string, unknown>>,
+) =>
+  new BotMemoryError({
+    reason: { _tag: code },
+    message,
+    ...(details === undefined ? {} : { details }),
+  });
+
+export const toBotMemoryError = (cause: unknown): BotMemoryError =>
+  Schema.is(BotMemoryError)(cause)
+    ? cause
+    : makeBotMemoryError("io-error", cause instanceof Error ? cause.message : String(cause), {
+        cause,
+      });
 
 export interface BotMemoryAccess {
   readonly botId: BotId;
@@ -263,7 +269,7 @@ function parseReviewCadence(raw: string): BotMemoryReviewCadenceState {
 
 function assertSafeId(label: string, value: string): void {
   if (!SAFE_ID.test(value) || value === "." || value === "..") {
-    throw new BotMemoryError("invalid-id", `${label} is not a valid memory path identifier.`);
+    throw makeBotMemoryError("invalid-id", `${label} is not a valid memory path identifier.`);
   }
 }
 
@@ -279,19 +285,10 @@ function renderEntries(entries: ReadonlyArray<string>): string {
   return entries.join(BOT_MEMORY_ENTRY_DELIMITER);
 }
 
-function scanContent(content: string): ReadonlyArray<string> {
-  const findings: string[] = [];
-  if (invisibleCharacters.test(content)) findings.push("invisible Unicode control characters");
-  for (const [pattern, label] of threatPatterns) {
-    if (pattern.test(content)) findings.push(label);
-  }
-  return findings;
-}
-
-function assertSafeContent(content: string): void {
-  const findings = scanContent(content);
+export function assertSafeContent(content: string): void {
+  const findings = scanMemoryContent(content);
   if (findings.length > 0) {
-    throw new BotMemoryError(
+    throw makeBotMemoryError(
       "unsafe-content",
       `Memory content was rejected: ${findings.join(", ")}.`,
       { findings },
@@ -302,10 +299,10 @@ function assertSafeContent(content: string): void {
 function findUniqueEntry(entries: ReadonlyArray<string>, oldText: string): number {
   const matches = entries.flatMap((entry, index) => (entry.includes(oldText) ? [index] : []));
   if (matches.length === 0) {
-    throw new BotMemoryError("not-found", `No memory entry matched '${oldText}'.`, { entries });
+    throw makeBotMemoryError("not-found", `No memory entry matched '${oldText}'.`, { entries });
   }
   if (matches.length > 1) {
-    throw new BotMemoryError(
+    throw makeBotMemoryError(
       "ambiguous-match",
       `More than one memory entry matched '${oldText}'.`,
       {
@@ -323,7 +320,7 @@ function applyOperation(
   const working = [...entries];
   if (operation.action === "add") {
     const content = normalizeEntry(operation.content);
-    if (!content) throw new BotMemoryError("invalid-operation", "Add content cannot be empty.");
+    if (!content) throw makeBotMemoryError("invalid-operation", "Add content cannot be empty.");
     assertSafeContent(content);
     if (!working.includes(content)) working.push(content);
     return working;
@@ -331,7 +328,7 @@ function applyOperation(
 
   const oldText = normalizeEntry(operation.oldText);
   if (!oldText) {
-    throw new BotMemoryError("invalid-operation", `${operation.action} oldText cannot be empty.`);
+    throw makeBotMemoryError("invalid-operation", `${operation.action} oldText cannot be empty.`);
   }
   const index = findUniqueEntry(working, oldText);
   if (operation.action === "remove") {
@@ -341,7 +338,7 @@ function applyOperation(
 
   const content = normalizeEntry(operation.content);
   if (!content) {
-    throw new BotMemoryError("invalid-operation", "Replace content cannot be empty.");
+    throw makeBotMemoryError("invalid-operation", "Replace content cannot be empty.");
   }
   assertSafeContent(content);
   working.splice(index, 1, content);
@@ -361,7 +358,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 async function ensurePrivateDirectory(memoryRoot: string, directory: string): Promise<void> {
   const relative = NodePath.relative(memoryRoot, directory);
   if (relative.startsWith("..") || NodePath.isAbsolute(relative)) {
-    throw new BotMemoryError("io-error", "Memory storage escaped its configured root.");
+    throw makeBotMemoryError("io-error", "Memory storage escaped its configured root.");
   }
   // A new profile may not have its state directory yet. That configured
   // directory is the trust boundary; every memory-owned segment below it is
@@ -383,7 +380,7 @@ async function ensurePrivateDirectory(memoryRoot: string, directory: string): Pr
     }
     const stat = await NodeFS.lstat(current);
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      throw new BotMemoryError("io-error", "Memory directories may not be symbolic links.");
+      throw makeBotMemoryError("io-error", "Memory directories may not be symbolic links.");
     }
     await NodeFS.chmod(current, 0o700);
   }
@@ -393,7 +390,7 @@ async function assertNotSymlink(filePath: string): Promise<void> {
   try {
     const stat = await NodeFS.lstat(filePath);
     if (stat.isSymbolicLink()) {
-      throw new BotMemoryError("io-error", "Memory paths may not be symbolic links.");
+      throw makeBotMemoryError("io-error", "Memory paths may not be symbolic links.");
     }
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
@@ -403,7 +400,7 @@ async function assertNotSymlink(filePath: string): Promise<void> {
 async function assertMemoryPath(memoryRoot: string, filePath: string): Promise<void> {
   const relative = NodePath.relative(memoryRoot, filePath);
   if (relative.startsWith("..") || NodePath.isAbsolute(relative)) {
-    throw new BotMemoryError("io-error", "Memory storage escaped its configured root.");
+    throw makeBotMemoryError("io-error", "Memory storage escaped its configured root.");
   }
   let current = memoryRoot;
   for (const segment of ["", ...relative.split(NodePath.sep)]) {
@@ -411,7 +408,7 @@ async function assertMemoryPath(memoryRoot: string, filePath: string): Promise<v
     try {
       const stat = await NodeFS.lstat(current);
       if (stat.isSymbolicLink()) {
-        throw new BotMemoryError("io-error", "Memory paths may not be symbolic links.");
+        throw makeBotMemoryError("io-error", "Memory paths may not be symbolic links.");
       }
     } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code === "ENOENT") return;
@@ -420,94 +417,210 @@ async function assertMemoryPath(memoryRoot: string, filePath: string): Promise<v
   }
 }
 
+interface BotMemoryFileLock {
+  readonly verifyOwnership: () => Promise<void>;
+}
+
+interface BotMemoryLockRecord {
+  readonly pid: number;
+  readonly token: string;
+  readonly heartbeatAtMs: number;
+}
+
+const readLockRecord = async (lockPath: string): Promise<BotMemoryLockRecord | null> => {
+  const raw = await NodeFS.readFile(lockPath, "utf8").catch(() => null);
+  if (raw === null) return null;
+  try {
+    const record = JSON.parse(raw) as Partial<BotMemoryLockRecord>;
+    if (
+      typeof record.pid !== "number" ||
+      !Number.isInteger(record.pid) ||
+      typeof record.token !== "string" ||
+      typeof record.heartbeatAtMs !== "number"
+    )
+      return null;
+    return record as BotMemoryLockRecord;
+  } catch {
+    return null;
+  }
+};
+
+const isProcessAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "EPERM") return true;
+    if ((cause as NodeJS.ErrnoException).code === "ESRCH") return false;
+    throw cause;
+  }
+};
+
+export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(function* (
+  memoryRoot: string,
+  filePath: string,
+) {
+  const lockPath = `${filePath}.lock`;
+  const token = NodeCrypto.randomUUID();
+  const pid = process.pid;
+  yield* Effect.tryPromise({
+    try: async () => {
+      await ensurePrivateDirectory(memoryRoot, NodePath.dirname(filePath));
+      await assertNotSymlink(lockPath);
+    },
+    catch: toBotMemoryError,
+  });
+  const record = (heartbeatAtMs: number): BotMemoryLockRecord => ({ pid, token, heartbeatAtMs });
+  const readOwnRecord = async (): Promise<BotMemoryLockRecord | null> => {
+    const current = await readLockRecord(lockPath);
+    return current?.token === token && current.pid === pid ? current : null;
+  };
+  const verifyOwnership = async (): Promise<void> => {
+    if (!(await readOwnRecord())) {
+      throw makeBotMemoryError("lock-lost", "The memory file lock was taken by another owner.");
+    }
+  };
+  const release = (handle: NodeFSP.FileHandle) =>
+    Effect.promise(async () => {
+      const owned = await handle.stat().catch(() => null);
+      await handle.close().catch(() => undefined);
+      if (!owned) return;
+      const current = await NodeFS.lstat(lockPath).catch(() => null);
+      if (current && current.ino === owned.ino && current.dev === owned.dev) {
+        await NodeFS.unlink(lockPath).catch(() => undefined);
+      }
+    });
+  const open = Effect.tryPromise({
+    try: async () => {
+      const handle = await NodeFS.open(lockPath, "wx", 0o600);
+      try {
+        await handle.writeFile(
+          JSON.stringify(record(DateTime.toEpochMillis(DateTime.nowUnsafe()))),
+          "utf8",
+        );
+        await handle.sync();
+        return handle;
+      } catch (cause) {
+        // Another writer may have reclaimed the lock path meanwhile; only remove our own inode.
+        const owned = await handle.stat().catch(() => null);
+        await handle.close().catch(() => undefined);
+        const current = await NodeFS.lstat(lockPath).catch(() => null);
+        if (owned && current && current.ino === owned.ino && current.dev === owned.dev) {
+          await NodeFS.unlink(lockPath).catch(() => undefined);
+        }
+        throw cause;
+      }
+    },
+    catch: (cause) =>
+      (cause as NodeJS.ErrnoException).code === "EEXIST"
+        ? makeBotMemoryError("lock-timeout", "Timed out waiting for the memory file lock.")
+        : makeBotMemoryError("io-error", "Could not acquire the memory file lock.", { cause }),
+  });
+  const acquire = open.pipe(
+    Effect.catchReason("BotMemoryError", "lock-timeout", () =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* Effect.tryPromise({
+          try: async () => {
+            await assertNotSymlink(lockPath);
+            const existing = await readLockRecord(lockPath);
+            let abandoned: boolean;
+            if (existing) {
+              abandoned =
+                now - existing.heartbeatAtMs > LOCK_STALE_AFTER_MS && !isProcessAlive(existing.pid);
+            } else {
+              // A writer that crashed between creating the lock and syncing its record
+              // leaves an empty or partial file. Live owners rewrite it every heartbeat,
+              // so an unreadable record older than the stale threshold has no owner.
+              const stat = await NodeFS.lstat(lockPath).catch(() => null);
+              abandoned = stat !== null && now - stat.mtimeMs > LOCK_STALE_AFTER_MS;
+            }
+            if (abandoned) {
+              const stalePath = `${lockPath}.stale-${NodeCrypto.randomUUID()}`;
+              await NodeFS.rename(lockPath, stalePath).then(
+                () => NodeFS.unlink(stalePath),
+                (cause: NodeJS.ErrnoException) => {
+                  if (cause.code !== "ENOENT") throw cause;
+                },
+              );
+            }
+          },
+          catch: toBotMemoryError,
+        });
+        return yield* makeBotMemoryError(
+          "lock-timeout",
+          "Timed out waiting for the memory file lock.",
+        );
+      }),
+    ),
+    Effect.retry({
+      schedule: Schedule.spaced("15 millis").pipe(Schedule.upTo({ duration: LOCK_WAIT_LIMIT_MS })),
+      while: (error) => error.reason._tag === "lock-timeout",
+    }),
+  );
+  const handle = yield* Effect.acquireRelease(acquire, release);
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      // Overwrite in place, then trim: truncating first would briefly expose an empty
+      // record that makes verifyOwnership report a lost lock. Records never shrink.
+      yield* Effect.promise(() =>
+        handle
+          .write(JSON.stringify(record(now)), 0, "utf8")
+          .then(({ bytesWritten }) => handle.truncate(bytesWritten))
+          .then(() => handle.sync())
+          .catch(() => undefined),
+      );
+    }).pipe(Effect.repeat(Schedule.fixed("10 seconds"))),
+  );
+  return { verifyOwnership } satisfies BotMemoryFileLock;
+});
+
 async function withFileLock<A>(
   memoryRoot: string,
   filePath: string,
-  use: () => Promise<A>,
+  use: (lock: BotMemoryFileLock) => Promise<A>,
 ): Promise<A> {
-  const lockPath = `${filePath}.lock`;
-  const token = NodeCrypto.randomUUID();
-  const startedAt = DateTime.toEpochMillis(DateTime.nowUnsafe());
-  await ensurePrivateDirectory(memoryRoot, NodePath.dirname(filePath));
-  await assertNotSymlink(lockPath);
-
-  let handle: NodeFSP.FileHandle | undefined;
-  while (!handle) {
-    try {
-      handle = await NodeFS.open(lockPath, "wx", 0o600);
-      await handle.writeFile(token, "utf8");
-      await handle.sync();
-    } catch (cause) {
-      if (handle) {
-        const owned = await handle.stat().catch(() => null);
-        const current = await NodeFS.lstat(lockPath).catch(() => null);
-        if (owned && current && owned.ino === current.ino && owned.dev === current.dev) {
-          await NodeFS.unlink(lockPath).catch(() => undefined);
-        }
-        await handle.close().catch(() => undefined);
-        handle = undefined;
-        throw new BotMemoryError("io-error", "Could not initialize the memory file lock.", {
-          cause,
-        });
-      }
-      if ((cause as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw new BotMemoryError("io-error", "Could not acquire the memory file lock.", { cause });
-      }
-      const stat = await NodeFS.stat(lockPath).catch(() => null);
-      const now = DateTime.toEpochMillis(DateTime.nowUnsafe());
-      if (stat && now - stat.mtimeMs > LOCK_STALE_AFTER_MS) {
-        await NodeFS.rename(lockPath, `${lockPath}.stale-${NodeCrypto.randomUUID()}`).catch(
-          () => undefined,
-        );
-        continue;
-      }
-      if (now - startedAt >= LOCK_WAIT_LIMIT_MS) {
-        throw new BotMemoryError("lock-timeout", "Timed out waiting for another memory write.");
-      }
-      await wait(15);
-    }
-  }
-
-  const lease = NodeTimers.setInterval(() => {
-    const now = DateTime.toDate(DateTime.nowUnsafe());
-    void handle?.utimes(now, now).catch(() => undefined);
-  }, LOCK_STALE_AFTER_MS / 3);
-  lease.unref();
-  try {
-    return await use();
-  } finally {
-    NodeTimers.clearInterval(lease);
-    await handle.close().catch(() => undefined);
-    const owner = await NodeFS.readFile(lockPath, "utf8").catch(() => "");
-    if (owner === token) await NodeFS.unlink(lockPath).catch(() => undefined);
-  }
+  return Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const lock = yield* acquireBotMemoryFileLock(memoryRoot, filePath);
+        return yield* Effect.promise(() => use(lock));
+      }),
+    ),
+  );
 }
 
-async function writeAtomically(
+async function writeMemoryFile(
   memoryRoot: string,
   filePath: string,
   contents: string,
+  verifyOwnership?: () => Promise<void>,
 ): Promise<void> {
-  const directory = NodePath.dirname(filePath);
-  await ensurePrivateDirectory(memoryRoot, directory);
+  await ensurePrivateDirectory(memoryRoot, NodePath.dirname(filePath));
   await assertNotSymlink(filePath);
-  const tempPath = NodePath.join(
-    directory,
-    `.${NodePath.basename(filePath)}.${NodeCrypto.randomUUID()}.tmp`,
-  );
-  let handle: NodeFSP.FileHandle | undefined;
-  try {
-    handle = await NodeFS.open(tempPath, "wx", 0o600);
-    await handle.writeFile(contents, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    await NodeFS.rename(tempPath, filePath);
-    await NodeFS.chmod(filePath, 0o600);
-  } finally {
-    await handle?.close().catch(() => undefined);
-    await NodeFS.unlink(tempPath).catch(() => undefined);
-  }
+  await verifyOwnership?.();
+  // Check again after the slow staging and sync, so a writer that lost the lock
+  // meanwhile never replaces the newer owner's file.
+  let lostLock: BotMemoryError | undefined;
+  await Effect.runPromise(
+    writeFileStringAtomically({
+      filePath,
+      contents,
+      mode: 0o600,
+      durable: true,
+      ...(verifyOwnership
+        ? {
+            beforeReplace: Effect.tryPromise({
+              try: verifyOwnership,
+              catch: (cause) => (lostLock = toBotMemoryError(cause)),
+            }),
+          }
+        : {}),
+    }).pipe(Effect.provide(NodeServices.layer)),
+  ).catch((cause: unknown) => {
+    throw lostLock ?? cause;
+  });
 }
 
 export class BotMemoryStore {
@@ -538,9 +651,9 @@ export class BotMemoryStore {
       return parseReviewCadence(await NodeFS.readFile(filePath, "utf8"));
     } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_REVIEW_CADENCE;
-      if (cause instanceof BotMemoryError || cause instanceof InvalidReviewCadenceError)
+      if (Schema.is(BotMemoryError)(cause) || cause instanceof InvalidReviewCadenceError)
         throw cause;
-      throw new BotMemoryError("io-error", "Could not read the bot memory review cadence.", {
+      throw makeBotMemoryError("io-error", "Could not read the bot memory review cadence.", {
         cause,
       });
     }
@@ -548,6 +661,7 @@ export class BotMemoryStore {
 
   private async readReviewCadenceStateRecovering(
     filePath: string,
+    lock: BotMemoryFileLock,
   ): Promise<BotMemoryReviewCadenceState> {
     try {
       return await this.readReviewCadenceState(filePath);
@@ -558,12 +672,14 @@ export class BotMemoryStore {
         `.memory-review.corrupt-${DateTime.formatIso(DateTime.nowUnsafe()).replaceAll(":", "-")}-${NodeCrypto.randomUUID()}.json`,
       );
       await assertMemoryPath(this.memoryRoot, quarantinePath);
+      await lock.verifyOwnership();
       await NodeFS.rename(filePath, quarantinePath);
       await NodeFS.chmod(quarantinePath, 0o600);
-      await writeAtomically(
+      await writeMemoryFile(
         this.memoryRoot,
         filePath,
         `${JSON.stringify(CONSERVATIVE_REVIEW_CADENCE)}\n`,
+        lock.verifyOwnership,
       );
       return CONSERVATIVE_REVIEW_CADENCE;
     }
@@ -584,8 +700,8 @@ export class BotMemoryStore {
     groupId: string | null = null,
   ): Promise<BotMemoryReviewCadence> {
     const filePath = this.reviewCadencePath(botId, groupId);
-    return withFileLock(this.memoryRoot, filePath, async () =>
-      this.toReviewCadence(await this.readReviewCadenceStateRecovering(filePath)),
+    return withFileLock(this.memoryRoot, filePath, async (lock) =>
+      this.toReviewCadence(await this.readReviewCadenceStateRecovering(filePath, lock)),
     );
   }
 
@@ -595,8 +711,8 @@ export class BotMemoryStore {
   ): Promise<BotMemoryReviewReservation> {
     const groupId = reviewInput?.groupId ?? null;
     const filePath = this.reviewCadencePath(botId, groupId);
-    return withFileLock(this.memoryRoot, filePath, async () => {
-      const state = await this.readReviewCadenceStateRecovering(filePath);
+    return withFileLock(this.memoryRoot, filePath, async (lock) => {
+      const state = await this.readReviewCadenceStateRecovering(filePath, lock);
       const now = this.now();
       const due = this.toReviewCadence(state).dueOnNextAcceptedPrompt;
       const claimAvailable = !state.reviewClaim || state.reviewClaim.leaseExpiresAtMs <= now;
@@ -604,7 +720,7 @@ export class BotMemoryStore {
       const memoryReviewIncluded = due && claimAvailable;
       if (memoryReviewIncluded) {
         const inputIds = state.reviewInputs.flatMap((input) => (input.id ? [input.id] : []));
-        await writeAtomically(
+        await writeMemoryFile(
           this.memoryRoot,
           filePath,
           `${JSON.stringify({
@@ -617,6 +733,7 @@ export class BotMemoryStore {
               inputIds,
             },
           })}\n`,
+          lock.verifyOwnership,
         );
       }
       return {
@@ -654,8 +771,8 @@ export class BotMemoryStore {
     reservation: BotMemoryReviewReservation,
   ): Promise<BotMemoryReviewCadence> {
     const filePath = this.reviewCadencePath(reservation.botId, reservation.groupId);
-    return withFileLock(this.memoryRoot, filePath, async () => {
-      const before = await this.readReviewCadenceStateRecovering(filePath);
+    return withFileLock(this.memoryRoot, filePath, async (lock) => {
+      const before = await this.readReviewCadenceStateRecovering(filePath, lock);
       if (before.settledTurnIds?.includes(reservation.id)) return this.toReviewCadence(before);
       const next: BotMemoryReviewCadenceState = {
         ...before,
@@ -665,7 +782,12 @@ export class BotMemoryStore {
           : before.reviewInputs,
         settledTurnIds: [...(before.settledTurnIds ?? []), reservation.id].slice(-20),
       };
-      await writeAtomically(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return this.toReviewCadence(next);
     });
   }
@@ -675,8 +797,8 @@ export class BotMemoryStore {
     completed: boolean,
   ): Promise<BotMemoryReviewCadence> {
     const filePath = this.reviewCadencePath(reservation.botId, reservation.groupId);
-    return withFileLock(this.memoryRoot, filePath, async () => {
-      const before = await this.readReviewCadenceStateRecovering(filePath);
+    return withFileLock(this.memoryRoot, filePath, async (lock) => {
+      const before = await this.readReviewCadenceStateRecovering(filePath, lock);
       if (before.reviewClaim?.id !== reservation.id) return this.toReviewCadence(before);
       const claimedIds = new Set(before.reviewClaim.inputIds);
       const next: BotMemoryReviewCadenceState = {
@@ -689,7 +811,12 @@ export class BotMemoryStore {
           : before.reviewInputs,
       };
       delete (next as { reviewClaim?: unknown }).reviewClaim;
-      await writeAtomically(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return this.toReviewCadence(next);
     });
   }
@@ -697,8 +824,8 @@ export class BotMemoryStore {
   async renewReviewClaim(reservation: BotMemoryReviewReservation): Promise<boolean> {
     if (!reservation.memoryReviewIncluded) return false;
     const filePath = this.reviewCadencePath(reservation.botId, reservation.groupId);
-    return withFileLock(this.memoryRoot, filePath, async () => {
-      const before = await this.readReviewCadenceStateRecovering(filePath);
+    return withFileLock(this.memoryRoot, filePath, async (lock) => {
+      const before = await this.readReviewCadenceStateRecovering(filePath, lock);
       if (before.reviewClaim?.id !== reservation.id) return false;
       const now = this.now();
       const next: BotMemoryReviewCadenceState = {
@@ -709,7 +836,12 @@ export class BotMemoryStore {
           leaseExpiresAtMs: now + this.reviewClaimLeaseMs,
         },
       };
-      await writeAtomically(this.memoryRoot, filePath, `${JSON.stringify(next)}\n`);
+      await writeMemoryFile(
+        this.memoryRoot,
+        filePath,
+        `${JSON.stringify(next)}\n`,
+        lock.verifyOwnership,
+      );
       return true;
     });
   }
@@ -737,7 +869,7 @@ export class BotMemoryStore {
       access.groupId === null ||
       !access.groupMemberBotIds.some((memberBotId) => memberBotId === access.botId)
     ) {
-      throw new BotMemoryError(
+      throw makeBotMemoryError(
         "access-denied",
         "Group memory is available only while the responding bot is a current group member.",
       );
@@ -763,8 +895,8 @@ export class BotMemoryStore {
       if ((cause as NodeJS.ErrnoException).code === "ENOENT") {
         return { entries: [], updatedAt: null };
       }
-      if (cause instanceof BotMemoryError) throw cause;
-      throw new BotMemoryError("io-error", "Could not read the memory file without data loss.", {
+      if (Schema.is(BotMemoryError)(cause)) throw cause;
+      throw makeBotMemoryError("io-error", "Could not read the memory file without data loss.", {
         cause,
       });
     }
@@ -802,16 +934,16 @@ export class BotMemoryStore {
     const access: BotMemoryAccess = input;
     const resolved = this.resolve(access, input.target);
     if (input.operations.length === 0) {
-      throw new BotMemoryError("invalid-operation", "At least one memory operation is required.");
+      throw makeBotMemoryError("invalid-operation", "At least one memory operation is required.");
     }
 
-    return withFileLock(this.memoryRoot, resolved.filePath, async () => {
+    return withFileLock(this.memoryRoot, resolved.filePath, async (lock) => {
       const before = await this.readResolved(resolved);
       let entries = before.entries;
       for (const operation of input.operations) entries = applyOperation(entries, operation);
       const content = renderEntries(entries);
       if (content.length > resolved.charLimit) {
-        throw new BotMemoryError(
+        throw makeBotMemoryError(
           "limit-exceeded",
           `${NodePath.basename(resolved.filePath)} would exceed its ${resolved.charLimit.toLocaleString()} character limit.`,
           {
@@ -822,7 +954,8 @@ export class BotMemoryStore {
         );
       }
       const changed = content !== renderEntries(before.entries);
-      if (changed) await writeAtomically(this.memoryRoot, resolved.filePath, content);
+      if (changed)
+        await writeMemoryFile(this.memoryRoot, resolved.filePath, content, lock.verifyOwnership);
       const updated = changed ? await this.readResolved(resolved) : before;
       return {
         document: this.toDocument(resolved, updated),
@@ -840,23 +973,23 @@ export class BotMemoryStore {
     expectedContent?: string,
   ): Promise<AkeruMemoryDocument> {
     if (access.botId !== expectedBotId) {
-      throw new BotMemoryError(
+      throw makeBotMemoryError(
         "access-denied",
         "The active bot changed. Reopen memory before saving.",
       );
     }
     const resolved = this.resolve(access, target);
     const { normalized } = this.validateDocumentReplacement(access, target, content);
-    return withFileLock(this.memoryRoot, resolved.filePath, async () => {
+    return withFileLock(this.memoryRoot, resolved.filePath, async (lock) => {
       const before = await this.readResolved(resolved);
       if (expectedContent !== undefined && expectedContent !== renderEntries(before.entries)) {
-        throw new BotMemoryError(
+        throw makeBotMemoryError(
           "invalid-operation",
           "Memory changed since you opened it. Reopen memory before saving.",
         );
       }
       if (normalized !== renderEntries(before.entries)) {
-        await writeAtomically(this.memoryRoot, resolved.filePath, normalized);
+        await writeMemoryFile(this.memoryRoot, resolved.filePath, normalized, lock.verifyOwnership);
         return this.toDocument(resolved, await this.readResolved(resolved));
       }
       return this.toDocument(resolved, before);
@@ -877,9 +1010,14 @@ export class BotMemoryStore {
     const documents = targets
       .map((target) => this.resolve(access, target))
       .sort((a, b) => a.filePath.localeCompare(b.filePath));
+    const locks = new Map<string, BotMemoryFileLock>();
     const lock = async (index: number): Promise<A> => {
       const document = documents[index];
-      if (document) return withFileLock(this.memoryRoot, document.filePath, () => lock(index + 1));
+      if (document)
+        return withFileLock(this.memoryRoot, document.filePath, async (held) => {
+          locks.set(document.filePath, held);
+          return lock(index + 1);
+        });
       const originals = new Map<
         AkeruMemoryDocumentTarget,
         { readonly resolved: ResolvedDocument; readonly content: string | null }
@@ -899,10 +1037,15 @@ export class BotMemoryStore {
         return await use(async (target, content) => {
           const original = originals.get(target);
           if (!original)
-            throw new BotMemoryError("access-denied", "Memory target is outside this transaction.");
+            throw makeBotMemoryError("access-denied", "Memory target is outside this transaction.");
           const { normalized } = this.validateDocumentReplacement(access, target, content);
           touched.add(target);
-          await writeAtomically(this.memoryRoot, original.resolved.filePath, normalized);
+          await writeMemoryFile(
+            this.memoryRoot,
+            original.resolved.filePath,
+            normalized,
+            locks.get(original.resolved.filePath)?.verifyOwnership,
+          );
         });
       } catch (cause) {
         const failures: unknown[] = [];
@@ -912,7 +1055,12 @@ export class BotMemoryStore {
             if (original.content === null)
               await NodeFS.rm(original.resolved.filePath, { force: true });
             else
-              await writeAtomically(this.memoryRoot, original.resolved.filePath, original.content);
+              await writeMemoryFile(
+                this.memoryRoot,
+                original.resolved.filePath,
+                original.content,
+                locks.get(original.resolved.filePath)?.verifyOwnership,
+              );
           } catch (rollbackCause) {
             failures.push(rollbackCause);
           }
@@ -939,7 +1087,7 @@ export class BotMemoryStore {
     const normalized = renderEntries(parseEntries(content.replaceAll("\r\n", "\n")));
     assertSafeContent(normalized);
     if (normalized.length > resolved.charLimit) {
-      throw new BotMemoryError(
+      throw makeBotMemoryError(
         "limit-exceeded",
         `${NodePath.basename(resolved.filePath)} exceeds its ${resolved.charLimit.toLocaleString()} character limit.`,
         { charCount: normalized.length, charLimit: resolved.charLimit },
@@ -957,7 +1105,7 @@ export class BotMemoryStore {
       };
       if (document.content.length > document.charLimit) return blockedForSize();
       const entries = parseEntries(document.content).map((entry) => {
-        const findings = scanContent(entry);
+        const findings = scanMemoryContent(entry);
         return findings.length === 0
           ? entry
           : `[BLOCKED: ${document.target.toUpperCase()} memory contained ${findings.join(", ")}. Edit the memory file to remove it.]`;
@@ -993,7 +1141,10 @@ export class BotMemoryStore {
       archiveDirectory,
       `${DateTime.formatIso(DateTime.nowUnsafe()).replaceAll(":", "-")}-${NodeCrypto.randomUUID()}.md`,
     );
-    await withFileLock(this.memoryRoot, source, () => NodeFS.rename(source, destination));
+    await withFileLock(this.memoryRoot, source, async (lock) => {
+      await lock.verifyOwnership();
+      await NodeFS.rename(source, destination);
+    });
     return destination;
   }
 
@@ -1011,10 +1162,15 @@ export class BotMemoryStore {
       ".migrations",
       `${migrationKey}.done`,
     );
-    return withFileLock(this.memoryRoot, markerPath, async () => {
+    return withFileLock(this.memoryRoot, markerPath, async (lock) => {
       if (await pathExists(markerPath)) return false;
       await migrate();
-      await writeAtomically(this.memoryRoot, markerPath, DateTime.formatIso(DateTime.nowUnsafe()));
+      await writeMemoryFile(
+        this.memoryRoot,
+        markerPath,
+        DateTime.formatIso(DateTime.nowUnsafe()),
+        lock.verifyOwnership,
+      );
       return true;
     });
   }
@@ -1047,7 +1203,7 @@ export class BotMemoryStore {
       botId,
       `${migrationKey}.md`,
     );
-    await writeAtomically(this.memoryRoot, archivePath, content);
+    await writeMemoryFile(this.memoryRoot, archivePath, content);
     return archivePath;
   }
 }

@@ -24,6 +24,7 @@ import { OverlayPortalHost } from "./components/OverlayPortal";
 import { appBlurTargetRef } from "./lib/appBlurTarget";
 import { useThemeColor } from "./lib/useThemeColor";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
+import { MobileLanguageProvider } from "./lib/i18n";
 
 import "../global.css";
 
@@ -63,9 +64,11 @@ export default function App() {
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <AppearancePreferencesProvider>
-        <ReplyPlaybackProvider>
-          <AppContent />
-        </ReplyPlaybackProvider>
+        <MobileLanguageProvider>
+          <ReplyPlaybackProvider>
+            <AppContent />
+          </ReplyPlaybackProvider>
+        </MobileLanguageProvider>
       </AppearancePreferencesProvider>
     </RegistryContext.Provider>
   );

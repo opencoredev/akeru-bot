@@ -7,6 +7,7 @@ import {
   ModelSelection,
   ComposioOperationError,
   type McpServer,
+  type OrchestrationEvent,
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderDriverKind,
@@ -26,8 +27,10 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -40,8 +43,10 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { deriveServerPaths, ServerConfig } from "../../config.ts";
 import { TextGenerationError } from "@t3tools/contracts";
 import {
+  AgentControllerRuntimeError,
   AgentControllerUnsupportedEngineError,
   ProviderAdapterRequestError,
+  ProviderValidationError,
 } from "../../provider/Errors.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -69,10 +74,10 @@ import {
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { PersistenceSqlError } from "../../persistence/Errors.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
 import { BotUsageLedger, BotUsageLedgerLive } from "../../usage/BotUsageLedger.ts";
 import { ComposioService, type ComposioServiceShape } from "../../composio/ComposioService.ts";
@@ -103,6 +108,25 @@ async function waitFor(
 
   return poll();
 }
+
+// Subscribes before the caller triggers work, then resolves with the first
+// published event that matches. Awaiting the event replaces polling state.
+const awaitDomainEvent = (
+  engine: OrchestrationEngineService["Service"],
+  matches: (event: OrchestrationEvent) => boolean,
+) =>
+  engine.subscribeDomainEvents.pipe(
+    Effect.flatMap((events) =>
+      events.pipe(Stream.filter(matches), Stream.runHead, Effect.forkScoped),
+    ),
+  );
+
+// Matches the event that hands a delegated result back to pending.
+const releasesDelegation = (delegationId: DelegationId) => (event: OrchestrationEvent) =>
+  event.type === "delegation.updated" &&
+  event.payload.delegation.delegationId === delegationId &&
+  event.payload.delegation.phase._tag === "Completed" &&
+  event.payload.delegation.phase.acknowledgedAt === null;
 
 describe("ProviderCommandReactor", () => {
   it("uses the responding group member before a direct thread bot", () => {
@@ -192,6 +216,7 @@ describe("ProviderCommandReactor", () => {
     readonly turnStartBeforeReactor?: boolean;
     readonly runningTurnBeforeReactor?: boolean;
     readonly resumeBeforeReactor?: boolean;
+    readonly delegatedChild?: boolean;
     readonly replayPersistedResumeOnSubscribe?: boolean;
     readonly commitDuringSequenceRead?: 1 | 2;
     readonly titleUpdatesBeforeStartupCommit?: number;
@@ -208,10 +233,18 @@ describe("ProviderCommandReactor", () => {
       ProviderAdapterRequestError
     >;
     readonly botEngine?: { readonly provider: string; readonly model: string } | null;
+    readonly secondBot?: {
+      readonly engine: { readonly provider: string; readonly model: string };
+      readonly modelSelection?: ModelSelection;
+    };
     readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     readonly bindTurnFailure?: boolean;
     readonly unavailableEngine?: boolean;
+    readonly disabledEngine?: boolean;
     readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
+    readonly enableAgentBrowserAccess?: boolean;
+    readonly startReactor?: boolean;
+    readonly dispatchDelegation?: AgentControllerShape["dispatchDelegation"];
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -357,24 +390,6 @@ describe("ProviderCommandReactor", () => {
       (input: { readonly refName: string; readonly path: string | null }) =>
         Effect.succeed({ worktree: { path: input.path ?? "", refName: input.refName } }),
     );
-    const refreshStatus = vi.fn((_: string) =>
-      Effect.succeed({
-        isRepo: true,
-        hasPrimaryRemote: true,
-        isDefaultRef: false,
-        refName: "renamed-branch",
-        hasWorkingTreeChanges: false,
-        workingTree: {
-          files: [],
-          insertions: 0,
-          deletions: 0,
-        },
-        hasUpstream: true,
-        aheadCount: 0,
-        behindCount: 0,
-        pr: null,
-      }),
-    );
     const generateBranchName = vi.fn<TextGenerationShape["generateBranchName"]>((_) =>
       Effect.fail(
         new TextGenerationError({
@@ -436,6 +451,14 @@ describe("ProviderCommandReactor", () => {
             }),
           );
         }
+        if (input?.disabledEngine === true && engine !== null) {
+          return Effect.fail(
+            new ProviderValidationError({
+              operation: "AgentController.inspectEngine",
+              issue: `Provider instance '${engine.provider}' is disabled in Akeru Bot settings.`,
+            }),
+          );
+        }
         const selected =
           engine === null
             ? fallback
@@ -445,6 +468,9 @@ describe("ProviderCommandReactor", () => {
               };
         return inspectEngine(selected).pipe(Effect.map((result) => ({ ...result, mode })));
       },
+    );
+    const failDelegation = vi.fn<NonNullable<AgentControllerShape["failDelegation"]>>(
+      () => Effect.void,
     );
     const service: AgentControllerShape = {
       authenticateMcpServer: () => Effect.die("unused"),
@@ -457,6 +483,8 @@ describe("ProviderCommandReactor", () => {
       respondToUserInput: respondToUserInput as AgentControllerShape["respondToUserInput"],
       stopSession: stopSession as AgentControllerShape["stopSession"],
       listSessions: () => Effect.succeed(runtimeSessions),
+      ...(input?.dispatchDelegation ? { dispatchDelegation: input.dispatchDelegation } : {}),
+      failDelegation,
       rollbackConversation: () => Effect.die("unused"),
       uploadFeedback: () => Effect.die("unused"),
       get streamEvents() {
@@ -474,13 +502,37 @@ describe("ProviderCommandReactor", () => {
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
-    const projectionSnapshotLayer = OrchestrationProjectionSnapshotQueryLive.pipe(
-      Layer.provide(ThreadBackgroundLiveness.layer),
-      Layer.provide(ThreadPlanProgress.layer),
-      Layer.provide(RepositoryIdentityResolver.layer),
-      Layer.provide(SqlitePersistenceMemory),
+    let failingCommandReadModelReads = 0;
+    const projectionSnapshotLayer = Layer.effect(
+      ProjectionSnapshotQuery,
+      ProjectionSnapshotQuery.pipe(
+        Effect.map((query) => ({
+          ...query,
+          getCommandReadModel: () =>
+            Effect.suspend(() => {
+              if (failingCommandReadModelReads === 0) return query.getCommandReadModel();
+              failingCommandReadModelReads -= 1;
+              return Effect.fail(
+                new PersistenceSqlError({
+                  operation: "ProjectionSnapshotQuery.getCommandReadModel:test",
+                  detail: "Injected command read model failure",
+                }),
+              );
+            }),
+        })),
+      ),
+    ).pipe(
+      Layer.provideMerge(
+        OrchestrationProjectionSnapshotQueryLive.pipe(
+          Layer.provide(ThreadBackgroundLiveness.layer),
+          Layer.provide(ThreadPlanProgress.layer),
+          Layer.provide(RepositoryIdentityResolver.layer),
+          Layer.provide(SqlitePersistenceMemory),
+        ),
+      ),
     );
     let titleRegenerationCompletionDispatchAttempts = 0;
+    let failingDelegationReleases = 0;
     let sequenceReads = 0;
     const reactorOrchestrationLayer = Layer.effect(
       OrchestrationEngineService,
@@ -502,6 +554,19 @@ describe("ProviderCommandReactor", () => {
               ) {
                 return Effect.die(new Error("Injected title regeneration completion failure"));
               }
+            }
+            if (
+              command.type === "delegation.state.set" &&
+              command.commandId.startsWith("server:delegation-release:") &&
+              failingDelegationReleases > 0
+            ) {
+              failingDelegationReleases -= 1;
+              return Effect.fail(
+                new PersistenceSqlError({
+                  operation: "OrchestrationEngine.dispatch:test",
+                  detail: "Injected delegation release failure",
+                }),
+              );
             }
             return engine.dispatch(command);
           },
@@ -607,25 +672,23 @@ describe("ProviderCommandReactor", () => {
         } satisfies Partial<GitWorkflowService.GitWorkflowService["Service"]>),
       ),
       Layer.provideMerge(
-        Layer.succeed(VcsStatusBroadcaster, {
-          getStatus: () => Effect.die("getStatus should not be called in this test"),
-          refreshLocalStatus: () =>
-            Effect.die("refreshLocalStatus should not be called in this test"),
-          refreshStatus,
-          streamStatus: () => Stream.die("streamStatus should not be called in this test"),
-        }),
-      ),
-      Layer.provideMerge(
         Layer.mock(TextGeneration, {
           generateBranchName,
           generateThreadTitle,
         }),
       ),
-      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(
+        ServerSettingsService.layerTest(
+          input?.enableAgentBrowserAccess === undefined
+            ? {}
+            : { enableAgentBrowserAccess: input.enableAgentBrowserAccess },
+        ),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
-    runtime = ManagedRuntime.make(layer);
+    const managedRuntime = ManagedRuntime.make(layer);
+    runtime = managedRuntime;
 
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
@@ -661,6 +724,42 @@ describe("ProviderCommandReactor", () => {
         }),
       );
     }
+    if (input?.secondBot !== undefined) {
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "bot.create",
+          commandId: CommandId.make("cmd-bot-create-2"),
+          botId: BotId.make("bot-2"),
+          name: "Second bot",
+          title: "Second bot",
+          avatar: { kind: "dither", seed: "second-bot" },
+          engine: input.secondBot.engine,
+          sandbox: "local",
+          runtimeMode: "approval-required",
+          usageCap: null,
+          groupId: null,
+          createdAt: now,
+        }),
+      );
+      await Effect.runPromise(
+        engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cmd-thread-create-2"),
+          threadId: ThreadId.make("thread-2"),
+          projectId: asProjectId("project-1"),
+          botId: BotId.make("bot-2"),
+          title: "Thread 2",
+          modelSelection:
+            input.secondBot.modelSelection ??
+            createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol"),
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+        }),
+      );
+    }
     await Effect.runPromise(
       engine.dispatch({
         type: "thread.create",
@@ -668,6 +767,12 @@ describe("ProviderCommandReactor", () => {
         threadId: ThreadId.make("thread-1"),
         projectId: asProjectId("project-1"),
         ...(input?.botEngine !== undefined ? { botId: BotId.make("bot-1") } : {}),
+        ...(input?.delegatedChild === true
+          ? {
+              parentThreadId: ThreadId.make("thread-parent"),
+              parentDelegationId: DelegationId.make("delegation-before-restart"),
+            }
+          : {}),
         title: "Thread",
         modelSelection: modelSelection,
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -819,13 +924,16 @@ describe("ProviderCommandReactor", () => {
     }
 
     scope = await Effect.runPromise(Scope.make("sequential"));
-    await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
+    if (input?.startReactor !== false) {
+      await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
+    }
     const drain = () => Effect.runPromise(reactor.drain);
 
     return {
       engine,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       resolveEngine,
+      failDelegation,
       startSession,
       sendTurn,
       interruptTurn,
@@ -835,17 +943,33 @@ describe("ProviderCommandReactor", () => {
       renameBranch,
       pruneWorktrees,
       createWorktree,
-      refreshStatus,
       generateBranchName,
       generateThreadTitle,
       runtimeSessions,
       stateDir,
       drain,
       runEffect,
+      // Builds and starts another reactor over the same persistence. Closing
+      // its scope stops it the way a server shutdown would.
+      startReactor: (reactorScope: Scope.Scope) =>
+        managedRuntime.runPromise(
+          Effect.gen(function* () {
+            const context = yield* Layer.build(Layer.fresh(ProviderCommandReactorLive));
+            const started = Context.get(context, ProviderCommandReactor);
+            yield* started.start();
+            return started;
+          }).pipe(Scope.provide(reactorScope)),
+        ),
       summarizeBotUsage: () =>
         runtime!.runPromise(
           BotUsageLedger.pipe(Effect.flatMap((ledger) => ledger.summarize(BotId.make("bot-1")))),
         ),
+      failNextCommandReadModelReads: (count: number) => {
+        failingCommandReadModelReads = count;
+      },
+      failNextDelegationReleases: (count: number) => {
+        failingDelegationReleases = count;
+      },
       get titleRegenerationCompletionDispatchAttempts() {
         return titleRegenerationCompletionDispatchAttempts;
       },
@@ -1003,6 +1127,22 @@ describe("ProviderCommandReactor", () => {
       input: "recover this persisted request",
     });
   });
+
+  it.each([
+    ["pending turn start", { turnStartBeforeReactor: true }],
+    ["pending resume", { resumeBeforeReactor: true }],
+    ["running turn", { runningTurnBeforeReactor: true }],
+  ] as const)(
+    "does not restart a delegated child's %s after reactor startup",
+    async (_name, recovery) => {
+      const harness = await createHarness({ ...recovery, delegatedChild: true });
+
+      await harness.drain();
+
+      expect(harness.startSession).not.toHaveBeenCalled();
+      expect(harness.sendTurn).not.toHaveBeenCalled();
+    },
+  );
 
   it("marks an interrupted turn resumable when automatic recovery fails", async () => {
     const harness = await createHarness({
@@ -1192,7 +1332,6 @@ describe("ProviderCommandReactor", () => {
   it.each([
     ["codex", "gpt-5.6-sol"],
     ["claudeAgent", "claude-fable-5"],
-    ["cursor", "composer-1.5"],
     ["grok", "grok-code-fast-1"],
     ["opencode", "anthropic/claude-sonnet-4-5"],
     ["kimi", "k3-256k"],
@@ -1430,12 +1569,53 @@ describe("ProviderCommandReactor", () => {
         kind: "provider.turn.start.failed",
         payload: {
           detail: "Provider instance 'missing' is not available.",
+          unavailability: "temporary-failure",
           requestId: "user-message-missing-bot-engine",
         },
       }),
     );
     expect(harness.startSession).not.toHaveBeenCalled();
     expect(harness.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("reports a disabled engine as one readable line and names the bot on its bot work", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+      disabledEngine: true,
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-disabled-bot-engine"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-disabled-bot-engine"),
+          role: "user",
+          text: "use disabled engine",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.failDelegation.mock.calls.length === 1);
+    await harness.drain();
+    const detail = "Provider instance 'codex' is disabled in Akeru Bot settings.";
+    expect(harness.failDelegation).toHaveBeenCalledWith({
+      threadId: ThreadId.make("thread-1"),
+      error: `Configured bot could not start: ${detail}`,
+    });
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed")
+        ?.payload,
+    ).toMatchObject({ detail });
+    expect(thread?.session?.lastError).toBe(detail);
   });
 
   it("fails the turn before provider dispatch when Composio runtime preparation fails", async () => {
@@ -1475,6 +1655,7 @@ describe("ProviderCommandReactor", () => {
         kind: "provider.turn.start.failed",
         payload: {
           detail: "Composio could not prepare connected tools.",
+          unavailability: "temporary-failure",
           requestId: "user-message-composio-failure",
         },
       }),
@@ -2376,11 +2557,59 @@ describe("ProviderCommandReactor", () => {
     );
 
     await waitFor(() => harness.generateBranchName.mock.calls.length === 1);
-    await waitFor(() => harness.refreshStatus.mock.calls.length === 1);
+    await waitFor(() => harness.renameBranch.mock.calls.length === 1);
     expect(harness.generateBranchName.mock.calls[0]?.[0]).toMatchObject({
       message: "Add a safer reconnect backoff.",
     });
-    expect(harness.refreshStatus.mock.calls[0]?.[0]).toBe("/tmp/provider-project-worktree");
+    expect(harness.renameBranch.mock.calls[0]?.[0]).toMatchObject({
+      cwd: "/tmp/provider-project-worktree",
+    });
+  });
+
+  it("strips the legacy t3code/ prefix when regenerating a worktree branch name", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-legacy-branch"),
+        threadId: ThreadId.make("thread-1"),
+        branch: "t3code/deadbeef",
+        worktreePath: "/tmp/provider-project-worktree",
+      }),
+    );
+
+    // Simulate a text-generation response that echoes the existing legacy
+    // branch back instead of producing a fresh fragment.
+    harness.generateBranchName.mockImplementation(() =>
+      Effect.succeed({ branch: "t3code/deadbeef" }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-legacy-branch"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-legacy-branch"),
+          role: "user",
+          text: "Regenerate the branch name.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.generateBranchName.mock.calls.length === 1);
+    await waitFor(() => harness.renameBranch.mock.calls.length === 1);
+    expect(harness.renameBranch.mock.calls[0]?.[0]).toMatchObject({
+      cwd: "/tmp/provider-project-worktree",
+      oldBranch: "t3code/deadbeef",
+      newBranch: "akeru/deadbeef",
+    });
   });
 
   it("recreates a missing worktree from the thread branch before starting a turn", async () => {
@@ -2569,7 +2798,140 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  it("forwards plan interaction mode to the provider turn request", async () => {
+  it.each([
+    { enableAgentBrowserAccess: true, browserText: "preview browser tools" },
+    { enableAgentBrowserAccess: false, browserText: "turned off in Settings" },
+  ])(
+    "expands @browser and @chat: mentions into bounded provider context (browser access $enableAgentBrowserAccess)",
+    async ({ enableAgentBrowserAccess, browserText }) => {
+      const harness = await createHarness({ enableAgentBrowserAccess });
+      const now = "2026-01-01T00:00:00.000Z";
+      const startTurn = (threadId: string, messageId: string, text: string) =>
+        Effect.runPromise(
+          harness.engine.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`cmd-${messageId}`),
+            threadId: ThreadId.make(threadId),
+            message: { messageId: asMessageId(messageId), role: "user", text, attachments: [] },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "approval-required",
+            createdAt: now,
+          }),
+        );
+
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cmd-thread-create-mentioned"),
+          threadId: ThreadId.make("thread-2"),
+          projectId: asProjectId("project-1"),
+          title: "Release plan",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+        }),
+      );
+      await startTurn("thread-2", "mentioned-message", "ship the release on friday");
+      await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+      const prompt = "check @chat:thread-2 with @browser";
+      await startTurn("thread-1", "mentioning-message", prompt);
+      await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+      const sent = harness.sendTurn.mock.calls[1]?.[0] as { readonly input?: string };
+      expect(sent.input?.startsWith(`${prompt}\n\n<mention_context>`)).toBe(true);
+      expect(sent.input).toContain(browserText);
+      expect(sent.input).toContain(
+        '<chat_context id="thread-2" title="Release plan">\nUser: ship the release on friday\n</chat_context>',
+      );
+
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.messages.at(-1)?.text).toBe(prompt);
+    },
+  );
+
+  it("never expands archived, deleted, background, or unknown chats", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const dispatch = (command: Parameters<typeof harness.engine.dispatch>[0]) =>
+      Effect.runPromise(harness.engine.dispatch(command));
+    const createWithMessage = async (threadId: string, title: string, sent: number) => {
+      await dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`cmd-create-${threadId}`),
+        threadId: ThreadId.make(threadId),
+        projectId: asProjectId("project-1"),
+        title,
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      await dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make(`cmd-turn-${threadId}`),
+        threadId: ThreadId.make(threadId),
+        message: {
+          messageId: asMessageId(`message-${threadId}`),
+          role: "user",
+          text: `secret from ${title}`,
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      });
+      await waitFor(() => harness.sendTurn.mock.calls.length === sent);
+    };
+
+    await createWithMessage("thread-archived", "Archived plan", 1);
+    await createWithMessage("thread-deleted", "Deleted plan", 2);
+    await createWithMessage("delegation-thread-worker", "Background work", 3);
+    await dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make("cmd-archive"),
+      threadId: ThreadId.make("thread-archived"),
+    });
+    await dispatch({
+      type: "thread.delete",
+      commandId: CommandId.make("cmd-delete"),
+      threadId: ThreadId.make("thread-deleted"),
+    });
+
+    // Four excluded mentions come first, so a valid fifth one needs a free context slot.
+    await createWithMessage("thread-visible", "Visible plan", 4);
+    const prompt =
+      "see @chat:thread-archived @chat:thread-deleted @chat:delegation-thread-worker @chat:thread-missing @chat:thread-visible";
+    await dispatch({
+      type: "thread.turn.start",
+      commandId: CommandId.make("cmd-turn-mentioning"),
+      threadId: ThreadId.make("thread-1"),
+      message: {
+        messageId: asMessageId("message-mentioning"),
+        role: "user",
+        text: prompt,
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      createdAt: now,
+    });
+    await waitFor(() => harness.sendTurn.mock.calls.length === 5);
+
+    const sent = harness.sendTurn.mock.calls[4]?.[0] as { readonly input?: string };
+    expect(sent.input).toContain("secret from Visible plan");
+    expect(sent.input).not.toContain("secret from Archived plan");
+    expect(sent.input).not.toContain("secret from Deleted plan");
+    expect(sent.input).not.toContain("secret from Background work");
+  });
+
+  it("runs a thread stored in the retired plan mode as a default turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
@@ -2603,7 +2965,7 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
       threadId: ThreadId.make("thread-1"),
-      interactionMode: "plan",
+      interactionMode: "default",
     });
   });
 
@@ -3597,6 +3959,77 @@ describe("ProviderCommandReactor", () => {
     ).toBe(false);
   });
 
+  it("uses the updated bot engine model for the next turn after bot.update", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5-codex" },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-model-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-model-1"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-bot-update-model"),
+        botId: BotId.make("bot-1"),
+        engine: { provider: "codex", model: "gpt-5.6-sol" },
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-model-2"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-model-2"),
+          role: "user",
+          text: "second",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.resolveEngine).toHaveBeenNthCalledWith(2, {
+      threadId: ThreadId.make("thread-1"),
+      engine: { provider: "codex", model: "gpt-5.6-sol" },
+      fallback: {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.6-sol",
+      },
+      mode: "default",
+      botConversation: true,
+    });
+    expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({
+      modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" },
+    });
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(
+      thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toBe(false);
+  });
+
   it("starts a new provider after the previous thread session stopped", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
@@ -3695,6 +4128,592 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  effectIt.effect("hands delegated results back when the parent turn fails to start", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness({ botEngine: null }));
+      const now = "2026-01-01T00:00:00.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-release");
+      const childTurnId = TurnId.make("delegation-turn-release");
+      const delegationId = DelegationId.make("delegation-release");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-release-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-release-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-release-create"),
+        delegation: queued,
+      });
+      const running = {
+        _tag: "Running" as const,
+        childThreadId,
+        childTurnId,
+        startedAt: now,
+        progress: null,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-release-running"),
+        delegation: { ...queued, phase: running },
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-release-completed"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId,
+            startedAt: now,
+            completedAt: now,
+            acknowledgedAt: null,
+            result: { summary: "The answer is 42.", childThreadId, childTurnId },
+          },
+        },
+      });
+
+      const startTurn = (suffix: string, createdAt: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-release-turn-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-release-${suffix}`),
+            role: "user",
+            text: "What did the child find?",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+
+      // The failed send recovers in its own fiber, so wait for the release
+      // event it publishes rather than the reactor drain.
+      const released = yield* awaitDomainEvent(harness.engine, releasesDelegation(delegationId));
+      harness.sendTurn.mockImplementationOnce(() => Effect.die("dispatch failed"));
+      yield* startTurn("failed", "2026-01-01T00:00:02.000Z");
+      yield* Fiber.join(released);
+
+      yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+      expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+        delegationResults: expect.stringContaining("The answer is 42."),
+      });
+    }).pipe(Effect.scoped),
+  );
+
+  effectIt.effect("hands delegated results back when they cannot be read for a started turn", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness({ botEngine: null }));
+      const now = "2026-01-01T00:00:00.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-unread");
+      const childTurnId = TurnId.make("delegation-turn-unread");
+      const delegationId = DelegationId.make("delegation-unread");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-unread-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-unread-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-unread-create"),
+        delegation: queued,
+      });
+      const running = {
+        _tag: "Running" as const,
+        childThreadId,
+        childTurnId,
+        startedAt: now,
+        progress: null,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-unread-running"),
+        delegation: { ...queued, phase: running },
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-unread-completed"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId,
+            startedAt: now,
+            completedAt: now,
+            acknowledgedAt: null,
+            result: { summary: "The answer is 42.", childThreadId, childTurnId },
+          },
+        },
+      });
+
+      const startTurn = (suffix: string, createdAt: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-unread-turn-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-unread-${suffix}`),
+            role: "user",
+            text: "What did the child find?",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+
+      // Both attempts at the results read fail, and so does the release's
+      // first read. The release retries its read, then the send proceeds.
+      harness.failNextCommandReadModelReads(3);
+      yield* startTurn("unread", "2026-01-01T00:00:02.000Z");
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+      expect(harness.sendTurn.mock.calls[0]?.[0]).not.toHaveProperty("delegationResults");
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      expect(
+        readModel.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: null });
+
+      yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+      expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+        delegationResults: expect.stringContaining("The answer is 42."),
+      });
+    }),
+  );
+
+  effectIt.effect("fails the turn start until unreleased delegated results are handed back", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness({ botEngine: null }));
+      const now = "2026-01-01T00:00:00.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-unreleased");
+      const childTurnId = TurnId.make("delegation-turn-unreleased");
+      const delegationId = DelegationId.make("delegation-unreleased");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-unreleased-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-unreleased-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-unreleased-create"),
+        delegation: queued,
+      });
+      const running = {
+        _tag: "Running" as const,
+        childThreadId,
+        childTurnId,
+        startedAt: now,
+        progress: null,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-unreleased-running"),
+        delegation: { ...queued, phase: running },
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-unreleased-completed"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId,
+            startedAt: now,
+            completedAt: now,
+            acknowledgedAt: null,
+            result: { summary: "The answer is 42.", childThreadId, childTurnId },
+          },
+        },
+      });
+
+      const startTurn = (suffix: string, createdAt: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-unreleased-turn-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-unreleased-${suffix}`),
+            role: "user",
+            text: "What did the child find?",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+
+      // The results read fails twice and every quick release attempt fails,
+      // so the turn must not run without them. The background retry then
+      // hands them back to the next turn.
+      const released = yield* awaitDomainEvent(harness.engine, releasesDelegation(delegationId));
+      harness.failNextCommandReadModelReads(2);
+      harness.failNextDelegationReleases(9);
+      yield* startTurn("unreleased", "2026-01-01T00:00:02.000Z");
+      yield* Effect.promise(() => harness.drain());
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      expect(
+        readModel.threads
+          .find((thread) => thread.id === ThreadId.make("thread-1"))
+          ?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+      ).toBe(true);
+      expect(harness.sendTurn).not.toHaveBeenCalled();
+      // The background retry publishes the release once a dispatch lands.
+      yield* Fiber.join(released);
+
+      yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+      expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+        delegationResults: expect.stringContaining("The answer is 42."),
+      });
+    }).pipe(Effect.scoped),
+  );
+
+  effectIt.effect("hands delegated results back after a restart cancels their release", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({ botEngine: null, startReactor: false }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-restart");
+      const childTurnId = TurnId.make("delegation-turn-restart");
+      const delegationId = DelegationId.make("delegation-restart");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-restart-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-restart-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-restart-create"),
+        delegation: queued,
+      });
+      const running = {
+        _tag: "Running" as const,
+        childThreadId,
+        childTurnId,
+        startedAt: now,
+        progress: null,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-restart-running"),
+        delegation: { ...queued, phase: running },
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-restart-completed"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId,
+            startedAt: now,
+            completedAt: now,
+            acknowledgedAt: null,
+            result: { summary: "The answer is 42.", childThreadId, childTurnId },
+          },
+        },
+      });
+
+      const startTurn = (suffix: string, createdAt: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-restart-turn-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-restart-${suffix}`),
+            role: "user",
+            text: "What did the child find?",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+
+      // The results read fails twice and every quick release attempt fails,
+      // so the turn must not run without them. The background retry then
+      // hands them back to the next turn.
+      // The first server fails the turn start and cannot release the results
+      // before it stops, which cancels the background retry.
+      const firstScope = yield* Scope.make("sequential");
+      yield* Effect.promise(() => harness.startReactor(firstScope));
+      const failed = yield* awaitDomainEvent(
+        harness.engine,
+        (event) =>
+          event.type === "thread.session-set" &&
+          event.payload.threadId === ThreadId.make("thread-1") &&
+          event.payload.session.status === "error",
+      );
+      harness.failNextDelegationReleases(Number.MAX_SAFE_INTEGER);
+      harness.sendTurn.mockImplementationOnce(() => Effect.die("dispatch failed"));
+      yield* startTurn("failed", "2026-01-01T00:00:02.000Z");
+      yield* Fiber.join(failed);
+      yield* Scope.close(firstScope, Exit.void);
+      const stranded = yield* Effect.promise(() => harness.readModel());
+      expect(
+        stranded.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: "2026-01-01T00:00:02.000Z" });
+
+      // The restarted server finds the failed turn start and hands the
+      // results back before it handles new work.
+      harness.failNextDelegationReleases(0);
+      const secondScope = yield* Scope.make("sequential");
+      yield* Effect.addFinalizer(() => Scope.close(secondScope, Exit.void));
+      const second = yield* Effect.promise(() => harness.startReactor(secondScope));
+      const recovered = yield* Effect.promise(() => harness.readModel());
+      expect(
+        recovered.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: null });
+
+      yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
+      yield* second.drain;
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+      expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+        delegationResults: expect.stringContaining("The answer is 42."),
+      });
+    }).pipe(Effect.scoped),
+  );
+
   effectIt.effect("interrupts canceled delegation children and preserves kept children", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => createHarness({ botEngine: null }));
@@ -3746,9 +4765,7 @@ describe("ProviderCommandReactor", () => {
             parentBotId,
             childBotId,
             parentThreadId: ThreadId.make("thread-1"),
-            childThreadId: null,
             parentTurnId: TurnId.make("turn-parent"),
-            childTurnId: null,
             ancestorBotIds: [parentBotId],
             depth: 1,
             task: "Research the answer.",
@@ -3764,15 +4781,14 @@ describe("ProviderCommandReactor", () => {
               disabledMcpServerIds: [],
               approvalCeiling: "send" as const,
             },
-            state: "queued" as const,
+            phase: { _tag: "Queued" as const },
             billedBotId: childBotId,
-            result: null,
-            failure: null,
             keep: false,
+            anchorMessageId: null,
+            retryOfDelegationId: null,
+            trigger: "bot" as const,
             createdAt: now,
             updatedAt: now,
-            startedAt: null,
-            completedAt: null,
           };
           yield* harness.engine.dispatch({
             type: "delegation.create",
@@ -3784,10 +4800,13 @@ describe("ProviderCommandReactor", () => {
             commandId: CommandId.make(`cmd-delegation-running-${suffix}`),
             delegation: {
               ...queued,
-              childThreadId,
-              childTurnId,
-              state: "running",
-              startedAt: now,
+              phase: {
+                _tag: "Running",
+                childThreadId,
+                childTurnId,
+                startedAt: now,
+                progress: null,
+              },
             },
           });
           return { delegationId, childThreadId, childTurnId };
@@ -3816,6 +4835,261 @@ describe("ProviderCommandReactor", () => {
       expect(harness.interruptTurn).toHaveBeenCalledWith({
         threadId: canceled.childThreadId,
         turnId: canceled.childTurnId,
+      });
+    }),
+  );
+
+  effectIt.effect("keeps a cancel when the stopped child cannot be interrupted", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: null,
+          interruptTurnEffect: () =>
+            Effect.fail(
+              new ProviderAdapterRequestError({
+                provider: ProviderDriverKind.make("codex"),
+                method: "thread.turn.interrupt",
+                detail: "No active session.",
+              }),
+            ),
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const later = "2026-01-01T00:00:01.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-stopped");
+      const delegationId = DelegationId.make("delegation-stopped-child");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-stopped-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-stopped-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Audit the docs site for broken links.",
+        expectedResult: "A list of broken links.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: true,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-stopped-child-create"),
+        delegation: queued,
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-stopped-child-running"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Running",
+            childThreadId,
+            childTurnId: null,
+            startedAt: now,
+            progress: null,
+          },
+        },
+      });
+
+      yield* harness.engine.dispatch({
+        type: "delegation.cancel",
+        commandId: CommandId.make("cmd-stopped-child-cancel"),
+        delegationId,
+        keep: false,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+
+      expect(harness.interruptTurn).toHaveBeenCalledWith({ threadId: childThreadId });
+      const delegation = (yield* Effect.promise(() => harness.readModel())).delegations.find(
+        (entry) => entry.delegationId === delegationId,
+      );
+      expect(delegation?.phase).toMatchObject({
+        _tag: "Canceled",
+        childThreadId,
+        completedAt: later,
+        canceledBy: "user",
+      });
+    }),
+  );
+
+  effectIt.effect("hands a retry to the delegation runtime and reports a refused start", () =>
+    Effect.gen(function* () {
+      const dispatchDelegation = vi.fn((input: { readonly delegationId?: DelegationId }) =>
+        input.delegationId === DelegationId.make("delegation-refused")
+          ? Effect.fail(
+              new AgentControllerRuntimeError({
+                operation: "dispatchDelegation",
+                detail: "The target bot is not available in this workspace.",
+              }),
+            )
+          : Effect.succeed({
+              delegationId: DelegationId.make("delegation-retry"),
+              childThreadId: ThreadId.make("delegation-thread-retry"),
+              childBotId: BotId.make("bot-child"),
+              name: "Child bot",
+              phase: "running" as const,
+            }),
+      );
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          botEngine: null,
+          dispatchDelegation: dispatchDelegation as AgentControllerShape["dispatchDelegation"],
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const later = "2026-01-01T00:00:01.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-retry-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      const createFailed = (suffix: string) =>
+        Effect.gen(function* () {
+          const queued = {
+            delegationId: DelegationId.make(`delegation-${suffix}`),
+            parentDelegationId: null,
+            parentBotId,
+            childBotId,
+            parentThreadId: ThreadId.make("thread-1"),
+            parentTurnId: TurnId.make("turn-parent"),
+            ancestorBotIds: [parentBotId],
+            depth: 1,
+            task: "Research the answer.",
+            expectedResult: "A concise answer.",
+            deadline: null,
+            access: {
+              allowedToolIds: ["Read" as const],
+              memoryScopes: [],
+              sandbox: "local" as const,
+              runtimeMode: "approval-required" as const,
+              hasUserComputer: false,
+              enabledMcpServerIds: [],
+              disabledMcpServerIds: [],
+              approvalCeiling: "send" as const,
+            },
+            phase: { _tag: "Queued" as const },
+            billedBotId: childBotId,
+            keep: false,
+            anchorMessageId: null,
+            retryOfDelegationId: null,
+            trigger: "bot" as const,
+            createdAt: now,
+            updatedAt: now,
+          };
+          yield* harness.engine.dispatch({
+            type: "delegation.create",
+            commandId: CommandId.make(`cmd-retry-create-${suffix}`),
+            delegation: queued,
+          });
+          yield* harness.engine.dispatch({
+            type: "delegation.state.set",
+            commandId: CommandId.make(`cmd-retry-failed-${suffix}`),
+            delegation: {
+              ...queued,
+              phase: {
+                _tag: "Failed",
+                childThreadId: null,
+                childTurnId: null,
+                startedAt: null,
+                completedAt: now,
+                failure: { failureCode: "child_failed", message: "The child failed." },
+                acknowledgedAt: null,
+              },
+            },
+          });
+          return queued.delegationId;
+        });
+
+      const original = yield* createFailed("original");
+      const before = (yield* Effect.promise(() => harness.readModel())).delegations;
+      yield* harness.engine.dispatch({
+        type: "delegation.retry",
+        commandId: CommandId.make("cmd-retry"),
+        delegationId: original,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+      expect(dispatchDelegation).toHaveBeenCalledWith({ _tag: "Retry", delegationId: original });
+      expect((yield* Effect.promise(() => harness.readModel())).delegations).toEqual(before);
+
+      const refused = yield* createFailed("refused");
+      yield* harness.engine.dispatch({
+        type: "delegation.retry",
+        commandId: CommandId.make("cmd-retry-refused"),
+        delegationId: refused,
+        createdAt: later,
+      });
+      yield* Effect.promise(() => harness.drain());
+      const parentThread = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (thread) => thread.id === ThreadId.make("thread-1"),
+      );
+      expect(
+        parentThread?.activities.find((activity) => activity.kind === "delegation.retry.failed"),
+      ).toMatchObject({
+        tone: "error",
+        summary: "Bot work could not be retried",
+        payload: { detail: "The target bot is not available in this workspace." },
       });
     }),
   );
@@ -4032,12 +5306,12 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
-  it("starts a fresh session when only projected session state exists", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("starts a fresh session when only projected session state exists", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-stale"),
         threadId: ThreadId.make("thread-1"),
@@ -4051,11 +5325,9 @@ describe("ProviderCommandReactor", () => {
           updatedAt: now,
         },
         createdAt: now,
-      }),
-    );
+      });
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-stale"),
         threadId: ThreadId.make("thread-1"),
@@ -4068,31 +5340,31 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(() => harness.startSession.mock.calls.length === 1);
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+      yield* Effect.promise(() => waitFor(() => harness.startSession.mock.calls.length === 1));
+      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
 
-    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
-      threadId: ThreadId.make("thread-1"),
-      modelSelection: {
-        instanceId: ProviderInstanceId.make("codex"),
-        model: "gpt-5-codex",
-      },
-      runtimeMode: "approval-required",
-    });
-    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
-      threadId: ThreadId.make("thread-1"),
-    });
-  });
+      expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+        threadId: ThreadId.make("thread-1"),
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        runtimeMode: "approval-required",
+      });
+      expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+        threadId: ThreadId.make("thread-1"),
+      });
+    }),
+  );
 
-  it("rejects active runtime sessions that are missing provider instance ids", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("rejects active runtime sessions that are missing provider instance ids", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-missing-instance"),
         threadId: ThreadId.make("thread-1"),
@@ -4106,21 +5378,19 @@ describe("ProviderCommandReactor", () => {
           updatedAt: now,
         },
         createdAt: now,
-      }),
-    );
-    harness.runtimeSessions.push({
-      provider: ProviderDriverKind.make("codex"),
-      status: "ready",
-      runtimeMode: "approval-required",
-      threadId: ThreadId.make("thread-1"),
-      cwd: "/tmp/provider-project",
-      resumeCursor: { opaque: "resume-without-instance" },
-      createdAt: now,
-      updatedAt: now,
-    });
+      });
+      harness.runtimeSessions.push({
+        provider: ProviderDriverKind.make("codex"),
+        status: "ready",
+        runtimeMode: "approval-required",
+        threadId: ThreadId.make("thread-1"),
+        cwd: "/tmp/provider-project",
+        resumeCursor: { opaque: "resume-without-instance" },
+        createdAt: now,
+        updatedAt: now,
+      });
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-missing-instance"),
         threadId: ThreadId.make("thread-1"),
@@ -4133,37 +5403,39 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-      return (
-        thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
-        false
+      yield* Effect.promise(() =>
+        waitFor(async () => {
+          const readModel = await harness.readModel();
+          const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+          return (
+            thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
+            false
+          );
+        }),
       );
-    });
 
-    expect(harness.startSession.mock.calls.length).toBe(0);
-    expect(harness.sendTurn.mock.calls.length).toBe(0);
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(
-      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
-    ).toMatchObject({
-      payload: {
-        detail: expect.stringContaining("without a provider instance id"),
-        requestId: "user-message-missing-instance",
-      },
-    });
-  });
+      expect(harness.startSession.mock.calls.length).toBe(0);
+      expect(harness.sendTurn.mock.calls.length).toBe(0);
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(
+        thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
+      ).toMatchObject({
+        payload: {
+          detail: expect.stringContaining("without a provider instance id"),
+          requestId: "user-message-missing-instance",
+        },
+      });
+    }),
+  );
 
   it("reacts to thread.approval.respond by forwarding provider approval response", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-for-approval"),
@@ -4181,7 +5453,7 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.approval.respond",
         commandId: CommandId.make("cmd-approval-respond"),
@@ -4205,7 +5477,7 @@ describe("ProviderCommandReactor", () => {
     const now = "2026-01-01T00:00:00.000Z";
     harness.respondToUserInput.mockImplementation(() => Effect.never);
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-for-user-input"),
@@ -4223,7 +5495,7 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    await Effect.runPromise(
+    await harness.runEffect(
       harness.engine.dispatch({
         type: "thread.user-input.respond",
         commandId: CommandId.make("cmd-user-input-respond"),
@@ -4464,6 +5736,332 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("keeps the question and session when a user-input answer fails to resume", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.respondToUserInput.mockImplementation(() =>
+      Effect.fail(
+        new AgentControllerRuntimeError({
+          operation: "respondToToolSuspension",
+          detail: "connection lost",
+          retryable: true,
+        }),
+      ),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-user-input-error"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.make("cmd-user-input-requested"),
+        threadId: ThreadId.make("thread-1"),
+        activity: {
+          id: EventId.make("activity-user-input-requested"),
+          tone: "info",
+          kind: "user-input.requested",
+          summary: "User input requested",
+          payload: {
+            requestId: "user-input-request-1",
+            questions: [
+              {
+                id: "sandbox_mode",
+                header: "Sandbox",
+                question: "Which mode should be used?",
+                options: [
+                  {
+                    label: "workspace-write",
+                    description: "Allow workspace writes only",
+                  },
+                ],
+              },
+            ],
+          },
+          turnId: null,
+          createdAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.user-input.respond",
+        commandId: CommandId.make("cmd-user-input-respond-stale"),
+        threadId: ThreadId.make("thread-1"),
+        requestId: asApprovalRequestId("user-input-request-1"),
+        answers: {
+          sandbox_mode: "workspace-write",
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread).toBeDefined();
+
+    const failureActivity = thread?.activities.find(
+      (activity) => activity.kind === "provider.user-input.respond.failed",
+    );
+    expect(failureActivity).toBeDefined();
+    expect(failureActivity?.payload).toMatchObject({
+      requestId: "user-input-request-1",
+      detail: expect.stringContaining("connection lost"),
+    });
+
+    const resolvedActivity = thread?.activities.find(
+      (activity) =>
+        activity.kind === "user-input.resolved" &&
+        typeof activity.payload === "object" &&
+        activity.payload !== null &&
+        (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
+    );
+    expect(resolvedActivity).toBeUndefined();
+    expect(thread?.messages.some((message) => message.role === "assistant")).toBe(false);
+    expect(thread?.session).toMatchObject({ status: "running", lastError: null });
+  });
+
+  it("keeps an OpenCode question open when its reply fails", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.respondToUserInput.mockImplementation(() =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: ProviderDriverKind.make("opencode"),
+          method: "question.reply",
+          detail: "connection lost",
+          retryable: true,
+        }),
+      ),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-user-input-error"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "opencode",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.make("cmd-user-input-requested"),
+        threadId: ThreadId.make("thread-1"),
+        activity: {
+          id: EventId.make("activity-user-input-requested"),
+          tone: "info",
+          kind: "user-input.requested",
+          summary: "User input requested",
+          payload: {
+            requestId: "user-input-request-1",
+            questions: [
+              {
+                id: "sandbox_mode",
+                header: "Sandbox",
+                question: "Which mode should be used?",
+                options: [
+                  {
+                    label: "workspace-write",
+                    description: "Allow workspace writes only",
+                  },
+                ],
+              },
+            ],
+          },
+          turnId: null,
+          createdAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.user-input.respond",
+        commandId: CommandId.make("cmd-user-input-respond-stale"),
+        threadId: ThreadId.make("thread-1"),
+        requestId: asApprovalRequestId("user-input-request-1"),
+        answers: {
+          sandbox_mode: "workspace-write",
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread).toBeDefined();
+
+    const failureActivity = thread?.activities.find(
+      (activity) => activity.kind === "provider.user-input.respond.failed",
+    );
+    expect(failureActivity).toBeDefined();
+    expect(failureActivity?.payload).toMatchObject({
+      requestId: "user-input-request-1",
+      detail: expect.stringContaining("connection lost"),
+    });
+
+    const resolvedActivity = thread?.activities.find(
+      (activity) =>
+        activity.kind === "user-input.resolved" &&
+        typeof activity.payload === "object" &&
+        activity.payload !== null &&
+        (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
+    );
+    expect(resolvedActivity).toBeUndefined();
+    expect(thread?.messages.some((message) => message.role === "assistant")).toBe(false);
+    expect(thread?.session).toMatchObject({ status: "running", lastError: null });
+  });
+
+  it("closes the question when a failed answer cannot be retried", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    harness.respondToUserInput.mockImplementation(() =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: ProviderDriverKind.make("claudeAgent"),
+          method: "item/tool/respondToUserInput",
+          detail: "connection lost",
+        }),
+      ),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-user-input-error"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "claudeAgent",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.make("cmd-user-input-requested"),
+        threadId: ThreadId.make("thread-1"),
+        activity: {
+          id: EventId.make("activity-user-input-requested"),
+          tone: "info",
+          kind: "user-input.requested",
+          summary: "User input requested",
+          payload: {
+            requestId: "user-input-request-1",
+            questions: [
+              {
+                id: "sandbox_mode",
+                header: "Sandbox",
+                question: "Which mode should be used?",
+                options: [
+                  {
+                    label: "workspace-write",
+                    description: "Allow workspace writes only",
+                  },
+                ],
+              },
+            ],
+          },
+          turnId: null,
+          createdAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.user-input.respond",
+        commandId: CommandId.make("cmd-user-input-respond-stale"),
+        threadId: ThreadId.make("thread-1"),
+        requestId: asApprovalRequestId("user-input-request-1"),
+        answers: {
+          sandbox_mode: "workspace-write",
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread).toBeDefined();
+
+    const failureActivity = thread?.activities.find(
+      (activity) => activity.kind === "provider.user-input.respond.failed",
+    );
+    expect(failureActivity).toBeDefined();
+    expect(failureActivity?.payload).toMatchObject({
+      requestId: "user-input-request-1",
+      detail: expect.stringContaining("connection lost"),
+    });
+
+    const resolvedActivity = thread?.activities.find(
+      (activity) =>
+        activity.kind === "user-input.resolved" &&
+        typeof activity.payload === "object" &&
+        activity.payload !== null &&
+        (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
+    );
+    expect(resolvedActivity).toBeUndefined();
+    expect(failureActivity?.payload).toMatchObject({
+      detail: expect.stringContaining("Stale pending user-input request"),
+    });
+    expect(failureActivity?.payload).not.toMatchObject({
+      detail: expect.stringContaining("app restarts"),
+    });
+    expect(thread?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "assistant",
+        text: "I could not continue that request because the provider failed. Check the provider, then send it again.",
+      }),
+    );
+    expect(thread?.session).toMatchObject({ status: "error" });
+    expect(thread?.session?.lastError).toContain("connection lost");
+    expect(thread?.session?.lastError).not.toContain("Stale pending");
+  });
+
   it("reacts to thread.session.stop by stopping provider session and clearing thread session state", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
@@ -4504,5 +6102,73 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("routes two bots on the same provider instance to their own saved models", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5.6-sol" },
+      secondBot: { engine: { provider: "codex", model: "gpt-5.6-codex-mini" } },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-1-model"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-1-model"),
+          role: "user",
+          text: "bot one turn",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-bot-2-model"),
+        threadId: ThreadId.make("thread-2"),
+        message: {
+          messageId: asMessageId("user-message-bot-2-model"),
+          role: "user",
+          text: "bot two turn",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    await harness.drain();
+
+    const sessionModels = Object.fromEntries(
+      harness.startSession.mock.calls.map((call) => [
+        String((call[1] as { threadId: ThreadId }).threadId),
+        (call[1] as { modelSelection?: ModelSelection }).modelSelection,
+      ]),
+    );
+    expect(sessionModels["thread-1"]).toMatchObject({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.6-sol",
+    });
+    expect(sessionModels["thread-2"]).toMatchObject({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.6-codex-mini",
+    });
+
+    const turnModels = Object.fromEntries(
+      harness.sendTurn.mock.calls.map((call) => [
+        String((call[0] as { threadId: ThreadId }).threadId),
+        (call[0] as { modelSelection?: ModelSelection }).modelSelection,
+      ]),
+    );
+    expect(turnModels["thread-1"]).toMatchObject({ model: "gpt-5.6-sol" });
+    expect(turnModels["thread-2"]).toMatchObject({ model: "gpt-5.6-codex-mini" });
   });
 });

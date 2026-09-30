@@ -7,7 +7,6 @@ import {
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
   ServerConfig,
-  VcsListRefsResult,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,7 +21,6 @@ const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
 // partial thread as complete (rollback safety).
 const THREAD_SNAPSHOT_CACHE_SCHEMA_VERSION = 3;
 const SERVER_CONFIG_CACHE_SCHEMA_VERSION = 1;
-const VCS_REFS_CACHE_SCHEMA_VERSION = 1;
 
 const StoredShellSnapshot = Schema.Struct({
   schemaVersion: Schema.Literal(SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION),
@@ -40,12 +38,6 @@ const StoredServerConfig = Schema.Struct({
   environmentId: Schema.String,
   config: ServerConfig,
 });
-const StoredVcsRefs = Schema.Struct({
-  schemaVersion: Schema.Literal(VCS_REFS_CACHE_SCHEMA_VERSION),
-  environmentId: Schema.String,
-  cwd: Schema.String,
-  refs: VcsListRefsResult,
-});
 
 const decodeStoredShellSnapshot = Schema.decodeUnknownEffect(
   Schema.fromJsonString(StoredShellSnapshot),
@@ -59,8 +51,6 @@ const decodeStoredServerConfig = Schema.decodeUnknownEffect(
   Schema.fromJsonString(StoredServerConfig),
 );
 const encodeStoredServerConfig = Schema.encodeEffect(Schema.fromJsonString(StoredServerConfig));
-const decodeStoredVcsRefs = Schema.decodeUnknownEffect(Schema.fromJsonString(StoredVcsRefs));
-const encodeStoredVcsRefs = Schema.encodeEffect(Schema.fromJsonString(StoredVcsRefs));
 
 type CacheOperation = ConnectionPersistenceError["operation"];
 
@@ -198,43 +188,6 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
           )
           .pipe(Effect.mapError(mapDatabaseError("save-server-config")));
       },
-    ),
-    loadVcsRefs: Effect.fn("MobileEnvironmentCache.loadVcsRefs")((environmentId, cwd) =>
-      loadDecodedCache({
-        database,
-        environmentId,
-        kind: "vcs-refs",
-        cacheKey: cwd,
-        operation: "load-vcs-refs",
-        decode: decodeStoredVcsRefs,
-        select: (stored) =>
-          stored.environmentId === environmentId && stored.cwd === cwd
-            ? Option.some(stored.refs)
-            : Option.none(),
-      }),
-    ),
-    saveVcsRefs: Effect.fn("MobileEnvironmentCache.saveVcsRefs")(
-      function* (environmentId, cwd, refs) {
-        const payload = yield* encodeStoredVcsRefs({
-          schemaVersion: VCS_REFS_CACHE_SCHEMA_VERSION,
-          environmentId,
-          cwd,
-          refs,
-        }).pipe(Effect.mapError((cause) => persistenceError("save-vcs-refs", cause)));
-        yield* database
-          .saveCache(environmentId, "vcs-refs", cwd, VCS_REFS_CACHE_SCHEMA_VERSION, payload)
-          .pipe(Effect.mapError(mapDatabaseError("save-vcs-refs")));
-      },
-    ),
-    removeVcsRefs: Effect.fn("MobileEnvironmentCache.removeVcsRefs")((environmentId, cwd) =>
-      database
-        .removeCache(environmentId, "vcs-refs", cwd)
-        .pipe(Effect.mapError(mapDatabaseError("remove-vcs-refs"))),
-    ),
-    clearVcsRefs: Effect.fn("MobileEnvironmentCache.clearVcsRefs")((environmentId) =>
-      database
-        .clearCacheKind(environmentId, "vcs-refs")
-        .pipe(Effect.mapError(mapDatabaseError("clear-vcs-refs"))),
     ),
     clear: Effect.fn("MobileEnvironmentCache.clear")((environmentId) =>
       database

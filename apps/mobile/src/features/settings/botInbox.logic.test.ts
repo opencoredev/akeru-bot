@@ -2,7 +2,7 @@ import { BotId } from "@t3tools/contracts";
 import type { BotInboxItem } from "@t3tools/client-runtime/bot-inbox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { canResolveInboxItem, settingsInboxView } from "./botInbox.logic";
+import { settingsInboxView } from "./botInbox.logic";
 
 function incident(overrides: Partial<BotInboxItem> = {}): BotInboxItem {
   return {
@@ -62,12 +62,5 @@ describe("settingsInboxView", () => {
         data: [incident({ status: "resolved" })],
       }),
     ).toEqual({ kind: "ready", items: [] });
-  });
-});
-
-describe("canResolveInboxItem", () => {
-  it("keeps connector incidents open until their dependency recovers", () => {
-    expect(canResolveInboxItem(incident())).toBe(false);
-    expect(canResolveInboxItem(incident({ kind: "approval-request" }))).toBe(true);
   });
 });

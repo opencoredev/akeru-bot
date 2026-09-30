@@ -26,9 +26,10 @@ import {
   TrimmedString,
   TurnId,
 } from "./baseSchemas.ts";
-import { ProviderInstanceId } from "./providerInstance.ts";
-import { McpServer, McpServerId, McpServerUrl } from "./mcpServer.ts";
-import { AkeruDelegationRecord, DelegationId } from "./akeruDelegation.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { McpServer, McpServerId, McpServerInstructions, McpServerUrl } from "./mcpServer.ts";
+import { AkeruDelegationRecord } from "./akeruDelegation.ts";
+import { ImageProviderId } from "./imageGeneration.ts";
 import {
   ClientRoutineCommand,
   InternalRoutineCommand,
@@ -43,6 +44,7 @@ import {
   RoutineId,
   RoutinePausedPayload,
   RoutineRun,
+  RoutineReceiptSource,
   RoutineRunCanceledPayload,
   RoutineRunId,
   RoutineRunningPayload,
@@ -51,6 +53,10 @@ import {
   RoutineSkillUnassignedPayload,
   SkillAssignmentId,
 } from "./routines.ts";
+
+// Keep this schema local to avoid evaluating the delegation module's
+// orchestration import while defining the orchestration contracts.
+const DelegationIdSchema = TrimmedNonEmptyString.pipe(Schema.brand("DelegationId"));
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -323,8 +329,8 @@ export const OrchestrationProject = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
-  // Per-project override for where new threads start. Null/absent means
-  // "no override": clients fall back to t3.json, then the global setting.
+  // Retired per-project override for where new threads start. Still decoded
+  // from stored events and snapshots; clients start new chats in local mode.
   defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
@@ -484,12 +490,23 @@ export const CHANNEL_TRANSPORT_CAPABILITIES = {
 
 export const ChannelBindingStatus = Schema.Literals([
   "disconnected",
+  "connecting",
   "connected",
   "needs-reconnect",
   "failed",
+  "blocked",
   "not-live",
 ]);
 export type ChannelBindingStatus = typeof ChannelBindingStatus.Type;
+/** Why a channel binding last failed. Clients pick one repair action from status plus category. */
+export const ChannelFailureCategory = Schema.Literals([
+  "credentials",
+  "network",
+  "project",
+  "delivery-unknown",
+  "restore",
+]);
+export type ChannelFailureCategory = typeof ChannelFailureCategory.Type;
 export const ChannelBinding = Schema.Struct({
   botId: BotId,
   connectionId: Schema.optional(ChannelConnectionId),
@@ -499,7 +516,11 @@ export const ChannelBinding = Schema.Struct({
   externalIdentity: Schema.NullOr(TrimmedNonEmptyString),
   connectedAt: Schema.NullOr(IsoDateTime),
   lastAttemptAt: Schema.optional(IsoDateTime),
+  /** Most recent successful connect or confirmed delivery. Survives later failures. */
+  lastSucceededAt: Schema.optional(IsoDateTime),
   lastError: Schema.optional(TrimmedNonEmptyString),
+  /** Present only with `lastError`. */
+  failureCategory: Schema.optional(ChannelFailureCategory),
   sentMessageIds: Schema.Array(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type ChannelBinding = typeof ChannelBinding.Type;
@@ -520,6 +541,14 @@ export const OrchestrationBot = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  /**
+   * The bot's image provider, independent of its chat engine (a Claude bot may
+   * still use ChatGPT images). `null` means "use the global default" and is
+   * also the decode default so bots written before this field decode cleanly.
+   */
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   channelBindings: Schema.Array(ChannelBinding).pipe(
@@ -581,6 +610,9 @@ export const ChannelMessageOrigin = Schema.Struct({
 });
 export type ChannelMessageOrigin = typeof ChannelMessageOrigin.Type;
 
+export const ChannelDeliveryState = Schema.Literals(["pending", "sent", "failed", "unknown"]);
+export type ChannelDeliveryState = typeof ChannelDeliveryState.Type;
+
 export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
@@ -601,6 +633,10 @@ export const OrchestrationMessage = Schema.Struct({
   authorPersonId: Schema.optional(Schema.NullOr(AuthSessionId)),
   authorDisplayName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   channelOrigin: Schema.optional(Schema.NullOr(ChannelMessageOrigin)),
+  /** External delivery state for channel-originated assistant replies, projected
+      from the delivery store. Optional so pre-channel servers and older
+      payloads decode without it. */
+  channelDelivery: Schema.optional(Schema.NullOr(ChannelDeliveryState)),
   reactions: Schema.optional(Schema.Array(OrchestrationMessageReaction)),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -649,6 +685,16 @@ export const OrchestrationSession = Schema.Struct({
   mcpServerIds: Schema.optional(Schema.Array(McpServerId)),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(TrimmedNonEmptyString),
+  unavailability: Schema.optional(
+    Schema.Literals([
+      "missing-login",
+      "expired-login",
+      "unsupported-model",
+      "limit-reached",
+      "usage-cap",
+      "temporary-failure",
+    ]),
+  ),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationSession = typeof OrchestrationSession.Type;
@@ -695,6 +741,20 @@ export const OrchestrationThreadActivity = Schema.Struct({
 });
 export type OrchestrationThreadActivity = typeof OrchestrationThreadActivity.Type;
 
+/**
+ * The silence watchdog appends `turn.silent` when a running turn has produced no
+ * provider activity for a while, and `turn.silent.cleared` when activity resumes.
+ * The latest of the two for a still-running turn is its current silent-run state.
+ */
+export const THREAD_SILENT_RUN_ACTIVITY_KIND = "turn.silent";
+export const THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND = "turn.silent.cleared";
+export const ThreadSilentRunActivityPayload = Schema.Struct({
+  provider: ProviderDriverKind,
+  /** Last provider activity before the silence; clients time the silence from here. */
+  lastActivityAt: IsoDateTime,
+});
+export type ThreadSilentRunActivityPayload = typeof ThreadSilentRunActivityPayload.Type;
+
 const OrchestrationLatestTurnState = Schema.Literals([
   "running",
   "interrupted",
@@ -713,6 +773,17 @@ export const OrchestrationLatestTurn = Schema.Struct({
   requestMessageId: Schema.optional(Schema.NullOr(MessageId)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  errorMessage: Schema.optional(TrimmedNonEmptyString),
+  unavailability: Schema.optional(
+    Schema.Literals([
+      "missing-login",
+      "expired-login",
+      "unsupported-model",
+      "limit-reached",
+      "usage-cap",
+      "temporary-failure",
+    ]),
+  ),
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
@@ -730,11 +801,22 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 });
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
+/**
+ * Title a chat carries until a real one is generated. The server writes it on
+ * thread creation and clients seed local drafts with it, so anything that
+ * hides or replaces a placeholder title compares against this value.
+ */
+export const PLACEHOLDER_THREAD_TITLE = "New chat";
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  // Child work threads retain their owning chat and delegation without
+  // changing the bot's continuous conversation. Optional for old snapshots.
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
@@ -823,6 +905,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
@@ -890,6 +974,7 @@ export const OrchestrationShellSnapshot = Schema.Struct({
   ),
   mcpServers: Schema.optional(Schema.Array(McpServer)),
   routines: Schema.optional(Schema.Array(Routine)),
+  routineReceiptSources: Schema.optional(Schema.Array(RoutineReceiptSource)),
   routineRuns: Schema.optional(Schema.Array(RoutineRun)),
   skillAssignments: Schema.optional(Schema.Array(RoutineSkillAssignment)),
   threads: Schema.Array(OrchestrationThreadShell),
@@ -948,6 +1033,7 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("routine-removed"),
     sequence: NonNegativeInt,
     routineId: RoutineId,
+    receiptSource: Schema.optional(RoutineReceiptSource),
   }),
   Schema.Struct({
     kind: Schema.Literal("skill-assignment-upserted"),
@@ -1121,6 +1207,7 @@ const BotCreateCommand = Schema.Struct({
   sandbox: Schema.NullOr(BotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.NullOr(GroupId),
@@ -1141,6 +1228,7 @@ const BotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
@@ -1161,6 +1249,7 @@ const ClientBotUpdateCommand = Schema.Struct({
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
@@ -1313,8 +1402,8 @@ const ChannelAttachCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   connectionId: ChannelConnectionId,
-  // Absent means the server uses the bot's default project, matching in-app chat.
-  projectId: Schema.optional(ProjectId),
+  // Every new attachment names its project explicitly. Legacy persisted bindings remain readable.
+  projectId: ProjectId,
   provider: ChannelProvider,
 });
 
@@ -1337,6 +1426,14 @@ const ChannelReconnectCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   provider: ChannelProvider,
+});
+
+const ChannelChangeProjectCommand = Schema.Struct({
+  type: Schema.Literal("channel.change-project"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: ChannelProvider,
+  projectId: ProjectId,
 });
 
 const ChannelSendCommand = Schema.Struct({
@@ -1463,6 +1560,14 @@ const McpServerUpdateCommand = Schema.Union([
   }),
 ]);
 
+const McpServerInstructionsSetCommand = Schema.Struct({
+  type: Schema.Literal("mcp-server.instructions.set"),
+  commandId: CommandId,
+  mcpServerId: McpServerId,
+  // An empty string clears the instructions.
+  instructions: McpServerInstructions,
+});
+
 const McpServerDeleteCommand = Schema.Struct({
   type: Schema.Literal("mcp-server.delete"),
   commandId: CommandId,
@@ -1488,6 +1593,8 @@ const ThreadCreateCommand = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -1702,6 +1809,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  hiddenWake: Schema.optional(Schema.Boolean),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(BotId),
@@ -1770,8 +1878,19 @@ const ThreadSessionStopCommand = Schema.Struct({
 export const DelegationCancelCommand = Schema.Struct({
   type: Schema.Literal("delegation.cancel"),
   commandId: CommandId,
-  delegationId: Schema.suspend(() => DelegationId),
+  delegationId: Schema.suspend(() => DelegationIdSchema),
   keep: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Starts a new delegation from a Failed or Canceled one: same child bot, task,
+ * access grant, and chat anchor. The original record is never changed.
+ */
+export const DelegationRetryCommand = Schema.Struct({
+  type: Schema.Literal("delegation.retry"),
+  commandId: CommandId,
+  delegationId: Schema.suspend(() => DelegationIdSchema),
   createdAt: IsoDateTime,
 });
 
@@ -1805,6 +1924,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
+  McpServerInstructionsSetCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
@@ -1833,6 +1953,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
+  DelegationRetryCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -1852,6 +1973,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ChannelDisconnectCommand,
   ChannelDetachCommand,
   ChannelReconnectCommand,
+  ChannelChangeProjectCommand,
   ChannelSendCommand,
   GroupCreateCommand,
   GroupRenameCommand,
@@ -1864,6 +1986,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   GroupBossSetCommand,
   McpServerCreateCommand,
   McpServerUpdateCommand,
+  McpServerInstructionsSetCommand,
   McpServerDeleteCommand,
   McpServerEnableCommand,
   McpServerDisableCommand,
@@ -1892,6 +2015,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMessageReactionSetCommand,
   ThreadSessionStopCommand,
   DelegationCancelCommand,
+  DelegationRetryCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -1911,6 +2035,8 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   delta: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
+  /** Attributes a server-authored message to this bot instead of the thread's responder. */
+  respondingBotId: Schema.optional(BotId),
   createdAt: IsoDateTime,
 });
 
@@ -1920,6 +2046,16 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   turnId: Schema.optional(TurnId),
+  respondingBotId: Schema.optional(BotId),
+  createdAt: IsoDateTime,
+});
+
+const ThreadChannelDeliverySetCommand = Schema.Struct({
+  type: Schema.Literal("thread.channel-delivery.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  delivery: ChannelDeliveryState,
   createdAt: IsoDateTime,
 });
 
@@ -2003,6 +2139,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
+  ThreadChannelDeliverySetCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -2069,6 +2206,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
+  "thread.channel-delivery-set",
   "thread.message-reaction-set",
   "thread.turn-start-requested",
   "thread.turn-resume-requested",
@@ -2084,6 +2222,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.activity-appended",
   "delegation.created",
   "delegation.updated",
+  "delegation.retry-requested",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -2147,6 +2286,9 @@ export const BotCreatedPayload = Schema.Struct({
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  imageProvider: Schema.NullOr(ImageProviderId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   personalityTone: BotPersonalityTone.pipe(
     Schema.withDecodingDefault(Effect.succeed(BALANCED_BOT_PERSONALITY_TONE)),
   ),
@@ -2171,6 +2313,7 @@ export const BotUpdatedPayload = Schema.Struct({
   sandbox: Schema.optional(PersistedBotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
   usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
+  imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
@@ -2268,6 +2411,8 @@ export const ThreadCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   botId: Schema.optional(Schema.NullOr(BotId)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentDelegationId: Schema.optional(Schema.NullOr(DelegationIdSchema)),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
@@ -2399,6 +2544,13 @@ export const ThreadMessageSentPayload = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 
+export const ThreadChannelDeliverySetPayload = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  delivery: ChannelDeliveryState,
+  updatedAt: IsoDateTime,
+});
+
 export const ThreadMessageReactionSetPayload = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
@@ -2417,9 +2569,18 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  hiddenWake: Schema.optional(Schema.Boolean),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   respondingBotId: Schema.optional(Schema.NullOr(BotId)),
   timezone: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Finished child delegations acknowledged by this turn start. The same
+   * durable step stamps their acknowledgedAt, and the provider turn receives
+   * their results as context, so each result reaches the parent exactly once.
+   */
+  acknowledgedDelegationIds: Schema.optional(
+    Schema.Array(Schema.suspend(() => DelegationIdSchema)),
+  ),
   createdAt: IsoDateTime,
 });
 
@@ -2494,6 +2655,11 @@ export const DelegationCreatedPayload = Schema.Struct({
   delegation: Schema.suspend(() => AkeruDelegationRecord),
 });
 export const DelegationUpdatedPayload = DelegationCreatedPayload;
+export const DelegationRetryRequestedPayload = Schema.Struct({
+  delegationId: Schema.suspend(() => DelegationIdSchema),
+  parentThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
 
 /**
  * Which client connection dispatched the command that produced an event.
@@ -2527,7 +2693,7 @@ const EventBaseFields = {
     BotId,
     GroupId,
     McpServerId,
-    Schema.suspend(() => DelegationId),
+    Schema.suspend(() => DelegationIdSchema),
     RoutineId,
     RoutineRunId,
     SkillAssignmentId,
@@ -2783,6 +2949,11 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("thread.channel-delivery-set"),
+    payload: ThreadChannelDeliverySetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("thread.message-reaction-set"),
     payload: ThreadMessageReactionSetPayload,
   }),
@@ -2855,6 +3026,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("delegation.updated"),
     payload: DelegationUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.retry-requested"),
+    payload: DelegationRetryRequestedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;
@@ -3082,6 +3258,19 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<O
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
     bootstrapThreadDisposition: Schema.optional(Schema.Literal("deleted")),
+    unavailability: Schema.optional(
+      Schema.Literals([
+        "missing-login",
+        "expired-login",
+        "unsupported-model",
+        "limit-reached",
+        "usage-cap",
+        "temporary-failure",
+      ]),
+    ),
+    repairAction: Schema.optional(TrimmedNonEmptyString),
+    /** Why a channel command failed, when the failure has a channel repair. */
+    channelFailureCategory: Schema.optional(ChannelFailureCategory),
   },
 ) {}
 

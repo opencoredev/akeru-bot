@@ -78,6 +78,8 @@ export interface ProjectionThreadRuntimeContext {
   readonly botId: BotId | null;
   readonly groupId: GroupId | null;
   readonly respondingBotId: BotId | null;
+  /** The chat that started this one, such as a worker's bot chat. Optional for test doubles. */
+  readonly parentThreadId?: ThreadId | null;
   readonly runtimeMode: RuntimeMode;
 }
 
@@ -276,6 +278,16 @@ export interface ProjectionSnapshotQueryShape {
     ReadonlyArray<ProjectionPendingTurnStart>,
     ProjectionRepositoryError
   >;
+
+  /**
+   * Whether the turn start a thread requested at this time recorded a
+   * `provider.turn.start.failed` activity. Startup recovery uses it to find
+   * delegated results acknowledged by a turn that never reached its provider.
+   */
+  readonly hasTurnStartFailure?: (input: {
+    readonly threadId: ThreadId;
+    readonly requestedAt: string;
+  }) => Effect.Effect<boolean, ProjectionRepositoryError>;
 
   /**
    * Read a single active thread detail snapshot by id.

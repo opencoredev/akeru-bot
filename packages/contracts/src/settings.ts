@@ -27,7 +27,15 @@ import {
   PreviewViewportSetting,
   PreviewZoomFactor,
 } from "./preview.ts";
-import { VoiceProvider, ChatGptRealtimeVoice, VoiceSettings } from "./voiceCall.ts";
+import {
+  VoiceProvider,
+  ChatGptRealtimeVoice,
+  VoiceSettings,
+  VoiceApiProvider,
+  VoiceTranscriptionProvider,
+  VoiceSynthesisVoices,
+} from "./voiceCall.ts";
+import { ImageGenerationSettings, ImageGenerationSettingsPatch } from "./imageGeneration.ts";
 import {
   ProviderInstanceConfig,
   ProviderInstanceEnvironmentVariable,
@@ -181,9 +189,9 @@ export type ProductFeedbackEndpoint = typeof ProductFeedbackEndpoint.Type;
  * because the Chromium guest they configure is desktop-local.
  */
 export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIEWPORT;
-export const DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW = true;
 
 export const ClientSettingsSchema = Schema.Struct({
+  language: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("system"))),
   reviewedPrivacyPolicyVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   reviewedTermsVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   appearanceContrast: AppearanceContrast.pipe(
@@ -197,15 +205,6 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   browserDefaultAppearance: PreviewAppearancePreference.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PREVIEW_APPEARANCE)),
-  ),
-  /**
-   * Whether an agent opening a preview pops the floating mini player into
-   * view. Only applies when the agent didn't ask either way — an explicit
-   * `open`/`show` on `preview_open` still wins, since that is the agent
-   * deliberately showing or hiding its work.
-   */
-  browserAutoShowFloatingPreview: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW)),
   ),
   // Desktop-only. Boolean values from older settings files decode to their
   // equivalent mode and encode back as the canonical string value.
@@ -268,16 +267,7 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  // Legacy plan mode. The composer's Build/Plan toggle was removed from the
-  // default UI; this beta flag restores it (plus the /plan and /default slash
-  // commands) for users who still rely on the old workflow.
-  planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  // Legacy sidebar (the original per-project tree). Deliberately a fresh key
-  // (was `sidebarV2Enabled` + `sidebarV2ConfiguredByUser`): decoding drops the
-  // old keys, so everyone, including prior beta opt-outs, resets to the new
-  // default sidebar.
-  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -396,7 +386,7 @@ export const CodexSettings = makeProviderSettingsSchema(
         description:
           "Account-specific Codex home. Keeps auth.json separate while sharing state from CODEX_HOME.",
         providerSettingsForm: {
-          placeholder: "~/.codex-t3/personal",
+          placeholder: "~/.codex-akeru/personal",
           clearWhenEmpty: "omit",
         },
       }),
@@ -482,53 +472,9 @@ export const ClaudeSettings = makeProviderSettingsSchema(
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
-export const CursorSettings = makeProviderSettingsSchema(
-  {
-    // Off by default like Grok and OpenCode. Users opt in from Settings.
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("cursor-agent").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Cursor agent binary.",
-        providerSettingsForm: { placeholder: "cursor-agent", clearWhenEmpty: "omit" },
-      }),
-    ),
-    apiEndpoint: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "API endpoint",
-        description: "Override the Cursor API endpoint for this instance.",
-        providerSettingsForm: {
-          placeholder: "https://...",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    verboseProtocolLogging: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({
-        title: "Verbose protocol logging",
-        description: "Record full ACP protocol diagnostics in provider event logs.",
-        providerSettingsForm: { control: "switch" },
-      }),
-    ),
-  },
-  {
-    order: ["binaryPath", "apiEndpoint", "verboseProtocolLogging"],
-  },
-);
-export type CursorSettings = typeof CursorSettings.Type;
-
 export const GrokSettings = makeProviderSettingsSchema(
   {
-    // Off by default (like Cursor and OpenCode): the binding is not yet
+    // Off by default: the binding is not yet
     // stable enough to probe on every install. Users opt in from Settings.
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
@@ -586,7 +532,7 @@ export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
-    // Off by default (like Cursor and Grok): the binding is not yet stable
+    // Off by default: the binding is not yet stable
     // enough to probe on every install. Users opt in from Settings.
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
@@ -709,6 +655,8 @@ export const ChannelConnectionProfile = Schema.Struct({
   name: TrimmedNonEmptyString,
   externalIdentity: Schema.optional(TrimmedNonEmptyString),
   managementUrl: Schema.optional(TrimmedNonEmptyString),
+  /** Server-built inbound webhook URL for providers that push events (WhatsApp). */
+  webhookUrl: Schema.optional(TrimmedNonEmptyString),
 });
 export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
 
@@ -759,6 +707,38 @@ export const SandboxSettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type SandboxSettings = typeof SandboxSettings.Type;
 
+/**
+ * How a durable fact saved to a shared project scope enters the store.
+ * "ask" lands it pending approval until the user approves it; "auto" saves it
+ * approved.
+ */
+export const SharedProjectMemorySaveMode = Schema.Literals(["ask", "auto"]);
+export type SharedProjectMemorySaveMode = typeof SharedProjectMemorySaveMode.Type;
+export const DEFAULT_SHARED_PROJECT_MEMORY_SAVE_MODE: SharedProjectMemorySaveMode = "ask";
+
+/**
+ * Server-authoritative durable memory switches. Durable facts are written and
+ * read through `EntityMemoryRepository`, which needs these values on any
+ * client surface, so they live on the server rather than in client-local
+ * settings. There is deliberately no model or embedding configuration here:
+ * durable memory is not a model feature.
+ */
+export const MemorySettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  privateBotMemory: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sharedProjectMemory: SharedProjectMemorySaveMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SHARED_PROJECT_MEMORY_SAVE_MODE)),
+  ),
+}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
+export type MemorySettings = typeof MemorySettings.Type;
+
+export const MemorySettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  privateBotMemory: Schema.optionalKey(Schema.Boolean),
+  sharedProjectMemory: Schema.optionalKey(SharedProjectMemorySaveMode),
+});
+export type MemorySettingsPatch = typeof MemorySettingsPatch.Type;
+
 export const BrowserProviderSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   browserbaseApiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -787,7 +767,7 @@ export const ServerSettings = Schema.Struct({
   ),
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
-   * withholds the MCP credential, so the `t3-code` server (and with it every
+   * withholds the MCP credential, so the `akeru` server (and with it every
    * `preview_*` tool) is never attached to a provider session, and the prompt
    * text describing those tools is dropped along with them. The user's own
    * browser panel is unaffected — this gates agent access only.
@@ -799,6 +779,7 @@ export const ServerSettings = Schema.Struct({
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   browserProvider: BrowserProviderSettings,
   voice: VoiceSettings,
+  imageGeneration: ImageGenerationSettings,
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
   // consumers should resolve `backgroundActivity` instead.
@@ -852,7 +833,6 @@ export const ServerSettings = Schema.Struct({
   providers: Schema.Struct({
     codex: CodexSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -871,6 +851,7 @@ export const ServerSettings = Schema.Struct({
   ),
   sandbox: SandboxSettings,
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  memory: MemorySettings,
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -996,14 +977,6 @@ const ClaudeSettingsPatch = Schema.Struct({
   ),
 });
 
-const CursorSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  apiEndpoint: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-  verboseProtocolLogging: Schema.optionalKey(Schema.Boolean),
-});
-
 const GrokSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1069,8 +1042,13 @@ const ServerSettingsPatchFields = {
       enabled: Schema.optionalKey(Schema.Boolean),
       provider: Schema.optionalKey(VoiceProvider),
       voice: Schema.optionalKey(ChatGptRealtimeVoice),
+      openaiVoice: Schema.optionalKey(ChatGptRealtimeVoice),
+      transcriptionProvider: Schema.optionalKey(VoiceTranscriptionProvider),
+      synthesisProvider: Schema.optionalKey(VoiceApiProvider),
+      synthesisVoices: Schema.optionalKey(VoiceSynthesisVoices),
     }),
   ),
+  imageGeneration: Schema.optionalKey(ImageGenerationSettingsPatch),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),
@@ -1095,6 +1073,7 @@ const ServerSettingsPatchFields = {
   ),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   sandbox: Schema.optionalKey(SandboxSettingsPatch),
+  memory: Schema.optionalKey(MemorySettingsPatch),
   observability: Schema.optionalKey(
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
@@ -1105,7 +1084,6 @@ const ServerSettingsPatchFields = {
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
-      cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
       kimi: Schema.optionalKey(KimiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
@@ -1128,13 +1106,13 @@ export const ServerSettingsRpcPatch = Schema.Struct(
 export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  language: Schema.optionalKey(TrimmedString),
   reviewedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),
   reviewedTermsVersion: Schema.optionalKey(TrimmedString),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
   browserDefaultAppearance: Schema.optionalKey(PreviewAppearancePreference),
-  browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   confirmQuit: Schema.optionalKey(QuitConfirmationMode),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
@@ -1171,9 +1149,7 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
-  planModeEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
-  legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

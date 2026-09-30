@@ -1,6 +1,6 @@
 import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { loadCatalog, loadDirectoryCatalog, type PluginDefinition } from "../../../../../plugins";
+import { loadDirectoryCatalog, type PluginDefinition } from "../../../../../plugins";
 import {
   findPluginServer,
   isBuiltinMcpServer,
@@ -9,18 +9,37 @@ import {
   pluginMcpServerId,
 } from "./pluginRegistry";
 
-const catalog = loadCatalog();
-const exa = catalog.find((plugin) => plugin.id === "exa");
-const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
-if (!exa || !firecrawl) throw new TypeError("Required catalog plugins are missing.");
+const directory = loadDirectoryCatalog();
+const exaEntry = directory.find((plugin) => plugin.id === "exa");
+const firecrawlEntry = directory.find((plugin) => plugin.id === "firecrawl");
+if (
+  !exaEntry ||
+  exaEntry.kind !== "mcp-url" ||
+  !firecrawlEntry ||
+  firecrawlEntry.kind !== "mcp-url"
+) {
+  throw new TypeError("Required catalog plugins are missing.");
+}
+// The pending directory keeps verified URLs visible; the registry tests model
+// the recovered installable shape once each lifecycle passes.
+const exa = {
+  ...exaEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+} satisfies PluginDefinition;
+const firecrawl = {
+  ...firecrawlEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+} satisfies PluginDefinition;
 
 const executorDirectory = loadDirectoryCatalog().find((plugin) => plugin.id === "executor");
-if (!executorDirectory || executorDirectory.kind !== "mcp-stdio") {
-  throw new TypeError("Executor is missing its local stdio recipe.");
+if (!executorDirectory || executorDirectory.kind !== "mcp-url") {
+  throw new TypeError("Executor is missing its HTTP recipe.");
 }
 const executor = {
   ...executorDirectory,
-  connection: { type: "local" as const },
+  connection: { type: "ready" as const },
   catalogStatus: "available" as const,
 } satisfies PluginDefinition;
 
@@ -52,13 +71,12 @@ describe("plugin registry mapping", () => {
     });
   });
 
-  it("maps local Executor and refreshes its stale recipe before enabling", () => {
+  it("maps Executor 2 HTTP and refreshes its stale recipe before enabling", () => {
     const existingExecutorServer: McpServer = {
       id: pluginMcpServerId(executor),
       name: "Executor",
-      transport: "stdio",
-      command: "bunx",
-      args: ["-y", "executor", "mcp"],
+      transport: "url",
+      url: "https://old.example/mcp",
       enabled: false,
       createdAt: "2026-08-27T00:00:00.000Z",
       updatedAt: "2026-08-27T00:00:00.000Z",
@@ -66,9 +84,8 @@ describe("plugin registry mapping", () => {
 
     expect(pluginMcpConfiguration(executor)).toEqual({
       name: "Executor",
-      transport: "stdio",
-      command: "executor",
-      args: ["mcp"],
+      transport: "url",
+      url: "https://executor.sh/mcp",
     });
     expect(planPluginToggle(executor, [existingExecutorServer], true)).toEqual({
       action: "refresh-and-enable",

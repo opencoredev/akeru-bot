@@ -146,6 +146,7 @@ function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): Orchestr
         sandbox: "local",
         runtimeMode: "full-access",
         usageCap: null,
+        imageProvider: null,
         voiceEnabled: true,
         channelBindings: [],
         groupId: GROUP_ID,
@@ -1374,6 +1375,45 @@ describe("portability import", () => {
       second.commands.map((command) => command.commandId),
     );
     expect(first.applied).toBeGreaterThan(0);
+  });
+
+  it("exports MCP guidance and restores it after the server", () => {
+    const base = makeSnapshot();
+    const source = makeSnapshot({
+      mcpServers: (base.mcpServers ?? []).map((server) =>
+        server.id === URL_MCP_ID ? { ...server, instructions: "Use for web search." } : server,
+      ),
+    });
+    const archive = createPortabilityArchive(source, makeSettings(), NOW);
+    expect(
+      archive.records.find((record) => record.type === "mcp-server" && record.id === URL_MCP_ID)
+        ?.data,
+    ).toMatchObject({ instructions: "Use for web search." });
+
+    const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
+    const { commands } = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+    const createIndex = commands.findIndex(
+      (command) => command.type === "mcp-server.create" && command.mcpServerId === URL_MCP_ID,
+    );
+    const instructionsIndex = commands.findIndex(
+      (command) =>
+        command.type === "mcp-server.instructions.set" &&
+        command.mcpServerId === URL_MCP_ID &&
+        command.instructions === "Use for web search.",
+    );
+    expect(createIndex).toBeGreaterThanOrEqual(0);
+    expect(instructionsIndex).toBeGreaterThan(createIndex);
+    expect(
+      commands.some(
+        (command) =>
+          command.type === "mcp-server.instructions.set" && command.mcpServerId === STDIO_MCP_ID,
+      ),
+    ).toBe(false);
   });
 
   effectIt.effect("preflights the complete restore plan through the decider", () => {

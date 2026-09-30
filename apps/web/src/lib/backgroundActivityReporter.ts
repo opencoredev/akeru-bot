@@ -112,14 +112,9 @@ function createActivityReport(
 function scopeForSubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): BackgroundScope | null {
-  if (observation.method === WS_METHODS.subscribeResourceTelemetry) {
-    return { type: "diagnostics" };
-  }
-  if (observation.method !== WS_METHODS.subscribeVcsStatus) {
-    return null;
-  }
-  const input = observation.input as { readonly cwd?: unknown };
-  return typeof input.cwd === "string" ? { type: "vcs-status", cwd: input.cwd } : null;
+  return observation.method === WS_METHODS.subscribeResourceTelemetry
+    ? { type: "diagnostics" }
+    : null;
 }
 
 function retainBackgroundScope(environmentId: EnvironmentId, scope: BackgroundScope): () => void {

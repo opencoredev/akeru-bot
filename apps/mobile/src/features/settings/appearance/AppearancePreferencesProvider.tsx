@@ -25,7 +25,6 @@ import {
   type MobileThemeIds,
   type MobileThemeMode,
 } from "../../../lib/mobileTheme";
-import { cacheTerminalFontSize } from "../../terminal/terminalUiState";
 
 interface AppearancePreferencesContextValue {
   /** Effective values with base-size derivation applied. Use this for rendering. */
@@ -42,11 +41,6 @@ interface AppearancePreferencesContextValue {
   readonly setThemeIdForBothAppearances: (value: MobileThemeId) => void;
   readonly setThemeMode: (value: MobileThemeMode) => void;
   readonly setBaseFontSize: (value: number) => void;
-  /** Pass null to clear the override and follow the base font size. */
-  readonly setTerminalFontSize: (value: number | null) => void;
-  /** Pass null to clear the override and follow the base font size. */
-  readonly setCodeFontSize: (value: number | null) => void;
-  readonly setCodeWordBreak: (value: boolean) => void;
 }
 
 const AppearancePreferencesContext = createContext<AppearancePreferencesContextValue | null>(null);
@@ -98,7 +92,6 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   useLayoutEffect(() => {
     applyAppearanceVariables(preferences.baseFontSize, themeIds);
     Uniwind.setTheme(themeMode);
-    cacheTerminalFontSize(resolveAppearance(preferences).terminalFontSize);
   }, [preferences, themeIds, themeMode]);
 
   const updatePreferences = useCallback(
@@ -138,27 +131,6 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     [updatePreferences],
   );
 
-  const setTerminalFontSize = useCallback(
-    (value: number | null) => {
-      updatePreferences({ terminalFontSize: value });
-    },
-    [updatePreferences],
-  );
-
-  const setCodeFontSize = useCallback(
-    (value: number | null) => {
-      updatePreferences({ codeFontSize: value });
-    },
-    [updatePreferences],
-  );
-
-  const setCodeWordBreak = useCallback(
-    (value: boolean) => {
-      updatePreferences({ codeWordBreak: value });
-    },
-    [updatePreferences],
-  );
-
   const value = useMemo(
     (): AppearancePreferencesContextValue => ({
       appearance: resolveAppearance(preferences),
@@ -171,9 +143,6 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       setThemeIdForBothAppearances,
       setThemeMode,
       setBaseFontSize,
-      setTerminalFontSize,
-      setCodeFontSize,
-      setCodeWordBreak,
     }),
     [
       preferences,
@@ -186,9 +155,6 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       setThemeIdForBothAppearances,
       setThemeMode,
       setBaseFontSize,
-      setTerminalFontSize,
-      setCodeFontSize,
-      setCodeWordBreak,
     ],
   );
 

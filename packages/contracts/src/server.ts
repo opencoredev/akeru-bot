@@ -61,6 +61,16 @@ export const ServerProviderAuth = Schema.Struct({
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
+export const ServerProviderUnavailability = Schema.Literals([
+  "missing-login",
+  "expired-login",
+  "unsupported-model",
+  "limit-reached",
+  "usage-cap",
+  "temporary-failure",
+]);
+export type ServerProviderUnavailability = typeof ServerProviderUnavailability.Type;
+
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -93,6 +103,13 @@ export const ServerProviderSkill = Schema.Struct({
   enabled: Schema.Boolean,
   displayName: Schema.optional(TrimmedNonEmptyString),
   shortDescription: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Optional per-skill icon reported by the provider: an emoji or a short
+   * named glyph from skill frontmatter or provider metadata (e.g. the Codex
+   * app-server's interface icon). Clients fall back to a source-kind glyph
+   * when absent, so older servers can omit it without breaking decode.
+   */
+  icon: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
@@ -187,6 +204,11 @@ export const ServerProvider = Schema.Struct({
   // Human-readable reason populated when `availability === "unavailable"`.
   // Surfaces in the UI alongside the missing-driver affordance.
   unavailableReason: Schema.optional(TrimmedNonEmptyString),
+  // Knowable turn-start failures are exposed in the provider snapshot so
+  // clients can explain them before persisting a message.
+  unavailability: Schema.optional(ServerProviderUnavailability),
+  unavailabilityDetail: Schema.optional(TrimmedNonEmptyString),
+  repairAction: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
   slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),

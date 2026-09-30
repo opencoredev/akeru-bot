@@ -1,6 +1,7 @@
 import {
   CommandId,
   MessageId,
+  PLACEHOLDER_THREAD_TITLE,
   ThreadId,
   type ModelSelection,
   type ProjectId,
@@ -13,7 +14,7 @@ import { toUploadChatImageAttachments, type DraftComposerImageAttachment } from 
 export function deriveThreadTitleFromPrompt(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    return "New chat";
+    return PLACEHOLDER_THREAD_TITLE;
   }
 
   const compact = trimmed.replace(/\s+/g, " ");

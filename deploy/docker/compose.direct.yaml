@@ -1,0 +1,21 @@
+services:
+  akeru:
+    image: ${AKERU_IMAGE:-akeru-remote:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "127.0.0.1:3773:3773"
+    environment:
+      T3CODE_MODE: web
+      T3CODE_HOST: 0.0.0.0
+      T3CODE_PORT: 3773
+      T3CODE_NO_BROWSER: "true"
+      AKERU_HOME: /data
+    volumes:
+      - akeru-data:/data
+      - ${AKERU_WORKSPACE:-$HOME}:/workspace
+    restart: unless-stopped
+volumes:
+  akeru-data:
+    name: ${AKERU_DATA_VOLUME:-akeru-data}

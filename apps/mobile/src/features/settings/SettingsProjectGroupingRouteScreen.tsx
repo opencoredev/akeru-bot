@@ -1,3 +1,4 @@
+import { useMobileI18n } from "../../lib/i18n";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -17,29 +18,29 @@ import {
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { SettingsSection } from "./components/SettingsSection";
 
-const GROUPING_OPTIONS: ReadonlyArray<{
-  readonly mode: SidebarProjectGroupingMode;
-  readonly label: string;
-  readonly description: string;
-}> = [
-  {
-    mode: "repository",
-    label: "Group by repository",
-    description: "Matching repositories appear as one project.",
-  },
-  {
-    mode: "repository_path",
-    label: "Group by repository path",
-    description: "Keep monorepo paths separate.",
-  },
-  {
-    mode: "separate",
-    label: "Keep separate",
-    description: "Show every workspace as its own project.",
-  },
-];
-
 export function SettingsProjectGroupingRouteScreen() {
+  const { t } = useMobileI18n();
+  const groupingOptions: ReadonlyArray<{
+    readonly mode: SidebarProjectGroupingMode;
+    readonly label: string;
+    readonly description: string;
+  }> = [
+    {
+      mode: "repository",
+      label: t("Group by repository"),
+      description: t("Matching repositories appear as one project."),
+    },
+    {
+      mode: "repository_path",
+      label: t("Group by repository path"),
+      description: t("Keep monorepo paths separate."),
+    },
+    {
+      mode: "separate",
+      label: t("Keep separate"),
+      description: t("Show every workspace as its own project."),
+    },
+  ];
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const checkmarkColor = useThemeColor("--color-icon");
@@ -55,7 +56,7 @@ export function SettingsProjectGroupingRouteScreen() {
       {Platform.OS === "android" ? (
         <>
           <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Project Grouping" onBack={() => navigation.goBack()} />
+          <AndroidScreenHeader title={t("Project Grouping")} onBack={() => navigation.goBack()} />
         </>
       ) : null}
       <ScrollView
@@ -65,8 +66,8 @@ export function SettingsProjectGroupingRouteScreen() {
         contentContainerClassName="gap-3 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
-        <SettingsSection title="Default grouping">
-          {GROUPING_OPTIONS.map((option, index) => (
+        <SettingsSection title={t("Default grouping")}>
+          {groupingOptions.map((option, index) => (
             <Pressable
               key={option.mode}
               accessibilityRole="radio"

@@ -25,6 +25,7 @@ import type * as Stream from "effect/Stream";
 import type { OrchestrationDispatchError } from "../Errors.ts";
 import type { OrchestrationEventStoreError } from "../../persistence/Errors.ts";
 import type { OrchestrationAggregateReplayStats } from "../../persistence/Services/OrchestrationEventStore.ts";
+import type { TurnStartAdmission } from "../../remote/updateGate.ts";
 
 export interface OrchestrationThreadReplayRange {
   readonly threadId: ThreadId;
@@ -72,7 +73,9 @@ export interface OrchestrationEngineShape {
    *
    * @param command - Valid orchestration command.
    * @param options - Optional client identity and origin. Trusted internal
-   *   dispatches omit the actor.
+   *   dispatches omit the actor. A caller that admitted a turn start before
+   *   earlier setup passes its admission so the start cannot be blocked by
+   *   an update that would otherwise begin in between.
    * @returns Effect containing the sequence of the persisted event.
    *
    * Dispatch is serialized through an internal queue and deduplicated via
@@ -83,6 +86,7 @@ export interface OrchestrationEngineShape {
     options?: {
       readonly actor?: OrchestrationDispatchActor;
       readonly origin?: OrchestrationClientOrigin;
+      readonly admission?: TurnStartAdmission;
     },
   ) => Effect.Effect<{ sequence: number }, OrchestrationDispatchError, never>;
 

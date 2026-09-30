@@ -1,3 +1,5 @@
+import { useMobileI18n } from "../../lib/i18n";
+import { driverSupportsDelegation } from "@t3tools/shared/delegationProviders";
 import type {
   BotUsageCap,
   EnvironmentId,
@@ -64,6 +66,7 @@ import {
 } from "./thread-settings-sheet-state";
 import { resolveBotUsageCapForProvider } from "./botStepUsage";
 import { ThreadMemoryScreen } from "./ThreadMemoryScreen";
+import { ThreadRoutinesScreen } from "./ThreadRoutinesScreen";
 
 /**
  * Everyday harnesses start expanded; every other provider (OpenRouter catalogs
@@ -96,12 +99,16 @@ function ModelRow(props: {
   readonly isFirst: boolean;
   readonly isLast: boolean;
 }) {
+  const { t } = useMobileI18n();
   const checkmarkColor = useThemeColor("--color-icon");
+  const disabledReason = props.option.disabledReason;
   return (
     <Pressable
       accessibilityLabel={props.option.label}
+      accessibilityHint={disabledReason ?? undefined}
       accessibilityRole="radio"
-      accessibilityState={{ checked: props.selected }}
+      accessibilityState={{ checked: props.selected, disabled: disabledReason !== null }}
+      disabled={disabledReason !== null}
       onPress={props.onPress}
       className={cn(
         "mx-4 min-h-11 flex-row items-center gap-2 bg-card px-4 py-2 active:bg-subtle",
@@ -109,17 +116,24 @@ function ModelRow(props: {
         props.isLast ? "rounded-b-2xl" : "border-b border-border-subtle",
       )}
     >
-      <Text className="min-w-0 shrink text-base font-t3-medium text-foreground" numberOfLines={1}>
-        {props.option.label}
-      </Text>
+      <View className={cn("min-w-0 shrink", disabledReason && "opacity-60")}>
+        <Text className="text-base font-t3-medium text-foreground" numberOfLines={1}>
+          {props.option.label}
+        </Text>
+        {disabledReason ? (
+          <Text className="text-xs text-foreground-muted" numberOfLines={2}>
+            {disabledReason}
+          </Text>
+        ) : null}
+      </View>
       {props.option.isDefault ? (
         <View className="rounded-md bg-subtle-strong px-1.5 py-0.5">
-          <Text className="text-3xs font-t3-bold text-foreground-muted">Default</Text>
+          <Text className="text-3xs font-t3-bold text-foreground-muted">{t("Default")}</Text>
         </View>
       ) : null}
       {props.option.isLegacy ? (
         <View className="rounded-md bg-subtle px-1.5 py-0.5">
-          <Text className="text-3xs font-t3-bold text-foreground-muted">Legacy</Text>
+          <Text className="text-3xs font-t3-bold text-foreground-muted">{t("Legacy")}</Text>
         </View>
       ) : null}
       <View className="flex-1" />
@@ -284,7 +298,8 @@ function SwitchRow(props: {
 type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
   | { readonly kind: "runtime" }
-  | { readonly kind: "memory" };
+  | { readonly kind: "memory" }
+  | { readonly kind: "routines" };
 
 type ThreadSettingsSessionProps = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
@@ -300,6 +315,11 @@ type ThreadSettingsSessionProps = {
   readonly memoryThreadRef?: {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
+  };
+  readonly routinesRef?: {
+    readonly environmentId: EnvironmentId;
+    readonly botId: string;
+    readonly botName?: string;
   };
 };
 
@@ -371,6 +391,9 @@ type ThreadSettingsSessionValue = {
   readonly setBotUsageCapInput: (input: string) => void;
   readonly toggleProvider: (providerKey: string) => void;
   readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
+  readonly routinesRef: ThreadSettingsSessionProps["routinesRef"];
+  /** False when the shown model's provider can neither hand off work nor receive it. */
+  readonly canDelegate: boolean;
 };
 
 const ThreadSettingsSessionContext = createContext<ThreadSettingsSessionValue | null>(null);
@@ -409,6 +432,16 @@ function ThreadSettingsSessionProvider(
     (option: ModelOption) => (pendingModel ? option.key === pendingModel.key : isApplied(option)),
     [isApplied, pendingModel],
   );
+
+  const displayedDriver = useMemo(
+    () =>
+      pendingModel?.providerDriver ??
+      props.providerGroups.flatMap((group) => group.models).find((option) => isApplied(option))
+        ?.providerDriver ??
+      null,
+    [isApplied, pendingModel, props.providerGroups],
+  );
+  const canDelegate = displayedDriver === null || driverSupportsDelegation(displayedDriver);
 
   // While a model is staged, the settings rows describe and edit the staged
   // model's options (kept on its pending selection); Save applies model and
@@ -474,6 +507,7 @@ function ThreadSettingsSessionProvider(
 
   const pressModel = useCallback(
     (option: ModelOption) => {
+      if (option.disabledReason) return;
       void Haptics.selectionAsync();
       setPendingModel((current) =>
         pendingModelAfterPress({
@@ -514,9 +548,12 @@ function ThreadSettingsSessionProvider(
       setBotUsageCapInput,
       toggleProvider,
       memoryThreadRef: props.memoryThreadRef,
+      routinesRef: props.routinesRef,
+      canDelegate,
     }),
     [
       applyOptionChange,
+      canDelegate,
       botUsageCapDirty,
       botUsageCapInput,
       botUsageCapValid,
@@ -535,6 +572,7 @@ function ThreadSettingsSessionProvider(
       props.providerGroups,
       props.runtimeMode,
       props.memoryThreadRef,
+      props.routinesRef,
       searchQuery,
       showLegacyToggle,
       toggleProvider,
@@ -706,6 +744,7 @@ function ThreadSettingsOptionsItem(props: {
   readonly animationsReady: boolean;
   readonly onOpenSubmenu: (submenu: ThreadSettingsSubmenuPage) => void;
 }) {
+  const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
   const bottomToolbarInset =
@@ -715,7 +754,9 @@ function ThreadSettingsOptionsItem(props: {
 
   return (
     <View style={{ paddingBottom: insets.bottom + bottomToolbarInset + 12 }}>
-      <Text className="px-5 pb-2 pt-2 text-sm font-t3-medium text-foreground-muted">Options</Text>
+      <Text className="px-5 pb-2 pt-2 text-sm font-t3-medium text-foreground-muted">
+        {t("Options")}
+      </Text>
       <Animated.View
         className="mx-4 overflow-hidden rounded-2xl bg-card"
         layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}
@@ -756,8 +797,12 @@ function ThreadSettingsOptionsItem(props: {
         })}
         <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
           <DisclosureRow
-            isLast={session.botUsageCapInput === undefined && !session.memoryThreadRef}
-            label="Runtime"
+            isLast={
+              session.botUsageCapInput === undefined &&
+              !session.memoryThreadRef &&
+              !session.routinesRef
+            }
+            label={t("Runtime")}
             value={
               RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
             }
@@ -767,23 +812,33 @@ function ThreadSettingsOptionsItem(props: {
         {session.memoryThreadRef ? (
           <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
             <DisclosureRow
-              isLast={session.botUsageCapInput === undefined}
-              label="Memory"
-              value="Markdown and observations"
+              isLast={session.botUsageCapInput === undefined && !session.routinesRef}
+              label={t("Memory")}
+              value={t("Markdown and observations")}
               onPress={() => props.onOpenSubmenu({ kind: "memory" })}
+            />
+          </Animated.View>
+        ) : null}
+        {session.routinesRef ? (
+          <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
+            <DisclosureRow
+              isLast={session.botUsageCapInput === undefined}
+              label={t("Routines")}
+              value={session.routinesRef.botName}
+              onPress={() => props.onOpenSubmenu({ kind: "routines" })}
             />
           </Animated.View>
         ) : null}
         {session.botUsageCapInput !== undefined && session.botUsageCapAvailable ? (
           <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-2">
-            <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
+            <Text className="text-sm font-t3-medium text-foreground">{t("Token hard stop")}</Text>
             <TextInput
-              accessibilityLabel="Token hard stop"
+              accessibilityLabel={t("Token hard stop")}
               className="min-w-24 flex-1 text-right text-base tabular-nums text-foreground"
               inputMode="numeric"
               keyboardType="number-pad"
               onChangeText={session.setBotUsageCapInput}
-              placeholder="No limit"
+              placeholder={t("No limit")}
               placeholderTextColorClassName="accent-placeholder"
               returnKeyType="done"
               value={session.botUsageCapInput}
@@ -791,21 +846,32 @@ function ThreadSettingsOptionsItem(props: {
           </View>
         ) : session.botUsageCapInput !== undefined ? (
           <View className="min-h-14 flex-row items-center justify-between gap-3 bg-card px-4 py-2">
-            <Text className="text-sm font-t3-medium text-foreground">Token hard stop</Text>
-            <Text className="text-sm text-foreground-muted">Unavailable for this provider</Text>
+            <Text className="text-sm font-t3-medium text-foreground">{t("Token hard stop")}</Text>
+            <Text className="text-sm text-foreground-muted">
+              {t("Unavailable for this provider")}
+            </Text>
           </View>
         ) : null}
       </Animated.View>
+      {session.canDelegate ? null : (
+        <Text
+          accessibilityRole="text"
+          className="px-5 pt-2 text-xs leading-4 text-foreground-muted"
+        >
+          {t("This bot's provider cannot hand off work.")}{" "}
+          {t("It cannot send work to other bots or receive work from them.")}
+        </Text>
+      )}
 
       {Platform.OS !== "ios" && session.hasLegacyModels ? (
         <>
           <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
-            Catalog
+            {t("Catalog")}
           </Text>
           <View className="mx-4 overflow-hidden rounded-2xl bg-card">
             <SwitchRow
               isLast
-              label="Legacy models"
+              label={t("Legacy models")}
               onValueChange={session.setShowLegacy}
               value={session.showLegacy}
             />
@@ -820,6 +886,7 @@ function ThreadSettingsOptionsItem(props: {
 function ThreadSettingsMainContent(props: {
   readonly onOpenSubmenu: (submenu: ThreadSettingsSubmenuPage) => void;
 }) {
+  const { t } = useMobileI18n();
   const session = useThreadSettingsSession();
   const catalogItems = useThreadSettingsCatalogItems(session);
   const [animationsReady, setAnimationsReady] = useState(false);
@@ -854,7 +921,9 @@ function ThreadSettingsMainContent(props: {
       } else if (item.kind === "empty") {
         content = (
           <View className="items-center px-8 py-14">
-            <Text className="text-center text-sm text-foreground-muted">No matching models</Text>
+            <Text className="text-center text-sm text-foreground-muted">
+              {t("No matching models")}
+            </Text>
           </View>
         );
       } else {
@@ -876,7 +945,7 @@ function ThreadSettingsMainContent(props: {
         </Animated.View>
       );
     },
-    [animationsReady, props.onOpenSubmenu],
+    [animationsReady, props.onOpenSubmenu, t],
   );
 
   return (
@@ -900,12 +969,12 @@ function ThreadSettingsMainContent(props: {
           {Platform.OS === "android" ? (
             <View className="px-4 pb-2 pt-3">
               <TextInput
-                accessibilityLabel="Find a model"
+                accessibilityLabel={t("Find a model")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 className="h-11 rounded-xl bg-card px-4 text-base text-foreground"
                 onChangeText={session.setSearchQuery}
-                placeholder="Find a model"
+                placeholder={t("Find a model")}
                 placeholderTextColorClassName="accent-placeholder"
                 value={session.searchQuery}
               />
@@ -1006,6 +1075,7 @@ type ThreadSettingsPickerStackParams = {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
   };
+  ThreadSettingsRoutines: NonNullable<ThreadSettingsSessionProps["routinesRef"]>;
 };
 
 type ThreadSettingsPickerPresentation = {
@@ -1027,6 +1097,7 @@ function useThreadSettingsPickerPresentation() {
 }
 
 function ThreadSettingsModelsScreen() {
+  const { t } = useMobileI18n();
   const session = useThreadSettingsSession();
   const presentation = useThreadSettingsPickerPresentation();
   const navigation = useNavigation<NativeStackNavigationProp<ThreadSettingsPickerStackParams>>();
@@ -1040,23 +1111,23 @@ function ThreadSettingsModelsScreen() {
     const saved = await session.commitBotUsageCap();
     setSaving(false);
     if (!saved) {
-      Alert.alert("Could not save bot settings");
+      Alert.alert(t("Could not save bot settings"));
       return;
     }
     session.commitPendingModel();
     presentation.onClose();
-  }, [presentation, saving, session]);
+  }, [presentation, saving, session, t]);
   const filterMenu = useMemo(
     () => ({
-      title: "Model filters",
+      title: t("Model filters"),
       items: [
         {
           type: "submenu" as const,
-          title: "Provider",
+          title: t("Provider"),
           items: [
             {
               type: "action" as const,
-              title: "All providers",
+              title: t("All providers"),
               state: session.providerFilter === null ? ("on" as const) : ("off" as const),
               onPress: () => session.setProviderFilter(null),
             },
@@ -1073,7 +1144,7 @@ function ThreadSettingsModelsScreen() {
           ? [
               {
                 type: "action" as const,
-                title: "Show legacy models",
+                title: t("Show legacy models"),
                 state: session.showLegacy ? ("on" as const) : ("off" as const),
                 onPress: () => session.setShowLegacy(!session.showLegacy),
               },
@@ -1081,7 +1152,7 @@ function ThreadSettingsModelsScreen() {
           : []),
       ],
     }),
-    [session],
+    [session, t],
   );
 
   return (
@@ -1090,14 +1161,14 @@ function ThreadSettingsModelsScreen() {
         <AndroidScreenHeader
           actions={[
             {
-              accessibilityLabel: hasPendingChanges ? "Save chat settings" : "Done",
+              accessibilityLabel: hasPendingChanges ? t("Save chat settings") : t("Done"),
               disabled: saving || !session.botUsageCapValid,
               icon: "checkmark",
               onPress: () => void commitAndClose(),
             },
           ]}
           onBack={presentation.onClose}
-          title="Chat settings"
+          title={t("Chat settings")}
         />
       ) : null}
       <NativeStackScreenOptions
@@ -1144,6 +1215,12 @@ function ThreadSettingsModelsScreen() {
             }
             return;
           }
+          if (submenu.kind === "routines") {
+            if (session.routinesRef) {
+              navigation.navigate("ThreadSettingsRoutines", session.routinesRef);
+            }
+            return;
+          }
           const title =
             submenu.kind === "runtime"
               ? "Runtime"
@@ -1155,38 +1232,38 @@ function ThreadSettingsModelsScreen() {
       />
       <NativeHeaderToolbar placement="left">
         <NativeHeaderToolbar.Button
-          accessibilityLabel="Cancel chat settings"
-          label="Cancel"
+          accessibilityLabel={t("Cancel chat settings")}
+          label={t("Cancel")}
           onPress={presentation.onClose}
         />
       </NativeHeaderToolbar>
       <NativeHeaderToolbar placement="right">
         <NativeHeaderToolbar.Button
-          accessibilityLabel={hasPendingChanges ? "Save chat settings" : "Done"}
+          accessibilityLabel={hasPendingChanges ? t("Save chat settings") : t("Done")}
           disabled={saving || !session.botUsageCapValid}
-          label={hasPendingChanges ? "Save" : "Done"}
+          label={hasPendingChanges ? t("Save") : t("Done")}
           onPress={() => void commitAndClose()}
         />
       </NativeHeaderToolbar>
       {Platform.OS === "ios" && !usesNativeMailSearchToolbar ? (
         <NativeHeaderToolbar placement="bottom">
           <NativeHeaderToolbar.Menu
-            accessibilityLabel="Filter models"
+            accessibilityLabel={t("Filter models")}
             icon={
               hasCustomCatalogFilter
                 ? "line.3.horizontal.decrease.circle.fill"
                 : "line.3.horizontal.decrease.circle"
             }
             separateBackground
-            title="Model filters"
+            title={t("Model filters")}
           >
-            <NativeHeaderToolbar.Menu title="Provider">
-              <NativeHeaderToolbar.Label>Provider</NativeHeaderToolbar.Label>
+            <NativeHeaderToolbar.Menu title={t("Provider")}>
+              <NativeHeaderToolbar.Label>{t("Provider")}</NativeHeaderToolbar.Label>
               <NativeHeaderToolbar.MenuAction
                 isOn={session.providerFilter === null}
                 onPress={() => session.setProviderFilter(null)}
               >
-                All providers
+                {t("All providers")}
               </NativeHeaderToolbar.MenuAction>
               {session.providerGroups.map((group) => (
                 <NativeHeaderToolbar.MenuAction
@@ -1203,7 +1280,7 @@ function ThreadSettingsModelsScreen() {
                 isOn={session.showLegacy}
                 onPress={() => session.setShowLegacy(!session.showLegacy)}
               >
-                Show legacy models
+                {t("Show legacy models")}
               </NativeHeaderToolbar.MenuAction>
             ) : null}
           </NativeHeaderToolbar.Menu>
@@ -1229,6 +1306,7 @@ function ThreadSettingsChoiceScreen() {
 }
 
 function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) {
+  const { t } = useMobileI18n();
   const solidSheetBackground = String(useThemeColor("--color-sheet-solid"));
   const foreground = String(useThemeColor("--color-foreground"));
   const presentation = useMemo(
@@ -1263,12 +1341,17 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsModels"
           component={ThreadSettingsModelsScreen}
-          options={{ headerBackVisible: false, title: "Chat settings" }}
+          options={{ headerBackVisible: false, title: t("Chat settings") }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsMemory"
           component={ThreadMemoryScreen}
-          options={{ title: "Memory" }}
+          options={{ title: t("Memory") }}
+        />
+        <ThreadSettingsPickerStack.Screen
+          name="ThreadSettingsRoutines"
+          component={ThreadRoutinesScreen}
+          options={{ title: t("Routines") }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"

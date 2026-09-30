@@ -22,6 +22,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
   makeSqlitePersistenceLive,
@@ -35,6 +36,7 @@ import {
 import { MemoryRevisionWriteLockLive } from "../Services/MemoryRevisionWriteLock.ts";
 import { EntityMemoryRepositoryLive } from "./EntityMemoryRepository.ts";
 import { deriveAkeruWorkspaceId, resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
+import { registerEntityMemoryResource } from "../EntityMemoryInvalidation.ts";
 import { exportAkeruMemory } from "../MemoryExport.ts";
 import { applyAkeruMemoryImport, previewAkeruMemoryImport } from "../MemoryImport.ts";
 
@@ -411,6 +413,39 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("invalidates derived copies on ordinary durable writes", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
+      const rootId = AkeruMemoryRootId.make("derived-write-root");
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("derived-write-root", "bot:user", { rootId }),
+      });
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("stale-2")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      yield* repository.revise({
+        access: botAccess,
+        expectedRevision: 1,
+        revision: makeRevision("derived-write-root-2", "bot:user", {
+          rootId,
+          revision: 2,
+          supersedesId: AkeruMemoryId.make("derived-write-root"),
+        }),
+      });
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
+    }),
+  );
+
   it.effect("does not return all memory for punctuation-only search", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
@@ -437,6 +472,9 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           fact: "secret-disappear-value",
         }),
       });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("active")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
       yield* repository.tombstone({
         access: botAccess,
         rootId,
@@ -450,6 +488,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         limit: 10,
       });
       assert.equal(rows.length, 0);
+      const ftsRows = yield* sql<{
+        readonly memory_id: string;
+      }>`SELECT memory_id FROM akeru_memory_fts WHERE memory_id = ${"active"}`;
+      assert.deepEqual(ftsRows, []);
+      const derivedRows = yield* sql<{
+        readonly root_id: string;
+      }>`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`;
+      assert.deepEqual(derivedRows, []);
       const current = yield* repository.getCurrent({ access: botAccess, rootId });
       assert.equal(current.deletionState, "tombstoned");
       assert.equal(current.revision, 2);
@@ -475,6 +521,77 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       if (resurrection._tag === "Failure") {
         assert.instanceOf(Cause.squash(resurrection.cause), EntityMemoryConflictError);
       }
+    }),
+  );
+
+  it.effect("does not commit a tombstone when observational memory cannot be cleared", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("forget-clear-fails-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("clear-fails-active", "bot:user", {
+          rootId,
+          fact: "stale-observation-value",
+        }),
+      });
+      const sql = yield* SqlClient.SqlClient;
+      const observedThreadId = "clear-fails-thread";
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("clear-fails-active")}, ${observedThreadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const unregister = registerEntityMemoryResource(
+        observedThreadId,
+        observedThreadId,
+        async () => {
+          throw new Error("observational memory store unavailable");
+        },
+      );
+      const exit = yield* repository
+        .tombstone({
+          access: botAccess,
+          rootId,
+          expectedRevision: 1,
+          memoryId: AkeruMemoryId.make("clear-fails-tombstone"),
+          updatedAt: "2026-08-30T22:00:00.000Z",
+        })
+        .pipe(Effect.ensuring(Effect.sync(unregister)), Effect.exit);
+
+      assert.isTrue(exit._tag === "Failure");
+      const current = yield* repository.getCurrent({ access: botAccess, rootId });
+      assert.equal(current.deletionState, "active");
+      assert.equal(current.revision, 1);
+      assert.deepEqual(
+        yield* sql`SELECT thread_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [{ thread_id: observedThreadId }],
+      );
+    }),
+  );
+
+  it.effect("clears observational memory when a fact is permanently deleted", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("delete-clears-observations-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("delete-clears-active", "bot:user", { rootId }),
+      });
+      const sql = yield* SqlClient.SqlClient;
+      const observedThreadId = "delete-clears-thread";
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("delete-clears-active")}, ${observedThreadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const cleared: Array<string> = [];
+      const unregister = registerEntityMemoryResource(
+        observedThreadId,
+        observedThreadId,
+        async (threadId) => {
+          cleared.push(threadId);
+        },
+      );
+      yield* repository
+        .deleteRoot({ access: botAccess, rootId })
+        .pipe(Effect.ensuring(Effect.sync(unregister)));
+
+      assert.deepEqual(cleared, [observedThreadId]);
     }),
   );
 
@@ -554,6 +671,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
   it.effect("previews and atomically imports a new authorized history", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
       const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
       const rootId = AkeruMemoryRootId.make("import-root");
       const first = makeRevision("import-1", "bot:user", {
@@ -629,6 +747,115 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
     }),
   );
 
+  it.effect("does not let an invalid archive chain replace local history", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
+      const rootId = AkeruMemoryRootId.make("invalid-chain-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("invalid-chain-local", "bot:user", { rootId }),
+      });
+      // Revision 2 with no revision 1 is not a valid chain.
+      const broken = makeRevision("invalid-chain-archive", "bot:user", { rootId, revision: 2 });
+      const preview = yield* repository.previewImport!({
+        access: botAccess,
+        partitions,
+        revisions: [broken],
+      });
+      assert.equal(preview.items[0]?.classification, "conflicting");
+      const exit = yield* repository.applyImport!({
+        access: botAccess,
+        partitions,
+        revisions: [broken],
+        previewHash: preview.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      }).pipe(Effect.exit);
+      assert.equal(exit._tag, "Failure");
+      const history = yield* repository.listHistory({ access: botAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => revision.id),
+        ["invalid-chain-local"],
+      );
+    }),
+  );
+
+  it.effect("rejects an archive record whose owner kind does not match its target", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
+      const forged = {
+        ...makeRevision("forged-kind-1", "bot:user", {
+          rootId: AkeruMemoryRootId.make("forged-kind-root"),
+        }),
+        // The bot entity id with a forged kind must not pass the owner check.
+        entityKind: "project" as const,
+        entityId: AkeruMemoryEntityId.make("bot"),
+      };
+      const exit = yield* repository.previewImport!({
+        access: botAccess,
+        partitions,
+        revisions: [forged],
+      }).pipe(Effect.exit);
+      assert.equal(exit._tag, "Failure");
+    }),
+  );
+
+  it.effect("rejects gaps and broken links after a redacted project history prefix", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const partitions = yield* resolveMemoryArchivePartitions(botAccess, "project");
+      const rootId = AkeruMemoryRootId.make("redacted-invalid-chain-root");
+      const first = makeRevision("redacted-invalid-chain-3", "project", {
+        rootId,
+        revision: 3,
+        partition: {
+          tenantId: botAccess.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(botAccess.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(botAccess.projectId),
+        visibility: "shared",
+        supersedesId: AkeruMemoryId.make("redacted-private-2"),
+        supersededById: AkeruMemoryId.make("redacted-invalid-chain-4"),
+      });
+      const second = {
+        ...first,
+        id: AkeruMemoryId.make("redacted-invalid-chain-4"),
+        revision: 4,
+        supersedesId: first.id,
+        supersededById: null,
+      };
+      const invalidHistories = [
+        [first, { ...second, revision: 5 }],
+        [first, { ...second, supersedesId: AkeruMemoryId.make("missing-project-revision") }],
+        [first],
+      ];
+      for (const revisions of invalidHistories) {
+        const preview = yield* repository.previewImport({
+          access: botAccess,
+          partitions,
+          revisions,
+        });
+        assert.equal(preview.items[0]?.classification, "conflicting");
+        assert.equal(preview.items[0]?.reason, "The archive revision chain is invalid.");
+        const exit = yield* repository
+          .applyImport({
+            access: botAccess,
+            partitions,
+            revisions,
+            previewHash: preview.previewHash,
+            resolutions: [{ rootId, decision: "use-archive" }],
+          })
+          .pipe(Effect.exit);
+        assert.equal(exit._tag, "Failure");
+      }
+      const missing = yield* repository.getCurrent({ access: botAccess, rootId }).pipe(Effect.flip);
+      assert.equal(missing._tag, "EntityMemoryNotFoundError");
+    }),
+  );
+
   it.effect("derives import ownership instead of trusting archive partition fields", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
@@ -647,34 +874,12 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         initiatingUserId: AkeruMemoryUserId.make("foreign-user"),
         affectedBotIds: [BotId.make("foreign-bot")],
       });
-      const preview = yield* repository.previewImport!({
+      const exit = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [forged],
-      });
-      const applied = yield* repository.applyImport!({
-        access: botAccess,
-        partitions,
-        revisions: [forged],
-        previewHash: preview.previewHash,
-      });
-      assert.equal(applied.imported, 1);
-      const current = yield* repository.getCurrent({
-        access: botAccess,
-        rootId: forged.rootId,
-      });
-      assert.deepEqual(current.partition, {
-        tenantId: botAccess.tenantId,
-        scope: "bot",
-        partitionId: AkeruMemoryPartitionId.make(botAccess.botId!),
-      });
-      assert.equal(current.visibility, "private");
-      assert.equal(current.entityKind, "bot");
-      assert.equal(current.entityId, AkeruMemoryEntityId.make(botAccess.botId!));
-      assert.isNull(current.sourceThreadId);
-      assert.equal(current.authorBotId, botAccess.botId);
-      assert.equal(current.initiatingUserId, botAccess.userId);
-      assert.deepEqual(current.affectedBotIds, [botAccess.botId]);
+      }).pipe(Effect.exit);
+      assert.isTrue(exit._tag === "Failure");
     }),
   );
 
@@ -713,30 +918,19 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         entityKind: "bot",
         entityId: AkeruMemoryEntityId.make("foreign-bot"),
       });
-      const preview = yield* repository.previewImport!({
+      const exit = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [botRevision],
-      });
-      yield* repository.applyImport!({
-        access: botAccess,
-        partitions,
-        revisions: [botRevision],
-        previewHash: preview.previewHash,
-      });
-      const current = yield* repository.getCurrent({
-        access: botAccess,
-        rootId: botRevision.rootId,
-      });
-      assert.equal(current.partition.scope, "bot");
-      assert.equal(current.partition.partitionId, AkeruMemoryPartitionId.make(botAccess.botId!));
-      assert.equal(current.entityKind, "bot");
+      }).pipe(Effect.exit);
+      assert.isTrue(exit._tag === "Failure");
     }),
   );
 
   it.effect("classifies identical, extending, divergent, and re-homed histories", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
       const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
       const rootId = AkeruMemoryRootId.make("classified-import-root");
       const first = makeRevision("classified-import-1", "bot", {
@@ -779,12 +973,18 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         revisions: [extendingFirst, second],
       });
       assert.equal(changed.items[0]?.classification, "changed");
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${first.id}, ${botAccess.threadId}, ${first.updatedAt})`;
       yield* repository.applyImport!({
         access: botAccess,
         partitions,
         revisions: [extendingFirst, second],
         previewHash: changed.previewHash,
       });
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
 
       const divergent = yield* repository.previewImport!({
         access: botAccess,
@@ -792,6 +992,24 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         revisions: [{ ...first, fact: "A divergent history." }],
       });
       assert.equal(divergent.items[0]?.classification, "conflicting");
+      const unresolved = yield* repository
+        .applyImport({
+          access: botAccess,
+          partitions,
+          revisions: [{ ...first, fact: "A divergent history." }],
+          previewHash: divergent.previewHash,
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(unresolved._tag === "Failure");
+      yield* repository.applyImport!({
+        access: botAccess,
+        partitions,
+        revisions: [{ ...first, fact: "A divergent history." }],
+        previewHash: divergent.previewHash,
+        resolutions: [{ rootId: first.rootId, decision: "use-archive" }],
+      });
+      const replaced = yield* repository.getCurrent({ access: botAccess, rootId: first.rootId });
+      assert.equal(replaced.fact, "A divergent history.");
 
       const sharedRootId = AkeruMemoryRootId.make("rehome-import-root");
       yield* repository.insert({
@@ -812,8 +1030,53 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         access: botAccess,
         partitions,
         revisions: [makeRevision("rehome-archive", "bot", { rootId: sharedRootId })],
+      }).pipe(Effect.exit);
+      assert.isTrue(rehome._tag === "Failure");
+    }),
+  );
+
+  it.effect("does not let another bot's archive replace a colliding private root", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const alice = privateAccess("bot-collision-alice");
+      const bob = privateAccess("bot-collision-bob");
+      const rootId = AkeruMemoryRootId.make("collision-root");
+      const privateRevision = (access: typeof alice, id: string, fact: string) =>
+        makeRevision(id, "bot", {
+          rootId,
+          fact,
+          partition: {
+            tenantId: access.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(access.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(access.botId),
+          sourceThreadId: access.threadId,
+          authorBotId: access.botId,
+          affectedBotIds: [access.botId],
+        });
+      yield* repository.insert({
+        access: alice,
+        revision: privateRevision(alice, "collision-alice", "Alice's private note."),
       });
-      assert.equal(rehome.items[0]?.classification, "conflicting");
+      const partitions = yield* resolveMemoryArchivePartitions(bob, "bot");
+      const revisions = [privateRevision(bob, "collision-bob", "Bob's replacement.")];
+      const preview = yield* repository.previewImport!({ access: bob, partitions, revisions });
+      assert.equal(preview.items[0]?.classification, "conflicting");
+      const replaced = yield* repository.applyImport!({
+        access: bob,
+        partitions,
+        revisions,
+        previewHash: preview.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      }).pipe(Effect.exit);
+      assert.isTrue(replaced._tag === "Failure");
+      if (replaced._tag === "Failure") {
+        assert.include(Cause.pretty(replaced.cause), "AkeruMemoryAccessDenied");
+      }
+      const current = yield* repository.getCurrent({ access: alice, rootId });
+      assert.equal(current.fact, "Alice's private note.");
     }),
   );
 
@@ -893,6 +1156,448 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           limit: 10,
         }),
         [],
+      );
+    }),
+  );
+
+  it.effect("roundtrips an imported project fact moved into the receiving bot's scope", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const alice = {
+        ...privateAccess("alice-private-import"),
+        userId: AkeruMemoryUserId.make("alice-user"),
+        projectId: ProjectId.make("project-privatize-import"),
+        legacyWorkspaceOwnerProjectId: ProjectId.make("project-privatize-import"),
+      };
+      const bob = {
+        ...privateAccess("bob-private-import"),
+        projectId: alice.projectId,
+        legacyWorkspaceOwnerProjectId: alice.projectId,
+      };
+      const rootId = AkeruMemoryRootId.make("import-privatize-root");
+      const original = makeRevision("import-privatize-1", "project", {
+        rootId,
+        partition: {
+          tenantId: alice.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(alice.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(alice.projectId),
+        sourceThreadId: alice.threadId,
+        authorBotId: alice.botId,
+        initiatingUserId: alice.userId,
+        affectedBotIds: [alice.botId],
+        visibility: "shared",
+      });
+      yield* repository.insert({ access: alice, revision: original });
+      const projectArchive = yield* exportAkeruMemory({
+        repository,
+        access: alice,
+        target: "project",
+        complete: true,
+        createdAt: "2026-08-30T22:00:00.000Z",
+        conversations: [],
+      });
+      yield* repository.deleteRoot({ access: alice, rootId });
+      const projectPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: projectArchive,
+      });
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: projectArchive,
+        previewHash: projectPreview.previewHash,
+      });
+      const imported = yield* repository.getCurrent({ access: bob, rootId });
+      assert.equal(imported.authorBotId, alice.botId);
+      assert.equal(imported.initiatingUserId, alice.userId);
+      assert.deepEqual(imported.affectedBotIds, [alice.botId]);
+      const moved = yield* repository.applyMutation({
+        access: bob,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: imported.revision,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("import-privatize-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const botArchive = yield* exportAkeruMemory({
+        repository,
+        access: bob,
+        target: "bot",
+        complete: true,
+        createdAt: "2026-08-30T23:00:00.000Z",
+        conversations: [],
+      });
+      yield* repository.deleteRoot({ access: bob, rootId });
+      const botPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "bot",
+        archive: botArchive,
+      });
+      assert.deepEqual(
+        botPreview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "bot",
+        archive: botArchive,
+        previewHash: botPreview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const restored = yield* repository.getCurrent({ access: bob, rootId });
+      assert.equal(restored.id, moved!.id);
+      assert.equal(restored.partition.scope, "bot");
+      assert.equal(restored.authorBotId, bob.botId);
+      assert.equal(restored.initiatingUserId, bob.userId);
+      assert.deepEqual(restored.affectedBotIds, [bob.botId]);
+      assert.equal(restored.sourceThreadId, alice.threadId);
+      const history = yield* repository.listHistory({ access: bob, rootId });
+      assert.equal(history.length, 2);
+      assert.equal(history[1]!.partition.scope, "project");
+      assert.equal(history[1]!.authorBotId, alice.botId);
+      assert.equal(history[1]!.initiatingUserId, alice.userId);
+      assert.deepEqual(history[1]!.affectedBotIds, [alice.botId]);
+    }),
+  );
+
+  it.effect("roundtrips a pending fact that moved scopes with its full history", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const moveAccess = {
+        ...privateAccess("bot-move-archive"),
+        projectId: ProjectId.make("project-move-archive"),
+        legacyWorkspaceOwnerProjectId: ProjectId.make("project-move-archive"),
+      } as const;
+      const rootId = AkeruMemoryRootId.make("move-archive-root");
+      yield* repository.insert({
+        access: moveAccess,
+        revision: makeRevision("move-archive-1", "bot", {
+          rootId,
+          partition: {
+            tenantId: moveAccess.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(moveAccess.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(moveAccess.botId),
+          sourceThreadId: moveAccess.threadId,
+          authorBotId: moveAccess.botId,
+          affectedBotIds: [moveAccess.botId],
+        }),
+      });
+      const moved = yield* repository.applyMutation({
+        access: moveAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("move-archive-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "pending",
+      });
+      assert.equal(moved!.approvalState, "pending");
+      const exportTarget = (target: "bot" | "project") =>
+        exportAkeruMemory({
+          repository,
+          access: moveAccess,
+          target,
+          complete: true,
+          createdAt: "2026-08-30T23:00:00.000Z",
+          conversations: [],
+        });
+      const botArchive = yield* exportTarget("bot");
+      if (botArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(botArchive.revisions, []);
+      const archive = yield* exportTarget("project");
+      if (archive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        archive.revisions.map(({ revision }) => revision.revision),
+        [1, 2],
+      );
+      const unchanged = yield* previewAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+      });
+      assert.deepEqual(
+        unchanged.items.map((item) => item.classification),
+        ["skipped"],
+      );
+
+      yield* repository.deleteRoot({ access: moveAccess, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+      });
+      assert.deepEqual(
+        preview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: moveAccess,
+        target: "project",
+        archive,
+        previewHash: preview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const restored = yield* repository.getCurrent({ access: moveAccess, rootId });
+      assert.equal(restored.id, moved!.id);
+      assert.equal(restored.partition.scope, "project");
+      assert.equal(restored.approvalState, "pending");
+      const history = yield* repository.listHistory({ access: moveAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => [revision.partition.scope, revision.sourceThreadId]),
+        [
+          ["project", moveAccess.threadId],
+          ["bot", moveAccess.threadId],
+        ],
+      );
+    }),
+  );
+
+  it.effect("roundtrips another bot's project export without a moved fact's private prefix", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const projectId = ProjectId.make("project-private-history");
+      const accessFor = (botId: string) =>
+        ({
+          ...privateAccess(botId),
+          projectId,
+          legacyWorkspaceOwnerProjectId: projectId,
+        }) as const;
+      const alice = accessFor("bot-private-history-alice");
+      const bob = accessFor("bot-private-history-bob");
+      const rootId = AkeruMemoryRootId.make("private-history-root");
+      yield* repository.insert({
+        access: alice,
+        revision: makeRevision("private-history-1", "bot", {
+          rootId,
+          fact: "Alice's private deploy token is hunter2.",
+          partition: {
+            tenantId: alice.tenantId,
+            scope: "bot",
+            partitionId: AkeruMemoryPartitionId.make(alice.botId),
+          },
+          entityKind: "bot",
+          entityId: AkeruMemoryEntityId.make(alice.botId),
+          sourceThreadId: alice.threadId,
+          authorBotId: alice.botId,
+          affectedBotIds: [alice.botId],
+        }),
+      });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 1,
+          fact: "Deploys use the shared release checklist.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("private-history-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      yield* repository.applyMutation({
+        access: alice,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 3,
+          fact: "Deploys use the shared release checklist and require approval.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-4"),
+        updatedAt: "2026-08-30T22:32:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const exportAs = (access: typeof alice) =>
+        exportAkeruMemory({
+          repository,
+          access,
+          target: "project",
+          complete: true,
+          createdAt: "2026-08-30T23:00:00.000Z",
+          conversations: [],
+        });
+
+      const bobArchive = yield* exportAs(bob);
+      if (bobArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        bobArchive.revisions.map(({ revision }) => revision.revision),
+        (yield* repository.listHistory({ access: bob, rootId }))
+          .map((revision) => revision.revision)
+          .toReversed(),
+      );
+      assert.deepEqual(
+        bobArchive.revisions.map(({ revision }) => revision.revision),
+        [3, 4],
+      );
+      assert.isFalse(bobArchive.files.some((file) => file.content.includes("hunter2")));
+
+      const aliceArchive = yield* exportAs(alice);
+      if (aliceArchive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
+      assert.deepEqual(
+        aliceArchive.revisions.map(({ revision }) => revision.revision),
+        [1, 2, 3, 4],
+      );
+      const existingPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        existingPreview.items.map((item) => item.classification),
+        ["conflicting"],
+      );
+      const replaceAlice = yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: existingPreview.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      }).pipe(Effect.exit);
+      assert.isTrue(replaceAlice._tag === "Failure");
+      assert.deepEqual(
+        (yield* repository.listHistory({ access: alice, rootId })).map(
+          (revision) => revision.revision,
+        ),
+        [4, 3, 2, 1],
+      );
+      yield* repository.deleteRoot({ access: alice, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        preview.items.map((item) => item.classification),
+        ["new"],
+      );
+      const result = yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: preview.previewHash,
+      });
+      assert.equal(result.imported, 1);
+      const assertRestored = Effect.gen(function* () {
+        const restored = yield* repository.getCurrent({ access: bob, rootId });
+        assert.equal(restored.id, "private-history-4");
+        assert.equal(restored.revision, 2);
+        assert.equal(restored.partition.scope, "project");
+        assert.equal(restored.partition.partitionId, AkeruMemoryPartitionId.make(projectId));
+        assert.equal(restored.entityKind, "project");
+        assert.equal(restored.entityId, AkeruMemoryEntityId.make(projectId));
+        assert.equal(restored.visibility, "shared");
+        assert.equal(restored.authorBotId, alice.botId);
+        assert.equal(restored.sourceThreadId, alice.threadId);
+        assert.deepEqual(restored.affectedBotIds, [alice.botId]);
+        assert.equal(
+          restored.fact,
+          "Deploys use the shared release checklist and require approval.",
+        );
+        const history = (yield* repository.listHistory({ access: bob, rootId })).toReversed();
+        assert.deepEqual(
+          history.map(({ id, revision, supersedesId, supersededById, partition }) => ({
+            id: String(id),
+            revision,
+            supersedesId: supersedesId === null ? null : String(supersedesId),
+            supersededById: supersededById === null ? null : String(supersededById),
+            scope: partition.scope,
+          })),
+          [
+            {
+              id: "private-history-3",
+              revision: 1,
+              supersedesId: null,
+              supersededById: "private-history-4",
+              scope: "project",
+            },
+            {
+              id: "private-history-4",
+              revision: 2,
+              supersedesId: "private-history-3",
+              supersededById: null,
+              scope: "project",
+            },
+          ],
+        );
+      });
+      yield* assertRestored;
+      yield* repository.applyMutation({
+        access: bob,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 2,
+          fact: "A divergent local edit.",
+        },
+        memoryId: AkeruMemoryId.make("private-history-local"),
+        updatedAt: "2026-08-30T23:01:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const conflicting = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+      });
+      assert.deepEqual(
+        conflicting.items.map((item) => item.classification),
+        ["conflicting"],
+      );
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: bobArchive,
+        previewHash: conflicting.previewHash,
+        resolutions: [{ rootId, decision: "use-archive" }],
+      });
+      yield* assertRestored;
+      const restoredArchive = yield* exportAs(bob);
+      const restoredPreview = yield* previewAkeruMemoryImport({
+        repository,
+        access: bob,
+        target: "project",
+        archive: restoredArchive,
+      });
+      assert.deepEqual(
+        restoredPreview.items.map((item) => item.classification),
+        ["skipped"],
       );
     }),
   );
@@ -997,6 +1702,534 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const current = yield* repository.getCurrent({ access: workspaceAccess, rootId });
       assert.equal(current.fact, edited.fact);
       assert.isTrue(current.pinned);
+    }),
+  );
+
+  it.effect("edits a durable fact through applyMutation", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-edit-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-edit-1", "bot:user", { rootId }),
+      });
+      const next = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.edit",
+          memoryId: rootId,
+          expectedRevision: 1,
+          fact: "The user prefers helix.",
+        },
+        memoryId: AkeruMemoryId.make("mutate-edit-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isNotNull(next);
+      assert.equal(next!.fact, "The user prefers helix.");
+      assert.equal(next!.revision, 2);
+      assert.equal(next!.supersedesId, "mutate-edit-1");
+      const history = yield* repository.listHistory({ access: botAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => revision.revision),
+        [2, 1],
+      );
+      const stale = yield* repository
+        .applyMutation({
+          access: botAccess,
+          mutation: {
+            operation: "fact.edit",
+            memoryId: rootId,
+            expectedRevision: 1,
+            fact: "stale",
+          },
+          memoryId: AkeruMemoryId.make("mutate-edit-3"),
+          updatedAt: "2026-08-30T22:31:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(stale._tag === "Failure");
+      if (stale._tag === "Failure") {
+        assert.instanceOf(Cause.squash(stale.cause), EntityMemoryConflictError);
+      }
+    }),
+  );
+
+  it.effect("pins and unpins a durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-pin-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-pin-1", "bot:user", { rootId }),
+      });
+      const pinned = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.pin",
+          memoryId: rootId,
+          expectedRevision: 1,
+          pinned: true,
+        },
+        memoryId: AkeruMemoryId.make("mutate-pin-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isTrue(pinned!.pinned);
+      const unpinned = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.pin",
+          memoryId: rootId,
+          expectedRevision: 2,
+          pinned: false,
+        },
+        memoryId: AkeruMemoryId.make("mutate-pin-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isFalse(unpinned!.pinned);
+      assert.equal(unpinned!.revision, 3);
+    }),
+  );
+
+  it.effect("changes scope only to an owner-valid target", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-scope-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-scope-1", "bot:user", { rootId }),
+      });
+      const moved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("mutate-scope-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(moved!.partition.scope, "project");
+      assert.equal(moved!.entityKind, "project");
+      assert.equal(moved!.visibility, "shared");
+      const back = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("mutate-scope-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(back!.partition.scope, "bot");
+      assert.equal(back!.visibility, "private");
+      // A group scope is not owned by a one-to-one thread and must fail.
+      const denied = yield* repository
+        .applyMutation({
+          access: botAccess,
+          mutation: {
+            operation: "fact.scope",
+            memoryId: rootId,
+            expectedRevision: 3,
+            scope: "group",
+          },
+          memoryId: AkeruMemoryId.make("mutate-scope-4"),
+          updatedAt: "2026-08-30T22:32:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(denied._tag === "Failure");
+    }),
+  );
+
+  it.effect("keeps a fact's source chat when it moves between scopes", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-source-root");
+      const sourceThreadId = ThreadId.make("ui-thread-1");
+      const sourceMessageId = MessageId.make("ui-message-1");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-source-1", "bot:user", {
+          rootId,
+          sourceThreadId,
+          sourceMessageId,
+        }),
+      });
+      const shared = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("mutate-source-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(shared!.partition.scope, "project");
+      assert.equal(shared!.sourceThreadId, sourceThreadId);
+      assert.equal(shared!.sourceMessageId, sourceMessageId);
+      const moved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 2,
+          scope: "bot",
+        },
+        memoryId: AkeruMemoryId.make("mutate-source-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(moved!.sourceThreadId, sourceThreadId);
+      const history = yield* repository.listHistory({ access: botAccess, rootId });
+      assert.deepEqual(
+        history.map((revision) => revision.sourceThreadId),
+        [sourceThreadId, sourceThreadId, sourceThreadId],
+      );
+    }),
+  );
+
+  it.effect("rejects then approves a pending durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-decide-root");
+      const foreignAccess = {
+        ...botAccess,
+        threadId: ThreadId.make("thread-decide-seed"),
+      };
+      const encodeJson = (value: unknown) =>
+        // The seeded row only carries empty objects and short bot-id arrays;
+        // keep the JSON encoding inline and side-effect free.
+        JSON.stringify(value) as string;
+      const pending = makeRevision("mutate-decide-1", "project", {
+        rootId,
+        partition: {
+          tenantId: botAccess.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(botAccess.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(botAccess.projectId),
+        visibility: "shared",
+        approvalState: "pending",
+      });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_revisions (
+        memory_id, root_id, revision, tenant_id, scope, partition_id,
+        entity_kind, entity_id, kind, value_json, fact_text,
+        source_thread_id, source_message_id, author_bot_id, initiating_user_id,
+        created_at, confirmed_at, updated_at, confidence, approval_state,
+        supersedes_id, superseded_by_id, visibility, deletion_state,
+        pinned, sensitive, affected_bot_ids_json
+      ) VALUES (
+        ${pending.id}, ${pending.rootId}, ${pending.revision}, ${pending.partition.tenantId},
+        ${pending.partition.scope}, ${pending.partition.partitionId}, ${pending.entityKind},
+        ${pending.entityId}, ${pending.kind}, ${encodeJson(pending.value)}, ${pending.fact},
+        ${pending.sourceThreadId}, ${pending.sourceMessageId}, ${pending.authorBotId},
+        ${pending.initiatingUserId}, ${pending.createdAt}, ${pending.confirmedAt},
+        ${pending.updatedAt}, ${pending.confidence}, ${pending.approvalState},
+        ${pending.supersedesId}, ${pending.supersededById}, ${pending.visibility},
+        ${pending.deletionState}, ${pending.pinned ? 1 : 0}, ${pending.sensitive ? 1 : 0},
+        ${encodeJson(pending.affectedBotIds)}
+      )`;
+      assert.isDefined(foreignAccess);
+      const rejected = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: 1,
+          decision: "reject",
+        },
+        memoryId: AkeruMemoryId.make("mutate-decide-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(rejected!.approvalState, "rejected");
+      const approved = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: 2,
+          decision: "approve",
+        },
+        memoryId: AkeruMemoryId.make("mutate-decide-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(approved!.approvalState, "approved");
+      assert.isTrue(
+        (yield* repository.listCurrent({ access: botAccess })).some(
+          (revision) => revision.rootId === rootId,
+        ),
+      );
+    }),
+  );
+
+  it.effect("restores a pending project fact from a complete export for review", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const access = { ...botAccess, projectId: ProjectId.make("project-pending-archive") };
+      const rootId = AkeruMemoryRootId.make("pending-archive-roundtrip-root");
+      const encodeJson = (value: unknown) => JSON.stringify(value) as string;
+      const pending = makeRevision("pending-archive-roundtrip-1", "project", {
+        rootId,
+        partition: {
+          tenantId: access.tenantId,
+          scope: "project",
+          partitionId: AkeruMemoryPartitionId.make(access.projectId),
+        },
+        entityKind: "project",
+        entityId: AkeruMemoryEntityId.make(access.projectId),
+        visibility: "shared",
+        approvalState: "pending",
+      });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO akeru_memory_revisions (
+        memory_id, root_id, revision, tenant_id, scope, partition_id,
+        entity_kind, entity_id, kind, value_json, fact_text,
+        source_thread_id, source_message_id, author_bot_id, initiating_user_id,
+        created_at, confirmed_at, updated_at, confidence, approval_state,
+        supersedes_id, superseded_by_id, visibility, deletion_state,
+        pinned, sensitive, affected_bot_ids_json
+      ) VALUES (
+        ${pending.id}, ${pending.rootId}, ${pending.revision}, ${pending.partition.tenantId},
+        ${pending.partition.scope}, ${pending.partition.partitionId}, ${pending.entityKind},
+        ${pending.entityId}, ${pending.kind}, ${encodeJson(pending.value)}, ${pending.fact},
+        ${pending.sourceThreadId}, ${pending.sourceMessageId}, ${pending.authorBotId},
+        ${pending.initiatingUserId}, ${pending.createdAt}, ${pending.confirmedAt},
+        ${pending.updatedAt}, ${pending.confidence}, ${pending.approvalState},
+        ${pending.supersedesId}, ${pending.supersededById}, ${pending.visibility},
+        ${pending.deletionState}, ${pending.pinned ? 1 : 0}, ${pending.sensitive ? 1 : 0},
+        ${encodeJson(pending.affectedBotIds)}
+      )`;
+      const archive = yield* exportAkeruMemory({
+        repository,
+        access: access,
+        target: "project",
+        complete: true,
+        createdAt: "2026-08-30T23:00:00.000Z",
+        conversations: [],
+      });
+      assert.isTrue(archive.revisions.some(({ revision }) => revision.rootId === rootId));
+      yield* repository.deleteRoot({ access: access, rootId });
+      const preview = yield* previewAkeruMemoryImport({
+        repository,
+        access: access,
+        target: "project",
+        archive,
+      });
+      yield* applyAkeruMemoryImport({
+        repository,
+        access: access,
+        target: "project",
+        archive,
+        previewHash: preview.previewHash,
+      });
+
+      const restored = yield* repository.getCurrent({ access: access, rootId });
+      assert.equal(restored.approvalState, "pending");
+      const approved = yield* repository.applyMutation({
+        access: access,
+        mutation: {
+          operation: "fact.decide",
+          memoryId: rootId,
+          expectedRevision: restored.revision,
+          decision: "approve",
+        },
+        memoryId: AkeruMemoryId.make("pending-archive-roundtrip-2"),
+        updatedAt: "2026-08-30T23:01:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(approved!.approvalState, "approved");
+    }),
+  );
+
+  it.effect("approves a pending project fact when it moves back to private memory", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-pending-private-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-pending-private-1", "bot:user", { rootId }),
+      });
+      const shared = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.scope",
+          memoryId: rootId,
+          expectedRevision: 1,
+          scope: "project",
+        },
+        memoryId: AkeruMemoryId.make("mutate-pending-private-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "pending",
+      });
+      assert.equal(shared!.approvalState, "pending");
+      const back = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: { operation: "fact.scope", memoryId: rootId, expectedRevision: 2, scope: "bot" },
+        memoryId: AkeruMemoryId.make("mutate-pending-private-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "pending",
+      });
+      assert.equal(back!.visibility, "private");
+      assert.equal(back!.approvalState, "approved");
+    }),
+  );
+  it.effect("accepts only permanent deletion after a fact is forgotten", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-forgotten-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-forgotten-1", "bot:user", { rootId }),
+      });
+      yield* repository.applyMutation({
+        access: botAccess,
+        mutation: { operation: "fact.forget", memoryId: rootId, expectedRevision: 1 },
+        memoryId: AkeruMemoryId.make("mutate-forgotten-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      const edited = yield* repository
+        .applyMutation({
+          access: botAccess,
+          mutation: {
+            operation: "fact.edit",
+            memoryId: rootId,
+            expectedRevision: 2,
+            fact: "revived",
+          },
+          memoryId: AkeruMemoryId.make("mutate-forgotten-3"),
+          updatedAt: "2026-08-30T22:31:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(edited._tag === "Failure");
+    }),
+  );
+  it.effect("forgets then permanently deletes a durable fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const sql = yield* SqlClient.SqlClient;
+      const rootId = AkeruMemoryRootId.make("mutate-delete-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-delete-1", "bot:user", {
+          rootId,
+          fact: "mutate-delete-marker",
+        }),
+      });
+      yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
+        VALUES (${botAccess.tenantId}, ${rootId}, ${AkeruMemoryId.make("mutate-delete-1")}, ${botAccess.threadId}, ${"2026-08-30T22:00:00.000Z"})`;
+      const forgotten = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.forget",
+          memoryId: rootId,
+          expectedRevision: 1,
+        },
+        memoryId: AkeruMemoryId.make("mutate-delete-2"),
+        updatedAt: "2026-08-30T22:30:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.equal(forgotten!.deletionState, "tombstoned");
+      assert.deepEqual(
+        yield* sql`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`,
+        [],
+      );
+      assert.deepEqual(
+        yield* repository.search({ access: botAccess, query: "mutate delete marker", limit: 10 }),
+        [],
+      );
+      const deleted = yield* repository.applyMutation({
+        access: botAccess,
+        mutation: {
+          operation: "fact.delete",
+          memoryId: rootId,
+          expectedRevision: 2,
+        },
+        memoryId: AkeruMemoryId.make("mutate-delete-3"),
+        updatedAt: "2026-08-30T22:31:00.000Z",
+        sharedProjectApproval: "approved",
+      });
+      assert.isNull(deleted);
+      const missing = yield* repository.getCurrent({ access: botAccess, rootId }).pipe(Effect.exit);
+      assert.isTrue(missing._tag === "Failure");
+    }),
+  );
+
+  it.effect("does not let another thread's owner mutate a fact", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const rootId = AkeruMemoryRootId.make("mutate-owner-root");
+      yield* repository.insert({
+        access: botAccess,
+        revision: makeRevision("mutate-owner-1", "bot:user", { rootId }),
+      });
+      const wrongBot = yield* repository
+        .applyMutation({
+          access: privateAccess("other-bot"),
+          mutation: {
+            operation: "fact.pin",
+            memoryId: rootId,
+            expectedRevision: 1,
+            pinned: true,
+          },
+          memoryId: AkeruMemoryId.make("mutate-owner-2"),
+          updatedAt: "2026-08-30T22:30:00.000Z",
+          sharedProjectApproval: "approved",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(wrongBot._tag === "Failure");
+      assert.equal((yield* repository.getCurrent({ access: botAccess, rootId })).revision, 1);
+    }),
+  );
+
+  it.effect("inserts an approved fact into a shared group scope for every member", () =>
+    Effect.gen(function* () {
+      const repository = yield* EntityMemoryRepository;
+      const revision = yield* repository.insertScopedFact({
+        access: sharedAccess,
+        scope: "group",
+        fact: "The group ships on Fridays.",
+        sensitive: false,
+        confidence: 1,
+        sourceMessageId: null,
+        memoryId: AkeruMemoryId.make("scoped-group-fact"),
+        createdAt: "2026-09-23T08:00:00.000Z",
+      });
+      assert.equal(revision.partition.scope, "group");
+      assert.equal(revision.approvalState, "approved");
+      assert.equal(revision.authorBotId, BotId.make("bot"));
+      assert.deepEqual(revision.affectedBotIds, [BotId.make("bot")]);
+      assert.isNull(revision.sourceThreadId);
+
+      const outsideGroup = yield* repository
+        .insertScopedFact({
+          access: botAccess,
+          scope: "group",
+          fact: "No group here.",
+          sensitive: false,
+          confidence: 1,
+          sourceMessageId: null,
+          memoryId: AkeruMemoryId.make("scoped-no-group"),
+          createdAt: "2026-09-23T08:00:00.000Z",
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(outsideGroup._tag === "Failure");
     }),
   );
 });

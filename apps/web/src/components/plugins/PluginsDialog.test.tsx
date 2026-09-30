@@ -2,7 +2,7 @@ import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import {
-  isInstallablePlugin,
+  isListedIntegration,
   loadDirectoryCatalog,
   PLUGIN_CATEGORIES,
   type PluginDirectoryDefinition,
@@ -10,30 +10,33 @@ import {
 import { PluginDetailsContent } from "./PluginDetails";
 import {
   EMPTY_MCP_SERVER_DRAFT,
-  COMPOSIO_APPS,
   PLUGIN_DIRECTORY_FILTERS,
   PLUGIN_DIALOG_CLASS_NAME,
   PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
   PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  pluginBrokeredBlockerNotice,
   pluginRecoveryNotice,
   resolvePluginDialogServers,
   validateMcpServerDraft,
 } from "./PluginsDialog";
-import {
-  ComposioToolkitResults,
-  CustomMcpServers,
-  PluginsCatalog,
-  RemovedBuiltinServers,
-} from "./PluginsCatalog";
+import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
 import { buildPluginSections } from "./pluginPresentation";
 import { planPluginToggle, pluginMcpServerId } from "./pluginRegistry";
 
 const catalog = loadDirectoryCatalog();
-const firecrawl = catalog.find((plugin) => plugin.id === "firecrawl");
+const listedCatalog = catalog.filter(isListedIntegration);
+const firecrawlEntry = catalog.find((plugin) => plugin.id === "firecrawl");
 const executor = catalog.find((plugin) => plugin.id === "executor");
-if (!firecrawl || !isInstallablePlugin(firecrawl) || firecrawl.kind !== "mcp-url" || !executor) {
+if (!firecrawlEntry || firecrawlEntry.kind !== "mcp-url" || !executor) {
   throw new TypeError("Required plugins are missing from the directory.");
 }
+// Firecrawl stays verification-pending until its lifecycle is verified; the
+// dialog tests model the recovered installable shape for installed-server flows.
+const firecrawl = {
+  ...firecrawlEntry,
+  connection: { type: "ready" as const },
+  catalogStatus: "available" as const,
+};
 const { kind: _kind, transport: _transport, url: _url, ...pendingBase } = firecrawl;
 const pendingPlugin = {
   ...pendingBase,
@@ -98,79 +101,24 @@ describe("Plugins dialog content", () => {
     expect(pluginRecoveryNotice("Hoplite", [])).toBeNull();
   });
 
-  it("lists Gmail as an app connected through Composio", () => {
-    const gmail = COMPOSIO_APPS[0];
-    const markup = renderToStaticMarkup(
-      <PluginsCatalog
-        sections={buildPluginSections({ plugins: COMPOSIO_APPS, query: "gmail", filter: "All" })}
-        servers={[]}
-        pendingServerId={null}
-        onToggle={noop}
-        onOpen={noop}
-      />,
+  it("surfaces the named blocker when a pending brokered plugin is toggled on", () => {
+    const brokered = catalog.find(
+      (plugin) => plugin.connection.type === "brokered" && plugin.connection.pendingBlocker,
     );
-
-    expect(gmail.id).toBe("gmail");
-    expect(markup).toContain("Gmail");
-    expect(markup).toContain("Composio");
-    expect(markup).toContain("Connect Gmail");
-  });
-
-  it("renders Composio search results with a neutral fallback when no logo exists", () => {
-    const markup = renderToStaticMarkup(
-      <ComposioToolkitResults
-        toolkits={[
-          {
-            slug: "google-calendar",
-            name: "Google Calendar",
-            description: "Manage calendars and events.",
-            categories: ["Productivity"],
-            toolsCount: 12,
-          },
-        ]}
-        connectedToolkitIds={new Set()}
-        pendingToolkitId={null}
-        onConnect={noop}
-      />,
-    );
-
-    expect(markup).toContain('data-composio-toolkit="google-calendar"');
-    expect(markup).toContain("Google Calendar");
-    expect(markup).toContain("Manage calendars and events.");
-    expect(markup).toContain("Connect Google Calendar");
-    expect(markup).toMatch(/aria-hidden="true"[^>]*>G<\/span>/);
-  });
-
-  it("presents Composio once as Gmail's connection provider", () => {
-    const gmail = COMPOSIO_APPS[0];
-    const markup = renderToStaticMarkup(
-      <PluginDetailsContent
-        plugin={gmail}
-        server={undefined}
-        activeDependentBotNames={[]}
-        pending={false}
-        onToggle={noop}
-        onRemove={noop}
-        onViewDocumentation={noop}
-        onViewSource={noop}
-        onOpenSkill={noop}
-      />,
-    );
-
-    expect(gmail.logo.src).toBe("https://logos.composio.dev/api/gmail");
-    expect(markup).toContain('src="https://logos.composio.dev/api/gmail"');
-    expect(markup).not.toContain("/plugin-logos/gmail.svg");
-    expect(markup).toContain("Provider");
-    expect(markup).toContain("Composio");
-    expect(markup).toContain("Sign-in");
-    expect(markup).toContain("Google OAuth");
-    expect(markup).toContain("Not connected");
-    expect(markup).not.toContain("Authentication");
-    expect(markup).not.toContain("Execution");
-    expect(markup).not.toContain("Health");
-    expect(markup).not.toContain("Transport");
-    expect(markup).not.toContain("Platforms");
-    expect(markup).not.toContain("License");
+    if (!brokered || brokered.connection.type !== "brokered") {
+      throw new TypeError("The directory must keep a pending brokered plugin.");
+    }
+    expect(pluginBrokeredBlockerNotice(brokered)).toEqual({
+      type: "warning",
+      title: `${brokered.title} is not available yet`,
+      description: brokered.connection.pendingBlocker,
+    });
+    expect(
+      pluginBrokeredBlockerNotice({
+        ...brokered,
+        connection: { type: "brokered", broker: { name: "Composio", url: "https://composio.dev" } },
+      }),
+    ).toBeNull();
   });
 
   it("keeps the directory and details at one fixed size", () => {
@@ -180,7 +128,7 @@ describe("Plugins dialog content", () => {
     expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).toContain("pt-5!");
     expect(PLUGIN_DIRECTORY_FILTERS.slice(3)).toEqual(
       PLUGIN_CATEGORIES.filter((category) =>
-        catalog.some((plugin) => plugin.category === category),
+        listedCatalog.some((plugin) => plugin.category === category),
       ),
     );
   });
@@ -252,9 +200,10 @@ describe("Plugins dialog content", () => {
     );
     expect(markup).toContain("By Useful Software Co.");
     expect(markup).toContain("Authentication");
-    expect(markup).not.toContain("OAuth");
-    expect(markup).toContain("Local");
-    expect(markup).toContain("Local command");
+    expect(markup).toContain("OAuth");
+    expect(markup).toContain("Hosted");
+    expect(markup).toContain("Remote URL");
+    expect(markup).toContain("Verification pending");
     expect(markup).toContain("Not checked");
     expect(markup).toContain("macos, windows, linux");
     expect(markup).toContain("Submit a payment.");

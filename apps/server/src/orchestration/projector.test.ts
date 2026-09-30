@@ -144,6 +144,8 @@ describe("orchestration projector", () => {
         projectId: "project-1",
         botId: null,
         groupId: null,
+        parentThreadId: null,
+        parentDelegationId: null,
         respondingBotId: null,
         title: "demo",
         modelSelection: {
@@ -307,6 +309,76 @@ describe("orchestration projector", () => {
     expect(next.updatedAt).toBe("2026-01-01T00:00:00.000Z");
     expect(next.threads).toEqual([]);
   });
+
+  it.effect("clears a failed session's category when the turn resumes", () =>
+    Effect.gen(function* () {
+      const at = "2026-02-23T08:00:00.000Z";
+      const created = yield* projectEvent(
+        createEmptyReadModel(at),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-1",
+            title: "demo",
+            modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5.3-codex" },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: at,
+            updatedAt: at,
+          },
+        }),
+      );
+      const failed = yield* projectEvent(
+        created,
+        makeEvent({
+          sequence: 2,
+          type: "thread.session-set",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-failed",
+          payload: {
+            threadId: "thread-1",
+            session: {
+              threadId: "thread-1",
+              status: "error",
+              providerName: "codex",
+              runtimeMode: "full-access",
+              activeTurnId: null,
+              lastError: "rate limit exceeded",
+              unavailability: "limit-reached",
+              updatedAt: at,
+            },
+          },
+        }),
+      );
+      expect(failed.threads[0]?.session?.unavailability).toBe("limit-reached");
+
+      const resumed = yield* projectEvent(
+        failed,
+        makeEvent({
+          sequence: 3,
+          type: "thread.turn-resume-requested",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: at,
+          commandId: "cmd-resume",
+          payload: { threadId: "thread-1", createdAt: at },
+        }),
+      );
+      const session = resumed.threads[0]?.session;
+      expect(session?.status).toBe("starting");
+      expect(session?.lastError).toBeNull();
+      expect(session?.unavailability).toBeUndefined();
+    }),
+  );
 
   it("tracks latest turn id from session lifecycle events", async () => {
     const createdAt = "2026-02-23T08:00:00.000Z";
@@ -722,6 +794,87 @@ describe("orchestration projector", () => {
     expect(message?.text).toBe("hello");
     expect(message?.streaming).toBe(false);
     expect(message?.updatedAt).toBe(completeAt);
+  });
+
+  it("projects channelDelivery onto the targeted assistant message", async () => {
+    const now = "2026-09-25T12:00:00.000Z";
+    const model = createEmptyReadModel(now);
+
+    const withThread = await Effect.runPromise(
+      projectEvent(
+        model,
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-1",
+            title: "demo",
+            modelSelection: {
+              provider: ProviderDriverKind.make("codex"),
+              model: "gpt-5.3-codex",
+            },
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+
+    const withMessage = await Effect.runPromise(
+      projectEvent(
+        withThread,
+        makeEvent({
+          sequence: 2,
+          type: "thread.message-sent",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-message",
+          payload: {
+            threadId: "thread-1",
+            messageId: "assistant:msg-1",
+            role: "assistant",
+            text: "hello",
+            turnId: "turn-1",
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+    expect(withMessage.threads[0]?.messages[0]?.channelDelivery).toBeUndefined();
+
+    const withDelivery = await Effect.runPromise(
+      projectEvent(
+        withMessage,
+        makeEvent({
+          sequence: 3,
+          type: "thread.channel-delivery-set",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-delivery",
+          payload: {
+            threadId: "thread-1",
+            messageId: "assistant:msg-1",
+            delivery: "sent",
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+
+    expect(withDelivery.threads[0]?.messages[0]?.channelDelivery).toBe("sent");
+    expect(withDelivery.threads[0]?.updatedAt).toBe(now);
   });
 
   it("prunes reverted turn messages from in-memory thread snapshot", async () => {

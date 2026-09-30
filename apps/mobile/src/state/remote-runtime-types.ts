@@ -1,9 +1,13 @@
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import {
+  type ConnectionFailureCode,
+  type EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 import { EnvironmentId, ThreadId, type ServerConfig } from "@t3tools/contracts";
 
 export interface EnvironmentRuntimeState {
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
+  readonly connectionErrorCode: ConnectionFailureCode | null;
   readonly connectionErrorTraceId: string | null;
   readonly serverConfig: ServerConfig | null;
 }
@@ -14,6 +18,7 @@ export interface ConnectedEnvironmentSummary {
   readonly displayUrl: string;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
+  readonly connectionErrorCode: ConnectionFailureCode | null;
   readonly connectionErrorTraceId: string | null;
 }
 
