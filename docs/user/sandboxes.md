@@ -37,6 +37,8 @@ for credential rotation and VM cleanup.
 Ascii Box runs persistent Linux VMs. Stopping a VM saves a native lifecycle snapshot; resuming it
 restores that workspace. Ascii Box supports public previews by default, so do not expose sensitive
 services. Akeru requests protected, token-authenticated access for its browser-control endpoint.
+If session setup fails, Akeru preserves the VM and waits for snapshot cleanup before reporting the
+error. Snapshot archival can take up to five minutes; retries wait for that cleanup to finish.
 New VMs do not inherit credentials from your Ascii account environment.
 Ascii Box commands support timeouts of up to ten minutes. Requests for longer timeouts are rejected
 before the command starts rather than silently shortened.

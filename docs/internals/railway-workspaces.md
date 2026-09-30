@@ -6,6 +6,8 @@ The shared identity file persists the Railway sandbox ID. Reattachment uses `San
 
 Railway identity hashes exclude the credential fingerprint while pool keys retain it. Rotating credentials creates a fresh SDK client but reconnects to the same saved VM, including after a server restart. Changing environments or revoking access fails closed rather than abandoning the old identity and creating a second billable VM. Settings requires explicit acknowledgement of the Railway-dashboard retirement path before replacing or removing existing credentials; this is not automatic remote cleanup.
 
+The workspace pool serializes Railway acquisition and release by durable identity across credential-scoped clients. A destroy request waits for the final identity lease, invalidates idle clients, and deletes the VM once. Shutdown waits for pending identity operations and deduplicates deletion. Creation after deletion starts a fresh lifecycle; stale clients cannot reattach from the idle cache.
+
 Railway has no SDK pause/resume operation. Workspace-pool release is therefore nondestructive: sleep is a no-op, wake verifies the VM is running, and destroy deletes the VM before the shared wrapper removes its identity file. Disk checkpoints are a Railway capability, not a substitute for pause/resume: restoring one creates a different VM and cannot transparently preserve the saved identity. No checkpoint API is added to the common workspace contract.
 
 Commands use the existing shell quoting and map cwd, environment, and millisecond timeouts to SDK options. A null exit code is treated as failure, never successful execution.
