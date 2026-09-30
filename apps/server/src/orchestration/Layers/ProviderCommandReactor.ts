@@ -1619,7 +1619,7 @@ const make = Effect.gen(function* () {
     releaseDelegationResultsNow(event).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
+          ? Effect.interrupt
           : Effect.logWarning("retrying release of delegated work results in the background", {
               threadId: event.payload.threadId,
               cause: Cause.pretty(cause),
