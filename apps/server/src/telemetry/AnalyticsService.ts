@@ -108,8 +108,7 @@ interface BucketAggregateRow {
   readonly botsDeleted: number;
   readonly botsRestored: number;
   readonly botsTotalCreated: number;
-  readonly botsTotalDeleted: number;
-  readonly botsTotalRestored: number;
+  readonly botsTotalGone: number;
   readonly userMessages: number;
   readonly botReplies: number;
   readonly failedTurns: number;
@@ -295,17 +294,33 @@ export const make = Effect.gen(function* () {
         sql<BucketAggregateRow>`
         SELECT
           COALESCE(SUM(CASE WHEN e.event_type = 'bot.created' THEN 1 ELSE 0 END), 0) AS "botsCreated",
-          COALESCE(SUM(CASE WHEN e.event_type = 'bot.archived' THEN 1 ELSE 0 END), 0) AS "botsDeleted",
+          COALESCE(SUM(CASE WHEN e.event_type = 'bot.archived'
+            OR (e.event_type = 'bot.deleted' AND COALESCE((
+              SELECT prior.event_type FROM orchestration_events prior
+              WHERE prior.aggregate_kind = 'bot'
+                AND prior.stream_id = e.stream_id
+                AND prior.event_type IN ('bot.archived', 'bot.restored')
+                AND prior.sequence < e.sequence
+              ORDER BY prior.sequence DESC LIMIT 1
+            ), '') <> 'bot.archived') THEN 1 ELSE 0 END), 0) AS "botsDeleted",
           COALESCE(SUM(CASE WHEN e.event_type = 'bot.restored' THEN 1 ELSE 0 END), 0) AS "botsRestored",
           (SELECT COUNT(*) FROM orchestration_events
             WHERE event_type = 'bot.created' AND occurred_at < ${end}
               AND COALESCE(json_extract(metadata_json, '$.importedHistory'), 0) <> 1) AS "botsTotalCreated",
-          (SELECT COUNT(*) FROM orchestration_events
-            WHERE event_type = 'bot.archived' AND occurred_at < ${end}
-              AND COALESCE(json_extract(metadata_json, '$.importedHistory'), 0) <> 1) AS "botsTotalDeleted",
-          (SELECT COUNT(*) FROM orchestration_events
-            WHERE event_type = 'bot.restored' AND occurred_at < ${end}
-              AND COALESCE(json_extract(metadata_json, '$.importedHistory'), 0) <> 1) AS "botsTotalRestored",
+          (SELECT COUNT(*) FROM orchestration_events gone
+            WHERE gone.aggregate_kind = 'bot'
+              AND gone.event_type IN ('bot.archived', 'bot.deleted')
+              AND gone.occurred_at < ${end}
+              AND COALESCE(json_extract(gone.metadata_json, '$.importedHistory'), 0) <> 1
+              AND NOT EXISTS (
+                SELECT 1 FROM orchestration_events newer
+                WHERE newer.aggregate_kind = 'bot'
+                  AND newer.stream_id = gone.stream_id
+                  AND newer.event_type IN ('bot.archived', 'bot.restored', 'bot.deleted')
+                  AND newer.occurred_at < ${end}
+                  AND COALESCE(json_extract(newer.metadata_json, '$.importedHistory'), 0) <> 1
+                  AND newer.sequence > gone.sequence
+              )) AS "botsTotalGone",
           COALESCE(SUM(CASE WHEN e.event_type = 'thread.message-sent'
             AND json_extract(e.payload_json, '$.role') = 'user' THEN 1 ELSE 0 END), 0) AS "userMessages",
           COALESCE(SUM(CASE WHEN e.event_type = 'thread.message-sent'
@@ -425,9 +440,7 @@ export const make = Effect.gen(function* () {
         new_installations: 0,
         bots_created: clampCounter(row.botsCreated),
         bots_deleted: clampCounter(row.botsDeleted),
-        bots_total: clampCounter(
-          row.botsTotalCreated - row.botsTotalDeleted + row.botsTotalRestored,
-        ),
+        bots_total: clampCounter(row.botsTotalCreated - row.botsTotalGone),
         user_messages: clampCounter(row.userMessages),
         bot_replies: clampCounter(row.botReplies),
         failed_turns: clampCounter(row.failedTurns),

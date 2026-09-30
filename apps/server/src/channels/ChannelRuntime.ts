@@ -1199,7 +1199,7 @@ const stopArchivedBotChannels = <E, R>(
   events: Stream.Stream<OrchestrationEvent, E, R>,
 ) =>
   Stream.runForEach(events, (event) =>
-    event.type === "bot.archived"
+    event.type === "bot.archived" || event.type === "bot.deleted"
       ? stopChannelsForBot(ctx, event.payload.botId)
       : event.type === "thread.deleted" || event.type === "thread.archived"
         ? clearChannelThreadStatuses(ctx, event.payload.threadId)

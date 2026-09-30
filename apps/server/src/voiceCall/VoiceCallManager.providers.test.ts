@@ -41,6 +41,7 @@ const repository = {
         updatedAt: "2026-08-27T00:00:00.000Z",
       }),
     ),
+  deleteById: () => Effect.void,
 } satisfies ProjectionBotRepositoryShape;
 const defaults: VoiceAdapters = {
   test: async () => undefined,

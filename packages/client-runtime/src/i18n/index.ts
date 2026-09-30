@@ -1196,6 +1196,13 @@ export const englishCatalog = {
     "Let this bot take subscription voice calls. Voice must also be enabled in Settings.",
   "Disable voice calls for {name}": "Disable voice calls for {name}",
   "Enable voice calls for {name}": "Enable voice calls for {name}",
+  Danger: "Danger",
+  "Delete bot": "Delete bot",
+  "Remove {name} from the roster. Its chats stay in your history.":
+    "Remove {name} from the roster. Its chats stay in your history.",
+  "Delete {name}? Its chats stay in your history. This cannot be undone.":
+    "Delete {name}? Its chats stay in your history. This cannot be undone.",
+  "Could not delete {name}": "Could not delete {name}",
   Model: "Model",
   "The provider and model this bot runs on.": "The provider and model this bot runs on.",
   "No model yet": "No model yet",

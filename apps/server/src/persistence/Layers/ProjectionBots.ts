@@ -109,6 +109,11 @@ const makeProjectionBotRepository = Effect.gen(function* () {
     `,
   });
 
+  const deleteBotRow = SqlSchema.void({
+    Request: GetProjectionBotInput,
+    execute: ({ botId }) => sql`DELETE FROM projection_bots WHERE bot_id = ${botId}`,
+  });
+
   const upsert: ProjectionBotRepositoryShape["upsert"] = (row) =>
     upsertBotRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.upsert:query")),
@@ -123,8 +128,12 @@ const makeProjectionBotRepository = Effect.gen(function* () {
       Effect.map((rows) => rows.map(toProjectionBot)),
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.listAll:query")),
     );
+  const deleteById: ProjectionBotRepositoryShape["deleteById"] = (input) =>
+    deleteBotRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.deleteById:query")),
+    );
 
-  return { upsert, getById, listAll } satisfies ProjectionBotRepositoryShape;
+  return { upsert, getById, listAll, deleteById } satisfies ProjectionBotRepositoryShape;
 });
 
 export const ProjectionBotRepositoryLive = Layer.effect(
