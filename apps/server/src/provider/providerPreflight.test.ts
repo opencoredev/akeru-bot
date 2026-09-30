@@ -182,6 +182,7 @@ describe("preflightProvider", () => {
           providers: [kimi],
           providerId: "kimi",
           model: "claude-sonnet",
+          now: Date.parse("2026-01-01T00:00:00.000Z"),
           subscriptionStatuses: [{ ...baseStatus, health }],
           subscriptionHealth: () => ({
             health: "failed",
@@ -198,6 +199,7 @@ describe("preflightProvider", () => {
         providers: [provider()],
         providerId: "claude",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         providerInstanceConfig: {
           driver: ProviderDriverKind.make("claudeAgent"),
           environment: [{ name: "ANTHROPIC_API_KEY", value: "own-key", sensitive: true }],
@@ -238,6 +240,7 @@ describe("preflightProvider", () => {
         providers: [claude],
         providerId: "claude",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         subscriptionStatuses: [status],
       }),
     ).toBeUndefined();
@@ -246,6 +249,7 @@ describe("preflightProvider", () => {
         providers: [claude],
         providerId: "claude",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         subscriptionStatuses: [status],
         subscriptionHealth: () => ({
           health: "failed",
@@ -258,6 +262,7 @@ describe("preflightProvider", () => {
         providers: [claude],
         providerId: "claude",
         model: "claude-sonnet",
+        now: Date.parse("2026-01-01T00:00:00.000Z"),
         subscriptionStatuses: [{ ...status, health: "revoked" }],
       })?.category,
     ).toBe("expired-login");
