@@ -13,9 +13,11 @@ summary. Use `pnpm changeset --empty` for documentation, tests, refactors, and i
 The four product packages (`akeru-bot`, desktop, web, and contracts) are a fixed group and always
 receive the same version. Packages without versions remain outside the release train.
 
-After changes reach `main`, Changesets creates or refreshes one Version Packages pull request. It
-combines the pending release levels, updates all four manifests and changelogs, and consumes the
-changeset files. Merging this pull request is the deliberate stable release button. That merge
+After changes reach `main`, the Version packages workflow runs `pnpm release:version`, force-pushes
+the result to `changeset-release/main`, and creates or refreshes one Version Packages pull request
+with `gh`. Changesets combines the pending release levels, updates all four manifests and
+changelogs, and consumes the changeset files. The pull request body lists the new changelog section
+of every package that changed. Merging this pull request is the deliberate stable release button. That merge
 starts the native builds, verifies every artifact, creates the `vX.Y.Z` tag, and creates the stable
 GitHub Release. Ordinary feature merges do not release immediately, and this flow does not publish
 the `akeru-bot` npm package. CI rejects stable-version edits from every PR except the authenticated,
