@@ -1462,7 +1462,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
                 { name: "RAILWAY_API_TOKEN", value: "railway-secret", sensitive: true },
                 { name: "RAILWAY_ENVIRONMENT_ID", value: "environment-id", sensitive: false },
               ],
-      },
+            },
             tenki: {
               environment: [{ name: "TENKI_API_KEY", value: "tenki-secret", sensitive: true }],
             },
@@ -1491,7 +1491,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.deepInclude(clientSettings.sandbox.providers.railway.environment[1], {
         value: "environment-id",
         sensitive: false,
-      },
+      });
       assert.deepInclude(clientSettings.sandbox.providers.tenki.environment[0], {
         value: "",
         valueRedacted: true,

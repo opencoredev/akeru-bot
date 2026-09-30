@@ -11,6 +11,7 @@ import {
   BotWorkspacePool,
   botWorkspaceCredentialFingerprint,
   botWorkspaceIdentity,
+  botWorkspaceResourceKey,
 } from "./botWorkspacePool.ts";
 
 const localWorkspace = () =>
