@@ -1,7 +1,15 @@
 import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import type { ChannelOperationError, ChannelRuntimeShape } from "./ChannelRuntime.ts";
+import {
+  channelFailureMessage,
+  channelFailurePresentation,
+  isChannelTransportError,
+  type ChannelFailurePresentation,
+  type ChannelOperationError,
+  type ChannelRuntimeShape,
+} from "./ChannelRuntime.ts";
 
 export type ChannelCommand = Extract<
   ClientOrchestrationCommand,
@@ -34,3 +42,30 @@ export const executeChannelCommand = (
                   ? runtime.reconnect(command.botId, command.provider)
                   : runtime.sendChannelMessage(command)
   ).pipe(Effect.map((sequence) => ({ sequence })));
+
+/**
+ * The only way a channel command failure leaves the server. Returns fixed, client-safe text
+ * and logs just the command type and failure category, never the provider error or cause.
+ */
+export const channelCommandFailure = (
+  command: ChannelCommand,
+  cause: Cause.Cause<unknown>,
+): Effect.Effect<ChannelFailurePresentation> => {
+  const error = Cause.hasInterruptsOnly(cause) ? undefined : Cause.squash(cause);
+  const presented =
+    error === undefined
+      ? { message: "Channel command was interrupted. Try again." }
+      : channelFailurePresentation(error);
+  // A provider error after a reply post began is ambiguous: the message may have been delivered.
+  // A definite rejection, or a check that failed before posting, keeps its own category.
+  const deliveryUnknown = channelFailureMessage("delivery-unknown");
+  const failure: ChannelFailurePresentation =
+    command.type === "channel.send" &&
+    (isChannelTransportError(error) || presented.message === deliveryUnknown)
+      ? { message: deliveryUnknown, category: "delivery-unknown" }
+      : presented;
+  return Effect.logWarning("channel command failed", {
+    commandType: command.type,
+    category: failure.category ?? "internal",
+  }).pipe(Effect.as(failure));
+};

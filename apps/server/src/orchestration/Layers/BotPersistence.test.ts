@@ -91,6 +91,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         connectorDependencies: [],
         sandbox: "local",
         approvalPolicy: "approval-required",
+        delegateToBotId: specialistBotId,
         createdAt,
       });
       yield* engine.dispatch({
@@ -143,6 +144,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       assert.equal(archived.routines?.[0]?.lifecycle, "paused");
       assert.equal(archived.routines?.[0]?.enabled, false);
       assert.equal(archived.routines?.[0]?.nextRunAt, null);
+      assert.equal(archived.routines?.[0]?.delegateToBotId, specialistBotId);
 
       yield* engine.dispatch({
         type: "bot.restore",

@@ -41,6 +41,7 @@ const routine = (overrides: Partial<Routine> = {}): Routine => ({
   connectorDependencies: [],
   sandbox: "local",
   approvalPolicy: "approval-required",
+  delegateToBotId: null,
   enabled: true,
   lifecycle: "enabled",
   nextRunAt: "2026-08-28T13:00:00.000Z",

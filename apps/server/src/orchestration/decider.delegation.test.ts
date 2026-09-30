@@ -112,6 +112,9 @@ function makeDelegation(overrides: Partial<AkeruDelegationRecord> = {}): AkeruDe
     },
     billedBotId: CHILD_BOT_ID,
     keep: false,
+    anchorMessageId: null,
+    retryOfDelegationId: null,
+    trigger: "bot" as const,
     createdAt: NOW,
     updatedAt: NOW,
     phase: { _tag: "Queued" },
@@ -700,6 +703,43 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
       });
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.some((event) => event.type === "delegation.updated")).toBe(false);
+    }),
+  );
+
+  it.effect("never lets a delegated child thread carry a channel origin", () =>
+    Effect.gen(function* () {
+      const base = makeReadModel();
+      const readModel: OrchestrationReadModel = {
+        ...base,
+        threads: base.threads.map((thread) =>
+          thread.id === CHILD_THREAD_ID ? { ...thread, parentThreadId: PARENT_THREAD_ID } : thread,
+        ),
+      };
+      const start = (threadId: ThreadId) =>
+        decideOrchestrationCommand({
+          readModel,
+          command: {
+            type: "thread.turn.start",
+            commandId: CommandId.make(`command-channel-${threadId}`),
+            threadId,
+            message: {
+              messageId: MessageId.make(`message-channel-${threadId}`),
+              role: "user",
+              text: "Hello from Telegram",
+              attachments: [],
+              channelOrigin: { provider: "telegram", externalThreadId: "chat-1" },
+            },
+            interactionMode: "default",
+            runtimeMode: "approval-required",
+            createdAt: LATER,
+          },
+        });
+
+      const rejected = yield* Effect.flip(start(CHILD_THREAD_ID));
+      expect(String(rejected)).toContain("cannot receive channel messages");
+      const accepted = yield* start(PARENT_THREAD_ID);
+      const events = Array.isArray(accepted) ? accepted : [accepted];
+      expect(events.some((event) => event.type === "thread.message-sent")).toBe(true);
     }),
   );
 });

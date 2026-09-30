@@ -920,8 +920,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         INSERT INTO projection_routines (
           routine_id, bot_id, target_thread_id, project_id, job, procedure, procedure_version,
           approval_version, schedule_json, timezone, skill_assignment_ids_json,
-          connector_dependencies_json, sandbox, approval_policy, enabled, lifecycle,
-          next_run_at, last_run_at, latest_result_json, latest_failure_json,
+          connector_dependencies_json, sandbox, approval_policy, delegate_to_bot_id, enabled,
+          lifecycle, next_run_at, last_run_at, latest_result_json, latest_failure_json,
           created_at, updated_at, deleted_at
         ) VALUES (
           ${routine.id}, ${routine.botId}, ${routine.targetThreadId}, ${routine.projectId}, ${routine.job},
@@ -929,7 +929,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           ${encodeRoutineSchedule(routine.schedule)}, ${routine.timezone},
           ${encodeSkillAssignmentIds(routine.skillAssignmentIds)},
           ${encodeMcpServerIds(routine.connectorDependencies)}, ${routine.sandbox},
-          ${routine.approvalPolicy}, ${routine.enabled ? 1 : 0}, ${routine.lifecycle},
+          ${routine.approvalPolicy}, ${routine.delegateToBotId}, ${routine.enabled ? 1 : 0},
+          ${routine.lifecycle},
           ${routine.nextRunAt}, ${routine.lastRunAt},
           ${routine.latestResult === null ? null : encodeRoutineResult(routine.latestResult)},
           ${routine.latestFailure === null ? null : encodeRoutineFailure(routine.latestFailure)},
@@ -948,6 +949,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           connector_dependencies_json = excluded.connector_dependencies_json,
           sandbox = excluded.sandbox,
           approval_policy = excluded.approval_policy,
+          delegate_to_bot_id = excluded.delegate_to_bot_id,
           enabled = excluded.enabled,
           lifecycle = excluded.lifecycle,
           next_run_at = excluded.next_run_at,

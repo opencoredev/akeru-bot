@@ -1,3 +1,5 @@
+import * as Cause from "effect/Cause";
+
 import {
   AuthAccessWriteScope,
   type AuthSessionState,
@@ -26,4 +28,21 @@ export function connectedChannelBinding(
   return bindings?.find(
     (binding) => binding.provider === provider && binding.status === "connected",
   );
+}
+
+const CHANNEL_IDENTITY_CONFLICT =
+  /^This channel connection is (?:already connected|attached) to another bot\.$/u;
+
+/**
+ * Whether a failed channel command was rejected because another bot already owns the provider
+ * account. The server sends one of two fixed messages for this case, and only an exact match counts.
+ */
+export function isChannelIdentityConflict(result: {
+  readonly cause?: Cause.Cause<unknown>;
+}): boolean {
+  if (!result.cause) return false;
+  const error = Cause.squash(result.cause);
+  const message =
+    typeof error === "object" && error !== null && "message" in error ? error.message : error;
+  return typeof message === "string" && CHANNEL_IDENTITY_CONFLICT.test(message);
 }

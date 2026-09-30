@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
@@ -150,6 +151,8 @@ export const RoutineDefinition = Schema.Struct({
   projectId: ProjectId,
   sandbox: RoutineSandbox,
   approvalPolicy: RoutineApprovalPolicy,
+  /** When set, each run delegates the job to this bot from the target thread's owner. */
+  delegateToBotId: Schema.NullOr(BotId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
 });
 export type RoutineDefinition = typeof RoutineDefinition.Type;
 

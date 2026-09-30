@@ -9,6 +9,7 @@ import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import {
   BotId,
   CHANNEL_PROVIDERS,
+  ChannelFailureCategory as ChannelFailureCategorySchema,
   type ChannelConnectionId,
   CommandId,
   MessageId,
@@ -18,6 +19,7 @@ import {
   type TurnId,
   type ChannelBinding,
   type ChannelConnectionProfile,
+  type ChannelFailureCategory,
   type ChannelProvider,
   type ClientOrchestrationCommand,
   type OrchestrationEvent,
@@ -57,41 +59,127 @@ import {
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ChannelDeliveryStore, type ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
 
-/** Transport adapters must confirm that no part of the reply was accepted before using this error. */
+/**
+ * Transport adapters must confirm that no part of the reply was accepted before using this error.
+ * The category picks the repair clients offer; a rejection without one counts as credentials.
+ */
 export class ChannelPostRejectedError extends Schema.TaggedErrorClass<ChannelPostRejectedError>()(
   "ChannelPostRejectedError",
-  { message: Schema.String },
+  { message: Schema.String, category: Schema.optional(ChannelFailureCategorySchema) },
 ) {}
 
-/** A channel operation failed. The message is safe to show and never carries provider errors. */
+/**
+ * A channel operation failed. The message is safe to show and never carries provider errors.
+ * The category, when known, tells clients which repair to offer.
+ */
 export class ChannelRuntimeError extends Schema.TaggedErrorClass<ChannelRuntimeError>()(
   "ChannelRuntimeError",
-  { message: Schema.String },
+  { message: Schema.String, category: Schema.optional(ChannelFailureCategorySchema) },
 ) {}
 
-const failWith = (message: string) => Effect.fail(new ChannelRuntimeError({ message }));
+const failWith = (message: string, category?: ChannelFailureCategory) =>
+  Effect.fail(new ChannelRuntimeError({ message, ...(category ? { category } : {}) }));
 
-/** A transport SDK promise rejected. The message is the SDK's own; the cause keeps the original. */
+const channelTransportErrorMessage = "Channel provider request failed.";
+
+/**
+ * A transport SDK promise rejected. The message is fixed because SDK errors can echo request
+ * data; the cause keeps the original for classification and must never reach a client or log.
+ */
 export class ChannelTransportError extends Schema.TaggedErrorClass<ChannelTransportError>()(
   "ChannelTransportError",
   { message: Schema.String, cause: Schema.Defect() },
 ) {}
 
+const transportError = (cause: unknown) =>
+  new ChannelTransportError({ message: channelTransportErrorMessage, cause });
+
 /** Runs an SDK promise and keeps its original rejection as the cause. */
 const fromPromise = <A>(evaluate: () => PromiseLike<A>): Effect.Effect<A, ChannelTransportError> =>
-  Effect.tryPromise({
-    try: () => evaluate(),
-    catch: (cause) =>
-      new ChannelTransportError({
-        message: cause instanceof Error ? cause.message : String(cause),
-        cause,
-      }),
-  });
+  Effect.tryPromise({ try: () => evaluate(), catch: transportError });
 
-const isChannelPostRejected = Schema.is(ChannelPostRejectedError);
+const networkErrorCodes = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "NETWORK_ERROR",
+]);
 
-const channelDeliveryUnknownError =
-  "This channel reply has an unfinished delivery attempt. Check the channel before sending another reply.";
+const isNetworkFailure = (cause: unknown, depth = 0): boolean => {
+  if (depth > 4 || typeof cause !== "object" || cause === null) return false;
+  const record = cause as Record<string, unknown>;
+  if (typeof record.code === "string" && networkErrorCodes.has(record.code)) {
+    // Discord wraps API rejections in NETWORK_ERROR; an HTTP status means the request arrived.
+    const original = record.originalError as Record<string, unknown> | undefined;
+    return typeof original?.status !== "number";
+  }
+  if (cause instanceof TypeError && cause.message === "fetch failed") return true;
+  if (cause instanceof DOMException && cause.name === "TimeoutError") return true;
+  return isNetworkFailure(record.cause, depth + 1);
+};
+
+const isChannelRuntimeError = Schema.is(ChannelRuntimeError);
+/** True for a definite provider rejection: no part of the reply reached the channel. */
+export const isChannelPostRejected = Schema.is(ChannelPostRejectedError);
+export const isChannelTransportError = Schema.is(ChannelTransportError);
+
+/** Classifies a failed channel operation. Unknown provider rejections count as credentials. */
+export const channelFailureCategory = (error: unknown): ChannelFailureCategory => {
+  if (isChannelRuntimeError(error) || isChannelPostRejected(error))
+    return error.category ?? "credentials";
+  if (isChannelTransportError(error))
+    return isNetworkFailure(error.cause) ? "network" : "credentials";
+  return "credentials";
+};
+
+const channelFailureMessages: Record<ChannelFailureCategory, string> = {
+  credentials: "The channel provider rejected the connection. Check the channel credentials.",
+  network: "Could not reach the channel provider. Check the network and try again.",
+  project: "The channel project is unavailable. Choose another project.",
+  "delivery-unknown":
+    "This channel reply has an unfinished delivery attempt. Check the channel before sending another reply.",
+  restore: "Connection restore failed. Reconnect with updated credentials.",
+};
+
+/** The fixed, client-safe text for a failure category. */
+export const channelFailureMessage = (category: ChannelFailureCategory) =>
+  channelFailureMessages[category];
+
+export interface ChannelFailurePresentation {
+  readonly message: string;
+  /** Absent for internal failures such as storage errors, which have no channel repair. */
+  readonly category?: ChannelFailureCategory;
+}
+
+const channelCommandFailedMessage = "Channel command failed. Try again.";
+
+/**
+ * Turns any channel failure into text a client may see. Runtime errors carry fixed messages
+ * written here; transport errors get a fixed message for their category; everything else is
+ * internal. Provider error text never passes through.
+ */
+export const channelFailurePresentation = (error: unknown): ChannelFailurePresentation => {
+  if (isChannelRuntimeError(error))
+    return { message: error.message, category: channelFailureCategory(error) };
+  if (isChannelTransportError(error)) {
+    const category = channelFailureCategory(error);
+    return { message: channelFailureMessage(category), category };
+  }
+  if (isChannelPostRejected(error))
+    return { message: channelDeliveryRejectedError, category: channelFailureCategory(error) };
+  return { message: channelCommandFailedMessage };
+};
+
+const channelDeliveryUnknownError = channelFailureMessages["delivery-unknown"];
 const channelDeliveryRejectedError =
   "The channel rejected this reply. Correct the channel problem, then retry.";
 
@@ -200,6 +288,8 @@ export interface ChannelTransportRuntime {
     emoji: string,
   ) => Promise<void>;
   readonly isHealthy?: () => boolean;
+  /** Resolves when a long-lived listener stops on its own or during shutdown. */
+  readonly settled?: Promise<void>;
 }
 
 /** Ways a running transport can fail. */
@@ -236,22 +326,18 @@ interface ChannelRuntimeEntry {
   ) => Effect.Effect<void, ChannelTransportFailure>;
   readonly clearThreadStatus?: (threadId: ThreadId) => Effect.Effect<void>;
   readonly isHealthy?: () => boolean;
+  /** Completes when a long-lived listener stops, so the binding can be marked for reconnect. */
+  readonly settled?: Effect.Effect<void>;
 }
 
 const fromTransportRuntime = (runtime: ChannelTransportRuntime): ChannelRuntimeEntry => {
-  const { webhook, react, removeReaction, isHealthy } = runtime;
+  const { webhook, react, removeReaction, isHealthy, settled } = runtime;
   return {
     // Injected transports signal a definite provider rejection by throwing ChannelPostRejectedError.
     post: (externalThreadId, text) =>
       Effect.tryPromise({
         try: () => runtime.post(externalThreadId, text),
-        catch: (cause) =>
-          isChannelPostRejected(cause)
-            ? cause
-            : new ChannelTransportError({
-                message: cause instanceof Error ? cause.message : String(cause),
-                cause,
-              }),
+        catch: (cause) => (isChannelPostRejected(cause) ? cause : transportError(cause)),
       }),
     shutdown: fromPromise(() => runtime.shutdown()),
     ...(webhook ? { webhook: (request: Request) => fromPromise(() => webhook(request)) } : {}),
@@ -268,6 +354,16 @@ const fromTransportRuntime = (runtime: ChannelTransportRuntime): ChannelRuntimeE
         }
       : {}),
     ...(isHealthy ? { isHealthy } : {}),
+    ...(settled
+      ? {
+          settled: Effect.promise(() =>
+            settled.then(
+              () => undefined,
+              () => undefined,
+            ),
+          ),
+        }
+      : {}),
   };
 };
 
@@ -334,10 +430,11 @@ export interface ChannelReplyTarget {
   readonly messageId: MessageId;
 }
 
+/** A binding that could not be restored. Carries only the category so logs never hold secrets. */
 export interface ChannelRestoreFailure {
   readonly botId: BotId;
   readonly provider: LiveProvider;
-  readonly cause: unknown;
+  readonly category: ChannelFailureCategory;
 }
 
 const channelStatusReactions = ["eyes", "white_check_mark", "x"] as const;
@@ -362,6 +459,8 @@ interface ChannelRuntimeContext {
   readonly runSdkCallback: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
   /** Parent of every transport's own scope, such as a renewing gateway. */
   readonly transportScope: Scope.Scope;
+  /** Runtime keys with a start in flight. A persisted `connecting` outside this set is stale. */
+  readonly connecting: Set<string>;
   closed: boolean;
 }
 
@@ -565,13 +664,18 @@ const subscribedExternalThreadIds = (
     return [...ids];
   });
 
-/** Marks connected bindings whose transport is not running as needing a reconnect. */
+/**
+ * Marks connected bindings whose transport is not running, and `connecting` bindings with no
+ * start in flight (left by a crash mid-connect), as needing a reconnect.
+ */
 export function channelBindingsForRuntime(
   bindings: ReadonlyArray<ChannelBinding>,
   isRunning: (botId: BotId, provider: ChannelProvider) => boolean,
+  isConnecting: (botId: BotId, provider: ChannelProvider) => boolean = () => false,
 ): ReadonlyArray<ChannelBinding> {
   return bindings.map((binding) =>
-    binding.status === "connected" && !isRunning(binding.botId, binding.provider)
+    (binding.status === "connected" && !isRunning(binding.botId, binding.provider)) ||
+    (binding.status === "connecting" && !isConnecting(binding.botId, binding.provider))
       ? { ...binding, status: "needs-reconnect" }
       : binding,
   );
@@ -904,7 +1008,7 @@ const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBinding) =>
       const previousBinding = (bot.channelBindings ?? []).find(
         (candidate) => candidate.provider === binding.provider,
       );
-      const nextBinding = {
+      const { failureCategory, ...merged } = {
         ...binding,
         ...(binding.projectId &&
         binding.projectId === previousBinding?.projectId &&
@@ -918,6 +1022,20 @@ const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBinding) =>
               ? binding.sentMessageIds
               : (previousBinding?.sentMessageIds ?? []),
         ),
+      };
+      const previousSent = new Set(previousBinding?.sentMessageIds ?? []);
+      const delivered = merged.sentMessageIds.some((id) => !previousSent.has(id));
+      // The category follows the error: dropped with it, and fixed for an unresolved delivery.
+      const category =
+        merged.lastError === channelDeliveryUnknownError
+          ? "delivery-unknown"
+          : merged.lastError
+            ? failureCategory
+            : undefined;
+      const nextBinding: ChannelBinding = {
+        ...merged,
+        ...(category ? { failureCategory: category } : {}),
+        ...(delivered ? { lastSucceededAt: yield* ctx.deps.nowIso } : {}),
       };
       const receipt = yield* ctx.deps.engine.dispatch({
         type: "bot.update",
@@ -943,12 +1061,30 @@ const withConnectionOperation = (ctx: ChannelRuntimeContext, connectionId: Chann
 const withConnectionSettingsOperation = (ctx: ChannelRuntimeContext) =>
   ctx.withLock("connection-settings");
 
-const stopRuntime = (ctx: ChannelRuntimeContext, botId: BotId, provider: ChannelProvider) =>
+/**
+ * Unregisters and stops a bot's transport. Pass `keepOnFailure` when the caller still owns the
+ * channel (a project move), so a transport that fails to stop stays registered and blocks a
+ * competing listener. Otherwise it stays unregistered and its inbound callbacks are ignored.
+ */
+const stopRuntime = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  options?: { readonly keepOnFailure?: boolean },
+) =>
   Effect.suspend(() => {
     const key = runtimeKey(botId, provider);
     const runtime = ctx.runtimes.get(key);
     if (!runtime) return Effect.void;
-    return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
+    ctx.runtimes.delete(key);
+    if (!options?.keepOnFailure) return runtime.shutdown;
+    return runtime.shutdown.pipe(
+      Effect.onError(() =>
+        Effect.sync(() => {
+          if (!ctx.runtimes.has(key)) ctx.runtimes.set(key, runtime);
+        }),
+      ),
+    );
   });
 
 /** Runs `operation` for each running transport under its channel lock, ignoring failures. */
@@ -997,7 +1133,8 @@ const shutdownAllChannels = (ctx: ChannelRuntimeContext) =>
   forEachRuntime(ctx, (key, runtime) =>
     Effect.suspend(() => {
       if (ctx.runtimes.get(key) !== runtime) return Effect.void;
-      return runtime.shutdown.pipe(Effect.map(() => void ctx.runtimes.delete(key)));
+      ctx.runtimes.delete(key);
+      return runtime.shutdown;
     }),
   );
 
@@ -1020,6 +1157,19 @@ const initializeChannelChat = (chat: Chat) =>
     Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)),
   );
 
+/**
+ * Blank messages and anything a bot wrote, including this bot, never start a turn.
+ *
+ * Discord, Slack, WhatsApp and iMessage always give a person's message a real boolean, so an
+ * `"unknown"` author there is treated as a bot. Telegram reports `"unknown"` for messages sent on
+ * behalf of a chat (`sender_chat`: anonymous group admins and linked channel posts), which people
+ * write, so only an explicit `true` counts as a bot on Telegram.
+ */
+export const ignoredInbound = (provider: ChannelProvider, message: Message) =>
+  !message.text.trim() ||
+  message.author.isMe === true ||
+  (provider === "telegram" ? message.author.isBot === true : message.author.isBot !== false);
+
 const startTelegram = (botId: BotId, token: string, onDirectMessage: InboundCallback) =>
   Effect.gen(function* () {
     const provider = new TelegramProvider({ mode: "polling", commands: [] });
@@ -1038,7 +1188,7 @@ const startTelegram = (botId: BotId, token: string, onDirectMessage: InboundCall
       state: createMemoryState(),
     });
     chat.onDirectMessage(async (thread, message) => {
-      if (!message.text.trim()) return;
+      if (ignoredInbound("telegram", message)) return;
       await onDirectMessage(normalizedInboundMessage(thread, message));
     });
     const disconnect = fromPromise(() => provider.disconnect(botId)).pipe(Effect.ignoreCause);
@@ -1070,9 +1220,10 @@ export interface RenewingGateway {
  * Keeps a time-limited gateway listener alive. Each cycle launches a listener that ends
  * itself at the renewal deadline and watches it until then; a schedule repeats the cycle.
  * Each cycle aborts and awaits the previous listener before launching the next one.
- * The first launch completes before this returns, and a failed first launch fails it.
- * A listener that stops early or fails to renew leaves the gateway unhealthy. Renewal
- * runs in its own child of the caller's scope, so closing that scope stops it.
+ * The first launch completes before this returns, and a failed first launch fails with its
+ * cause so the connect can classify it. A later listener that stops early or fails to launch
+ * leaves the gateway unhealthy. Renewal runs in its own child of the caller's scope, so
+ * closing that scope stops it.
  */
 export const startRenewingGateway = (
   start: (
@@ -1081,7 +1232,7 @@ export const startRenewingGateway = (
     signal: AbortSignal,
   ) => Promise<Response>,
   label: string,
-): Effect.Effect<RenewingGateway, ChannelRuntimeError | ChannelTransportError, Scope.Scope> =>
+): Effect.Effect<RenewingGateway, ChannelTransportError | ChannelRuntimeError, Scope.Scope> =>
   Effect.gen(function* () {
     const scope = yield* Scope.fork(yield* Scope.Scope);
     let abort = new AbortController();
@@ -1110,9 +1261,14 @@ export const startRenewingGateway = (
           abort.signal,
         ),
       );
+      // Server-side and rate-limit statuses are worth retrying; anything else is a rejection.
+      if (!response.ok) {
+        const category =
+          response.status >= 500 || response.status === 429 ? "network" : "credentials";
+        return yield* failWith(channelFailureMessage(category), category);
+      }
       const task = currentTask();
-      if (!response.ok || !task)
-        return yield* failWith(`${label} failed with status ${response.status}.`);
+      if (!task) return yield* failWith(`${label} did not start a listener.`);
       return task;
     });
     const watch = (task: Promise<unknown>) =>
@@ -1121,13 +1277,16 @@ export const startRenewingGateway = (
         Effect.timeoutOption(CHANNEL_GATEWAY_RENEWAL_INTERVAL),
       );
     // The first listener launches before this returns, so callers see it running.
-    const first = yield* launch.pipe(
-      Effect.onError(() =>
-        Scope.close(scope, Exit.void).pipe(Effect.andThen(Effect.sync(() => abort.abort()))),
-      ),
-    );
+    const first = yield* Effect.exit(launch);
+    if (Exit.isFailure(first)) {
+      abort.abort();
+      yield* Scope.close(scope, Exit.void);
+      const task = currentTask();
+      if (task) yield* settle(task);
+      return yield* Effect.failCause(first.cause);
+    }
     const renew = launch.pipe(Effect.flatMap(watch), Effect.repeat(Schedule.forever));
-    const supervisor = yield* watch(first).pipe(
+    const supervisor = yield* watch(first.value).pipe(
       Effect.andThen(renew),
       Effect.onError(() =>
         Effect.sync(() => {
@@ -1150,21 +1309,25 @@ export const startRenewingGateway = (
     } satisfies RenewingGateway;
   });
 
-function registerThreadedHandlers(chat: Chat, context: ChannelTransportContext) {
+function registerThreadedHandlers(
+  chat: Chat,
+  provider: ChannelProvider,
+  context: ChannelTransportContext,
+) {
   chat.onNewMention(async (thread, message) => {
-    if (!message.text.trim()) return;
+    if (ignoredInbound(provider, message)) return;
     await thread.subscribe();
     await context.onMention(await mentionWithContext(thread, message));
   });
   chat.onSubscribedMessage(async (thread, message) => {
-    if (!message.text.trim()) return;
+    if (ignoredInbound(provider, message)) return;
     await context.onSubscribedMessage(normalizedInboundMessage(thread, message));
   });
 }
 
-const onDirectText = (chat: Chat, onDirectMessage: InboundCallback) =>
+const onDirectText = (chat: Chat, provider: ChannelProvider, onDirectMessage: InboundCallback) =>
   chat.onDirectMessage(async (thread, message) => {
-    if (!message.text.trim()) return;
+    if (ignoredInbound(provider, message)) return;
     await onDirectMessage(normalizedInboundMessage(thread, message));
   });
 
@@ -1197,7 +1360,7 @@ const startIMessage = (
       adapters: { imessage: adapter },
       state: createMemoryState(),
     });
-    onDirectText(chat, onDirectMessage);
+    onDirectText(chat, "imessage", onDirectMessage);
     yield* initializeChannelChat(chat);
     const gateway = yield* startRenewingGateway(
       (waitUntil, durationMs, signal) =>
@@ -1214,6 +1377,7 @@ const startIMessage = (
       runtime: {
         post: (externalThreadId, text) => postChannelText(chat, "imessage", externalThreadId, text),
         isHealthy: gateway.isHealthy,
+        settled: gateway.settled,
         shutdown: gateway.shutdown.pipe(Effect.andThen(shutdownChat(chat))),
       },
     } satisfies StartedTransport;
@@ -1237,7 +1401,7 @@ const startWhatsApp = (
       adapters: { whatsapp: adapter as Adapter },
       state: createMemoryState(),
     });
-    onDirectText(chat, onDirectMessage);
+    onDirectText(chat, "whatsapp", onDirectMessage);
     yield* initializeChannelChat(chat);
     return {
       externalIdentity: input.phoneNumberId,
@@ -1284,8 +1448,8 @@ const startSlack = (
       adapters: { slack: adapter as Adapter },
       state,
     });
-    onDirectText(chat, onDirectMessage);
-    registerThreadedHandlers(chat, context);
+    onDirectText(chat, "slack", onDirectMessage);
+    registerThreadedHandlers(chat, "slack", context);
     yield* initializeChannelChat(chat);
     if (!adapter.botUserId) {
       yield* shutdownChat(chat);
@@ -1321,8 +1485,8 @@ const startDiscord = (
       adapters: { discord: adapter as Adapter },
       state: createMemoryState(),
     });
-    onDirectText(chat, onDirectMessage);
-    registerThreadedHandlers(chat, context);
+    onDirectText(chat, "discord", onDirectMessage);
+    registerThreadedHandlers(chat, "discord", context);
     yield* initializeChannelChat(chat);
     const identity = yield* fromPromise(() => adapter.getUser(input.applicationId)).pipe(
       Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)),
@@ -1346,6 +1510,7 @@ const startDiscord = (
         removeReaction: (externalThreadId, externalMessageId, emoji) =>
           fromPromise(() => adapter.removeReaction(externalThreadId, externalMessageId, emoji)),
         isHealthy: gateway.isHealthy,
+        settled: gateway.settled,
         shutdown: gateway.shutdown.pipe(Effect.andThen(shutdownChat(chat))),
       },
     } satisfies StartedTransport;
@@ -1483,7 +1648,7 @@ const startChannel = (
     const project = model.projects.find(
       (candidate) => candidate.id === input.targetProjectId && candidate.deletedAt === null,
     );
-    if (!project) return yield* failWith("The selected channel project is unavailable.");
+    if (!project) return yield* failWith("The selected channel project is unavailable.", "project");
     let runtime: ChannelRuntimeEntry | undefined;
     const dispatch = (message: InboundChannelMessage) =>
       withChannelOperation(
@@ -1594,6 +1759,7 @@ const startChannel = (
         externalIdentity: started.externalIdentity,
         connectedAt: yield* deps.nowIso,
         lastAttemptAt: yield* deps.nowIso,
+        lastSucceededAt: yield* deps.nowIso,
         sentMessageIds: [],
       },
     } satisfies StartedChannel;
@@ -1609,6 +1775,13 @@ const commitStartedChannel = (
     if (ctx.closed) {
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
       return yield* failWith("Channels are shutting down.");
+    }
+    const liveBot = (yield* deps.readModel.pipe(
+      Effect.onError(() => started.runtime.shutdown.pipe(Effect.ignoreCause)),
+    )).bots.some((bot) => bot.id === started.binding.botId && bot.archivedAt === null);
+    if (!liveBot) {
+      yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
+      return yield* failWith("Channel bot is unavailable.");
     }
     const key = runtimeKey(started.binding.botId, started.binding.provider);
     const previousRuntime = ctx.runtimes.get(key);
@@ -1639,6 +1812,203 @@ const commitStartedChannel = (
     }).pipe(Effect.onError(() => rollback));
   });
 
+const bindingFor = (
+  model: OrchestrationReadModel,
+  botId: BotId,
+  provider: ChannelProvider,
+): ChannelBinding | undefined =>
+  model.bots
+    .find((bot) => bot.id === botId)
+    ?.channelBindings?.find((binding) => binding.provider === provider);
+
+/**
+ * Undoes the `connecting` write of a failed attempt, unless something replaced it since: puts
+ * back the binding from before the attempt, or removes the one the attempt created.
+ */
+const revertConnectingBinding = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  previous: ChannelBinding | undefined,
+) =>
+  ctx.withLock(`binding:${botId}`)(
+    Effect.gen(function* () {
+      const model = yield* ctx.deps.readModel;
+      const bot = model.bots.find((candidate) => candidate.id === botId);
+      if (bindingFor(model, botId, provider)?.status !== "connecting" || !bot) return;
+      yield* ctx.deps.engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make(yield* randomId(ctx, "channel-binding")),
+        botId,
+        channelBindings: (bot.channelBindings ?? []).flatMap((candidate) =>
+          candidate.provider !== provider
+            ? [candidate]
+            : !previous
+              ? []
+              : previous.status === "connecting"
+                ? // A stale attempt from before a restart; nothing is starting it any more.
+                  [{ ...previous, status: "needs-reconnect" as const, connectedAt: null }]
+                : [previous],
+        ),
+      });
+    }),
+  );
+
+/**
+ * Records why a start failed. A binding whose earlier transport still runs keeps its status and
+ * gains the failure; one with nothing running becomes `failed` (or stays `blocked`); a binding
+ * the attempt created is removed so a rejected first connect leaves nothing behind. When the bot
+ * was archived or deleted during the attempt, the binding goes back to how it was before, so no
+ * `connecting` binding outlives the attempt or returns when the bot is restored.
+ */
+const recordStartFailure = (
+  ctx: ChannelRuntimeContext,
+  previous: ChannelBinding | undefined,
+  input: ChannelConnectInput,
+  error: unknown,
+) =>
+  Effect.gen(function* () {
+    const liveBot = (yield* ctx.deps.readModel).bots.some(
+      (bot) => bot.id === input.botId && bot.archivedAt === null,
+    );
+    if (!previous || !liveBot)
+      return yield* revertConnectingBinding(ctx, input.botId, input.provider, previous);
+    const failure = channelFailurePresentation(error);
+    const { failureCategory: _previousCategory, ...base } = previous;
+    const annotated: ChannelBinding = {
+      ...base,
+      lastAttemptAt: yield* ctx.deps.nowIso,
+      lastError: failure.message,
+      ...(failure.category ? { failureCategory: failure.category } : {}),
+    };
+    const running = ctx.runtimes.has(runtimeKey(input.botId, input.provider));
+    yield* replaceBinding(
+      ctx,
+      running
+        ? annotated
+        : {
+            ...annotated,
+            status: previous.status === "blocked" ? "blocked" : "failed",
+            connectedAt: null,
+          },
+    );
+  }).pipe(Effect.ignoreCause);
+
+const channelStoppedMessage = "The channel connection stopped. Reconnect to resume.";
+
+/**
+ * Marks the binding for reconnect when a long-lived listener stops on its own, so clients
+ * learn about it without waiting for the next snapshot. A stop caused by replacing or
+ * removing the transport is ignored because the runtime is no longer current.
+ */
+const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel) => {
+  const { settled } = started.runtime;
+  if (!settled) return Effect.void;
+  const { botId, provider } = started.binding;
+  const key = runtimeKey(botId, provider);
+  return settled.pipe(
+    Effect.andThen(
+      withChannelOperation(
+        ctx,
+        provider,
+      )(
+        Effect.gen(function* () {
+          if (ctx.closed || ctx.runtimes.get(key) !== started.runtime) return;
+          const current = bindingFor(yield* ctx.deps.readModel, botId, provider);
+          if (current?.status !== "connected") return;
+          yield* replaceBinding(ctx, {
+            ...current,
+            status: "needs-reconnect",
+            connectedAt: null,
+            lastError: channelStoppedMessage,
+            failureCategory: "network",
+          });
+        }),
+      ),
+    ),
+    Effect.ignoreCause,
+    Effect.forkIn(ctx.transportScope),
+    Effect.asVoid,
+  );
+};
+
+/**
+ * Starts a transport and commits it, persisting `connecting` first so every client sees the
+ * attempt. A transport that is already unhealthy when it returns, such as a gateway whose
+ * first launch was refused, fails instead of committing. With `recordFailure` false the caller
+ * records the outcome itself.
+ */
+const startAndCommitChannel = (
+  ctx: ChannelRuntimeContext,
+  input: ChannelConnectInput,
+  options: {
+    readonly connectionId?: ChannelConnectionId | undefined;
+    readonly secret?: StoredChannelSecret;
+    readonly recordFailure?: boolean;
+  } = {},
+) =>
+  Effect.gen(function* () {
+    const key = runtimeKey(input.botId, input.provider);
+    const model = yield* ctx.deps.readModel;
+    const previous = bindingFor(model, input.botId, input.provider);
+    const liveBot = model.bots.some((bot) => bot.id === input.botId && bot.archivedAt === null);
+    ctx.connecting.add(key);
+    return yield* Effect.gen(function* () {
+      if (liveBot && !ctx.closed) {
+        const initial: ChannelBinding = {
+          status: "disconnected",
+          botId: input.botId,
+          provider: input.provider,
+          ...(options.connectionId ? { connectionId: options.connectionId } : {}),
+          projectId: input.targetProjectId,
+          externalIdentity: null,
+          connectedAt: null,
+          sentMessageIds: [],
+        };
+        const {
+          lastError: _lastError,
+          failureCategory: _failureCategory,
+          ...base
+        } = previous ?? initial;
+        yield* replaceBinding(ctx, {
+          ...base,
+          status: "connecting",
+          lastAttemptAt: yield* ctx.deps.nowIso,
+          ...(previous?.failureCategory === "delivery-unknown"
+            ? {
+                lastError: channelDeliveryUnknownError,
+                failureCategory: "delivery-unknown" as const,
+              }
+            : {}),
+        });
+      }
+      const started = yield* startChannel(ctx, input, options.connectionId);
+      // A failed first gateway launch already failed the start with its own category. A listener
+      // the provider accepted and then dropped before commit is a connection problem.
+      if (started.runtime.isHealthy?.() === false) {
+        yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
+        return yield* failWith(channelFailureMessage("network"), "network");
+      }
+      const sequence = yield* commitStartedChannel(ctx, started, options.secret);
+      yield* watchTransportExit(ctx, started);
+      return sequence;
+    }).pipe(
+      Effect.onError((cause) =>
+        options.recordFailure === false
+          ? Effect.void
+          : Cause.hasInterruptsOnly(cause)
+            ? // An interrupted attempt must not leave its `connecting` binding behind.
+              ctx.closed
+              ? Effect.void
+              : revertConnectingBinding(ctx, input.botId, input.provider, previous).pipe(
+                  Effect.ignoreCause,
+                )
+            : recordStartFailure(ctx, previous, input, Cause.squash(cause)),
+      ),
+      Effect.ensuring(Effect.sync(() => ctx.connecting.delete(key))),
+    );
+  });
+
 const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnectInput) =>
   withChannelOperation(
     ctx,
@@ -1646,8 +2016,7 @@ const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnectInput) 
   )(
     Effect.gen(function* () {
       yield* assertChannelIdentityAvailable(ctx, input.botId, storedSecretFromInput(input));
-      const started = yield* startChannel(ctx, input);
-      return yield* commitStartedChannel(ctx, started, storedSecretFromInput(input));
+      return yield* startAndCommitChannel(ctx, input, { secret: storedSecretFromInput(input) });
     }),
   );
 
@@ -1798,8 +2167,7 @@ const attachChannelConnection = (
         yield* assertChannelIdentityAvailable(ctx, botId, secret);
         const commandId = CommandId.make(yield* randomId(ctx, "channel-attach"));
         const input = yield* connectInputFromSecret(botId, projectId, commandId, secret);
-        const started = yield* startChannel(ctx, input, connectionId);
-        return yield* commitStartedChannel(ctx, started);
+        return yield* startAndCommitChannel(ctx, input, { connectionId });
       }),
     ),
   );
@@ -1874,7 +2242,8 @@ const detachChannelConnection = (
  * Moves a bot's channel to another live project. The old runtime stops before the new one
  * starts because most transports cannot poll with the same credentials twice. If the new
  * runtime cannot start, the binding keeps its previous project and records the failure, and
- * a previously connected channel is restarted on its old project when possible.
+ * a previously connected channel is restarted on its old project when possible. If the old
+ * runtime fails to stop, the move fails and that runtime stays registered.
  */
 const changeChannelProject = (
   ctx: ChannelRuntimeContext,
@@ -1913,13 +2282,16 @@ const changeChannelProject = (
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
-      yield* stopRuntime(ctx, botId, provider);
+      // A transport that fails to stop stays registered, and no competing one starts.
+      yield* stopRuntime(ctx, botId, provider, { keepOnFailure: true });
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
           const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
           const input = yield* connectInputFromSecret(botId, target, commandId, secret);
-          const started = yield* startChannel(ctx, input, binding.connectionId);
-          return yield* commitStartedChannel(ctx, started);
+          return yield* startAndCommitChannel(ctx, input, {
+            connectionId: binding.connectionId,
+            recordFailure: false,
+          });
         });
       return yield* startOn(projectId).pipe(
         Effect.catch((cause) => {
@@ -1935,12 +2307,14 @@ const changeChannelProject = (
               restored
                 ? Effect.fail(cause)
                 : Effect.gen(function* () {
+                    const category = channelFailurePresentation(cause).category;
                     yield* replaceBinding(ctx, {
                       ...binding,
                       status: binding.status === "blocked" ? "blocked" : "failed",
                       connectedAt: null,
                       lastAttemptAt: yield* ctx.deps.nowIso,
                       lastError: "Could not start the channel in the selected project. Try again.",
+                      ...(category ? { failureCategory: category } : {}),
                     }).pipe(Effect.ignoreCause);
                     return yield* Effect.fail(cause);
                   }),
@@ -1968,8 +2342,7 @@ const reconnectChannel = (ctx: ChannelRuntimeContext, botId: BotId, provider: Li
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
       const commandId = CommandId.make(yield* randomId(ctx, "channel-reconnect"));
       const input = yield* connectInputFromSecret(botId, binding.projectId, commandId, secret);
-      const started = yield* startChannel(ctx, input, binding.connectionId);
-      return yield* commitStartedChannel(ctx, started);
+      return yield* startAndCommitChannel(ctx, input, { connectionId: binding.connectionId });
     }),
   );
 
@@ -1982,7 +2355,9 @@ const restoreConnectedChannels = (
     const candidates = model.bots.flatMap((bot) =>
       bot.archivedAt === null
         ? (bot.channelBindings ?? []).flatMap((binding) =>
-            binding.status === "connected" || binding.status === "needs-reconnect"
+            binding.status === "connected" ||
+            binding.status === "needs-reconnect" ||
+            binding.status === "connecting"
               ? [{ botId: bot.id, provider: binding.provider }]
               : [],
           )
@@ -2007,10 +2382,12 @@ const restoreConnectedChannels = (
                   yield* replaceBinding(ctx, {
                     ...binding,
                     status: projectMissing ? "blocked" : "failed",
+                    connectedAt: null,
                     lastAttemptAt: yield* deps.nowIso,
                     lastError: projectMissing
                       ? "The selected project is unavailable. Choose another project."
-                      : "Connection restore failed. Reconnect with updated credentials.",
+                      : channelFailureMessage("restore"),
+                    failureCategory: "restore",
                   });
                 }).pipe(Effect.ignoreCause);
               }
@@ -2022,7 +2399,7 @@ const restoreConnectedChannels = (
       { concurrency: "unbounded" },
     );
     return results.flatMap((exit, index) =>
-      Exit.isFailure(exit) ? [{ ...candidates[index]!, cause: Cause.squash(exit.cause) }] : [],
+      Exit.isFailure(exit) ? [{ ...candidates[index]!, category: "restore" as const }] : [],
     );
   });
 
@@ -2093,14 +2470,20 @@ const sendChannelMessage = (
           }
           const posted = yield* Effect.exit(runtime.post(origin.externalThreadId, text));
           if (Exit.isFailure(posted)) {
-            const rejected = isChannelPostRejected(Cause.squash(posted.cause));
+            const failure = Cause.squash(posted.cause);
+            const rejected = isChannelPostRejected(failure);
             if (rejected) {
               yield* deps.deliveryStore.releaseRequested(input.messageId);
             }
             yield* replaceBinding(ctx, {
               ...binding,
               lastAttemptAt: yield* deps.nowIso,
-              lastError: rejected ? channelDeliveryRejectedError : channelDeliveryUnknownError,
+              ...(rejected
+                ? {
+                    lastError: channelDeliveryRejectedError,
+                    failureCategory: channelFailureCategory(failure),
+                  }
+                : { lastError: channelDeliveryUnknownError }),
             });
             return yield* Effect.failCause(posted.cause);
           }
@@ -2130,7 +2513,8 @@ const sendChannelMessage = (
           ? model.snapshotSequence
           : yield* replaceBinding(ctx, {
               ...sentBinding,
-              ...(lastError && lastError !== channelDeliveryRejectedError ? { lastError } : {}),
+              // A delivered reply clears every failure except another reply's unresolved delivery.
+              ...(lastError === channelDeliveryUnknownError ? { lastError } : {}),
               sentMessageIds: [...binding.sentMessageIds, input.messageId],
             });
       }),
@@ -2161,6 +2545,22 @@ const resolveCompletedChannelReply = (
         message.role === "user" &&
         message.channelOrigin !== undefined,
     );
+    if (inboundIndex < 0) return null;
+    // Only the owning bot answers the channel, from the thread the channel message landed on.
+    // The decider never gives a delegated child thread a channel origin, so the parent turn is
+    // the only delivery point and this branch should not see child threads. Turns answered by
+    // another bot stay inside Akeru.
+    if (
+      thread.parentThreadId ||
+      (latestTurn.respondingBotId && latestTurn.respondingBotId !== thread.botId)
+    ) {
+      yield* Effect.logTrace("channel reply dropped", {
+        threadId,
+        turnId,
+        reason: thread.parentThreadId ? "delegated-child-thread" : "other-responding-bot",
+      });
+      return null;
+    }
     const assistantIndex = thread.messages.findIndex(
       (message) =>
         message.id === latestTurn.assistantMessageId &&
@@ -2169,7 +2569,7 @@ const resolveCompletedChannelReply = (
         !message.streaming &&
         Boolean(message.text.trim()),
     );
-    if (inboundIndex < 0 || assistantIndex <= inboundIndex) return null;
+    if (assistantIndex <= inboundIndex) return null;
 
     return {
       botId: thread.botId,
@@ -2261,6 +2661,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       withLock: makeKeyedLock(),
       runSdkCallback,
       transportScope,
+      connecting: new Set(),
       closed: false,
     };
     const shutdown = shutdownAllChannels(ctx);
@@ -2308,10 +2709,14 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
           ),
         ),
       channelBindingsForRuntime: (bindings) =>
-        channelBindingsForRuntime(bindings, (botId, provider) => {
-          const runtime = ctx.runtimes.get(runtimeKey(botId, provider));
-          return runtime !== undefined && (runtime.isHealthy?.() ?? true);
-        }),
+        channelBindingsForRuntime(
+          bindings,
+          (botId, provider) => {
+            const runtime = ctx.runtimes.get(runtimeKey(botId, provider));
+            return runtime !== undefined && (runtime.isHealthy?.() ?? true);
+          },
+          (botId, provider) => ctx.connecting.has(runtimeKey(botId, provider)),
+        ),
       shutdown,
     } satisfies ChannelRuntimeShape;
   });

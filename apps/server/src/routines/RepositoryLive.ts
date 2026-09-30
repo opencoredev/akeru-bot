@@ -42,6 +42,7 @@ const RoutineRow = Schema.Struct({
   connectorDependencies: Schema.fromJsonString(Schema.Array(McpServerId)),
   sandbox: Schema.String,
   approvalPolicy: Schema.String,
+  delegateToBotId: Schema.NullOr(BotId),
   enabled: Schema.Number,
   lifecycle: Schema.Literals([
     "draft",
@@ -118,7 +119,8 @@ const make = Effect.gen(function* () {
             approval_version AS "approvalVersion", schedule_json AS schedule, timezone,
             skill_assignment_ids_json AS "skillAssignmentIds",
             connector_dependencies_json AS "connectorDependencies", sandbox,
-            approval_policy AS "approvalPolicy", enabled, lifecycle,
+            approval_policy AS "approvalPolicy", delegate_to_bot_id AS "delegateToBotId",
+            enabled, lifecycle,
             next_run_at AS "nextRunAt", last_run_at AS "lastRunAt",
             latest_result_json AS "latestResult", latest_failure_json AS "latestFailure",
             created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"
@@ -131,7 +133,8 @@ const make = Effect.gen(function* () {
             approval_version AS "approvalVersion", schedule_json AS schedule, timezone,
             skill_assignment_ids_json AS "skillAssignmentIds",
             connector_dependencies_json AS "connectorDependencies", sandbox,
-            approval_policy AS "approvalPolicy", enabled, lifecycle,
+            approval_policy AS "approvalPolicy", delegate_to_bot_id AS "delegateToBotId",
+            enabled, lifecycle,
             next_run_at AS "nextRunAt", last_run_at AS "lastRunAt",
             latest_result_json AS "latestResult", latest_failure_json AS "latestFailure",
             created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"

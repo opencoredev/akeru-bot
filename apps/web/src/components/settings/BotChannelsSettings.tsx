@@ -12,13 +12,15 @@ import {
   canChangeChannelProject,
   channelBindingNeedsProject,
   channelPickerProjectId,
+  channelRepairAction,
   channelRestoreProjectId,
 } from "@t3tools/client-runtime/channel-presentation";
 import { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
+import { useLocation } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { resolveChannelSettingsAccess } from "../../channelAccess";
+import { isChannelIdentityConflict, resolveChannelSettingsAccess } from "../../channelAccess";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { botEnvironment, environmentBotsAtom } from "../../state/bots";
@@ -26,14 +28,23 @@ import { environmentSnapshotAtom } from "../../state/shell";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
 import { ChannelProjectSelect } from "./ChannelProjectSelect";
-import { ChannelSetupDialog } from "./ChannelSetupDialog";
-import { CHANNEL_PROVIDER_META, channelProviderMeta } from "./channelProviderMeta";
+import { type ChannelReplacement, ChannelSetupDialog } from "./ChannelSetupDialog";
+import {
+  ChannelRepairButton,
+  ChannelStatusBadge,
+  ChannelStatusNotice,
+  channelWebhookUrl,
+} from "./ChannelStatus";
+import {
+  CHANNEL_PROVIDER_META,
+  channelProviderMeta,
+  channelSettingsTarget,
+} from "./channelProviderMeta";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
@@ -93,6 +104,14 @@ export function parsePhotonHostedCredentials(input: string): {
   return projectId && projectSecret ? { projectId, projectSecret } : null;
 }
 
+function channelProviderFromHash(hash: string): ChannelProvider | null {
+  const target = hash.replace(/^#/, "");
+  return (
+    CHANNEL_PROVIDER_META.find((channel) => channelSettingsTarget(channel.provider) === target)
+      ?.provider ?? null
+  );
+}
+
 export function BotChannelsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
@@ -121,8 +140,16 @@ export function BotChannelsSettingsPanel() {
     reportFailure: false,
   });
   const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
-  const [provider, setProvider] = useState<ChannelProvider>("imessage");
+  // Repair links elsewhere open this panel on one provider through the `channel-<provider>` hash.
+  const hashProvider = channelProviderFromHash(
+    useLocation({ select: (location) => location.hash }),
+  );
+  const [provider, setProvider] = useState<ChannelProvider>(hashProvider ?? "imessage");
+  useEffect(() => {
+    if (hashProvider) setProvider(hashProvider);
+  }, [hashProvider]);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [replacing, setReplacing] = useState<ChannelReplacement | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyConnectionId, setBusyConnectionId] = useState<string | null>(null);
   const [pendingProfile, setPendingProfile] = useState<{
@@ -220,6 +247,13 @@ export function BotChannelsSettingsPanel() {
             restored?._tag === "Failure"
               ? "Could not assign or restore channel"
               : "Could not assign channel",
+          ...(isChannelIdentityConflict(result)
+            ? {
+                description: t(
+                  "Another bot already uses this account. Unassign it there, then connect again.",
+                ),
+              }
+            : {}),
         });
       }
     }
@@ -241,6 +275,24 @@ export function BotChannelsSettingsPanel() {
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: t("Could not move channel to this project") });
     }
+  };
+
+  const reconnectChannel = async (connection: ChannelConnectionProfile, botId: BotId) => {
+    if (!environmentId || busyConnectionId) return;
+    setBusyConnectionId(connection.id);
+    const result = await reconnect({
+      environmentId,
+      input: { botId, provider: connection.provider },
+    });
+    setBusyConnectionId(null);
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: "Could not reconnect channel" });
+    }
+  };
+
+  const openSetup = (next: ChannelReplacement | null) => {
+    setReplacing(next);
+    setSetupOpen(true);
   };
 
   if (environmentId === null) {
@@ -282,6 +334,7 @@ export function BotChannelsSettingsPanel() {
           {CHANNEL_PROVIDER_META.map((channel) => (
             <button
               key={channel.provider}
+              id={channelSettingsTarget(channel.provider)}
               type="button"
               role="tab"
               aria-selected={provider === channel.provider}
@@ -304,7 +357,7 @@ export function BotChannelsSettingsPanel() {
         title={meta.label}
         icon={<meta.icon className="size-5 shrink-0" aria-hidden />}
         headerAction={
-          <Button onClick={() => setSetupOpen(true)}>
+          <Button onClick={() => openSetup(null)}>
             <PlusIcon className="size-4" />
             Add connection
           </Button>
@@ -314,7 +367,7 @@ export function BotChannelsSettingsPanel() {
         {providerConnections.length === 0 ? (
           <div className="mx-3 flex flex-col items-start gap-3 rounded-xl border border-dashed px-4 py-6 sm:mx-4">
             <p className="text-sm text-muted-foreground">No {meta.label} connections yet.</p>
-            <Button variant="outline" onClick={() => setSetupOpen(true)}>
+            <Button variant="outline" onClick={() => openSetup(null)}>
               Set up {meta.label}
             </Button>
           </div>
@@ -339,6 +392,8 @@ export function BotChannelsSettingsPanel() {
               assignedBot !== undefined &&
               binding !== undefined &&
               canChangeChannelProject(binding, pickedProjectId, liveProjects);
+            const repairAction =
+              assignedBot && binding ? channelRepairAction(binding, liveProjects) : "none";
             return (
               <div
                 key={connection.id}
@@ -355,57 +410,24 @@ export function BotChannelsSettingsPanel() {
                       {externalIdentity ? ` · ${externalIdentity}` : ""}
                     </p>
                   </div>
-                  <Badge
-                    variant={
-                      needsProject ||
-                      binding?.status === "failed" ||
-                      binding?.status === "needs-reconnect"
-                        ? "warning"
-                        : binding?.status === "disconnected"
-                          ? "secondary"
-                          : assignedBot
-                            ? "success"
-                            : "secondary"
-                    }
-                    size="sm"
-                  >
-                    {needsProject
-                      ? t("Choose another project")
-                      : binding?.status === "failed"
-                        ? "Connection failed"
-                        : binding?.status === "needs-reconnect"
-                          ? "Needs reconnect"
-                          : binding?.status === "disconnected"
-                            ? `Disconnected · ${assignedBot?.name ?? "Assigned"}`
-                            : assignedBot
-                              ? `Assigned to ${assignedBot.name}`
-                              : "Unassigned"}
-                  </Badge>
+                  <ChannelStatusBadge
+                    binding={binding}
+                    ownerName={assignedBot?.name}
+                    needsProject={needsProject}
+                  />
                 </div>
-                {needsProject ? (
-                  <p
-                    role="status"
-                    className="break-words text-xs text-amber-600 dark:text-amber-400"
-                  >
-                    {t(
-                      "The project for this channel is unavailable. Choose another project to reconnect it.",
-                    )}
-                  </p>
-                ) : binding?.lastError ? (
-                  <p
-                    role="status"
-                    className="break-words text-xs text-amber-600 dark:text-amber-400"
-                  >
-                    {binding.lastError}
-                  </p>
-                ) : null}
+                <ChannelStatusNotice
+                  binding={binding}
+                  needsProject={needsProject}
+                  webhookUrl={channelWebhookUrl(connection)}
+                />
                 {assignedBot ? (
                   <p className="text-[13px] text-muted-foreground/80">
                     {channelTestInstructions(connection.provider, assignedBot.name)}
                   </p>
                 ) : null}
                 <div className="flex min-w-0 flex-wrap items-end gap-x-4 gap-y-2">
-                  <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
                     <span className="text-xs font-medium text-muted-foreground">
                       Bot that answers
                     </span>
@@ -417,7 +439,7 @@ export function BotChannelsSettingsPanel() {
                     >
                       <SelectTrigger
                         aria-label={`Assign ${connection.name}`}
-                        className="w-48"
+                        className="w-full sm:w-48"
                         // "No bot" needs no project, so an assigned channel can always be unassigned.
                         disabled={connectionBusy || (!assignedBot && pickedProjectId === null)}
                       >
@@ -451,17 +473,43 @@ export function BotChannelsSettingsPanel() {
                     label={t("Project for {name}", { name: connection.name })}
                     disabled={connectionBusy}
                   />
-                  {canMove ? (
+                  {assignedBot && binding ? (
+                    <ChannelRepairButton
+                      action={repairAction}
+                      status={binding.status}
+                      disabled={
+                        busy || connectionBusy || (repairAction === "choose-project" && !canMove)
+                      }
+                      managementUrl={connection.managementUrl}
+                      onRepair={(action) => {
+                        if (action === "choose-project") {
+                          if (canMove)
+                            void moveToProject(connection, assignedBot.id, pickedProjectId);
+                        } else if (action === "update-credentials") {
+                          openSetup({
+                            connectionId: connection.id,
+                            name: connection.name,
+                            botId: assignedBot.id,
+                            projectId: binding.projectId,
+                          });
+                        } else {
+                          void reconnectChannel(connection, assignedBot.id);
+                        }
+                      }}
+                    />
+                  ) : null}
+                  {canMove && repairAction !== "choose-project" ? (
                     <Button
+                      variant="outline"
                       disabled={busy || connectionBusy}
                       onClick={() =>
                         void moveToProject(connection, assignedBot.id, pickedProjectId)
                       }
                     >
-                      {needsProject ? t("Reconnect in this project") : t("Move to this project")}
+                      {t("Move to this project")}
                     </Button>
                   ) : null}
-                  {connection.managementUrl ? (
+                  {connection.managementUrl && repairAction !== "check-delivery" ? (
                     <Button
                       variant="outline"
                       render={
@@ -494,33 +542,6 @@ export function BotChannelsSettingsPanel() {
                       Disconnect
                     </Button>
                   ) : null}
-                  {assignedBot &&
-                  !needsProject &&
-                  (binding?.status === "failed" ||
-                    binding?.status === "needs-reconnect" ||
-                    binding?.status === "disconnected") ? (
-                    <Button
-                      variant="outline"
-                      disabled={busy || connectionBusy}
-                      onClick={() => {
-                        setBusyConnectionId(connection.id);
-                        void reconnect({
-                          environmentId,
-                          input: { botId: assignedBot.id, provider: connection.provider },
-                        }).then((result) => {
-                          setBusyConnectionId(null);
-                          if (result._tag === "Failure") {
-                            toastManager.add({
-                              type: "error",
-                              title: "Could not reconnect channel",
-                            });
-                          }
-                        });
-                      }}
-                    >
-                      Reconnect
-                    </Button>
-                  ) : null}
                   <Button
                     variant="outline"
                     disabled={busy || connectionBusy || assignedBot !== undefined}
@@ -536,11 +557,14 @@ export function BotChannelsSettingsPanel() {
       </SettingsSection>
 
       <ChannelSetupDialog
+        // Remount per target so a credentials update never inherits another dialog's fields.
+        key={replacing?.connectionId ?? "new"}
         environmentId={environmentId}
         provider={provider}
         open={setupOpen}
         onOpenChange={setSetupOpen}
         bots={activeBots}
+        replacing={replacing}
         onSaved={(connectionId) => setPendingProfile({ id: connectionId, present: true })}
       />
     </SettingsPageContainer>

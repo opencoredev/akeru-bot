@@ -7,6 +7,7 @@ import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools.ts";
 import {
   BotId,
   IsoDateTime,
+  MessageId,
   PositiveInt,
   ThreadId,
   TrimmedNonEmptyString,
@@ -41,6 +42,10 @@ export const isTerminalDelegationState = (state: AkeruDelegationState): boolean 
  * Open delegations are always kept.
  */
 export const SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD = 20;
+
+/** What started a delegation: a parent bot's tool call or a scheduled routine. */
+export const AkeruDelegationTrigger = Schema.Literals(["bot", "scheduled"]);
+export type AkeruDelegationTrigger = typeof AkeruDelegationTrigger.Type;
 
 export const AkeruDelegationAccessGrant = Schema.Struct({
   allowedToolIds: Schema.Array(Schema.suspend(() => AkeruToolId)),
@@ -93,6 +98,13 @@ const AkeruDelegationRecordFields = {
   access: AkeruDelegationAccessGrant,
   billedBotId: BotId,
   keep: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Parent chat message the work card sits under. Null places it by parentTurnId. */
+  anchorMessageId: Schema.NullOr(MessageId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  /** The Failed or Canceled delegation this one retries. The original is never mutated. */
+  retryOfDelegationId: Schema.NullOr(DelegationId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  trigger: AkeruDelegationTrigger.pipe(Schema.withDecodingDefault(Effect.succeed("bot" as const))),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 } as const;

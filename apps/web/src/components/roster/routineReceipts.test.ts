@@ -30,6 +30,7 @@ const routine = {
   connectorDependencies: [],
   sandbox: "local",
   approvalPolicy: "auto",
+  delegateToBotId: null,
   enabled: true,
   lifecycle: "enabled",
   nextRunAt: null,

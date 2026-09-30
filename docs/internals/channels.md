@@ -51,11 +51,40 @@ The shared provider capability record states whether an adapter supports direct 
 
 A channel supports save, assign, connect, reconnect, disconnect, unassign, and delete. Server startup restores connected transports. A failed restore produces a visible repair state and does not stop server startup.
 
-Slack uses Socket Mode. Discord and Photon use supervised Gateway listeners that renew after their finite listener period expires. An early listener exit marks the transport unhealthy. Shutdown waits for listener cleanup. Retired transport callbacks cannot start new work after disconnect or replacement.
+Slack uses Socket Mode. Discord and Photon use supervised Gateway listeners that renew after their finite listener period expires. A first listener launch that fails fails the connect with its own category: a thrown network error or a 5xx or 429 status is `network`, and any other status is `credentials`. A later early exit marks the transport unhealthy. Shutdown waits for listener cleanup. Retired transport callbacks cannot start new work after disconnect or replacement.
 
 Startup restores Slack and Discord subscriptions from channel origins in full thread records. Slack subscriptions exist before Socket Mode starts. First-mention context includes at most ten earlier messages and 8,000 characters. The current mention remains intact.
 
 Replies must match the current binding's project. Reassigning a channel to another project prevents old-project replies from using the new assignment.
+
+## Health
+
+A `ChannelBinding` reports health through `status`, `lastError`, `failureCategory`, and `lastSucceededAt`:
+
+- `connecting` is written before a transport starts and replaced by `connected` or a failure. The server tracks starts in flight, so `channelBindingsForRuntime` reads a `connecting` binding with no start in flight, left by a crash mid-connect, as `needs-reconnect`. It does the same for a `connected` binding whose transport is not running.
+- `failureCategory` is one of `credentials`, `network`, `project`, `delivery-unknown`, or `restore`. It is present only with `lastError`. A successful connect clears both. A delivered reply clears both unless another reply's delivery is still unknown.
+- A `connected` binding can carry `lastError`. When a reconnect, attach, or new token fails while the old transport keeps running, the binding stays `connected` and records the failure, so the channel keeps working and the client still offers a repair.
+- `lastSucceededAt` records the most recent successful connect or confirmed delivery. Later failures keep it, so clients can show when the channel last worked.
+
+`watchTransportExit` persists `needs-reconnect` with the `network` category when a transport that exposes `settled` stops on its own. Today that is the Discord and Photon gateway listeners. The `bot.update` it dispatches pushes the change to every subscribed client, so a dead channel stops reading as connected without a refresh. A disconnect or replacement retires the transport first, so its exit writes nothing. Telegram, Slack, and WhatsApp transports do not report an exit; their health changes only through commands, restore, and the read-time check above.
+
+`channelRepairAction` in `@t3tools/client-runtime/channel-presentation` maps status plus category to one repair: wait, connect, reconnect, update credentials, choose a project, check delivery, or set a public URL. For a `connected` binding it offers update credentials for `credentials`, reconnect for `network` or `restore`, and check delivery for `delivery-unknown`. Clients should render that action instead of interpreting `lastError`.
+
+Web renders health through `apps/web/src/components/settings/ChannelStatus.tsx`, shared by Settings > Bot channels and the bot Channels sheet. `ChannelStatusBadge` names the state, `ChannelStatusNotice` shows the fixed `lastError` text or the WhatsApp public URL explanation, and `ChannelRepairButton` renders the one action from `channelRepairAction`. Check delivery links to the connection's `managementUrl`, so the card hides its separate provider link for that action. Setting a public URL has no button because the client cannot fix it. The notice shows the webhook URL only when the connection profile carries a server-built `webhookUrl`; the web reads that field optionally and never derives it from the browser origin, which may be a private address.
+
+Update credentials in Settings saves the new credentials as a new connection, detaches the old one, and attaches the new one to the same bot and project. The old profile is deleted only after the attach succeeds. If the attach fails, the dialog reattaches the old connection and deletes the new profile. The bot Channels sheet sends this action to Settings because it has no credential form. Mobile stays status-only and points to Settings on the host.
+
+`isChannelIdentityConflict` in `apps/web/src/channelAccess.ts` recognizes the server's two fixed identity conflict messages in a command failure cause by exact match, so clients can show plain conflict copy without parsing other errors.
+
+A failed connect or attach rolls back what it started. The transport stops, a `connecting` binding for a new assignment is removed, and a previously saved credential stays saved. If the bot is archived or deleted while its channel connects, the start is refused at commit, the transport stops, and the `connecting` binding is removed or put back as it was, so restore never starts it. When another bot already uses the same external identity, the command fails before it replaces the live transport.
+
+### Error text
+
+Provider SDK errors can echo tokens, request bodies, or account details. `ChannelTransportError` carries the fixed message "Channel provider request failed." and keeps the SDK rejection only as its cause for classification. `channelFailurePresentation` turns any failure into a fixed message for its category, and `ChannelCommand.channelCommandFailure` applies it at the command boundary. The WebSocket route returns that message. The HTTP route returns the `orchestration_dispatch_failed` reason and logs only the category. A `channel.send` that fails with a network or credentials error reports `delivery-unknown`, because the provider may already have accepted the post. A definite provider rejection (`ChannelPostRejectedError`) keeps its own category, `credentials` unless the transport names another, on the binding and in the command failure. Startup restore logs the bot, provider, and category of each failure, never an error or cause.
+
+### Reply ownership
+
+`resolveCompletedChannelReply` sends a reply only for the owning bot's own turn. A delegated child thread, a turn another bot answered, and a provider subagent resolve to no reply, and each drop is logged at trace level. The decider rejects a turn that would give a delegated child thread a channel origin, so a channel message always lands in the owning bot's thread. Inbound handlers ignore blank messages and messages written by any bot, including this one, so two connected bots cannot answer each other in a loop. Discord, Slack, WhatsApp, and iMessage always mark a person's message with `isBot: false`, so an `"unknown"` author there counts as a bot. Telegram reports `"unknown"` for messages sent on behalf of a chat, such as anonymous group admins and linked channel posts, so Telegram ignores only an explicit `true`.
 
 ## Security boundary
 
@@ -73,7 +102,7 @@ WebSocket commands, the HTTP bot routes, the WhatsApp webhook route, startup res
 
 Running transports live in the runtime's transport map, and the service scope has one finalizer that shuts down every transport in that map. Built-in transports also acquire their own resources, such as a renewing gateway, in a child of the service scope, so closing it stops those listeners too. `shutdown` checks the running transports each time it runs, so it also stops transports that started after the service was built. Operations, failures, and errors are typed: transport I/O fails with `ChannelTransportError`, a definite provider rejection with `ChannelPostRejectedError`, and runtime policy failures with `ChannelRuntimeError`. Injected transports that throw `ChannelPostRejectedError` keep that type.
 
-Gateway renewal is a scoped Effect `Schedule`. `startRenewingGateway` launches the first listener before it returns, and fails if that launch fails, so the channel is never saved as connected without a listener. It then watches each listener for `CHANNEL_GATEWAY_RENEWAL_INTERVAL` (one hour) and relaunches at the deadline. Each relaunch aborts and awaits the previous listener first, so two listeners never run at once. A listener that exits early or fails to relaunch leaves the gateway unhealthy and stops renewal. Shutdown closes the renewal scope, aborts the listener, and waits for the listener task. Tests drive renewal with `TestClock`.
+Gateway renewal is a scoped Effect `Schedule`. `startRenewingGateway` launches the first listener before it returns and fails with that launch's error if it fails, so the channel is never saved as connected without a listener. It then watches each listener for `CHANNEL_GATEWAY_RENEWAL_INTERVAL` (one hour) and relaunches at the deadline. Each relaunch aborts and awaits the previous listener first, so two listeners never run at once. A later listener that exits early or fails to launch leaves the gateway unhealthy and stops renewal. Shutdown closes the renewal scope, aborts the listener, and waits for the listener task. Tests drive renewal with `TestClock`.
 
 Per-provider channel work, per-connection operations, connection settings, and per-bot binding updates are serialized by `makeKeyedLock`. It is a FIFO lock per key that releases the key after completion or interruption. An interrupted caller that is still waiting leaves the queue without blocking the callers behind it.
 

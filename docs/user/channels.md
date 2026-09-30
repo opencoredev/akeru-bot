@@ -24,6 +24,27 @@ If reassignment changes the workspace, replies from the earlier workspace cannot
 
 Credentials stay on the environment server. Web, desktop, and mobile receive safe connection and delivery state only. A standard remote client cannot change channel credentials or assignment.
 
+## Channel health
+
+Each channel card shows whether the channel is working. When something is wrong, the card explains it and offers one repair button.
+
+- **Connecting…** appears while Akeru starts the channel. It changes to connected or to an error when the start finishes.
+- **Needs reconnect** means the channel stopped after it was working, for example after a server restart or a dropped Discord or iMessage connection. Click **Reconnect** to resume.
+- **Connection failed** means the provider rejected the connection or Akeru could not reach it. If the provider rejected the credentials, click **Update credentials**. Otherwise click **Reconnect**.
+- **Not live** means WhatsApp cannot receive messages because the environment has no public HTTPS address. The card shows the webhook URL when the server knows it. Give the environment a public URL, then reconnect.
+- **Choose another project** means the channel's project is unavailable.
+- **Disconnected** means someone stopped the channel. Click **Connect** to start it again.
+
+A connected channel can show **Needs attention** while it keeps working. If you reconnect with a token the provider rejects, the channel keeps running on its earlier connection and the card offers **Update credentials**. After a network or restart problem, the card offers **Reconnect**. If a reply's delivery is unknown, the card offers **Check the channel**, which opens the provider's console so you can see whether the reply arrived. If the connection has also failed, **Reconnect** remains available even when there is no provider console link. Reconnecting does not confirm whether the earlier reply arrived, so the warning remains.
+
+**Update credentials** in Settings opens the setup form for that connection. Enter the new credentials and click **Save and reconnect**. Akeru connects with the new credentials and removes the old ones only after that works. If the new credentials fail, Akeru puts the earlier connection back. If the old connection is removed but its listener does not stop cleanly, the form says the bot is now unassigned from the channel. Click **Reconnect** there to connect with the new credentials. The bot's Channels panel sends you to Settings for this step.
+
+A messaging account can answer for only one bot. If you connect an account that another bot already uses, Akeru says so. Unassign the account from that bot, then connect again.
+
+Status changes reach every open client without a refresh.
+
+Error text comes from Akeru, not from the messaging service. Service error messages can contain tokens or account details, so Akeru never shows or logs them.
+
 ## Delivery state
 
 Akeru records confirmed replies and prevents normal retries from posting them again. If a provider confirms that it rejected a reply, you can retry that reply.
@@ -96,6 +117,8 @@ Enter the credentials in Akeru, select a bot, and click **Connect**. Direct mess
 ## Access warning
 
 Anyone who can reach a connected bot can ask it to use the selected project and its enabled tools. The bot's permission mode still controls sensitive work, but channel membership is part of the access boundary.
+
+The setup form repeats this warning before you click **Connect**.
 
 Keep Slack bots out of channels that should not reach the workspace. Limit Discord server and channel access. Use a private phone or messaging identity for Telegram, iMessage, and WhatsApp when the selected project contains sensitive data.
 

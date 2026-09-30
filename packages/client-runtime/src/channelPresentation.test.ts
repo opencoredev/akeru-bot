@@ -10,6 +10,8 @@ import {
   channelHealthLabel,
   channelOriginLabel,
   channelProviderLabel,
+  channelRepairAction,
+  channelRepairLabel,
 } from "./channelPresentation.ts";
 
 describe("channel presentation", () => {
@@ -24,6 +26,7 @@ describe("channel presentation", () => {
 
   it("labels every health state without exposing raw errors", () => {
     expect([
+      channelHealthLabel("connecting"),
       channelHealthLabel("connected"),
       channelHealthLabel("disconnected"),
       channelHealthLabel("needs-reconnect"),
@@ -31,6 +34,7 @@ describe("channel presentation", () => {
       channelHealthLabel("blocked"),
       channelHealthLabel("not-live"),
     ]).toEqual([
+      "Connecting",
       "Connected",
       "Disconnected",
       "Reconnect required",
@@ -38,6 +42,43 @@ describe("channel presentation", () => {
       "Choose another project",
       "Not live",
     ]);
+  });
+
+  it("derives one repair action from status and failure category", () => {
+    const projectId = ProjectId.make("project-1");
+    const live = [{ id: projectId }];
+    const at = (
+      status: ChannelBinding["status"],
+      failureCategory?: ChannelBinding["failureCategory"],
+    ) => channelRepairAction({ status, projectId, failureCategory }, live);
+    expect(at("connecting")).toBe("wait");
+    expect(at("connected")).toBe("none");
+    expect(at("connected", "delivery-unknown")).toBe("check-delivery");
+    expect(at("connected", "credentials")).toBe("update-credentials");
+    expect(at("connected", "network")).toBe("reconnect");
+    expect(at("disconnected")).toBe("connect");
+    expect(at("disconnected", "credentials")).toBe("update-credentials");
+    expect(at("needs-reconnect", "network")).toBe("reconnect");
+    expect(at("needs-reconnect", "credentials")).toBe("update-credentials");
+    expect(at("failed", "credentials")).toBe("update-credentials");
+    expect(at("failed", "delivery-unknown")).toBe("check-delivery");
+    expect(at("failed", "network")).toBe("reconnect");
+    expect(at("failed", "restore")).toBe("reconnect");
+    expect(at("failed", "project")).toBe("choose-project");
+    expect(at("blocked")).toBe("choose-project");
+    expect(at("not-live")).toBe("configure-public-url");
+    expect(
+      channelRepairAction({ status: "failed", projectId, failureCategory: "credentials" }, []),
+    ).toBe("choose-project");
+    expect(
+      channelRepairAction({ status: "failed", projectId, failureCategory: "delivery-unknown" }, []),
+    ).toBe("choose-project");
+    expect(
+      channelRepairAction({ status: "failed", projectId, failureCategory: "credentials" }),
+    ).toBe("update-credentials");
+    expect(channelRepairLabel("none")).toBeNull();
+    expect(channelRepairLabel("update-credentials")).toBe("Update credentials");
+    expect(channelRepairLabel(at("failed", "delivery-unknown"))).toBe("Check the channel");
   });
 
   it("reports only confirmed deliveries and does not choose a default project", () => {

@@ -159,6 +159,43 @@ describe("Akeru delegation contracts", () => {
     }
   });
 
+  it("defaults anchor, retry, and trigger on records written before them", () => {
+    expect(decodeDelegationRecord(record)).toMatchObject({
+      anchorMessageId: null,
+      retryOfDelegationId: null,
+      trigger: "bot",
+    });
+  });
+
+  it("carries anchor, retry, and trigger through tagged and legacy records", () => {
+    const fields = {
+      anchorMessageId: "message-user-1",
+      retryOfDelegationId: "delegation-0",
+      trigger: "scheduled",
+    } as const;
+    expect(decodeDelegationRecord({ ...record, ...fields })).toMatchObject(fields);
+
+    const { phase, ...base } = record;
+    const legacy = {
+      ...base,
+      ...fields,
+      state: "completed",
+      result: phase.result,
+      failure: null,
+      childThreadId: "thread-child",
+      childTurnId: "turn-child",
+      startedAt: "2026-08-31T00:00:10.000Z",
+      completedAt: "2026-08-31T00:01:00.000Z",
+    };
+    const decoded = decodeDelegationRecord(legacy);
+    expect(decoded).toMatchObject({ ...fields, phase: { _tag: "Completed" } });
+    expect(decoded).not.toHaveProperty("state");
+  });
+
+  it("rejects an unknown trigger", () => {
+    expect(() => decodeDelegationRecord({ ...record, trigger: "webhook" })).toThrow();
+  });
+
   it("lifts legacy queued and failed records", () => {
     const { phase: _phase, ...base } = record;
     const legacy = {

@@ -147,6 +147,7 @@ function BotThreadRouteView() {
     projectId: ProjectId.make(draft.projectId),
     sandbox: draft.sandbox,
     approvalPolicy: draft.approval,
+    delegateToBotId: null,
   });
 
   return (
@@ -207,6 +208,7 @@ function BotThreadRouteView() {
                     routineId: RoutineId.make(routineId),
                     targetThreadId: current.targetThreadId,
                     ...(await routineDefinition(draft)),
+                    delegateToBotId: current.delegateToBotId,
                     expectedProcedureVersion: current.procedureVersion,
                     createdAt: new Date().toISOString(),
                   },

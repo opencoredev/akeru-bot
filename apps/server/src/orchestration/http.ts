@@ -6,7 +6,6 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
-import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -154,8 +153,15 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 ChannelCommand.executeChannelCommand(services.value.channelRuntime, command),
               )
               .pipe(
+                // The log gets the category only; channel errors can wrap provider responses.
                 Effect.catchCause((cause) =>
-                  failEnvironmentInternal("orchestration_dispatch_failed", Cause.squash(cause)),
+                  ChannelCommand.channelCommandFailure(command, cause).pipe(
+                    Effect.flatMap((failure) =>
+                      failEnvironmentInternal("orchestration_dispatch_failed", {
+                        channelFailureCategory: failure.category ?? "internal",
+                      }),
+                    ),
+                  ),
                 ),
               );
           }

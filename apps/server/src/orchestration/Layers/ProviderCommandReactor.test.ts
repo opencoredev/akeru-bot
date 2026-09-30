@@ -4137,6 +4137,9 @@ describe("ProviderCommandReactor", () => {
         phase: { _tag: "Queued" as const },
         billedBotId: childBotId,
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       };
@@ -4269,6 +4272,9 @@ describe("ProviderCommandReactor", () => {
         phase: { _tag: "Queued" as const },
         billedBotId: childBotId,
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       };
@@ -4406,6 +4412,9 @@ describe("ProviderCommandReactor", () => {
         phase: { _tag: "Queued" as const },
         billedBotId: childBotId,
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       };
@@ -4551,6 +4560,9 @@ describe("ProviderCommandReactor", () => {
         phase: { _tag: "Queued" as const },
         billedBotId: childBotId,
         keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot" as const,
         createdAt: now,
         updatedAt: now,
       };
@@ -4718,6 +4730,9 @@ describe("ProviderCommandReactor", () => {
             phase: { _tag: "Queued" as const },
             billedBotId: childBotId,
             keep: false,
+            anchorMessageId: null,
+            retryOfDelegationId: null,
+            trigger: "bot" as const,
             createdAt: now,
             updatedAt: now,
           };
@@ -4982,12 +4997,12 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
-  it("starts a fresh session when only projected session state exists", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("starts a fresh session when only projected session state exists", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await harness.runEffect(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-stale"),
         threadId: ThreadId.make("thread-1"),
@@ -5001,11 +5016,9 @@ describe("ProviderCommandReactor", () => {
           updatedAt: now,
         },
         createdAt: now,
-      }),
-    );
+      });
 
-    await harness.runEffect(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-stale"),
         threadId: ThreadId.make("thread-1"),
@@ -5018,31 +5031,31 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(() => harness.startSession.mock.calls.length === 1);
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+      yield* Effect.promise(() => waitFor(() => harness.startSession.mock.calls.length === 1));
+      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
 
-    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
-      threadId: ThreadId.make("thread-1"),
-      modelSelection: {
-        instanceId: ProviderInstanceId.make("codex"),
-        model: "gpt-5-codex",
-      },
-      runtimeMode: "approval-required",
-    });
-    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
-      threadId: ThreadId.make("thread-1"),
-    });
-  });
+      expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+        threadId: ThreadId.make("thread-1"),
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        runtimeMode: "approval-required",
+      });
+      expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+        threadId: ThreadId.make("thread-1"),
+      });
+    }),
+  );
 
-  it("rejects active runtime sessions that are missing provider instance ids", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
+  effectIt.effect("rejects active runtime sessions that are missing provider instance ids", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const now = "2026-01-01T00:00:00.000Z";
 
-    await harness.runEffect(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.session.set",
         commandId: CommandId.make("cmd-session-set-missing-instance"),
         threadId: ThreadId.make("thread-1"),
@@ -5056,21 +5069,19 @@ describe("ProviderCommandReactor", () => {
           updatedAt: now,
         },
         createdAt: now,
-      }),
-    );
-    harness.runtimeSessions.push({
-      provider: ProviderDriverKind.make("codex"),
-      status: "ready",
-      runtimeMode: "approval-required",
-      threadId: ThreadId.make("thread-1"),
-      cwd: "/tmp/provider-project",
-      resumeCursor: { opaque: "resume-without-instance" },
-      createdAt: now,
-      updatedAt: now,
-    });
+      });
+      harness.runtimeSessions.push({
+        provider: ProviderDriverKind.make("codex"),
+        status: "ready",
+        runtimeMode: "approval-required",
+        threadId: ThreadId.make("thread-1"),
+        cwd: "/tmp/provider-project",
+        resumeCursor: { opaque: "resume-without-instance" },
+        createdAt: now,
+        updatedAt: now,
+      });
 
-    await harness.runEffect(
-      harness.engine.dispatch({
+      yield* harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-missing-instance"),
         threadId: ThreadId.make("thread-1"),
@@ -5083,31 +5094,33 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
-      }),
-    );
+      });
 
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-      return (
-        thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
-        false
+      yield* Effect.promise(() =>
+        waitFor(async () => {
+          const readModel = await harness.readModel();
+          const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+          return (
+            thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
+            false
+          );
+        }),
       );
-    });
 
-    expect(harness.startSession.mock.calls.length).toBe(0);
-    expect(harness.sendTurn.mock.calls.length).toBe(0);
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(
-      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
-    ).toMatchObject({
-      payload: {
-        detail: expect.stringContaining("without a provider instance id"),
-        requestId: "user-message-missing-instance",
-      },
-    });
-  });
+      expect(harness.startSession.mock.calls.length).toBe(0);
+      expect(harness.sendTurn.mock.calls.length).toBe(0);
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(
+        thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
+      ).toMatchObject({
+        payload: {
+          detail: expect.stringContaining("without a provider instance id"),
+          requestId: "user-message-missing-instance",
+        },
+      });
+    }),
+  );
 
   it("reacts to thread.approval.respond by forwarding provider approval response", async () => {
     const harness = await createHarness();

@@ -64,6 +64,9 @@ const delegation: AkeruDelegationRecord = {
   phase: { _tag: "Queued" },
   billedBotId: CHILD_BOT_ID,
   keep: false,
+  anchorMessageId: null,
+  retryOfDelegationId: null,
+  trigger: "bot" as const,
   createdAt: NOW,
   updatedAt: NOW,
 };

@@ -116,6 +116,10 @@
       "types": "./src/state/auth.ts",
       "default": "./src/state/auth.ts"
     },
+    "./state/bot-chat-timeline": {
+      "types": "./src/state/botChatTimeline.ts",
+      "default": "./src/state/botChatTimeline.ts"
+    },
     "./state/bots": {
       "types": "./src/state/bots.ts",
       "default": "./src/state/bots.ts"

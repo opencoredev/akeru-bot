@@ -1525,6 +1525,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
         sandbox: command.sandbox,
         approvalPolicy: command.approvalPolicy,
+        delegateToBotId: command.delegateToBotId,
         procedureVersion: 1,
         approvalVersion: 1,
         enabled: false as const,
@@ -1583,6 +1584,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
         sandbox: command.sandbox,
         approvalPolicy: command.approvalPolicy,
+        delegateToBotId: command.delegateToBotId,
         procedureVersion,
         approvalVersion: null,
         enabled: false as const,
@@ -2639,6 +2641,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      // Channel replies are sent only from the parent thread's turn, so a delegated child
+      // thread must never carry an inbound channel message. See resolveCompletedChannelReply.
+      if (targetThread.parentThreadId && command.message.channelOrigin !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegated thread '${command.threadId}' cannot receive channel messages.`,
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
