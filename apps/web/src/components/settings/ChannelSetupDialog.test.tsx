@@ -484,9 +484,25 @@ describe("ChannelSetupDialog credential update", () => {
     expect(container.textContent).toContain(
       "Could not update the credentials. The old connection is unchanged.",
     );
+    expect(onSaved).toHaveBeenCalledWith(newConnection);
+    // The snapshot may not have synced the detach yet, so closing keeps the new credentials.
     await act(() => mocks.changeOpen(false));
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+  });
+
+  it("discards the kept connection on retry while the old one stays assigned", async () => {
+    await assignment(oldConnection);
+    mocks.detach.mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const kept = mocks.save.mock.calls[0]![0].input.connectionId;
+    await click("Save and reconnect");
+    const retried = mocks.save.mock.calls[1]![0].input.connectionId;
+    expect(retried).not.toBe(kept);
+    expect(mocks.detach).toHaveBeenCalledTimes(2);
     expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
-      newConnection,
+      kept,
+      oldConnection,
     ]);
   });
 
@@ -521,6 +537,45 @@ describe("ChannelSetupDialog credential update", () => {
         provider: "telegram",
         projectId: botProject,
       },
+    ]);
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      oldConnection,
+    ]);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("keeps reconnecting with the kept connection after a failed recovery", async () => {
+    await assignment(oldConnection);
+    mocks.detach.mockImplementationOnce(async () => {
+      await assignment(undefined);
+      return { _tag: "Failure" };
+    });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const kept = mocks.save.mock.calls[0]![0].input.connectionId;
+
+    mocks.save.mockResolvedValueOnce({ _tag: "Failure" });
+    await click("Reconnect");
+    expect(container.textContent).toContain("is now unassigned from this channel");
+    mocks.attach.mockResolvedValue({ _tag: "Failure" });
+    await click("Reconnect");
+    expect(container.textContent).toContain(
+      "Could not connect with the new credentials or restore the old connection.",
+    );
+    mocks.attach.mockResolvedValue({ _tag: "Success" });
+    await click("Reconnect");
+
+    expect(mocks.detach).toHaveBeenCalledTimes(1);
+    expect(mocks.save.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      kept,
+      kept,
+      kept,
+      kept,
+    ]);
+    expect(mocks.attach.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      kept,
+      oldConnection,
+      kept,
     ]);
     expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
       oldConnection,

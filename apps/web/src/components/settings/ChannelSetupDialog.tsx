@@ -157,6 +157,8 @@ export function ChannelSetupDialog({
   const [connectError, setConnectError] = useState<string | null>(null);
   // The new connection kept after a failed detach, until the bot's assignment shows whether the
   // old connection survived (retry from scratch) or was removed (reconnect with this one).
+  // Closing the dialog keeps it, since a snapshot that has not synced yet can still show the old
+  // assignment after the detach removed it.
   const [unconfirmed, setUnconfirmed] = useState<ChannelConnectionId | null>(null);
   const savedConnection = useRef<{
     connectionId: ChannelConnectionId;
@@ -211,11 +213,13 @@ export function ChannelSetupDialog({
   const replace = async (current: ChannelReplacement) => {
     if (projectId === null) return;
     // After a detach removed the old connection, reconnect with the kept one instead.
+    // It stays kept until it attaches or the old connection is restored, so a failed retry
+    // still reconnects instead of detaching a binding that is already gone.
     const reconnecting = unassigned ? unconfirmed : null;
     if (unconfirmed !== null && !reconnecting) {
       await deleteConnection({ environmentId, input: { connectionId: unconfirmed } });
+      setUnconfirmed(null);
     }
-    setUnconfirmed(null);
     const connectionId = reconnecting ?? newConnectionId();
     const saved = await saveConnection({
       environmentId,
@@ -267,6 +271,7 @@ export function ChannelSetupDialog({
         onSaved(connectionId);
       } else {
         await discardNew();
+        setUnconfirmed(null);
       }
       setBusy(false);
       setConnectError(
@@ -351,10 +356,6 @@ export function ChannelSetupDialog({
       open={open}
       onOpenChange={(next) => {
         if (busy) return;
-        // The old connection survived, so the kept new one is not needed.
-        if (!next && unconfirmed !== null && oldStillAssigned) {
-          void deleteConnection({ environmentId, input: { connectionId: unconfirmed } });
-        }
         onOpenChange(next);
         if (!next) reset();
       }}
@@ -482,7 +483,11 @@ export function ChannelSetupDialog({
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
-              {unconfirmed !== null ? (
+              {connectError ? (
+                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                  {connectError}
+                </p>
+              ) : unconfirmed !== null ? (
                 <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
                   {unassigned
                     ? t(
@@ -490,10 +495,6 @@ export function ChannelSetupDialog({
                         { name: botName },
                       )
                     : t("Could not update the credentials. The old connection is unchanged.")}
-                </p>
-              ) : connectError ? (
-                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
-                  {connectError}
                 </p>
               ) : null}
               {replacing ? null : (
