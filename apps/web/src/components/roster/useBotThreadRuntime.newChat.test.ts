@@ -180,6 +180,25 @@ describe("New chat while another chat is opened", () => {
     expect(mocks.roster.chatPathByBotId["bot-1"]).toBe("/env-a/older");
   });
 
+  it("adopts the new chat when the opened chat's pin is released automatically", async () => {
+    mocks.roster.openBotChat("bot-1", "older", "/env-a/older");
+    const finishCreate = deferredCreate();
+    const creating = render().startNewChat();
+
+    // Another turn makes the opened chat the newest, so its pin is released.
+    mocks.roster.openBotChat("bot-1", null, "/env-a/older");
+    const sending = render().send("hello new", []);
+    finishCreate();
+
+    expect(await creating).toBe(true);
+    expect(await sending).toBe(true);
+    const createdId = (mocks.createThread.mock.calls[0]![0] as { input: { threadId: string } })
+      .input.threadId;
+    expect(startedThreadIds()).toEqual([createdId]);
+    expect(mocks.roster.openChatByBotId["bot-1"]).toBeUndefined();
+    expect(mocks.roster.chatPathByBotId["bot-1"]).toBe(`/env-a/${createdId}`);
+  });
+
   it("switches to the new chat when nothing else was opened meanwhile", async () => {
     const finishCreate = deferredCreate();
     const runtime = render();

@@ -48,6 +48,7 @@ import {
   shouldTitlePlaceholderChat,
   type RetainedChat,
 } from "./botThreadRuntime.logic";
+import { parseChatPath } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { useBotChatTarget } from "./useBotThreadRef";
 import { ensureLocalApi } from "../../localApi";
@@ -61,10 +62,18 @@ import {
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
-/** The bot's chosen chat, compared across an await to spot an explicit switch. */
+/**
+ * The bot's chosen chat, compared across an await to spot an explicit switch.
+ * A pinned chat and the same chat recorded as the path compare equal, so the
+ * pin released when that chat becomes the newest does not count as a switch.
+ */
 function readChatSelection(botId: string): string {
   const roster = useRosterStore.getState();
-  return `${roster.chatPathByBotId[botId] ?? ""}\n${roster.openChatByBotId[botId] ?? ""}`;
+  const opened = roster.openChatByBotId[botId];
+  if (opened !== undefined) return opened;
+  const path = roster.chatPathByBotId[botId] ?? "";
+  const parsed = parseChatPath(path);
+  return parsed?.kind === "thread" ? parsed.threadId : path;
 }
 
 function threadTitle(prompt: string, files: readonly File[]): string {
