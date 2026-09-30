@@ -375,7 +375,14 @@ export const BotEngine = Schema.Struct({
 });
 export type BotEngine = typeof BotEngine.Type;
 
-export const BotSandbox = Schema.Literals(["local", "e2b", "daytona", "vercel", "upstash"]);
+export const BotSandbox = Schema.Literals([
+  "local",
+  "e2b",
+  "daytona",
+  "vercel",
+  "upstash",
+  "tenki",
+]);
 export type BotSandbox = typeof BotSandbox.Type;
 
 export const PersistedBotSandbox = Schema.Union([

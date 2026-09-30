@@ -51,6 +51,12 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Cloud workspaces managed by Upstash Box. Requires an API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
+  tenki: {
+    id: "tenki",
+    label: "Tenki",
+    description: "Cloud workspaces managed by Tenki. Requires an API key.",
+    fields: [{ name: "TENKI_API_KEY", label: "API key", secret: true }],
+  },
 };
 
 export const SANDBOX_PROVIDER_DEFINITIONS = Object.values(SANDBOX_PROVIDER_DEFINITION_BY_ID);
