@@ -556,6 +556,7 @@ export function mastraConnectionIssue(
 export function recordProviderAccessHealth(
   subscriptionAuth: SubscriptionAuthService,
   event: ProviderRuntimeEvent,
+  model?: string,
 ): void {
   const provider = subscriptionProviderForDriver(event.provider);
   const providerInstanceId = event.providerInstanceId;
@@ -568,6 +569,7 @@ export function recordProviderAccessHealth(
           providerInstanceId,
           message,
           event.createdAt,
+          model,
         );
       }
     } else if (event.payload.state === "completed") {
@@ -587,6 +589,7 @@ export function recordProviderAccessHealth(
       providerInstanceId,
       event.payload.message,
       event.createdAt,
+      model,
     );
   }
 }
@@ -3395,8 +3398,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         ).pipe(
           Stream.tap((event) =>
             Effect.gen(function* () {
-              recordProviderAccessHealth(subscriptionAuth, event);
               const key = String(event.threadId);
+              recordProviderAccessHealth(
+                subscriptionAuth,
+                event,
+                resolvedByThread.get(key)?.modelSelection.model,
+              );
               if (sessions.has(key)) return;
               const pendingTurns = legacyPending(key);
               if (pendingTurns.length === 0) return;

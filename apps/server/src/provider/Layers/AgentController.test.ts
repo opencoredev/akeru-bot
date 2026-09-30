@@ -789,6 +789,37 @@ describe("provider access health", () => {
     }
   });
 
+  it("records the model a failed turn ran on with the instance failure", () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-model-"));
+    try {
+      const service = new SubscriptionAuthService(
+        NodePath.join(directory, "subscription-auth.json"),
+      );
+      recordProviderAccessHealth(
+        service,
+        {
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          threadId: ThreadId.make("thread-model"),
+          turnId: TurnId.make("turn-model"),
+          type: "turn.completed",
+          eventId: EventId.make("evt-model-failed"),
+          createdAt: "2026-08-30T20:00:00.000Z",
+          payload: { state: "failed", stopReason: null, errorMessage: "Model gpt-typo not found" },
+        },
+        "gpt-typo",
+      );
+
+      expect(service.providerInstanceRequestHealth("codex")?.lastFailedRequest).toEqual({
+        at: "2026-08-30T20:00:00.000Z",
+        message: "Model gpt-typo not found",
+        model: "gpt-typo",
+      });
+    } finally {
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each(["interrupted", "cancelled"] as const)(
     "does not call a %s turn a successful provider request",
     (state) => {

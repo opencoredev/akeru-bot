@@ -7,18 +7,24 @@ import { providerUnavailabilityFromDetail } from "./providerSnapshot.ts";
 // did not report its own retry time.
 const RATE_LIMIT_RETRY_WINDOW_MS = 60_000;
 
-type RecordedFailure = { readonly at?: string; readonly message: string };
+type RecordedFailure = {
+  readonly at?: string;
+  readonly message: string;
+  readonly model?: string;
+};
 
-// A recorded request failure only gates new turns while it still applies. An
-// old model error says nothing about the model selected now, and a rate limit
-// lapses once its retry window passes.
+// A recorded request failure only gates new turns while it still applies. A
+// model error blocks only the model that failed, so switching models recovers,
+// and a rate limit lapses once its retry window passes.
 const recordedFailureStillBlocks = (
   category: ServerProviderUnavailability,
   failure: RecordedFailure | undefined,
   nextRetryAt: string | undefined,
+  model: string,
   now: number,
 ): boolean => {
-  if (category === "temporary-failure" || category === "unsupported-model") return false;
+  if (category === "temporary-failure") return false;
+  if (category === "unsupported-model") return failure?.model === model;
   if (category !== "limit-reached") return true;
   const retryAt = nextRetryAt
     ? Date.parse(nextRetryAt)
@@ -77,7 +83,7 @@ export const preflightProvider = (input: {
     const detail = failure?.message ?? "The provider request failed.";
     const category = providerUnavailabilityFromDetail(provider.driver, detail);
     const nextRetryAt = requestHealth ? requestHealth.nextRetryAt : subscription?.nextRetryAt;
-    if (recordedFailureStillBlocks(category, failure, nextRetryAt, input.now)) {
+    if (recordedFailureStillBlocks(category, failure, nextRetryAt, input.model, input.now)) {
       return { category, detail };
     }
   }

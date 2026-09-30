@@ -140,7 +140,9 @@ interface ProviderHealthRecord {
     message: string;
     failureKind: "request" | "revoked";
   };
-  lastFailedRequest?: { at: string; message: string };
+  // Provider-instance failures also keep the model that failed, so preflight
+  // can tell whether the current selection is the one the provider rejected.
+  lastFailedRequest?: { at: string; message: string; model?: string };
   nextRetryAt?: string;
   healthTest?: { status: "passed" | "failed"; checkedAt: string };
   oauthCheck?: { status: "passed" | "failed"; checkedAt: string };
@@ -150,7 +152,11 @@ interface ProviderHealthRecord {
 export interface RequestHealthStatus {
   readonly health: "healthy" | "failed" | "failed-first-request" | "recovered";
   readonly lastSuccessfulRequestAt?: string;
-  readonly lastFailedRequest?: { readonly at: string; readonly message: string };
+  readonly lastFailedRequest?: {
+    readonly at: string;
+    readonly message: string;
+    readonly model?: string;
+  };
   readonly nextRetryAt?: string;
 }
 
@@ -371,8 +377,9 @@ export class SubscriptionAuthService {
     instanceId: string,
     message: string,
     at = new Date().toISOString(),
+    model?: string,
   ): void {
-    this.recordHealthFailure(`provider:${instanceId}`, message, at, "request");
+    this.recordHealthFailure(`provider:${instanceId}`, message, at, "request", model);
   }
 
   recordMcpRequestSuccess(serverId: string, at = new Date().toISOString()): void {
@@ -467,12 +474,13 @@ export class SubscriptionAuthService {
     message: string,
     at: string,
     failureKind: "request" | "revoked",
+    model?: string,
   ): void {
     message = this.redactHealthMessage(message);
     const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
     this.health[key] = {
       ...previous,
-      lastFailedRequest: { at, message },
+      lastFailedRequest: { at, message, ...(model ? { model } : {}) },
       failureKind,
       healthTest: { status: "failed", checkedAt: at },
     };

@@ -15,6 +15,7 @@ const provider: ServerProvider = {
   models: [
     { slug: "gpt-old", name: "Old", isCustom: false, capabilities: null },
     { slug: "gpt-new", name: "New", isCustom: false, capabilities: null },
+    { slug: "gpt-typo", name: "gpt-typo", isCustom: true, capabilities: null },
   ],
   slashCommands: [],
   skills: [],
@@ -25,7 +26,12 @@ const at = (offsetMs: number) => Date.parse(failedAt) + offsetMs;
 
 const preflightAfterFailure = (
   message: string,
-  options: { readonly model?: string; readonly now: number; readonly nextRetryAt?: string },
+  options: {
+    readonly model?: string;
+    readonly failedModel?: string;
+    readonly now: number;
+    readonly nextRetryAt?: string;
+  },
 ) =>
   preflightProvider({
     providers: [provider],
@@ -34,7 +40,11 @@ const preflightAfterFailure = (
     now: options.now,
     subscriptionHealth: () => ({
       health: "failed",
-      lastFailedRequest: { at: failedAt, message },
+      lastFailedRequest: {
+        at: failedAt,
+        message,
+        ...(options.failedModel ? { model: options.failedModel } : {}),
+      },
       ...(options.nextRetryAt ? { nextRetryAt: options.nextRetryAt } : {}),
     }),
   });
@@ -70,6 +80,18 @@ describe("preflightProvider recorded request failures", () => {
       preflightAfterFailure("Model gpt-gone not found", { model: "gpt-gone", now: at(1_000) })
         ?.category,
     ).toBe("unsupported-model");
+  });
+
+  it("keeps blocking an unchanged custom model the provider rejected", () => {
+    const failure = "Model gpt-typo not found";
+    expect(
+      preflightAfterFailure(failure, { model: "gpt-typo", failedModel: "gpt-typo", now: at(1_000) })
+        ?.category,
+    ).toBe("unsupported-model");
+    expect(
+      preflightAfterFailure(failure, { model: "gpt-new", failedModel: "gpt-typo", now: at(1_000) }),
+    ).toBeUndefined();
+    expect(preflightAfterFailure(failure, { model: "gpt-typo", now: at(1_000) })).toBeUndefined();
   });
 
   it("still blocks on a recorded login failure", () => {
