@@ -1577,8 +1577,9 @@ const make = Effect.gen(function* () {
   );
 
   // A turn that fails before its provider reads the results it acknowledged
-  // hands them back, so the parent's next turn still receives them.
-  const releaseDelegationResults = (
+  // hands them back, so the parent's next turn still receives them. Fails when
+  // the release cannot be confirmed after a few quick attempts.
+  const releaseDelegationResultsNow = (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) => {
     const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
@@ -1605,18 +1606,47 @@ const make = Effect.gen(function* () {
           { discard: true },
         ),
       ),
-      Effect.catchCause((cause) =>
-        Effect.logWarning("failed to release delegated work results after turn start failure", {
-          threadId: event.payload.threadId,
-          cause: Cause.pretty(cause),
-        }),
-      ),
+      Effect.retry(Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])),
     );
   };
 
+  // Releases the results on a failure path. A release that cannot be confirmed
+  // keeps retrying in the background with capped backoff, so the results do
+  // not stay marked as delivered to a turn that never received them.
+  const releaseDelegationResults = (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+  ) =>
+    releaseDelegationResultsNow(event).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("retrying release of delegated work results in the background", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            }).pipe(
+              Effect.andThen(
+                releaseDelegationResultsNow(event).pipe(
+                  Effect.retry(
+                    Schedule.min([Schedule.exponential("200 millis"), Schedule.spaced("1 minute")]),
+                  ),
+                  Effect.catchCause((retryCause) =>
+                    Effect.logWarning("failed to release delegated work results", {
+                      threadId: event.payload.threadId,
+                      cause: Cause.pretty(retryCause),
+                    }),
+                  ),
+                  Effect.forkScoped,
+                ),
+              ),
+              Effect.asVoid,
+            ),
+      ),
+    );
+
   // The decider acknowledged these results when it admitted the turn. If they
-  // still cannot be read after a retry, the acknowledgements are released so
-  // the turn runs without them and the parent's next turn receives them.
+  // still cannot be read after a retry, the turn runs without them only once
+  // their acknowledgements are released, so the parent's next turn receives
+  // them. A release that cannot be confirmed fails the turn start instead.
   const readDelegationResults = (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) => {
@@ -1638,7 +1668,7 @@ const make = Effect.gen(function* () {
           : Effect.logWarning("failed to read delegated work results for turn start", {
               threadId: event.payload.threadId,
               cause: Cause.pretty(cause),
-            }).pipe(Effect.andThen(releaseDelegationResults(event)), Effect.as("")),
+            }).pipe(Effect.andThen(releaseDelegationResultsNow(event)), Effect.as("")),
       ),
     );
   };
@@ -1808,12 +1838,27 @@ const make = Effect.gen(function* () {
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
-    const delegationResults = yield* readDelegationResults(event);
+    const delegationResults = yield* readDelegationResults(event).pipe(
+      Effect.map(Option.some),
+      Effect.catchCause((cause) =>
+        (respondingBotId === null
+          ? Effect.void
+          : botUsageLedger.settle({
+              reservationId,
+              state: "released",
+              settledAt: event.payload.createdAt,
+            })
+        ).pipe(Effect.andThen(handleTurnStartFailure(cause)), Effect.as(Option.none<string>())),
+      ),
+    );
+    if (Option.isNone(delegationResults)) {
+      return;
+    }
 
     yield* agentController
       .sendTurn({
         ...sendTurnRequest.value,
-        ...(delegationResults ? { delegationResults } : {}),
+        ...(delegationResults.value ? { delegationResults: delegationResults.value } : {}),
       })
       .pipe(
         Effect.tap((result) =>
