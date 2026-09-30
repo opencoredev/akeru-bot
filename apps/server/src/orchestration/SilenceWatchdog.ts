@@ -53,11 +53,15 @@ export const startSilenceWatchdog = (input: {
           yield* input.callbacks.onBeat;
           yield* Ref.set(beatSent, true);
         }
+        // While paused, block on the next signal without a deadline timer.
         const remaining = Math.max(1, SILENCE_WATCHDOG_FAILURE_MS - elapsed);
-        const signal = yield* Effect.race(
-          Queue.take(wake),
-          Effect.sleep(Duration.millis(Math.min(remaining, 1_000))),
-        );
+        const signal =
+          (yield* Ref.get(paused)) > 0
+            ? yield* Queue.take(wake)
+            : yield* Effect.race(
+                Queue.take(wake),
+                Effect.sleep(Duration.millis(Math.min(remaining, 1_000))),
+              );
         if (signal === "stop") {
           yield* Deferred.succeed(stopped, void 0);
           return;
@@ -67,7 +71,14 @@ export const startSilenceWatchdog = (input: {
           yield* Ref.set(beatSent, Boolean(input.skipFirstBeat));
         }
         if (signal === "pause") yield* Ref.update(paused, (count) => count + 1);
-        if (signal === "resume") yield* Ref.update(paused, (count) => Math.max(0, count - 1));
+        if (signal === "resume") {
+          const count = yield* Ref.updateAndGet(paused, (count) => Math.max(0, count - 1));
+          // The paused wait is not silence; restart the deadline from the resume.
+          if (count === 0) {
+            yield* Ref.set(lastActivity, yield* Clock.currentTimeMillis);
+            yield* Ref.set(beatSent, Boolean(input.skipFirstBeat));
+          }
+        }
       }
     }).pipe(Effect.forkScoped);
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import { startSilenceWatchdog } from "./SilenceWatchdog.ts";
@@ -52,6 +53,40 @@ describe("silence watchdog", () => {
         expect(failures).toBe(0);
         yield* handle.resume;
         yield* handle.touch;
+        yield* handle.stop;
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("schedules no timers during a long approval wait", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let failures = 0;
+        let sleeps = 0;
+        const clock = yield* TestClock.testClockWith(Effect.succeed);
+        const countingClock: Clock.Clock = {
+          currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+          currentTimeMillis: clock.currentTimeMillis,
+          currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+          currentTimeNanos: clock.currentTimeNanos,
+          monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+          monotonicTimeNanos: clock.monotonicTimeNanos,
+          sleep: (duration) => Effect.suspend(() => (sleeps++, clock.sleep(duration))),
+        };
+        const handle = yield* startSilenceWatchdog({
+          callbacks: { onBeat: Effect.void, onFailure: Effect.sync(() => failures++) },
+        }).pipe(Effect.provideService(Clock.Clock, countingClock));
+        yield* handle.suspend;
+        yield* TestClock.adjust("1 second");
+        const sleepsWhenPaused = sleeps;
+        yield* TestClock.adjust("10 minutes");
+        expect(sleeps).toBe(sleepsWhenPaused);
+        expect(failures).toBe(0);
+        yield* handle.resume;
+        yield* TestClock.adjust("119 seconds");
+        expect(failures).toBe(0);
+        yield* TestClock.adjust("1 second");
+        expect(failures).toBe(1);
         yield* handle.stop;
       }),
     ).pipe(Effect.provide(TestClock.layer())),
