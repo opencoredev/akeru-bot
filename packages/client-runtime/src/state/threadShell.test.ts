@@ -91,6 +91,37 @@ describe("latest owner thread atoms", () => {
     return { registry: AtomRegistry.make(), snapshotAtom, atoms };
   }
 
+  it("lists every live chat completion for one bot and ignores unrelated changes", () => {
+    const completed = (id: string, completedAt: string, owner: { readonly botId?: string }) =>
+      ({
+        ...thread(id, completedAt, owner),
+        latestTurn: { completedAt },
+      }) as OrchestrationThreadShell;
+    const a1 = completed("a-1", "2026-06-01T00:00:00.000Z", { botId: "a" });
+    const a2 = completed("a-2", "2026-06-02T00:00:00.000Z", { botId: "a" });
+    const pending = thread("a-3", "2026-06-03T00:00:00.000Z", { botId: "a" });
+    const other = completed("b-1", "2026-06-01T00:00:00.000Z", { botId: "b" });
+    const { registry, snapshotAtom, atoms } = harness([a1, a2, pending, other]);
+    const botAtom = atoms.botChatCompletionsAtom(ENVIRONMENT_ID, "a");
+    const before = registry.get(botAtom);
+    expect(before).toEqual([
+      { threadId: "a-1", completedAt: "2026-06-01T00:00:00.000Z" },
+      { threadId: "a-2", completedAt: "2026-06-02T00:00:00.000Z" },
+    ]);
+
+    registry.set(
+      snapshotAtom,
+      snapshot([a1, { ...a2, title: "Renamed" }, pending, { ...other, title: "Renamed" }]),
+    );
+    expect(registry.get(botAtom)).toBe(before);
+
+    registry.set(
+      snapshotAtom,
+      snapshot([completed("a-1", "2026-06-04T00:00:00.000Z", { botId: "a" }), a2, pending]),
+    );
+    expect(registry.get(botAtom)[0]?.completedAt).toBe("2026-06-04T00:00:00.000Z");
+  });
+
   it("keeps identities and skips notifications when an unrelated thread changes", () => {
     const first = thread("a-1", "2026-06-01T00:00:00.000Z", { botId: "a" });
     const other = thread("b-1", "2026-06-01T00:00:00.000Z", { botId: "b" });
