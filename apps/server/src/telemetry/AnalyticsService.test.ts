@@ -439,11 +439,13 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
 
         const requests = captured as ReadonlyArray<{
           readonly batch: ReadonlyArray<{
-            readonly properties: { readonly bots_total: number };
+            readonly properties: { readonly bots_total: number; readonly bots_deleted: number };
           }>;
         }>;
         assert.equal(requests[0]?.batch.length, 1);
         assert.equal(requests[0]?.batch[0]?.properties.bots_total, 2);
+        // Archiving and then deleting bot-a removes it once.
+        assert.equal(requests[0]?.batch[0]?.properties.bots_deleted, 2);
       }).pipe(Effect.provide(analyticsLayer));
     }),
   );
