@@ -189,6 +189,7 @@ const UsageCounters = Schema.Struct({
   new_installations: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(0)),
   ),
+  sandbox_turns_ascii: UsageCounter.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
 });
 
 export const Usage3hProperties = Schema.Struct({

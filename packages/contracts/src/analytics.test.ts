@@ -86,6 +86,23 @@ describe("Usage3hEvent", () => {
     rejects({ ...event, properties: { ...event.properties, thread_id: "thread-1" } });
   });
 
+  it("defaults queued events from before Ascii Box support to zero", () => {
+    const legacyProperties = Object.fromEntries(
+      Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_ascii"),
+    );
+    expect(decodeUsage3hEvent({ ...event, properties: legacyProperties })).toEqual(event);
+  });
+
+  it("preserves valid Ascii counters and rejects invalid explicit values", () => {
+    expect(
+      decodeUsage3hEvent({ ...event, properties: { ...event.properties, sandbox_turns_ascii: 3 } })
+        .properties.sandbox_turns_ascii,
+    ).toBe(3);
+    for (const sandbox_turns_ascii of [-1, 0.5, USAGE_3H_COUNTER_MAX + 1, null, "0"]) {
+      rejects({ ...event, properties: { ...event.properties, sandbox_turns_ascii } });
+    }
+  });
+
   it("rejects free text, invalid enums, and invalid versions", () => {
     rejects({ ...event, distinct_id: "installation-name" });
     rejects({ ...event, properties: { ...event.properties, provider: "custom-provider" } });
