@@ -278,6 +278,16 @@ export interface ProjectionSnapshotQueryShape {
   >;
 
   /**
+   * Whether the turn start a thread requested at this time recorded a
+   * `provider.turn.start.failed` activity. Startup recovery uses it to find
+   * delegated results acknowledged by a turn that never reached its provider.
+   */
+  readonly hasTurnStartFailure?: (input: {
+    readonly threadId: ThreadId;
+    readonly requestedAt: string;
+  }) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
    * Read a single active thread detail snapshot by id.
    */
   readonly getThreadDetailById: (

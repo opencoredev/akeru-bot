@@ -7,6 +7,7 @@ import {
   ModelSelection,
   ComposioOperationError,
   type McpServer,
+  type OrchestrationEvent,
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderDriverKind,
@@ -26,8 +27,10 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -104,6 +107,25 @@ async function waitFor(
 
   return poll();
 }
+
+// Subscribes before the caller triggers work, then resolves with the first
+// published event that matches. Awaiting the event replaces polling state.
+const awaitDomainEvent = (
+  engine: OrchestrationEngineService["Service"],
+  matches: (event: OrchestrationEvent) => boolean,
+) =>
+  engine.subscribeDomainEvents.pipe(
+    Effect.flatMap((events) =>
+      events.pipe(Stream.filter(matches), Stream.runHead, Effect.forkScoped),
+    ),
+  );
+
+// Matches the event that hands a delegated result back to pending.
+const releasesDelegation = (delegationId: DelegationId) => (event: OrchestrationEvent) =>
+  event.type === "delegation.updated" &&
+  event.payload.delegation.delegationId === delegationId &&
+  event.payload.delegation.phase._tag === "Completed" &&
+  event.payload.delegation.phase.acknowledgedAt === null;
 
 describe("ProviderCommandReactor", () => {
   it("uses the responding group member before a direct thread bot", () => {
@@ -218,6 +240,7 @@ describe("ProviderCommandReactor", () => {
     readonly unavailableEngine?: boolean;
     readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
     readonly enableAgentBrowserAccess?: boolean;
+    readonly startReactor?: boolean;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -674,7 +697,8 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
-    runtime = ManagedRuntime.make(layer);
+    const managedRuntime = ManagedRuntime.make(layer);
+    runtime = managedRuntime;
 
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
@@ -904,7 +928,9 @@ describe("ProviderCommandReactor", () => {
     }
 
     scope = await Effect.runPromise(Scope.make("sequential"));
-    await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
+    if (input?.startReactor !== false) {
+      await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
+    }
     const drain = () => Effect.runPromise(reactor.drain);
 
     return {
@@ -927,6 +953,17 @@ describe("ProviderCommandReactor", () => {
       stateDir,
       drain,
       runEffect,
+      // Builds and starts another reactor over the same persistence. Closing
+      // its scope stops it the way a server shutdown would.
+      startReactor: (reactorScope: Scope.Scope) =>
+        managedRuntime.runPromise(
+          Effect.gen(function* () {
+            const context = yield* Layer.build(Layer.fresh(ProviderCommandReactorLive));
+            const started = Context.get(context, ProviderCommandReactor);
+            yield* started.start();
+            return started;
+          }).pipe(Scope.provide(reactorScope)),
+        ),
       summarizeBotUsage: () =>
         runtime!.runPromise(
           BotUsageLedger.pipe(Effect.flatMap((ledger) => ledger.summarize(BotId.make("bot-1")))),
@@ -4083,24 +4120,20 @@ describe("ProviderCommandReactor", () => {
           createdAt,
         });
 
+      // The failed send recovers in its own fiber, so wait for the release
+      // event it publishes rather than the reactor drain.
+      const released = yield* awaitDomainEvent(harness.engine, releasesDelegation(delegationId));
       harness.sendTurn.mockImplementationOnce(() => Effect.die("dispatch failed"));
       yield* startTurn("failed", "2026-01-01T00:00:02.000Z");
-      yield* Effect.promise(() =>
-        waitFor(async () => {
-          const readModel = await harness.readModel();
-          const phase = readModel.delegations.find(
-            (delegation) => delegation.delegationId === delegationId,
-          )?.phase;
-          return phase?._tag === "Completed" && phase.acknowledgedAt === null;
-        }),
-      );
+      yield* Fiber.join(released);
 
       yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
-      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 2));
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
       expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
         delegationResults: expect.stringContaining("The answer is 42."),
       });
-    }),
+    }).pipe(Effect.scoped),
   );
 
   effectIt.effect("hands delegated results back when they cannot be read for a started turn", () =>
@@ -4223,20 +4256,17 @@ describe("ProviderCommandReactor", () => {
       // first read. The release retries its read, then the send proceeds.
       harness.failNextCommandReadModelReads(3);
       yield* startTurn("unread", "2026-01-01T00:00:02.000Z");
-      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
       expect(harness.sendTurn.mock.calls[0]?.[0]).not.toHaveProperty("delegationResults");
-      yield* Effect.promise(() =>
-        waitFor(async () => {
-          const readModel = await harness.readModel();
-          const phase = readModel.delegations.find(
-            (delegation) => delegation.delegationId === delegationId,
-          )?.phase;
-          return phase?._tag === "Completed" && phase.acknowledgedAt === null;
-        }),
-      );
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      expect(
+        readModel.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: null });
 
       yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
-      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 2));
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
       expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
         delegationResults: expect.stringContaining("The answer is 42."),
       });
@@ -4362,37 +4392,190 @@ describe("ProviderCommandReactor", () => {
       // The results read fails twice and every quick release attempt fails,
       // so the turn must not run without them. The background retry then
       // hands them back to the next turn.
+      const released = yield* awaitDomainEvent(harness.engine, releasesDelegation(delegationId));
       harness.failNextCommandReadModelReads(2);
       harness.failNextDelegationReleases(9);
       yield* startTurn("unreleased", "2026-01-01T00:00:02.000Z");
-      yield* Effect.promise(() =>
-        waitFor(async () => {
-          const readModel = await harness.readModel();
-          return (
-            readModel.threads
-              .find((thread) => thread.id === ThreadId.make("thread-1"))
-              ?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
-            false
-          );
-        }),
-      );
-      yield* Effect.promise(() =>
-        waitFor(async () => {
-          const readModel = await harness.readModel();
-          const phase = readModel.delegations.find(
-            (delegation) => delegation.delegationId === delegationId,
-          )?.phase;
-          return phase?._tag === "Completed" && phase.acknowledgedAt === null;
-        }),
-      );
+      yield* Effect.promise(() => harness.drain());
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      expect(
+        readModel.threads
+          .find((thread) => thread.id === ThreadId.make("thread-1"))
+          ?.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
+      ).toBe(true);
       expect(harness.sendTurn).not.toHaveBeenCalled();
+      // The background retry publishes the release once a dispatch lands.
+      yield* Fiber.join(released);
 
       yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
-      yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+      yield* Effect.promise(() => harness.drain());
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
       expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
         delegationResults: expect.stringContaining("The answer is 42."),
       });
-    }),
+    }).pipe(Effect.scoped),
+  );
+
+  effectIt.effect("hands delegated results back after a restart cancels their release", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({ botEngine: null, startReactor: false }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+      const parentBotId = BotId.make("bot-1");
+      const childBotId = BotId.make("bot-child");
+      const childThreadId = ThreadId.make("delegation-child-restart");
+      const childTurnId = TurnId.make("delegation-turn-restart");
+      const delegationId = DelegationId.make("delegation-restart");
+
+      yield* harness.engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-restart-child-bot"),
+        botId: childBotId,
+        name: "Child bot",
+        title: "Child bot",
+        avatar: { kind: "dither", seed: "child-bot" },
+        engine: null,
+        sandbox: "local",
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt: now,
+      });
+      yield* harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-restart-child-thread"),
+        threadId: childThreadId,
+        projectId: asProjectId("project-1"),
+        botId: childBotId,
+        title: "Delegated work",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      });
+      const queued = {
+        delegationId,
+        parentDelegationId: null,
+        parentBotId,
+        childBotId,
+        parentThreadId: ThreadId.make("thread-1"),
+        parentTurnId: TurnId.make("turn-parent"),
+        ancestorBotIds: [parentBotId],
+        depth: 1,
+        task: "Research the answer.",
+        expectedResult: "A concise answer.",
+        deadline: null,
+        access: {
+          allowedToolIds: ["Read" as const],
+          memoryScopes: [],
+          sandbox: "local" as const,
+          runtimeMode: "approval-required" as const,
+          hasUserComputer: false,
+          enabledMcpServerIds: [],
+          disabledMcpServerIds: [],
+          approvalCeiling: "send" as const,
+        },
+        phase: { _tag: "Queued" as const },
+        billedBotId: childBotId,
+        keep: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.create",
+        commandId: CommandId.make("cmd-restart-create"),
+        delegation: queued,
+      });
+      const running = {
+        _tag: "Running" as const,
+        childThreadId,
+        childTurnId,
+        startedAt: now,
+        progress: null,
+      };
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-restart-running"),
+        delegation: { ...queued, phase: running },
+      });
+      yield* harness.engine.dispatch({
+        type: "delegation.state.set",
+        commandId: CommandId.make("cmd-restart-completed"),
+        delegation: {
+          ...queued,
+          phase: {
+            _tag: "Completed",
+            childThreadId,
+            childTurnId,
+            startedAt: now,
+            completedAt: now,
+            acknowledgedAt: null,
+            result: { summary: "The answer is 42.", childThreadId, childTurnId },
+          },
+        },
+      });
+
+      const startTurn = (suffix: string, createdAt: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-restart-turn-${suffix}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-restart-${suffix}`),
+            role: "user",
+            text: "What did the child find?",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        });
+
+      // The results read fails twice and every quick release attempt fails,
+      // so the turn must not run without them. The background retry then
+      // hands them back to the next turn.
+      // The first server fails the turn start and cannot release the results
+      // before it stops, which cancels the background retry.
+      const firstScope = yield* Scope.make("sequential");
+      yield* Effect.promise(() => harness.startReactor(firstScope));
+      const failed = yield* awaitDomainEvent(
+        harness.engine,
+        (event) =>
+          event.type === "thread.session-set" &&
+          event.payload.threadId === ThreadId.make("thread-1") &&
+          event.payload.session.status === "error",
+      );
+      harness.failNextDelegationReleases(Number.MAX_SAFE_INTEGER);
+      harness.sendTurn.mockImplementationOnce(() => Effect.die("dispatch failed"));
+      yield* startTurn("failed", "2026-01-01T00:00:02.000Z");
+      yield* Fiber.join(failed);
+      yield* Scope.close(firstScope, Exit.void);
+      const stranded = yield* Effect.promise(() => harness.readModel());
+      expect(
+        stranded.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: "2026-01-01T00:00:02.000Z" });
+
+      // The restarted server finds the failed turn start and hands the
+      // results back before it handles new work.
+      harness.failNextDelegationReleases(0);
+      const secondScope = yield* Scope.make("sequential");
+      yield* Effect.addFinalizer(() => Scope.close(secondScope, Exit.void));
+      const second = yield* Effect.promise(() => harness.startReactor(secondScope));
+      const recovered = yield* Effect.promise(() => harness.readModel());
+      expect(
+        recovered.delegations.find((delegation) => delegation.delegationId === delegationId)?.phase,
+      ).toMatchObject({ _tag: "Completed", acknowledgedAt: null });
+
+      yield* startTurn("retry", "2026-01-01T00:00:03.000Z");
+      yield* second.drain;
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+      expect(harness.sendTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+        delegationResults: expect.stringContaining("The answer is 42."),
+      });
+    }).pipe(Effect.scoped),
   );
 
   effectIt.effect("interrupts canceled delegation children and preserves kept children", () =>

@@ -1071,6 +1071,20 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const getTurnStartFailureRow = SqlSchema.findOneOption({
+    Request: Schema.Struct({ threadId: ThreadId, requestedAt: IsoDateTime }),
+    Result: Schema.Struct({ activityId: Schema.String }),
+    execute: ({ threadId, requestedAt }) =>
+      sql`
+        SELECT activity_id AS "activityId"
+        FROM projection_thread_activities
+        WHERE thread_id = ${threadId}
+          AND created_at = ${requestedAt}
+          AND kind = 'provider.turn.start.failed'
+        LIMIT 1
+      `,
+  });
+
   const listActiveLatestTurnRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionLatestTurnDbRowSchema,
@@ -3506,6 +3520,20 @@ pending_approval_requests AS (
     },
   );
 
+  const hasTurnStartFailure = Effect.fn("ProjectionSnapshotQuery.hasTurnStartFailure")(
+    function* (input: { readonly threadId: ThreadId; readonly requestedAt: string }) {
+      const row = yield* getTurnStartFailureRow(input).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.hasTurnStartFailure:query",
+            "ProjectionSnapshotQuery.hasTurnStartFailure:decodeRow",
+          ),
+        ),
+      );
+      return Option.isSome(row);
+    },
+  );
+
   // Contiguous turn range bounding a windowed detail read; undefined loads the
   // full thread. Resolved from a window request inside the snapshot
   // transaction (see getThreadDetailSnapshot).
@@ -3940,6 +3968,7 @@ pending_approval_requests AS (
     getLatestAssistantMessageIdForTurn,
     getTurnStartMessage,
     listPendingTurnStarts,
+    hasTurnStartFailure,
     getThreadDetailById,
     getThreadDetailSnapshot,
   } satisfies ProjectionSnapshotQueryShape;

@@ -1,4 +1,5 @@
 import {
+  type AkeruDelegationRecord,
   AkeruMemoryTenantId,
   AkeruMemoryUserId,
   AkeruUsageReservationId,
@@ -1576,6 +1577,17 @@ const make = Effect.gen(function* () {
     processThreadTitleRegenerationSafely,
   );
 
+  const dispatchDelegationRelease = (delegation: AkeruDelegationRecord) =>
+    serverCommandId("delegation-release").pipe(
+      Effect.flatMap((commandId) =>
+        orchestrationEngine.dispatch({
+          type: "delegation.state.set",
+          commandId,
+          delegation: releaseAkeruDelegationAcknowledgement(delegation),
+        }),
+      ),
+    );
+
   // A turn that fails before its provider reads the results it acknowledged
   // hands them back, so the parent's next turn still receives them. Fails when
   // the release cannot be confirmed after a few quick attempts.
@@ -1593,16 +1605,7 @@ const make = Effect.gen(function* () {
               (delegation.phase._tag === "Completed" || delegation.phase._tag === "Failed") &&
               delegation.phase.acknowledgedAt === event.payload.createdAt,
           ),
-          (delegation) =>
-            serverCommandId("delegation-release").pipe(
-              Effect.flatMap((commandId) =>
-                orchestrationEngine.dispatch({
-                  type: "delegation.state.set",
-                  commandId,
-                  delegation: releaseAkeruDelegationAcknowledgement(delegation),
-                }),
-              ),
-            ),
+          dispatchDelegationRelease,
           { discard: true },
         ),
       ),
@@ -1612,7 +1615,9 @@ const make = Effect.gen(function* () {
 
   // Releases the results on a failure path. A release that cannot be confirmed
   // keeps retrying in the background with capped backoff, so the results do
-  // not stay marked as delivered to a turn that never received them.
+  // not stay marked as delivered to a turn that never received them. A restart
+  // cancels that retry; startup recovery then releases the results of any turn
+  // start with a recorded failure (see releaseStrandedDelegationResults).
   const releaseDelegationResults = (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) =>
@@ -1733,22 +1738,25 @@ const make = Effect.gen(function* () {
         return Effect.void;
       }
       const { detail, unavailability } = formatFailure(cause);
-      return setThreadSessionErrorOnTurnStartFailure({
+      // The failure activity lands before the session error clears the pending
+      // turn start, so a restart either replays the turn start or finds the
+      // failure and releases the results this turn acknowledged.
+      return appendProviderFailureActivity({
         threadId: event.payload.threadId,
+        kind: "provider.turn.start.failed",
+        summary: "Provider turn start failed",
         detail,
-        unavailability,
+        turnId: null,
         createdAt: event.payload.createdAt,
+        requestId: event.payload.messageId,
+        unavailability,
       }).pipe(
         Effect.flatMap(() =>
-          appendProviderFailureActivity({
+          setThreadSessionErrorOnTurnStartFailure({
             threadId: event.payload.threadId,
-            kind: "provider.turn.start.failed",
-            summary: "Provider turn start failed",
             detail,
-            turnId: null,
-            createdAt: event.payload.createdAt,
-            requestId: event.payload.messageId,
             unavailability,
+            createdAt: event.payload.createdAt,
           }),
         ),
         Effect.asVoid,
@@ -2496,6 +2504,58 @@ const make = Effect.gen(function* () {
     );
   });
 
+  // Hands back delegated results still acknowledged by a turn start that
+  // recorded a failure, whose background release a restart cancelled. Turn
+  // starts that are still pending are replayed instead and read the results.
+  const releaseStrandedDelegationResults = Effect.fn("releaseStrandedDelegationResults")(function* (
+    delegations: ReadonlyArray<AkeruDelegationRecord>,
+    pendingTurnStarts: ReadonlyArray<{ readonly threadId: ThreadId; readonly requestedAt: string }>,
+  ) {
+    const hasTurnStartFailure = projectionSnapshotQuery.hasTurnStartFailure;
+    if (!hasTurnStartFailure) return;
+    const turnStartKey = (threadId: ThreadId, requestedAt: string) =>
+      JSON.stringify([threadId, requestedAt]);
+    const pending = new Set(
+      pendingTurnStarts.map((turnStart) => turnStartKey(turnStart.threadId, turnStart.requestedAt)),
+    );
+    const byTurnStart = new Map<
+      string,
+      { threadId: ThreadId; requestedAt: string; delegations: Array<AkeruDelegationRecord> }
+    >();
+    for (const delegation of delegations) {
+      if (
+        (delegation.phase._tag !== "Completed" && delegation.phase._tag !== "Failed") ||
+        delegation.phase.acknowledgedAt === null
+      ) {
+        continue;
+      }
+      const threadId = delegation.parentThreadId;
+      const requestedAt = delegation.phase.acknowledgedAt;
+      const key = turnStartKey(threadId, requestedAt);
+      if (pending.has(key)) continue;
+      const group = byTurnStart.get(key) ?? { threadId, requestedAt, delegations: [] };
+      group.delegations.push(delegation);
+      byTurnStart.set(key, group);
+    }
+    for (const { threadId, requestedAt, delegations: acknowledged } of byTurnStart.values()) {
+      yield* hasTurnStartFailure({ threadId, requestedAt }).pipe(
+        Effect.flatMap((failed) =>
+          failed
+            ? Effect.forEach(acknowledged, dispatchDelegationRelease, { discard: true })
+            : Effect.void,
+        ),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.logWarning("failed to release delegated work results at startup", {
+                threadId,
+                cause: Cause.pretty(cause),
+              }),
+        ),
+      );
+    }
+  });
+
   const recoverStartupProviderWork = Effect.fn("recoverStartupProviderWork")(function* () {
     const throughSequence = yield* orchestrationEngine.latestSequence;
     const initialReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
@@ -2503,6 +2563,7 @@ const make = Effect.gen(function* () {
       ? yield* projectionSnapshotQuery.listPendingTurnStarts()
       : [];
     const pendingThreadIds = new Set(pendingTurnStarts.map((pending) => String(pending.threadId)));
+    yield* releaseStrandedDelegationResults(initialReadModel.delegations, pendingTurnStarts);
 
     for (const pending of pendingTurnStarts) {
       const event = yield* findPersistedTurnStart({

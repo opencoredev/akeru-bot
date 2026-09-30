@@ -62,9 +62,14 @@ ways.
   result acknowledges it, so the next turn does not repeat it.
 
 If the parent never takes another turn, the result stays pending and the card
-says it is waiting for the next reply. If a provider fails after the
-acknowledgement, the result is not replayed into another turn; it remains on
-the card and in `CheckAgent`. Canceled delegations have no result to deliver.
+says it is waiting for the next reply. If the turn start fails before its
+provider reads the results, `ProviderCommandReactor` releases their
+acknowledgement so the next parent turn receives them, retrying in the
+background when the release cannot land at once. It records the
+`provider.turn.start.failed` activity before the session error clears the
+pending turn start, so after a restart startup recovery either replays that
+turn start or finds the failure and releases the results it acknowledged.
+Canceled delegations have no result to deliver.
 
 ## Provider injection
 
