@@ -8,6 +8,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -287,6 +288,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 subscriptionStatuses: subscriptionAuth.statuses(),
                 subscriptionHealth: (instanceId) =>
                   subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                now: yield* Clock.currentTimeMillis,
               });
               if (verdict) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);

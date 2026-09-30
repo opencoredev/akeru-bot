@@ -3,16 +3,44 @@ import type { ServerProvider, ServerProviderUnavailability } from "@t3tools/cont
 import type { ProviderStatus } from "../subscription-auth/service.ts";
 import { providerUnavailabilityFromDetail } from "./providerSnapshot.ts";
 
+// How long a recorded rate limit keeps blocking new turns when the provider
+// did not report its own retry time.
+const RATE_LIMIT_RETRY_WINDOW_MS = 60_000;
+
+type RecordedFailure = { readonly at?: string; readonly message: string };
+
+// A recorded request failure only gates new turns while it still applies. An
+// old model error says nothing about the model selected now, and a rate limit
+// lapses once its retry window passes.
+const recordedFailureStillBlocks = (
+  category: ServerProviderUnavailability,
+  failure: RecordedFailure | undefined,
+  nextRetryAt: string | undefined,
+  now: number,
+): boolean => {
+  if (category === "temporary-failure" || category === "unsupported-model") return false;
+  if (category !== "limit-reached") return true;
+  const retryAt = nextRetryAt
+    ? Date.parse(nextRetryAt)
+    : failure?.at
+      ? Date.parse(failure.at) + RATE_LIMIT_RETRY_WINDOW_MS
+      : Number.NaN;
+  return Number.isFinite(retryAt) && now < retryAt;
+};
+
 export const preflightProvider = (input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly providerId: string;
   readonly model: string;
   readonly subscriptionStatuses?: ReadonlyArray<ProviderStatus>;
-  readonly subscriptionHealth?: (
-    instanceId: string,
-  ) =>
-    | { readonly health: string; readonly lastFailedRequest?: { readonly message: string } }
+  readonly subscriptionHealth?: (instanceId: string) =>
+    | {
+        readonly health: string;
+        readonly lastFailedRequest?: RecordedFailure;
+        readonly nextRetryAt?: string;
+      }
     | undefined;
+  readonly now: number;
 }): { readonly category: ServerProviderUnavailability; readonly detail: string } | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
   if (!provider) {
@@ -45,12 +73,13 @@ export const preflightProvider = (input: {
   if (health === "expired")
     return { category: "expired-login", detail: "Provider login has expired." };
   if (health === "failed" || health === "failed-first-request") {
-    const detail =
-      requestHealth?.lastFailedRequest?.message ??
-      subscription?.lastFailedRequest?.message ??
-      "The provider request failed.";
+    const failure = requestHealth?.lastFailedRequest ?? subscription?.lastFailedRequest;
+    const detail = failure?.message ?? "The provider request failed.";
     const category = providerUnavailabilityFromDetail(provider.driver, detail);
-    if (category !== "temporary-failure") return { category, detail };
+    const nextRetryAt = requestHealth ? requestHealth.nextRetryAt : subscription?.nextRetryAt;
+    if (recordedFailureStillBlocks(category, failure, nextRetryAt, input.now)) {
+      return { category, detail };
+    }
   }
   if (provider.unavailability && provider.unavailability !== "temporary-failure") {
     return {

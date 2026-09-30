@@ -1932,6 +1932,7 @@ const makeWsRpcLayer = (
                     subscriptionStatuses: subscriptionAuth.statuses(),
                     subscriptionHealth: (instanceId) =>
                       subscriptionAuth.providerInstanceRequestHealth(instanceId),
+                    now: yield* Clock.currentTimeMillis,
                   });
                   if (verdict) {
                     yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
