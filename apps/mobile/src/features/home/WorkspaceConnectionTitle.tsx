@@ -14,6 +14,7 @@ import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useWorkspaceState } from "../../state/workspace";
 import {
   workspaceConnectionStatusPresentation,
+  type TranslateMessage,
   type WorkspaceConnectionStatusPresentation,
 } from "./workspace-connection-status";
 
@@ -29,9 +30,11 @@ const FADE_IN_MS = 250;
  * workspace has been in a non-connected state for STATUS_SHOW_DELAY_MS,
  * then live-updating until the workspace reconnects (null again immediately).
  */
-function useDelayedConnectionStatus(): WorkspaceConnectionStatusPresentation | null {
+function useDelayedConnectionStatus(
+  t: TranslateMessage,
+): WorkspaceConnectionStatusPresentation | null {
   const { state } = useWorkspaceState();
-  const presentation = workspaceConnectionStatusPresentation(state);
+  const presentation = workspaceConnectionStatusPresentation(state, t);
   const hasStatus = presentation !== null;
   const [visible, setVisible] = useState(false);
 
@@ -101,7 +104,7 @@ export function WorkspaceConnectionTitle(props: {
 }) {
   const { t } = useMobileI18n();
   const iconColor = String(useThemeColor("--color-icon-muted"));
-  const status = useDelayedConnectionStatus();
+  const status = useDelayedConnectionStatus(t);
   const size = props.size ?? "navbar";
 
   if (status === null) {

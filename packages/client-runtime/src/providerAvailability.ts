@@ -206,7 +206,9 @@ export function latestTurnFailure(
   readonly detail: string;
   readonly unavailability: ServerProviderUnavailability | null;
 } | null {
-  const newestFirst = activities.toSorted(
+  // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023
+  // change-by-copy array methods.
+  const newestFirst = [...activities].sort(
     (left, right) =>
       (right.sequence ?? -1) - (left.sequence ?? -1) ||
       right.createdAt.localeCompare(left.createdAt),

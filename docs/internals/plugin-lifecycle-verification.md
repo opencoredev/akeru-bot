@@ -22,7 +22,7 @@ Run the matrix with the catalog, schema, runtime, and validator checks. Do not c
 
 ## Lifecycle matrix execution
 
-`apps/server/src/provider/PluginLifecycleMatrix.test.ts` runs the install → connect → health → disconnect → reconnect → remove sequence through the same Mastra `McpManager` used by bot sessions. Local stdio recipes (Executor's `executor mcp`, Codex Computer Use's `akeru-codex-computer-use mcp`) run against a newline-delimited JSON-RPC fixture because neither CLI is on PATH in CI. URL recipes (Context.dev, Exa, Firecrawl, Parallel, Hoplite) run against a loopback Streamable HTTP fake that stands in for the vendor endpoint.
+`apps/server/src/provider/PluginLifecycleMatrix.test.ts` runs the install → connect → health → disconnect → reconnect → remove sequence through the same Mastra `McpManager` used by bot sessions. The Codex Computer Use stdio recipe (`akeru-codex-computer-use mcp`) runs against a newline-delimited JSON-RPC fixture because the CLI is not on PATH in CI. URL recipes (including Executor 2's authenticated `https://executor.sh/mcp` recipe) run against a loopback Streamable HTTP fake that stands in for the vendor endpoint. The Executor fixture requires a bearer header, so discovery is not treated as an unauthenticated socket probe.
 
 Fixtures prove the lifecycle wiring, not vendor behavior. A fixture pass never moves an entry out of `verification-pending`; only a run against the real CLI or endpoint does.
 
@@ -30,4 +30,4 @@ Fixtures prove the lifecycle wiring, not vendor behavior. A fixture pass never m
 
 No entry is currently `available`. Context.dev, Exa, Firecrawl, Parallel, and Hoplite keep their official HTTPS recipes visible but are `verification-pending` until each OAuth and connection lifecycle passes against the live vendor. Gmail keeps its Composio `brokered` connection but reports a `pendingBlocker` naming the required Composio API key and connected Gmail account, so it cannot be connected until that lifecycle is verified.
 
-Executor declares its official local stdio CLI recipe but stays pending until its full add, use, disable, reconnect, and removal lifecycle passes. Typefully stays pending until its OAuth lifecycle passes. Paper stays pending until its loopback desktop lifecycle passes. PayPal stays pending until its first-party OAuth and payment lifecycle passes. No entry can move to available based on a manifest check, HTTP probe, or vendor documentation alone.
+Executor declares its official Executor 2 HTTP MCP recipe but stays pending until its full add, use, disable, reconnect, and removal lifecycle passes against the live service. Typefully stays pending until its OAuth lifecycle passes. Paper stays pending until its loopback desktop lifecycle passes. PayPal stays pending until its first-party OAuth and payment lifecycle passes. No entry can move to available based on a manifest check, HTTP probe, or vendor documentation alone.

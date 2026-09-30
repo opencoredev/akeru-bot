@@ -14,7 +14,11 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
-    expect(session.synthesis).toEqual({ available: true, provider: "openai", voice: "alloy" });
+    expect(session.synthesisFor("environment")).toEqual({
+      available: true,
+      provider: "openai",
+      voice: "alloy",
+    });
     session.dispose();
   });
 
@@ -25,7 +29,24 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
-    expect(session.synthesis).toEqual({ available: true, provider: "openai", voice: "alloy" });
+    expect(session.synthesisFor("environment")).toEqual({
+      available: true,
+      provider: "openai",
+      voice: "alloy",
+    });
+    session.dispose();
+  });
+
+  it("leaves replies from another environment unavailable", async () => {
+    const synthesize = vi.fn();
+    const session = createWebReplyPlaybackSession({
+      environmentId: "primary" as never,
+      voice: { enabled: true, provider: "composed" },
+      synthesize,
+      cancel: vi.fn(),
+    });
+    expect(session.synthesisFor("remote")).toMatchObject({ available: false });
+    expect(session.synthesisFor("primary")).toMatchObject({ available: true });
     session.dispose();
   });
 });

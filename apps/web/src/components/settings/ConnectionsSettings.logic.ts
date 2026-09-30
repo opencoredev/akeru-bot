@@ -11,6 +11,15 @@ export function isQrShareableEndpoint(endpoint: AdvertisedEndpoint): boolean {
   return endpoint.status !== "unavailable" && endpoint.reachability !== "loopback";
 }
 
+/** A remote backend is reachable when any advertised non-loopback endpoint is available. */
+export function isAdvertisedEndpointRemotelyReachable(
+  endpoints: ReadonlyArray<AdvertisedEndpoint>,
+): boolean {
+  return endpoints.some(
+    (endpoint) => endpoint.status === "available" && endpoint.reachability !== "loopback",
+  );
+}
+
 export type QrEndpointOption = {
   /** Unique per endpoint instance (AdvertisedEndpoint.id); safe as a React key. */
   readonly id: string;

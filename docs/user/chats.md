@@ -39,7 +39,8 @@ The boss answers every message by default. Type `@` and a bot's name, such as `@
 message to that bot instead. It answers with its own provider and model. If a message mentions
 several bots, the last mention wins. If two bots in the group share a name, Akeru cannot tell them
 apart, so it holds the message and asks you to rename one of them. Mentions of people, such as
-`@Leo`, stay plain text and the boss answers.
+`@Leo`, stay plain text and the boss answers. On mobile, a reply shows the bot's avatar and name
+whenever a different bot starts speaking.
 
 Groups hold bots only. You cannot add people to a group yet.
 
@@ -48,8 +49,8 @@ Groups hold bots only. You cannot add people to a group yet.
 A bot can hand part of a request to another bot. The bot does not wait for that work. It replies
 first, and a work card in the chat shows the other bot, the task, and its state: queued, running,
 blocked, completed, failed, or canceled. On mobile the same card appears inline in the chat and
-folds away with that turn's work. Its **Let it finish**, **Cancel**, and **Try again** buttons work
-the same as on web and desktop.
+stays visible when that turn's work log is collapsed. Its **Let it finish**, **Cancel**, and **Try again**
+buttons work the same as on web and desktop.
 
 On web and desktop, each card sits right after the exchange that started the work, and it stays
 there when you reload or come back later. Work started in three different replies shows up as

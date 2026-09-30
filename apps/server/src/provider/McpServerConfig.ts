@@ -33,10 +33,16 @@ export function getMcpRuntimeHeaders(server: McpServer): Readonly<Record<string,
 function sameHeaders(left: McpServer, right: McpServer): boolean {
   const leftHeaders = getMcpRuntimeHeaders(left);
   const rightHeaders = getMcpRuntimeHeaders(right);
-  const names = Object.keys(leftHeaders);
+  // HTTP field names are case-insensitive. OAuth refreshes can return the same
+  // credential under a different casing without changing the MCP connection.
+  const normalize = (headers: Readonly<Record<string, string>>) =>
+    new Map(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
+  const normalizedLeft = normalize(leftHeaders);
+  const normalizedRight = normalize(rightHeaders);
+  const names = [...normalizedLeft.keys()];
   return (
-    names.length === Object.keys(rightHeaders).length &&
-    names.every((name) => leftHeaders[name] === rightHeaders[name])
+    names.length === normalizedRight.size &&
+    names.every((name) => normalizedLeft.get(name) === normalizedRight.get(name))
   );
 }
 

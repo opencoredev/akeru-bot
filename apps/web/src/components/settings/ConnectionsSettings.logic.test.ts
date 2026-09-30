@@ -2,6 +2,7 @@ import type { AdvertisedEndpoint, DesktopWslState } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   applyWslEnableSelection,
+  isAdvertisedEndpointRemotelyReachable,
   isQrShareableEndpoint,
   selectQrEndpointOption,
 } from "./ConnectionsSettings.logic";
@@ -112,6 +113,32 @@ describe("isQrShareableEndpoint", () => {
     expect(
       isQrShareableEndpoint(makeEndpoint({ reachability: "private-network", status: "unknown" })),
     ).toBe(true);
+  });
+});
+
+describe("isAdvertisedEndpointRemotelyReachable", () => {
+  it("counts an available Tailscale IP endpoint as remote reachability", () => {
+    expect(
+      isAdvertisedEndpointRemotelyReachable([
+        makeEndpoint({
+          id: "tailscale-ip:http://100.84.12.7:4780",
+          label: "Tailscale IP",
+          reachability: "private-network",
+          provider: { id: "tailscale", label: "Tailscale", kind: "private-network", isAddon: true },
+        }),
+      ]),
+    ).toBe(true);
+  });
+
+  it("does not count unavailable or loopback endpoints", () => {
+    expect(isAdvertisedEndpointRemotelyReachable([makeEndpoint({ status: "unavailable" })])).toBe(
+      false,
+    );
+    expect(
+      isAdvertisedEndpointRemotelyReachable([
+        makeEndpoint({ reachability: "loopback", id: "desktop-loopback:4780" }),
+      ]),
+    ).toBe(false);
   });
 });
 

@@ -41,6 +41,7 @@ import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestam
 import { resolveDesktopPairingUrl } from "./pairingUrls";
 import {
   applyWslEnableSelection,
+  isAdvertisedEndpointRemotelyReachable,
   isQrShareableEndpoint,
   selectQrEndpointOption,
 } from "./ConnectionsSettings.logic";
@@ -2140,8 +2141,11 @@ export function ConnectionsSettings() {
         : visibleDesktopNetworkAdvertisedEndpoints,
     [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
-  const isLocalBackendRemotelyReachable =
-    isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
+  // Desktop reports what it exposes; a browser has no endpoint list and relies
+  // on the server's auth policy.
+  const isLocalBackendRemotelyReachable = desktopBridge
+    ? isAdvertisedEndpointRemotelyReachable(visibleDesktopAdvertisedEndpoints)
+    : currentAuthPolicy === "remote-reachable";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),

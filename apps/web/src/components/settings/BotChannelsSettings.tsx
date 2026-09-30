@@ -567,13 +567,20 @@ export function BotChannelsSettingsPanel() {
                       Disconnect
                     </Button>
                   ) : null}
-                  <Button
-                    variant="outline"
-                    disabled={busy || connectionBusy || assignedBot !== undefined}
-                    onClick={() => void removeConnection(connection)}
-                  >
-                    Delete
-                  </Button>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="outline"
+                      disabled={busy || connectionBusy || assignedBot !== undefined}
+                      onClick={() => void removeConnection(connection)}
+                    >
+                      Delete
+                    </Button>
+                    {assignedBot ? (
+                      <span className="text-xs text-muted-foreground">
+                        Choose No bot above to delete this connection.
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             );

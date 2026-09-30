@@ -188,8 +188,8 @@ function capTerminalDelegations(
   );
   if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
   const dropped = new Set(
-    terminal
-      .toSorted(
+    [...terminal]
+      .sort(
         (left, right) =>
           compareText(right.updatedAt, left.updatedAt) ||
           compareText(left.createdAt, right.createdAt) ||

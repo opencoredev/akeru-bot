@@ -68,10 +68,15 @@ export function botChatTimeline<
       entry: { _tag: "Receipt", key: `receipt:${receipt.id}`, receipt } as const,
     })),
   ];
-  const sorted = base.toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  const sorted = [...base].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   const rows = sorted.map(({ entry }) => entry);
-  const lastPositionAt = (createdAt: string) =>
-    sorted.findLastIndex((row) => row.createdAt.localeCompare(createdAt) <= 0);
+  const lastPositionAt = (createdAt: string) => {
+    for (let index = sorted.length - 1; index >= 0; index -= 1) {
+      if (sorted[index]!.createdAt.localeCompare(createdAt) <= 0) return index;
+    }
+    return -1;
+  };
 
   const positionByMessageId = new Map<string, number>();
   const lastPositionByTurnId = new Map<string, number>();
@@ -83,7 +88,7 @@ export function botChatTimeline<
 
   // Cards inserted after the same row keep creation order.
   const cardsAfter = new Map<number, Entry[]>();
-  const delegations = (input.delegations ?? []).toSorted(
+  const delegations = [...(input.delegations ?? [])].sort(
     (left, right) =>
       left.createdAt.localeCompare(right.createdAt) ||
       left.delegationId.localeCompare(right.delegationId),

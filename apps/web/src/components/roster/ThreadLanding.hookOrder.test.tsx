@@ -77,7 +77,7 @@ vi.mock("../voice/VoiceCall", () => ({
 vi.mock("../chat/ReplyPlaybackProvider", () => {
   const synthesis = { provider: "test-provider", voice: "test-voice" };
   const session = {
-    synthesis,
+    synthesisFor: () => synthesis,
     subscribeSynthesis: () => () => {},
     getSynthesisSnapshot: () => synthesis,
     setContext: mocks.setContext,

@@ -4,10 +4,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
+import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { isInstallableManifest, loadManifestCatalog } from "../../../../plugins/manifestCatalog.ts";
 import { startHttpMcpFixture } from "./pluginLifecycleFixtures.ts";
+import { toMcpServerConfigs } from "./Layers/AgentController.ts";
+import { withMcpRuntimeHeaders } from "./McpServerConfig.ts";
 
 const STDIO_FIXTURE = new URL("./pluginLifecycleStdioFixture.mjs", import.meta.url).pathname;
 const PLUGIN_ENTRIES = new URL("../../../../plugins/entries/", import.meta.url);
@@ -36,9 +39,35 @@ function temporaryRuntimeDir() {
  * transport, so manifest drift breaks the matrix.
  */
 async function runLifecycle(config: McpServerConfig) {
+  const registration: McpServer =
+    "url" in config
+      ? withMcpRuntimeHeaders(
+          {
+            id: McpServerId.make("matrix-target"),
+            name: "matrix-target",
+            transport: "url",
+            url: config.url,
+            enabled: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          config.headers ?? {},
+        )
+      : {
+          id: McpServerId.make("matrix-target"),
+          name: "matrix-target",
+          transport: "stdio",
+          command: config.command,
+          ...(config.args ? { args: config.args } : {}),
+          enabled: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        };
+  const registeredConfig = toMcpServerConfigs([registration])["matrix-target"];
+  if (!registeredConfig) throw new Error("MCP fixture registration was not projected.");
   const managers: ReturnType<typeof createMcpManager>[] = [];
   const manager = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test", {
-    "matrix-target": config,
+    "matrix-target": registeredConfig,
   });
   try {
     // install + connect
@@ -59,7 +88,7 @@ async function runLifecycle(config: McpServerConfig) {
     // fresh manager models the per-server reconnect the bot tools expose.
     await manager.disconnect();
     const restarted = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test", {
-      "matrix-target": config,
+      "matrix-target": registeredConfig,
     });
     managers.push(restarted);
     await restarted.init();
@@ -67,6 +96,14 @@ async function runLifecycle(config: McpServerConfig) {
     expect(reconnected.connected).toBe(true);
     status = reconnected;
     expect(status.toolNames).toContain("matrix-target_echo");
+
+    // Removal is represented by rebuilding the manager without the registration.
+    await restarted.disconnect();
+    const removed = createMcpManager(temporaryRuntimeDir(), ".akeru-matrix-test");
+    managers.push(removed);
+    await removed.init();
+    expect(removed.getServerStatuses()).toEqual([]);
+    expect(removed.getTools()).toEqual({});
   } finally {
     await manager.disconnect();
     while (managers.length > 0) await managers.pop()?.disconnect();
@@ -79,16 +116,15 @@ describe("plugin lifecycle matrix execution", () => {
     while (fixtures.length > 0) await fixtures.pop()?.close();
   });
 
-  it("runs the local stdio lifecycle for the Executor and Computer Use recipe shape", async () => {
+  it("runs the local stdio lifecycle for the Computer Use recipe shape", async () => {
     const catalog = loadManifestCatalog(catalogManifests());
-    for (const pluginId of ["executor", "computer-use"]) {
+    for (const pluginId of ["computer-use"]) {
       const plugin = catalog.find((entry) => entry.id === pluginId);
       if (plugin?.transport.type !== "stdio") {
         throw new TypeError(`Plugin '${pluginId}' is missing its stdio recipe.`);
       }
-      // Neither `executor` nor `akeru-codex-computer-use` is on PATH in CI; the
-      // fixture substitutes the command while keeping the manifest's
-      // `<command> mcp` recipe shape.
+      // `akeru-codex-computer-use` is not on PATH in CI; the fixture substitutes
+      // the command while keeping the manifest's `<command> mcp` recipe shape.
       await runLifecycle({
         command: process.execPath,
         args: [STDIO_FIXTURE, ...(plugin.transport.args ?? [])],
@@ -109,6 +145,20 @@ describe("plugin lifecycle matrix execution", () => {
       expect(plugin.transport.url).toMatch(/^https:\/\//);
       await runLifecycle({ url: fixture.url });
     }
+  });
+
+  it("runs Executor 2 discovery with the required bearer header", async () => {
+    const fixture = await startHttpMcpFixture({ authorization: "Bearer fixture-token" });
+    fixtures.push(fixture);
+    const executor = loadManifestCatalog(catalogManifests()).find(
+      (entry) => entry.id === "executor",
+    );
+    if (executor?.transport.type !== "url") {
+      throw new TypeError("Executor is missing its HTTP recipe.");
+    }
+    expect(executor.transport.url).toBe("https://executor.sh/mcp");
+    expect(executor.authentication).toBe("oauth");
+    await runLifecycle({ url: fixture.url, headers: { authorization: "Bearer fixture-token" } });
   });
 
   it("keeps every unverified entry non-installable with a named blocker", () => {

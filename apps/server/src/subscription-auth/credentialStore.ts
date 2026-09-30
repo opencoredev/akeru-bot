@@ -240,10 +240,14 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
       return yield* Effect.gen(function* () {
         yield* fs.writeFileString(tempPath, text, { mode: 0o600 });
         yield* fs.chmod(tempPath, 0o600);
-        const written = fileFingerprint(tempPath);
+        const stat = yield* Effect.tryPromise({
+          try: () => NodeFS.promises.stat(tempPath, { bigint: true }),
+          catch: (cause) => storeError("write", { message: String(cause) }),
+        });
+        const written = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}`;
         yield* fs.rename(tempPath, filePath);
         return written;
-      }).pipe(Effect.onError(() => fs.remove(tempPath, { force: true }).pipe(Effect.ignore)));
+      }).pipe(Effect.ensuring(fs.remove(tempPath, { force: true }).pipe(Effect.ignore)));
     }).pipe(Effect.mapError((cause) => storeError("write", cause)));
 
   const lock = yield* Semaphore.make(1);

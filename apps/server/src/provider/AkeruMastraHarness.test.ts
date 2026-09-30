@@ -135,6 +135,64 @@ const harnessTest = (body: (open: OpenHarness) => Promise<void>) =>
   });
 
 describe("AkeruMastraHarness", () => {
+  it.effect("restores original history when rebuilding a conversation fails", () =>
+    harnessTest(async (open) => {
+      const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-rebuild-"));
+      const harness = await open({
+        authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
+        memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
+        getThreadTools: () => ({}),
+        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      });
+      const threadId = "rebuild-history";
+      const messages = [1, 2].map((count) => ({
+        id: `message-${count}`,
+        role: "user" as const,
+        content: { format: 2 as const, parts: [{ type: "text" as const, text: `Turn ${count}` }] },
+        createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-01-01T00:00:00.000Z")),
+        threadId,
+        resourceId: threadId,
+      }));
+      const snapshot = {
+        current: {
+          id: "original-observations",
+          generationCount: 1,
+          originType: "initial" as const,
+          activeObservations: "Facts from both original turns",
+          bufferedObservations: "",
+          bufferedReflection: null,
+          totalTokensObserved: 10,
+          observationTokenCount: 2,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        history: [],
+      };
+      let persist: ReturnType<typeof vi.spyOn> | undefined;
+      try {
+        await harness.controller.init();
+        await harness.rebuildConversation!(threadId, messages);
+        await harness.restoreObservationalMemory!(threadId, snapshot);
+        const originalSnapshot = await harness.readObservationalMemory!(threadId);
+        persist = vi
+          .spyOn(Memory.prototype, "persistMessages")
+          .mockRejectedValueOnce(new Error("Persistence failed"));
+        await expect(harness.rebuildConversation!(threadId, messages.slice(0, 1))).rejects.toThrow(
+          "Persistence failed",
+        );
+        const session = await harness.controller.createSession({ resourceId: threadId, threadId });
+        expect((await session.thread.listActiveMessages()).map((message) => message.id)).toEqual([
+          "message-1",
+          "message-2",
+        ]);
+        expect(await harness.readObservationalMemory!(threadId)).toEqual(originalSnapshot);
+      } finally {
+        persist?.mockRestore();
+        await harness.close();
+        NodeFS.rmSync(directory, { recursive: true, force: true });
+      }
+    }),
+  );
   it("emits observer and reflector metering callbacks", async () => {
     const started: unknown[] = [];
     const finished: unknown[] = [];

@@ -9,9 +9,10 @@ export function selectOpenBotInboxItems(
   inbox: ReadonlyArray<BotInboxItem>,
   botIds?: ReadonlySet<string>,
 ): ReadonlyArray<BotInboxItem> {
-  return inbox
+  // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
+  return [...inbox]
     .filter((item) => item.status === "open" && (botIds === undefined || botIds.has(item.botId)))
-    .toSorted((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
+    .sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
 }
 
 export type BotInboxRepairDestination = "providers" | "plugins";

@@ -123,6 +123,7 @@ describe("reply playback session", () => {
     expect(session.preference.getSnapshot().enabled).toBe(true);
     unsubscribe();
   });
+
   it("exposes settled assistant readout without starting a turn", () => {
     const { session, prepare } = setup();
     expect(session.actionFor(message)).toMatchObject({
@@ -132,6 +133,96 @@ describe("reply playback session", () => {
     expect(session.actionFor({ ...message, role: "user" })).toBeNull();
     expect(session.actionFor({ ...message, streaming: true })).toBeNull();
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("resolves synthesis per environment when given a lookup", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: (environmentId) =>
+        environmentId === "environment"
+          ? { available: true, provider: "speech", voice: "voice" }
+          : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
+    });
+    expect(session.synthesisFor("environment")).toEqual({
+      available: true,
+      provider: "speech",
+      voice: "voice",
+    });
+    expect(session.synthesisFor("other").available).toBe(false);
+  });
+
+  it("keeps an environment's applied voice settings out of other environments", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: () => ({
+        available: false,
+        provider: "unavailable",
+        voice: "unavailable",
+        reason: "no",
+      }),
+    });
+    session.setSynthesis({ available: true, provider: "speech", voice: "voice" }, "a");
+    const context = {
+      threadId: "thread",
+      provider: "p",
+      voice: "v",
+      connected: true,
+      mediaBlocked: false,
+    };
+    session.setContext({ ...context, environmentId: "a" });
+    expect(session.actionFor(message)?.unavailableReason).toBeUndefined();
+    session.setContext({ ...context, environmentId: "b" });
+    expect(session.actionFor(message)?.unavailableReason).toBe("no");
+    expect(session.getSynthesisSnapshot().available).toBe(false);
+  });
+
+  it("keeps the synthesis snapshot stable until the capability changes", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: (environmentId) =>
+        environmentId === "environment"
+          ? { available: true, provider: "speech", voice: "voice" }
+          : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
+    });
+    const onSynthesisChanged = vi.fn();
+    session.subscribeSynthesis(onSynthesisChanged);
+    const empty = session.getSynthesisSnapshot();
+    expect(session.getSynthesisSnapshot()).toBe(empty);
+
+    session.setContext(context);
+    const selected = session.getSynthesisSnapshot();
+    expect(selected).toMatchObject({ available: true });
+    expect(session.getSynthesisSnapshot()).toBe(selected);
+    expect(onSynthesisChanged).toHaveBeenCalledOnce();
+
+    session.setContext({ ...context, mediaBlocked: true });
+    expect(onSynthesisChanged).toHaveBeenCalledOnce();
+
+    session.clearContextIf(context.environmentId, context.threadId);
+    expect(session.getSynthesisSnapshot().available).toBe(false);
+    expect(session.getSynthesisSnapshot()).toBe(session.getSynthesisSnapshot());
+    expect(onSynthesisChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the default capability for a null or empty environment", () => {
+    const lookup = vi.fn(() => ({
+      available: true as const,
+      provider: "speech",
+      voice: "voice",
+    }));
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: lookup,
+    });
+    expect(session.synthesisFor(null).available).toBe(false);
+    expect(session.synthesisFor("").available).toBe(false);
+    expect(lookup).not.toHaveBeenCalled();
+    expect(session.actionFor(message)).toBeNull();
+    expect(lookup).not.toHaveBeenCalled();
   });
 
   it("hydrates history and loaded-earlier replies without automatic playback", async () => {

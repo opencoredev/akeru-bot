@@ -100,6 +100,15 @@ export function ChannelStatusNotice({
       t("The project for this channel is unavailable. Choose another project to reconnect it."),
     );
   }
+  const showWebhookUrl =
+    webhookUrl !== null &&
+    binding.provider === "whatsapp" &&
+    (binding.status === "not-live" || binding.status === "connected");
+  const webhookLine = showWebhookUrl ? (
+    <p className="mt-1 text-muted-foreground">
+      {t("Webhook URL")}: <code className="break-all font-mono">{webhookUrl}</code>
+    </p>
+  ) : null;
   if (binding.status === "not-live") {
     return notice(
       <>
@@ -108,20 +117,29 @@ export function ChannelStatusNotice({
             "WhatsApp needs a public HTTPS address to receive messages. Give this environment a public URL, then reconnect.",
           )}
         </p>
-        {webhookUrl ? (
-          <p className="mt-1 text-muted-foreground">
-            {t("Webhook URL")}: <code className="break-all font-mono">{webhookUrl}</code>
-          </p>
-        ) : null}
+        {webhookLine}
       </>,
     );
   }
   // Server failure text is fixed per category and never carries provider error details, so a
   // known category reads better in the client's own words.
   if (binding.failureCategory) {
-    return notice(channelFailureReason(binding.failureCategory, binding.provider, t));
+    return notice(
+      <>
+        <p>{channelFailureReason(binding.failureCategory, binding.provider, t)}</p>
+        {webhookLine}
+      </>,
+    );
   }
-  return binding.lastError ? notice(binding.lastError) : null;
+  if (binding.lastError) {
+    return notice(
+      <>
+        <p>{binding.lastError}</p>
+        {webhookLine}
+      </>,
+    );
+  }
+  return webhookLine ? notice(webhookLine) : null;
 }
 
 /**

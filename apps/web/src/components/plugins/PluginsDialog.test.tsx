@@ -2,7 +2,6 @@ import { McpServerId, type McpServer } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import {
-  isInstallablePlugin,
   loadDirectoryCatalog,
   PLUGIN_CATEGORIES,
   type PluginDirectoryDefinition,
@@ -276,9 +275,10 @@ describe("Plugins dialog content", () => {
     );
     expect(markup).toContain("By Useful Software Co.");
     expect(markup).toContain("Authentication");
-    expect(markup).not.toContain("OAuth");
-    expect(markup).toContain("Local");
-    expect(markup).toContain("Local command");
+    expect(markup).toContain("OAuth");
+    expect(markup).toContain("Hosted");
+    expect(markup).toContain("Remote URL");
+    expect(markup).toContain("Verification pending");
     expect(markup).toContain("Not checked");
     expect(markup).toContain("macos, windows, linux");
     expect(markup).toContain("Submit a payment.");

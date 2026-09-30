@@ -38,6 +38,7 @@ import { SettingsRow } from "./components/SettingsRow";
 import { LanguageSettingsSection } from "./LanguageSettingsSection";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { RemoteHealthSection } from "./RemoteHealthSection";
 import { ReplyReadoutPreference } from "../replyPlayback/ReplyReadoutPreference";
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import {
@@ -132,6 +133,10 @@ function LocalSettingsRouteScreen({
         <ProviderSettingsSection environmentId={settingsEnvironmentId} />
 
         <ErrorsSettingsSection environmentId={connections[0]?.environmentId ?? null} />
+
+        {settingsEnvironmentId !== null ? (
+          <RemoteHealthSection environmentId={settingsEnvironmentId} />
+        ) : null}
 
         <LanguageSettingsSection />
 

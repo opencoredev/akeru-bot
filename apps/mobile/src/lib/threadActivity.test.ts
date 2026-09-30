@@ -19,6 +19,7 @@ import {
 import {
   buildPendingUserInputAnswers,
   buildThreadFeed,
+  deriveGroupSpeakerLabels,
   derivePendingApprovals,
   deriveThreadFeedPresentation,
   isPendingUserInputOptionSelected,
@@ -1207,38 +1208,134 @@ describe("delegation cards in the feed", () => {
     expect(feed.map((entry) => entry.id)).toEqual(["user-1", "bot-1", "user-2", "delegation:d-2"]);
   });
 
-  it("keeps work-log collapse behavior: a card inside a settled turn folds with it", () => {
-    const feed = buildThreadFeed(feedThread(messages), {
+  it("keeps a card visible while its settled turn's work log is folded", () => {
+    const thread = {
+      ...feedThread(messages),
+      activities: [
+        makeActivity({
+          id: EventId.make("turn-1-warning"),
+          kind: "runtime.warning",
+          summary: "Warning",
+          createdAt: at(2),
+          turnId: TurnId.make("turn-1"),
+        }),
+      ],
+    };
+    const feed = buildThreadFeed(thread, {
       delegations: [feedDelegation("d-1", 2, "turn-1", "user-1")],
     });
+    const running = {
+      turnId: TurnId.make("turn-3"),
+      state: "running" as const,
+      startedAt: at(30),
+      completedAt: null,
+    };
+
+    const collapsed = deriveThreadFeedPresentation(feed, running, new Set()).map(
+      (entry) => entry.id,
+    );
+    // The work log folds; the card does not join it.
+    expect(collapsed).toContain("turn-fold:turn-1");
+    expect(collapsed).not.toContain("turn-1-warning");
+    expect(collapsed).toContain("delegation:d-1");
+    expect(collapsed.indexOf("delegation:d-1")).toBeLessThan(collapsed.indexOf("user-2"));
+
+    const expanded = deriveThreadFeedPresentation(
+      feed,
+      running,
+      new Set([TurnId.make("turn-1")]),
+    ).map((entry) => entry.id);
+    expect(expanded).toContain("turn-1-warning");
+    expect(expanded.filter((id) => id === "delegation:d-1")).toHaveLength(1);
+  });
+
+  it("drops a delegation activity whose record already has a card", () => {
+    const deliveryActivity = (id: string, delegationId: string) =>
+      makeActivity({
+        id: EventId.make(id),
+        kind: "delegation.completed",
+        summary: "Finished work",
+        createdAt: at(4),
+        turnId: TurnId.make("turn-1"),
+        payload: { delegationId },
+      });
+    const thread = {
+      ...feedThread(messages.slice(0, 2)),
+      activities: [deliveryActivity("carded", "d-1"), deliveryActivity("uncarded", "d-orphan")],
+    };
+
+    const ids = buildThreadFeed(thread, {
+      delegations: [feedDelegation("d-1", 2, "turn-1", "user-1")],
+    }).map((entry) => entry.id);
+
+    expect(ids).toEqual(["user-1", "bot-1", "delegation:d-1", "uncarded"]);
+  });
+
+  it("renders each delegation record once", () => {
+    const records = [
+      feedDelegation("d-1", 2, "turn-1", "user-1"),
+      feedDelegation("d-2", 11, "turn-2", "user-2"),
+      feedDelegation("d-3", 21, "turn-3", "user-3"),
+    ];
+    const thread = {
+      ...feedThread(messages),
+      activities: records.map((record, index) =>
+        makeActivity({
+          id: EventId.make(`delivery-${index}`),
+          kind: "delegation.completed",
+          summary: "Finished work",
+          createdAt: record.createdAt,
+          turnId: record.parentTurnId,
+          payload: { delegationId: record.delegationId },
+        }),
+      ),
+    };
+    const feed = buildThreadFeed(thread, { delegations: records });
     const presented = deriveThreadFeedPresentation(
       feed,
       { turnId: TurnId.make("turn-3"), state: "running", startedAt: at(30), completedAt: null },
       new Set(),
     );
 
-    // The card sits inside turn 1's collapsible span: hidden until the fold
-    // opens, while the turn's terminal reply stays pinned under the fold row.
-    expect(presented.map((entry) => entry.id)).toEqual([
-      "user-1",
-      "bot-1",
-      "turn-fold:turn-1",
-      "user-2",
-      "bot-2",
-      "user-3",
-      "bot-3",
-    ]);
+    for (const entries of [feed, presented]) {
+      const cardIds = entries.flatMap((entry) =>
+        entry.type === "delegation" ? [entry.delegation.delegationId] : [],
+      );
+      expect(cardIds).toEqual(["d-1", "d-2", "d-3"]);
+      expect(entries.some((entry) => entry.id.startsWith("delivery-"))).toBe(false);
+    }
+  });
 
-    const expanded = deriveThreadFeedPresentation(
-      feed,
-      { turnId: TurnId.make("turn-3"), state: "running", startedAt: at(30), completedAt: null },
-      new Set([TurnId.make("turn-1")]),
+  it("offers actions on running and failed cards", () => {
+    const running = {
+      ...feedDelegation("d-1", 2, "turn-1", "user-1"),
+      phase: {
+        _tag: "Running" as const,
+        childThreadId: ThreadId.make("child-1"),
+        childTurnId: null,
+        startedAt: at(3),
+        progress: null,
+      },
+    };
+    const failed = {
+      ...feedDelegation("d-2", 11, "turn-2", "user-2"),
+      phase: {
+        _tag: "Failed" as const,
+        childThreadId: null,
+        childTurnId: null,
+        startedAt: at(12),
+        completedAt: at(13),
+        failure: { failureCode: "child_failed" as const, message: "Child crashed." },
+        acknowledgedAt: null,
+      },
+    };
+    const feed = buildThreadFeed(feedThread(messages), { delegations: [running, failed] });
+    const actions = Object.fromEntries(
+      feed.flatMap((entry) => (entry.type === "delegation" ? [[entry.id, entry.actions]] : [])),
     );
-    const expandedIds = expanded.map((entry) => entry.id);
-    expect(expandedIds.indexOf("delegation:d-1")).toBeGreaterThan(
-      expandedIds.indexOf("turn-fold:turn-1"),
-    );
-    expect(expandedIds.indexOf("delegation:d-1")).toBeLessThan(expandedIds.indexOf("user-2"));
+
+    expect(actions["delegation:d-1"]).toEqual(expect.arrayContaining(["keep", "cancel"]));
+    expect(actions["delegation:d-2"]).toEqual(["retry"]);
   });
 
   it("keeps cards when a work-log group holds several activities (P1-2 regression)", () => {
@@ -1351,5 +1448,73 @@ describe("delegation cards in the feed", () => {
       }
       previousMessageId = null;
     }
+  });
+});
+
+describe("deriveGroupSpeakerLabels", () => {
+  const at = (second: number) => `2026-09-25T11:00:${String(second).padStart(2, "0")}.000Z`;
+  const mira = BotId.make("bot-mira");
+  const ren = BotId.make("bot-ren");
+  const message = (
+    id: string,
+    second: number,
+    role: "user" | "assistant",
+    respondingBotId: BotId | null = null,
+    text = id,
+  ) => ({
+    id: MessageId.make(id),
+    role,
+    text,
+    turnId: role === "assistant" ? TurnId.make(`turn-${id}`) : null,
+    respondingBotId,
+    createdAt: at(second),
+    updatedAt: at(second),
+    streaming: false,
+  });
+  const feedOf = (messages: OrchestrationThread["messages"]) =>
+    buildThreadFeed(
+      makeThread({
+        id: ThreadId.make("thread-group"),
+        projectId: ProjectId.make("project-1"),
+        title: "Mira and Ren",
+        messages,
+      }),
+    );
+
+  it("labels assistant messages where the speaker changes, falling back to the boss", () => {
+    const feed = feedOf([
+      message("user-1", 1, "user"),
+      message("boss-1", 2, "assistant"),
+      message("mira-2", 3, "assistant", mira),
+      message("user-2", 4, "user"),
+      message("mira-3", 5, "assistant", mira),
+      message("ren-1", 6, "assistant", ren),
+      message("empty", 7, "assistant", mira, "  "),
+      message("ren-2", 8, "assistant", ren),
+    ]);
+
+    expect(Object.fromEntries(deriveGroupSpeakerLabels(feed, { bossBotId: mira }))).toEqual({
+      "boss-1": mira,
+      "ren-1": ren,
+    });
+  });
+
+  it("labels nothing outside a group chat", () => {
+    const feed = feedOf([message("mira-1", 1, "assistant", mira)]);
+    expect(deriveGroupSpeakerLabels(feed, null).size).toBe(0);
+  });
+
+  it("labels named replies in a group without a boss", () => {
+    const feed = feedOf([
+      message("user-1", 1, "user"),
+      message("unnamed", 2, "assistant"),
+      message("mira-1", 3, "assistant", mira),
+      message("ren-1", 4, "assistant", ren),
+    ]);
+
+    expect(Object.fromEntries(deriveGroupSpeakerLabels(feed, { bossBotId: null }))).toEqual({
+      "mira-1": mira,
+      "ren-1": ren,
+    });
   });
 });

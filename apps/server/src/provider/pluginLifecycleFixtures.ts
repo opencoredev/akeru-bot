@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
-import type * as NodeNet from "node:net";
+import * as NodeNet from "node:net";
 
 type JsonRpcMessage = {
   readonly id?: unknown;
@@ -63,14 +63,24 @@ export interface HttpMcpFixture {
   readonly close: () => Promise<void>;
 }
 
+interface HttpMcpFixtureOptions {
+  readonly authorization?: string;
+}
+
 /**
  * Streamable HTTP MCP server standing in for a vendor endpoint such as
  * `https://mcp.exa.ai/mcp`. Loopback-only; no real vendor traffic.
  */
-export async function startHttpMcpFixture(): Promise<HttpMcpFixture> {
+export async function startHttpMcpFixture(
+  options: HttpMcpFixtureOptions = {},
+): Promise<HttpMcpFixture> {
   const server = NodeHttp.createServer((request, response) => {
     if (request.method !== "POST") {
       response.writeHead(405).end();
+      return;
+    }
+    if (options.authorization && request.headers.authorization !== options.authorization) {
+      response.writeHead(401).end();
       return;
     }
     let body = "";
