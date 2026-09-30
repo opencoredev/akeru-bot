@@ -798,6 +798,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
     >();
     const sessions = new Map<string, ActiveSession>();
+    const turnPreparationByThread = new Map<string, Promise<void>>();
     // Tool calls consume no model tokens, so their entries hold no cap while they run.
     // `persisted` is false when the start write failed; finish then writes the whole entry.
     const toolUsageStarts = new Map<
@@ -3606,6 +3607,21 @@ const make = (options?: AgentControllerLiveOptions) =>
     const sendTurn: AgentControllerShape["sendTurn"] = Effect.fn("AgentController.sendTurn")(
       function* (input) {
         const key = String(input.threadId);
+        const serializePreparation = sessions.has(key);
+        const previousPreparation = serializePreparation
+          ? (turnPreparationByThread.get(key) ?? Promise.resolve())
+          : Promise.resolve();
+        let releasePreparation!: () => void;
+        const preparation = new Promise<void>((resolve) => {
+          releasePreparation = resolve;
+        });
+        if (serializePreparation) turnPreparationByThread.set(key, preparation);
+        const release = () => {
+          releasePreparation();
+          if (serializePreparation && turnPreparationByThread.get(key) === preparation) {
+            turnPreparationByThread.delete(key);
+          }
+        };
         const resolved = resolvedByThread.get(key);
         if (resolved && usesMastraCode(resolved.provider)) {
           const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
@@ -3765,6 +3781,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             );
         }
         const turnAdmissionGeneration = active.turnAdmissionGeneration;
+        yield* Effect.promise(() => previousPreparation);
         if (input.timezone !== undefined) {
           active.configuredToolSession = {
             ...active.configuredToolSession,
@@ -3813,7 +3830,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             });
           },
           { concurrency: 1 },
-        );
+        ).pipe(Effect.ensuring(Effect.sync(release)));
         if (
           sessions.get(key) !== active ||
           active.status === "closed" ||
