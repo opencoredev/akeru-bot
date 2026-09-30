@@ -1201,6 +1201,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Update {name} credentials": "更新 {name} 凭据",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "任何能给此机器人发消息的人，都能让它使用已启用的工具在所选项目中工作。",
+  "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":
+    "无法更新凭据，{name} 现已从此频道取消分配。重新连接以使用新凭据。",
   "Save and reconnect": "保存并重新连接",
   "Disabled for the workspace": "已在工作区中停用",
   "Disable {name} for this bot": "为此机器人停用 {name}",

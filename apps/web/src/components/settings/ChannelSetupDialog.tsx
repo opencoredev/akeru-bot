@@ -155,6 +155,9 @@ export function ChannelSetupDialog({
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // The new connection kept after a failed detach, until the bot's assignment shows whether the
+  // old connection survived (retry from scratch) or was removed (reconnect with this one).
+  const [unconfirmed, setUnconfirmed] = useState<ChannelConnectionId | null>(null);
   const savedConnection = useRef<{
     connectionId: ChannelConnectionId;
     name: string;
@@ -169,7 +172,17 @@ export function ChannelSetupDialog({
   const credentialsComplete = fields.every((field) => field.optional || value(field.key).trim());
   const inviteUrl = provider === "discord" ? discordInviteUrl(value("applicationId")) : null;
 
+  // Read from the live snapshot so the copy follows the server's view of the assignment.
+  const oldStillAssigned =
+    replacing !== null &&
+    snapshot?.bots
+      ?.find((bot) => bot.id === replacing.botId)
+      ?.channelBindings?.find((binding) => binding.provider === provider)?.connectionId ===
+      replacing.connectionId;
+  const unassigned = unconfirmed !== null && !oldStillAssigned;
+
   const reset = () => {
+    setUnconfirmed(null);
     savedConnection.current = null;
     setStep(0);
     setMode("hosted");
@@ -197,7 +210,13 @@ export function ChannelSetupDialog({
   // Detaches the old connection, connects the new one, and puts the old one back on failure.
   const replace = async (current: ChannelReplacement) => {
     if (projectId === null) return;
-    const connectionId = newConnectionId();
+    // After a detach removed the old connection, reconnect with the kept one instead.
+    const reconnecting = unassigned ? unconfirmed : null;
+    if (unconfirmed !== null && !reconnecting) {
+      await deleteConnection({ environmentId, input: { connectionId: unconfirmed } });
+    }
+    setUnconfirmed(null);
+    const connectionId = reconnecting ?? newConnectionId();
     const saved = await saveConnection({
       environmentId,
       input: buildChannelConnectionSaveInput({
@@ -215,14 +234,18 @@ export function ChannelSetupDialog({
     }
     const discardNew = () =>
       deleteConnection({ environmentId, input: { connectionId } }).then(() => undefined);
-    const detached = await detach({
-      environmentId,
-      input: { botId: current.botId, provider },
-    });
-    if (detached._tag === "Failure") {
-      await discardNew();
+    const detached = reconnecting
+      ? null
+      : await detach({
+          environmentId,
+          input: { botId: current.botId, provider },
+        });
+    if (detached?._tag === "Failure") {
+      // The detach can fail after it removed the old connection, when the old listener does not
+      // stop. Keep the new connection until the assignment shows which happened.
       setBusy(false);
-      setConnectError(t("Could not update the credentials. The old connection is unchanged."));
+      setUnconfirmed(connectionId);
+      onSaved(connectionId);
       return;
     }
     const attached = await attach({
@@ -328,6 +351,10 @@ export function ChannelSetupDialog({
       open={open}
       onOpenChange={(next) => {
         if (busy) return;
+        // The old connection survived, so the kept new one is not needed.
+        if (!next && unconfirmed !== null && oldStillAssigned) {
+          void deleteConnection({ environmentId, input: { connectionId: unconfirmed } });
+        }
         onOpenChange(next);
         if (!next) reset();
       }}
@@ -455,7 +482,16 @@ export function ChannelSetupDialog({
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
-              {connectError ? (
+              {unconfirmed !== null ? (
+                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                  {unassigned
+                    ? t(
+                        "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.",
+                        { name: botName },
+                      )
+                    : t("Could not update the credentials. The old connection is unchanged.")}
+                </p>
+              ) : connectError ? (
                 <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
                   {connectError}
                 </p>
@@ -525,7 +561,9 @@ export function ChannelSetupDialog({
                 onClick={() => void save()}
               >
                 {replacing
-                  ? t("Save and reconnect")
+                  ? unassigned
+                    ? t("Reconnect")
+                    : t("Save and reconnect")
                   : botId === CONNECT_LATER
                     ? "Save connection"
                     : "Connect"}

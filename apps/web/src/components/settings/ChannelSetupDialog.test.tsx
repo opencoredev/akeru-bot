@@ -458,17 +458,85 @@ describe("ChannelSetupDialog credential update", () => {
     );
   });
 
+  // Mirrors the bot's telegram assignment the server reports after the detach.
+  async function assignment(connectionId: string | undefined) {
+    mocks.snapshot = {
+      ...(mocks.snapshot as object),
+      bots: [
+        {
+          id: "test-bot",
+          channelBindings: [{ provider: "telegram", status: "disconnected", connectionId }],
+        },
+      ],
+    };
+    await act(() =>
+      root.render(<ChannelSetupDialog key="replace" {...props} replacing={replacing} />),
+    );
+  }
+
   it("leaves the old connection attached when it cannot be detached", async () => {
+    await assignment(oldConnection);
     mocks.detach.mockResolvedValueOnce({ _tag: "Failure" });
     await enterNewToken();
     await click("Save and reconnect");
     const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
     expect(mocks.attach).not.toHaveBeenCalled();
-    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
-      newConnection,
-    ]);
     expect(container.textContent).toContain(
       "Could not update the credentials. The old connection is unchanged.",
     );
+    await act(() => mocks.changeOpen(false));
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+    ]);
+  });
+
+  it("shows the bot unassigned and reconnects when the old listener fails to stop", async () => {
+    await assignment(oldConnection);
+    // The durable detach removed the connection, then the old listener's shutdown rejected.
+    mocks.detach.mockImplementationOnce(async () => {
+      await assignment(undefined);
+      return { _tag: "Failure" };
+    });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(mocks.attach).not.toHaveBeenCalled();
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledWith(newConnection);
+    expect(container.textContent).toContain(
+      "Could not update the credentials, and Test bot is now unassigned from this channel.",
+    );
+    expect(container.textContent).not.toContain("The old connection is unchanged.");
+
+    await click("Reconnect");
+    expect(mocks.detach).toHaveBeenCalledTimes(1);
+    expect(mocks.save.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+      newConnection,
+    ]);
+    expect(mocks.attach.mock.calls.map(([value]) => value.input)).toEqual([
+      {
+        botId: "test-bot",
+        connectionId: newConnection,
+        provider: "telegram",
+        projectId: botProject,
+      },
+    ]);
+    expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      oldConnection,
+    ]);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("follows the assignment when it syncs after the detach failure", async () => {
+    await assignment(oldConnection);
+    mocks.detach.mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    expect(container.textContent).toContain("The old connection is unchanged.");
+    await assignment(undefined);
+    expect(container.textContent).toContain("is now unassigned from this channel");
+    await act(() => mocks.changeOpen(false));
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
   });
 });

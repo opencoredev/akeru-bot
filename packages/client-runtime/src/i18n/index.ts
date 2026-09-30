@@ -1253,6 +1253,8 @@ export const englishCatalog = {
   "Update {name} credentials": "Update {name} credentials",
   "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.":
     "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
+  "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.":
+    "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.",
   "Save and reconnect": "Save and reconnect",
   "Disabled for the workspace": "Disabled for the workspace",
   "Disable {name} for this bot": "Disable {name} for this bot",
