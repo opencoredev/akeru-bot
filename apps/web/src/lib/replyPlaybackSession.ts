@@ -31,9 +31,10 @@ export function useWebReplyPlaybackSession() {
     [cancel, environmentId, initialVoice, synthesize],
   );
   // Voice setting changes update the live session, so playback and automatic readout survive them.
+  // They belong to the primary environment, so replies from other environments stay unavailable.
   useEffect(() => {
-    session.setSynthesis(storedReplySynthesisCapability(voice));
-  }, [session, voice]);
+    if (environmentId) session.setSynthesis(storedReplySynthesisCapability(voice), environmentId);
+  }, [environmentId, session, voice]);
   return session;
 }
 

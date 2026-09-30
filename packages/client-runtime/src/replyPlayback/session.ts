@@ -44,7 +44,7 @@ export function createReplyPlaybackSession(options: {
     | StoredReplySynthesisCapability
     | ((environmentId: string) => StoredReplySynthesisCapability);
 }) {
-  const synthesisFor = (environmentId: string | null) =>
+  const resolveSynthesis = (environmentId: string | null) =>
     typeof options.synthesis === "function"
       ? environmentId
         ? options.synthesis(environmentId)
@@ -56,8 +56,23 @@ export function createReplyPlaybackSession(options: {
   const currentSynthesis = (environmentId: string | null) =>
     (environmentId ? environmentSynthesisOverrides.get(environmentId) : undefined) ??
     synthesisOverride ??
-    synthesisFor(environmentId);
+    resolveSynthesis(environmentId);
   const synthesisListeners = new Set<() => void>();
+  // `useSyncExternalStore` needs the same object until the capability changes, while resolvers
+  // build a fresh one per call, so equal capabilities reuse the last snapshot.
+  let synthesisSnapshot: StoredReplySynthesisCapability | null = null;
+  const readSynthesisSnapshot = () => {
+    const next = currentSynthesis(context?.environmentId ?? null);
+    if (!synthesisSnapshot || !sameSynthesis(synthesisSnapshot, next)) synthesisSnapshot = next;
+    return synthesisSnapshot;
+  };
+  const notifySynthesis = () => {
+    for (const listener of synthesisListeners) listener();
+  };
+  const notifyIfSynthesisChanged = () => {
+    const previous = synthesisSnapshot;
+    if (readSynthesisSnapshot() !== previous) notifySynthesis();
+  };
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
   const preference = createReplyReadoutPreference(options.storage, () => {
@@ -133,10 +148,11 @@ export function createReplyPlaybackSession(options: {
     controller,
     preference,
     get synthesis() {
-      return currentSynthesis(context?.environmentId ?? null);
+      return readSynthesisSnapshot();
     },
-    synthesisFor,
-    getSynthesisSnapshot: () => currentSynthesis(context?.environmentId ?? null),
+    /** The capability replies from `environmentId` use, including applied settings. */
+    synthesisFor: currentSynthesis,
+    getSynthesisSnapshot: readSynthesisSnapshot,
     subscribeSynthesis: (listener: () => void) => {
       synthesisListeners.add(listener);
       return () => synthesisListeners.delete(listener);
@@ -145,7 +161,7 @@ export function createReplyPlaybackSession(options: {
     setSynthesis: (next: StoredReplySynthesisCapability, environmentId?: string) => {
       if (environmentId) environmentSynthesisOverrides.set(environmentId, next);
       else synthesisOverride = next;
-      for (const listener of synthesisListeners) listener();
+      notifySynthesis();
     },
     actionFor,
     setContext: (next: ReplyPlaybackContext | null) => {
@@ -159,6 +175,7 @@ export function createReplyPlaybackSession(options: {
         baseline = null;
         tracker.reset(scope, 0);
       }
+      notifyIfSynthesisChanged();
     },
     clearContextIf: (environmentId: string, threadId: string) => {
       if (context?.environmentId === environmentId && context.threadId === threadId) {
@@ -169,6 +186,7 @@ export function createReplyPlaybackSession(options: {
         sequence = 0;
         baseline = null;
         tracker.reset(null, 0);
+        notifyIfSynthesisChanged();
       }
     },
     observe: (messages: ReadonlyArray<ReplyPlaybackMessage>) => {
@@ -220,6 +238,15 @@ export function createReplyPlaybackSession(options: {
       synthesisListeners.clear();
     },
   };
+}
+
+function sameSynthesis(a: StoredReplySynthesisCapability, b: StoredReplySynthesisCapability) {
+  return (
+    a.available === b.available &&
+    a.provider === b.provider &&
+    a.voice === b.voice &&
+    (a.available || b.available || a.reason === b.reason)
+  );
 }
 
 export type ReplyPlaybackSession = ReturnType<typeof createReplyPlaybackSession>;

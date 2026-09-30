@@ -178,6 +178,35 @@ describe("reply playback session", () => {
     expect(session.getSynthesisSnapshot().available).toBe(false);
   });
 
+  it("keeps the synthesis snapshot stable until the capability changes", () => {
+    const session = createReplyPlaybackSession({
+      storage: { getItem: async () => "true", setItem: async () => {} },
+      prepare: vi.fn(),
+      synthesis: (environmentId) =>
+        environmentId === "environment"
+          ? { available: true, provider: "speech", voice: "voice" }
+          : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
+    });
+    const onSynthesisChanged = vi.fn();
+    session.subscribeSynthesis(onSynthesisChanged);
+    const empty = session.getSynthesisSnapshot();
+    expect(session.getSynthesisSnapshot()).toBe(empty);
+
+    session.setContext(context);
+    const selected = session.getSynthesisSnapshot();
+    expect(selected).toMatchObject({ available: true });
+    expect(session.getSynthesisSnapshot()).toBe(selected);
+    expect(onSynthesisChanged).toHaveBeenCalledOnce();
+
+    session.setContext({ ...context, mediaBlocked: true });
+    expect(onSynthesisChanged).toHaveBeenCalledOnce();
+
+    session.clearContextIf(context.environmentId, context.threadId);
+    expect(session.getSynthesisSnapshot().available).toBe(false);
+    expect(session.getSynthesisSnapshot()).toBe(session.getSynthesisSnapshot());
+    expect(onSynthesisChanged).toHaveBeenCalledTimes(2);
+  });
+
   it("returns the default capability for a null or empty environment", () => {
     const lookup = vi.fn(() => ({
       available: true as const,
