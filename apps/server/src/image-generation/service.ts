@@ -13,7 +13,8 @@
  * `detected` until an image is generated.
  *
  * `generateImageWithProviders` is the generation producer behind the
- * GenerateImage catalog tool. It records request health on the same
+ * GenerateImage catalog tool. ChatGPT generation calls the OpenAI Images API,
+ * which takes only an API key, so a ChatGPT sign-in fails with that message. It records request health on the same
  * `image:<provider>` keys. `lastGenerationAt` is not persisted yet, so it
  * stays absent.
  */
@@ -373,6 +374,19 @@ function imageMimeType(bytes: Uint8Array): GeneratedImage["mimeType"] | undefine
   return undefined;
 }
 
+const CHATGPT_API_KEY_REQUIRED =
+  "ChatGPT image generation needs an OpenAI API key; a ChatGPT sign-in cannot call the OpenAI Images API.";
+
+/** A generation failure whose health classification is already known. */
+class ImageRequestError extends Error {
+  readonly failureKind: "request" | "revoked";
+
+  constructor(message: string, failureKind: "request" | "revoked") {
+    super(message);
+    this.failureKind = failureKind;
+  }
+}
+
 async function generateWithProvider(input: {
   readonly provider: ImageProviderId;
   readonly prompt: string;
@@ -380,8 +394,21 @@ async function generateWithProvider(input: {
   readonly fetchFn: (input: string | URL, init?: RequestInit) => Promise<Response>;
 }): Promise<GeneratedImage> {
   const meta = IMAGE_PROVIDER_META[input.provider];
-  const token = await input.subscriptionAuth.getAccessToken(meta.subscription);
-  if (!token) throw new Error(`No ${meta.label} subscription is connected.`);
+  // The OpenAI Images API only accepts a Platform API key. A ChatGPT sign-in
+  // token is a subscription credential for the ChatGPT backend, so it is never
+  // sent there.
+  const token =
+    input.provider === "chatgpt"
+      ? input.subscriptionAuth.getApiKeyCredential(meta.subscription)?.access
+      : await input.subscriptionAuth.getAccessToken(meta.subscription);
+  if (!token) {
+    throw new ImageRequestError(
+      input.provider === "chatgpt"
+        ? CHATGPT_API_KEY_REQUIRED
+        : `No ${meta.label} subscription is connected.`,
+      "request",
+    );
+  }
   const response = await input.fetchFn(meta.generationsUrl, {
     method: "POST",
     redirect: "error",
@@ -400,10 +427,15 @@ async function generateWithProvider(input: {
   });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
-    const error = new Error(`${meta.label} image generation was rejected (${response.status}).`);
-    (error as Error & { revoked?: boolean }).revoked =
-      response.status === 401 || response.status === 403;
-    throw error;
+    const rejectedCredential = response.status === 401 || response.status === 403;
+    // A rejected OpenAI API key says nothing about the ChatGPT subscription,
+    // so it never marks the subscription revoked.
+    throw new ImageRequestError(
+      `${meta.label} image generation was rejected (${response.status}).${
+        rejectedCredential && input.provider === "chatgpt" ? ` ${CHATGPT_API_KEY_REQUIRED}` : ""
+      }`,
+      rejectedCredential && input.provider === "grok" ? "revoked" : "request",
+    );
   }
   const body = JSON.parse(await readBoundedText(response, meta.label)) as {
     readonly data?: ReadonlyArray<{ readonly b64_json?: string; readonly revised_prompt?: string }>;
@@ -449,13 +481,11 @@ export async function generateImageWithProviders(input: {
       return image;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      const revoked =
-        cause instanceof Error && (cause as Error & { revoked?: boolean }).revoked === true;
       input.subscriptionAuth.recordImageRequestFailure(
         provider,
         message,
         undefined,
-        revoked ? "revoked" : oauthFailureKind(cause),
+        cause instanceof ImageRequestError ? cause.failureKind : oauthFailureKind(cause),
       );
       failures.push(message);
     }

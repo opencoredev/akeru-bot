@@ -3,7 +3,6 @@ import {
   AkeruMemoryUserId,
   AkeruUsageReservationId,
   type ChatAttachment,
-  type DelegationId,
   ComposioOperationError,
   CommandId,
   EventId,
@@ -1577,27 +1576,6 @@ const make = Effect.gen(function* () {
     processThreadTitleRegenerationSafely,
   );
 
-  // The decider acknowledged these results when it admitted the turn. If this
-  // read fails the turn still runs; the results stay visible on their cards.
-  const readDelegationResults = (delegationIds: ReadonlyArray<DelegationId>) =>
-    delegationIds.length === 0
-      ? Effect.succeed("")
-      : projectionSnapshotQuery.getCommandReadModel().pipe(
-          Effect.map((readModel) =>
-            delegationResultsContext(
-              readModel.delegations.filter((delegation) =>
-                delegationIds.includes(delegation.delegationId),
-              ),
-              readModel.bots,
-            ),
-          ),
-          Effect.catchCause((cause) =>
-            Effect.logWarning("failed to read delegated work results for turn start", {
-              cause: Cause.pretty(cause),
-            }).pipe(Effect.as("")),
-          ),
-        );
-
   // A turn that fails before its provider reads the results it acknowledged
   // hands them back, so the parent's next turn still receives them.
   const releaseDelegationResults = (
@@ -1632,6 +1610,35 @@ const make = Effect.gen(function* () {
           threadId: event.payload.threadId,
           cause: Cause.pretty(cause),
         }),
+      ),
+    );
+  };
+
+  // The decider acknowledged these results when it admitted the turn. If they
+  // still cannot be read after a retry, the acknowledgements are released so
+  // the turn runs without them and the parent's next turn receives them.
+  const readDelegationResults = (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+  ) => {
+    const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
+    if (delegationIds.length === 0) return Effect.succeed("");
+    return projectionSnapshotQuery.getCommandReadModel().pipe(
+      Effect.retry({ times: 1 }),
+      Effect.map((readModel) =>
+        delegationResultsContext(
+          readModel.delegations.filter((delegation) =>
+            delegationIds.includes(delegation.delegationId),
+          ),
+          readModel.bots,
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("failed to read delegated work results for turn start", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.andThen(releaseDelegationResults(event)), Effect.as("")),
       ),
     );
   };
@@ -1801,9 +1808,7 @@ const make = Effect.gen(function* () {
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
-    const delegationResults = yield* readDelegationResults(
-      event.payload.acknowledgedDelegationIds ?? [],
-    );
+    const delegationResults = yield* readDelegationResults(event);
 
     yield* agentController
       .sendTurn({

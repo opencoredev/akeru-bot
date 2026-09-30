@@ -56,6 +56,11 @@ the default, or the fallback order. Only providers that are turned on are
 tried. If every provider fails, the bot reports each failure. Finished images
 are saved on the environment, and the bot replies with where it saved them.
 
+A ChatGPT sign-in cannot create images yet. The OpenAI Images API accepts only
+an OpenAI API key, so a ChatGPT image request fails with a message saying so,
+and the ChatGPT subscription stays connected for chat. Use Grok to create
+images.
+
 ## Mobile
 
 Mobile shows the saved setup under **Settings > Image generation**, including

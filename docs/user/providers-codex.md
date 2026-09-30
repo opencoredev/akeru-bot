@@ -15,8 +15,9 @@ Akeru supports ChatGPT Plus, Pro, Business, Enterprise, and Edu. Select **Check 
 stored login. Akeru refreshes an elapsed access token when it next needs one. Use **Reconnect** if
 the refresh grant is rejected or **Check OAuth** reports a revoked login.
 
-ChatGPT image generation needs this account sign-in. An OpenAI API key for Codex chat does not
-connect the ChatGPT image provider.
+The ChatGPT image provider row needs this account sign-in. An OpenAI API key for Codex chat does not
+connect it. Creating images with a ChatGPT sign-in is not supported yet; see
+[Image generation settings](./image-generation.md).
 
 ## How Codex runs
 

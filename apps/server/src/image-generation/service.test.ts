@@ -629,6 +629,46 @@ describe("image generation", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
+  it("never sends a ChatGPT sign-in token to the OpenAI Images API", async () => {
+    const { authPath } = fixture();
+    seedOAuth(authPath, "openai-codex");
+    const service = new SubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () => Response.json({ data: [{ b64_json: PNG_BASE64 }] }));
+
+    await expect(
+      generateImageWithProviders({
+        prompt: "a fox",
+        settings: { ...baseSettings, chatgptEnabled: true },
+        subscriptionAuth: service,
+        fetchFn,
+      }),
+    ).rejects.toThrow("needs an OpenAI API key");
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
+      (row) => row.provider === "chatgpt",
+    );
+    expect(chatgpt?.health).not.toBe("revoked");
+  });
+
+  it("does not mark ChatGPT revoked when the Images API rejects the key", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "openai-codex");
+    const service = new SubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
+
+    await expect(
+      generateImageWithProviders({
+        prompt: "a fox",
+        settings: { ...baseSettings, chatgptEnabled: true },
+        subscriptionAuth: service,
+        fetchFn,
+      }),
+    ).rejects.toThrow("needs an OpenAI API key");
+
+    expect(service.imageRequestHealth("chatgpt")?.health).not.toBe("revoked");
+  });
+
   it("rejects a response that is not an image", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
