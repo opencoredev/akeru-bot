@@ -1163,9 +1163,12 @@ export async function createAkeruMastraHarness(
   const discardQueuedObservations = observationQueueDb.prepare(
     `DELETE FROM akeru_observation_queue WHERE thread_id = ? AND resource_id = ?`,
   );
+  // A claimed row becomes eligible when its lease expires, which covers a claim
+  // left behind by a process that exited mid-observation.
   const nextQueuedObservationAt = observationQueueDb.prepare(
-    `SELECT MIN(next_attempt_at) AS nextAttemptAt FROM akeru_observation_queue
-      WHERE claimed_at IS NULL`,
+    `SELECT MIN(CASE WHEN claimed_at IS NULL THEN next_attempt_at END) AS nextAttemptAt,
+            MIN(claimed_at) AS oldestClaimAt
+       FROM akeru_observation_queue`,
   );
   let closing = false;
   let observationDrain: Promise<void> | undefined;
@@ -1251,18 +1254,27 @@ export async function createAkeruMastraHarness(
     return work;
   };
 
-  // A backed-off row has no turn to wake it, so the drain that leaves it
-  // behind arms one timer for the earliest pending retry.
+  // A backed-off or still-claimed row has no turn to wake it, so the drain that
+  // leaves it behind arms one timer for the earliest retry or lease expiry.
   const scheduleObservationRetry = () => {
     if (closing) return;
-    const { nextAttemptAt } = nextQueuedObservationAt.get() as { nextAttemptAt: string | null };
-    if (nextAttemptAt === null) return;
+    const { nextAttemptAt, oldestClaimAt } = nextQueuedObservationAt.get() as {
+      nextAttemptAt: string | null;
+      oldestClaimAt: string | null;
+    };
+    const dueTimes = [
+      ...(nextAttemptAt === null
+        ? []
+        : [DateTime.toEpochMillis(DateTime.makeUnsafe(nextAttemptAt))]),
+      ...(oldestClaimAt === null
+        ? []
+        : [
+            DateTime.toEpochMillis(DateTime.makeUnsafe(oldestClaimAt)) + OBSERVATION_CLAIM_LEASE_MS,
+          ]),
+    ];
+    if (dueTimes.length === 0) return;
     if (observationRetryTimer) Effect.runFork(Fiber.interrupt(observationRetryTimer));
-    const delay = Math.max(
-      0,
-      DateTime.toEpochMillis(DateTime.makeUnsafe(nextAttemptAt)) -
-        DateTime.toEpochMillis(DateTime.nowUnsafe()),
-    );
+    const delay = Math.max(0, Math.min(...dueTimes) - DateTime.toEpochMillis(DateTime.nowUnsafe()));
     observationRetryTimer = Effect.runFork(
       Effect.sleep(Duration.millis(delay)).pipe(
         Effect.andThen(

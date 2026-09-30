@@ -1036,6 +1036,55 @@ describe("AkeruMastraHarness", () => {
     }
   });
 
+  it("drains a row whose claim was left by an abrupt exit once its lease expires", async () => {
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-stale-claim-"));
+    const calls: string[] = [];
+    const recovered = Promise.withResolvers<void>();
+    const observe = vi
+      .spyOn(ObservationalMemory.prototype, "observe")
+      .mockImplementation(async (input: { threadId: string }) => {
+        calls.push(input.threadId);
+        recovered.resolve();
+        return { observed: false, reflected: false, record: {} } as never;
+      });
+    // Provision the queue store, then persist a row as a process that exited
+    // mid-observation leaves it: claimed, with an unexpired lease.
+    await (await makeObservationHarness(directory)).destroy();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const claimedAt = DateTime.formatIso(DateTime.nowUnsafe());
+    {
+      const db = new NodeSqlite.DatabaseSync(
+        NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
+      );
+      db.prepare(
+        `INSERT INTO akeru_observation_queue
+          (id, thread_id, resource_id, model_id, turn_id, attempts, claimed_at, next_attempt_at,
+           created_at)
+          VALUES ('stale', 'thread-stale', 'thread-stale', 'openai/gpt-5.6-sol', NULL, 0, ?, ?, ?)`,
+      ).run(claimedAt, claimedAt, claimedAt);
+      db.close();
+    }
+    const harness = await makeObservationHarness(directory);
+    try {
+      // The startup drain cannot claim the row while its lease holds.
+      await harness.drainObservationQueue!();
+      expect(calls).toEqual([]);
+      assert.equal(queuedObservations(directory)[0]!.claimedAt, claimedAt);
+
+      // No turn or restart follows: only the lease-expiry timer can recover it.
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await recovered.promise;
+      await harness.drainObservationQueue!();
+      expect(calls).toEqual(["thread-stale"]);
+      assert.deepEqual(queuedObservations(directory), []);
+    } finally {
+      vi.useRealTimers();
+      observe.mockRestore();
+      await harness.destroy();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("meters external turns through the memory-call hooks", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-external-"));
     const started: ReadonlyArray<unknown>[] = [];
