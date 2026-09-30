@@ -139,7 +139,10 @@ import {
   createAkeruWebFetch,
   type AkeruWebFetchOptions,
 } from "../AkeruWebFetch.ts";
-import { generateImageWithProviders } from "../../image-generation/service.ts";
+import {
+  cancelActiveImageGenerations,
+  runImageGenerationTool,
+} from "../../image-generation/ImageGenerationRuntime.ts";
 import {
   formatMcpServerInstructions,
   getMcpRuntimeHeaders,
@@ -237,6 +240,8 @@ interface ActiveTurn {
   readonly turnId: TurnId;
   readonly assistantMessages: Map<string, ActiveAssistantMessage>;
   waiting: boolean;
+  /** Suspended tool calls still waiting for a user answer. */
+  readonly suspendedToolCalls: Set<string>;
   finished: boolean;
   inputTokens: number;
   outputTokens: number;
@@ -343,8 +348,11 @@ export interface AgentControllerLiveOptions {
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop">>;
   /** Overrides the WebFetch resolver and address policy in tests. */
   readonly webFetch?: AkeruWebFetchOptions;
-  /** Overrides the HTTP client for image generation requests in tests. */
-  readonly imageFetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * Overrides the image generation entry for tests. Defaults to
+   * `runImageGenerationTool`, which calls the active ImageGenerationRuntime.
+   */
+  readonly generateImage?: (threadId: ThreadId, input: unknown) => Effect.Effect<unknown>;
 }
 
 export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
@@ -784,14 +792,20 @@ const make = (options?: AgentControllerLiveOptions) =>
       memoryHandler?: AkeruMemoryToolHandler,
     ) =>
       Effect.gen(function* () {
-        const previewEnabled = Option.isSome(serverSettings)
+        // Matches ProviderService's capabilities: an unreadable settings file withholds both.
+        const { previewEnabled, imageEnabled } = Option.isSome(serverSettings)
           ? yield* serverSettings.value.getSettings.pipe(
-              Effect.map((settings) => settings.enableAgentBrowserAccess),
-              Effect.orElseSucceed(() => false),
+              Effect.map((settings) => ({
+                previewEnabled: settings.enableAgentBrowserAccess,
+                imageEnabled:
+                  settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled,
+              })),
+              Effect.orElseSucceed(() => ({ previewEnabled: false, imageEnabled: false })),
             )
-          : true;
+          : { previewEnabled: true, imageEnabled: false };
         const capabilities = new Set<McpInvocationContext.McpCapability>([
           ...(previewEnabled ? (["preview"] as const) : []),
+          ...(imageEnabled ? (["image"] as const) : []),
           ...(memoryHandler ? (["memory"] as const) : []),
         ]);
         if (capabilities.size === 0) {
@@ -835,10 +849,11 @@ const make = (options?: AgentControllerLiveOptions) =>
     >("The agent controller stopped before the routine review finished.");
     // Accepted routine reviews whose routine is still being created, by tool call.
     const creatingRoutineReviews = new Map<string, string>();
-    // A turn waits on the user while any tool approval or routine review it
-    // opened is unanswered, or an accepted routine is still being created.
+    // A turn waits on the user while any tool approval, question, or routine review
+    // it opened is unanswered, or an accepted routine is still being created.
     const turnStillWaiting = (threadId: string, active: ActiveSession) =>
       active.pendingApprovals.size > 0 ||
+      (active.activeTurn?.suspendedToolCalls.size ?? 0) > 0 ||
       pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
       [...creatingRoutineReviews.values()].includes(threadId);
 
@@ -1134,6 +1149,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       };
       return { memory: guarded };
     };
+    // Image providers for the GenerateImage tool, read on every session start or reuse. An
+    // unreadable settings file hides the tool rather than offering a call that can only fail
+    // (ProviderService denies the MCP capability the same way). Without the service, tests
+    // keep the tool visible.
+    const imageToolSettings = Option.isSome(serverSettings)
+      ? serverSettings.value.getSettings.pipe(
+          Effect.map((settings) => settings.imageGeneration),
+          Effect.orElseSucceed(() => ({ chatgptEnabled: false, grokEnabled: false })),
+          Effect.map(({ chatgptEnabled, grokEnabled }) => ({ chatgptEnabled, grokEnabled })),
+        )
+      : Effect.succeed({ chatgptEnabled: true, grokEnabled: true });
     const memorySettings = () =>
       Option.isSome(serverSettings)
         ? serverSettings.value.getSettings.pipe(
@@ -1799,6 +1825,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         turnId,
         assistantMessages: new Map(),
         waiting: false,
+        suspendedToolCalls: new Set(),
         finished: false,
         inputTokens: 0,
         outputTokens: 0,
@@ -2321,6 +2348,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           if (!turn) return;
           completeAssistantMessages(threadId, active, turn);
           active.toolNames.set(event.toolCallId, event.toolName);
+          turn.suspendedToolCalls.add(event.toolCallId);
           turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
           const suspendPayload =
@@ -2751,6 +2779,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         delete toolSession.delegation;
         delete toolSession.memoryHandlers;
         delete toolSession.botState;
+        delete toolSession.imageGeneration;
+        const imageGeneration = yield* imageToolSettings;
         const settings = yield* memorySettings();
         const nextMemoryHandlers =
           access.memoryScopes.length > 0
@@ -2775,6 +2805,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               }
             : {}),
           ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+          imageGeneration,
         };
         existing.configuredToolSession = configuredToolSession;
         existing.configuredMemoryAccess = delegatedAccess
@@ -2932,6 +2963,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           : undefined;
       const registeredMemoryHandlers = nextMemoryHandlers;
       const mcpManager = sessionResources.getMcpManager(key);
+      const imageGenerationSettings = yield* imageToolSettings;
       const mcpDependencies =
         input.botId && input.botName
           ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
@@ -2945,6 +2977,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
         ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
         ...(input.botId && botStateRuntime ? { botState: botStateRuntime } : {}),
+        imageGeneration: imageGenerationSettings,
         catalogHandlers: createAkeruCatalogToolHandlers(
           mcpManager,
           pluginRuntime,
@@ -2987,39 +3020,12 @@ const make = (options?: AgentControllerLiveOptions) =>
           {
             webSearch: akeruWebSearchUnavailable,
             webFetch,
-            ...(Option.isSome(serverSettings)
-              ? {
-                  generateImage: async (request: {
-                    readonly prompt: string;
-                    readonly provider?: "chatgpt" | "grok";
-                  }) => {
-                    const settings = await runPromise(serverSettings.value.getSettings);
-                    const image = await generateImageWithProviders({
-                      prompt: request.prompt,
-                      settings: settings.imageGeneration,
-                      subscriptionAuth,
-                      requested: request.provider,
-                      botProvider: bot?.imageProvider ?? null,
-                      ...(options?.imageFetch ? { fetchFn: options.imageFetch } : {}),
-                    });
-                    const directory = NodePath.join(config.attachmentsDir, "generated-images");
-                    NodeFS.mkdirSync(directory, { recursive: true });
-                    const extension = image.mimeType.slice("image/".length);
-                    const path = NodePath.join(
-                      directory,
-                      `${NodeCrypto.randomUUID()}.${extension}`,
-                    );
-                    NodeFS.writeFileSync(path, image.bytes);
-                    return {
-                      provider: image.provider,
-                      model: image.model,
-                      mimeType: image.mimeType,
-                      path,
-                      ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
-                    };
-                  },
-                }
-              : {}),
+            // The router bounds each provider attempt and interruptTurn cancels
+            // in-flight requests, so there is no outer deadline here.
+            generateImage: async (request: unknown) => {
+              const generate = options?.generateImage ?? runImageGenerationTool;
+              return runPromise(generate(threadId, request));
+            },
             ...(pluginRuntimeOptions
               ? {
                   addMcpServer: async (input: unknown) => {
@@ -3521,6 +3527,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
+      yield* cancelActiveImageGenerations(input.threadId);
       yield* releaseMastraReservations(input.threadId);
       finishTurn(input.threadId, active, "interrupted");
     });
@@ -3755,6 +3762,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         });
       }
       const activeTurn = active.activeTurn;
+      // Only a question this turn was waiting on goes back into its set on failure.
+      let ownedByTurn = false;
+      let restored = false;
       let resumeFailure: string | undefined;
       const unsubscribe = active.session.subscribe((event) => {
         if (event.type === "tool_suspension_cancelled" && event.toolCallId === toolCallId) {
@@ -3771,7 +3781,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             if (!activeTurn || active.activeTurn !== activeTurn) {
               return { _tag: "Stale" as const };
             }
-            if (active.activeTurn) active.activeTurn.waiting = turnStillWaiting(key, active);
+            ownedByTurn = activeTurn.suspendedToolCalls.delete(toolCallId);
+            activeTurn.waiting = turnStillWaiting(key, active);
             return {
               _tag: "Dispatched" as const,
               resume: active.session.respondToToolSuspension({ toolCallId, resumeData: answer }),
@@ -3784,7 +3795,33 @@ const make = (options?: AgentControllerLiveOptions) =>
             detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,
           });
         }
-        yield* runMastra("respondToToolSuspension", () => admitted.resume);
+        yield* runMastra("respondToToolSuspension", () => admitted.resume).pipe(
+          // A rejected resume leaves the question open while its turn is still live.
+          Effect.onError(() =>
+            Effect.sync(() => {
+              if (
+                !ownedByTurn ||
+                !activeTurn ||
+                active.activeTurn !== activeTurn ||
+                resumeFailure !== undefined
+              )
+                return;
+              activeTurn.suspendedToolCalls.add(toolCallId);
+              activeTurn.waiting = turnStillWaiting(key, active);
+              restored = true;
+            }),
+          ),
+          Effect.mapError((error) =>
+            restored
+              ? new AgentControllerRuntimeError({
+                  operation: error.operation,
+                  detail: error.detail,
+                  cause: error.cause,
+                  retryable: true,
+                })
+              : error,
+          ),
+        );
       }).pipe(Effect.ensuring(Effect.sync(unsubscribe)));
       if (resumeFailure !== undefined) {
         return yield* new AgentControllerRuntimeError({
@@ -3810,6 +3847,8 @@ const make = (options?: AgentControllerLiveOptions) =>
       input: Parameters<AgentControllerShape["stopSession"]>[0],
       destroyResources: boolean,
     ) {
+      // A stopped chat must not receive an image that finishes later.
+      yield* cancelActiveImageGenerations(input.threadId);
       const key = String(input.threadId);
       const active = sessions.get(key);
       if (!active) {

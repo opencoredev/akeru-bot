@@ -9,8 +9,8 @@ import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import {
   BotId,
   CHANNEL_PROVIDERS,
+  ChannelConnectionId,
   ChannelFailureCategory as ChannelFailureCategorySchema,
-  type ChannelConnectionId,
   CommandId,
   MessageId,
   type ProjectId,
@@ -27,7 +27,7 @@ import {
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
-import { type Adapter, Chat, type Message, type Thread } from "chat";
+import { type Adapter, Chat, ConsoleLogger, type Message, type Thread } from "chat";
 import { Context } from "effect";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -44,7 +44,14 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/unstable/http";
 
 export { defaultProjectIdForBot } from "@t3tools/shared/channelProject";
 
@@ -52,6 +59,7 @@ import { ServerSecretStore, type SecretStoreError } from "../auth/ServerSecretSt
 import type { OrchestrationDispatchError } from "../orchestration/Errors.ts";
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
+import { ServerConfig } from "../config.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -393,6 +401,8 @@ export interface ChannelTransportContext {
   readonly subscribedThreadIds: ReadonlyArray<string>;
   readonly onMention: InboundCallback;
   readonly onSubscribedMessage: InboundCallback;
+  /** HTTP client for credential probes. Defaults to the fetch-backed client. */
+  readonly httpClient?: HttpClient.HttpClient;
 }
 
 type LiveProvider = ChannelProvider;
@@ -416,6 +426,10 @@ export interface ChannelRuntimeDependencies {
   ) => Effect.Effect<OrchestrationThread | null, ProjectionRepositoryError>;
   readonly nowIso: Effect.Effect<string>;
   readonly randomUuid: Effect.Effect<string, PlatformError.PlatformError>;
+  /** HTTP client for built-in credential probes. Defaults to the fetch-backed client. */
+  readonly httpClient?: HttpClient.HttpClient;
+  /** Public https origin that webhook providers can reach, from `--public-origin`. */
+  readonly publicOrigin?: string;
   /** Replaces the built-in adapters. Tests use it to drive transports directly. */
   readonly startTransport?: (
     input: ChannelConnectInput,
@@ -437,7 +451,9 @@ export interface ChannelRestoreFailure {
   readonly category: ChannelFailureCategory;
 }
 
-const channelStatusReactions = ["eyes", "white_check_mark", "x"] as const;
+// Normalized chat-sdk emoji keys, so Slack and Discord each resolve their native form.
+// "hourglass" marks a turn that is waiting on an approval or user-input answer.
+const channelStatusReactions = ["eyes", "check", "x", "hourglass"] as const;
 type ChannelOrigin = NonNullable<OrchestrationThread["messages"][number]["channelOrigin"]>;
 type ChannelStatus = {
   origin: ChannelOrigin;
@@ -594,6 +610,19 @@ const deterministicChannelId = (
     .digest("hex")}`;
 
 export const WHATSAPP_WEBHOOK_PATH = "/api/channels/whatsapp/:botId/webhook";
+export const WHATSAPP_CONNECTION_WEBHOOK_PATH =
+  "/api/channels/whatsapp/connections/:connectionId/webhook";
+export const WHATSAPP_NOT_LIVE_MESSAGE =
+  "WhatsApp cannot reach this server. Start it with a public https origin (--public-origin), then reconnect.";
+
+/** Webhook URL Meta should call for a saved WhatsApp connection, or undefined without a public https origin. */
+export const whatsAppWebhookUrl = (
+  publicOrigin: string | undefined,
+  connectionId: ChannelConnectionId,
+) =>
+  publicOrigin?.startsWith("https://")
+    ? `${publicOrigin}${WHATSAPP_CONNECTION_WEBHOOK_PATH.replace(":connectionId", encodeURIComponent(connectionId))}`
+    : undefined;
 
 const normalizedInboundMessage = (
   thread: Thread,
@@ -673,8 +702,10 @@ export function channelBindingsForRuntime(
   isRunning: (botId: BotId, provider: ChannelProvider) => boolean,
   isConnecting: (botId: BotId, provider: ChannelProvider) => boolean = () => false,
 ): ReadonlyArray<ChannelBinding> {
+  // A not-live WhatsApp binding still runs a transport that can send, so it needs one too.
   return bindings.map((binding) =>
-    (binding.status === "connected" && !isRunning(binding.botId, binding.provider)) ||
+    ((binding.status === "connected" || binding.status === "not-live") &&
+      !isRunning(binding.botId, binding.provider)) ||
     (binding.status === "connecting" && !isConnecting(binding.botId, binding.provider))
       ? { ...binding, status: "needs-reconnect" }
       : binding,
@@ -1425,12 +1456,59 @@ const startWhatsApp = (
     } satisfies StartedTransport;
   });
 
+const SLACK_APP_TOKEN_INVALID = "Slack app-level token is invalid.";
+const SLACK_UNREACHABLE = "Slack could not be reached. Check the network and try again.";
+// Slack `error` codes that mean the app-level token itself is unusable.
+const SLACK_TOKEN_ERRORS: ReadonlySet<unknown> = new Set([
+  "invalid_auth",
+  "not_authed",
+  "token_revoked",
+  "token_expired",
+  "account_inactive",
+  "not_allowed_token_type",
+  "missing_scope",
+]);
+
+// Socket Mode retries a rejected app token in the background instead of failing `initialize`,
+// so the token is checked up front. Only a Slack auth error blames the token; network, HTTP,
+// and other Slack failures report that Slack could not be reached. Slack's own error text is
+// dropped to keep it out of logs.
+const validateSlackAppToken = (appToken: string, httpClient: HttpClient.HttpClient | undefined) =>
+  Effect.gen(function* () {
+    if (!appToken.startsWith("xapp-"))
+      return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");
+    const probe = HttpClient.execute(
+      HttpClientRequest.post("https://slack.com/api/apps.connections.open").pipe(
+        HttpClientRequest.bearerToken(appToken),
+      ),
+    ).pipe(Effect.flatMap((response) => response.json));
+    const body = yield* (
+      httpClient
+        ? probe.pipe(Effect.provideService(HttpClient.HttpClient, httpClient))
+        : probe.pipe(Effect.provide(FetchHttpClient.layer))
+    ).pipe(
+      Effect.mapError(
+        () => new ChannelRuntimeError({ message: SLACK_UNREACHABLE, category: "network" }),
+      ),
+    );
+    if (typeof body === "object" && body !== null && "ok" in body && body.ok === true) return;
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "error" in body &&
+      SLACK_TOKEN_ERRORS.has(body.error)
+    )
+      return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");
+    return yield* failWith(SLACK_UNREACHABLE, "network");
+  });
+
 const startSlack = (
   input: Extract<ChannelConnectInput, { readonly provider: "slack" }>,
   context: ChannelTransportContext,
   onDirectMessage: InboundCallback,
 ) =>
   Effect.gen(function* () {
+    yield* validateSlackAppToken(input.appToken, context.httpClient);
     const adapter = createSlackAdapter({
       mode: "socket",
       botToken: input.botToken,
@@ -1478,7 +1556,16 @@ const startDiscord = (
     const adapter = createDiscordAdapter({
       applicationId: input.applicationId,
       botToken: input.botToken,
+      // The SDK requires a key to verify interaction webhooks. Akeru only uses the gateway,
+      // but a placeholder verifier would silently reject interactions if they are ever routed.
       publicKey: input.publicKey,
+      // The SDK falls back to DISCORD_* environment variables for these. Only a direct mention
+      // of the bot starts a chat, whatever the server's environment says.
+      mentionRoleIds: [],
+      respondToChannelIds: [],
+      respondToGlobalMentions: false,
+      // Info-level gateway logs include message content.
+      logger: new ConsoleLogger("warn", "discord"),
     });
     const chat = new Chat({
       userName: context.botName,
@@ -1532,6 +1619,9 @@ const startBuiltInTransport = (
           ? startSlack(input, context, onDirectMessage)
           : startDiscord(input, context, onDirectMessage);
 
+const channelStatusKey = (origin: ChannelOrigin) =>
+  `${origin.externalThreadId}\u0000${origin.externalMessageId ?? ""}`;
+
 const updateChannelStatus = (
   ctx: ChannelRuntimeContext,
   runtime: ChannelRuntimeEntry,
@@ -1551,7 +1641,7 @@ const updateChannelStatus = (
       return;
     const statuses = ctx.statuses.get(runtime) ?? new Map<string, ChannelStatus>();
     ctx.statuses.set(runtime, statuses);
-    const key = `${origin.externalThreadId}\u0000${externalMessageId}`;
+    const key = channelStatusKey(origin);
     if (status && statuses.get(key)?.status === status) return;
     statuses.delete(key);
     for (const emoji of channelStatusReactions) {
@@ -1590,12 +1680,18 @@ const clearPersistedChannelStatuses = (
     }
   });
 
-const finishChannelTurn = (
+// Runs `update` against the channel runtime for the user message that started `turnId`,
+// but only while that message is still the thread's latest user message.
+const withChannelTurnOrigin = (
   ctx: ChannelRuntimeContext,
   threadId: ThreadId,
   turnId: TurnId | undefined,
-  state: "completed" | "failed" | "cancelled",
-  requestMessageId?: MessageId,
+  requestMessageId: MessageId | undefined,
+  update: (
+    runtime: ChannelRuntimeEntry,
+    origin: ChannelOrigin,
+    statuses: Map<string, ChannelStatus> | undefined,
+  ) => Effect.Effect<void>,
 ) =>
   Effect.gen(function* () {
     const thread = yield* ctx.deps.readThread(threadId);
@@ -1622,15 +1718,35 @@ const finishChannelTurn = (
         const current = yield* ctx.deps.readThread(threadId);
         if (current?.messages.findLast((message) => message.role === "user")?.id !== request.id)
           return;
-        yield* updateChannelStatus(
-          ctx,
-          runtime,
-          origin,
-          state === "completed" ? "white_check_mark" : "x",
-          threadId,
-        );
+        yield* update(runtime, origin, ctx.statuses.get(runtime));
       }),
     );
+  });
+
+const finishChannelTurn = (
+  ctx: ChannelRuntimeContext,
+  threadId: ThreadId,
+  turnId: TurnId | undefined,
+  state: "completed" | "failed" | "cancelled",
+  requestMessageId?: MessageId,
+) =>
+  withChannelTurnOrigin(ctx, threadId, turnId, requestMessageId, (runtime, origin) =>
+    updateChannelStatus(ctx, runtime, origin, state === "completed" ? "check" : "x", threadId),
+  );
+
+// Swaps the in-progress reaction for "hourglass" while the turn waits on an approval or
+// user-input answer, and back once it resumes. Terminal reactions are never overwritten.
+const markChannelTurnWaiting = (
+  ctx: ChannelRuntimeContext,
+  threadId: ThreadId,
+  turnId: TurnId | undefined,
+  waiting: boolean,
+) =>
+  withChannelTurnOrigin(ctx, threadId, turnId, undefined, (runtime, origin, statuses) => {
+    const current = statuses?.get(channelStatusKey(origin))?.status;
+    if (waiting && current !== undefined && current !== "eyes") return Effect.void;
+    if (!waiting && current !== "hourglass") return Effect.void;
+    return updateChannelStatus(ctx, runtime, origin, waiting ? "hourglass" : "eyes", threadId);
   });
 
 const startChannel = (
@@ -1710,6 +1826,7 @@ const startChannel = (
       ),
       onMention: onInbound,
       onSubscribedMessage: onInbound,
+      ...(ctx.deps.httpClient ? { httpClient: ctx.deps.httpClient } : {}),
     };
     const startTransport = deps.startTransport;
     const started: StartedTransport = startTransport
@@ -1748,6 +1865,8 @@ const startChannel = (
       shutdown: clearTrackedStatuses().pipe(Effect.andThen(started.runtime.shutdown)),
     };
     runtime = wrapped;
+    // Meta only delivers WhatsApp webhooks to a public https URL; without one the bot never hears messages.
+    const notLive = input.provider === "whatsapp" && !deps.publicOrigin?.startsWith("https://");
     return {
       runtime: wrapped,
       binding: {
@@ -1755,7 +1874,9 @@ const startChannel = (
         ...(connectionId ? { connectionId } : {}),
         projectId: project.id,
         provider: input.provider,
-        status: "connected",
+        ...(notLive
+          ? { status: "not-live" as const, lastError: WHATSAPP_NOT_LIVE_MESSAGE }
+          : { status: "connected" as const }),
         externalIdentity: started.externalIdentity,
         connectedAt: yield* deps.nowIso,
         lastAttemptAt: yield* deps.nowIso,
@@ -1915,7 +2036,7 @@ const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel)
         Effect.gen(function* () {
           if (ctx.closed || ctx.runtimes.get(key) !== started.runtime) return;
           const current = bindingFor(yield* ctx.deps.readModel, botId, provider);
-          if (current?.status !== "connected") return;
+          if (current?.status !== "connected" && current?.status !== "not-live") return;
           yield* replaceBinding(ctx, {
             ...current,
             status: "needs-reconnect",
@@ -2020,6 +2141,32 @@ const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnectInput) 
     }),
   );
 
+const optionalWebhookUrl = (
+  publicOrigin: string | undefined,
+  connectionId: ChannelConnectionId,
+) => {
+  const webhookUrl = whatsAppWebhookUrl(publicOrigin, connectionId);
+  return webhookUrl ? { webhookUrl } : {};
+};
+
+/** Rewrites saved WhatsApp webhook URLs when the server's public origin changed since they were saved. */
+const syncWhatsAppWebhookUrls = (ctx: ChannelRuntimeContext) =>
+  withConnectionSettingsOperation(ctx)(
+    Effect.gen(function* () {
+      const settings = yield* ctx.deps.settings.getSettings;
+      let changed = false;
+      const channelConnections = settings.channelConnections.map((connection) => {
+        if (connection.provider !== "whatsapp") return connection;
+        const webhookUrl = whatsAppWebhookUrl(ctx.deps.publicOrigin, connection.id);
+        if (connection.webhookUrl === webhookUrl) return connection;
+        changed = true;
+        const { webhookUrl: _stale, ...rest } = connection;
+        return webhookUrl ? { ...rest, webhookUrl } : rest;
+      });
+      if (changed) yield* ctx.deps.settings.updateSettings({ channelConnections });
+    }),
+  );
+
 const saveChannelConnection = (ctx: ChannelRuntimeContext, input: ChannelConnectionSaveInput) =>
   withConnectionSettingsOperation(ctx)(
     withConnectionOperation(
@@ -2044,7 +2191,10 @@ const saveChannelConnection = (ctx: ChannelRuntimeContext, input: ChannelConnect
           provider: input.provider,
           adapter: input.provider === "imessage" ? "photon" : input.provider,
           ...(input.provider === "whatsapp"
-            ? { externalIdentity: input.phoneNumberId }
+            ? {
+                externalIdentity: input.phoneNumberId,
+                ...optionalWebhookUrl(deps.publicOrigin, input.connectionId),
+              }
             : input.provider === "imessage"
               ? {
                   externalIdentity:
@@ -2346,18 +2496,179 @@ const reconnectChannel = (ctx: ChannelRuntimeContext, botId: BotId, provider: Li
     }),
   );
 
+const handleWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request: Request) =>
+  Effect.suspend(() => {
+    const webhook = ctx.runtimes.get(runtimeKey(botId, "whatsapp"))?.webhook;
+    return webhook ? webhook(request) : Effect.succeed(new Response("Not Found", { status: 404 }));
+  }).pipe(
+    Effect.catchCause(() =>
+      Effect.succeed(new Response("Webhook processing failed", { status: 500 })),
+    ),
+  );
+
+// Meta's message webhooks are a few kilobytes; media arrives by reference, not inline.
+const MAX_WHATSAPP_WEBHOOK_BYTES = 1024 * 1024;
+const WEBHOOK_TOO_LARGE = Symbol("webhook-too-large");
+
+/** Reads a webhook body without buffering more than the cap. */
+const readBoundedWebhookBody = async (
+  request: Request,
+): Promise<Buffer | typeof WEBHOOK_TOO_LARGE> => {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_WHATSAPP_WEBHOOK_BYTES) return WEBHOOK_TOO_LARGE;
+  const reader = request.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_WHATSAPP_WEBHOOK_BYTES) {
+      void reader.cancel().catch(() => undefined);
+      return WEBHOOK_TOO_LARGE;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+};
+
+const parseWebhookJson = (body: Buffer): unknown => {
+  try {
+    return JSON.parse(body.toString("utf8")) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+/** Hands a webhook to the bot's transport only when its messages are for the saved phone number. */
+const handlePhoneScopedWhatsAppWebhook = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  secret: StoredChannelSecret | null,
+  request: Request,
+): Effect.Effect<Response> => {
+  if (!secret || secret.provider !== "whatsapp")
+    return Effect.succeed(new Response("Not Found", { status: 404 }));
+  if (request.method !== "POST") return handleWhatsAppWebhook(ctx, botId, request);
+  return Effect.promise(() => readBoundedWebhookBody(request)).pipe(
+    Effect.flatMap((body) => {
+      if (body === WEBHOOK_TOO_LARGE) {
+        return Effect.succeed(new Response("Payload Too Large", { status: 413 }));
+      }
+      const scoped = scopeWhatsAppWebhookToPhone(
+        body,
+        request.headers,
+        secret.appSecret,
+        secret.phoneNumberId,
+      );
+      return scoped === null
+        ? Effect.succeed(new Response("Not Found", { status: 404 }))
+        : handleWhatsAppWebhook(
+            ctx,
+            botId,
+            new Request(request.url, {
+              method: request.method,
+              headers: scoped.headers,
+              body: scoped.body,
+            }),
+          );
+    }),
+  );
+};
+
+/** Serves the older bot-addressed webhook URL with the same phone check as connection URLs. */
+const handleBotWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request: Request) =>
+  ctx.deps.readModel.pipe(
+    Effect.map((model) =>
+      model.bots
+        .find((bot) => bot.id === botId && bot.archivedAt === null)
+        ?.channelBindings?.find((binding) => binding.provider === "whatsapp"),
+    ),
+    Effect.flatMap((binding) =>
+      binding?.connectionId
+        ? loadConnectionSecret(ctx, binding.connectionId)
+        : loadSecret(ctx, botId, "whatsapp"),
+    ),
+    Effect.flatMap((secret) => handlePhoneScopedWhatsAppWebhook(ctx, botId, secret, request)),
+    Effect.catchCause(() => Effect.succeed(new Response("Not Found", { status: 404 }))),
+  );
+
+const record = (value: unknown): Readonly<Record<string, unknown>> | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
+
+const whatsAppChangePhone = (change: unknown): unknown =>
+  record(record(record(change)?.value)?.metadata)?.phone_number_id;
+
+const whatsAppSignature = (body: Buffer, appSecret: string) =>
+  `sha256=${NodeCrypto.createHmac("sha256", appSecret).update(body).digest("hex")}`;
+
+/**
+ * Keeps a webhook batch to the saved phone number. Meta can batch changes for
+ * several numbers on one app, so changes for other numbers are dropped and the
+ * trimmed body is signed again for the transport. Returns null when nothing in
+ * a signed batch belongs to this number. An unsigned or badly signed body is
+ * passed through untouched so the transport rejects it.
+ */
+const scopeWhatsAppWebhookToPhone = (
+  body: Buffer,
+  headers: Headers,
+  appSecret: string,
+  phoneNumberId: string,
+): { readonly body: Buffer; readonly headers: Headers } | null => {
+  const payload = record(parseWebhookJson(body));
+  const entries = payload?.entry;
+  if (!payload || !Array.isArray(entries)) return { body, headers };
+  const otherPhone = (change: unknown) => {
+    const phone = whatsAppChangePhone(change);
+    return phone !== undefined && phone !== phoneNumberId;
+  };
+  const hasOtherPhone = entries.some((entry: unknown) => {
+    const changes = record(entry)?.changes;
+    return Array.isArray(changes) && changes.some(otherPhone);
+  });
+  if (!hasOtherPhone) return { body, headers };
+  const presented = headers.get("x-hub-signature-256") ?? "";
+  const expected = whatsAppSignature(body, appSecret);
+  if (
+    presented.length !== expected.length ||
+    !NodeCrypto.timingSafeEqual(Buffer.from(presented), Buffer.from(expected))
+  ) {
+    return { body, headers };
+  }
+  const scopedEntries = entries.flatMap((entry: unknown) => {
+    const current = record(entry);
+    const changes = current?.changes;
+    if (!current || !Array.isArray(changes)) return [entry];
+    const kept = changes.filter((change: unknown) => !otherPhone(change));
+    return kept.length > 0 ? [{ ...current, changes: kept }] : [];
+  });
+  if (scopedEntries.length === 0) return null;
+  const scopedBody = Buffer.from(JSON.stringify({ ...payload, entry: scopedEntries }), "utf8");
+  const scopedHeaders = new Headers(headers);
+  scopedHeaders.set("x-hub-signature-256", whatsAppSignature(scopedBody, appSecret));
+  scopedHeaders.delete("content-length");
+  return { body: scopedBody, headers: scopedHeaders };
+};
+
 const restoreConnectedChannels = (
   ctx: ChannelRuntimeContext,
 ): Effect.Effect<ReadonlyArray<ChannelRestoreFailure>, ChannelOperationError> =>
   Effect.gen(function* () {
     const deps = ctx.deps;
+    yield* syncWhatsAppWebhookUrls(ctx).pipe(
+      Effect.catchCause(() => Effect.logWarning("Could not refresh WhatsApp webhook URLs.")),
+    );
     const model = yield* deps.readModel;
     const candidates = model.bots.flatMap((bot) =>
       bot.archivedAt === null
         ? (bot.channelBindings ?? []).flatMap((binding) =>
             binding.status === "connected" ||
             binding.status === "needs-reconnect" ||
-            binding.status === "connecting"
+            binding.status === "connecting" ||
+            binding.status === "not-live"
               ? [{ botId: bot.id, provider: binding.provider }]
               : [],
           )
@@ -2440,7 +2751,11 @@ const sendChannelMessage = (
         if (binding.projectId !== thread.projectId) {
           return yield* failWith("This reply belongs to a previous channel project assignment.");
         }
-        if (binding.status !== "connected") {
+        // A not-live WhatsApp binding can still hear messages through an unconfigured tunnel.
+        if (
+          binding.status !== "connected" &&
+          !(binding.status === "not-live" && origin.provider === "whatsapp")
+        ) {
           return yield* failWith("Reconnect this channel before sending a reply.");
         }
         const claim = yield* deps.deliveryStore.claim({
@@ -2626,6 +2941,11 @@ export interface ChannelRuntimeShape {
     state: "completed" | "failed" | "cancelled",
     requestMessageId?: MessageId,
   ) => Effect.Effect<void, ChannelOperationError>;
+  readonly markChannelTurnWaiting: (
+    threadId: ThreadId,
+    turnId: TurnId | undefined,
+    waiting: boolean,
+  ) => Effect.Effect<void, ChannelOperationError>;
   readonly resolveCompletedChannelReply: (
     threadId: ThreadId,
     turnId: TurnId,
@@ -2641,6 +2961,11 @@ export interface ChannelRuntimeShape {
     events: Stream.Stream<OrchestrationEvent, E, R>,
   ) => Effect.Effect<void, E, R>;
   readonly handleWhatsAppWebhook: (botId: BotId, request: Request) => Effect.Effect<Response>;
+  /** Routes a webhook for a saved WhatsApp connection to the bot it is attached to. */
+  readonly handleWhatsAppConnectionWebhook: (
+    connectionId: ChannelConnectionId,
+    request: Request,
+  ) => Effect.Effect<Response>;
   readonly channelBindingsForRuntime: (
     bindings: ReadonlyArray<ChannelBinding>,
   ) => ReadonlyArray<ChannelBinding>;
@@ -2686,6 +3011,8 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       sendChannelMessage: (input) => sendChannelMessage(ctx, input),
       finishChannelTurn: (threadId, turnId, state, requestMessageId) =>
         finishChannelTurn(ctx, threadId, turnId, state, requestMessageId),
+      markChannelTurnWaiting: (threadId, turnId, waiting) =>
+        markChannelTurnWaiting(ctx, threadId, turnId, waiting),
       resolveCompletedChannelReply: (threadId, turnId) =>
         resolveCompletedChannelReply(ctx, threadId, turnId),
       sendCompletedChannelReply: (threadId, turnId) =>
@@ -2697,15 +3024,32 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       stopChannelsForBot: (botId) => stopChannelsForBot(ctx, botId),
       clearChannelThreadStatuses: (threadId) => clearChannelThreadStatuses(ctx, threadId),
       stopArchivedBotChannels: (events) => stopArchivedBotChannels(ctx, events),
-      handleWhatsAppWebhook: (botId, request) =>
-        Effect.suspend(() => {
-          const webhook = ctx.runtimes.get(runtimeKey(botId, "whatsapp"))?.webhook;
-          return webhook
-            ? webhook(request)
-            : Effect.succeed(new Response("Not Found", { status: 404 }));
-        }).pipe(
-          Effect.catchCause(() =>
-            Effect.succeed(new Response("Webhook processing failed", { status: 500 })),
+      handleWhatsAppWebhook: (botId, request) => handleBotWhatsAppWebhook(ctx, botId, request),
+      handleWhatsAppConnectionWebhook: (connectionId, request) =>
+        ctx.deps.readModel.pipe(
+          Effect.map(
+            (model) =>
+              model.bots.find(
+                (bot) =>
+                  bot.archivedAt === null &&
+                  (bot.channelBindings ?? []).some(
+                    (binding) =>
+                      binding.provider === "whatsapp" && binding.connectionId === connectionId,
+                  ),
+              )?.id,
+          ),
+          Effect.catchCause(() => Effect.succeed(undefined)),
+          Effect.flatMap((botId) =>
+            botId
+              ? loadConnectionSecret(ctx, connectionId).pipe(
+                  Effect.flatMap((secret) =>
+                    handlePhoneScopedWhatsAppWebhook(ctx, botId, secret, request),
+                  ),
+                  Effect.catchCause(() =>
+                    Effect.succeed(new Response("Not Found", { status: 404 })),
+                  ),
+                )
+              : Effect.succeed(new Response("Not Found", { status: 404 })),
           ),
         ),
       channelBindingsForRuntime: (bindings) =>
@@ -2745,7 +3089,10 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
       const settings = yield* ServerSettingsService;
       const crypto = yield* Crypto.Crypto;
+      const serverConfig = yield* Effect.serviceOption(ServerConfig);
+      const publicOrigin = Option.getOrUndefined(serverConfig)?.publicOrigin;
       return ChannelRuntime.layerWith({
+        ...(publicOrigin ? { publicOrigin } : {}),
         engine,
         secretStore: secretStore.value,
         settings,
@@ -2766,6 +3113,22 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
 export const whatsAppWebhookRouteLayer = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime);
+    const connectionHandler = Effect.gen(function* () {
+      if (Option.isNone(channelRuntime))
+        return HttpServerResponse.text("Not Found", { status: 404 });
+      const params = yield* HttpRouter.schemaPathParams(
+        Schema.Struct({ connectionId: ChannelConnectionId }),
+      ).pipe(Effect.option);
+      if (Option.isNone(params)) return HttpServerResponse.text("Not Found", { status: 404 });
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.option);
+      if (Option.isNone(webRequest)) return HttpServerResponse.text("Bad Request", { status: 400 });
+      const response = yield* channelRuntime.value.handleWhatsAppConnectionWebhook(
+        params.value.connectionId,
+        webRequest.value,
+      );
+      return HttpServerResponse.fromWeb(response);
+    });
     const handler = Effect.gen(function* () {
       if (Option.isNone(channelRuntime))
         return HttpServerResponse.text("Not Found", { status: 404 });
@@ -2784,5 +3147,7 @@ export const whatsAppWebhookRouteLayer = HttpRouter.use((router) =>
     });
     yield* router.add("GET", WHATSAPP_WEBHOOK_PATH, handler);
     yield* router.add("POST", WHATSAPP_WEBHOOK_PATH, handler);
+    yield* router.add("GET", WHATSAPP_CONNECTION_WEBHOOK_PATH, connectionHandler);
+    yield* router.add("POST", WHATSAPP_CONNECTION_WEBHOOK_PATH, connectionHandler);
   }),
 );

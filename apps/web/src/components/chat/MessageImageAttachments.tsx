@@ -79,7 +79,11 @@ export function MessageImageAttachments(props: {
         )}
       </div>
       {expanded ? (
-        <ExpandedImageDialog preview={expanded} onClose={() => setExpanded(null)} />
+        <ExpandedImageDialog
+          preview={expanded}
+          environmentId={props.environmentId}
+          onClose={() => setExpanded(null)}
+        />
       ) : null}
     </>
   );

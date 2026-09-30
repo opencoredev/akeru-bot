@@ -60,6 +60,8 @@ import {
   AttachmentCreateUploadUrlInput,
   AttachmentCreateUploadUrlResult,
   AttachmentDeleteInput,
+  AttachmentNotFoundError,
+  AttachmentRevealInput,
   AttachmentUploadSigningKeyError,
 } from "./assets.ts";
 import {
@@ -295,6 +297,7 @@ export const WS_METHODS = {
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
+  shellRevealAttachment: "shell.revealAttachment",
 
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
@@ -928,6 +931,15 @@ export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
 });
 
+export const WsShellRevealAttachmentRpc = Rpc.make(WS_METHODS.shellRevealAttachment, {
+  payload: AttachmentRevealInput,
+  error: Schema.Union([
+    AttachmentNotFoundError,
+    ExternalLauncherError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
 export const WsFilesystemBrowseRpc = Rpc.make(WS_METHODS.filesystemBrowse, {
   payload: FilesystemBrowseInput,
   success: FilesystemBrowseResult,
@@ -1396,6 +1408,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
+  WsShellRevealAttachmentRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,
   WsAttachmentsCreateUploadUrlRpc,

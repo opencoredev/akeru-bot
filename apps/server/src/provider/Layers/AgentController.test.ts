@@ -42,10 +42,12 @@ import {
   type ProviderSession,
   type ServerSettings,
 } from "@t3tools/contracts";
+import type { AkeruUsageEntry } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -58,6 +60,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { assert, describe, expect, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../../config.ts";
@@ -70,6 +73,7 @@ import { BotMemoryStore } from "../../memory/BotMemory.ts";
 import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.ts";
 import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryRepository.ts";
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
+import type { McpCapability } from "../../mcp/McpInvocationContext.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
 import type { AkeruRuntimeToolId } from "../AkeruToolRuntime.ts";
@@ -86,10 +90,23 @@ import {
   toMcpServerConfigs,
   type AgentControllerLiveOptions,
 } from "./AgentController.ts";
+import {
+  ImageGenerationRuntime,
+  layerWith as imageGenerationRuntimeLayerWith,
+  type ImageSubscriptionAuth,
+} from "../../image-generation/ImageGenerationRuntime.ts";
+import {
+  GROK_IMAGE_CAPABILITIES,
+  makeChatGptImageAdapter,
+  type ImageProviderAdapter,
+} from "../../image-generation/adapters.ts";
+import { pngBytes } from "../../image-generation/testImages.ts";
+import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectionBotRepository } from "../../persistence/Services/ProjectionBots.ts";
+import { ProjectionThreadMessageRepository } from "../../persistence/Services/ProjectionThreadMessages.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { makeTestSubscriptionAuthService } from "../../subscription-auth/testUtils/subscriptionAuthService.ts";
 import * as OrchestrationEngine from "../../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   RoutineDraftDispatcher,
   RoutineDraftError,
@@ -478,7 +495,7 @@ function makeMemoryOnlyCredentialOptions() {
   const requests: Array<{
     readonly threadId: ThreadId;
     readonly providerInstanceId: ProviderInstanceId;
-    readonly capabilities?: ReadonlySet<"preview" | "memory">;
+    readonly capabilities?: ReadonlySet<McpCapability>;
   }> = [];
   const revoked: Array<ThreadId> = [];
   return {
@@ -657,7 +674,7 @@ function makeLayer(
     | "makeBotBrowser"
     | "botMemoryStore"
     | "webFetch"
-    | "imageFetch"
+    | "generateImage"
   >,
   delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"],
   settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
@@ -713,7 +730,7 @@ function provideController<A, E>(
     | "makeBotBrowser"
     | "botMemoryStore"
     | "webFetch"
-    | "imageFetch"
+    | "generateImage"
   >,
   settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
   settingsLayer?: Layer.Layer<ServerSettingsService>,
@@ -1009,6 +1026,114 @@ describe("provider access health", () => {
     },
   );
 });
+
+/** An image runtime over fake adapters for one running chat, plus the commands and usage it records. */
+function makeImageRuntimeTestLayer(input: {
+  readonly baseDir: string;
+  readonly adapters: Readonly<Record<"chatgpt" | "grok", ImageProviderAdapter>>;
+  readonly connected: ReadonlyArray<"openai-codex" | "xai">;
+  readonly settings: { readonly chatgptEnabled?: boolean; readonly grokEnabled?: boolean };
+  readonly botProvider: "chatgpt" | "grok" | null;
+  readonly requestTimeout?: Duration.Input;
+}) {
+  const dispatched: OrchestrationCommand[] = [];
+  const imageUsage: Array<unknown> = [];
+  const subscriptionAuth: ImageSubscriptionAuth = {
+    statuses: () =>
+      input.connected.map((provider) => ({
+        provider,
+        connected: true,
+        health: "healthy" as const,
+        reconnectAction: "",
+        healthTest: { status: "not-run" as const },
+        dependentBots: [],
+        dependentRoutines: [],
+      })),
+    recordImageGenerationSuccess: () => undefined,
+    recordImageRequestFailure: () => undefined,
+  };
+  const layer = imageGenerationRuntimeLayerWith({
+    adapters: input.adapters,
+    subscriptionAuth,
+    ...(input.requestTimeout ? { requestTimeout: input.requestTimeout } : {}),
+  }).pipe(
+    Layer.provideMerge(
+      Layer.succeed(
+        OrchestrationEngine.OrchestrationEngineService,
+        OrchestrationEngine.OrchestrationEngineService.of({
+          readEvents: () => Stream.empty,
+          readThreadEvents: () => Stream.empty,
+          getThreadReplayStats: () => Effect.die("unused"),
+          subscribeDomainEvents: Effect.succeed(Stream.empty),
+          latestSequence: Effect.succeed(0),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              dispatched.push(command);
+              return { sequence: dispatched.length };
+            }),
+          streamDomainEvents: Stream.empty,
+        }),
+      ),
+    ),
+    Layer.provideMerge(
+      Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getThreadShellById: () =>
+          Effect.succeed(
+            Option.some({
+              latestTurn: {
+                state: "running",
+                turnId: TurnId.make("turn-image"),
+                respondingBotId: BotId.make("bot-image"),
+                requestedAt: "2026-01-01T00:00:00.000Z",
+                startedAt: null,
+                completedAt: null,
+                assistantMessageId: null,
+              },
+              respondingBotId: BotId.make("bot-image"),
+              botId: BotId.make("bot-image"),
+            }),
+          ),
+      } as never),
+    ),
+    Layer.provideMerge(
+      Layer.succeed(ProjectionBotRepository, {
+        getById: () =>
+          Effect.succeed(
+            Option.some({ id: BotId.make("bot-image"), imageProvider: input.botProvider }),
+          ),
+      } as never),
+    ),
+    Layer.provideMerge(
+      Layer.succeed(ProjectionThreadMessageRepository, {
+        listByThreadId: () => Effect.succeed([]),
+      } as never),
+    ),
+    Layer.provideMerge(serverSettingsLayerTest({ imageGeneration: input.settings })),
+    Layer.provideMerge(
+      Layer.succeed(
+        BotUsageLedger,
+        BotUsageLedger.of({
+          ...makeUsageLedger().service,
+          recordMeasurement: (measurement) =>
+            Effect.sync(() => {
+              imageUsage.push(measurement);
+              return {
+                ...measurement,
+                state: "reported",
+                reservedTokens: 0,
+                unavailableReason: null,
+                settledAt: measurement.createdAt,
+              } as AkeruUsageEntry;
+            }),
+        }),
+      ),
+    ),
+    Layer.provideMerge(Layer.succeed(SqlClient.SqlClient, {} as never)),
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), input.baseDir)),
+    Layer.provideMerge(NodeServices.layer),
+  );
+  return { layer, dispatched, imageUsage };
+}
 
 describe("AgentControllerLive", () => {
   for (const provider of [
@@ -1438,17 +1563,16 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-tools-"));
-    const secretsDir = NodePath.join(baseDir, "userdata", "secrets");
-    NodeFS.mkdirSync(secretsDir, { recursive: true });
-    NodeFS.writeFileSync(
-      NodePath.join(secretsDir, "subscription-auth.json"),
-      JSON.stringify({ "openai-codex": { type: "api-key", access: "openai-key" } }),
-    );
     const page = NodeHttp.createServer((_request, response) => response.end("catalog page"));
-    const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString(
-      "base64",
+    const imageResult = {
+      status: "needs-consent",
+      provider: "grok",
+      message: "ask first",
+      attempts: [],
+    };
+    const generateImage = vi.fn((_threadId: ThreadId, _input: unknown) =>
+      Effect.succeed(imageResult),
     );
-    const imageFetch = vi.fn(async () => Response.json({ data: [{ b64_json: pngBase64 }] }));
     const dispatched: OrchestrationCommand[] = [];
     const docsServer: McpServer = {
       id: McpServerId.make("docs"),
@@ -1529,7 +1653,6 @@ describe("AgentControllerLive", () => {
             "WebSearch",
             "WebFetch",
             "GenerateImage",
-            "generate_image",
             "AddMcpServer",
             "UninstallMcpServer",
             "RemoveMcpAccount",
@@ -1553,17 +1676,9 @@ describe("AgentControllerLive", () => {
           yield* run("WebFetch", "fetch", { url: `http://catalog.example:${port}/` }),
         ).toMatchObject({ status: 200, text: "catalog page", truncated: false });
 
-        for (const toolId of ["GenerateImage", "generate_image"] as const) {
-          const image = (yield* run(toolId, `image-${toolId}`, { prompt: "a fox" })) as {
-            readonly path: string;
-          };
-          expect(image).toMatchObject({ provider: "chatgpt", mimeType: "image/png" });
-          expect(NodeFS.readFileSync(image.path).toString("base64")).toBe(pngBase64);
-        }
-        expect(imageFetch).toHaveBeenCalledWith(
-          "https://api.openai.com/v1/images/generations",
-          expect.objectContaining({ method: "POST" }),
-        );
+        const imageRequest = { operation: "generate", prompt: "a fox" } as const;
+        expect(yield* run("GenerateImage", "image", imageRequest)).toEqual(imageResult);
+        expect(generateImage).toHaveBeenCalledExactlyOnceWith(codexThreadId, imageRequest);
 
         expect(
           yield* run("SetMcpInstructions", "instructions", {
@@ -1715,10 +1830,240 @@ describe("AgentControllerLive", () => {
           lookup: async () => [{ address: "127.0.0.1", family: 4 }],
           allowAddress: (address) => address === "127.0.0.1",
         },
-        imageFetch,
+        generateImage,
       },
       { imageGeneration: { chatgptEnabled: true } },
     );
+  });
+
+  it.effect("routes the Mastra GenerateImage catalog tool through the image runtime", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-"));
+    const grokCalls: Array<unknown> = [];
+    let grokGate: (() => void) | undefined;
+    const grokAdapter: ImageProviderAdapter = {
+      provider: "grok",
+      capabilities: GROK_IMAGE_CAPABILITIES,
+      run: (request, signal) => {
+        grokCalls.push(request);
+        if (!grokGate) {
+          return Promise.resolve({
+            images: [pngBytes(32, 32)],
+            model: "grok-image-model",
+          });
+        }
+        return new Promise((resolve, reject) => {
+          grokGate!();
+          signal.addEventListener("abort", () => {
+            reject(signal.reason ?? new Error("aborted"));
+          });
+        });
+      },
+    };
+    const {
+      layer: runtimeLayer,
+      dispatched,
+      imageUsage,
+    } = makeImageRuntimeTestLayer({
+      baseDir,
+      adapters: { chatgpt: grokAdapter, grok: grokAdapter },
+      connected: ["xai"],
+      settings: { grokEnabled: true },
+      botProvider: "grok",
+    });
+
+    return provideController(
+      Effect.gen(function* () {
+        const imageRuntime = yield* ImageGenerationRuntime;
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toContain(
+          "GenerateImage",
+        );
+        expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).not.toContain(
+          "generate_image",
+        );
+        const input = { operation: "generate", prompt: "a fox" } as const;
+        const execution = {
+          threadId: String(codexThreadId),
+          toolId: "GenerateImage" as const,
+          toolCallId: "image-catalog",
+          input,
+        };
+        runtime.grantApproval(execution);
+        const result = yield* Effect.promise(() =>
+          Promise.resolve(runtime.execute({ ...execution, approvalMode: "require-grant" })),
+        );
+        expect(result).toMatchObject({ status: "completed", provider: "grok" });
+        expect(grokCalls).toHaveLength(1);
+        const delta = dispatched.find(
+          (command) => command.type === "thread.message.assistant.delta",
+        ) as { attachments?: unknown[] } | undefined;
+        expect(delta?.attachments).toHaveLength(1);
+        expect(
+          dispatched.filter((command) => command.type === "thread.message.assistant.complete"),
+        ).toHaveLength(1);
+        expect(imageUsage).toHaveLength(1);
+
+        // Interrupting the Mastra turn cancels an in-flight image request.
+        const pending = yield* Effect.forkChild(imageRuntime.generate(codexThreadId, input));
+        const gate = Deferred.makeUnsafe<string>();
+        grokGate = () => Deferred.doneUnsafe(gate, Effect.succeed("release"));
+        yield* Deferred.await(gate);
+        expect(grokCalls).toHaveLength(2);
+        yield* controller.interruptTurn({ threadId: codexThreadId });
+        const cancelledExit = yield* Fiber.await(pending);
+        expect(
+          cancelledExit._tag === "Success" ? cancelledExit.value : cancelledExit,
+        ).toMatchObject({ status: "failed", kind: "cancelled" });
+      }).pipe(Effect.provide(runtimeLayer)),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      baseDir,
+      undefined,
+      undefined,
+      { imageGeneration: { grokEnabled: true } },
+    );
+  });
+
+  it.effect("falls back to the next image provider when a Mastra image attempt times out", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const baseDir = NodeFS.mkdtempSync(
+      NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-timeout-"),
+    );
+    const requestTimeout = Duration.millis(50);
+    const chatgptStarted = Deferred.makeUnsafe<void>();
+    let chatgptAborted = false;
+    const grokCalls: Array<unknown> = [];
+    const chatgptAdapter: ImageProviderAdapter = {
+      provider: "chatgpt",
+      capabilities: GROK_IMAGE_CAPABILITIES,
+      run: (_request, signal) =>
+        new Promise((_resolve, reject) => {
+          Deferred.doneUnsafe(chatgptStarted, Effect.void);
+          signal.addEventListener("abort", () => {
+            chatgptAborted = true;
+            reject(signal.reason ?? new Error("aborted"));
+          });
+        }),
+    };
+    const grokAdapter: ImageProviderAdapter = {
+      provider: "grok",
+      capabilities: GROK_IMAGE_CAPABILITIES,
+      run: (request) => {
+        grokCalls.push(request);
+        return Promise.resolve({ images: [pngBytes(32, 32)], model: "grok-image-model" });
+      },
+    };
+    const settings = { chatgptEnabled: true, grokEnabled: true };
+    const { layer: runtimeLayer, dispatched } = makeImageRuntimeTestLayer({
+      baseDir,
+      adapters: { chatgpt: chatgptAdapter, grok: grokAdapter },
+      connected: ["openai-codex", "xai"],
+      settings,
+      botProvider: "chatgpt",
+      requestTimeout,
+    });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+        const runtime = mastra.harnessOptions[0]?.toolRuntime;
+        assert.isDefined(runtime);
+        const execution = {
+          threadId: String(codexThreadId),
+          toolId: "GenerateImage" as const,
+          toolCallId: "image-catalog-timeout",
+          input: { operation: "generate", prompt: "a fox" },
+        };
+        runtime.grantApproval(execution);
+        const pending = yield* Effect.forkChild(
+          Effect.promise(() =>
+            Promise.resolve(runtime.execute({ ...execution, approvalMode: "require-grant" })),
+          ),
+        );
+        yield* Deferred.await(chatgptStarted);
+        yield* TestClock.adjust(requestTimeout);
+        const result = yield* Fiber.join(pending);
+
+        expect(chatgptAborted).toBe(true);
+        expect(grokCalls).toHaveLength(1);
+        expect(result).toMatchObject({
+          status: "completed",
+          provider: "grok",
+          attempts: [
+            { provider: "chatgpt", outcome: "timeout" },
+            { provider: "grok", outcome: "completed" },
+          ],
+        });
+        expect(
+          dispatched.filter((command) => command.type === "thread.message.assistant.complete"),
+        ).toHaveLength(1);
+      }).pipe(Effect.provide(runtimeLayer)),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      baseDir,
+      undefined,
+      undefined,
+      { imageGeneration: settings },
+    );
+  });
+
+  it.effect("refuses an api-key openai-codex credential for ChatGPT images", () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-image-apikey-"));
+    const secretsDir = NodePath.join(baseDir, "userdata", "secrets");
+    NodeFS.mkdirSync(secretsDir, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(secretsDir, "subscription-auth.json"),
+      JSON.stringify({ "openai-codex": { type: "api-key", access: "openai-key" } }),
+    );
+    return Effect.gen(function* () {
+      const subscriptionAuth = yield* Effect.promise(() =>
+        makeTestSubscriptionAuthService(NodePath.join(secretsDir, "subscription-auth.json")),
+      );
+      const adapter = makeChatGptImageAdapter({ subscriptionAuth });
+      const run = adapter.run(
+        {
+          operation: "generate",
+          prompt: "a fox",
+          inputImages: [],
+          aspectRatio: undefined,
+          quality: "standard",
+          count: 1,
+        },
+        AbortSignal.timeout(5_000),
+      );
+      const failure = yield* Effect.promise(() =>
+        run.then(
+          () => {
+            throw new Error("expected failure");
+          },
+          (cause: unknown) => cause,
+        ),
+      );
+      expect(String((failure as Error).message)).toContain("ChatGPT account sign-in");
+    }).pipe(Effect.provide(NodeServices.layer));
   });
 
   it.effect("keeps group memory tools bound to the admitted responding bot", () => {
@@ -2512,6 +2857,41 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("grants legacy sessions the image tool when an image provider is enabled", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    const credentials = makeMemoryOnlyCredentialOptions();
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const settings = yield* ServerSettingsService;
+        yield* settings.updateSettings({ imageGeneration: { chatgptEnabled: true } });
+        yield* controller.resolveEngine({
+          threadId: claudeThreadId,
+          engine: { provider: "opencode", model: "anthropic/claude-sonnet-4-5" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(claudeThreadId, {
+          threadId: claudeThreadId,
+          provider: ProviderDriverKind.make("opencode"),
+          providerInstanceId: openCodeInstanceId,
+          cwd: process.cwd(),
+          runtimeMode: "approval-required",
+        });
+        expect(credentials.requests.at(-1)?.capabilities?.has("image")).toBe(true);
+      }),
+      bridge.service,
+      mastra.factory,
+      undefined,
+      undefined,
+      undefined,
+      credentials,
+    );
+  });
+
   it.effect(
     "denies the legacy MCP memory tool while Memory is off and restores it on re-enable",
     () => {
@@ -3064,6 +3444,46 @@ describe("AgentControllerLive", () => {
       mastra.factory,
     );
   });
+
+  it.effect(
+    "hides the image tool on a reused Mastra session after image providers turn off",
+    () => {
+      const bridge = makeBridge();
+      const mastra = makeMastraHarness();
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+          const settings = yield* ServerSettingsService;
+          yield* resolveCodex(controller);
+          const input = {
+            threadId: codexThreadId,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId: codexInstanceId,
+            modelSelection: codexSelection,
+            runtimeMode: "full-access" as const,
+          };
+          yield* controller.startSession(codexThreadId, input);
+          const runtime = mastra.harnessOptions[0]?.toolRuntime;
+          assert.isDefined(runtime);
+          const toolIds = () =>
+            runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id);
+          expect(toolIds()).toContain("GenerateImage");
+
+          yield* settings.updateSettings({ imageGeneration: { grokEnabled: false } });
+          yield* controller.startSession(codexThreadId, input);
+          expect(mastra.createSession).toHaveBeenCalledOnce();
+          expect(toolIds()).not.toContain("GenerateImage");
+        }),
+        bridge.service,
+        mastra.factory,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { imageGeneration: { grokEnabled: true } },
+      );
+    },
+  );
 
   it.effect("clears a stale bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
@@ -3796,13 +4216,13 @@ describe("AgentControllerLive", () => {
       usage.service,
     ).pipe(
       Effect.provideService(
-        ProjectionSnapshotQuery,
-        ProjectionSnapshotQuery.of({
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
           getThreadRuntimeContext: () => Effect.succeed(Option.some({ botId })),
           getBotById: () => Effect.succeed(Option.none()),
           getGroupById: () => Effect.succeed(Option.none()),
           listThreadDelegations: () => Effect.succeed([]),
-        } as unknown as ProjectionSnapshotQuery["Service"]),
+        } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
       ),
     );
   });
@@ -5086,6 +5506,194 @@ describe("AgentControllerLive", () => {
           toolCallId: "tool-input-1",
           resumeData: "Continue",
         });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps a turn waiting while another suspended question is open", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+        for (const toolCallId of ["question-a", "question-b"]) {
+          mastra.emit({
+            type: "tool_suspended",
+            toolCallId,
+            toolName: "ask_user",
+            args: {},
+            suspendPayload: {},
+          } as AgentControllerEvent);
+        }
+        mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        const latestState = () =>
+          events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+
+        yield* controller.respondToUserInput({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("question-a"),
+          answers: { "question-a": "First" },
+        });
+        yield* Effect.yieldNow;
+        expect(latestState()).toBe("waiting");
+
+        yield* controller.respondToUserInput({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("question-b"),
+          answers: { "question-b": "Second" },
+        });
+        yield* Effect.yieldNow;
+        expect(latestState()).toBe("running");
+        yield* Fiber.interrupt(collector);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("keeps a question open when resuming its answer fails", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+        for (const toolCallId of ["question-a", "question-b"]) {
+          mastra.emit({
+            type: "tool_suspended",
+            toolCallId,
+            toolName: "ask_user",
+            args: {},
+            suspendPayload: {},
+          } as AgentControllerEvent);
+        }
+        mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        const latestState = () =>
+          events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+
+        vi.mocked(mastra.session.respondToToolSuspension).mockRejectedValueOnce(
+          new Error("connection lost"),
+        );
+        const failedExit = yield* controller
+          .respondToUserInput({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("question-a"),
+            answers: { "question-a": "First" },
+          })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(failedExit));
+        expect(failedExit).toMatchObject({
+          cause: { reasons: [{ error: { retryable: true } }] },
+        });
+
+        yield* controller.respondToUserInput({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("question-b"),
+          answers: { "question-b": "Second" },
+        });
+        yield* Effect.yieldNow;
+        expect(latestState()).toBe("waiting");
+        yield* Fiber.interrupt(collector);
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
+  it.effect("does not strand the turn on a failed answer to an unknown question", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        const events: ProviderRuntimeEvent[] = [];
+        const collector = yield* controller.streamEvents.pipe(
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          cwd: process.cwd(),
+          modelSelection: codexSelection,
+          runtimeMode: "approval-required",
+        });
+        yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+        for (const toolCallId of ["question-b"]) {
+          mastra.emit({
+            type: "tool_suspended",
+            toolCallId,
+            toolName: "ask_user",
+            args: {},
+            suspendPayload: {},
+          } as AgentControllerEvent);
+        }
+        mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
+        mastra.finishSend();
+        yield* Effect.yieldNow;
+        const latestState = () =>
+          events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+
+        vi.mocked(mastra.session.respondToToolSuspension).mockRejectedValueOnce(
+          new Error("connection lost"),
+        );
+        const failedExit = yield* controller
+          .respondToUserInput({
+            threadId: codexThreadId,
+            requestId: ApprovalRequestId.make("question-stale"),
+            answers: { "question-stale": "First" },
+          })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(failedExit));
+        expect(failedExit).not.toMatchObject({
+          cause: { reasons: [{ error: { retryable: true } }] },
+        });
+
+        yield* controller.respondToUserInput({
+          threadId: codexThreadId,
+          requestId: ApprovalRequestId.make("question-b"),
+          answers: { "question-b": "Second" },
+        });
+        yield* Effect.yieldNow;
+        expect(latestState()).toBe("running");
+        yield* Fiber.interrupt(collector);
       }),
       bridge.service,
       mastra.factory,

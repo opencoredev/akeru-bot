@@ -88,6 +88,13 @@ interface BrowserAttribution {
 
 const T3_CODE_PREVIEW_MCP_SERVER_NAME = "t3-code";
 const T3_CODE_PREVIEW_TOOL_PREFIX = `${T3_CODE_PREVIEW_MCP_SERVER_NAME}_`;
+/**
+ * Mastra sessions reach image generation through the GenerateImage catalog
+ * tool on the runtime, not the shared `/mcp` server (their credential never
+ * carries the `image` capability). Hide the dead MCP copy so a bot sees
+ * exactly one image tool.
+ */
+const T3_CODE_MASTRA_HIDDEN_TOOLS = new Set([`${T3_CODE_PREVIEW_TOOL_PREFIX}generate_image`]);
 
 export class AkeruSessionResources {
   private readonly options: AkeruSessionResourcesOptions;
@@ -372,28 +379,30 @@ export class AkeruSessionResources {
       ...this.mcpManagers.get(threadId)?.getTools(),
     };
     return Object.fromEntries(
-      Object.entries(tools).map(([name, tool]) => {
-        const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
-          ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
-          : name;
-        const execute = Reflect.get(tool, "execute") as unknown;
-        if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
-          return [exposedName, tool];
-        }
-        return [
-          exposedName,
-          {
-            ...tool,
-            execute: async (...args: readonly unknown[]) => {
-              const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
-              return sanitizeCodexComputerUseResult(
-                await Reflect.apply(execute, tool, args),
-                temporaryDirectory ? { temporaryDirectory } : undefined,
-              );
+      Object.entries(tools)
+        .filter(([name]) => !T3_CODE_MASTRA_HIDDEN_TOOLS.has(name))
+        .map(([name, tool]) => {
+          const exposedName = name.startsWith(T3_CODE_PREVIEW_TOOL_PREFIX)
+            ? name.slice(T3_CODE_PREVIEW_TOOL_PREFIX.length)
+            : name;
+          const execute = Reflect.get(tool, "execute") as unknown;
+          if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
+            return [exposedName, tool];
+          }
+          return [
+            exposedName,
+            {
+              ...tool,
+              execute: async (...args: readonly unknown[]) => {
+                const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
+                return sanitizeCodexComputerUseResult(
+                  await Reflect.apply(execute, tool, args),
+                  temporaryDirectory ? { temporaryDirectory } : undefined,
+                );
+              },
             },
-          },
-        ];
-      }),
+          ];
+        }),
     );
   }
 

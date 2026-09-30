@@ -286,8 +286,8 @@ describe("bot prompt composer", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(2);
     expect(buildBotPromptAttachmentPreview(attachments, attachments[1]!.id)).toEqual({
       images: [
-        { src: "blob:first", name: "same-name.png" },
-        { src: "blob:second", name: "same-name.png" },
+        { id: attachments[0]!.id, src: "blob:first", name: "same-name.png" },
+        { id: attachments[1]!.id, src: "blob:second", name: "same-name.png" },
       ],
       index: 1,
     });
@@ -298,7 +298,7 @@ describe("bot prompt composer", () => {
         new Set([attachments[0]!.id]),
       ),
     ).toEqual({
-      images: [{ src: "blob:second", name: "same-name.png" }],
+      images: [{ id: attachments[1]!.id, src: "blob:second", name: "same-name.png" }],
       index: 0,
     });
 

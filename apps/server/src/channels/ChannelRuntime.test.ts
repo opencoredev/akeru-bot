@@ -42,6 +42,7 @@ import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
 import * as Cause from "effect/Cause";
 import * as FiberSet from "effect/FiberSet";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { it } from "@effect/vitest";
 import { afterEach, describe, expect, vi } from "vite-plus/test";
 
@@ -595,6 +596,21 @@ function makeMemorySecretStore() {
   return { store, values };
 }
 
+/** Answers Slack's apps.connections.open app-token probe with `ok`. */
+const slackProbeClient = (ok: boolean) =>
+  HttpClient.make((request) =>
+    Effect.succeed(
+      HttpClientResponse.fromWeb(
+        request,
+        request.url === "https://slack.com/api/apps.connections.open"
+          ? Response.json(
+              ok ? { ok, url: "wss://wss.slack.test/link" } : { ok, error: "invalid_auth" },
+            )
+          : Response.json({ ok: false, error: "unexpected_request" }, { status: 404 }),
+      ),
+    ),
+  );
+
 function makeHarness(input: {
   readonly bots?: ReadonlyArray<OrchestrationBot>;
   readonly threads?: ReadonlyArray<OrchestrationThread>;
@@ -672,6 +688,9 @@ function makeHarness(input: {
       Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
     nowIso: Effect.succeed(NOW),
     randomUuid: Effect.sync(() => `uuid-${commands.length}`),
+    // Accepts the Slack app-token probe, the only request the built-in transports send here.
+    httpClient: slackProbeClient(true),
+    publicOrigin: "https://akeru.example",
     ...(input.startTransport === null
       ? {}
       : {
@@ -911,6 +930,20 @@ describe("channel runtime", () => {
     }),
   );
 
+  it("asks to reconnect a not-live WhatsApp binding whose transport stopped", () => {
+    const binding: ChannelBinding = {
+      status: "not-live",
+      botId: BOT_ID,
+      provider: "whatsapp",
+      projectId: PROJECT_ID,
+      externalIdentity: null,
+      connectedAt: null,
+      sentMessageIds: [],
+    };
+    expect(channelBindingsWith([binding], () => false)[0]?.status).toBe("needs-reconnect");
+    expect(channelBindingsWith([binding], () => true)[0]?.status).toBe("not-live");
+  });
+
   it("keeps ChannelPostRejectedError typed and message-safe", () => {
     const error = new ChannelPostRejectedError({ message: "rejected" });
     expect(error._tag).toBe("ChannelPostRejectedError");
@@ -999,34 +1032,38 @@ describe("channel runtime", () => {
         const prefix = `${externalThreadId}:external-request`;
         expect(externalAdapters.reactions).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "completed");
-        expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:white_check_mark`);
+        expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:check`);
         const count = externalAdapters.reactions.length;
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "completed");
         expect(externalAdapters.reactions).toHaveLength(count);
         yield* clearChannelThreadStatuses(threadId);
-        expect(externalAdapters.reactions.slice(-3)).toEqual([
+        expect(externalAdapters.reactions.slice(-4)).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         yield* finishChannelTurn(harness.dependencies, threadId, turnId, "failed");
         expect(externalAdapters.reactions.at(-1)).toBe(`add:${prefix}:x`);
         yield* disconnectChannel(harness.dependencies, BOT_ID, provider);
-        expect(externalAdapters.reactions.slice(-3)).toEqual([
+        expect(externalAdapters.reactions.slice(-4)).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
         externalAdapters.reactions.length = 0;
         yield* reconnectChannel(harness.dependencies, BOT_ID, provider);
         expect(externalAdapters.reactions).toEqual([
           `remove:${prefix}:eyes`,
-          `remove:${prefix}:white_check_mark`,
+          `remove:${prefix}:check`,
           `remove:${prefix}:x`,
+          `remove:${prefix}:hourglass`,
         ]);
       }),
   );
@@ -1638,6 +1675,69 @@ describe("channel runtime", () => {
         externalMessageId: "wamid.1",
         externalSenderId: "15551234567",
       });
+    }),
+  );
+
+  it.effect("keeps the bot-addressed WhatsApp webhook to its own phone number", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({ startTransport: null });
+      yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+      const change = (phoneNumberId: string, messageId: string) => ({
+        field: "messages",
+        value: {
+          messaging_product: "whatsapp",
+          metadata: {
+            display_phone_number: "+15550002222",
+            phone_number_id: phoneNumberId,
+          },
+          contacts: [{ profile: { name: "Mallory" }, wa_id: "15557654321" }],
+          messages: [
+            {
+              from: "15557654321",
+              id: messageId,
+              timestamp: "1788220000",
+              text: { body: `Message ${messageId}` },
+              type: "text",
+            },
+          ],
+        },
+      });
+      const batch = (...changes: ReadonlyArray<ReturnType<typeof change>>) =>
+        JSON.stringify({
+          object: "whatsapp_business_account",
+          entry: [{ id: "business-id", changes }],
+        });
+
+      const otherLine = yield* handleWhatsAppWebhook(
+        BOT_ID,
+        signedWhatsAppRequest(batch(change("other-phone-number-id", "wamid.other-line"))),
+      );
+      const oversized = yield* handleWhatsAppWebhook(
+        BOT_ID,
+        signedWhatsAppRequest(" ".repeat(1024 * 1024 + 1)),
+      );
+
+      expect(otherLine.status).toBe(404);
+      expect(oversized.status).toBe(413);
+      expect(harness.commands.some((command) => command.type === "thread.turn.start")).toBe(false);
+
+      // A batch for two numbers still delivers the message for this bot's number.
+      const mixed = yield* handleWhatsAppWebhook(
+        BOT_ID,
+        signedWhatsAppRequest(
+          batch(
+            change("other-phone-number-id", "wamid.mixed-other"),
+            change("phone-number-id", "wamid.mixed-own"),
+          ),
+        ),
+      );
+      expect(mixed.status).toBe(200);
+      const turns = harness.commands.filter((command) => command.type === "thread.turn.start");
+      expect(
+        turns.map((turn) =>
+          turn.type === "thread.turn.start" ? turn.message.channelOrigin?.externalMessageId : null,
+        ),
+      ).toEqual(["wamid.mixed-own"]);
     }),
   );
 
@@ -2566,6 +2666,55 @@ describe("channel runtime", () => {
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
 
       expect(posts).toEqual([{ externalThreadId, text: "Approved answer" }]);
+    }),
+  );
+
+  it.effect("allows not-live WhatsApp replies but blocks other not-live channels", () =>
+    Effect.gen(function* () {
+      for (const provider of ["telegram", "whatsapp"] as const) {
+        const messageId = MessageId.make(`not-live-reply-${provider}`);
+        const threadId = ThreadId.make(`thread-not-live-${provider}`);
+        let posts = 0;
+        const harness = makeHarness({
+          threads: [
+            makeThread(threadId, BOT_ID, [
+              makeMessage(MessageId.make(`not-live-inbound-${provider}`), "user", "Question", {
+                provider,
+                externalThreadId: `${provider}:conversation`,
+              }),
+              makeMessage(messageId, "assistant", "Answer"),
+            ]),
+          ],
+          post: async () => void (posts += 1),
+        });
+        yield* connectChannel(
+          harness.dependencies,
+          provider === "telegram" ? telegramConnect(BOT_ID) : whatsappConnect(BOT_ID),
+        );
+        const update = harness.commands.findLast((command) => command.type === "bot.update");
+        if (!update) throw new Error("Expected a connected channel binding");
+        yield* harness.dependencies.engine.dispatch({
+          ...update,
+          commandId: CommandId.make(`mark-not-live-${provider}`),
+          channelBindings: update.channelBindings?.map((binding) => ({
+            ...binding,
+            status: "not-live" as const,
+          })),
+        });
+
+        const send = sendChannelMessage(harness.dependencies, {
+          botId: BOT_ID,
+          threadId,
+          messageId,
+        });
+        if (provider === "telegram") {
+          yield* expectFailureMessage(send, "Reconnect this channel before sending a reply.");
+          expect(posts).toBe(0);
+        } else {
+          yield* send;
+          expect(posts).toBe(1);
+        }
+      }
     }),
   );
 

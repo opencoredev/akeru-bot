@@ -151,6 +151,8 @@ interface ProviderHealthRecord {
   failureKind?: "request" | "revoked";
   /** Set while the post-login health check runs; shared across service instances. */
   healthCheckStartedAt?: string;
+  /** Image providers only: the last request that produced an image. */
+  lastGenerationAt?: string;
 }
 
 /** A post-login check older than this is treated as abandoned (for example, the server restarted). */
@@ -592,6 +594,20 @@ export class SubscriptionAuthService {
     failureKind: "request" | "revoked" = "request",
   ): void {
     this.recordHealthFailure(`image:${provider}`, message, at, failureKind);
+  }
+
+  /** A completed image generation, which also proves the provider healthy. */
+  recordImageGenerationSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+    this.recordHealthSuccess(`image:${provider}`, at);
+    this.health[`image:${provider}`] = {
+      ...this.health[`image:${provider}`],
+      lastGenerationAt: at,
+    };
+    this.saveHealth();
+  }
+
+  imageLastGenerationAt(provider: "chatgpt" | "grok"): string | undefined {
+    return this.health[`image:${provider}`]?.lastGenerationAt;
   }
 
   /** Image-provider request health, keyed separately from the chat driver. */

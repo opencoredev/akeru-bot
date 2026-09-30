@@ -105,7 +105,13 @@ export function BotMessageAttachments({
           );
         })}
       </div>
-      {preview ? <ExpandedImageDialog preview={preview} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <ExpandedImageDialog
+          preview={preview}
+          environmentId={environmentId}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
     </>
   );
 }

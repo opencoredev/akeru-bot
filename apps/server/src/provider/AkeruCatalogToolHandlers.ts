@@ -136,10 +136,7 @@ export interface AkeruCatalogBackendOptions {
     readonly domains?: readonly string[];
   }) => Promise<unknown>;
   readonly webFetch?: (input: { readonly url: string }) => Promise<unknown>;
-  readonly generateImage?: (input: {
-    readonly prompt: string;
-    readonly provider?: "chatgpt" | "grok";
-  }) => Promise<unknown>;
+  readonly generateImage?: (input: unknown) => Promise<unknown>;
   readonly addMcpServer?: (input: unknown) => Promise<unknown>;
   readonly uninstallMcpServer?: (serverId: string) => Promise<unknown>;
   readonly removeMcpAccount?: (serverId: string) => Promise<unknown>;
@@ -559,10 +556,7 @@ export function createAkeruCatalogToolHandlers(
         }
       : {}),
     ...(backends.generateImage
-      ? {
-          GenerateImage: async ({ input }) => backends.generateImage!(input as never),
-          generate_image: async ({ input }) => backends.generateImage!(input as never),
-        }
+      ? { GenerateImage: async ({ input }) => backends.generateImage!(input) }
       : {}),
     ...(backends.addMcpServer
       ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) }

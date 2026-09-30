@@ -986,6 +986,13 @@ export const englishCatalog = {
   "Choose an active group boss in the group sidebar.":
     "Choose an active group boss in the group sidebar.",
   "Close image preview": "Close image preview",
+  "Open image": "Open image",
+  "Save image": "Save image",
+  "Copy image": "Copy image",
+  "Image copied": "Image copied",
+  "Could not save the image": "Could not save the image",
+  "Could not copy the image": "Could not copy the image",
+  "Could not reveal the image": "Could not reveal the image",
   "Collapse (Esc)": "Collapse (Esc)",
   "Collapse {name} browser": "Collapse {name} browser",
   "Connect a provider in Settings > Providers so this group can reply.":

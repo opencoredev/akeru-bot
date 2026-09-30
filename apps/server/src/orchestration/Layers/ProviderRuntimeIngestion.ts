@@ -971,14 +971,22 @@ const make = Effect.gen(function* () {
       threadId: ThreadId;
       turnId: TurnId | undefined;
       requestMessageId?: MessageId;
-      state: "completed" | "failed" | "cancelled";
+      state: "completed" | "failed" | "cancelled" | "waiting" | "resumed";
     }) =>
       channelRuntime
-        ? channelRuntime
-            .finishChannelTurn(input.threadId, input.turnId, input.state, input.requestMessageId)
-            .pipe(
-              Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")),
-            )
+        ? (input.state === "waiting" || input.state === "resumed"
+            ? channelRuntime.markChannelTurnWaiting(
+                input.threadId,
+                input.turnId,
+                input.state === "waiting",
+              )
+            : channelRuntime.finishChannelTurn(
+                input.threadId,
+                input.turnId,
+                input.state,
+                input.requestMessageId,
+              )
+          ).pipe(Effect.catchCause(() => Effect.logWarning("failed to update channel turn status")))
         : Effect.void,
   );
   const automaticChannelReplyWorker = yield* makeDrainableWorker(
@@ -1003,6 +1011,14 @@ const make = Effect.gen(function* () {
   // Open requests per watched turn, so a duplicate or unmatched resolution cannot
   // resume a watchdog while another request still waits on the user.
   const silenceWaitingRequests = new Map<string, Set<string>>();
+  // Open approval and user-input requests per provider turn, so a channel's waiting
+  // reaction clears only when the last pending request resolves.
+  const channelWaitingRequests = new Map<string, { turnId: TurnId; requestIds: Set<string> }>();
+  const clearChannelWaitingRequests = (threadId: ThreadId) => {
+    for (const key of channelWaitingRequests.keys()) {
+      if (key.startsWith(`${threadId}:`)) channelWaitingRequests.delete(key);
+    }
+  };
   const silenceIncidentKey = (threadId: ThreadId, turnId: TurnId) =>
     `silence:${threadId}:${turnId}`;
   const stopSilenceWatchdog = (threadId: ThreadId, turnId: TurnId) => {
@@ -1927,6 +1943,62 @@ const make = Effect.gen(function* () {
       const activeTurnId = thread.session?.activeTurnId ?? null;
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
+      // Requests do not always carry a turn id; they then belong to the active turn.
+      const waitingTurnId = eventTurnId ?? activeTurnId ?? undefined;
+      if (
+        channelRuntime &&
+        waitingTurnId &&
+        !conflictsWithActiveTurn &&
+        (event.type === "request.opened" || event.type === "user-input.requested")
+      ) {
+        const waitingKey = providerTurnKey(thread.id, waitingTurnId);
+        const open = channelWaitingRequests.get(waitingKey) ?? {
+          turnId: waitingTurnId,
+          requestIds: new Set<string>(),
+        };
+        open.requestIds.add(event.requestId ?? event.eventId);
+        channelWaitingRequests.set(waitingKey, open);
+        if (open.requestIds.size === 1) {
+          yield* channelStatusWorker.enqueue({
+            threadId: thread.id,
+            turnId: waitingTurnId,
+            state: "waiting",
+          });
+        }
+      } else if (
+        channelRuntime &&
+        (event.type === "request.resolved" || event.type === "user-input.resolved")
+      ) {
+        // Resolutions do not always carry a turn id, so match the pending request instead.
+        const requestId = event.requestId;
+        for (const [waitingKey, open] of channelWaitingRequests) {
+          if (!waitingKey.startsWith(`${thread.id}:`)) continue;
+          if (eventTurnId && !sameId(open.turnId, eventTurnId)) continue;
+          if (requestId && !open.requestIds.has(requestId)) continue;
+          // Without a request id, one resolution answers one request, never all of them.
+          const resolved = requestId ?? open.requestIds.values().next().value;
+          if (resolved !== undefined) open.requestIds.delete(resolved);
+          if (open.requestIds.size > 0) continue;
+          channelWaitingRequests.delete(waitingKey);
+          yield* channelStatusWorker.enqueue({
+            threadId: thread.id,
+            turnId: open.turnId,
+            state: "resumed",
+          });
+        }
+      } else if (
+        (event.type === "turn.completed" || event.type === "turn.aborted") &&
+        eventTurnId
+      ) {
+        channelWaitingRequests.delete(providerTurnKey(thread.id, eventTurnId));
+      }
+      if (
+        event.type === "session.exited" ||
+        (event.type === "session.state.changed" &&
+          (event.payload.state === "error" || event.payload.state === "stopped"))
+      ) {
+        clearChannelWaitingRequests(thread.id);
+      }
       const needsPendingTurnStart =
         event.type === "session.exited" ||
         event.type === "session.started" ||
@@ -2625,9 +2697,13 @@ const make = Effect.gen(function* () {
           (event.type === "session.state.changed" &&
             (event.payload.state === "error" || event.payload.state === "stopped")))
       ) {
+        const terminalTurnId = eventTurnId ?? activeTurnId ?? undefined;
+        if (terminalTurnId) {
+          channelWaitingRequests.delete(providerTurnKey(thread.id, terminalTurnId));
+        }
         yield* channelStatusWorker.enqueue({
           threadId: thread.id,
-          turnId: eventTurnId ?? activeTurnId ?? undefined,
+          turnId: terminalTurnId,
           ...(activeTurnId === null && Option.isSome(pendingTurnStart)
             ? { requestMessageId: pendingTurnStart.value.messageId }
             : {}),
@@ -2669,6 +2745,7 @@ const make = Effect.gen(function* () {
       thread.session.status !== session.status
     )
       return;
+    clearChannelWaitingRequests(threadId);
     const request = thread.messages.findLast((message) => message.role === "user");
     if (!request?.channelOrigin) return;
     yield* channelStatusWorker.enqueue({

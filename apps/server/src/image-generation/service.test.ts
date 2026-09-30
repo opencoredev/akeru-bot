@@ -20,8 +20,6 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeImagePatch = Schema.decodeUnknownExit(ImageGenerationSettingsPatch);
 import {
-  generateImageWithProviders,
-  imageProviderCandidates,
   imageProviderStatuses,
   normalizeImageGenerationPatch,
   runImageProviderHealthTest,
@@ -43,6 +41,20 @@ function seedOAuth(authPath: string, provider: string) {
     refresh: `${provider}-refresh`,
     accountId: "chatgpt-test-account",
     expires: 0,
+  };
+  NodeFS.writeFileSync(authPath, JSON.stringify(existing));
+}
+
+function seedChatGptSignIn(authPath: string) {
+  const existing = NodeFS.existsSync(authPath)
+    ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
+    : {};
+  existing["openai-codex"] = {
+    type: "oauth",
+    access: "chatgpt-access",
+    refresh: "chatgpt-refresh",
+    expires: Date.now() + 3_600_000,
+    accountId: "acct-123",
   };
   NodeFS.writeFileSync(authPath, JSON.stringify(existing));
 }
@@ -80,7 +92,7 @@ describe("image provider rows", () => {
       connected: false,
       enabled: false,
       health: "missing",
-      operations: ["generate"],
+      operations: ["generate", "edit"],
       repairAction: "Connect ChatGPT subscription",
     });
     expect(chatgpt?.lastGenerationAt).toBeUndefined();
@@ -323,7 +335,7 @@ describe("imageGeneration settings schema", () => {
 });
 
 describe("image provider health test", () => {
-  it("keeps generation unverified after an account probe succeeds", async () => {
+  it("keeps image generation unverified after an account probe succeeds", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "xai");
     const service = await makeTestSubscriptionAuthService(authPath);
@@ -342,20 +354,23 @@ describe("image provider health test", () => {
     expect(grok?.healthTest?.status).toBe("passed");
   });
 
-  it("probes a ChatGPT sign-in on the ChatGPT backend", async () => {
+  it("records a failure and never reports healthy on a rejected request", async () => {
     const { authPath } = fixture();
-    NodeFS.writeFileSync(
-      authPath,
-      JSON.stringify({
-        "openai-codex": {
-          type: "oauth",
-          access: "chatgpt-access",
-          refresh: "chatgpt-refresh",
-          expires: Date.now() + 60_000,
-          accountId: "acct-123",
-        },
-      }),
+    seedChatGptSignIn(authPath);
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
+    await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
+    const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
+      (row) => row.provider === "chatgpt",
     );
+    expect(chatgpt?.health).toBe("revoked");
+    expect(chatgpt?.healthTest?.status).toBe("failed");
+    expect(chatgpt?.lastFailure?.message).toContain("401");
+  });
+
+  it("probes ChatGPT through the ChatGPT sign-in, not the OpenAI API", async () => {
+    const { authPath } = fixture();
+    seedChatGptSignIn(authPath);
     const service = await makeTestSubscriptionAuthService(authPath);
     const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
     await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
@@ -368,32 +383,45 @@ describe("image provider health test", () => {
         }),
       }),
     );
-    expect(rows(service, { ...baseSettings, chatgptEnabled: true })[0]?.health).toBe("detected");
-  });
-
-  it("records a failure and never reports healthy on a rejected request", async () => {
-    const { authPath } = fixture();
-    NodeFS.writeFileSync(
-      authPath,
-      JSON.stringify({
-        "openai-codex": {
-          type: "oauth",
-          access: "chatgpt-access",
-          refresh: "chatgpt-refresh",
-          expires: Date.now() + 60_000,
-          accountId: "acct-123",
-        },
-      }),
-    );
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
-    await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
-    expect(chatgpt?.health).toBe("revoked");
+    expect(chatgpt?.health).toBe("detected");
+  });
+
+  it("never probes ChatGPT with an OpenAI API key", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "openai-codex");
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
+    await runImageProviderHealthTest({ provider: "chatgpt", subscriptionAuth: service, fetchFn });
+    expect(fetchFn).not.toHaveBeenCalled();
+    const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
+      (row) => row.provider === "chatgpt",
+    );
+    expect(chatgpt?.health).toBe("missing");
     expect(chatgpt?.healthTest?.status).toBe("failed");
-    expect(chatgpt?.lastFailure?.message).toContain("401");
+    expect(chatgpt?.lastFailure?.message).toContain("API key is not used");
+  });
+
+  it("reports the last generation once an image is produced", async () => {
+    const { authPath } = fixture();
+    seedApiKey(authPath, "xai");
+    const service = await makeTestSubscriptionAuthService(authPath);
+    service.recordImageGenerationSuccess("grok", "2026-09-25T10:00:00.000Z");
+    const reloaded = await makeTestSubscriptionAuthService(authPath);
+    const grok = imageProviderStatuses({
+      settings: { ...baseSettings, grokEnabled: true },
+      subscriptionStatuses: reloaded.statuses(),
+      chatgptAccountConnected: reloaded.hasOpenAICodexAccount(),
+      requestHealth: (provider) => reloaded.imageRequestHealth(provider),
+      lastGenerationAt: (provider) => reloaded.imageLastGenerationAt(provider),
+    }).find((row) => row.provider === "grok");
+    expect(grok).toMatchObject({
+      health: "healthy",
+      lastGenerationAt: "2026-09-25T10:00:00.000Z",
+      operations: ["generate", "edit"],
+    });
   });
 
   it("keeps image request health separate from an account probe failure", async () => {
@@ -546,144 +574,5 @@ describe("image provider health test", () => {
     );
     expect(grok?.health).toBe("missing");
     expect(grok?.lastFailure?.message).toContain("subscription is connected");
-  });
-});
-
-const PNG_BASE64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
-
-describe("image generation", () => {
-  it("orders candidates by request, bot, default, then fallback and skips disabled providers", () => {
-    const settings = { ...baseSettings, chatgptEnabled: true, grokEnabled: true };
-    expect(imageProviderCandidates({ settings, botProvider: "grok" })).toEqual(["grok", "chatgpt"]);
-    expect(
-      imageProviderCandidates({ settings, requested: "chatgpt", botProvider: "grok" }),
-    ).toEqual(["chatgpt"]);
-    expect(
-      imageProviderCandidates({
-        settings: { ...settings, grokEnabled: false },
-        botProvider: "grok",
-      }),
-    ).toEqual(["chatgpt"]);
-    expect(() => imageProviderCandidates({ settings: baseSettings })).toThrow("No image provider");
-    expect(() =>
-      imageProviderCandidates({
-        settings: { ...baseSettings, chatgptEnabled: true },
-        requested: "grok",
-      }),
-    ).toThrow("turned off");
-  });
-
-  it("falls back to the next provider and records health for both attempts", async () => {
-    const { authPath } = fixture();
-    seedApiKey(authPath, "openai-codex");
-    seedApiKey(authPath, "xai");
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const fetchFn = vi.fn(async (url: string | URL) =>
-      String(url).includes("openai")
-        ? new Response("busy", { status: 503 })
-        : Response.json({ data: [{ b64_json: PNG_BASE64, revised_prompt: "a red fox" }] }),
-    );
-
-    const image = await generateImageWithProviders({
-      prompt: "a fox",
-      settings: { ...baseSettings, chatgptEnabled: true, grokEnabled: true },
-      subscriptionAuth: service,
-      fetchFn,
-    });
-
-    expect(image).toMatchObject({
-      provider: "grok",
-      model: "grok-imagine-image-2.0",
-      mimeType: "image/png",
-      revisedPrompt: "a red fox",
-    });
-    expect(fetchFn).toHaveBeenLastCalledWith(
-      "https://api.x.ai/v1/images/generations",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({ Authorization: "Bearer xai-key" }),
-      }),
-    );
-    expect(service.imageRequestHealth("chatgpt")?.health).not.toBe("healthy");
-    expect(service.imageRequestHealth("grok")?.health).toBe("healthy");
-  });
-
-  it("closes a rejected response before falling back", async () => {
-    const { authPath } = fixture();
-    seedApiKey(authPath, "openai-codex");
-    seedApiKey(authPath, "xai");
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const cancel = vi.fn();
-    const fetchFn = vi.fn(async (url: string | URL) =>
-      String(url).includes("openai")
-        ? new Response(new ReadableStream({ cancel }), { status: 503 })
-        : Response.json({ data: [{ b64_json: PNG_BASE64 }] }),
-    );
-
-    await generateImageWithProviders({
-      prompt: "a fox",
-      settings: { ...baseSettings, chatgptEnabled: true, grokEnabled: true },
-      subscriptionAuth: service,
-      fetchFn,
-    });
-
-    expect(cancel).toHaveBeenCalledOnce();
-  });
-
-  it("never sends a ChatGPT sign-in token to the OpenAI Images API", async () => {
-    const { authPath } = fixture();
-    seedOAuth(authPath, "openai-codex");
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const fetchFn = vi.fn(async () => Response.json({ data: [{ b64_json: PNG_BASE64 }] }));
-
-    await expect(
-      generateImageWithProviders({
-        prompt: "a fox",
-        settings: { ...baseSettings, chatgptEnabled: true },
-        subscriptionAuth: service,
-        fetchFn,
-      }),
-    ).rejects.toThrow("needs an OpenAI API key");
-
-    expect(fetchFn).not.toHaveBeenCalled();
-    const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
-      (row) => row.provider === "chatgpt",
-    );
-    expect(chatgpt?.health).not.toBe("revoked");
-  });
-
-  it("does not mark ChatGPT revoked when the Images API rejects the key", async () => {
-    const { authPath } = fixture();
-    seedApiKey(authPath, "openai-codex");
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const fetchFn = vi.fn(async () => new Response("no", { status: 401 }));
-
-    await expect(
-      generateImageWithProviders({
-        prompt: "a fox",
-        settings: { ...baseSettings, chatgptEnabled: true },
-        subscriptionAuth: service,
-        fetchFn,
-      }),
-    ).rejects.toThrow("needs an OpenAI API key");
-
-    expect(service.imageRequestHealth("chatgpt")?.health).not.toBe("revoked");
-  });
-
-  it("rejects a response that is not an image", async () => {
-    const { authPath } = fixture();
-    seedApiKey(authPath, "openai-codex");
-    const service = await makeTestSubscriptionAuthService(authPath);
-    const fetchFn = vi.fn(async () =>
-      Response.json({ data: [{ b64_json: Buffer.from("<html>").toString("base64") }] }),
-    );
-    await expect(
-      generateImageWithProviders({
-        prompt: "a fox",
-        settings: { ...baseSettings, chatgptEnabled: true },
-        subscriptionAuth: service,
-        fetchFn,
-      }),
-    ).rejects.toThrow("unrecognized image format");
   });
 });

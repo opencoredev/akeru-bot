@@ -87,6 +87,8 @@ export class ServerConfig extends Context.Service<
     readonly logWebSocketEvents: boolean;
     readonly tailscaleServeEnabled: boolean;
     readonly tailscaleServePort: number;
+    /** Public origin that forwards to this server, for provider webhooks. */
+    readonly publicOrigin?: string | undefined;
   }
 >()("akeru-bot/config/ServerConfig") {
   /** @deprecated Import and use `layerTest` from this module. */

@@ -71,11 +71,10 @@ WebSearch is advertised but reports `status: "unavailable"` with no results. The
 expose no native search call that Akeru can invoke, and Akeru has no search index of its own, so the
 tool says so and suggests WebFetch instead of inventing results.
 
-GenerateImage and its `generate_image` alias call `generateImageWithProviders` in the image
-generation service. It tries the requested provider, then the bot's image provider, the default, and
-the fallback order, using only providers turned on in Settings. Each attempt records success or
-failure in image provider health. Images are written under the environment's attachments directory in
-`generated-images/`, and the tool returns their path. Both tools need production approval.
+GenerateImage calls `runImageGenerationTool` in the image generation runtime, the same entry the
+`generate_image` MCP tool uses for legacy-bridge sessions. The tool is listed only when ChatGPT or
+Grok images are enabled in Settings. Images are saved as chat attachments and posted into the chat;
+the tool result carries artifact metadata only. GenerateImage needs production approval.
 
 SetMcpInstructions dispatches `mcp-server.instructions.set`. The guidance is stored on the MCP
 server record, is limited to 4,000 characters, and an empty string clears it. Mastra appends every

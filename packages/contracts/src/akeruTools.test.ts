@@ -18,7 +18,6 @@ describe("Akeru tool contracts", () => {
       "WebSearch",
       "WebFetch",
       "GenerateImage",
-      "generate_image",
       "AddMcpServer",
       "UninstallMcpServer",
       "RemoveMcpAccount",
@@ -29,7 +28,9 @@ describe("Akeru tool contracts", () => {
     }
     expect(() => decodeAkeruToolInput("WebSearch", { query: "" })).toThrow();
     expect(() => decodeAkeruToolInput("WebFetch", { url: "file:///secret" })).toThrow();
-    expect(() => decodeAkeruToolInput("GenerateImage", { prompt: "" })).toThrow();
+    expect(() =>
+      decodeAkeruToolInput("GenerateImage", { operation: "generate", prompt: "" }),
+    ).toThrow();
     expect(() =>
       decodeAkeruToolInput("AddMcpServer", { serverId: "x", name: "x", transport: "stdio" }),
     ).toThrow();

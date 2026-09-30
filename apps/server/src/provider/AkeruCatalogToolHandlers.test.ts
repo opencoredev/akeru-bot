@@ -77,7 +77,7 @@ describe("Akeru catalog MCP tool handlers", () => {
         return { text: "page" };
       },
       generateImage: async (input) => {
-        calls.push(`image:${input.prompt}`);
+        calls.push(`image:${(input as { prompt: string }).prompt}`);
         return { url: "https://img" };
       },
       addMcpServer: async (input) => {
@@ -103,8 +103,10 @@ describe("Akeru catalog MCP tool handlers", () => {
     });
     await handlers.WebSearch!({ input: { query: "akeru" }, emitProgress: vi.fn() });
     await handlers.WebFetch!({ input: { url: "https://example.com" }, emitProgress: vi.fn() });
-    await handlers.GenerateImage!({ input: { prompt: "a cat" }, emitProgress: vi.fn() });
-    await handlers.generate_image!({ input: { prompt: "a dog" }, emitProgress: vi.fn() });
+    await handlers.GenerateImage!({
+      input: { operation: "generate", prompt: "a cat" },
+      emitProgress: vi.fn(),
+    });
     await handlers.AddMcpServer!({ input: { serverId: "one" }, emitProgress: vi.fn() });
     await handlers.UninstallMcpServer!({ input: { serverId: "one" }, emitProgress: vi.fn() });
     await handlers.RemoveMcpAccount!({ input: { serverId: "one" }, emitProgress: vi.fn() });
@@ -120,7 +122,6 @@ describe("Akeru catalog MCP tool handlers", () => {
       "search:akeru",
       "fetch:https://example.com/",
       "image:a cat",
-      "image:a dog",
       "add:one",
       "uninstall:one",
       "remove:one",

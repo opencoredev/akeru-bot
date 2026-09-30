@@ -4724,6 +4724,44 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("routes websocket rpc shell.revealAttachment to the stored file", () =>
+    Effect.gen(function* () {
+      let revealed: unknown = null;
+      const config = yield* buildAppUnderTest({
+        layers: {
+          externalLauncher: {
+            launchEditor: (input) =>
+              Effect.sync(() => {
+                revealed = input;
+              }),
+          },
+        },
+      });
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const attachmentId = "thread-reveal-00000000-0000-4000-8000-000000000001";
+      const attachmentPath = path.join(config.attachmentsDir, `${attachmentId}.png`);
+      yield* fileSystem.makeDirectory(config.attachmentsDir, { recursive: true });
+      yield* fileSystem.writeFile(attachmentPath, new Uint8Array([1, 2, 3]));
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const missing = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            yield* client[WS_METHODS.shellRevealAttachment]({ attachmentId });
+            return yield* client[WS_METHODS.shellRevealAttachment]({
+              attachmentId: "thread-reveal-00000000-0000-4000-8000-000000000002",
+            }).pipe(Effect.result);
+          }),
+        ),
+      );
+
+      assert.deepEqual(revealed, { cwd: attachmentPath, editor: "file-manager", reveal: true });
+      assertTrue(missing._tag === "Failure");
+      assertTrue(missing.failure._tag === "AttachmentNotFoundError");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("routes websocket rpc git methods", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({

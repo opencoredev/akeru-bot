@@ -12,6 +12,7 @@ This is a living glossary for Akeru Bot. It explains what common terms mean in t
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
 - [Subscription provider](#subscription-provider)
+- [Image provider](#image-provider)
 - [Interface language](#interface-language)
 - [Checkpointing](#checkpointing)
 - [Dictation](#dictation)
@@ -151,6 +152,10 @@ Reading an existing assistant message on the current client speaker. Identity, s
 ### Subscription provider
 
 A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. OpenCode Go uses an API key instead of OAuth. The environment server stores the credential and gives a run only the access token it needs. See [subscription authentication](./subscription-auth.md).
+
+### Image provider
+
+The subscription that creates images for a bot, ChatGPT or Grok, chosen per bot or by the global default and independent of the bot's chat provider. Bots reach it through the `generate_image` tool, and each finished image is saved as an ordinary chat attachment. See [image-generation.md](./image-generation.md).
 
 ### Interface language
 
