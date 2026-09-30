@@ -1257,6 +1257,7 @@ export const englishCatalog = {
   "Update credentials": "Update credentials",
   "Another bot already uses this account. Unassign it there, then connect again.":
     "Another bot already uses this account. Unassign it there, then connect again.",
+  "the bot": "the bot",
   "Could not update the credentials. The old connection is unchanged.":
     "Could not update the credentials. The old connection is unchanged.",
   "Could not connect with the new credentials or restore the old connection.":

@@ -1205,6 +1205,7 @@ export const zhCNCatalog: TranslationCatalog = {
   "Update credentials": "更新凭据",
   "Another bot already uses this account. Unassign it there, then connect again.":
     "另一个机器人已在使用此账号。请先在那里取消分配，然后再连接。",
+  "the bot": "机器人",
   "Could not update the credentials. The old connection is unchanged.":
     "无法更新凭据。原连接保持不变。",
   "Could not connect with the new credentials or restore the old connection.":
