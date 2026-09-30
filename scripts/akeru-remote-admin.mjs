@@ -223,8 +223,12 @@ switch (command) {
     break;
   case "uninstall":
     schtasks("/End", "/TN", SERVICE_TASK);
-    for (const task of [SERVICE_TASK, "Akeru Remote Update", "Akeru Remote Heartbeat"])
-      schtasks("/Delete", "/F", "/TN", task);
+    for (const task of [SERVICE_TASK, "Akeru Remote Update", "Akeru Remote Heartbeat"]) {
+      // A task that is already gone is fine. One that is still scheduled would run Remote again.
+      if (schtasks("/Delete", "/F", "/TN", task).status === 0) continue;
+      if (schtasks("/Query", "/TN", task).status === 0)
+        throw new Error(`Could not remove the "${task}" scheduled task.`);
+    }
     console.log("Removed Akeru Remote. Its data remains in ~/.akeru.");
     break;
   case "update":

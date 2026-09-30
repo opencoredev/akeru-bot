@@ -109,7 +109,9 @@ describe("Akeru Remote administration", () => {
     ]);
   });
 
-  it("removes the Windows service task on uninstall without the CLI boot-service manager", () => {
+  const runWindowsUninstall = (
+    schtasksScript: string,
+  ): { readonly status: number | null; readonly stderr: string; readonly calls: string[] } => {
     const root = tempRoot();
     NodeFS.copyFileSync(
       new URL("./akeru-remote-admin.mjs", import.meta.url),
@@ -121,7 +123,7 @@ describe("Akeru Remote administration", () => {
     NodeFS.mkdirSync(bin);
     NodeFS.writeFileSync(
       NodePath.join(bin, "schtasks.exe"),
-      `#!/bin/sh\necho "schtasks $*" >> "${calls}"\n`,
+      `#!/bin/sh\necho "schtasks $*" >> "${calls}"\n${schtasksScript}`,
       { mode: 0o755 },
     );
     const probe = NodePath.join(root, "probe.mjs");
@@ -141,12 +143,37 @@ describe("Akeru Remote administration", () => {
         encoding: "utf8",
       },
     );
+    return {
+      status: result.status,
+      stderr: result.stderr,
+      calls: NodeFS.readFileSync(calls, "utf8").trim().split("\n"),
+    };
+  };
+
+  it("removes the Windows service task on uninstall without the CLI boot-service manager", () => {
+    const result = runWindowsUninstall("");
     expect(result.status).toBe(0);
-    expect(NodeFS.readFileSync(calls, "utf8").trim().split("\n")).toEqual([
+    expect(result.calls).toEqual([
       "schtasks /End /TN Akeru Remote",
       "schtasks /Delete /F /TN Akeru Remote",
       "schtasks /Delete /F /TN Akeru Remote Update",
       "schtasks /Delete /F /TN Akeru Remote Heartbeat",
+    ]);
+  });
+
+  it("allows already removed tasks but reports a task Windows would not delete", () => {
+    const absent = runWindowsUninstall('case "$*" in *"Akeru Remote Heartbeat"*) exit 1;; esac\n');
+    expect(absent.status).toBe(0);
+
+    const denied = runWindowsUninstall(
+      'if [ "$1" = /Delete ] && [ "$4" = "Akeru Remote" ]; then exit 1; fi\n',
+    );
+    expect(denied.status).not.toBe(0);
+    expect(denied.stderr).toContain('Could not remove the "Akeru Remote" scheduled task.');
+    expect(denied.calls).toEqual([
+      "schtasks /End /TN Akeru Remote",
+      "schtasks /Delete /F /TN Akeru Remote",
+      "schtasks /Query /TN Akeru Remote",
     ]);
   });
 

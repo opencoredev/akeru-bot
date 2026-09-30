@@ -125,8 +125,16 @@ try {
   $Staging = Join-Path $Runtime ("versions\.staging-" + [Guid]::NewGuid())
   Copy-Item -LiteralPath $Verified -Destination $Staging -Recurse
   Set-Content -LiteralPath (Join-Path $Staging ".install-complete") -Value $Version -Encoding Ascii
-  if (Test-Path $Pinned) { Remove-Item -LiteralPath $Pinned -Recurse -Force }
-  Move-Item -LiteralPath $Staging -Destination $Pinned
+  # Keep the old runtime until the new one is in place, so a failed move leaves the service runnable.
+  $Previous = if (Test-Path $Pinned) { $Pinned + ".previous-" + [Guid]::NewGuid() } else { $null }
+  if ($Previous) { Move-Item -LiteralPath $Pinned -Destination $Previous }
+  try {
+    Move-Item -LiteralPath $Staging -Destination $Pinned
+  } catch {
+    if ($Previous) { Move-Item -LiteralPath $Previous -Destination $Pinned }
+    throw
+  }
+  if ($Previous) { Remove-Item -LiteralPath $Previous -Recurse -Force }
   Copy-Item -LiteralPath (Join-Path $Verified "node_modules\akeru-bot\dist\service-launcher.mjs") -Destination $Runtime -Force
   $ServiceState = @{ protocol = 2; activeVersion = $Version } | ConvertTo-Json -Compress
   [IO.File]::WriteAllText($StatePath, "$ServiceState`n", [Text.UTF8Encoding]::new($false))

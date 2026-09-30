@@ -55,6 +55,18 @@ describe("Windows remote installer", () => {
     );
   });
 
+  it("keeps the previous runtime until the new one is in place", () => {
+    const order = [
+      "Move-Item -LiteralPath $Pinned -Destination $Previous",
+      "Move-Item -LiteralPath $Staging -Destination $Pinned",
+      "if ($Previous) { Move-Item -LiteralPath $Previous -Destination $Pinned }",
+      "Remove-Item -LiteralPath $Previous -Recurse -Force",
+    ].map((step) => script.indexOf(step));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].toSorted((a, b) => a - b)).toEqual(order);
+    expect(script).not.toContain("Remove-Item -LiteralPath $Pinned");
+  });
+
   it("derives the server home from AKERU_HOME, never an ambient T3CODE_HOME", () => {
     expect(script).toContain(
       '$RuntimeHome = if ($env:AKERU_HOME) { $env:AKERU_HOME } else { Join-Path $HOME ".akeru" }',
