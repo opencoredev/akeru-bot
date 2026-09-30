@@ -7,7 +7,7 @@ import {
   type AkeruMemoryArchiveV2,
   type AkeruMemoryImportPreview,
   type AkeruMemoryRevision,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

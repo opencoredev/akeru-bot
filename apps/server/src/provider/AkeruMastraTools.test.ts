@@ -1,4 +1,4 @@
-import { AKERU_TOOL_CATALOG } from "@t3tools/contracts";
+import { AKERU_TOOL_CATALOG } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntime.ts";

@@ -1,4 +1,4 @@
-import { BotId, type VoiceSettings } from "@t3tools/contracts";
+import { BotId, type VoiceSettings } from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

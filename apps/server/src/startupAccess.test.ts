@@ -1,4 +1,4 @@
-import { AuthAdministrativeScopes, AuthStandardClientScopes } from "@t3tools/contracts";
+import { AuthAdministrativeScopes, AuthStandardClientScopes } from "@akeru/contracts";
 import { assert, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 

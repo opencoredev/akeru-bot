@@ -1,7 +1,7 @@
 import * as NodeOS from "node:os";
 
-import type { AuthClientSession } from "@t3tools/contracts";
-import { QrCode } from "@t3tools/shared/qrCode";
+import type { AuthClientSession } from "@akeru/contracts";
+import { QrCode } from "@akeru/shared/qrCode";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/unstable/http";
 

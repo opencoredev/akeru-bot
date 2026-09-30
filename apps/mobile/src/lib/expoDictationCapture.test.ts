@@ -1,4 +1,4 @@
-import { DEFAULT_DICTATION_LIMITS } from "@t3tools/client-runtime/dictation";
+import { DEFAULT_DICTATION_LIMITS } from "@akeru/client-runtime/dictation";
 import type { RecordingStatus } from "expo-audio";
 import type { AppStateStatus } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";

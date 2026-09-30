@@ -24,7 +24,7 @@ import {
   type ServerProviderModel,
   type ServerSettings,
   type ServerProviderState,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import {
   joinProviderUnavailability,
@@ -33,7 +33,7 @@ import {
   type ProviderAvailabilityPresentation,
   type ProviderAvailabilityReason,
   type ProviderAvailabilityTranslate,
-} from "@t3tools/client-runtime/provider-availability";
+} from "@akeru/client-runtime/provider-availability";
 
 import { formatProviderDriverKindLabel } from "./providerModels";
 

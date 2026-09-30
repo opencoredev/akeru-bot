@@ -1,4 +1,4 @@
-import { DesktopHostTelemetryMessage } from "@t3tools/contracts";
+import { DesktopHostTelemetryMessage } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";

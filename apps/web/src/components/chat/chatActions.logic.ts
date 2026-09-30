@@ -3,8 +3,8 @@ import {
   canSnooze,
   effectiveSettled,
   effectiveSnoozed,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/thread-settled";
+import type { OrchestrationThreadShell } from "@akeru/contracts";
 
 export interface ChatActionSupport {
   readonly settlement: boolean;

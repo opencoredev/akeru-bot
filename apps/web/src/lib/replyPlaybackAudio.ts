@@ -1,4 +1,4 @@
-import type { ReplyAudioEvents, ReplyAudioHandle } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyAudioEvents, ReplyAudioHandle } from "@akeru/client-runtime/reply-playback";
 
 export const MAX_REPLY_AUDIO_BYTES = 20 * 1024 * 1024;
 

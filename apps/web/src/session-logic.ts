@@ -1,4 +1,4 @@
-import { isSilentRunActivity } from "@t3tools/client-runtime/silent-run";
+import { isSilentRunActivity } from "@akeru/client-runtime/silent-run";
 import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
@@ -8,8 +8,8 @@ import {
   requestKindFromRequestType,
   type PendingApproval,
   type PendingUserInput,
-} from "@t3tools/client-runtime/pending-requests";
-import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@akeru/client-runtime/pending-requests";
+import { isBackgroundTaskActivity } from "@akeru/client-runtime/state/subagentRuntime";
 import {
   AkeruPluginSearchResult,
   isToolLifecycleItemType,
@@ -18,7 +18,7 @@ import {
   ProviderDriverKind,
   type ToolLifecycleItemType,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import type { ChatMessage, SessionPhase, Thread, ThreadSession, TurnDiffSummary } from "./types";
 
@@ -301,7 +301,7 @@ export function workEntryIndicatesToolNeutralStatus(entry: WorkLogEntry): boolea
   return true;
 }
 
-export { formatDuration, formatElapsed } from "@t3tools/shared/orchestrationTiming";
+export { formatDuration, formatElapsed } from "@akeru/shared/orchestrationTiming";
 
 type LatestTurnTiming = Pick<OrchestrationLatestTurn, "turnId" | "startedAt" | "completedAt">;
 type SessionActivityState = Pick<NonNullable<Thread["session"]>, "status" | "activeTurnId">;

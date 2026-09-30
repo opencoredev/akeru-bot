@@ -6,7 +6,7 @@ import {
   type AkeruMemoryPacket as MemoryPacket,
   type AkeruMemoryRevision,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import { scanMemoryContent } from "./memoryContentSafety.ts";

@@ -2,17 +2,17 @@ import {
   createTranslator,
   type MessageKey,
   type TranslationParams,
-} from "@t3tools/client-runtime/i18n";
+} from "@akeru/client-runtime/i18n";
 import {
   formatProviderSkillDisplayName,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
-} from "@t3tools/client-runtime/providerSkills";
+} from "@akeru/client-runtime/providerSkills";
 import type {
   ProviderDriverKind,
   ServerProviderSkill,
   ServerProviderSlashCommand,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { searchProviderSkills } from "../../providerSkillSearch";
 import type { ComposerCommandItem } from "./ComposerCommandMenu";

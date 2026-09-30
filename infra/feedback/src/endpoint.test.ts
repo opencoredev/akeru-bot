@@ -4,7 +4,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   PRODUCT_FEEDBACK_BODY_MAX_BYTES,
   type ProductFeedbackSubmission,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   coarseIpAddress,
   makeProductFeedbackEndpoint,

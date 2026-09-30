@@ -1,11 +1,11 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import { pinOrderKeyBetween } from "@t3tools/client-runtime/state/thread-sort";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+} from "@akeru/client-runtime/state/runtime";
+import { pinOrderKeyBetween } from "@akeru/client-runtime/state/thread-sort";
+import type { ScopedThreadRef } from "@akeru/contracts";
 import { useCallback, useMemo } from "react";
 
 import { shouldForgetChatPath } from "../components/chat/chatActions.logic";

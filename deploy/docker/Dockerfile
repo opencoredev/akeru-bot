@@ -3,7 +3,7 @@ WORKDIR /src
 RUN corepack enable
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @t3tools/web build
+RUN pnpm --filter @akeru/web build
 RUN node apps/server/scripts/cli.ts build
 RUN pnpm --config.inject-workspace-packages=true --filter akeru-bot deploy --prod /runtime \
   && rm -f /runtime/node_modules/.pnpm/node_modules/akeru-bot \

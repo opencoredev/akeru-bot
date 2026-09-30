@@ -5,9 +5,9 @@ import {
   memoryApprovalHeading,
   memoryApprovalMutation,
   type MemoryApprovalIntent,
-} from "@t3tools/client-runtime/durable-memory";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { AkeruMemoryApprovalRequest, ScopedThreadRef } from "@t3tools/contracts";
+} from "@akeru/client-runtime/durable-memory";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
+import type { AkeruMemoryApprovalRequest, ScopedThreadRef } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo, useState } from "react";
 

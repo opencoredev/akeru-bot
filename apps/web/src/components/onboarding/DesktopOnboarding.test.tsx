@@ -1,4 +1,4 @@
-import { EnvironmentId, type SubscriptionProviderId } from "@t3tools/contracts";
+import { EnvironmentId, type SubscriptionProviderId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { act, type ComponentProps } from "react";

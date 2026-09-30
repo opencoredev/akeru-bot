@@ -1,4 +1,4 @@
-import { detectComposerTrigger } from "@t3tools/shared/composerTrigger";
+import { detectComposerTrigger } from "@akeru/shared/composerTrigger";
 
 export interface BotPromptCommandTrigger {
   /** `skill` for a `$` token anywhere, `slash-command` for a `/` that starts a line. */

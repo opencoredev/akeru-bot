@@ -4,13 +4,13 @@
  *
  * @module features/threads/ThreadDelegationCard
  */
-import type { AkeruDelegationRecord, OrchestrationBot } from "@t3tools/contracts";
-import { akeruDelegationStateOf, type AkeruDelegationState } from "@t3tools/contracts";
+import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
+import { akeruDelegationStateOf, type AkeruDelegationState } from "@akeru/contracts";
 import {
   presentDelegation,
   type DelegationAction,
-} from "@t3tools/client-runtime/delegation-presentation";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+} from "@akeru/client-runtime/delegation-presentation";
+import { formatDuration } from "@akeru/shared/orchestrationTiming";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

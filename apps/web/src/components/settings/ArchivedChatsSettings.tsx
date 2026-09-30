@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@akeru/client-runtime/environment";
+import type { EnvironmentId } from "@akeru/contracts";
 import { ArchiveRestoreIcon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 

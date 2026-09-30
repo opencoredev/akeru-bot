@@ -1,11 +1,11 @@
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 import {
   RoutineId,
   ThreadId,
   type OrchestrationMessage,
   type Routine,
   type RoutineRun,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildBotConversationEntries } from "./botConversationPresentation";

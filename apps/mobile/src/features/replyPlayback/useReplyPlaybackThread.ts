@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
-import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
-import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@t3tools/contracts";
+import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId } from "@akeru/contracts";
 import type {
   ReplyPlaybackMessage,
   ReplyPlaybackSession,
-} from "@t3tools/client-runtime/reply-playback";
+} from "@akeru/client-runtime/reply-playback";
 
 import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
 import { serverEnvironment } from "../../state/server";

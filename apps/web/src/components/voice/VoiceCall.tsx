@@ -1,14 +1,14 @@
 import { CallEndIcon, CallIcon } from "@hugeicons/core-free-icons";
 import { useAtomValue } from "@effect/atom-react";
-import type { SupervisorConnectionState } from "@t3tools/client-runtime/connection";
+import type { SupervisorConnectionState } from "@akeru/client-runtime/connection";
 import {
   createRealtimeVoiceSession,
   createVoiceCallScope,
   runComposedVoiceCall,
   type VoiceCallChatHandlers,
   type VoiceCallScope,
-} from "@t3tools/client-runtime/voice";
-import { BotId, type VoiceCallSnapshot } from "@t3tools/contracts";
+} from "@akeru/client-runtime/voice";
+import { BotId, type VoiceCallSnapshot } from "@akeru/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import {
@@ -89,7 +89,7 @@ export function reduceVoiceCallUiState(
 export {
   handleVoiceChannelMessage,
   type VoiceCallChatHandlers,
-} from "@t3tools/client-runtime/voice";
+} from "@akeru/client-runtime/voice";
 
 /** Shown when the server pinned a different voice mode than the client prepared for. */
 export const VOICE_MODE_CHANGED_MESSAGE =

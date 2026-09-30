@@ -22,7 +22,7 @@ export const APP_BUNDLE_ID = isDevelopment
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["akeru-dev"] : ["akeru"];
 const LAUNCHER_VERSION = 16;
 const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "akeru-macos-1024.png");
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
+// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
 function setPlistString(plistPath, key, value) {

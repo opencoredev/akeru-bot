@@ -1,4 +1,4 @@
-import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
+import { ClientSettingsSchema, type ClientSettings } from "@akeru/contracts";
 
 import { getFirstLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 

@@ -1,4 +1,4 @@
-import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@t3tools/contracts";
+import { AKERU_CREATE_ROUTINE_TOOL_NAME, ApprovalRequestId } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 

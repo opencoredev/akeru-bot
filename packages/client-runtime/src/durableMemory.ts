@@ -18,7 +18,7 @@ import {
   type BotId,
   type SharedProjectMemorySaveMode,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import {

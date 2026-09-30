@@ -1,12 +1,12 @@
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import type {
   EnvironmentId,
   RemoteDiagnosticCheck,
   RemoteDiagnosticStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useState } from "react";
 
 import { cn } from "../../lib/utils";

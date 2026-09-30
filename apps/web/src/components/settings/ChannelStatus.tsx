@@ -1,8 +1,8 @@
-import type { ChannelBinding, ChannelConnectionProfile } from "@t3tools/contracts";
+import type { ChannelBinding, ChannelConnectionProfile } from "@akeru/contracts";
 import {
   type ChannelRepairAction,
   channelFailureReason,
-} from "@t3tools/client-runtime/channel-presentation";
+} from "@akeru/client-runtime/channel-presentation";
 
 import type { ReactNode } from "react";
 

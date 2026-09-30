@@ -12,7 +12,7 @@ import { AiError, McpProtocol, McpSchema, McpServer, Tool } from "effect/unstabl
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
-import { ImageGenerationRequest, type ImageGenerationResult } from "@t3tools/contracts";
+import { ImageGenerationRequest, type ImageGenerationResult } from "@akeru/contracts";
 import { runImageGenerationTool } from "../image-generation/ImageGenerationRuntime.ts";
 import {
   AKERU_MEMORY_TOOL_DESCRIPTION,

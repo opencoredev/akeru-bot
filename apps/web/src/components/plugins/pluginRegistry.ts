@@ -1,4 +1,4 @@
-import { McpServerId, type McpServer, type McpServerConfiguration } from "@t3tools/contracts";
+import { McpServerId, type McpServer, type McpServerConfiguration } from "@akeru/contracts";
 import type { PluginDefinition, PluginDirectoryDefinition } from "../../../../../plugins";
 
 const BUILTIN_PREFIX = "builtin-";

@@ -1,9 +1,9 @@
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   ApprovalRequestId,
   ProviderApprovalDecision,
   ScopedThreadRef,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { derivePendingApprovals } from "../../session-logic";

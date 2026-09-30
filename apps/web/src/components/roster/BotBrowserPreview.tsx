@@ -1,7 +1,7 @@
 "use client";
 
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { PreviewFrame, ScopedThreadRef } from "@t3tools/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { PreviewFrame, ScopedThreadRef } from "@akeru/contracts";
 import { Maximize2Icon, MonitorIcon, Minimize2Icon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 

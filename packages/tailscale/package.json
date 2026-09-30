@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/tailscale",
+  "name": "@akeru/tailscale",
   "version": "0.0.2",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
-    "@t3tools/shared": "workspace:*",
+    "@akeru/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

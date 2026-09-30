@@ -4,7 +4,7 @@ import {
   ProviderInstanceId,
   type ServerProvider,
   type SubscriptionProviderStatus,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   apiKeyStartInput,
   apiKeyValidationError,

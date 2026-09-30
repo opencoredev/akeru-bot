@@ -6,11 +6,11 @@ import {
   type EnvironmentId,
   type VoiceApiProvider,
   type VoiceSettings,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@akeru/client-runtime/state/runtime";
 import { LoaderIcon } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
@@ -25,7 +25,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import type { ReplyReadoutPreference } from "@t3tools/client-runtime/reply-playback";
+import type { ReplyReadoutPreference } from "@akeru/client-runtime/reply-playback";
 import { useOptionalReplyPlayback } from "../chat/ReplyPlaybackProvider";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";

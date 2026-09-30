@@ -1,4 +1,4 @@
-import { createTranslator, type TranslationParams } from "@t3tools/client-runtime/i18n";
+import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import { APP_DISPLAY_NAME } from "../branding";

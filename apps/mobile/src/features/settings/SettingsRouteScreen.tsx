@@ -5,10 +5,10 @@ import {
   SHARED_PROJECT_MEMORY_SETTING,
   sharedProjectMemoryAutoSaves,
   sharedProjectMemoryMode,
-} from "@t3tools/client-runtime/durable-memory";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { MemorySettingsPatch } from "@t3tools/contracts/settings";
+} from "@akeru/client-runtime/durable-memory";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import { EnvironmentId } from "@akeru/contracts";
+import type { MemorySettingsPatch } from "@akeru/contracts/settings";
 import Constants from "expo-constants";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";

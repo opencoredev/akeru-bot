@@ -7,8 +7,8 @@ import {
   type AkeruDelegationState,
   type AkeruDelegationTrigger,
   type ThreadId,
-} from "@t3tools/contracts";
-import { withoutErrorStack } from "@t3tools/shared/errorText";
+} from "@akeru/contracts";
+import { withoutErrorStack } from "@akeru/shared/errorText";
 
 /**
  * Whether the parent bot has received a finished result. Completed and failed

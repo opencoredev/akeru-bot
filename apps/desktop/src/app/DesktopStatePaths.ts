@@ -1,4 +1,4 @@
-import { PRODUCT_HOME_DIRNAME } from "@t3tools/shared/devHome";
+import { PRODUCT_HOME_DIRNAME } from "@akeru/shared/devHome";
 import * as Option from "effect/Option";
 
 export type JoinPath = (first: string, ...segments: string[]) => string;

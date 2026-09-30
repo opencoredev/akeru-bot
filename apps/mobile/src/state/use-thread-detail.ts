@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@akeru/contracts";
 import * as Option from "effect/Option";
 
 import { useEnvironmentThread } from "./threads";

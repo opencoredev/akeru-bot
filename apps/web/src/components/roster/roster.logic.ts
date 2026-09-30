@@ -1,14 +1,14 @@
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import type { OrchestrationThreadShell } from "@akeru/contracts";
 import {
   isGroupBotMember,
   isGroupPersonMember,
   type GroupPersonMembership,
-} from "@t3tools/contracts";
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
-import type { TimestampFormat } from "@t3tools/contracts/settings";
+import type { TimestampFormat } from "@akeru/contracts/settings";
 import { threadJumpIndexFromCommand } from "../../keybindings";
 import { formatShortTimestamp, parseTimestampDate } from "../../timestampFormat";
 import type { Bot, BotAvatar, BotBlobShape, Group } from "./types";

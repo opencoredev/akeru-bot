@@ -1,4 +1,4 @@
-import type { EnvironmentId, RemoteDiagnosticStatus } from "@t3tools/contracts";
+import type { EnvironmentId, RemoteDiagnosticStatus } from "@akeru/contracts";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";

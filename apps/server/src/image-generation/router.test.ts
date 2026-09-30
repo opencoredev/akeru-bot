@@ -3,7 +3,7 @@ import type {
   ImageGenerationRequest,
   ImageGenerationSettings,
   ImageProviderId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";

@@ -1,6 +1,6 @@
-import { channelProviderLabel as sharedChannelProviderLabel } from "@t3tools/client-runtime/channel-presentation";
-import { formatDate } from "@t3tools/client-runtime/i18n";
-import type { OrchestrationMessage } from "@t3tools/contracts";
+import { channelProviderLabel as sharedChannelProviderLabel } from "@akeru/client-runtime/channel-presentation";
+import { formatDate } from "@akeru/client-runtime/i18n";
+import type { OrchestrationMessage } from "@akeru/contracts";
 import type { RosterPresence } from "./roster.logic";
 
 export const channelProviderLabel = sharedChannelProviderLabel;

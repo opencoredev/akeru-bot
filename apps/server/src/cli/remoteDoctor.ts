@@ -1,5 +1,5 @@
-import { RemoteDoctorReport } from "@t3tools/contracts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { RemoteDoctorReport } from "@akeru/contracts";
+import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

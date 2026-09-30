@@ -4,7 +4,7 @@ import {
   MessageId,
   type ChannelDeliveryState,
   type OrchestrationMessage,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   channelDeliveryLabel,
   channelOriginForAssistantMessage,

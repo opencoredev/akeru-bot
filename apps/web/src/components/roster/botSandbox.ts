@@ -2,8 +2,8 @@ import {
   DEFAULT_LOCAL_EXECUTION_MODE,
   type LocalExecutionMode,
   type RuntimeMode,
-} from "@t3tools/contracts";
-import { createTranslator } from "@t3tools/client-runtime/i18n";
+} from "@akeru/contracts";
+import { createTranslator } from "@akeru/client-runtime/i18n";
 
 import type { useI18n } from "../../i18n";
 import type { Bot } from "./types";

@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterEach, assert, describe, expect, it, vi } from "@effect/vitest";
-import { BotId, GroupId, ThreadId, type AkeruConversationMemorySnapshot } from "@t3tools/contracts";
+import { BotId, GroupId, ThreadId, type AkeruConversationMemorySnapshot } from "@akeru/contracts";
 
 import { BotMemoryStore } from "./BotMemory.ts";
 import {

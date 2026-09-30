@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as NodeFS from "node:fs";
 
-import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@akeru/shared/themePalettes";
 import { DEFAULT_MOBILE_THEME_VARIABLES } from "./mobileDefaultTheme";
 
 import {

@@ -1,4 +1,4 @@
-import { threadSilentRun } from "@t3tools/client-runtime/silent-run";
+import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import {
   NativeStackScreenOptions,
@@ -7,17 +7,17 @@ import {
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
 import * as Option from "effect/Option";
-import { latestTurnFailure } from "@t3tools/client-runtime/provider-availability";
+import { latestTurnFailure } from "@akeru/client-runtime/provider-availability";
 import {
   EnvironmentId,
   PLACEHOLDER_THREAD_TITLE,
   ThreadId,
   type BotAvatar,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import {
   requestOlderThreadTurns,
   threadHasOlderTurns,
-} from "@t3tools/client-runtime/state/threads";
+} from "@akeru/client-runtime/state/threads";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceState } from "../../state/workspace";

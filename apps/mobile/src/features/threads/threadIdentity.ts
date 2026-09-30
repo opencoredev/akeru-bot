@@ -2,9 +2,9 @@ import {
   isGroupBotMember,
   type OrchestrationBot,
   type OrchestrationGroup,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 
 /**
  * Bot members of a group, boss first — the avatars that stand in for a group

@@ -1,5 +1,5 @@
-import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import type { ResolvedKeybindingsConfig } from "@akeru/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@akeru/shared/keybindings";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";

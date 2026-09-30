@@ -1,5 +1,5 @@
 import { it as effectIt } from "@effect/vitest";
-import { EventId, ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
+import { EventId, ThreadId, type OrchestrationEvent } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";

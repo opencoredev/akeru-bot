@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProjectId, ThreadId, TurnId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ThreadId, TurnId, ProviderInstanceId } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";

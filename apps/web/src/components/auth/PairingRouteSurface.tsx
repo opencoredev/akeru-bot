@@ -1,7 +1,7 @@
-import type { AuthSessionState } from "@t3tools/contracts";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import type { HostedPairingRequest } from "@t3tools/shared/remote";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import type { AuthSessionState } from "@akeru/contracts";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import type { HostedPairingRequest } from "@akeru/shared/remote";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
 import {

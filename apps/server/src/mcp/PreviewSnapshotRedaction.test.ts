@@ -1,6 +1,6 @@
 import { PNG } from "pngjs";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { redactSensitiveText } from "@t3tools/shared/sensitiveDataRedaction";
+import { redactSensitiveText } from "@akeru/shared/sensitiveDataRedaction";
 
 import {
   redactComputerScreenshot,

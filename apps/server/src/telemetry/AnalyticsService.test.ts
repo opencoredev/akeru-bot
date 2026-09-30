@@ -1,6 +1,6 @@
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { USAGE_3H_COUNTER_KEYS, USAGE_BASE_COUNTER_KEYS } from "@t3tools/contracts";
+import { USAGE_3H_COUNTER_KEYS, USAGE_BASE_COUNTER_KEYS } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as DateTime from "effect/DateTime";

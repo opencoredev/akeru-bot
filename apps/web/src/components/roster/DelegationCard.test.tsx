@@ -12,7 +12,7 @@ import {
   type AkeruDelegationState,
   type OrchestrationThreadActivity,
   type OrchestrationThreadShell,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -52,7 +52,7 @@ vi.mock("react", async (importOriginal) => {
 });
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("../../i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });

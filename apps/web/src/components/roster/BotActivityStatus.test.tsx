@@ -1,4 +1,4 @@
-import { ProviderDriverKind, TurnId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { ProviderDriverKind, TurnId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 

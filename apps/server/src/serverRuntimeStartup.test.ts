@@ -1,7 +1,7 @@
 import * as NodeUtil from "node:util";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { BotId, DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";

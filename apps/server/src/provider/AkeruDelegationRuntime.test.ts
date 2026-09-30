@@ -17,7 +17,7 @@ import {
   type OrchestrationBot,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";

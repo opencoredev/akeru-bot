@@ -106,7 +106,7 @@ jobs:
           vp exec changeset status --since=origin/main
 
       - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+        run: vp run --filter @akeru/desktop ensure:electron
 
       - name: Validate plugin catalog
         run: node scripts/validate-plugin-catalog.ts
@@ -141,7 +141,7 @@ jobs:
         run: vp run build:marketing
 
       - name: Test shipped desktop and shared packages
-        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!t3code-relay' --filter '!@t3tools/monorepo' --filter '!@t3tools/mobile' test
+        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!@akeru/monorepo' --filter '!@akeru/mobile' test
 
       - name: Test isolated server suite
         run: >-

@@ -1,4 +1,4 @@
-import { createBotInboxEnvironmentAtoms } from "@t3tools/client-runtime/state/bot-inbox";
+import { createBotInboxEnvironmentAtoms } from "@akeru/client-runtime/state/bot-inbox";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 

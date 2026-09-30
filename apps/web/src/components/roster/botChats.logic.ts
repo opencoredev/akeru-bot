@@ -1,4 +1,4 @@
-import { PLACEHOLDER_THREAD_TITLE } from "@t3tools/contracts";
+import { PLACEHOLDER_THREAD_TITLE } from "@akeru/contracts";
 
 /** How many of a bot's chats its side panel lists; palette search reaches the rest. */
 export const BOT_CHATS_PANEL_LIMIT = 8;

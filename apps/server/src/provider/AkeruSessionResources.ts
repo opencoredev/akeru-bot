@@ -9,7 +9,7 @@ import {
   type McpServerConfig,
 } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
-import type { BotId, BotSandbox, McpServer } from "@t3tools/contracts";
+import type { BotId, BotSandbox, McpServer } from "@akeru/contracts";
 
 import {
   createBotBrowser,

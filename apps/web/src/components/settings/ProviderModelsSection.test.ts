@@ -5,7 +5,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 const mocks = vi.hoisted(() => ({
   buttons: new Map<string, { onClick?: () => void }>(),

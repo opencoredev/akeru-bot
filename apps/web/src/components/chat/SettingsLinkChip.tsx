@@ -1,5 +1,5 @@
 import { Settings02Icon } from "@hugeicons/core-free-icons";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@akeru/contracts";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useI18n } from "../../i18n";

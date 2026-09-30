@@ -8,7 +8,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ProjectId,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

@@ -4,7 +4,7 @@ import * as NodeFS from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { RoutineAdapterItem } from "@t3tools/client-runtime/routines";
+import type { RoutineAdapterItem } from "@akeru/client-runtime/routines";
 
 import { RoutineDetail, RoutinePanel } from "./RoutinePanel";
 

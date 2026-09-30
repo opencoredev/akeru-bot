@@ -1,10 +1,10 @@
-import type { UpdateBotInput } from "@t3tools/client-runtime/state/bots";
+import type { UpdateBotInput } from "@akeru/client-runtime/state/bots";
 import {
   AkeruStepUsageSnapshot,
   type BotEngine,
   type BotId,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 const isAkeruStepUsageSnapshot = Schema.is(AkeruStepUsageSnapshot);

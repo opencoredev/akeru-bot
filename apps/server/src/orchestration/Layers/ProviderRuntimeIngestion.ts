@@ -27,7 +27,7 @@ import {
   THREAD_SILENT_RUN_CLEARED_ACTIVITY_KIND,
   type ProviderDriverKind,
   type ThreadSilentRunActivityPayload,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -41,7 +41,7 @@ import * as Exit from "effect/Exit";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 
 import { AgentController } from "../../provider/Services/AgentController.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";

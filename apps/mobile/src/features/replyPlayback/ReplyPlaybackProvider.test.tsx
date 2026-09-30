@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { storedReplySynthesisCapability } from "@t3tools/client-runtime/reply-playback";
+import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 
 describe("mobile reply playback synthesis", () => {
   it("accepts a configured provider capability for native playback", () => {

@@ -3,7 +3,7 @@ import type {
   ChannelMessageOrigin,
   ChannelProvider,
   OrchestrationMessage,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 
 import { channelProviderLabel } from "./channelPresentation.ts";
 

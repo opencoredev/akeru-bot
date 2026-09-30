@@ -1,17 +1,17 @@
-import type { DictationDraft } from "@t3tools/client-runtime/dictation";
+import type { DictationDraft } from "@akeru/client-runtime/dictation";
 import {
   EnvironmentId,
   ProviderInstanceId,
   ThreadId,
   type OrchestrationThreadShell,
-} from "@t3tools/contracts";
+} from "@akeru/contracts";
 import { isValidElement, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vite-plus/test";
 
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
 
 type Session = ReturnType<
-  typeof import("@t3tools/client-runtime/dictation").createDictationSession
+  typeof import("@akeru/client-runtime/dictation").createDictationSession
 >;
 type DictationInput = {
   readonly getDraft: () => Omit<DictationDraft, "identity">;
@@ -94,7 +94,7 @@ vi.mock("../../components/ControlPill", () => ({ ControlPill: "ControlPill" }));
 vi.mock("../../components/ProviderIcon", () => ({ ProviderIcon: "ProviderIcon" }));
 vi.mock("../../lib/useThemeColor", () => ({ useThemeColor: () => "#000000" }));
 vi.mock("../../lib/i18n", async () => {
-  const { createTranslator } = await import("@t3tools/client-runtime/i18n");
+  const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
   return { useMobileI18n: () => ({ t: translator.translate, plural: translator.plural }) };
 });
@@ -139,7 +139,7 @@ vi.mock("./use-thread-settings-sheet-presentation", () => ({
 // The real session runs behind the environment binding: capture succeeds, transcription fails.
 vi.mock("../../lib/useEnvironmentComposerDictation", async () => {
   const { createDictationSession, dictationControlStatus } =
-    await import("@t3tools/client-runtime/dictation");
+    await import("@akeru/client-runtime/dictation");
   const identity = { environmentId: "environment", threadId: "thread", draftId: "thread" };
   return {
     useEnvironmentComposerDictation: (input: DictationInput) => {

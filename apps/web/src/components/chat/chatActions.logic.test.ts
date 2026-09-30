@@ -1,4 +1,4 @@
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import type { OrchestrationThreadShell } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {

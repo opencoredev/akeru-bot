@@ -1,4 +1,4 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ScopedThreadRef } from "@akeru/contracts";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildVisibleToastLayout,

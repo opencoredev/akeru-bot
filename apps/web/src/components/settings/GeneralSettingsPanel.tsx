@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import { DEFAULT_UNIFIED_SETTINGS, type QuitConfirmationMode } from "@t3tools/contracts/settings";
+import type { MessageKey } from "@akeru/client-runtime/i18n";
+import { DEFAULT_UNIFIED_SETTINGS, type QuitConfirmationMode } from "@akeru/contracts/settings";
 
 import { APP_VERSION } from "../../branding";
 import {

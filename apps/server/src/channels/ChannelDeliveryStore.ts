@@ -1,4 +1,4 @@
-import { BotId, ChannelProvider, IsoDateTime, MessageId, ThreadId } from "@t3tools/contracts";
+import { BotId, ChannelProvider, IsoDateTime, MessageId, ThreadId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

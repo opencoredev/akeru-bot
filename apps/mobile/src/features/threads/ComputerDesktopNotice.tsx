@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { BotId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { BotId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { useEffect, useRef } from "react";
 import { View } from "react-native";
 

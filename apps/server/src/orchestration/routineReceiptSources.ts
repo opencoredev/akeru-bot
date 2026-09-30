@@ -1,4 +1,4 @@
-import type { Routine, RoutineReceiptSource } from "@t3tools/contracts";
+import type { Routine, RoutineReceiptSource } from "@akeru/contracts";
 
 /** Keep deleted routine labels in chat without sending their full definitions. */
 export function toRoutineReceiptSource(routine: Routine): RoutineReceiptSource {

@@ -2,7 +2,7 @@ import {
   createDictationSession,
   type DictationDependencies,
   type DictationLimits,
-} from "@t3tools/client-runtime/dictation";
+} from "@akeru/client-runtime/dictation";
 import { startDictationCapture, type DictationCaptureDependencies } from "./dictationCapture";
 
 /** Connect local browser capture to an environment-owned transcription operation. */

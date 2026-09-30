@@ -1,4 +1,4 @@
-import type { ProjectId } from "@t3tools/contracts";
+import type { ProjectId } from "@akeru/contracts";
 
 import { useI18n } from "../../i18n";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
