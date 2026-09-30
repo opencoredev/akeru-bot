@@ -1140,8 +1140,6 @@ export const zhCNCatalog: TranslationCatalog = {
   "Delete {name}? Its chats stay in your history. This cannot be undone.":
     "删除 {name}？其聊天记录会保留在历史中。此操作无法撤销。",
   "Could not delete {name}": "无法删除 {name}",
-  "A group boss cannot be deleted, and every group needs at least two bots.":
-    "群组负责人不能被删除，且每个群组至少需要两个机器人。",
   Model: "模型",
   "The provider and model this bot runs on.": "此机器人使用的提供商和模型。",
   "No model yet": "尚未选择模型",

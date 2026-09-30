@@ -76,6 +76,7 @@ import { resolveThreadIdentity } from "./threadIdentity";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 import { composerMentionItemToken, isThreadMentionQuery } from "./composerMentionItems";
@@ -713,13 +714,15 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
   );
   const deleteThreadBot = useCallback(async () => {
-    if (!bot) return false;
+    if (!bot) return t("The command failed.");
     const result = await deleteBot({
       environmentId: props.environmentId,
       input: { botId: bot.id },
     });
-    return result._tag === "Success";
-  }, [bot, deleteBot, props.environmentId]);
+    if (result._tag !== "Failure") return null;
+    const error = squashAtomCommandFailure(result);
+    return error instanceof Error ? error.message : t("The command failed.");
+  }, [bot, deleteBot, props.environmentId, t]);
   const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({

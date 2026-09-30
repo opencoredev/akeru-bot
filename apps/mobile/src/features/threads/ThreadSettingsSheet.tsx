@@ -322,7 +322,8 @@ type ThreadSettingsSessionProps = {
     readonly botName?: string;
   };
   /** Deletes the chat's bot. Resolves false when the server refuses. */
-  readonly onDeleteBot?: () => Promise<boolean>;
+  /** Resolves to null on success, or the reason the delete failed. */
+  readonly onDeleteBot?: () => Promise<string | null>;
 };
 
 export type ExistingThreadSettingsRouteSession = ThreadSettingsSessionProps & {
@@ -901,13 +902,10 @@ function DeleteBotSection() {
 
   const deleteBot = async () => {
     setDeleting(true);
-    const deleted = await onDeleteBot();
+    const failure = await onDeleteBot();
     setDeleting(false);
-    if (!deleted) {
-      Alert.alert(
-        t("Could not delete {name}", { name: botName }),
-        t("A group boss cannot be deleted, and every group needs at least two bots."),
-      );
+    if (failure !== null) {
+      Alert.alert(t("Could not delete {name}", { name: botName }), failure);
       return;
     }
     presentation.onClose();

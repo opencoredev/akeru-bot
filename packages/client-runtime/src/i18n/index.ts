@@ -1190,8 +1190,6 @@ export const englishCatalog = {
   "Delete {name}? Its chats stay in your history. This cannot be undone.":
     "Delete {name}? Its chats stay in your history. This cannot be undone.",
   "Could not delete {name}": "Could not delete {name}",
-  "A group boss cannot be deleted, and every group needs at least two bots.":
-    "A group boss cannot be deleted, and every group needs at least two bots.",
   Model: "Model",
   "The provider and model this bot runs on.": "The provider and model this bot runs on.",
   "No model yet": "No model yet",
