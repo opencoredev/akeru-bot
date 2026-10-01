@@ -53,7 +53,7 @@ import { createGroups } from "./projection/Groups.ts";
 import { createDelegations } from "./projection/Delegations.ts";
 import { createRoutines } from "./projection/Routines.ts";
 import { createMcpServers } from "./projection/McpServers.ts";
-import { makeThreads } from "./projection/Threads.ts";
+import { createThreads } from "./projection/Threads.ts";
 import { createMessages } from "./projection/Messages.ts";
 import { createRequests } from "./projection/Requests.ts";
 import { createTurns } from "./projection/Turns.ts";
@@ -86,7 +86,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const { applyRoutinesProjection } = createRoutines({ sql });
     const { applyMcpServersProjection } = createMcpServers({ projectionMcpServerRepository });
 
-    const { applyThreadsProjection } = makeThreads({
+    const { applyThreadsProjection } = createThreads({
       projectionThreadRepository,
       projectionThreadMessageRepository,
       projectionThreadProposedPlanRepository,

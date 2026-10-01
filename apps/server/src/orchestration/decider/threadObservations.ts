@@ -1,3 +1,5 @@
+import { ApprovalRequestId } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
 import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   type OrchestrationCommand,
@@ -192,13 +194,13 @@ export const decideThreadObservations = Effect.fn("decideThreadObservations")(fu
         threadId: command.threadId,
       });
 
+      const requestPayload = command.activity.payload;
+
       const requestId =
-        typeof command.activity.payload === "object" &&
-        command.activity.payload !== null &&
-        "requestId" in command.activity.payload &&
-        typeof (command.activity.payload as { requestId?: unknown }).requestId === "string"
-          ? ((command.activity.payload as { requestId: string })
-              .requestId as OrchestrationEvent["metadata"]["requestId"])
+        Predicate.isObjectOrArray(requestPayload) &&
+        "requestId" in requestPayload &&
+        Predicate.isString(requestPayload.requestId)
+          ? ApprovalRequestId.make(requestPayload.requestId)
           : undefined;
 
       const activityAppendedEvent: Omit<OrchestrationEvent, "sequence"> = {

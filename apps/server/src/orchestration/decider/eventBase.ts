@@ -1,3 +1,5 @@
+import { asRecord } from "../ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import {
   AKERU_DELEGATION_TRANSITIONS,
   type AkeruDelegationPhase,
@@ -33,12 +35,14 @@ export type DecideCommandSequence = (input: {
 
 export const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
-export function userInputAnswerText(answers: Record<string, unknown>): string | null {
+export function userInputAnswerText(
+  answers: Extract<OrchestrationCommand, { type: "thread.user-input.respond" }>["answers"],
+): string | null {
   const values = Object.values(answers).flatMap((answer) => {
-    if (typeof answer === "string") return [answer];
+    if (Predicate.isString(answer)) return [answer];
 
     if (Array.isArray(answer)) {
-      return answer.filter((value): value is string => typeof value === "string");
+      return answer.filter((value): value is string => Predicate.isString(value));
     }
 
     return [];
@@ -78,10 +82,10 @@ export const isDelegationTransitionAllowed = (
 };
 
 export const delegationChildThreadId = (phase: AkeruDelegationPhase): ThreadId | null =>
-  phase._tag === "Queued" ? null : phase.childThreadId;
+  "childThreadId" in phase ? phase.childThreadId : null;
 
 export const delegationChildTurnId = (phase: AkeruDelegationPhase): TurnId | null =>
-  phase._tag === "Queued" ? null : phase.childTurnId;
+  "childTurnId" in phase ? phase.childTurnId : null;
 
 export function hasSameDelegationOwnership(
   current: AkeruDelegationRecord,
@@ -103,8 +107,10 @@ export function hasSameDelegationOwnership(
  * failure detail marks the request stale/unknown — or settle would be
  * rejected on threads whose shell flags read as clear.
  */
-export function isStaleRequestFailureDetail(payload: Record<string, unknown> | null): boolean {
-  const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+export function isStaleRequestFailureDetail(
+  payload: { readonly detail?: unknown } | null,
+): boolean {
+  const detail = Predicate.isString(payload?.detail) ? payload.detail.toLowerCase() : null;
 
   if (detail === null) return false;
 
@@ -132,12 +138,9 @@ export function hasOpenBlockingRequest(thread: {
   const openRequestIds = new Set<string>();
 
   for (const activity of thread.activities) {
-    const payload =
-      typeof activity.payload === "object" && activity.payload !== null
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+    const payload = asRecord(activity.payload);
 
-    const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+    const requestId = Predicate.isString(payload?.requestId) ? payload.requestId : null;
 
     if (requestId === null) continue;
 

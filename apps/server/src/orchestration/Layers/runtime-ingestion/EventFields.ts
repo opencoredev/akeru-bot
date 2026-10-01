@@ -1,3 +1,6 @@
+import { asRecord } from "../../ActivityPayloadBounds.ts";
+import type { TaskAgentLinkage, RuntimeTaskUsage, RuntimeTaskStatus } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
@@ -47,21 +50,17 @@ export function findTaskTitleInActivities(
       continue;
     }
 
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as { taskId?: unknown; title?: unknown; detail?: unknown })
-        : undefined;
+    const payload = asRecord(activity.payload) ?? undefined;
 
     if (payload?.taskId !== taskId) {
       continue;
     }
 
-    const title =
-      typeof payload.title === "string"
-        ? payload.title
-        : activity.kind === "task.started" && typeof payload.detail === "string"
-          ? payload.detail
-          : undefined;
+    const title = Predicate.isString(payload.title)
+      ? payload.title
+      : activity.kind === "task.started" && Predicate.isString(payload.detail)
+        ? payload.detail
+        : undefined;
 
     if (title && title.trim().length > 0) {
       return title;
@@ -123,7 +122,8 @@ export const decodeCreateRoutineInput = Schema.decodeUnknownExit(
   },
 );
 
-export function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments enter through the tool-specific schema decoders here.
+export function boundedApprovalArgs(toolName: string | undefined, args: unknown) {
   if (args === undefined) return undefined;
 
   if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {
@@ -315,20 +315,30 @@ export function requestKindFromCanonicalRequestType(
   }
 }
 
+type TaskLinkagePayload = TaskAgentLinkage & {
+  readonly typedUsage?: RuntimeTaskUsage | undefined;
+  readonly status?: RuntimeTaskStatus | "stopped" | undefined;
+  readonly error?: string | undefined;
+};
+
+interface TaskLinkageFields {
+  [key: string]: TaskLinkagePayload[keyof TaskLinkagePayload];
+}
+
 export /**
  * Copies the optional TaskAgentLinkage bundle from a task.* runtime payload
  * into the persisted activity payload. Identity fields ride on every row so
  * client folds survive activity retention; absent fields stay absent.
  */
-function taskLinkageActivityFields(payload: Record<string, unknown>): Record<string, unknown> {
-  const fields: Record<string, unknown> = {
+function taskLinkageActivityFields(payload: TaskLinkagePayload): TaskLinkageFields {
+  const fields: TaskLinkageFields = {
     // Server-stamped classification: persisted rows are self-describing, so
     // clients trust the stamp instead of re-deriving agent-vs-background
     // from taskType denylists and marker heuristics (legacy rows without a
     // stamp keep the client fallback).
     agentKind: classifyTaskAgentKind({
-      taskType: typeof payload.taskType === "string" ? payload.taskType : undefined,
-      agentId: typeof payload.agentId === "string" ? payload.agentId : undefined,
+      taskType: Predicate.isString(payload.taskType) ? payload.taskType : undefined,
+      agentId: Predicate.isString(payload.agentId) ? payload.agentId : undefined,
     }),
   };
 

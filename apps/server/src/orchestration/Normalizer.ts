@@ -134,6 +134,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     }
 
     if (canonicalCommand.type !== "thread.turn.start") {
+      // SAFETY: Client-only bootstrap fields occur exclusively on turn.start, handled below.
       return canonicalCommand as OrchestrationCommand;
     }
 

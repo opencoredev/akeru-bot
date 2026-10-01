@@ -13,5 +13,7 @@ export function toRoutineReceiptSource(routine: Routine): RoutineReceiptSource {
 export function deletedRoutineReceiptSources(
   routines: ReadonlyArray<Routine>,
 ): RoutineReceiptSource[] {
-  return routines.filter((routine) => routine.deletedAt !== null).map(toRoutineReceiptSource);
+  return routines.flatMap((routine) =>
+    routine.deletedAt !== null ? [toRoutineReceiptSource(routine)] : [],
+  );
 }

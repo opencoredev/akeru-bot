@@ -1,3 +1,14 @@
+interface RecentThreadTitleContext {
+  readonly context: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+  readonly truncated: boolean;
+}
+
+interface ThreadTitleContext {
+  readonly message: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+}
+
 import { type ChatAttachment } from "@akeru/contracts";
 import {
   MAX_FIRST_USER_TITLE_CONTEXT_CHARS,
@@ -46,11 +57,7 @@ export function limitFirstUserSection(section: string): string {
 export function collectRecentThreadTitleContext(
   messages: ReadonlyArray<ThreadTitleMessage>,
   maxChars: number,
-): {
-  readonly context: string;
-  readonly attachments: ReadonlyArray<ChatAttachment>;
-  readonly truncated: boolean;
-} {
+): RecentThreadTitleContext {
   let context = "";
   let truncated = false;
   const retainedAttachments: Array<ChatAttachment> = [];
@@ -82,10 +89,9 @@ export function collectRecentThreadTitleContext(
   return { context, attachments: retainedAttachments, truncated };
 }
 
-export function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): {
-  readonly message: string;
-  readonly attachments: ReadonlyArray<ChatAttachment>;
-} {
+export function formatThreadTitleContext(
+  messages: ReadonlyArray<ThreadTitleMessage>,
+): ThreadTitleContext {
   const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS);
 
   if (!recent.truncated) {

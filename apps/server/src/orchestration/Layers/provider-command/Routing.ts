@@ -1,8 +1,13 @@
+import * as Data from "effect/Data";
+import type { AkeruDelegationDispatch } from "../../../provider/AkeruDelegationRuntime.ts";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { increment, orchestrationEventsProcessedTotal } from "../../../observability/Metrics.ts";
 import { type ProviderIntentEvent, PROVIDER_COMMAND_CONCURRENCY } from "./Fields.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Routing composes a scoped queue worker; this utility has no contextual service or layer.
 import { makeKeyedDrainableWorker } from "./KeyedDrainableWorker.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createFailures } from "./Failures.ts";
@@ -11,6 +16,8 @@ import type { createContext } from "./Context.ts";
 import type { createSession } from "./Session.ts";
 import type { createTurns } from "./Turns.ts";
 import type { createRequests } from "./Requests.ts";
+
+const DelegationDispatch = Data.taggedEnum<AkeruDelegationDispatch>();
 
 export const createRouting = Effect.fn("makeprovider-command-Routing")(function* ({
   agentController,
@@ -60,16 +67,18 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
-      ...(event.type === "delegation.updated"
-        ? {
-            "orchestration.thread_id":
-              (event.payload.delegation.phase._tag === "Queued"
-                ? null
-                : event.payload.delegation.phase.childThreadId) ?? "unassigned",
-          }
-        : event.type === "delegation.retry-requested"
-          ? { "orchestration.thread_id": event.payload.parentThreadId }
-          : { "orchestration.thread_id": event.payload.threadId }),
+      ...Match.value(event).pipe(
+        Match.when({ type: "delegation.updated" }, (event) => ({
+          "orchestration.thread_id":
+            ("childThreadId" in event.payload.delegation.phase
+              ? event.payload.delegation.phase.childThreadId
+              : null) ?? "unassigned",
+        })),
+        Match.when({ type: "delegation.retry-requested" }, (event) => ({
+          "orchestration.thread_id": event.payload.parentThreadId,
+        })),
+        Match.orElse((event) => ({ "orchestration.thread_id": event.payload.threadId })),
+      ),
       ...(event.commandId ? { "orchestration.command_id": event.commandId } : {}),
     });
     yield* increment(orchestrationEventsProcessedTotal, {
@@ -80,7 +89,10 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
       case "delegation.updated": {
         const delegation = event.payload.delegation;
 
-        if (delegation.phase._tag === "Canceled" && delegation.phase.childThreadId !== null) {
+        if (
+          Predicate.isTagged(delegation.phase, "Canceled") &&
+          delegation.phase.childThreadId !== null
+        ) {
           yield* agentController.interruptTurn({
             threadId: delegation.phase.childThreadId,
             ...(delegation.phase.childTurnId ? { turnId: delegation.phase.childTurnId } : {}),
@@ -104,7 +116,7 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
           return;
         }
 
-        yield* dispatchDelegation({ _tag: "Retry", delegationId }).pipe(
+        yield* dispatchDelegation(DelegationDispatch.Retry({ delegationId })).pipe(
           Effect.catchTag("AgentControllerRuntimeError", (error) =>
             appendProviderFailureActivity({
               threadId: parentThreadId,
@@ -214,36 +226,42 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
   });
 
   const processDomainEventSafely = (event: ProviderIntentEvent) =>
-    (event.type === "delegation.updated"
-      ? event.payload.delegation.phase._tag === "Queued" ||
-        event.payload.delegation.phase.childThreadId === null
-        ? Effect.succeed(false)
-        : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId)
-      : event.type === "delegation.retry-requested"
-        ? Effect.succeed(false)
-        : reconcileRestrictiveSessionCleanup(event.payload.threadId)
-    ).pipe(
-      Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) {
-          return Effect.interrupt;
-        }
+    Match.value(event)
+      .pipe(
+        Match.when({ type: "delegation.updated" }, (event) =>
+          !("childThreadId" in event.payload.delegation.phase) ||
+          event.payload.delegation.phase.childThreadId === null
+            ? Effect.succeed(false)
+            : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId),
+        ),
+        Match.when({ type: "delegation.retry-requested" }, () => Effect.succeed(false)),
+        Match.orElse((event) => reconcileRestrictiveSessionCleanup(event.payload.threadId)),
+      )
+      .pipe(
+        Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) {
+            return Effect.interrupt;
+          }
 
-        return Effect.logWarning("provider command reactor failed to process event", {
-          eventType: event.type,
-          cause: Cause.pretty(cause),
-        });
-      }),
-    );
+          return Effect.logWarning("provider command reactor failed to process event", {
+            eventType: event.type,
+            cause: Cause.pretty(cause),
+          });
+        }),
+      );
 
   const providerCommandLaneKey = (event: ProviderIntentEvent): string =>
-    event.type === "delegation.updated"
-      ? event.payload.delegation.phase._tag === "Queued"
-        ? event.payload.delegation.parentThreadId
-        : (event.payload.delegation.phase.childThreadId ?? event.payload.delegation.parentThreadId)
-      : event.type === "delegation.retry-requested"
-        ? event.payload.parentThreadId
-        : event.payload.threadId;
+    Match.value(event).pipe(
+      Match.when({ type: "delegation.updated" }, (event) =>
+        "childThreadId" in event.payload.delegation.phase
+          ? (event.payload.delegation.phase.childThreadId ??
+            event.payload.delegation.parentThreadId)
+          : event.payload.delegation.parentThreadId,
+      ),
+      Match.when({ type: "delegation.retry-requested" }, (event) => event.payload.parentThreadId),
+      Match.orElse((event) => event.payload.threadId),
+    );
 
   const worker = yield* makeKeyedDrainableWorker({
     concurrency: PROVIDER_COMMAND_CONCURRENCY,

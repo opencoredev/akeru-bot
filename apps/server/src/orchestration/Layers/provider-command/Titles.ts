@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { CommandId, PLACEHOLDER_THREAD_TITLE, ThreadId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -9,6 +10,11 @@ import { formatThreadTitleContext } from "./TitleContext.ts";
 import type { createContext } from "./Context.ts";
 import type { createWorkspace } from "./Workspace.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
+const TitleRegeneration = Data.taggedEnum<
+  | { readonly _tag: "Superseded" }
+  | { readonly _tag: "Completed"; readonly title: string | undefined }
+>();
 
 export const createTitles = Effect.fn("makeprovider-command-Titles")(function* ({
   resolveThreadDetail,
@@ -37,25 +43,25 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
     requestId: CommandId,
   ) {
     if (event.payload.regenerateTitle !== true) {
-      return { _tag: "Superseded" } as const;
+      return TitleRegeneration.Superseded();
     }
 
     const thread = yield* resolveThreadDetail(event.payload.threadId);
 
     if (!thread || thread.titleRegeneration?.requestId !== requestId) {
-      return { _tag: "Superseded" } as const;
+      return TitleRegeneration.Superseded();
     }
 
     const { message, attachments } = formatThreadTitleContext(thread.messages);
 
     if (message.length === 0) {
-      return { _tag: "Completed", title: undefined } as const;
+      return TitleRegeneration.Completed({ title: undefined });
     }
 
     const previousTitle = event.payload.previousTitle ?? thread.title;
 
     if (thread.title !== previousTitle) {
-      return { _tag: "Superseded" } as const;
+      return TitleRegeneration.Superseded();
     }
 
     const project = yield* resolveProject(thread.projectId);
@@ -82,7 +88,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
       generated.title === PLACEHOLDER_THREAD_TITLE ||
       generated.title === previousTitle
     ) {
-      return { _tag: "Completed", title: undefined } as const;
+      return TitleRegeneration.Completed({ title: undefined });
     }
 
     const latestThread = yield* resolveThreadShell(event.payload.threadId);
@@ -92,10 +98,10 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
       latestThread.titleRegeneration?.requestId !== requestId ||
       latestThread.title !== previousTitle
     ) {
-      return { _tag: "Superseded" } as const;
+      return TitleRegeneration.Superseded();
     }
 
-    return { _tag: "Completed", title: generated.title } as const;
+    return TitleRegeneration.Completed({ title: generated.title });
   });
 
   const dispatchThreadTitleRegenerationCompletion = Effect.fn(
@@ -178,11 +184,11 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
           return Effect.logWarning("provider command reactor failed to regenerate thread title", {
             threadId: event.payload.threadId,
             cause: Cause.pretty(cause),
-          }).pipe(Effect.as({ _tag: "Completed", title: undefined } as const));
+          }).pipe(Effect.as(TitleRegeneration.Completed({ title: undefined })));
         }),
       );
 
-      if (result._tag === "Superseded") {
+      if (TitleRegeneration.$is("Superseded")(result)) {
         return;
       }
 

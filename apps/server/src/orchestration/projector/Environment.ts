@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   DelegationCreatedPayload,
   DelegationUpdatedPayload,
@@ -155,16 +156,13 @@ export function projectEnvironment(
     case "routine.enabled":
     case "routine.paused":
     case "routine.deleted": {
-      const schema =
-        event.type === "routine.drafted"
-          ? RoutineDraftedPayload
-          : event.type === "routine.approved"
-            ? RoutineApprovedPayload
-            : event.type === "routine.enabled"
-              ? RoutineEnabledPayload
-              : event.type === "routine.paused"
-                ? RoutinePausedPayload
-                : RoutineDeletedPayload;
+      const schema = Match.value(event.type).pipe(
+        Match.when("routine.drafted", () => RoutineDraftedPayload),
+        Match.when("routine.approved", () => RoutineApprovedPayload),
+        Match.when("routine.enabled", () => RoutineEnabledPayload),
+        Match.when("routine.paused", () => RoutinePausedPayload),
+        Match.orElse(() => RoutineDeletedPayload),
+      );
 
       return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
@@ -187,16 +185,13 @@ export function projectEnvironment(
     case "routine.failed":
     case "routine.completed":
     case "routine.run-canceled": {
-      const schema =
-        event.type === "routine.running"
-          ? RoutineRunningPayload
-          : event.type === "routine.blocked"
-            ? RoutineBlockedPayload
-            : event.type === "routine.failed"
-              ? RoutineFailedPayload
-              : event.type === "routine.completed"
-                ? RoutineCompletedPayload
-                : RoutineRunCanceledPayload;
+      const schema = Match.value(event.type).pipe(
+        Match.when("routine.running", () => RoutineRunningPayload),
+        Match.when("routine.blocked", () => RoutineBlockedPayload),
+        Match.when("routine.failed", () => RoutineFailedPayload),
+        Match.when("routine.completed", () => RoutineCompletedPayload),
+        Match.orElse(() => RoutineRunCanceledPayload),
+      );
 
       return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {

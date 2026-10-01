@@ -1,3 +1,5 @@
+import { asRecord } from "../../ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import {
   ApprovalRequestId,
   McpServerId,
@@ -92,14 +94,11 @@ export interface AttachmentSideEffects {
   readonly prunedThreadRelativePaths: Map<string, Set<string>>;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted activity payloads enter through this request-ID decoder boundary.
 export function extractActivityRequestId(payload: unknown): ApprovalRequestId | null {
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
+  const requestId = asRecord(payload)?.requestId;
 
-  const requestId = (payload as Record<string, unknown>).requestId;
-
-  return typeof requestId === "string" ? ApprovalRequestId.make(requestId) : null;
+  return Predicate.isString(requestId) ? ApprovalRequestId.make(requestId) : null;
 }
 
 export function isStalePendingApprovalFailureDetail(detail: string | null): boolean {
@@ -151,12 +150,9 @@ export function derivePendingUserInputCountFromActivities(
       continue;
     }
 
-    const payload =
-      typeof activity.payload === "object" && activity.payload !== null
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+    const payload = asRecord(activity.payload);
 
-    const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+    const detail = Predicate.isString(payload?.detail) ? payload.detail.toLowerCase() : null;
 
     if (activity.kind === "user-input.requested") {
       openRequestIds.add(requestId);

@@ -49,7 +49,7 @@ export const runAttachmentSideEffects = Effect.fn("runAttachmentSideEffects")(fu
 
   const readAttachmentRootEntries = fileSystem
     .readDirectory(attachmentsRootDir, { recursive: false })
-    .pipe(Effect.orElseSucceed(() => [] as Array<string>));
+    .pipe(Effect.orElseSucceed(() => Array<string>()));
 
   const removeDeletedThreadAttachmentEntry = Effect.fn("removeDeletedThreadAttachmentEntry")(
     function* (threadSegment: string, entry: string) {

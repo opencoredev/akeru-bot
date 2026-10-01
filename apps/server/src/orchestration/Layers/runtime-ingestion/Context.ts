@@ -51,7 +51,7 @@ export function createContext({
       for (const activity of activities) {
         const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
 
-        if (!payload || typeof payload.requestId !== "string") continue;
+        if (!payload || !Predicate.isString(payload.requestId)) continue;
         const requestId = payload.requestId;
 
         if (activity.kind === "user-input.requested" && payload.responseMode !== "message") {
@@ -65,7 +65,7 @@ export function createContext({
         }
 
         if (activity.kind !== "provider.user-input.respond.failed") continue;
-        const detail = typeof payload.detail === "string" ? payload.detail.toLowerCase() : "";
+        const detail = Predicate.isString(payload.detail) ? payload.detail.toLowerCase() : "";
 
         if (
           detail.includes("stale pending user-input request") ||

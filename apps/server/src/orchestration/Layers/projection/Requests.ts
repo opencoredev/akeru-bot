@@ -1,3 +1,5 @@
+import { asRecord } from "../../ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import {
@@ -116,13 +118,9 @@ export function createRequests({
         }
 
         if (event.payload.activity.kind === "provider.approval.respond.failed") {
-          const payload =
-            typeof event.payload.activity.payload === "object" &&
-            event.payload.activity.payload !== null
-              ? (event.payload.activity.payload as Record<string, unknown>)
-              : null;
+          const payload = asRecord(event.payload.activity.payload);
 
-          const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+          const detail = Predicate.isString(payload?.detail) ? payload.detail.toLowerCase() : null;
 
           if (isStalePendingApprovalFailureDetail(detail)) {
             if (Option.isNone(existingRow)) {
