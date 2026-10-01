@@ -56,6 +56,7 @@ import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -284,6 +285,7 @@ interface PendingTurn {
 interface ActiveSession {
   startInput: Parameters<AgentControllerShape["startSession"]>[1];
   readonly session: MastraSession;
+  readonly turnPreparation: Semaphore.Semaphore;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
   cwd: string | undefined;
@@ -293,6 +295,9 @@ interface ActiveSession {
   runtimeMode: RuntimeMode;
   model: string;
   status: ProviderSession["status"];
+  turnAdmissionGeneration: number;
+  /** Completes when the current admission generation ends, cancelling turns still preparing. */
+  turnPreparationCancelled: Deferred.Deferred<void>;
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
@@ -372,6 +377,7 @@ export interface AgentControllerLiveOptions {
     "send" | "sendToUser" | "parentFinished" | "accessForThread"
   > &
     Partial<Pick<AkeruDelegationRuntime, "create" | "check" | "stop" | "dispatchDelegation">>;
+  readonly readAttachment?: (path: string) => Promise<Uint8Array>;
   /** Overrides the WebFetch resolver and address policy in tests. */
   readonly webFetch?: AkeruWebFetchOptions;
   /**
@@ -2261,6 +2267,13 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
     }
 
+    // Ends the current admission generation and cancels turns still preparing in it.
+    const endTurnAdmissionGeneration = (active: ActiveSession) => {
+      active.turnAdmissionGeneration += 1;
+      Deferred.doneUnsafe(active.turnPreparationCancelled, Effect.void);
+      active.turnPreparationCancelled = Deferred.makeUnsafe<void>();
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -3559,8 +3572,10 @@ const make = (options?: AgentControllerLiveOptions) =>
           const current = sessions.get(key);
           if (current) handleControllerEvent(threadId, current, event);
         });
+        const turnPreparation = yield* Semaphore.make(1);
         return {
           session,
+          turnPreparation,
           startInput: input,
           pendingDispatches: new Set<Promise<void>>(),
           provider: resolved.provider,
@@ -3572,6 +3587,8 @@ const make = (options?: AgentControllerLiveOptions) =>
           runtimeMode: access.runtimeMode,
           model: resolved.modelSelection.model,
           status: "ready" as const,
+          turnAdmissionGeneration: 0,
+          turnPreparationCancelled: Deferred.makeUnsafe<void>(),
           activeTurn: null,
           admittingTurn: null,
           pendingTurns: [],
@@ -3604,17 +3621,19 @@ const make = (options?: AgentControllerLiveOptions) =>
       function* (input) {
         const key = String(input.threadId);
         const resolved = resolvedByThread.get(key);
-        if (resolved && usesMastraCode(resolved.provider)) {
-          const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
-          if (!routing.enabled) {
-            return yield* disabledProviderError(
-              "AgentController.sendTurn",
-              resolved.providerInstanceId,
-            );
-          }
-        }
         const active = sessions.get(key);
         if (!active) {
+          if (resolved && usesMastraCode(resolved.provider)) {
+            const routing = yield* legacyProviderBridge.getInstanceInfo(
+              resolved.providerInstanceId,
+            );
+            if (!routing.enabled) {
+              return yield* disabledProviderError(
+                "AgentController.sendTurn",
+                resolved.providerInstanceId,
+              );
+            }
+          }
           if (
             usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
           ) {
@@ -3761,63 +3780,117 @@ const make = (options?: AgentControllerLiveOptions) =>
               ),
             );
         }
-        if (input.timezone !== undefined) {
-          active.configuredToolSession = {
-            ...active.configuredToolSession,
-            timezone: input.timezone,
-          };
-          if (!active.activeTurn && !active.admittingTurn && active.pendingTurns.length === 0) {
-            active.toolSession = active.configuredToolSession;
-            toolRuntime.registerSession(key, active.toolSession);
-          }
-        }
-        const attachmentFiles = yield* Effect.forEach(input.attachments ?? [], (attachment) => {
-          const path = resolveAttachmentPath({
-            attachmentsDir: config.attachmentsDir,
-            attachment,
-          });
-          if (path === null) {
-            return Effect.fail(
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Attachment '${attachment.id}' has an invalid path.`,
-              }),
-            );
-          }
-          return Effect.try({
-            try: () => ({
-              file: {
-                data: NodeFS.readFileSync(path).toString("base64"),
-                mediaType: attachment.mimeType,
-                filename: attachment.name,
+        const turnAdmissionGeneration = active.turnAdmissionGeneration;
+        const turnPreparationCancelled = active.turnPreparationCancelled;
+        const prepareTurn = active.turnPreparation.withPermit(
+          Effect.gen(function* () {
+            if (resolved && usesMastraCode(resolved.provider)) {
+              const routing = yield* legacyProviderBridge.getInstanceInfo(
+                resolved.providerInstanceId,
+              );
+              if (!routing.enabled) {
+                return yield* disabledProviderError(
+                  "AgentController.sendTurn",
+                  resolved.providerInstanceId,
+                );
+              }
+            }
+            if (input.timezone !== undefined) {
+              active.configuredToolSession = {
+                ...active.configuredToolSession,
+                timezone: input.timezone,
+              };
+              if (!active.activeTurn && !active.admittingTurn && active.pendingTurns.length === 0) {
+                active.toolSession = active.configuredToolSession;
+                toolRuntime.registerSession(key, active.toolSession);
+              }
+            }
+            const attachmentFiles = yield* Effect.forEach(
+              input.attachments ?? [],
+              (attachment) => {
+                const path = resolveAttachmentPath({
+                  attachmentsDir: config.attachmentsDir,
+                  attachment,
+                });
+                if (path === null) {
+                  return Effect.fail(
+                    new AgentControllerRuntimeError({
+                      operation: "sendTurn.attachments",
+                      detail: `Attachment '${attachment.id}' has an invalid path.`,
+                    }),
+                  );
+                }
+                return Effect.tryPromise({
+                  try: async () => {
+                    const bytes = await (options?.readAttachment ?? NodeFS.promises.readFile)(path);
+                    return {
+                      file: {
+                        data: Buffer.from(
+                          bytes.buffer,
+                          bytes.byteOffset,
+                          bytes.byteLength,
+                        ).toString("base64"),
+                        mediaType: attachment.mimeType,
+                        filename: attachment.name,
+                      },
+                      pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
+                    };
+                  },
+                  catch: (cause) =>
+                    new AgentControllerRuntimeError({
+                      operation: "sendTurn.attachments",
+                      detail: `Could not read attachment '${attachment.id}'.`,
+                      cause,
+                    }),
+                });
               },
-              pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
-            }),
-            catch: (cause) =>
-              new AgentControllerRuntimeError({
-                operation: "sendTurn.attachments",
-                detail: `Could not read attachment '${attachment.id}'.`,
-                cause,
-              }),
-          });
-        });
-        const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
-          .filter((part): part is string => typeof part === "string" && part.length > 0)
-          .join("\n\n");
-        const files = attachmentFiles.map(({ file }) => file);
-        const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
-        active.pendingTurns.push({
-          threadId: input.threadId,
-          turnId,
-          message: { content, ...(files.length > 0 ? { files } : {}) },
-          botUsage: input.botUsage,
-          toolSession: active.configuredToolSession,
-          memoryAccess: active.configuredMemoryAccess,
-          entityMemoryAccess: active.configuredEntityMemoryAccess,
-          reviewInput: input.input ?? "",
-          hiddenWake: input.hiddenWake === true,
-          delegationResults: input.delegationResults,
-        });
+              { concurrency: 1 },
+            );
+            if (
+              sessions.get(key) !== active ||
+              active.status === "closed" ||
+              active.turnAdmissionGeneration !== turnAdmissionGeneration
+            ) {
+              return yield* new AgentControllerRuntimeError({
+                operation: "sendTurn",
+                detail: `Mastra session for thread '${input.threadId}' is not running.`,
+              });
+            }
+            const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
+              .filter((part): part is string => typeof part === "string" && part.length > 0)
+              .join("\n\n");
+            const files = attachmentFiles.map(({ file }) => file);
+            const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
+            active.pendingTurns.push({
+              threadId: input.threadId,
+              turnId,
+              message: { content, ...(files.length > 0 ? { files } : {}) },
+              botUsage: input.botUsage,
+              toolSession: active.configuredToolSession,
+              memoryAccess: active.configuredMemoryAccess,
+              entityMemoryAccess: active.configuredEntityMemoryAccess,
+              reviewInput: input.input ?? "",
+              hiddenWake: input.hiddenWake === true,
+              delegationResults: input.delegationResults,
+            });
+            return turnId;
+          }),
+        );
+        // An interrupt must not wait for a stalled attachment read: abandon the
+        // preparation, release its permit, and fail turns still queued behind it.
+        const turnId = yield* Effect.raceFirst(
+          prepareTurn,
+          Deferred.await(turnPreparationCancelled).pipe(
+            Effect.andThen(
+              Effect.fail(
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn",
+                  detail: `Mastra session for thread '${input.threadId}' is not running.`,
+                }),
+              ),
+            ),
+          ),
+        );
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
           if (nextTurn) {
@@ -3864,6 +3937,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
       }
+      endTurnAdmissionGeneration(active);
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4242,6 +4316,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
+      endTurnAdmissionGeneration(active);
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4414,6 +4489,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
+          endTurnAdmissionGeneration(active);
           active.pendingTurns.length = 0;
           active.admittingTurn = null;
           active.session.abort();

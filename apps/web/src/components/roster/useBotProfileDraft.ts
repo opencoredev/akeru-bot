@@ -349,7 +349,7 @@ export function useBotProfileDraft(
         description: normalizedDescription,
         engine: nextEngine,
         usageCap: resolvedUsageCap.value,
-        sandbox,
+        sandbox: sandbox === "default" ? null : sandbox,
         personalityTone,
         voiceEnabled,
         imageProvider,

@@ -1,3 +1,4 @@
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
@@ -28,7 +29,6 @@ import {
   useProjects,
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
-  useThreadMessages,
   useThreadShell,
   useThreadShells,
 } from "../../state/entities";
@@ -156,7 +156,8 @@ export function useGroupThreadRuntime(groupId: string) {
     linkedThreadRef,
     bootstrapped,
   );
-  const messages = useThreadMessages(linkedThreadRef);
+  const { messages, lastMessageRole, lastUserMessageAt } =
+    useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
   const defaultProject = useMemo(
@@ -208,7 +209,7 @@ export function useGroupThreadRuntime(groupId: string) {
       rememberedThread?.session?.status === "stopped") &&
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
-      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+      (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);
@@ -534,7 +535,7 @@ export function useGroupThreadRuntime(groupId: string) {
     activities,
     latestTurn: rememberedThread?.latestTurn ?? null,
     session,
-    lastUserMessageAt: messages?.findLast((message) => message.role === "user")?.createdAt ?? null,
+    lastUserMessageAt,
   });
   const failure: BotThreadFailure | null =
     error ??

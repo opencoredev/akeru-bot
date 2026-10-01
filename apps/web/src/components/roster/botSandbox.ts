@@ -25,10 +25,10 @@ export const BOT_SANDBOX_OPTIONS = [
   { value: "tenki", label: "Tenki" },
 ] as const;
 
-export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"];
+export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"] | "default";
 
 export function botSandboxChoice(sandbox: Bot["sandbox"]): BotSandboxChoice {
-  return sandbox ?? "local";
+  return sandbox ?? "default";
 }
 
 /** "Local" is interface copy; the cloud sandbox labels are product names and stay as written. */
@@ -36,6 +36,7 @@ export function botSandboxLabel(
   sandbox: BotSandboxChoice,
   t: Translate = translateEnglish,
 ): string {
+  if (sandbox === "default") return t("Default sandbox");
   const option = BOT_SANDBOX_OPTIONS.find((candidate) => candidate.value === sandbox);
   return !option || option.value === "local" ? t("Local") : option.label;
 }
@@ -44,5 +45,5 @@ export function resolveBotRuntimeMode(
   sandbox: Bot["sandbox"],
   localExecutionMode: LocalExecutionMode,
 ): RuntimeMode {
-  return botSandboxChoice(sandbox) === "local" ? localExecutionMode : "full-access";
+  return sandbox === null || sandbox === "local" ? localExecutionMode : "full-access";
 }

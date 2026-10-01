@@ -1,3 +1,4 @@
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
@@ -20,7 +21,6 @@ import {
   useProjects,
   readEnvironmentSupportsFileAttachments,
   useThreadActivities,
-  useThreadMessages,
   useThreadShells,
 } from "../../state/entities";
 import { environmentBotsAtom } from "../../state/bots";
@@ -166,7 +166,8 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     bootstrapped,
     openThreadId,
   );
-  const messages = useThreadMessages(linkedThreadRef);
+  const { messages, lastMessageRole, hasMessages, lastUserMessageAt } =
+    useBotConversationMessageProjection(linkedThreadRef);
   const activities = useThreadActivities(linkedThreadRef);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   useEffect(() => {
@@ -248,7 +249,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
       rememberedThread?.session?.status === "stopped") &&
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
-      (rememberedThread?.latestTurn === null && messages?.at(-1)?.role === "user"));
+      (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);
@@ -353,11 +354,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
   // A fresh chat only makes sense once the current one has a message; an empty
   // chat is already fresh, and creating another would leave it behind.
   const canStartNewChat =
-    botReady &&
-    activeProject !== null &&
-    !sending &&
-    linkedThreadRef !== null &&
-    (messages?.length ?? 0) > 0;
+    botReady && activeProject !== null && !sending && linkedThreadRef !== null && hasMessages;
   const startNewChat = useCallback(async (): Promise<boolean> => {
     if (!canStartNewChat || startingNewChatRef.current) return false;
     // A created chat waits here until its shell arrives; another click would leave it empty.
@@ -699,13 +696,12 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     submitPendingUserInput,
   ]);
 
-  const lastUserMessageAt = messages?.findLast((message) => message.role === "user")?.createdAt;
   const session = rememberedThread?.session ?? null;
   const turnFailure = latestBotThreadFailure({
     activities,
     latestTurn: rememberedThread?.latestTurn ?? null,
     session,
-    lastUserMessageAt: lastUserMessageAt ?? null,
+    lastUserMessageAt,
   });
   const failure: BotThreadFailure | null =
     error ??

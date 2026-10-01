@@ -8,6 +8,8 @@ Railway does not offer pause/resume through its SDK. An idle bot leaves its VM r
 
 Before disconnecting Railway or changing access, stop active bot sessions and open your environment in the [Railway dashboard](https://railway.com/dashboard). Destroy any VMs you no longer need there. Disconnecting credentials in Akeru is not VM cleanup: VMs can continue accruing charges. Settings asks you to review these VMs before proceeding. When rotating a token, retain access to the same environment; Akeru reconnects to the saved VM with the new credentials. A different or inaccessible environment produces an error instead of silently creating a second VM.
 
+Deleting a bot does not delete its Railway VM, just as switching the bot to another sandbox does not. Before you delete a bot that has used Railway, stop its sessions and destroy its VM in the Railway dashboard if you no longer need it.
+
 ## Networking and previews
 
 Railway supports private networking, but a private VM address is not a browser preview URL. Previews require a Railway CLI tunnel. Akeru does not automatically create these tunnels and cannot route its bot browser to a Railway workspace; browser requests report this limitation instead of returning an inaccessible address. Use Railway's CLI to establish a tunnel when you need to inspect a preview manually.
