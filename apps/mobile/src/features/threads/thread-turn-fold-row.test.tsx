@@ -4,13 +4,18 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ThreadTurnFoldRow } from "./thread-turn-fold-row";
 
 const state = vi.hoisted(() => ({ locale: "en" as "en" | "zh-CN" }));
+
 vi.mock("react-native", () => ({ Pressable: "div" }));
+
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
+
 vi.mock("../../components/AppSymbol", () => ({ SymbolView: "i" }));
+
 vi.mock("../../lib/i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const zh = await catalogRegistry["zh-CN"]!();
   const translators = { en: createTranslator("en"), "zh-CN": createTranslator("zh-CN", zh) };
+
   return { useMobileI18n: () => ({ t: translators[state.locale].translate }) };
 });
 
@@ -50,10 +55,12 @@ describe("mobile turn fold translations", () => {
     "translates $english when the locale changes with the same feed entry",
     ({ interrupted, elapsedMs, english, chinese }) => {
       const fold = entry(interrupted, elapsedMs);
+
       const render = () =>
         renderToStaticMarkup(
           <ThreadTurnFoldRow entry={fold} onToggle={() => {}} iconColor="gray" />,
         );
+
       expect(render()).toContain(`>${english}</span>`);
       state.locale = "zh-CN";
       expect(render()).toContain(`>${chinese}</span>`);

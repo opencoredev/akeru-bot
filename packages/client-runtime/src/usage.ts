@@ -37,9 +37,11 @@ export function aggregateUsage(environments: readonly EnvironmentUsageStatus[]) 
           },
         ],
   );
+
   const stillReporting = environments.some(
     (environment) => environment.summary === null && environment.error === null,
   );
+
   return {
     merged: mergeUsage(answered, USAGE_CONTRACT_VERSION),
     isPending: answered.length === 0 && stillReporting,

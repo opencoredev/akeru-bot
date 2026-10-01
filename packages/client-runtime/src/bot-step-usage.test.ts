@@ -59,6 +59,7 @@ describe("bot step meter", () => {
       tokens: 100,
       estimatedCost: { status: "available", usd: 0.1 },
     };
+
     const meters = buildBotStepMeters([
       activity("cap", "bot.usage-cap.hit", {}),
       activity("usage1", "bot.step-usage.updated", snapshot),
@@ -66,6 +67,7 @@ describe("bot step meter", () => {
       activity("invalid", "bot.step-usage.updated", { tokens: "invalid" }),
       { ...activity("no-turn", "bot.step-usage.updated", snapshot), turnId: null },
     ]);
+
     expect(meters.size).toBe(1);
     expect(meters.get("turn-1")).toMatchObject({ tokens: 200, hardStopReached: true });
     expect(formatBotStepEngine(snapshot.engine)).toBe("codex/gpt-5.6-sol");

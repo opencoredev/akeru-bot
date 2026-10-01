@@ -19,6 +19,7 @@ const summary: UsageSummary = {
   scanDurationMs: 0,
   connectedProviders: ["openai-codex"],
 };
+
 function environment(
   id: string,
   overrides: Partial<EnvironmentUsageStatus> = {},
@@ -65,6 +66,7 @@ describe("usage aggregation", () => {
       sinceTime: "2026-08-01T00:00:00Z",
       untilTime: "2026-08-31T00:00:00Z",
     };
+
     expect(usageWindowKey(input)).toBe(JSON.stringify(input));
     expect(
       usageWindowKey({
@@ -76,9 +78,11 @@ describe("usage aggregation", () => {
         sinceDay: input.sinceDay,
       }),
     ).toBe(usageWindowKey(input));
+
     for (const field of ["timeZone", "sinceTime", "untilTime"] as const) {
       expect(usageWindowKey({ ...input, [field]: "different" })).not.toBe(usageWindowKey(input));
     }
+
     expect(usageWindowKey({ ...input, resolution: "day" })).not.toBe(usageWindowKey(input));
     expect(usageWindowKey({ ...input, sinceDay: UsageDay.make("2026-08-02") })).not.toBe(
       usageWindowKey(input),

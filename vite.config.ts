@@ -24,7 +24,7 @@ const ANTI_SLOP_RULES = {
   "anti-slop/no-unknown-type-aliases": "error",
   "anti-slop/no-unsafe-dictionary-type": "warn",
   "anti-slop/no-widen-then-assert": "error",
-  "anti-slop/require-readable-spacing": "warn",
+  "anti-slop/require-readable-spacing": "error",
   "anti-slop/require-safety-comment-for-type-assertion": "warn",
   "anti-slop-effect/no-manual-effect-error-tag": "warn",
   "anti-slop-effect/no-manual-tag-comparison": "warn",
@@ -193,7 +193,7 @@ export default defineConfig({
       "akeru/no-manual-effect-runtime-in-tests": "error",
       "akeru/no-native-title-tooltip": "error",
       "akeru/namespace-node-imports": "error",
-      "eslint/max-lines": ["warn", { max: 800, skipBlankLines: true, skipComments: true }],
+      "eslint/max-lines": ["error", { max: 800, skipBlankLines: true, skipComments: true }],
       ...ANTI_SLOP_RULES,
     },
     overrides: [

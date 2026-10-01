@@ -17,6 +17,7 @@ describe("work log parsing", () => {
         },
       },
     });
+
     expect(entry?.command).toBe("bun run lint");
   });
   it("unwraps PowerShell command wrappers for displayed command text", () => {
@@ -28,6 +29,7 @@ describe("work log parsing", () => {
         },
       },
     });
+
     expect(entry?.command).toBe("bun run lint");
     expect(entry?.rawCommand).toBe(
       "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -Command 'bun run lint'",
@@ -42,6 +44,7 @@ describe("work log parsing", () => {
         },
       },
     });
+
     expect(entry?.command).toBe("rg -n foo .");
     expect(entry?.rawCommand).toBe(
       '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "rg -n foo ."',
@@ -53,6 +56,7 @@ describe("work log parsing", () => {
       detail:
         '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoLogo -NoProfile -Command \'rg -n -F "new Date()" .\' <exited with exit code 0>',
     });
+
     expect(entry?.command).toBe('rg -n -F "new Date()" .');
     expect(entry?.rawCommand).toBe(
       `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoLogo -NoProfile -Command 'rg -n -F "new Date()" .'`,
@@ -67,6 +71,7 @@ describe("work log parsing", () => {
         },
       },
     });
+
     expect(entry?.command).toBe("bash script.sh");
     expect(entry?.rawCommand).toBeNull();
   });
@@ -82,6 +87,7 @@ describe("work log parsing", () => {
         },
       },
     });
+
     expect(entry).toEqual([
       "apps/web/src/components/ChatView.tsx",
       "apps/web/src/session-logic.ts",

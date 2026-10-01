@@ -13,6 +13,7 @@ export function ThreadTurnFoldRow(props: {
 }) {
   const { t } = useMobileI18n();
   const { entry } = props;
+
   const duration =
     entry.elapsedMs === null
       ? null
@@ -31,6 +32,7 @@ export function ThreadTurnFoldRow(props: {
             }
           },
         );
+
   const label = entry.interrupted
     ? duration === null
       ? t("You stopped this response")

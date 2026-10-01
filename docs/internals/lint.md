@@ -95,6 +95,9 @@ Files may have at most 800 lines, not counting blank lines and comments. When a 
 limit, split it along a real seam, such as a component, a service, or a group of tests that share
 a fixture. Splitting at an arbitrary line count does not help.
 
+`max-lines` and `anti-slop/require-readable-spacing` are errors. No hand-written file is over the
+limit, and `vp lint --fix` applies the spacing rule, so run it on new files before committing.
+
 ## Severity ratchet
 
 Each new rule starts at `error` if the codebase has no findings for it and at `warn` otherwise.
