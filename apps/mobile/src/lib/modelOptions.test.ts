@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
-import { ProviderInstanceId, type ServerConfig } from "@akeru/contracts";
+import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId, type ServerConfig } from "@akeru/contracts";
 
 import {
   buildModelOptions,
@@ -11,35 +11,39 @@ import {
   resolveSelectableModelSelection,
 } from "./modelOptions";
 
+// Fixtures list only the provider fields these rules read; the rest of the
+// server config is irrelevant here, so the partial provider rows are cast once.
+function serverConfig(providers: ReadonlyArray<object>): ServerConfig {
+  return { providers, settings: DEFAULT_SERVER_SETTINGS } as unknown as ServerConfig;
+}
+
 describe("mobile model options", () => {
   it("groups models by provider and flags legacy entries", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          displayName: "Codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [
-            {
-              slug: "gpt-5.6-sol",
-              name: "GPT-5.6 Sol",
-              isCustom: false,
-              capabilities: null,
-            },
-            {
-              slug: "gpt-5.4",
-              name: "GPT-5.4",
-              isCustom: false,
-              isLegacy: true,
-              capabilities: null,
-            },
-          ],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        displayName: "Codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [
+          {
+            slug: "gpt-5.6-sol",
+            name: "GPT-5.6 Sol",
+            isCustom: false,
+            capabilities: null,
+          },
+          {
+            slug: "gpt-5.4",
+            name: "GPT-5.4",
+            isCustom: false,
+            isLegacy: true,
+            capabilities: null,
+          },
+        ],
+      },
+    ]);
 
     expect(groupByProvider(buildModelOptions(config, null))).toMatchObject([
       {
@@ -54,26 +58,24 @@ describe("mobile model options", () => {
   });
 
   it("lists host-detected models for disconnected subscriptions as disabled", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
-        },
-        {
-          instanceId: "grok",
-          driver: "grok",
-          enabled: true,
-          installed: true,
-          auth: { status: "unknown" },
-          models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
+      },
+      {
+        instanceId: "grok",
+        driver: "grok",
+        enabled: true,
+        installed: true,
+        auth: { status: "unknown" },
+        models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
+      },
+    ]);
 
     const options = buildModelOptions(config, null, [
       {
@@ -101,36 +103,34 @@ describe("mobile model options", () => {
   });
 
   it("keeps unavailable providers' models visible with their reason", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "claudeAgent",
-          driver: "claudeAgent",
-          enabled: true,
-          installed: true,
-          auth: { status: "unauthenticated" },
-          unavailability: "missing-login",
-          models: [{ slug: "claude-opus", name: "Claude Opus", capabilities: null }],
-        },
-        {
-          instanceId: "kimi",
-          driver: "kimi",
-          enabled: false,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [{ slug: "kimi-k3", name: "Kimi K3", capabilities: null }],
-        },
-        {
-          instanceId: "grok",
-          driver: "grok",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          unavailability: "temporary-failure",
-          models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "claudeAgent",
+        driver: "claudeAgent",
+        enabled: true,
+        installed: true,
+        auth: { status: "unauthenticated" },
+        unavailability: "missing-login",
+        models: [{ slug: "claude-opus", name: "Claude Opus", capabilities: null }],
+      },
+      {
+        instanceId: "kimi",
+        driver: "kimi",
+        enabled: false,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [{ slug: "kimi-k3", name: "Kimi K3", capabilities: null }],
+      },
+      {
+        instanceId: "grok",
+        driver: "grok",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        unavailability: "temporary-failure",
+        models: [{ slug: "grok-build", name: "Grok Build", capabilities: null }],
+      },
+    ]);
 
     const options = buildModelOptions(config, null);
 
@@ -148,18 +148,16 @@ describe("mobile model options", () => {
   });
 
   it("keeps a saved selection visible after its provider drops the model", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", capabilities: null }],
+      },
+    ]);
 
     const saved = buildModelOptions(config, {
       instanceId: ProviderInstanceId.make("codex"),
@@ -173,39 +171,37 @@ describe("mobile model options", () => {
   });
 
   it("normalizes a legacy fallback selection against current capabilities", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          displayName: "Codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [
-            {
-              slug: "gpt-test",
-              name: "GPT Test",
-              isCustom: false,
-              capabilities: {
-                optionDescriptors: [
-                  {
-                    id: "serviceTier",
-                    label: "Service Tier",
-                    type: "select",
-                    options: [
-                      { id: "default", label: "Standard", isDefault: true },
-                      { id: "priority", label: "Fast" },
-                    ],
-                    currentValue: "default",
-                  },
-                ],
-              },
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        displayName: "Codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [
+          {
+            slug: "gpt-test",
+            name: "GPT Test",
+            isCustom: false,
+            capabilities: {
+              optionDescriptors: [
+                {
+                  id: "serviceTier",
+                  label: "Service Tier",
+                  type: "select",
+                  options: [
+                    { id: "default", label: "Standard", isDefault: true },
+                    { id: "priority", label: "Fast" },
+                  ],
+                  currentValue: "default",
+                },
+              ],
             },
-          ],
-        },
-      ],
-    } as unknown as ServerConfig;
+          },
+        ],
+      },
+    ]);
 
     const [option] = buildModelOptions(config, {
       instanceId: ProviderInstanceId.make("codex"),
@@ -218,26 +214,24 @@ describe("mobile model options", () => {
   });
 
   it("rejects stored selections whose provider is not usable", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [],
-        },
-        {
-          instanceId: "claudeAgent",
-          driver: "claudeAgent",
-          enabled: false,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [],
+      },
+      {
+        instanceId: "claudeAgent",
+        driver: "claudeAgent",
+        enabled: false,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [],
+      },
+    ]);
 
     const usable = {
       instanceId: ProviderInstanceId.make("codex"),
@@ -260,28 +254,26 @@ describe("mobile model options", () => {
   });
 
   it("keeps legacy models out of implicit defaults", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "codex",
-          driver: "codex",
-          displayName: "Codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [
-            { slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", isCustom: false, capabilities: null },
-            {
-              slug: "gpt-5.4",
-              name: "GPT-5.4",
-              isCustom: false,
-              isLegacy: true,
-              capabilities: null,
-            },
-          ],
-        },
-      ],
-    } as unknown as ServerConfig;
+    const config = serverConfig([
+      {
+        instanceId: "codex",
+        driver: "codex",
+        displayName: "Codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [
+          { slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", isCustom: false, capabilities: null },
+          {
+            slug: "gpt-5.4",
+            name: "GPT-5.4",
+            isCustom: false,
+            isLegacy: true,
+            capabilities: null,
+          },
+        ],
+      },
+    ]);
 
     const current = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" };
     const legacy = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" };
@@ -296,19 +288,17 @@ describe("mobile model options", () => {
 
 describe("resolveModelSendBlock", () => {
   const claude = (patch: Record<string, unknown>) =>
-    ({
-      providers: [
-        {
-          instanceId: "claudeAgent",
-          driver: "claudeAgent",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [{ slug: "claude-opus", name: "Claude Opus", isCustom: false }],
-          ...patch,
-        },
-      ],
-    }) as unknown as ServerConfig;
+    serverConfig([
+      {
+        instanceId: "claudeAgent",
+        driver: "claudeAgent",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [{ slug: "claude-opus", name: "Claude Opus", isCustom: false }],
+        ...patch,
+      },
+    ]);
   const selection = { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude-opus" };
 
   it("blocks Send with the provider, what failed, and the next step", () => {
