@@ -31,7 +31,7 @@ import { ChannelProjectSelect } from "./ChannelProjectSelect";
 import { channelProviderMeta, discordInviteUrl, slackPasteTarget } from "./channelProviderMeta";
 import {
   CONNECT_LATER,
-  ChannelReplacement,
+  type ChannelReplacement,
   PhotonModeSelect,
   newConnectionId,
   buildChannelConnectionSaveInput,
@@ -574,7 +574,7 @@ export function ChannelSetupDialog({
 }
 
 export {
-  ChannelReplacement,
+  type ChannelReplacement,
   PhotonModeSelect,
   buildChannelConnectionSaveInput,
 } from "./channelSetup.logic";

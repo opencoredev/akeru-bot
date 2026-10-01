@@ -937,6 +937,6 @@ export function useDesktopBackendSettings() {
 export {
   BACKEND_VALUE_DEFAULT_WSL,
   BACKEND_VALUE_WSL_OFF,
-  PendingWslChange,
+  type PendingWslChange,
   useDesktopWslCommands,
 } from "./useDesktopWslCommands";

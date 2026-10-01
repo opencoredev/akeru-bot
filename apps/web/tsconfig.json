@@ -6,6 +6,7 @@
     "moduleResolution": "Bundler",
     "erasableSyntaxOnly": false,
     "verbatimModuleSyntax": false,
+    "isolatedModules": true,
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "paths": {
