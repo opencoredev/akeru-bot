@@ -1,10 +1,10 @@
-import type { PluginApprovalClass, CatalogCategory, } from "./categories.ts";
+import type { PluginApprovalClass, CatalogCategory } from "./categories.ts";
 
 export const PLUGIN_SCHEMA_VERSION = 1 as const;
 
 export type PluginPlatform = "web" | "desktop" | "mobile" | "macos" | "windows" | "linux";
 export type PluginAuthentication = "none" | "oauth" | "optional-oauth" | "api-key";
-export type PluginCatalogStatus = "available" | "approval-pending" | "verification-pending" | "deprecated";
+export type PluginCatalogStatus = | "available" | "approval-pending" | "verification-pending" | "deprecated";
 
 export interface Party {
   readonly name: string;
