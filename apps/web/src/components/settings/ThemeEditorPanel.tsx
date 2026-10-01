@@ -500,7 +500,7 @@ export function ThemeEditorPanel({
     <div
       aria-label={isEditing ? "Edit theme" : "Create theme"}
       className={cn(
-        "dialog-glass fixed z-110 flex max-h-[min(42rem,calc(100dvh-6rem))] w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border text-popover-foreground",
+        "dialog-glass fixed z-110 flex max-h-min-42rem-dvh-6rem w-min-26rem-vw-2rem flex-col overflow-hidden rounded-xl border text-popover-foreground",
         position === null && "bottom-4 right-4",
         isMinimized && "max-h-none",
       )}

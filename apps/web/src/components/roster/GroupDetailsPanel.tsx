@@ -80,7 +80,7 @@ export function GroupDetailsPanel(props: {
         data-details-panel=""
         data-state={desktopPanel.state}
         onTransitionEnd={desktopPanel.onTransitionEnd}
-        className="hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background [--details-width:22rem] min-[981px]:flex"
+        className="hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background details-width min-[981px]:flex"
       >
         <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
           {content(
@@ -136,7 +136,7 @@ export function GroupDetailsPanel(props: {
       </div>
       <Sheet open={mobileOpen} onOpenChange={(open) => setMobileOpen(open)}>
         <SheetPopup
-          className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
+          className="w-min-92vw-24rem pb-safe pt-safe p-0"
           showCloseButton={false}
           side="right"
         >

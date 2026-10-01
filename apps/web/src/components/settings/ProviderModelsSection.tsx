@@ -287,7 +287,7 @@ export function ProviderModelsSection({
             <div
               key={`${instanceId}:${model.slug}`}
               className={cn(
-                "grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1",
+                "grid min-h-7 grid-cols-1fr-auto items-center gap-2 py-1",
                 isHidden && "text-muted-foreground",
               )}
             >

@@ -100,7 +100,7 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
             return (
               <div
                 key={`${window.kind}:${window.label}`}
-                className="grid gap-3 px-4 py-4 md:grid-cols-[10rem_minmax(0,1fr)_7rem] md:items-center md:gap-5"
+                className="grid gap-3 px-4 py-4 md:grid-cols-10rem-1fr-7rem md:items-center md:gap-5"
               >
                 <div className="flex items-baseline justify-between gap-3 md:block">
                   <span className="text-sm font-medium text-foreground">{window.label}</span>
@@ -123,7 +123,7 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
                     }}
                     /* oxlint-enable shadcn/no-inline-styles */
                   />
-                  <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_4px,var(--border)_4px,var(--border)_5px)] opacity-30" />
+                  <div className="absolute inset-0 bg-hatched opacity-30" />
                 </div>
                 <span className="text-xs text-muted-foreground tabular-nums md:text-end">
                   {formatReset(window.resetsAt)}

@@ -123,7 +123,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
           <div
             className={cn(
               "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 rounded-t-2xl",
-              "chat-composer-banner-stack-cap border border-b-0 shadow-[0_6px_18px_rgba(0,0,0,0.06)]",
+              "chat-composer-banner-stack-cap border border-b-0 shadow-peek",
               stackCapBorderClass[firstStackedItem.variant],
               "transition-opacity duration-150 ease-out",
               "group-hover/banner-stack:opacity-0 group-focus-within/banner-stack:opacity-0",
@@ -153,15 +153,15 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
           <div
             data-composer-banner-stack-expanded-items="true"
             className={cn(
-              "relative z-20 grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-out",
-              "group-hover/banner-stack:grid-rows-[1fr] group-focus-within/banner-stack:grid-rows-[1fr]",
+              "relative z-20 grid grid-rows-collapsed transition-grid-rows duration-150 ease-out",
+              "group-hover/banner-stack:grid-rows-expanded group-focus-within/banner-stack:grid-rows-expanded",
             )}
           >
             <div className="min-h-0 overflow-hidden">
               <div
                 className={cn(
                   "invisible pointer-events-none space-y-2 pb-2 opacity-0",
-                  "translate-y-1 transform-gpu transition-[opacity,transform] duration-150 ease-out will-change-[opacity,transform]",
+                  "translate-y-1 transform-gpu transition-transform-opacity duration-150 ease-out will-change-opacity-transform",
                   "group-hover/banner-stack:visible group-hover/banner-stack:pointer-events-auto group-hover/banner-stack:translate-y-0 group-hover/banner-stack:opacity-100",
                   "group-focus-within/banner-stack:visible group-focus-within/banner-stack:pointer-events-auto group-focus-within/banner-stack:translate-y-0 group-focus-within/banner-stack:opacity-100",
                 )}
@@ -214,7 +214,7 @@ function ComposerBannerStackAlert({
       variant={visualVariant}
       className={cn(
         attached
-          ? "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-[calc(var(--chat-composer-attachment-overlap)_+_0.375rem)] text-xs sm:px-4"
+          ? "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-composer-overlap-1.5 text-xs sm:px-4"
           : "alert-glass rounded-[22px]",
         item.className,
       )}

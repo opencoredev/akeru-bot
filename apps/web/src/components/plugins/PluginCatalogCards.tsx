@@ -13,7 +13,7 @@ import {
 } from "./pluginPresentation";
 
 export const LOGO_TILE_CLASS_NAME =
-  "flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-muted/70 p-2 ring-1 ring-border/50 ring-inset";
+  "flex shrink-0 items-center justify-center overflow-hidden rounded-10px bg-muted/70 p-2 ring-1 ring-border/50 ring-inset";
 
 export const ROW_CLASS_NAME =
   "group flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/50";
@@ -132,7 +132,7 @@ export function DirectorySection({
 }
 
 const CARD_CLASS_NAME =
-  "group relative flex min-h-34 min-w-0 flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgb(0_0_0/3%)] transition-[border-color,background-color,box-shadow] duration-(--duration-fast) ease-(--ease-smooth-out) hover:border-border hover:shadow-[0_1px_2px_rgb(0_0_0/4%),0_6px_16px_-8px_rgb(0_0_0/12%)] motion-reduce:transition-none has-[[data-card-open]:focus-visible]:ring-2 has-[[data-card-open]:focus-visible]:ring-ring";
+  "group relative flex min-h-34 min-w-0 flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card-rest transition-border-bg-shadow duration-(--duration-fast) ease-(--ease-smooth-out) hover:border-border hover:shadow-card-hover motion-reduce:transition-none has-[[data-card-open]:focus-visible]:ring-2 has-[[data-card-open]:focus-visible]:ring-ring";
 
 /** One directory card. The whole card opens details; the action sits above that hit area. */
 export function DirectoryCard({

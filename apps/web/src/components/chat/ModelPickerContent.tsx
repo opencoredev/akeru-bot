@@ -634,8 +634,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     <TooltipProvider delay={0}>
       <div
         className={cn(
-          "relative flex w-[min(22.5rem,calc(100vw-2rem))] max-h-[min(21.625rem,calc(100dvh-2rem))] flex-row overflow-hidden",
-          hasResults ? "h-[min(21.625rem,calc(100dvh-2rem))]" : "min-h-32",
+          "relative flex w-min-22.5rem-vw-2rem max-h-min-21.625rem-dvh-2rem flex-row overflow-hidden",
+          hasResults ? "h-min-21.625rem-dvh-2rem" : "min-h-32",
         )}
         data-model-picker-content="true"
       >

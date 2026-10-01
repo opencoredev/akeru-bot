@@ -50,7 +50,7 @@ export function MessageReactions({
         );
 
         const className = cn(
-          "inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 py-1 text-lg leading-none [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]",
+          "inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 py-1 text-lg leading-none font-emoji",
           mine ? "border-primary/40 bg-primary/10" : "border-border/80 bg-background/70",
         );
 

@@ -80,7 +80,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   };
 
   return (
-    <div className="mx-auto w-[min(46rem,calc(100%-2rem))] pt-2">
+    <div className="mx-auto w-min-46rem-pct-2rem pt-2">
       <section
         aria-atomic="true"
         className="relative rounded-xl border border-destructive/20 bg-card px-3 py-2.5 pe-10 text-card-foreground shadow-sm"

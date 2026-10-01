@@ -20,7 +20,7 @@ export function ThemeEditorNameField({
   onNameChange: (name: string) => void;
 }) {
   return (
-    <label className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-3">
+    <label className="grid grid-cols-1fr-2fr items-center gap-3">
       <span className="text-sm font-medium">Theme name</span>
       <Input
         autoFocus
@@ -78,7 +78,7 @@ export function ThemeEditorAppearanceField({
   onSelect: (appearance: ThemeAppearance) => void;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-3">
+    <div className="grid grid-cols-1fr-2fr items-center gap-3">
       <span className="text-sm font-medium">Appearance</span>
       <div aria-label="Theme appearance" className="grid grid-cols-2 gap-2" role="group">
         {(["light", "dark"] as const).map((appearance) => (
@@ -107,7 +107,7 @@ export function ThemeEditorColorsHeader({
   onAdvancedChange: (advanced: boolean) => void;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-3">
+    <div className="grid grid-cols-1fr-2fr items-start gap-3">
       <div>
         <h3 className="text-sm font-medium">Colors</h3>
         {isAdvanced ? null : (

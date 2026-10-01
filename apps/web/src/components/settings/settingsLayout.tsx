@@ -204,7 +204,7 @@ export function SettingsRow({
       data-settings-row=""
       className={cn("rounded-xl px-3 sm:px-4", children ? "pt-3 pb-1" : "py-3", className)}
     >
-      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] sm:items-center sm:gap-8">
+      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-1fr-10rem-auto sm:items-center sm:gap-8">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
             <h3 className="text-sm font-medium tracking-title-xs text-foreground">{title}</h3>

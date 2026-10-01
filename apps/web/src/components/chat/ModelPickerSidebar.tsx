@@ -96,14 +96,14 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
 
   return (
     <div className="w-11 shrink-0 overflow-hidden bg-muted/30" data-model-picker-sidebar="true">
-      <div className="h-full overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="h-full overflow-y-auto overscroll-contain scrollbar-none [&::-webkit-scrollbar]:hidden">
         <div ref={sidebarContentRef} className="relative flex min-h-full flex-col gap-1 p-1">
           {selectedIndicatorTop !== null ? (
             <div
               data-model-picker-selected-indicator="true"
               className={cn(
                 SELECTED_INDICATOR_CLASS,
-                "right-0 translate-y-0 transition-[top] duration-200 ease-out",
+                "right-0 translate-y-0 transition-top duration-200 ease-out",
               )}
               style={{ top: selectedIndicatorTop }}
             />

@@ -81,7 +81,7 @@ export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
   return (
     <div
       data-slot="animated-height"
-      className="transition-[height] duration-200 ease-out motion-reduce:transition-none"
+      className="transition-height duration-200 ease-out motion-reduce:transition-none"
       style={
         heightState.height === null
           ? undefined

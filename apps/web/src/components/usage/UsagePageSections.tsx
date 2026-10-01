@@ -173,7 +173,7 @@ export function UsageDeviceStrip({
 export function UsageSkeleton() {
   return (
     <>
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+      <section className="grid gap-6 lg:grid-cols-18rem-1fr">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1">
             <Skeleton className="h-10 w-36" />

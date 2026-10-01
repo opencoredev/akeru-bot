@@ -53,7 +53,7 @@ export function Legend({
               dimmed && "opacity-40",
             )}
           >
-            <span className="size-2 rounded-[1px]" style={{ backgroundColor: rgb(seed.fill) }} />
+            <span className="size-2 rounded-1px" style={{ backgroundColor: rgb(seed.fill) }} />
             {chart.labelOf(name)}
           </button>
         );

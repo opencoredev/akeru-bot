@@ -47,7 +47,7 @@ export function PluginSearchField({
       <input
         aria-label={t("Search plugins")}
         autoComplete="off"
-        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
+        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-border-shadow placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
         placeholder={t("Search plugins")}
         spellCheck={false}
         type="search"
@@ -144,7 +144,7 @@ export function PluginFilterBar({
       className="flex flex-wrap items-center justify-between gap-2"
       role="group"
     >
-      <div className="relative inline-flex rounded-[10px] bg-muted/70 p-0.5" ref={barRef}>
+      <div className="relative inline-flex rounded-10px bg-muted/70 p-0.5" ref={barRef}>
         <span
           aria-hidden="true"
           className="motion-segment-pill pointer-events-none absolute inset-y-0.5 left-0 rounded-lg bg-card opacity-0 shadow-xs ring-1 ring-border/60"

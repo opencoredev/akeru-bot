@@ -275,11 +275,9 @@ function SidebarUpdateControl() {
               aria-label={tooltip}
               aria-disabled={isInteractionDisabled || undefined}
               className={cn(
-                "inline-flex size-8 items-center justify-center rounded-[var(--control-radius)] outline-hidden ring-ring transition-colors focus-visible:ring-2",
+                "inline-flex size-8 items-center justify-center rounded-(--control-radius) outline-hidden ring-ring transition-colors focus-visible:ring-2",
                 isInteractionDisabled ? "cursor-not-allowed" : "cursor-pointer",
-                showUpdateIconState
-                  ? "text-sidebar-foreground"
-                  : "text-[var(--sidebar-icon-color)]",
+                showUpdateIconState ? "text-sidebar-foreground" : "text-(--sidebar-icon-color)",
                 !isInteractionDisabled &&
                   "hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
                 disabled && !showUpdateIconState && "opacity-60",

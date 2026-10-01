@@ -170,7 +170,7 @@ export function ProductFeedbackDialog() {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
       <DialogPopup
-        className="flex max-h-[min(32rem,90dvh)] max-w-lg flex-col overflow-hidden"
+        className="flex max-h-min-32rem-90dvh max-w-lg flex-col overflow-hidden"
         data-akeru-feedback-ui="composer"
       >
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -210,7 +210,7 @@ export function ProductFeedbackDialog() {
               autoComplete="off"
               name="website"
               tabIndex={-1}
-              className="absolute -left-[10000px] size-px opacity-0"
+              className="absolute -left-2500 size-px opacity-0"
               value={website}
               onChange={(event) => setWebsite(event.currentTarget.value)}
             />
@@ -237,7 +237,7 @@ export function ProductFeedbackDialog() {
           </DialogPanel>
 
           <DialogFooter className="shrink-0">
-            <div className="grid w-full grid-cols-2 gap-2 min-[360px]:grid-cols-[1fr_auto_auto]">
+            <div className="grid w-full grid-cols-2 gap-2 min-[360px]:grid-cols-grow-auto-auto">
               <Button
                 className="col-span-2 min-[360px]:col-span-1 min-[360px]:mr-auto"
                 type="button"

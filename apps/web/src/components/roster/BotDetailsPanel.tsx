@@ -280,7 +280,7 @@ export function BotDetailsPanel({
         onTransitionEnd={desktopPanel.onTransitionEnd}
         className={cn(
           "hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background min-[981px]:flex",
-          browserExpanded ? "[--details-width:min(48rem,52vw)]" : "[--details-width:22rem]",
+          browserExpanded ? "details-width-wide" : "details-width",
         )}
       >
         <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
@@ -352,7 +352,7 @@ export function BotDetailsPanel({
       </div>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetPopup
-          className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
+          className="w-min-92vw-24rem pb-safe pt-safe p-0"
           showCloseButton={false}
           side="right"
         >

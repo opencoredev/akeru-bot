@@ -86,7 +86,7 @@ export function Tooltip({
                 style={{ opacity: item.dimmed ? 0.4 : 1 }}
               >
                 <span
-                  className="size-2 rounded-[1px]"
+                  className="size-2 rounded-1px"
                   style={{ backgroundColor: rgb(item.seed.fill) }}
                 />
                 <span className="text-muted-foreground">{item.label}</span>

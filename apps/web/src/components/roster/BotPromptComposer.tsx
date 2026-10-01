@@ -326,7 +326,7 @@ export function BotPromptComposer({
       data-chat-composer-form="true"
       data-state={composerState}
       aria-disabled={readOnly || undefined}
-      className="w-full px-[max(1rem,calc((100%-48rem)/2))] pb-4 pt-2 sm:px-[max(1.5rem,calc((100%-48rem)/2))] sm:pb-6"
+      className="w-full px-gutter-48rem pb-4 pt-2 sm:px-gutter-48rem-wide sm:pb-6"
       onSubmit={(event) => {
         event.preventDefault();
         submitDraft({
@@ -421,7 +421,7 @@ export function BotPromptComposer({
             data-testid="bot-prompt-composer"
             data-expanded={expanded || undefined}
             className={cn(
-              "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out",
+              "relative flex min-h-13 flex-col overflow-hidden rounded-1.65rem border shadow-composer-float transition-composer-shape duration-200 ease-out",
               quietSurface
                 ? BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME
                 : BOT_COMPOSER_SURFACE_CLASS_NAME,
@@ -481,7 +481,7 @@ export function BotPromptComposer({
               aria-activedescendant={(mentionTrigger && activeMentionOptionId) || undefined}
               className={cn(
                 "field-sizing-content max-h-56 w-full resize-none bg-transparent text-base leading-6 outline-none placeholder:text-muted-foreground/70",
-                expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
+                expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-0.9rem",
               )}
               onChange={(event) => {
                 const { selectionStart, value } = event.currentTarget;

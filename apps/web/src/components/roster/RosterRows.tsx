@@ -191,7 +191,7 @@ export const BotRosterRow = memo(function BotRosterRow({
           "relative flex w-full items-center outline-none select-none",
           pinned ? "rounded-xl" : "rounded-lg",
           sortable.isDragging
-            ? "bg-[linear-gradient(var(--sidebar-row-active),var(--sidebar-row-active)),linear-gradient(var(--sidebar),var(--sidebar))] text-sidebar-foreground shadow-lg"
+            ? "sidebar-row-active-fill text-sidebar-foreground shadow-lg"
             : isActive
               ? "bg-sidebar-row-active text-sidebar-foreground"
               : pinned

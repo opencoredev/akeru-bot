@@ -277,7 +277,7 @@ export function UsagePage() {
                   staleEnvironments={merged.staleEnvironments}
                 />
 
-                <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+                <section className="grid gap-6 lg:grid-cols-18rem-1fr">
                   <div className="flex min-w-0 flex-col gap-5">
                     <div className="flex flex-col gap-1">
                       <span className="text-4xl font-semibold text-foreground tabular-nums">

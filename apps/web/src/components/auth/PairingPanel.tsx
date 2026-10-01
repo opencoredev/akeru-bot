@@ -199,7 +199,7 @@ export function PairingPanel({
 
       {hasEnvironment ? (
         <AuthSurfaceSection>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+          <dl className="grid grid-cols-auto-1fr gap-x-6 gap-y-2 text-sm">
             {environment.name ? (
               <>
                 <dt className="text-muted-foreground">{t("Environment")}</dt>

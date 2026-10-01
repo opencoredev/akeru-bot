@@ -144,7 +144,7 @@ export function MessageControls(props: {
         props.align === "end" && "justify-end",
         // Read aloud leads with an xs text button (8px to its icon); otherwise an
         // icon-xs button (6px, 5px from sm).
-        props.flushStart && (props.readAloud ? "-ms-2" : "-ms-1.5 sm:-ms-[5px]"),
+        props.flushStart && (props.readAloud ? "-ms-2" : "-ms-1.5 sm:-ms-1.25"),
       )}
       data-message-controls="true"
     >
@@ -208,9 +208,7 @@ export function MessageControls(props: {
               }
             >
               {props.selectedReaction ? (
-                <span className="text-xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]">
-                  {props.selectedReaction}
-                </span>
+                <span className="text-xl font-emoji">{props.selectedReaction}</span>
               ) : (
                 <SmilePlusIcon className="size-3.5" />
               )}
@@ -235,7 +233,7 @@ export function MessageControls(props: {
                       : t("React {emoji}", { emoji: option })
                   }
                   aria-pressed={props.selectedReaction === option}
-                  className="size-11 text-2xl sm:size-11 sm:text-2xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]"
+                  className="size-11 text-2xl sm:size-11 sm:text-2xl font-emoji"
                   size="icon-sm"
                   variant={props.selectedReaction === option ? "secondary" : "ghost"}
                   onClick={() => chooseReaction(option)}

@@ -6,7 +6,7 @@ import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 
 export const CHAT_MARKDOWN_IMAGE_SIZE_CLASS_NAME =
-  "h-auto w-auto max-h-[30rem] max-w-[min(100%,30rem)] object-contain";
+  "h-auto w-auto max-h-120 max-w-min-full-30rem object-contain";
 
 // block! outranks the unlayered `.chat-markdown img { display: inline-block }`
 // rule, keeping workspace images on the same block layout as their placeholder.
@@ -53,7 +53,7 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
       <span
         role="status"
         aria-label={t("Loading image")}
-        className="my-1 block aspect-video w-full max-w-[30rem] rounded-lg bg-muted/60"
+        className="my-1 block aspect-video w-full max-w-120 rounded-lg bg-muted/60"
       />
     );
   }

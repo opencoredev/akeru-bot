@@ -37,7 +37,7 @@ export function ProcessTreeName({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
       style={
         // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
         { paddingLeft: `${Math.min(process.depth, 7) * 10}px` }
@@ -63,7 +63,7 @@ export function ProcessTreeName({
         <TooltipPopup
           side="top"
           variant="diagnostics-mono"
-          className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+          className="max-w-min-520px-vw-2rem whitespace-normal break-words text-left"
         >
           {process.command || process.name}
         </TooltipPopup>
@@ -154,7 +154,7 @@ export function ProcessTable({
       scrollFade
       hideScrollbars
       variant="telemetry-process"
-      className="max-h-[min(68vh,48rem)] w-full max-w-full"
+      className="max-h-min-68vh-48rem w-full max-w-full"
     >
       <table className="w-full min-w-330 table-fixed text-left text-xs">
         <colgroup>
@@ -307,7 +307,7 @@ export function HistoryProcessTable({
                   <TooltipPopup
                     side="top"
                     variant="diagnostics-mono"
-                    className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+                    className="max-w-min-520px-vw-2rem whitespace-normal break-words text-left"
                   >
                     {process.command || process.name}
                   </TooltipPopup>

@@ -303,7 +303,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         setHighlightedItemValue(null);
         setQuery(nextQuery);
       }}
-      panelClassName="max-h-[min(28rem,70vh)]"
+      panelClassName="max-h-min-28rem-70vh"
       value={query}
     >
       <CommandPaletteResults

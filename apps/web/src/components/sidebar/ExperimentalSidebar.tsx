@@ -117,9 +117,7 @@ export function ExperimentalSidebar() {
         <div
           className={cn(
             "w-full shrink-0",
-            isMacosDesktop
-              ? "h-[var(--workspace-topbar-height)]"
-              : "h-[calc(0.5rem+var(--workspace-topbar-height)/2-1.25rem)]",
+            isMacosDesktop ? "h-(--workspace-topbar-height)" : "h-topbar-spacer",
             isElectron && "drag-region",
           )}
         />
@@ -175,7 +173,7 @@ export function ExperimentalSidebar() {
         className={cn("flex shrink-0 py-2 pr-2", onPlugins && "hidden")}
         style={{ width: PANEL_WIDTH }}
       >
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-[var(--shell-card-shadow)] [--sidebar-row-active:color-mix(in_srgb,var(--sidebar-foreground)_7%,transparent)] [--sidebar-row-hover:color-mix(in_srgb,var(--sidebar-foreground)_4%,transparent)] [--card:var(--shell-card)] [--sidebar:var(--shell-card)]">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-(--shell-card-shadow) [--sidebar-row-active:color-mix(in_srgb,var(--sidebar-foreground)_7%,transparent)] [--sidebar-row-hover:color-mix(in_srgb,var(--sidebar-foreground)_4%,transparent)] [--card:var(--shell-card)] [--sidebar:var(--shell-card)]">
           <div
             key={panel}
             className={cn("flex min-h-0 flex-1 flex-col", panelSwitched && "motion-place-enter")}
@@ -218,10 +216,10 @@ function RailButton({
             aria-current={active || undefined}
             onClick={onClick}
             className={cn(
-              "flex size-10 cursor-pointer items-center justify-center rounded-xl outline-none transition-[background-color,color,box-shadow] duration-(--duration-fast) ease-(--ease-smooth-out) select-none motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring [-webkit-app-region:no-drag]",
+              "flex size-10 cursor-pointer items-center justify-center rounded-xl outline-none transition-bg-color-shadow duration-(--duration-fast) ease-(--ease-smooth-out) select-none motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring app-region-no-drag",
               active
                 ? "bg-(--shell-card) text-sidebar-foreground shadow-xs ring-1 ring-sidebar-border/70"
-                : "text-sidebar-muted-foreground hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_6%,transparent)] hover:text-sidebar-foreground",
+                : "text-sidebar-muted-foreground hover:bg-sidebar-wash hover:text-sidebar-foreground",
             )}
           >
             <AppIcon icon={icon} className="size-5" strokeWidth={active ? 2 : 1.7} />
@@ -237,7 +235,7 @@ function PanelHeader({ title }: { title: string }) {
   return (
     <div
       className={cn(
-        "flex h-[var(--workspace-topbar-height)] shrink-0 items-center px-4",
+        "flex h-(--workspace-topbar-height) shrink-0 items-center px-4",
         isElectron && "drag-region",
       )}
     >

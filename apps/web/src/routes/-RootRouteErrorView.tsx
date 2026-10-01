@@ -43,7 +43,7 @@ export function RootRouteErrorView({
       aria-labelledby="root-error-title"
       className="flex h-full min-h-0 flex-col bg-background text-foreground"
     >
-      <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1.5 pl-[var(--workspace-controls-left)] pr-[var(--workspace-controls-right)]">
+      <header className="flex h-(--workspace-topbar-height) shrink-0 items-center gap-1.5 pl-(--workspace-controls-left) pr-(--workspace-controls-right)">
         <AkeruWordmark aria-hidden className="text-2xl text-foreground" />
         <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
           {APP_DISPLAY_NAME}
@@ -69,7 +69,7 @@ export function RootRouteErrorView({
           </div>
 
           <details className="group mt-5 w-full text-left">
-            <summary className="flex cursor-pointer list-none items-center justify-center rounded-[var(--control-radius)] px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-center rounded-(--control-radius) px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden">
               {t("Technical details")}
             </summary>
             <pre

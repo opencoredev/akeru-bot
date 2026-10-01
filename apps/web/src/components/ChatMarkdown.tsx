@@ -306,7 +306,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           <TooltipTrigger render={link} />
           <TooltipPopup
             side="top"
-            className="max-w-[min(36rem,calc(100vw-2rem))] whitespace-normal leading-tight wrap-anywhere"
+            className="max-w-min-36rem-vw-2rem whitespace-normal leading-tight wrap-anywhere"
           >
             {href}
           </TooltipPopup>
@@ -453,7 +453,7 @@ function ChatMarkdown({
   return (
     <div
       className={cn(
-        "chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere] [word-break:break-word]",
+        "chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80 wrap-anywhere word-break-word",
         className,
       )}
       onCopy={handleCopy}

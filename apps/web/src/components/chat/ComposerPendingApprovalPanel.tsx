@@ -341,7 +341,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           >
             <CommandGlyph />
             <code
-              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >
@@ -402,7 +402,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           <div className="mt-1.5 flex min-w-0 flex-col gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
             <code
               aria-label={detailAriaLabel}
-              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >

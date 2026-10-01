@@ -127,7 +127,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
 
   const renderRemoteFields = () => (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-3 sm:grid-cols-1fr-10rem">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-foreground">Host</span>
           <Input
@@ -188,7 +188,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
             spellCheck={false}
           />
         </label>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
+        <div className="grid gap-3 sm:grid-cols-1fr-7rem">
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-foreground">Username</span>
             <Input

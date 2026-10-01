@@ -32,7 +32,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
       key={props.pulseKey}
       className={cn(
         props.pulsing
-          ? "animate-[prompt-stash-count-enter_180ms_ease-out_both] text-primary motion-reduce:animate-none"
+          ? "animate-prompt-stash-count-enter text-primary motion-reduce:animate-none"
           : "text-muted-foreground",
       )}
     >

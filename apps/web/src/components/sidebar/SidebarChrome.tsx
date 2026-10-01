@@ -82,12 +82,12 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   return (
     <SidebarHeader
       className={cn(
-        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
+        "@container/sidebar-header relative h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
         isElectron && "drag-region",
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
-      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
           <SidebarTrigger
             className={cn(
@@ -102,7 +102,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           <Link
             aria-label={t("Go to chats")}
             className={cn(
-              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
+              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 app-region-no-drag",
               backdropVariant ? "text-white" : "text-sidebar-foreground",
             )}
             to="/"
@@ -459,7 +459,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   }, [closeMobileSidebar]);
 
   return (
-    <SidebarFooter className="max-h-[min(45dvh,22rem)] shrink-0 overflow-y-auto overscroll-contain p-[var(--sidebar-content-inset)]">
+    <SidebarFooter className="max-h-min-45dvh-22rem shrink-0 overflow-y-auto overscroll-contain p-(--sidebar-content-inset)">
       <div className="flex flex-col gap-2 empty:hidden group-data-[collapsible=icon]:hidden">
         <ComputerUseControl />
         <SidebarProviderUpdatePill />

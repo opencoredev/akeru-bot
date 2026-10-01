@@ -272,7 +272,7 @@ export function ThemeColorPickerPanel({
             style={hueThumbStyle}
           />
         </div>
-        <div className="grid grid-cols-[1fr_1.2fr] gap-2">
+        <div className="grid grid-cols-grow-1.2grow gap-2">
           <label className="grid min-w-0 gap-1">
             <span className="px-1 text-10px font-semibold uppercase tracking-caps text-muted-foreground">
               HEX

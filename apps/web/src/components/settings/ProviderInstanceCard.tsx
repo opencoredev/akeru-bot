@@ -370,7 +370,7 @@ export function ProviderInstanceCard({
                   <PopoverPopup
                     side="bottom"
                     align="start"
-                    className="w-[min(21rem,calc(100vw-1.5rem))] [--popup-width:min(21rem,calc(100vw-1.5rem))]"
+                    className="w-min-21rem-vw-1.5rem popup-width-21rem"
                   >
                     <div className="grid min-w-0 gap-3">
                       <div className="grid gap-0.5">

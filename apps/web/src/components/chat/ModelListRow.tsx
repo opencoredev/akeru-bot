@@ -54,8 +54,8 @@ export const ModelListRow = memo(function ModelListRow(props: {
       disabled={Boolean(props.disabledReason)}
       contentClassName="flex w-full items-center gap-3"
       className={cn(
-        "group relative w-full !min-w-0 max-w-full cursor-pointer rounded-md px-2 py-2 transition-[background-color,box-shadow,color]",
-        "hover:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] data-highlighted:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))] data-selected:bg-foreground/[0.08] data-selected:text-foreground data-selected:ring-0 [&[data-highlighted][data-selected]]:bg-[color-mix(in_srgb,var(--popover)_90%,var(--contrast-foreground))]",
+        "group relative w-full !min-w-0 max-w-full cursor-pointer rounded-md px-2 py-2 transition-bg-color-shadow",
+        "hover:bg-popover-highlight data-highlighted:bg-popover-highlight data-selected:bg-foreground/[0.08] data-selected:text-foreground data-selected:ring-0 [&[data-highlighted][data-selected]]:bg-popover-highlight",
         props.disabledReason &&
           "data-disabled:pointer-events-auto data-disabled:cursor-not-allowed data-disabled:hover:bg-transparent",
       )}
@@ -100,7 +100,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
                 size="icon-xs"
                 variant="ghost"
                 className={cn(
-                  "-mr-1 shrink-0 text-muted-foreground/70 opacity-64 transition-[color,opacity] hover:text-foreground hover:opacity-100 group-hover:opacity-100",
+                  "-mr-1 shrink-0 text-muted-foreground/70 opacity-64 transition-color-opacity hover:text-foreground hover:opacity-100 group-hover:opacity-100",
                   props.isFavorite && "text-foreground opacity-100",
                 )}
                 onClick={(event) => {

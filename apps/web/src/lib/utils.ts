@@ -5,28 +5,11 @@ import { DraftId } from "../composerDraftStore";
 import type { CnFunction } from "cn";
 import { createCn } from "cn/config";
 
-/**
- * Class merger that knows the extra theme steps declared in index.css, so a
- * later `text-11px` replaces an earlier `text-xs` instead of being read as a
- * text color.
- */
+import { scaleClassGroups, scaleTheme } from "./scaleTheme";
+
+/** Class merger that knows the extra theme steps declared in styles/scale-tokens.css. */
 export const cn: CnFunction = createCn({
-  extend: {
-    theme: {
-      text: ["7px", "8px", "9px", "10px", "11px", "12px", "13px", "15px", "17px", "26px"],
-      tracking: [
-        "caps",
-        "caps-wide",
-        "caps-wider",
-        "caps-widest",
-        "title-xs",
-        "title-sm",
-        "title",
-        "title-lg",
-      ],
-      leading: ["copy", "copy-tight"],
-    },
-  },
+  extend: { theme: scaleTheme, classGroups: scaleClassGroups },
 });
 
 export function isMacPlatform(platform: string): boolean {

@@ -485,7 +485,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         <RosterSidebarHeader onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
       )}
       <SidebarContent
-        className="gap-0 [overflow-anchor:none]"
+        className="gap-0 overflow-anchor-none"
         fixedHeader={
           chrome === "panel" && !searchOpen && query.length === 0 ? null : (
             <SidebarGroup className="px-(--sidebar-content-inset) pb-1 pt-1 group-data-[collapsible=icon]:hidden">

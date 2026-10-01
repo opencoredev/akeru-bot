@@ -227,7 +227,7 @@ export function DelegationCard({
   return (
     <article
       aria-label={t("Delegation to {name}", { name: childName })}
-      className="mt-2 ml-10 max-w-[min(42rem,calc(100%-2.5rem))] border-l-2 border-border py-1.5 pl-3"
+      className="mt-2 ml-10 max-w-min-42rem-pct-2.5rem border-l-2 border-border py-1.5 pl-3"
       data-testid="delegation-card"
       data-delegation-id={delegation.delegationId}
     >

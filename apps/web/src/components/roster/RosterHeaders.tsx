@@ -36,7 +36,7 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
         isElectron && "drag-region",
       )}
     >
-      <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+      <div className="grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
           <SidebarTrigger className="md:hidden" />
         </div>

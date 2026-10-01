@@ -1,0 +1,92 @@
+/* Single-property utilities Tailwind does not ship, kept here so components
+   use a named class instead of an arbitrary property. */
+
+/* Thin horizontal scrollbar with a soft thumb for long single-line content. */
+@utility scrollbar-subtle {
+  scrollbar-color: color-mix(in srgb, var(--contrast-border) 78%, transparent) transparent;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--contrast-border) 78%, transparent);
+  }
+}
+
+@utility scrollbar-gutter-stable-both {
+  scrollbar-gutter: stable both-edges;
+}
+
+@utility app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@utility appearance-textfield {
+  appearance: textfield;
+}
+
+@utility word-break-word {
+  word-break: break-word;
+}
+
+@utility overflow-anchor-none {
+  overflow-anchor: none;
+}
+
+/* Lines an inline icon up with the text baseline. */
+@utility align-icon {
+  vertical-align: -0.125em;
+}
+
+/* Skips layout and paint for offscreen chat rows, reserving 96px meanwhile. */
+@utility content-visibility-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+@utility will-change-opacity-transform {
+  will-change: opacity, transform;
+}
+
+/* Diagonal hatching for empty chart bars. */
+@utility bg-hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 4px,
+    var(--border) 4px,
+    var(--border) 5px
+  );
+}
+
+/* Paints the active row tint over an opaque sidebar fill. */
+@utility sidebar-row-active-fill {
+  background-image:
+    linear-gradient(var(--sidebar-row-active), var(--sidebar-row-active)),
+    linear-gradient(var(--sidebar), var(--sidebar));
+}
+
+/* Sidebar panel drawn as a floating shell card. */
+@utility sidebar-shell-card {
+  --sidebar-row-active: color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
+  --sidebar-row-hover: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  --card: var(--shell-card);
+  --sidebar: var(--shell-card);
+}
+
+@utility details-width {
+  --details-width: 22rem;
+}
+
+@utility details-width-wide {
+  --details-width: min(48rem, 52vw);
+}
+
+/* Shorter topbar fade for pages whose header sits close to the content. */
+@utility topbar-scroll-fade-compact {
+  &.topbar-scroll-fade {
+    --topbar-scroll-fade-height: 1.5rem;
+  }
+}
+
+@utility popup-width-21rem {
+  --popup-width: min(21rem, calc(100vw - 1.5rem));
+}

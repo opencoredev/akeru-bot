@@ -75,7 +75,7 @@ function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | 
           strokeDashoffset={progressOffset}
           strokeLinecap="round"
           strokeWidth="1.5"
-          className="transition-[stroke-dashoffset] duration-300 ease-out motion-reduce:transition-none"
+          className="transition-stroke-dashoffset duration-300 ease-out motion-reduce:transition-none"
         />
       </svg>
       <DownloadIcon className="size-3" strokeWidth={2.25} />

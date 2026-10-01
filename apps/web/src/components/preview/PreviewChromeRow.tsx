@@ -171,7 +171,7 @@ export function PreviewChromeRow({
                   className={cn(
                     onOpenInBrowser &&
                       !inputFocused &&
-                      "group-hover/address:pe-7 transition-[padding]",
+                      "group-hover/address:pe-7 transition-padding",
                   )}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => {

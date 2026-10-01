@@ -348,7 +348,7 @@ export function ThemeLibrary({
     // tooltip briefly showing while crossing between a card's two circles is
     // accepted: scoping the group tighter makes the handoffs feel sluggish.
     <TooltipProvider>
-      <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+      <div className="grid w-full grid-cols-fill-15rem gap-3">
         {STANDARD_THEME_CARDS.map((standardTheme) => (
           <ThemeLibraryCard
             activeModes={pickedModesFor(null)}

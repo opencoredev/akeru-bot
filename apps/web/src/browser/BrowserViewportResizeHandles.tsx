@@ -91,8 +91,8 @@ function ResizeHandle(props: {
             className={cn("relative block size-3", mirrorCorner && "-scale-x-100")}
             aria-hidden="true"
           >
-            <span className="absolute bottom-[3px] left-0 h-px w-3 -rotate-45 rounded-full bg-current" />
-            <span className="absolute bottom-0 left-[5px] h-px w-2 -rotate-45 rounded-full bg-current" />
+            <span className="absolute bottom-0.75 left-0 h-px w-3 -rotate-45 rounded-full bg-current" />
+            <span className="absolute bottom-0 left-1.25 h-px w-2 -rotate-45 rounded-full bg-current" />
           </span>
         )}
       </span>
