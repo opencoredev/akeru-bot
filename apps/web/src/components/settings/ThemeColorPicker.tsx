@@ -33,9 +33,8 @@ function ThemeColorPicker({
                   type="button"
                 >
                   <span
-                    className="absolute inset-0 rounded-full shadow-sm"
-                    // oxlint-disable-next-line shadcn/no-inline-styles -- swatch shows the color being edited
-                    style={{ backgroundColor: value }}
+                    className="absolute inset-0 rounded-full shadow-sm swatch-fill"
+                    style={{ "--swatch": value }}
                   />
                 </button>
               }

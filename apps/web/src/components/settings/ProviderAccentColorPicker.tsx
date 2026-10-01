@@ -1,15 +1,7 @@
 "use client";
 
 import { PipetteIcon, XIcon } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 
 import { ColorSelector } from "../color-selector";
 import { Button } from "../ui/button";
@@ -26,20 +18,17 @@ const PROVIDER_ACCENT_SWATCHES = [
   "#0891b2",
 ] as const;
 
-const FALLBACK_ACCENT_COLOR = PROVIDER_ACCENT_SWATCHES[0];
-
-/* oxlint-disable shadcn/no-inline-styles -- full hue spectrum track, not app chrome */
-const HUE_TRACK_STYLE: CSSProperties = {
-  background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-};
-/* oxlint-enable shadcn/no-inline-styles */
+/** The stored accent as a hex color, or the first swatch when none is valid. */
+function resolveAccentColor(value: string | undefined): string {
+  return normalizeProviderAccentColor(value) ?? PROVIDER_ACCENT_SWATCHES[0];
+}
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
 
 function hexToHsv(hex: string) {
-  const normalized = normalizeProviderAccentColor(hex) ?? FALLBACK_ACCENT_COLOR;
+  const normalized = resolveAccentColor(hex);
   const numeric = Number.parseInt(normalized.slice(1), 16);
   const red = ((numeric >> 16) & 255) / 255;
   const green = ((numeric >> 8) & 255) / 255;
@@ -107,14 +96,6 @@ function ProviderCustomColorPanel(props: {
   const [hsv, setHsv] = useState(initialHsv);
   const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
 
-  /* oxlint-disable shadcn/no-inline-styles -- HSV plane painted for the current hue */
-  const planeStyle: CSSProperties = {
-    backgroundColor: `hsl(${hsv.h} 100% 50%)`,
-    backgroundImage:
-      "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
-  };
-  /* oxlint-enable shadcn/no-inline-styles */
-
   const commitHsv = useCallback(
     (nextHsv: typeof hsv) => {
       setHsv(nextHsv);
@@ -151,8 +132,8 @@ function ProviderCustomColorPanel(props: {
   return (
     <div className="w-56 bg-popover">
       <div
-        className="relative h-36 cursor-crosshair touch-none"
-        style={planeStyle}
+        className="relative h-36 cursor-crosshair touch-none bg-pure-hue bg-saturation-value-plane"
+        style={{ "--hue": String(hsv.h) }}
         onPointerDown={handlePointerDown(updateFromPlane)}
         onPointerMove={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -161,15 +142,13 @@ function ProviderCustomColorPanel(props: {
         }}
       >
         <span
-          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
-          // oxlint-disable-next-line shadcn/no-inline-styles -- thumb position follows the picked saturation and brightness
-          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
+          className="pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
+          style={{ "--thumb-left": `${hsv.s * 100}%`, "--thumb-top": `${(1 - hsv.v) * 100}%` }}
         />
       </div>
       <div className="grid gap-3 p-3">
         <div
-          className="relative h-3 cursor-pointer touch-none rounded-full"
-          style={HUE_TRACK_STYLE}
+          className="relative h-3 cursor-pointer touch-none rounded-full bg-hue-spectrum"
           onPointerDown={handlePointerDown(updateFromHue)}
           onPointerMove={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -178,9 +157,8 @@ function ProviderCustomColorPanel(props: {
           }}
         >
           <span
-            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
-            // oxlint-disable-next-line shadcn/no-inline-styles -- thumb position and fill follow the picked color
-            style={{ left: `${(hsv.h / 360) * 100}%`, backgroundColor: currentColor }}
+            className="pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35 swatch-fill"
+            style={{ "--thumb-left": `${(hsv.h / 360) * 100}%`, "--swatch": currentColor }}
           />
         </div>
         <input
@@ -207,17 +185,7 @@ function ProviderCustomColorPicker(props: {
   readonly selected: boolean;
   readonly onCommit: (value: string) => void;
 }) {
-  const normalized = normalizeProviderAccentColor(props.value) ?? FALLBACK_ACCENT_COLOR;
-
-  // The trigger wears the user's custom accent; selected adds a ring in that color.
-  /* oxlint-disable shadcn/no-inline-styles -- user-chosen accent color */
-  const triggerStyle: CSSProperties = {
-    backgroundColor: normalized,
-    ...(props.selected
-      ? { boxShadow: `inset 0 0 0 2px var(--card), 0 0 0 2px ${normalized}` }
-      : {}),
-  };
-  /* oxlint-enable shadcn/no-inline-styles */
+  const normalized = resolveAccentColor(props.value);
 
   return (
     <Popover>
@@ -226,10 +194,12 @@ function ProviderCustomColorPicker(props: {
           <button
             type="button"
             className={cn(
-              "flex size-6 cursor-pointer items-center justify-center rounded-full text-white transition-transform duration-200 active:scale-90",
+              "flex size-6 cursor-pointer items-center justify-center rounded-full swatch-fill text-white transition-transform duration-200 active:scale-90",
               "hover:scale-105",
+              // The trigger wears the user's custom accent; selected adds a ring in that color.
+              props.selected && "swatch-ring",
             )}
-            style={triggerStyle}
+            style={{ "--swatch": normalized }}
             aria-label={`Choose custom accent color for ${props.displayName}`}
           >
             <PipetteIcon className="size-3 text-foreground/25" aria-hidden />

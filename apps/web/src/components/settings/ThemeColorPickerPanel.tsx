@@ -1,5 +1,6 @@
-import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
+import type { KeyboardEvent, PointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "../../lib/utils";
 import {
   clampThemeColor,
   normalizeThemePickerColor,
@@ -10,12 +11,6 @@ import {
   themeRgbValue,
   type ThemeColorHsv,
 } from "./themeColorPicker.logic";
-
-/* oxlint-disable shadcn/no-inline-styles -- full hue spectrum track, not app chrome */
-const HUE_TRACK_STYLE: CSSProperties = {
-  background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-};
-/* oxlint-enable shadcn/no-inline-styles */
 
 export function ThemeColorPickerPanel({
   label,
@@ -160,35 +155,11 @@ export function ThemeColorPickerPanel({
   // Thumbs travel inside the control by half their own size so they never
   // clip at the extremes; movement only animates for keyboard steps and
   // click-to-jump, never while dragging.
-  const thumbTransition = isDragging
-    ? undefined
-    : "left 80ms linear, top 80ms linear, background-color 80ms linear";
+  const thumbTransition = !isDragging && "transition-picker-thumb";
 
   // The plane and thumbs paint the picked color and sit where it lies on the
-  // HSV axes, so their styles are runtime values rather than app chrome.
-  /* oxlint-disable shadcn/no-inline-styles -- picked color and HSV thumb geometry */
-  const pureHue = `hsl(${hsv.h} 100% 50%)`;
-
-  const planeStyle: CSSProperties = {
-    backgroundColor: pureHue,
-    backgroundImage:
-      "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
-  };
-
-  const planeThumbStyle: CSSProperties = {
-    left: `calc(${hsv.s} * (100% - 0.75rem) + 0.375rem)`,
-    top: `calc(${1 - hsv.v} * (100% - 0.75rem) + 0.375rem)`,
-    transition: thumbTransition,
-  };
-
-  const hueThumbStyle: CSSProperties = {
-    left: `calc(${hsv.h / 360} * (100% - 1rem) + 0.5rem)`,
-    // The ball shows the pure hue so it stays visually anchored to the track;
-    // the header swatch carries the full current color.
-    backgroundColor: pureHue,
-    transition: thumbTransition,
-  };
-  /* oxlint-enable shadcn/no-inline-styles */
+  // HSV axes, so they read runtime custom properties.
+  const hue = String(hsv.h);
 
   const handleHexChange = (nextValue: string) => {
     setHexDraft(nextValue);
@@ -220,18 +191,17 @@ export function ThemeColorPickerPanel({
           <p className="text-11px text-muted-foreground">Choose a color</p>
         </div>
         <span
-          className="size-7 shrink-0 rounded-full shadow-sm"
-          // oxlint-disable-next-line shadcn/no-inline-styles -- swatch shows the picked color
-          style={{ backgroundColor: currentColor }}
+          className="size-7 shrink-0 rounded-full shadow-sm swatch-fill"
+          style={{ "--swatch": currentColor }}
         />
       </div>
       <div className="grid gap-3 px-3 pb-3 pt-3">
         <div
           aria-label={`${label} saturation and brightness`}
           aria-valuetext={`saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}
-          className="relative h-32 cursor-crosshair touch-none overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
+          className="relative h-32 cursor-crosshair touch-none overflow-hidden rounded-lg bg-pure-hue bg-saturation-value-plane outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
           role="slider"
-          style={planeStyle}
+          style={{ "--hue": hue }}
           tabIndex={0}
           onKeyDown={handlePlaneKeyDown}
           onLostPointerCapture={stopDragging}
@@ -242,8 +212,14 @@ export function ThemeColorPickerPanel({
           onPointerUp={stopDragging}
         >
           <span
-            className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/40"
-            style={planeThumbStyle}
+            className={cn(
+              "pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/40",
+              thumbTransition,
+            )}
+            style={{
+              "--thumb-left": `calc(${hsv.s} * (100% - 0.75rem) + 0.375rem)`,
+              "--thumb-top": `calc(${1 - hsv.v} * (100% - 0.75rem) + 0.375rem)`,
+            }}
           />
         </div>
         <div
@@ -264,12 +240,19 @@ export function ThemeColorPickerPanel({
         >
           <span
             aria-hidden
-            className="h-2.5 w-full rounded-full inset-ring inset-ring-black/12"
-            style={HUE_TRACK_STYLE}
+            className="h-2.5 w-full rounded-full bg-hue-spectrum inset-ring inset-ring-black/12"
           />
+          {/* The ball shows the pure hue so it stays visually anchored to the
+              track; the header swatch carries the full current color. */}
           <span
-            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/40"
-            style={hueThumbStyle}
+            className={cn(
+              "pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-pure-hue ring-1 ring-black/40",
+              thumbTransition,
+            )}
+            style={{
+              "--thumb-left": `calc(${hsv.h / 360} * (100% - 1rem) + 0.5rem)`,
+              "--hue": hue,
+            }}
           />
         </div>
         <div className="grid grid-cols-grow-1.2grow gap-2">
@@ -279,9 +262,8 @@ export function ThemeColorPickerPanel({
             </span>
             <span className="flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-2 focus-within:border-foreground/30">
               <span
-                className="size-3.5 shrink-0 rounded-full"
-                // oxlint-disable-next-line shadcn/no-inline-styles -- swatch shows the picked color
-                style={{ backgroundColor: currentColor }}
+                className="size-3.5 shrink-0 rounded-full swatch-fill"
+                style={{ "--swatch": currentColor }}
               />
               <input
                 aria-label={`${label} picker hex value`}
