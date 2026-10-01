@@ -3769,6 +3769,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               ),
             );
         }
+        const turnAdmissionGeneration = active.turnAdmissionGeneration;
         const turnId = yield* active.turnPreparation.withPermit(
           Effect.gen(function* () {
             if (resolved && usesMastraCode(resolved.provider)) {
@@ -3782,7 +3783,6 @@ const make = (options?: AgentControllerLiveOptions) =>
                 );
               }
             }
-            const turnAdmissionGeneration = active.turnAdmissionGeneration;
             if (input.timezone !== undefined) {
               active.configuredToolSession = {
                 ...active.configuredToolSession,

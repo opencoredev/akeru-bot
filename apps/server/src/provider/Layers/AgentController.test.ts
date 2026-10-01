@@ -6737,6 +6737,69 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
+  it.effect("interrupts turns waiting for attachment preparation", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    let readStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    let finishRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
+      readAttachment: async () => {
+        readStarted();
+        await readGate;
+        return Buffer.from("image");
+      },
+    });
+    return Effect.gen(function* () {
+      const controller = yield* AgentController;
+      yield* resolveCodex(controller);
+      yield* controller.startSession(codexThreadId, {
+        threadId: codexThreadId,
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        cwd: process.cwd(),
+        modelSelection: codexSelection,
+        runtimeMode: "full-access",
+      });
+      const first = yield* controller
+        .sendTurn({
+          threadId: codexThreadId,
+          input: "Preparing attachment",
+          attachments: [
+            {
+              type: "image",
+              id: "image-1",
+              name: "first.png",
+              mimeType: "image/png",
+              sizeBytes: 5,
+            },
+          ],
+        })
+        .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.promise(() => started);
+      const second = yield* controller
+        .sendTurn({
+          threadId: codexThreadId,
+          input: "Waiting for preparation",
+        })
+        .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
+      yield* controller.interruptTurn({ threadId: codexThreadId });
+      finishRead();
+      expect((yield* Fiber.join(first))._tag).toBe("Failure");
+      expect((yield* Fiber.join(second))._tag).toBe("Failure");
+      expect(mastra.sendMessage).not.toHaveBeenCalled();
+      yield* controller.sendTurn({ threadId: codexThreadId, input: "After interrupt" });
+      yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+      expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "After interrupt" });
+      mastra.finishSend();
+    }).pipe(Effect.provide(layer), Effect.orDie);
+  });
+
   it.effect("reads persisted image attachments for Mastra turns", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();

@@ -7,3 +7,5 @@ Add Railway bot workspaces with durable identity reattachment and saved credenti
 Deleting a bot leaves its Railway VM running; the Railway guide explains how to retire it.
 
 Preserve sandbox inheritance when editing bot settings. Keep same-chat turns in order while preparing attachments without blocking other chats.
+
+Interrupting a chat also cancels turns waiting for attachment preparation, while allowing new turns after the interrupt.
