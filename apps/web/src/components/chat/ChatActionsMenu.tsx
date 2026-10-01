@@ -59,13 +59,11 @@ import {
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { resolveChatMenuState } from "./chatActions.logic";
-import { buildChatPaletteActions, snoozePresetLabel } from "./chatPaletteActions";
-
-/** Starts a fresh chat with the open bot. Groups keep a single chat, so they pass none. */
-export interface NewChatControl {
-  readonly canStart: boolean;
-  readonly start: () => Promise<boolean>;
-}
+import {
+  buildChatPaletteActions,
+  type NewChatControl,
+  snoozePresetLabel,
+} from "./chatPaletteActions";
 
 /**
  * The open chat's state and its menu in the chat header: rename, regenerate
@@ -386,6 +384,6 @@ export function ChatActionsMenu({
   );
 }
 
-export { buildChatPaletteActions } from "./chatPaletteActions";
+export { buildChatPaletteActions, type NewChatControl } from "./chatPaletteActions";
 
 export { useMarkChatVisited } from "./useMarkChatVisited";

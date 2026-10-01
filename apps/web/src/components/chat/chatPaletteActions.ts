@@ -7,7 +7,12 @@ import { type ChatPaletteAction } from "../../chatActionsRegistry";
 import { type ChatActions } from "../../hooks/useChatActions";
 import { useI18n } from "../../i18n";
 import { type ChatMenuState } from "./chatActions.logic";
-import { type NewChatControl } from "./ChatActionsMenu";
+
+/** Starts a fresh chat with the open bot. Groups keep a single chat, so they pass none. */
+export interface NewChatControl {
+  readonly canStart: boolean;
+  readonly start: () => Promise<boolean>;
+}
 
 export function snoozePresetLabel(id: SnoozePresetId, t: ReturnType<typeof useI18n>["t"]) {
   switch (id) {
