@@ -86,6 +86,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --appearance-contrast-target: black;
   --app-scrollbar-thumb: rgb(217 217 217);
   --app-scrollbar-thumb-hover: rgb(191 191 191);
+  --terminal-scrollbar: var(--app-scrollbar-thumb);
+  --terminal-scrollbar-hover: var(--app-scrollbar-thumb-hover);
   /*
    * Compact UI geometry. Keep these values semantic so sidebar, palette,
    * tooltip, and toolbar controls cannot quietly drift apart.
@@ -162,6 +164,20 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+@utility terminal-scrollbar-thumb {
+  position: absolute;
+  inset-inline: 1px;
+  top: 0;
+  border-radius: 3px;
+  background: var(--terminal-scrollbar);
+  transition: background-color 120ms ease-out;
+
+  .group:hover &,
+  .group:focus-visible & {
+    background: var(--terminal-scrollbar-hover);
+  }
+}
+
 /* Honor the OS preference at the token, so a transition written against these
    durations becomes an instant state change rather than each call site having
    to remember its own reduced-motion branch. */
@@ -197,7 +213,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
 @theme inline {
   --color-zinc-25: oklch(99.2% 0 0);
-  --animate-skeleton: skeleton 2s infinite linear;
+  --animate-skeleton: none;
   /* Duty-cycled indicator animations: long holds with stepped ramps, so the
      compositor updates discrete frames instead of every vsync. */
   --animate-status-pulse: status-pulse 2s infinite;
@@ -502,80 +518,6 @@ html[data-theme-id="akeru-noir"] .dialog-glass {
       var(--stage-fade) 93%
     );
   }
-}
-
-@keyframes live-activity-focus {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes live-activity-focus-counter {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
-@utility live-activity-focus {
-  --live-activity-focus-width: 4.5rem;
-
-  right: auto;
-  left: calc(-1 * var(--live-activity-focus-width));
-  width: calc(100% + var(--live-activity-focus-width) + var(--live-activity-focus-width));
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    rgb(0 0 0 / 12%) 0.675rem,
-    rgb(0 0 0 / 55%) 1.575rem,
-    black 2.25rem,
-    rgb(0 0 0 / 55%) 2.925rem,
-    rgb(0 0 0 / 12%) 3.825rem,
-    transparent var(--live-activity-focus-width),
-    transparent 100%
-  );
-  -webkit-mask-repeat: no-repeat;
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    rgb(0 0 0 / 12%) 0.675rem,
-    rgb(0 0 0 / 55%) 1.575rem,
-    black 2.25rem,
-    rgb(0 0 0 / 55%) 2.925rem,
-    rgb(0 0 0 / 12%) 3.825rem,
-    transparent var(--live-activity-focus-width),
-    transparent 100%
-  );
-  mask-repeat: no-repeat;
-  animation: live-activity-focus 2.2s linear infinite;
-  will-change: transform;
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-    opacity: 0;
-    will-change: auto;
-  }
-}
-
-@utility live-activity-focus-counter {
-  width: 100%;
-  animation: live-activity-focus-counter 2.2s linear infinite;
-  will-change: transform;
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-    will-change: auto;
-  }
-}
-
-@utility live-activity-focus-aligned {
-  width: calc(100% - var(--live-activity-focus-width) - var(--live-activity-focus-width));
-  margin-left: var(--live-activity-focus-width);
 }
 
 @layer base {
@@ -1944,6 +1886,8 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --terminal-foreground: var(--app-theme-terminal-foreground);
   --terminal-cursor: var(--app-theme-terminal-cursor);
   --terminal-selection-background: var(--app-theme-terminal-selection-background);
+  --terminal-scrollbar: var(--app-theme-terminal-scrollbar);
+  --terminal-scrollbar-hover: var(--app-theme-terminal-scrollbar-hover);
 }
 
 /* T3 Chat's composer is a translucent lift over --chat-background. Route its
@@ -2977,10 +2921,6 @@ code {
   background-position: 120% 0;
   background-size: 240% 100%;
   background-clip: text;
-  /* background-clip: text cannot move on the compositor, so each frame
-     repaints the text. Stepping to about 15fps keeps the sweep smooth enough
-     at a quarter of the paint work on high-refresh displays. */
-  animation: bot-status-shimmer 1.8s steps(27) infinite;
 }
 
 /* The thinking glyph: a comet head steps clockwise around eight pixel cells
@@ -3023,8 +2963,6 @@ code {
   inset: 0;
   pointer-events: none;
   mask-image: linear-gradient(90deg, transparent 25%, #000 50%, transparent 75%);
-  animation: bot-shimmer-sheen var(--bot-shimmer-duration) linear infinite;
-  will-change: transform;
 }
 
 .bot-shimmer-sheen-text {
@@ -3033,8 +2971,6 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: color-mix(in srgb, var(--background) 62%, transparent);
-  animation: bot-shimmer-sheen-counter var(--bot-shimmer-duration) linear infinite;
-  will-change: transform;
 }
 
 @keyframes bot-shimmer-sheen {
@@ -3085,12 +3021,6 @@ code {
   .response-loading-pixel {
     animation: none;
   }
-}
-
-/* A shimmer that settles after two sweeps, for status lines that may hold
-   through a long wait and must not repaint the whole time. */
-.bot-status-shimmer-finite {
-  animation-iteration-count: 2;
 }
 
 @media (prefers-reduced-motion: reduce) {
