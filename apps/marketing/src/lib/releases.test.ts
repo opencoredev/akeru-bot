@@ -144,7 +144,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function releaseResponse(data: unknown = release): Response {
+function releaseResponse(
+  data: Omit<Release, "assets"> & { assets: (Release["assets"][number] | null)[] } = release,
+): Response {
   return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
 }
 
@@ -220,7 +222,7 @@ describe("bounded shared release requests", () => {
 
       const cards = [new DownloadLinkStub(), new DownloadLinkStub(), new DownloadLinkStub()];
       const downloads = cards.map((card) => resolveAssetDownload(card, "x64.exe"));
-      const request = fetchLatestRelease().catch((error: unknown) => error);
+      const request = fetchLatestRelease().catch((cause: unknown) => cause);
       const signal = fetchMock.mock.calls[0]?.[1]?.signal;
       expect(signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(RELEASE_REQUEST_TIMEOUT_MS - 1);

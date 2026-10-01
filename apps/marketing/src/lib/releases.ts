@@ -1,3 +1,5 @@
+import { isJsonObject, isJsonString } from "../../../../plugins/json.ts";
+
 const REPO = "opencoredev/akeru-bot";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
@@ -200,20 +202,27 @@ async function requestLatestRelease(): Promise<Release> {
 }
 
 function isRelease(value: unknown): value is Release {
-  if (!value || typeof value !== "object") return false;
-  const release = value as Record<string, unknown>;
+  if (!isJsonObject(value)) return false;
+  const release = value;
 
   return (
-    typeof release.tag_name === "string" &&
+    "tag_name" in release &&
+    isJsonString(release.tag_name) &&
     /^v\d+\.\d+\.\d+$/.test(release.tag_name) &&
-    typeof release.html_url === "string" &&
+    "html_url" in release &&
+    isJsonString(release.html_url) &&
+    "assets" in release &&
     Array.isArray(release.assets) &&
-    release.assets.every(
-      (asset) =>
-        asset &&
-        typeof asset === "object" &&
-        typeof asset.name === "string" &&
-        typeof asset.browser_download_url === "string",
-    )
+    release.assets.every(isReleaseAsset)
+  );
+}
+
+function isReleaseAsset(asset: unknown): asset is ReleaseAsset {
+  return (
+    isJsonObject(asset) &&
+    "name" in asset &&
+    isJsonString(asset.name) &&
+    "browser_download_url" in asset &&
+    isJsonString(asset.browser_download_url)
   );
 }

@@ -5,6 +5,8 @@ import SiteFooter from "../components/SiteFooter.astro";
 import "../styles/site.css";
 import PostHog from "../components/PostHog.astro";
 
+type StructuredDataValue = string | number | boolean | null | undefined | StructuredDataValue[] | { [key: string]: StructuredDataValue };
+
 interface Props {
   title?: string;
   description?: string;
@@ -14,7 +16,7 @@ interface Props {
   articleModifiedTime?: string;
   pageClass?: string;
   noindex?: boolean;
-  structuredData?: Record<string, unknown>[];
+  structuredData?: Record<string, StructuredDataValue>[];
 }
 
 const {

@@ -35,7 +35,9 @@ export function initDemoVideos() {
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        const video = entry.target as HTMLVideoElement;
+        const video = entry.target;
+
+        if (!(video instanceof HTMLVideoElement)) return;
         visibility.set(video, entry.intersectionRatio);
       });
       updatePlayback();

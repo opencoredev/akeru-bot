@@ -2,7 +2,7 @@ import { resolveDownloadLink } from "./downloadLinks";
 import { detectDownloadTarget, fetchLatestRelease } from "./releases";
 
 export async function initHomeDownloads() {
-  const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
+  const button = document.querySelector<HTMLAnchorElement>("#download-btn");
   const label = document.getElementById("download-label");
   const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
 
