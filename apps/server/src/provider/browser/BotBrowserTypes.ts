@@ -52,7 +52,7 @@ export const JsonRpcResponseSchema = Schema.Struct({
 export type JsonRpcResponse = typeof JsonRpcResponseSchema.Type;
 
 export type BrowserRpcValue =
-  | typeof Schema.Json.Type
+  | Schema.Json
   | undefined
   | readonly BrowserRpcValue[]
   | { readonly [key: string]: BrowserRpcValue };
