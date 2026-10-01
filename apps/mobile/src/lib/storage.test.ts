@@ -1,3 +1,4 @@
+import { EnvironmentId } from "@akeru/contracts";
 import { Predicate } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
@@ -5,6 +6,7 @@ import {
   loadPreferences,
   loadSavedConnections,
   savePreferencesPatch,
+  saveConnection,
 } from "../persistence/imperative";
 
 const mocks = vi.hoisted(() => {
@@ -125,6 +127,33 @@ describe("mobile connection storage", () => {
       cause,
       message: "Mobile secure storage operation read failed for key akeru.connections.",
     });
+  });
+
+  it("retains authenticated connections beside an incomplete row when loading and saving", async () => {
+    const good = {
+      environmentId: EnvironmentId.make("good"),
+      environmentLabel: "Good",
+      pairingUrl: "https://good.example/pair",
+      displayUrl: "https://good.example",
+      httpBaseUrl: "https://good.example",
+      wsBaseUrl: "wss://good.example",
+      bearerToken: "good-token",
+    };
+
+    await mocks.setItemAsync(
+      "akeru.connections",
+      JSON.stringify({
+        connections: [good, { environmentId: "expired" }],
+      }),
+    );
+
+    await expect(loadSavedConnections()).resolves.toEqual([good]);
+    const next = { ...good, environmentId: EnvironmentId.make("new"), bearerToken: "new-token" };
+    await saveConnection(next);
+    expect(JSON.parse(mocks.getStoredValue("akeru.connections") ?? "")).toEqual({
+      connections: [good, next],
+    });
+    await expect(loadSavedConnections()).resolves.toEqual([good, next]);
   });
 
   it("retires legacy registration data after a direct clear", async () => {

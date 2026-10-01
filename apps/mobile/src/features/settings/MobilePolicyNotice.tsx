@@ -75,7 +75,7 @@ function PolicyButton({
 }: {
   readonly label: string;
   readonly onPress: () => void;
-  readonly pressedOverlay: ColorValue;
+  readonly pressedOverlay: ColorValue | undefined;
 }) {
   return (
     <View className="overflow-hidden rounded-full">

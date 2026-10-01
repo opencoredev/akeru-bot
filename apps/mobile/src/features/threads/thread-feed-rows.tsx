@@ -87,8 +87,8 @@ type ThreadFeedRenderContext = {
   readonly onPressImage: (uri: string, headers?: Record<string, string>) => void;
   readonly onMarkdownLinkPress: (href: string) => void;
   readonly renderMarkdownImage: MarkdownImageRenderer;
-  readonly iconSubtleColor: string | ColorValue;
-  readonly userBubbleColor: string | ColorValue;
+  readonly iconSubtleColor: ColorValue | undefined;
+  readonly userBubbleColor: ColorValue | undefined;
   readonly markdownStyles: MarkdownStyleSets;
   readonly userBubbleMaxWidth: number;
   readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;

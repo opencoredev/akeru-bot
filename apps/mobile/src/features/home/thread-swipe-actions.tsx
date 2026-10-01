@@ -79,7 +79,7 @@ function resolveSecondaryAction(input: {
 }
 
 export function ThreadSwipeable(props: {
-  readonly backgroundColor: ColorValue;
+  readonly backgroundColor: ColorValue | undefined;
   readonly children: (close: () => void) => ReactNode;
   /** Uses action visuals that fit inside compact 44pt rows. The press target
    * still spans the row's full height and width. */
@@ -228,7 +228,7 @@ export function ThreadSwipeable(props: {
 }
 
 export function ThreadSwipeActions(props: {
-  readonly backgroundColor: ColorValue;
+  readonly backgroundColor: ColorValue | undefined;
   readonly compact: boolean;
   readonly fullSwipeAction?: "delete" | "primary";
   readonly fullSwipeThreshold: number;

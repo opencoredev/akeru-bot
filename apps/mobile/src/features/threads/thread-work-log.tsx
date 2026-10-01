@@ -138,7 +138,7 @@ type ThreadWorkLogProps = {
   readonly activities: ReadonlyArray<ThreadFeedActivity>;
   readonly copiedRowId: string | null;
   readonly expandedRows: Readonly<Record<string, boolean>>;
-  readonly iconSubtleColor: import("react-native").ColorValue;
+  readonly iconSubtleColor: import("react-native").ColorValue | undefined;
   readonly onCopyRow: (rowId: string, value: string) => void;
   readonly onToggleRow: (rowId: string) => void;
 };
@@ -327,7 +327,7 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
 export function ThreadWorkGroupToggle(props: {
   readonly expanded: boolean;
   readonly hiddenCount: number;
-  readonly iconSubtleColor: import("react-native").ColorValue;
+  readonly iconSubtleColor: import("react-native").ColorValue | undefined;
   readonly onlyToolActivities: boolean;
   readonly onToggle: () => void;
 }) {

@@ -196,7 +196,15 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     Effect.map((parsed) =>
       pipe(
         parsed?.connections ?? [],
-        Arr.filter((connection) => !!connection.environmentId && !!connection.bearerToken?.trim()),
+        Arr.flatMap((row) => {
+          const connection = decodeSavedConnection(row);
+
+          return Option.isSome(connection) &&
+            connection.value.environmentId &&
+            connection.value.bearerToken?.trim()
+            ? [connection.value]
+            : [];
+        }),
       ),
     ),
   );
@@ -308,19 +316,19 @@ export const layer = Layer.effect(MobileStorage, make());
 
 const decodeSavedConnectionDocument = Schema.decodeUnknownSync(
   Schema.Struct({
-    connections: Schema.optional(
-      Schema.Array(
-        Schema.Struct({
-          environmentId: EnvironmentId,
-          environmentLabel: Schema.String,
-          pairingUrl: Schema.String,
-          displayUrl: Schema.String,
-          httpBaseUrl: Schema.String,
-          wsBaseUrl: Schema.String,
-          bearerToken: Schema.NullOr(Schema.String),
-        }),
-      ),
-    ),
+    connections: Schema.optional(Schema.Array(Schema.Unknown)),
+  }),
+);
+
+const decodeSavedConnection = Schema.decodeUnknownOption(
+  Schema.Struct({
+    environmentId: EnvironmentId,
+    environmentLabel: Schema.String,
+    pairingUrl: Schema.String,
+    displayUrl: Schema.String,
+    httpBaseUrl: Schema.String,
+    wsBaseUrl: Schema.String,
+    bearerToken: Schema.NullOr(Schema.String),
   }),
 );
 
