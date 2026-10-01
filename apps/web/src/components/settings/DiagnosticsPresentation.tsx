@@ -81,7 +81,7 @@ export function StatBlock({
             <TooltipPopup
               side="top"
               variant="diagnostics-prose"
-              className="max-w-min-300px-vw-2rem whitespace-normal text-left"
+              className="max-w-(--spacing-min-300px-vw-2rem) whitespace-normal text-left"
             >
               {tooltip}
             </TooltipPopup>
@@ -235,7 +235,7 @@ export function TraceIdCell({ traceId }: { traceId: string }) {
         <TooltipPopup
           side="top"
           variant="diagnostics-mono"
-          className="max-w-min-520px-vw-2rem break-all"
+          className="max-w-(--spacing-min-520px-vw-2rem) break-all"
         >
           {traceId}
         </TooltipPopup>

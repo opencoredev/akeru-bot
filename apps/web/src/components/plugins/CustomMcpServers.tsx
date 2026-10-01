@@ -111,7 +111,7 @@ export function CustomMcpServers({
             />
             <Button
               aria-label={t("Edit {name}", { name: server.name })}
-              className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+              presentation="reveal-on-hover"
               size="icon-sm"
               variant="ghost-muted"
               disabled={pending}
@@ -121,7 +121,7 @@ export function CustomMcpServers({
             </Button>
             <Button
               aria-label={t("Delete {name}", { name: server.name })}
-              className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+              presentation="reveal-on-hover"
               size="icon-sm"
               variant="ghost-muted"
               disabled={pending}

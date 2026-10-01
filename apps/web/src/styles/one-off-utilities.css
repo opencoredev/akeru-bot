@@ -86,7 +86,3 @@
     --topbar-scroll-fade-height: 1.5rem;
   }
 }
-
-@utility popup-width-21rem {
-  --popup-width: min(21rem, calc(100vw - 1.5rem));
-}

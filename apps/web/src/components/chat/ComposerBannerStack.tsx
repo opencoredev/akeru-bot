@@ -212,12 +212,8 @@ function ComposerBannerStackAlert({
   return (
     <Alert
       variant={visualVariant}
-      className={cn(
-        attached
-          ? "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-composer-overlap-1.5 text-xs sm:px-4"
-          : "alert-glass rounded-[22px]",
-        item.className,
-      )}
+      presentation={attached ? "composer-drawer" : "glass"}
+      className={item.className}
       data-variant={visualVariant}
     >
       {item.icon}

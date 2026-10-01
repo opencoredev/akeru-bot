@@ -15,7 +15,19 @@ const POPOVER_POPUP_VARIANT_CLASSES = {
     "rounded-2xl border border-border/70 p-0 shadow-2xl [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
   "accent-picker":
     "rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
+  // Clipped picker whose content scrolls itself; the viewport class below drops padding.
+  "model-picker": "before:hidden [--viewport-inline-padding:0]",
+  // Narrow notice card that stays inside small windows.
+  "provider-update":
+    "w-[min(21rem,calc(100vw-1.5rem))] [--popup-width:min(21rem,calc(100vw-1.5rem))]",
 } as const;
+
+const POPOVER_VIEWPORT_VARIANT_CLASSES: Partial<
+  Record<keyof typeof POPOVER_POPUP_VARIANT_CLASSES, string>
+> = {
+  "model-picker":
+    "!overflow-hidden rounded-[calc(var(--radius-lg)-1px)] p-0 [clip-path:inset(0_round_calc(var(--radius-lg)-1px))]",
+};
 
 function PopoverTrigger({
   className,
@@ -98,6 +110,7 @@ function PopoverPopup({
                 ? "py-1 [--viewport-inline-padding:--spacing(2)]"
                 : "not-data-transitioning:overflow-y-auto",
               viewportPadding === "none" && "p-0 [--viewport-inline-padding:0px]",
+              POPOVER_VIEWPORT_VARIANT_CLASSES[variant],
               viewportClassName,
             )}
             data-slot="popover-viewport"

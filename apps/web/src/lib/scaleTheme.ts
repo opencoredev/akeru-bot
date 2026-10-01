@@ -49,7 +49,6 @@ export const scaleTheme = {
     "min-300px-vw-2rem",
     "min-440px-vw-2rem",
     "min-520px-vw-2rem",
-    "min-21rem-vw-1.5rem",
     "min-22.5rem-vw-2rem",
     "min-26rem-vw-2rem",
     "min-34rem-vw-2rem",

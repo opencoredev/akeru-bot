@@ -211,7 +211,8 @@ export function SidebarProviderUpdatePill() {
                 size="icon-micro"
                 variant="ghost"
                 aria-label={t("Dismiss provider update notice")}
-                className="relative z-1 mr-1 [--control-icon-color:currentColor] rounded-md text-inherit opacity-70 hover:bg-transparent hover:opacity-100"
+                presentation="update-pill-dismiss"
+                className="relative z-1 mr-1"
                 onClick={() => startExit(displayedView.key, null, displayedView.key)}
               >
                 <XIcon className="size-3.5" />

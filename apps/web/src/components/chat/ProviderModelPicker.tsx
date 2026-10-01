@@ -213,11 +213,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <ComposerControlChevron />
         </span>
       </PopoverTrigger>
-      <PopoverPopup
-        align="start"
-        className="before:hidden [--viewport-inline-padding:0]"
-        viewportClassName="!overflow-hidden rounded-[calc(var(--radius-lg)-1px)] p-0 [clip-path:inset(0_round_calc(var(--radius-lg)-1px))]"
-      >
+      <PopoverPopup align="start" variant="model-picker">
         <ModelPickerContent
           activeInstanceId={activeInstanceId}
           model={props.model}

@@ -46,11 +46,14 @@ function Sidebar({
   variant = "sidebar",
   collapsible = "offcanvas",
   resizable = false,
+  surface,
   className,
   children,
   ...props
 }: React.ComponentProps<"div"> & {
   side?: "left" | "right";
+  /** "app" paints the sidebar surface on the container; "app-bordered" adds the edge border. */
+  surface?: "app" | "app-bordered";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
   resizable?: boolean | SidebarResizableOptions;
@@ -74,6 +77,11 @@ function Sidebar({
     };
   }, [collapsible, isMobile, resizable]);
 
+  const surfaceClassName = cn(
+    surface && "bg-sidebar text-sidebar-foreground",
+    surface === "app-bordered" && "border-r border-sidebar-border",
+  );
+
   const instanceContextValue = React.useMemo<SidebarInstanceContextProps>(
     () => ({ side, resizable: resolvedResizable }),
     [resolvedResizable, side],
@@ -85,6 +93,7 @@ function Sidebar({
         <div
           className={cn(
             "flex h-full w-(--sidebar-width) flex-col bg-sidebar surface-grain text-sidebar-foreground",
+            surfaceClassName,
             className,
           )}
           data-slot="sidebar"
@@ -103,6 +112,7 @@ function Sidebar({
           <SheetPopup
             className={cn(
               "w-(--sidebar-width) max-w-none bg-sidebar surface-grain p-0 text-sidebar-foreground",
+              surfaceClassName,
               className,
             )}
             data-mobile="true"
@@ -166,6 +176,7 @@ function Sidebar({
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            surfaceClassName,
             className,
           )}
           data-slot="sidebar-container"
@@ -184,7 +195,13 @@ function Sidebar({
   );
 }
 
-function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
+/** `onStage` restyles the trigger for the white-on-artwork stage backdrop. */
+function SidebarTrigger({
+  className,
+  onClick,
+  onStage = false,
+  ...props
+}: React.ComponentProps<typeof Button> & { onStage?: boolean }) {
   const { toggleSidebar } = useSidebar();
   const isOpen = useSidebarVisibility();
   const { t } = useI18n();
@@ -193,6 +210,8 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
     <Button
       className={cn(
         "size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]",
+        onStage &&
+          "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
         className,
       )}
       data-sidebar="trigger"
@@ -227,12 +246,19 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
   );
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+/** `tone` sets the page text color for full-height route surfaces. */
+function SidebarInset({
+  className,
+  tone,
+  ...props
+}: React.ComponentProps<"main"> & { tone?: "foreground" | "muted" }) {
   return (
     <main
       className={cn(
         "relative flex min-w-0 w-full flex-1 flex-col bg-background surface-grain",
         "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2 md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm/5",
+        tone === "foreground" && "text-foreground",
+        tone === "muted" && "text-muted-foreground",
         className,
       )}
       data-slot="sidebar-inset"

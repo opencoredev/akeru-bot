@@ -367,11 +367,7 @@ export function ProviderInstanceCard({
                       </Button>
                     }
                   />
-                  <PopoverPopup
-                    side="bottom"
-                    align="start"
-                    className="w-min-21rem-vw-1.5rem popup-width-21rem"
-                  >
+                  <PopoverPopup side="bottom" align="start" variant="provider-update">
                     <div className="grid min-w-0 gap-3">
                       <div className="grid gap-0.5">
                         <p className="text-13px font-semibold leading-tight text-foreground">

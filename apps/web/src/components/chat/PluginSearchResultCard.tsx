@@ -114,7 +114,8 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
       </div>
       <Button
         aria-label={t("{action} {name}", { action, name: recommendation.name })}
-        className="h-8 rounded-full px-3.5 text-xs"
+        presentation="plugin-action"
+        className="h-8"
         disabled={recommendation.action === "unavailable"}
         size="sm"
         variant="secondary"

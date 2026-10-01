@@ -33,7 +33,11 @@ function TooltipPopup({
     | "diagnostics-process"
     | "keybinding-warning"
     | "telemetry-history"
-    | "connection-error";
+    | "connection-error"
+    | "tight"
+    | "hint"
+    | "mono"
+    | "file-link";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
 }) {
   return (
@@ -58,6 +62,10 @@ function TooltipPopup({
             variant === "keybinding-warning" && "leading-relaxed",
             variant === "telemetry-history" && "space-y-0.5 text-left",
             variant === "connection-error" && "max-w-80 whitespace-pre-wrap leading-tight",
+            variant === "tight" && "leading-tight",
+            variant === "hint" && "font-normal leading-snug",
+            variant === "mono" && "font-mono",
+            variant === "file-link" && "font-mono text-[11px] leading-tight",
             className,
           )}
           data-slot="tooltip-popup"

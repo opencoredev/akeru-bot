@@ -498,7 +498,7 @@ export function ConnectionsSettings() {
               />
               <TooltipPopup side="top">Add environment</TooltipPopup>
             </Tooltip>
-            <DialogPopup className="max-h-80dvh sm:max-w-3xl">
+            <DialogPopup className="max-h-(--spacing-80dvh) sm:max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Add environment</DialogTitle>
                 <DialogDescription>

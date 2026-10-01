@@ -90,10 +90,9 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
           <SidebarTrigger
+            onStage={Boolean(backdropVariant)}
             className={cn(
               "md:hidden",
-              backdropVariant &&
-                "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
               backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
             )}
           />
@@ -111,7 +110,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           </Link>
           {pillLabel ? (
             <Badge
-              className="absolute left-full ml-2 rounded-full px-1.5 text-muted-foreground"
+              presentation="environment-pill"
+              className="absolute left-full ml-2"
               data-environment-identification="pill"
               size="sm"
               variant="secondary"
@@ -356,12 +356,19 @@ function ComputerUseControlForEnvironment({
         </span>
       </div>
       <div className="mt-2 flex gap-2">
-        <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
+        <Button
+          presentation="text-xs"
+          className="h-7 flex-1"
+          disabled={pending}
+          size="sm"
+          onClick={stop}
+        >
           {t("Stop")}
         </Button>
         <Button
           aria-label={t("Revoke Computer Use for all bots")}
-          className="h-7 flex-1 text-xs"
+          presentation="text-xs"
+          className="h-7 flex-1"
           disabled={pending}
           size="sm"
           title={t("Disable Computer Use for all bots")}
@@ -459,7 +466,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   }, [closeMobileSidebar]);
 
   return (
-    <SidebarFooter className="max-h-min-45dvh-22rem shrink-0 overflow-y-auto overscroll-contain p-(--sidebar-content-inset)">
+    <SidebarFooter className="max-h-(--spacing-min-45dvh-22rem) shrink-0 overflow-y-auto overscroll-contain p-(--sidebar-content-inset)">
       <div className="flex flex-col gap-2 empty:hidden group-data-[collapsible=icon]:hidden">
         <ComputerUseControl />
         <SidebarProviderUpdatePill />

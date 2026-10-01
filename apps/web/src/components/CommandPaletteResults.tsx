@@ -9,7 +9,6 @@ import {
   CommandList,
   CommandShortcut,
 } from "./ui/command";
-import { cn } from "~/lib/utils";
 
 interface CommandPaletteResultsProps {
   groups: ReadonlyArray<CommandPaletteGroup>;
@@ -89,10 +88,8 @@ function CommandPaletteResultRow(props: {
   return (
     <CommandItem
       value={props.item.value}
-      className={cn(
-        "cursor-pointer gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit data-selected:bg-transparent data-selected:text-inherit [&[data-highlighted][data-selected]]:bg-transparent [&[data-highlighted][data-selected]]:text-inherit",
-        props.isActive && "bg-accent! text-accent-foreground!",
-      )}
+      variant={props.isActive ? "palette-active" : "palette"}
+      className="cursor-pointer"
       onMouseDown={(event) => {
         event.preventDefault();
       }}

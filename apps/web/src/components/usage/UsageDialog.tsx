@@ -33,7 +33,7 @@ export function UsageDialog() {
       <DialogPopup
         showCloseButton={false}
         bottomStickOnMobile={false}
-        className="h-min-48rem-90dvh max-w-5xl flex-col overflow-hidden"
+        className="h-(--spacing-min-48rem-90dvh) max-w-5xl flex-col overflow-hidden"
       >
         {open ? <UsagePage /> : null}
       </DialogPopup>

@@ -177,7 +177,8 @@ export function PluginFilterBar({
         >
           <SelectTrigger
             aria-label={t("Plugin category")}
-            className={cn("h-8", category && "text-foreground")}
+            presentation={category ? "filter-active" : undefined}
+            className="h-8"
             size="sm-dense"
             variant="ghost"
           >

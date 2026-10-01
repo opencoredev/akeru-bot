@@ -709,8 +709,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               <div className="border-b border-border/70 pb-2.5 transition-colors focus-within:border-foreground/30">
                 <ComboboxInput
                   ref={searchInputRef}
-                  className="[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5"
-                  inputClassName="rounded-none bg-transparent text-sm"
+                  presentation="model-search"
                   placeholder={t("Search models…")}
                   aria-label={t("Search models")}
                   showTrigger={false}
@@ -773,7 +772,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             {/* Model list */}
             {hasResults ? (
               <div className="relative min-h-0 flex-1 overflow-hidden pr-px">
-                <ComboboxListVirtualized className="size-full min-w-0 p-0 not-empty:p-0">
+                <ComboboxListVirtualized presentation="model-list">
                   <LegendList<string>
                     ref={modelListRef}
                     data={filteredItemKeys}
@@ -787,8 +786,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                             index={index}
                             value={modelKey}
                             aria-expanded={legacySection.isExpanded}
-                            className="group w-full cursor-pointer rounded-md px-2 py-2"
-                            contentClassName="flex w-full items-center gap-3"
+                            variant="model-row"
+                            className="group w-full cursor-pointer"
+                            contentClassName="flex w-full items-center"
                           >
                             <div className="min-w-0 flex-1 text-left">
                               <div className="text-xs font-medium leading-snug">

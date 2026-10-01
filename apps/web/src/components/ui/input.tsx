@@ -16,7 +16,9 @@ type InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputEleme
     | "color-value"
     | "keybinding-capture"
     | "keybinding-expression"
-    | "keybinding-search";
+    | "keybinding-search"
+    | "mono"
+    | "viewport-dimension";
   surface?: "background";
 };
 
@@ -86,6 +88,9 @@ function Input({
             props["aria-invalid"] &&
             "border-destructive/70 focus-visible:border-destructive",
           variant === "keybinding-search" && "[&_[data-slot=input]]:pl-8",
+          variant === "mono" && "font-mono",
+          variant === "viewport-dimension" &&
+            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:appearance-textfield",
           surface === "background" && "bg-background",
           className,
         ) || undefined

@@ -122,7 +122,7 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="chat-markdown-chrome-action"
+                presentation="markdown-chrome"
                 aria-pressed={expanded}
                 onClick={toggleExpanded}
                 aria-label={expandLabel}
@@ -143,7 +143,7 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="chat-markdown-chrome-action"
+                      presentation="markdown-chrome"
                       aria-label={copyLabel}
                     />
                   }

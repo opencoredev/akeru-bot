@@ -63,7 +63,7 @@ export function ProcessTreeName({
         <TooltipPopup
           side="top"
           variant="diagnostics-mono"
-          className="max-w-min-520px-vw-2rem whitespace-normal break-words text-left"
+          className="max-w-(--spacing-min-520px-vw-2rem) whitespace-normal break-words text-left"
         >
           {process.command || process.name}
         </TooltipPopup>
@@ -154,7 +154,7 @@ export function ProcessTable({
       scrollFade
       hideScrollbars
       variant="telemetry-process"
-      className="max-h-min-68vh-48rem w-full max-w-full"
+      className="max-h-(--spacing-min-68vh-48rem) w-full max-w-full"
     >
       <table className="w-full min-w-330 table-fixed text-left text-xs">
         <colgroup>
@@ -307,7 +307,7 @@ export function HistoryProcessTable({
                   <TooltipPopup
                     side="top"
                     variant="diagnostics-mono"
-                    className="max-w-min-520px-vw-2rem whitespace-normal break-words text-left"
+                    className="max-w-(--spacing-min-520px-vw-2rem) whitespace-normal break-words text-left"
                   >
                     {process.command || process.name}
                   </TooltipPopup>

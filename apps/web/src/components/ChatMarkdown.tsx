@@ -306,7 +306,8 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           <TooltipTrigger render={link} />
           <TooltipPopup
             side="top"
-            className="max-w-min-36rem-vw-2rem whitespace-normal leading-tight wrap-anywhere"
+            variant="tight"
+            className="max-w-(--spacing-min-36rem-vw-2rem) whitespace-normal wrap-anywhere"
           >
             {href}
           </TooltipPopup>

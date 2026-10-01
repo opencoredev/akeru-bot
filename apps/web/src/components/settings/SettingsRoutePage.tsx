@@ -23,7 +23,10 @@ export function SettingsRoutePage() {
   const label = t(settingsSectionLabel(section));
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset
+      tone="foreground"
+      className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate"
+    >
       {/* No fill here: the experimental shell paints the inset with var(--card), like chat. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
         {sidebarExperiment ? (

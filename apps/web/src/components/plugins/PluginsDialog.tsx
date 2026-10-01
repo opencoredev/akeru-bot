@@ -112,7 +112,8 @@ export function resolvePluginDialogServers(
   };
 }
 
-export const PLUGIN_DIALOG_CLASS_NAME = "h-min-48rem-90dvh max-w-5xl flex-col overflow-hidden";
+export const PLUGIN_DIALOG_CLASS_NAME =
+  "h-(--spacing-min-48rem-90dvh) max-w-5xl flex-col overflow-hidden";
 
 /** The named blocker for a brokered plugin that cannot connect yet, or null when it can. */
 export function pluginBrokeredBlockerNotice(
@@ -535,7 +536,7 @@ function PluginsDialogForEnvironment({
         </PluginDirectoryLayout>
       )}
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>
-        <DialogPopup className="max-h-min-36rem-90dvh max-w-lg flex-col overflow-hidden">
+        <DialogPopup className="max-h-(--spacing-min-36rem-90dvh) max-w-lg flex-col overflow-hidden">
           <DialogHeader variant="divided" className="shrink-0 px-6 py-5">
             <DialogTitle>
               {editorTarget?.server ? t("Edit MCP server") : t("Add MCP server")}

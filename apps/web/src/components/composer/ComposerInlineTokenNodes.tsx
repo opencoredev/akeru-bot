@@ -60,7 +60,11 @@ function ComposerMentionDecorator(props: { path: string }) {
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipPopup side="top" className="max-w-120 whitespace-normal leading-tight wrap-anywhere">
+      <TooltipPopup
+        side="top"
+        variant="tight"
+        className="max-w-120 whitespace-normal wrap-anywhere"
+      >
         {props.path}
       </TooltipPopup>
     </Tooltip>

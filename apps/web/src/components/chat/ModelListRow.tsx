@@ -52,12 +52,12 @@ export const ModelListRow = memo(function ModelListRow(props: {
       index={props.index}
       value={modelPickerModelKey(props.instanceId, props.model.slug)}
       disabled={Boolean(props.disabledReason)}
-      contentClassName="flex w-full items-center gap-3"
+      variant={props.disabledReason ? "model-option-disabled" : "model-option"}
+      contentClassName="flex w-full items-center"
       className={cn(
-        "group relative w-full !min-w-0 max-w-full cursor-pointer rounded-md px-2 py-2 transition-bg-color-shadow",
-        "hover:bg-popover-highlight data-highlighted:bg-popover-highlight data-selected:bg-foreground/[0.08] data-selected:text-foreground data-selected:ring-0 [&[data-highlighted][data-selected]]:bg-popover-highlight",
+        "group relative w-full !min-w-0 max-w-full cursor-pointer",
         props.disabledReason &&
-          "data-disabled:pointer-events-auto data-disabled:cursor-not-allowed data-disabled:hover:bg-transparent",
+          "data-disabled:pointer-events-auto data-disabled:cursor-not-allowed",
       )}
     >
       <div className="min-w-0 flex-1 text-left">
@@ -99,10 +99,10 @@ export const ModelListRow = memo(function ModelListRow(props: {
               <Button
                 size="icon-xs"
                 variant="ghost"
-                className={cn(
-                  "-mr-1 shrink-0 text-muted-foreground/70 opacity-64 transition-color-opacity hover:text-foreground hover:opacity-100 group-hover:opacity-100",
-                  props.isFavorite && "text-foreground opacity-100",
-                )}
+                presentation={
+                  props.isFavorite ? "model-favorite-toggle-on" : "model-favorite-toggle"
+                }
+                className="-mr-1 shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onToggleFavorite();
@@ -137,7 +137,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
   return (
     <Tooltip>
       <TooltipTrigger render={row} />
-      <TooltipPopup side="left" align="center" className="max-w-64 text-balance leading-snug">
+      <TooltipPopup side="left" align="center" variant="hint" className="max-w-64">
         {props.disabledReason}
       </TooltipPopup>
     </Tooltip>

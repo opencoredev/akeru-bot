@@ -227,8 +227,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     // a retry rather than a blank pane.
     return rosterLoadState.kind === "failed" ? (
       <SidebarInset
+        tone="muted"
         aria-label={t("Could not load bots")}
-        className="h-dvh min-h-0 overflow-hidden bg-background text-muted-foreground"
+        className="h-dvh min-h-0 overflow-hidden"
       >
         <RosterLoadStatus state={rosterLoadState} variant="page" />
       </SidebarInset>
@@ -263,8 +264,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   return (
     <SidebarInset
+      tone="foreground"
       aria-label={t("{name} group chat", { name: group.name })}
-      className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
+      className="h-dvh min-h-0 overflow-hidden"
       data-testid="group-thread-landing"
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">

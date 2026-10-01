@@ -233,7 +233,8 @@ export function MessageControls(props: {
                       : t("React {emoji}", { emoji: option })
                   }
                   aria-pressed={props.selectedReaction === option}
-                  className="size-11 text-2xl sm:size-11 sm:text-2xl font-emoji"
+                  presentation="reaction-emoji"
+                  className="size-11 sm:size-11"
                   size="icon-sm"
                   variant={props.selectedReaction === option ? "secondary" : "ghost"}
                   onClick={() => chooseReaction(option)}

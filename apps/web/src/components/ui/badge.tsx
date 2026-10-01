@@ -45,6 +45,9 @@ const badgeVariants = cva(
       },
       presentation: {
         "connection-kind": "h-4 px-1.5 text-10px",
+        "default-trait":
+          "gap-0 border-border/70 bg-muted/60 px-1.5 py-0 font-semibold text-10px text-muted-foreground leading-none",
+        "environment-pill": "rounded-full px-1.5 text-muted-foreground",
       },
     },
   },

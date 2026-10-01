@@ -88,7 +88,8 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
       >
         <Button
           aria-label={t("Dismiss error")}
-          className="absolute end-2 top-2 text-muted-foreground hover:text-foreground"
+          presentation="muted-dismiss"
+          className="absolute end-2 top-2"
           onClick={dismiss}
           size="icon-xs"
           type="button"

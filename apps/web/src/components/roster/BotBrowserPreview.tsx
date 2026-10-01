@@ -300,7 +300,8 @@ function BotBrowserPreviewFrame({
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/0 transition-colors group-focus-within/screen:bg-zinc-950/25 group-hover/screen:bg-zinc-950/25">
             <Button
               aria-label={t("Open {name} browser", { name: botName })}
-              className="translate-y-1 opacity-0 transition group-focus-within/screen:translate-y-0 group-focus-within/screen:opacity-100 group-hover/screen:translate-y-0 group-hover/screen:opacity-100"
+              presentation="screen-reveal"
+              className="translate-y-1 group-focus-within/screen:translate-y-0 group-hover/screen:translate-y-0"
               size="xs"
               variant="secondary"
               onClick={(event) => {

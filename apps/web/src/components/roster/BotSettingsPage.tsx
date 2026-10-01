@@ -91,7 +91,10 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
   );
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset
+      tone="foreground"
+      className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate"
+    >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border/70">
           <WorkspaceBreadcrumb ariaLabel={t("Bot settings breadcrumb")}>

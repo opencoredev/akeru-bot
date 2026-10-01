@@ -178,11 +178,33 @@ function CommandCollection({ ...props }: React.ComponentProps<typeof Autocomplet
   return <AutocompleteCollection data-slot="command-collection" {...props} />;
 }
 
-function CommandItem({ className, ...props }: React.ComponentProps<typeof AutocompleteItem>) {
+const PALETTE_ITEM_CLASSES =
+  "gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit data-selected:bg-transparent data-selected:text-inherit [&[data-highlighted][data-selected]]:bg-transparent [&[data-highlighted][data-selected]]:text-inherit";
+
+const COMPOSER_ITEM_CLASSES =
+  "gap-3 rounded-lg px-3 py-2! hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit";
+
+// Items whose highlight the caller drives from its own keyboard state; `-active` marks that row.
+const COMMAND_ITEM_VARIANT_CLASSES = {
+  default: undefined,
+  palette: PALETTE_ITEM_CLASSES,
+  "palette-active": `${PALETTE_ITEM_CLASSES} bg-accent! text-accent-foreground!`,
+  composer: COMPOSER_ITEM_CLASSES,
+  "composer-active": `${COMPOSER_ITEM_CLASSES} bg-accent! text-accent-foreground!`,
+} as const;
+
+function CommandItem({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<typeof AutocompleteItem> & {
+  variant?: keyof typeof COMMAND_ITEM_VARIANT_CLASSES;
+}) {
   return (
     <AutocompleteItem
       className={cn(
         "py-1.5 data-selected:bg-foreground/[0.06] data-highlighted:bg-foreground/[0.09] data-highlighted:text-foreground [&[data-highlighted][data-selected]]:bg-foreground/[0.09] [&[data-highlighted][data-selected]]:text-foreground",
+        COMMAND_ITEM_VARIANT_CLASSES[variant],
         className,
       )}
       data-slot="command-item"

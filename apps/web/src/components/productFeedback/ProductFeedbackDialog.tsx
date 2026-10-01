@@ -170,7 +170,7 @@ export function ProductFeedbackDialog() {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
       <DialogPopup
-        className="flex max-h-min-32rem-90dvh max-w-lg flex-col overflow-hidden"
+        className="flex max-h-(--spacing-min-32rem-90dvh) max-w-lg flex-col overflow-hidden"
         data-akeru-feedback-ui="composer"
       >
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>

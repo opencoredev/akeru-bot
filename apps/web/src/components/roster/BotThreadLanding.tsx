@@ -257,8 +257,9 @@ export function BotThreadLanding({
     if (rosterLoadState.kind === "failed") {
       return (
         <SidebarInset
+          tone="muted"
           aria-label={t("Could not load bots")}
-          className="h-dvh min-h-0 overflow-hidden bg-background text-muted-foreground"
+          className="h-dvh min-h-0 overflow-hidden"
         >
           <RosterLoadStatus state={rosterLoadState} variant="page" />
         </SidebarInset>
@@ -267,8 +268,9 @@ export function BotThreadLanding({
 
     return (
       <SidebarInset
+        tone="muted"
         aria-label={t("Loading bot…")}
-        className="h-dvh min-h-0 items-center justify-center overflow-hidden bg-background text-muted-foreground"
+        className="h-dvh min-h-0 items-center justify-center overflow-hidden"
       >
         <div className="flex flex-1 items-center justify-center gap-2 text-sm" role="status">
           <Spinner aria-hidden="true" className="size-4" />
@@ -339,8 +341,9 @@ export function BotThreadLanding({
 
   return (
     <SidebarInset
+      tone="foreground"
       aria-label={t("{name} chat", { name: bot.name })}
-      className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
+      className="h-dvh min-h-0 overflow-hidden"
       data-testid="bot-thread-landing"
     >
       <div className="flex min-h-0 min-w-0 flex-1">

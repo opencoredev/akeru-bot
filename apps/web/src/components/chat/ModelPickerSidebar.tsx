@@ -40,7 +40,7 @@ const PICKER_TOOLTIP_SIDE = "left" as const;
 
 const PICKER_TOOLTIP_SIDE_OFFSET = 8;
 
-const PICKER_TOOLTIP_CLASS = "max-w-64 text-balance font-normal leading-snug";
+const PICKER_TOOLTIP_CLASS = "max-w-64";
 
 export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   selectedInstanceId: ProviderInstanceId | "favorites";
@@ -132,6 +132,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {t("Favorites")}
@@ -234,6 +235,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {tooltip}

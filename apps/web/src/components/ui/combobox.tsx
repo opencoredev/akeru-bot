@@ -66,7 +66,7 @@ function ComboboxInput({
   ...props
 }: Omit<ComboboxPrimitive.Input.Props, "size"> & {
   inputClassName?: string;
-  presentation?: "font-search";
+  presentation?: "font-search" | "model-search";
   showTrigger?: boolean;
   showClear?: boolean;
   startAddon?: React.ReactNode;
@@ -96,6 +96,8 @@ function ComboboxInput({
             : "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
           presentation === "font-search" &&
             "[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5",
+          presentation === "model-search" &&
+            "[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5",
           className,
         )}
         data-slot="combobox-input"
@@ -103,7 +105,8 @@ function ComboboxInput({
           <Input
             className={cn(
               "has-disabled:opacity-100",
-              presentation === "font-search" && "rounded-none bg-transparent text-sm",
+              (presentation === "font-search" || presentation === "model-search") &&
+                "rounded-none bg-transparent text-sm",
               inputClassName,
             )}
             nativeInput
@@ -209,20 +212,37 @@ function ComboboxPopup({
   );
 }
 
+const MODEL_OPTION_ITEM_CLASSES =
+  "rounded-md px-2 py-2 transition-bg-color-shadow hover:bg-popover-highlight data-highlighted:bg-popover-highlight data-selected:bg-foreground/[0.08] data-selected:text-foreground data-selected:ring-0 [&[data-highlighted][data-selected]]:bg-popover-highlight";
+
+// Roomier picker rows. `model-option` adds the picker's own highlight fill.
+const COMBOBOX_ITEM_VARIANTS = {
+  default: { item: undefined, content: undefined },
+  "model-row": { item: "rounded-md px-2 py-2", content: "gap-3" },
+  "model-option": { item: MODEL_OPTION_ITEM_CLASSES, content: "gap-3" },
+  "model-option-disabled": {
+    item: `${MODEL_OPTION_ITEM_CLASSES} data-disabled:hover:bg-transparent`,
+    content: "gap-3",
+  },
+} as const;
+
 function ComboboxItem({
   className,
   contentClassName,
   children,
   hideIndicator: _hideIndicator = false,
+  variant = "default",
   ...props
 }: ComboboxPrimitive.Item.Props & {
   contentClassName?: string;
   hideIndicator?: boolean;
+  variant?: keyof typeof COMBOBOX_ITEM_VARIANTS;
 }) {
   return (
     <ComboboxPrimitive.Item
       className={cn(
         "flex min-h-8 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-pointer items-center rounded-sm px-2 py-1 text-base outline-none hover:bg-accent data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-selected:bg-foreground/[0.08] data-selected:text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground [&[data-highlighted][data-selected]]:bg-accent [&[data-highlighted][data-selected]]:text-accent-foreground data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        COMBOBOX_ITEM_VARIANTS[variant].item,
         className,
       )}
       data-slot="combobox-item"
@@ -231,6 +251,7 @@ function ComboboxItem({
       <div
         className={cn(
           "min-w-0 flex-1 [&_svg:not([class*='text-'])]:text-muted-foreground",
+          COMBOBOX_ITEM_VARIANTS[variant].content,
           contentClassName,
         )}
         data-slot="combobox-item-content"
@@ -312,12 +333,13 @@ function ComboboxListVirtualized({
   className,
   presentation,
   ...props
-}: ComboboxPrimitive.List.Props & { presentation?: "font-family" }) {
+}: ComboboxPrimitive.List.Props & { presentation?: "font-family" | "model-list" }) {
   return (
     <ComboboxPrimitive.List
       className={cn(
         "not-empty:px-1 not-empty:py-1",
         presentation === "font-family" && "size-full min-w-0 p-0",
+        presentation === "model-list" && "size-full min-w-0 p-0 not-empty:p-0",
         className,
       )}
       data-slot="combobox-list"

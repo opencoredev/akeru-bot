@@ -348,7 +348,7 @@ export function MarkdownCodeBlock({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="chat-markdown-chrome-action"
+                  presentation="markdown-chrome"
                   aria-pressed={wrapped}
                   onClick={() => setWrapped((value) => !value)}
                   aria-label={wrapLabel}
@@ -366,7 +366,7 @@ export function MarkdownCodeBlock({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="chat-markdown-chrome-action"
+                  presentation="markdown-chrome"
                   onClick={handleCopy}
                   aria-label={copyLabel}
                 />

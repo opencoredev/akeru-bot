@@ -54,7 +54,6 @@
   --spacing-min-300px-vw-2rem: min(300px, calc(100vw - 2rem));
   --spacing-min-440px-vw-2rem: min(440px, calc(100vw - 2rem));
   --spacing-min-520px-vw-2rem: min(520px, calc(100vw - 2rem));
-  --spacing-min-21rem-vw-1\.5rem: min(21rem, calc(100vw - 1.5rem));
   --spacing-min-22\.5rem-vw-2rem: min(22.5rem, calc(100vw - 2rem));
   --spacing-min-26rem-vw-2rem: min(26rem, calc(100vw - 2rem));
   --spacing-min-34rem-vw-2rem: min(34rem, calc(100vw - 2rem));
