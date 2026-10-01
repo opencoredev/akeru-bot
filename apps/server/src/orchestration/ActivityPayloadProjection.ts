@@ -1,9 +1,12 @@
+import type { ActivityValue, ActivityRecord } from "./ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import type {
   OrchestrationEvent,
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
 } from "@akeru/contracts";
 import { AkeruPluginSearchResult } from "@akeru/contracts";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { asRecord, asTrimmedString, projectBoundedValue } from "./ActivityPayloadBounds.ts";
 import {
@@ -18,19 +21,19 @@ import {
   dropStaleContextWindowActivities,
 } from "./ActivityRetention.ts";
 
-const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
+const decodePluginSearchResult = Schema.decodeUnknownOption(AkeruPluginSearchResult);
 
 /**
  * Task-list tools (Akeru's `task_write`, Claude's `TodoWrite`) carry the whole
  * list in their args. Clients only show the step in progress, as a short status.
  */
-function projectMemoryOperationCount(data: Record<string, unknown>): number | undefined {
+function projectMemoryOperationCount(data: ActivityRecord): number | undefined {
   const operations = asRecord(data.args)?.operations;
 
   return Array.isArray(operations) ? operations.length : undefined;
 }
 
-function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
+function projectRawOutput(value: ActivityValue): ActivityRecord | undefined {
   const direct = asTrimmedString(value);
 
   if (direct) {
@@ -45,7 +48,7 @@ function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
     return undefined;
   }
 
-  if (typeof rawOutput.totalFiles === "number" && Number.isFinite(rawOutput.totalFiles)) {
+  if (Predicate.isNumber(rawOutput.totalFiles) && Number.isFinite(rawOutput.totalFiles)) {
     return {
       totalFiles: rawOutput.totalFiles,
       ...(rawOutput.truncated === true ? { truncated: true } : {}),
@@ -79,7 +82,7 @@ function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
   return undefined;
 }
 
-function projectAcpContent(value: unknown): Record<string, unknown> | undefined {
+function projectAcpContent(value: ActivityValue): ActivityRecord | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
@@ -101,12 +104,14 @@ function projectAcpContent(value: unknown): Record<string, unknown> | undefined 
   return summary ? { content: summary } : undefined;
 }
 
-function projectPluginSearchResult(value: unknown): AkeruPluginSearchResult | undefined {
-  if (!isPluginSearchResult(value)) return undefined;
+function projectPluginSearchResult(value: ActivityValue): AkeruPluginSearchResult | undefined {
+  const decoded = decodePluginSearchResult(value);
+
+  if (Option.isNone(decoded)) return undefined;
 
   return {
-    ...value,
-    recommendations: value.recommendations.slice(0, 6),
+    ...decoded.value,
+    recommendations: decoded.value.recommendations.slice(0, 6),
   };
 }
 
@@ -158,7 +163,7 @@ export function projectActivityPayload(
     }
   }
 
-  const projectedData: Record<string, unknown> = {};
+  const projectedData: ActivityRecord = {};
   const item = projectCommandData(data);
 
   if (item) {

@@ -1,3 +1,5 @@
+import type { ActivityValue, ActivityRecord } from "./ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import { asRecord, projectBoundedValue } from "./ActivityPayloadBounds.ts";
 import { summarizeToolTextOutput, collectChangedFiles } from "./CommandActivityPayload.ts";
 
@@ -24,14 +26,14 @@ const MCP_ITEM_KEPT_FIELDS = [
  * `{content: [{type: "text", text}, ...]}` record or a raw Claude
  * `tool_result` block whose `content` is a string or block array.
  */
-function extractMcpResultText(result: unknown): string | null {
+function extractMcpResultText(result: ActivityValue): string | null {
   const record = asRecord(result);
 
   if (!record) {
-    return typeof result === "string" ? result : null;
+    return Predicate.isString(result) ? result : null;
   }
 
-  if (typeof record.content === "string") {
+  if (Predicate.isString(record.content)) {
     return record.content;
   }
 
@@ -41,7 +43,7 @@ function extractMcpResultText(result: unknown): string | null {
     for (const entry of record.content) {
       const text = asRecord(entry)?.text;
 
-      if (typeof text === "string" && text.trim().length > 0) {
+      if (Predicate.isString(text) && text.trim().length > 0) {
         texts.push(text);
       }
     }
@@ -54,7 +56,7 @@ function extractMcpResultText(result: unknown): string | null {
   return null;
 }
 
-function summarizeMcpResult(result: unknown): Record<string, unknown> | undefined {
+function summarizeMcpResult(result: ActivityValue): ActivityRecord | undefined {
   if (result === undefined || result === null) {
     return undefined;
   }
@@ -71,13 +73,13 @@ function summarizeMcpResult(result: unknown): Record<string, unknown> | undefine
  * keep the expanded-row UI working. Keep the fields the UI actually renders
  * and summarize the result like regular tool output.
  */
-export function projectMcpToolCallData(data: Record<string, unknown>): Record<string, unknown> {
-  const projectedData: Record<string, unknown> = {};
+export function projectMcpToolCallData(data: ActivityRecord): ActivityRecord {
+  const projectedData: ActivityRecord = {};
 
   const item = asRecord(data.item);
 
   if (item) {
-    const projectedItem: Record<string, unknown> = {};
+    const projectedItem: ActivityRecord = {};
 
     for (const key of MCP_ITEM_KEPT_FIELDS) {
       if (key in item) {

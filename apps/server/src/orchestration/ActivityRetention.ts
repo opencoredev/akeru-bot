@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { OrchestrationThreadActivity } from "@akeru/contracts";
 import { asRecord, asTrimmedString } from "./ActivityPayloadBounds.ts";
 
@@ -15,7 +16,7 @@ function isResolvableContextWindowActivity(activity: OrchestrationThreadActivity
   const payload = asRecord(activity.payload);
   const usedTokens = payload?.usedTokens;
 
-  return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
+  return Predicate.isNumber(usedTokens) && Number.isFinite(usedTokens) && usedTokens >= 0;
 }
 
 /**
