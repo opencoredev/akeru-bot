@@ -42,6 +42,7 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   daytona: "Daytona",
   vercel: "Vercel Sandbox",
   upstash: "Upstash Box",
+  ascii: "Ascii Box",
   railway: "Railway",
   tenki: "Tenki",
 };

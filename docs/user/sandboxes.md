@@ -1,6 +1,6 @@
 # Configure sandboxes
 
-Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, Upstash Box, Tenki, or Railway. Local workspaces
+Open **Settings > Sandbox** to connect E2B, Daytona, Vercel Sandbox, Upstash Box, Tenki, Railway, or Ascii Box. Local workspaces
 need no credential and are always available.
 
 Tenki runs coding agents in full Linux VMs and supports public previews, disk and memory snapshots,
@@ -26,12 +26,26 @@ so connect that service before you start the bot.
 
 Akeru pauses remote sandboxes other than Railway while bots are idle and reconnects to the saved provider workspace when
 bot work resumes.
-If a remote pause fails, Akeru keeps the workspace and retries the pause while it remains idle.
+If a remote pause fails, Akeru keeps the workspace and retries the pause while it remains idle,
+except on Ascii Box, where it reconnects to the saved VM on the next use.
 
 Railway VMs remain running while idle and can continue accruing charges. Connect with a
 `RAILWAY_API_TOKEN` and `RAILWAY_ENVIRONMENT_ID`. Previews require a Railway CLI tunnel;
 Akeru cannot attach its sandbox browser. See [Railway workspaces](railway-sandboxes.md)
 for credential rotation and VM cleanup.
+
+Ascii Box runs persistent Linux VMs. Stopping a VM saves a native lifecycle snapshot; resuming it
+restores that workspace. Ascii Box supports public previews by default, so do not expose sensitive
+services. Akeru requests protected, token-authenticated access for its browser-control endpoint.
+If session setup fails, Akeru preserves the VM and waits for snapshot cleanup before reporting the
+error. Snapshot archival can take up to five minutes; retries wait for that cleanup to finish.
+New VMs do not inherit credentials from your Ascii account environment.
+Ascii Box commands support timeouts of up to ten minutes. Requests for longer timeouts are rejected
+before the command starts rather than silently shortened.
+If Ascii confirms that a saved VM no longer exists, Akeru creates a replacement on the next use.
+Connection failures and permission errors retain the saved VM identity rather than replacing it.
+Connect it with a Box API key. Ascii Box is now Boat; this integration uses the legacy Box API, which
+the provider supports until its announced sunset. See the [migration notice](https://docs.boat.dev/migrating-from-box).
 
 Changing a provider credential replaces active sessions that use the connection. A running session
 cannot continue with the old credential.

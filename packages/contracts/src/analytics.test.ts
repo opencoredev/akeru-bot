@@ -52,7 +52,7 @@ const rejects = (input: unknown) => expect(() => decodeUsage3hEvent(input)).toTh
 describe("Usage3hEvent", () => {
   it("accepts the fixed anonymous aggregate payload", () => {
     expect(decodeUsage3hEvent(event)).toEqual(event);
-    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(96);
+    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(97);
   });
 
   it("accepts current remote sandboxes and rejects the retired hosted sandbox", () => {
@@ -61,6 +61,7 @@ describe("Usage3hEvent", () => {
       "daytona",
       "vercel",
       "upstash",
+      "ascii",
       "railway",
       "tenki",
     ] as const) {
@@ -87,7 +88,7 @@ describe("Usage3hEvent", () => {
     ).toBe(0);
   });
 
-  it.each(["sandbox_turns_tenki", "sandbox_turns_railway"])(
+  it.each(["sandbox_turns_tenki", "sandbox_turns_railway", "sandbox_turns_ascii"])(
     "defaults queued %s counters without changing event identity",
     (counter) => {
       const properties = Object.fromEntries(
@@ -108,6 +109,23 @@ describe("Usage3hEvent", () => {
     rejects({ ...event, event: "turn_completed" });
     rejects({ ...event, prompt: "private" });
     rejects({ ...event, properties: { ...event.properties, thread_id: "thread-1" } });
+  });
+
+  it("defaults queued events from before Ascii Box support to zero", () => {
+    const legacyProperties = Object.fromEntries(
+      Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_ascii"),
+    );
+    expect(decodeUsage3hEvent({ ...event, properties: legacyProperties })).toEqual(event);
+  });
+
+  it("preserves valid Ascii counters and rejects invalid explicit values", () => {
+    expect(
+      decodeUsage3hEvent({ ...event, properties: { ...event.properties, sandbox_turns_ascii: 3 } })
+        .properties.sandbox_turns_ascii,
+    ).toBe(3);
+    for (const sandbox_turns_ascii of [-1, 0.5, USAGE_3H_COUNTER_MAX + 1, null, "0"]) {
+      rejects({ ...event, properties: { ...event.properties, sandbox_turns_ascii } });
+    }
   });
 
   it("rejects free text, invalid enums, and invalid versions", () => {

@@ -47,6 +47,7 @@ describe("BotUsageCap", () => {
       "daytona",
       "vercel",
       "upstash",
+      "ascii",
       "railway",
       "tenki",
     ] as const) {

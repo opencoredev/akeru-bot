@@ -463,6 +463,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
         version: 0.3.170(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+      '@asciidev/box-sdk':
+        specifier: 0.0.37
+        version: 0.0.37
       '@chat-adapter/discord':
         specifier: 4.39.0
         version: 4.39.0(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(utf-8-validate@6.0.6)(zod@4.4.3)
@@ -1340,6 +1343,9 @@ packages:
   '@appium/logger@1.7.1':
     resolution: {integrity: sha512-9C2o9X/lBEDBUnKfAi3mRo9oG7Z03nmISLwsGkWxIWjMAvBdJD0RRSJMekWVKzfXN3byrI1WlCXTITzN4LAoLw==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0, npm: '>=8'}
+
+  '@asciidev/box-sdk@0.0.37':
+    resolution: {integrity: sha512-fZhs5ygWO3uZ3clx/dPVSRPMadCbNleyeeB2tf+hcqgOKpqWNfjOk/a8M/QffpZfQE8n5LJUtQlqnL7ysBi/Qw==}
 
   '@ast-grep/napi-darwin-arm64@0.42.3':
     resolution: {integrity: sha512-pcTBI8UiNQ9xVOYfu3Ww5KXcrrHV/jJqECQ6efpJpzTGwW+mOpzgihfrq5GKjbMONhr0OaRARCMwEsvKgBXCpA==}
@@ -14159,6 +14165,8 @@ snapshots:
       lodash: 4.17.21
       lru-cache: 10.4.3
       set-blocking: 2.0.0
+
+  '@asciidev/box-sdk@0.0.37': {}
 
   '@ast-grep/napi-darwin-arm64@0.42.3':
     optional: true

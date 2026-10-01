@@ -22,6 +22,7 @@ export const REMOTE_BOT_SANDBOXES = [
   "daytona",
   "vercel",
   "upstash",
+  "ascii",
   "railway",
   "tenki",
 ] as const;
@@ -140,7 +141,7 @@ export async function createRemoteBotWorkspace(
       { cause },
     );
   }
-  if (!persisted) {
+  if (!persisted || persisted.providerId !== session.providerId) {
     try {
       await writeIdentity(identityFile, {
         provider: input.sandbox,
@@ -341,6 +342,14 @@ async function create(
   id: string,
   environment: Readonly<Record<string, string>> = {},
 ): Promise<AkeruRemoteSession> {
+  if (provider === "ascii") {
+    const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
+    const client = new BoxApi(
+      new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
+    );
+    const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+    return ascii(client, box.id);
+  }
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
@@ -390,6 +399,21 @@ async function open(
   id: string,
   environment: Readonly<Record<string, string>> = {},
 ): Promise<AkeruRemoteSession> {
+  if (provider === "ascii") {
+    const { BoxApi, Configuration, ResponseError } = await import("@asciidev/box-sdk");
+    const client = new BoxApi(
+      new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
+    );
+    try {
+      await client.get({ boxId: id });
+    } catch (cause) {
+      if (!(cause instanceof ResponseError) || cause.response.status !== 404) throw cause;
+      // A timed-out deletion can finish later; only confirmed absence permits replacement.
+      const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+      return ascii(client, box.id);
+    }
+    return ascii(client, id);
+  }
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
@@ -426,6 +450,95 @@ async function open(
   }
   const { Box } = await import("@upstash/box");
   return upstash(await Box.get(id, { apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
+}
+
+export function ascii(
+  client: import("@asciidev/box-sdk").BoxApi,
+  boxId: string,
+): AkeruRemoteSession {
+  const waitUntilArchived = async () => {
+    const deadline = performance.now() + 300_000;
+    while (true) {
+      const { box } = await client.get({ boxId });
+      if (box.state === "archived") return;
+      if (box.state === "error") throw new Error("Ascii Box snapshot archival failed.");
+      if (performance.now() >= deadline) throw new Error("Ascii Box snapshot archival timed out.");
+      // The SDK lifecycle is promise-based; polling does not own an Effect runtime.
+      // @effect-diagnostics-next-line globalTimers:off
+      await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+    }
+  };
+  return {
+    providerId: boxId,
+    inspect: async () => {
+      try {
+        const { box } = await client.get({ boxId });
+        if (["ready", "idle", "running"].includes(box.state)) return "running";
+        return box.state === "error" ? "missing" : "sleeping";
+      } catch (cause) {
+        const { ResponseError } = await import("@asciidev/box-sdk");
+        if (cause instanceof ResponseError && cause.response.status === 404) return "missing";
+        throw cause;
+      }
+    },
+    wake: async () => {
+      const { box } = await client.get({ boxId });
+      if (box.state === "archiving") await waitUntilArchived();
+      if (box.state === "archived" || box.state === "archiving")
+        await client.resume({ boxId, resumeRequest: { ttlSeconds: null } });
+      const { waitUntilReady } = await import("@asciidev/box-sdk");
+      await waitUntilReady(client, boxId, { timeoutMs: 300_000 });
+    },
+    // Stop takes a native lifecycle snapshot; never force-stop and discard VM changes.
+    sleep: async () => {
+      await client.stop({ boxId });
+      await waitUntilArchived();
+    },
+    destroy: async () => {
+      let result = await client.deleteBox({ boxId, xAsciiConfirmDelete: boxId });
+      const deadline = performance.now() + 300_000;
+      while (result.operation.status !== "completed") {
+        if (result.operation.status === "blocked")
+          throw new Error("Ascii Box deletion is blocked.");
+        if (performance.now() >= deadline) throw new Error("Ascii Box deletion timed out.");
+        // The SDK lifecycle is promise-based, like the archival wait above.
+        // @effect-diagnostics-next-line globalTimers:off
+        await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+        result = await client.getDeletionOperation({ operationId: result.operation.id });
+      }
+    },
+    run: async (command, args, options) => {
+      const timeout = options?.timeout ?? 600_000;
+      if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 600_000)
+        throw new Error("Ascii Box command timeout must be greater than 0 and at most 600000 ms.");
+      const env = Object.entries(options?.env ?? {}).map(([key, value]) =>
+        quote(`${key}=${value}`),
+      );
+      const invocation = `${env.length ? `env ${env.join(" ")} ` : ""}${commandLine(command, args)}`;
+      const result = await client.command({
+        boxId,
+        commandRequest: {
+          command: options?.cwd ? `cd ${quote(options.cwd)} && ${invocation}` : invocation,
+          timeoutSeconds: Math.ceil(timeout / 1_000),
+        },
+      });
+      if (result.type !== "command.finished")
+        throw new Error("Ascii Box command did not finish in the foreground.");
+      return {
+        exitCode: result.timedOut ? 124 : (result.exitCode ?? (result.success ? 0 : 1)),
+        stdout: result.stdout,
+        stderr: result.stderr,
+      };
+    },
+    browserEndpoint: async (port) => {
+      const result = await client.hostPort({ boxId, hostPortRequest: { port, _public: false } });
+      if (!result.url || result.success === false)
+        throw new Error("Ascii Box workspace did not return a preview URL.");
+      if (result.isProtected !== true || !new URL(result.url).searchParams.get("_token"))
+        throw new Error("Ascii Box workspace did not return a protected browser endpoint.");
+      return { url: result.url, requestHeaders: {} };
+    },
+  };
 }
 
 export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemoteSession {

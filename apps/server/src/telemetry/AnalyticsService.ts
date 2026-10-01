@@ -185,6 +185,7 @@ const sandboxValues = new Set([
   "daytona",
   "vercel",
   "upstash",
+  "ascii",
   "railway",
   "tenki",
 ]);

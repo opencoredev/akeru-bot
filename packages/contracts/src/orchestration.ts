@@ -381,6 +381,7 @@ export const BotSandbox = Schema.Literals([
   "daytona",
   "vercel",
   "upstash",
+  "ascii",
   "railway",
   "tenki",
 ]);

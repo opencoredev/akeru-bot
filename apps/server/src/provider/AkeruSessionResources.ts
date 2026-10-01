@@ -381,7 +381,10 @@ export class AkeruSessionResources {
       };
     } catch (cause) {
       await this.releaseOnce(key, {
-        destroy: input.botSandbox !== "railway" && input.botSandbox !== "tenki",
+        destroy:
+          input.botSandbox !== "railway" &&
+          input.botSandbox !== "tenki" &&
+          input.botSandbox !== "ascii",
       }).catch(() => undefined);
       throw cause;
     }

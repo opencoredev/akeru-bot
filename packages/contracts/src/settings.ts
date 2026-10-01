@@ -669,6 +669,7 @@ export const CLOUD_SANDBOX_PROVIDERS = [
   "daytona",
   "vercel",
   "upstash",
+  "ascii",
   "railway",
   "tenki",
 ] as const;
@@ -681,6 +682,7 @@ export const SANDBOX_PROVIDER_CREDENTIALS = {
     { name: "VERCEL_PROJECT_ID", sensitive: false },
   ],
   upstash: [{ name: "UPSTASH_BOX_API_KEY", sensitive: true }],
+  ascii: [{ name: "BOX_API_KEY", sensitive: true }],
   railway: [
     { name: "RAILWAY_API_TOKEN", sensitive: true },
     { name: "RAILWAY_ENVIRONMENT_ID", sensitive: false },
@@ -710,6 +712,7 @@ export const SandboxSettings = Schema.Struct({
     daytona: SandboxProviderConnection,
     vercel: SandboxProviderConnection,
     upstash: SandboxProviderConnection,
+    ascii: SandboxProviderConnection,
     railway: SandboxProviderConnection,
     tenki: SandboxProviderConnection,
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -1024,6 +1027,7 @@ const SandboxSettingsPatch = Schema.Struct({
       daytona: Schema.optionalKey(SandboxProviderConnectionPatch),
       vercel: Schema.optionalKey(SandboxProviderConnectionPatch),
       upstash: Schema.optionalKey(SandboxProviderConnectionPatch),
+      ascii: Schema.optionalKey(SandboxProviderConnectionPatch),
       railway: Schema.optionalKey(SandboxProviderConnectionPatch),
       tenki: Schema.optionalKey(SandboxProviderConnectionPatch),
     }),

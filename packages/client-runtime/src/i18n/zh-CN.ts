@@ -2312,6 +2312,8 @@ export const zhCNCatalog: TranslationCatalog = {
   "Cloud workspaces managed by Daytona. Requires an API key.":
     "由 Daytona 管理的云端工作区。需要 API 密钥。",
   "Cloud workspaces in your Vercel team and project.": "位于你的 Vercel 团队和项目中的云端工作区。",
+  "Run bots in a persistent Linux VM. Public previews are enabled by default.":
+    "在持久化 Linux 虚拟机中运行机器人。默认启用公开预览。",
   "Cloud workspaces managed by Upstash Box. Requires an API key.":
     "由 Upstash Box 管理的云端工作区。需要 API 密钥。",
   "Cloud workspaces managed by Tenki. Requires an API key.":

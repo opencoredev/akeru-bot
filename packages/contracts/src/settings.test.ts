@@ -305,6 +305,7 @@ describe("ServerSettings sandbox providers", () => {
         daytona: { environment: [] },
         vercel: { environment: [] },
         upstash: { environment: [] },
+        ascii: { environment: [] },
         railway: { environment: [] },
         tenki: { environment: [] },
       },
@@ -331,6 +332,20 @@ describe("ServerSettings sandbox providers", () => {
         },
       },
     });
+  });
+
+  it("accepts the Ascii Box credential", () => {
+    expect(
+      decodeServerSettingsPatch({
+        sandbox: {
+          providers: {
+            ascii: {
+              environment: [{ name: "BOX_API_KEY", value: "secret", sensitive: true }],
+            },
+          },
+        },
+      }).sandbox?.providers?.ascii?.environment,
+    ).toEqual([{ name: "BOX_API_KEY", value: "secret", sensitive: true }]);
   });
 
   it("accepts Tenki's secret API key", () => {

@@ -252,6 +252,19 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           assert.equal(failedState.cursorBucketStart, currentStart);
           assert.isFalse(yield* fs.exists(config.anonymousIdPath));
 
+          // Simulate a queued state written before Ascii Box support was installed.
+          yield* fs.writeFileString(
+            config.analyticsStatePath,
+            encodeJson({
+              ...failedState,
+              pending: failedState.pending.map((event) => ({
+                ...event,
+                properties: Object.fromEntries(
+                  Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_ascii"),
+                ),
+              })),
+            }),
+          );
           yield* analytics.flush;
           const deliveredState = readState(yield* fs.readFileString(config.analyticsStatePath));
           assert.equal(deliveredState.pending.length, 0);
@@ -274,6 +287,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
                 readonly browser_searches_codex: number;
                 readonly provider_turns_codex: number;
                 readonly sandbox_turns_local: number;
+                readonly sandbox_turns_ascii: number;
                 readonly sandbox_turns_none: number;
                 readonly plugin_enabled_github: number;
               };
@@ -296,6 +310,8 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           assert.equal(requests[0]?.batch[0]?.properties.browser_searches_codex, 1);
           assert.equal(requests[0]?.batch[0]?.properties.provider_turns_codex, 1);
           assert.equal(requests[0]?.batch[0]?.properties.sandbox_turns_local, 1);
+          assert.equal(requests[1]?.batch[0]?.properties.sandbox_turns_ascii, 0);
+          assert.equal(requests[1]?.batch[1]?.properties.sandbox_turns_ascii, 0);
           assert.equal(requests[0]?.batch[0]?.properties.sandbox_turns_none, 1);
           assert.equal(requests[0]?.batch[0]?.properties.plugin_enabled_github, 1);
           assert.isFalse(requests[0]?.batch[0]?.properties.$process_person_profile);

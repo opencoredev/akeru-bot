@@ -11,6 +11,8 @@ export const availableLanguages = [
 ] as const;
 
 export const englishCatalog = {
+  "Run bots in a persistent Linux VM. Public previews are enabled by default.":
+    "Run bots in a persistent Linux VM. Public previews are enabled by default.",
   "Retire Railway VMs before changing access": "Retire Railway VMs before changing access",
   "Open Railway dashboard": "Open Railway dashboard",
   "I have reviewed my VMs — continue": "I have reviewed my VMs — continue",

@@ -20,6 +20,7 @@ export const BOT_SANDBOX_OPTIONS = [
   { value: "daytona", label: "Daytona" },
   { value: "vercel", label: "Vercel Sandbox" },
   { value: "upstash", label: "Upstash Box" },
+  { value: "ascii", label: "Ascii Box" },
   { value: "railway", label: "Railway" },
   { value: "tenki", label: "Tenki" },
 ] as const;

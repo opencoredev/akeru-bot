@@ -73,6 +73,15 @@ interface PoolState {
   readonly scope: Scope.Closeable;
 }
 
+interface RailwayIdentityState {
+  lock?: Promise<void>;
+  leases: number;
+  destroyRequested: boolean;
+  deleted: boolean;
+  readonly keys: Set<string>;
+  destruction?: Promise<void>;
+}
+
 /**
  * Keeps one workspace alive while matching thread sessions use it. After the
  * final release the workspace stays awake for `idleTimeToLive` (zero by default), then sleeps.
@@ -91,6 +100,8 @@ export class BotWorkspacePool {
   private readonly failed = new Set<string>();
   private readonly retrying = new Set<string>();
   private readonly closing = new Map<string, Promise<void>>();
+  private readonly railwayIdentities = new Map<string, RailwayIdentityState>();
+  private readonly activeAcquisitions = new Set<Promise<void>>();
   private destroyingAll = false;
   private readonly destroyAllFailures: unknown[] = [];
 
@@ -129,14 +140,21 @@ export class BotWorkspacePool {
       Effect.map((created) =>
         created instanceof Workspace ? wrapMastraWorkspace(created) : created,
       ),
+      Effect.map((workspace) =>
+        key.startsWith("railway:")
+          ? this.withIdentityDestroy(this.identityKey(key), workspace)
+          : workspace,
+      ),
       Effect.tap((workspace) =>
         Effect.tryPromise({ try: () => workspace.wake(), catch: toPoolError }).pipe(
           Effect.tapCause(() =>
             workspace.provider === "local"
               ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-              : Effect.sync(() => {
-                  this.sleepers.set(key, workspace);
-                }),
+              : workspace.provider === "ascii"
+                ? Effect.void
+                : Effect.sync(() => {
+                    this.sleepers.set(key, workspace);
+                  }),
           ),
         ),
       ),
@@ -166,7 +184,13 @@ export class BotWorkspacePool {
   }
 
   private closeWorkspace(key: string, workspace: AkeruBotWorkspace): Effect.Effect<void> {
-    if (this.destroyingAll || this.destroyRequested.delete(key)) {
+    if (
+      this.destroyingAll ||
+      this.destroyRequested.delete(key) ||
+      (key.startsWith("railway:") &&
+        this.railwayIdentity(this.identityKey(key)).destroyRequested &&
+        this.railwayIdentity(this.identityKey(key)).leases === 0)
+    ) {
       this.sleepers.delete(key);
       return Effect.tryPromise(() => workspace.destroy()).pipe(
         Effect.tapError((cause) =>
@@ -183,10 +207,12 @@ export class BotWorkspacePool {
       Effect.tapError(() =>
         workspace.provider === "local"
           ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-          : Effect.sync(() => {
-              this.sleepers.set(key, workspace);
-              this.failed.add(key);
-            }),
+          : workspace.provider === "ascii"
+            ? Effect.void
+            : Effect.sync(() => {
+                this.sleepers.set(key, workspace);
+                this.failed.add(key);
+              }),
       ),
       Effect.catch((error) => Effect.die(error.cause)),
     );
@@ -196,14 +222,152 @@ export class BotWorkspacePool {
     key: string,
     create: () => Promise<AkeruBotWorkspace | Workspace>,
   ): Promise<BotWorkspaceLease> {
+    if (this.destroyingAll) {
+      throw new BotWorkspacePoolError({ message: "Bot workspaces are shutting down." });
+    }
+    let finish!: () => void;
+    const acquisition = new Promise<void>((resolve) => (finish = resolve));
+    this.activeAcquisitions.add(acquisition);
     this.acquisitions.set(key, (this.acquisitions.get(key) ?? 0) + 1);
+    const identity = this.identityKey(key);
     try {
-      return await this.acquireOnce(key, create);
+      const lease = await this.withIdentityCoordination(key, identity, async () => {
+        if (this.destroyingAll) {
+          throw new BotWorkspacePoolError({ message: "Bot workspaces are shutting down." });
+        }
+        if (key.startsWith("railway:")) {
+          const state = this.railwayIdentity(identity);
+          if (state.deleted) {
+            state.deleted = false;
+            delete state.destruction;
+          }
+          state.keys.add(key);
+        }
+        const acquired = await this.acquireOnce(key, create);
+        if (this.destroyingAll) {
+          await acquired.release({ destroy: true });
+          throw new BotWorkspacePoolError({ message: "Bot workspaces are shutting down." });
+        }
+        if (!key.startsWith("railway:")) return acquired;
+        this.railwayIdentity(identity).leases++;
+        return acquired;
+      });
+      if (!key.startsWith("railway:")) return lease;
+      let released = false;
+      return {
+        ...lease,
+        release: async (options) => {
+          if (released) return;
+          released = true;
+          await this.withIdentityCoordination(key, identity, async () => {
+            const state = this.railwayIdentity(identity);
+            if (options?.destroy) state.destroyRequested = true;
+            const remaining = --state.leases;
+            const destroy = state.destroyRequested && remaining === 0;
+            if (destroy) {
+              const { map } = await this.state;
+              const keys = state.keys;
+              let cleanupFailure: unknown;
+              let idleDeletionFailure: unknown;
+              for (const pooledKey of keys) {
+                this.destroyRequested.add(pooledKey);
+                const sleeping = this.sleepers.get(pooledKey);
+                this.sleepers.delete(pooledKey);
+                this.failed.delete(pooledKey);
+                if (sleeping) {
+                  try {
+                    await this.run(Effect.promise(() => sleeping.destroy()));
+                  } catch (cause) {
+                    idleDeletionFailure ??= cause;
+                  }
+                }
+                try {
+                  await this.run(RcMap.invalidate(map, pooledKey));
+                } catch (cause) {
+                  cleanupFailure ??= cause;
+                }
+              }
+              for (const pooledKey of keys) this.destroyRequested.delete(pooledKey);
+              state.keys.clear();
+              state.deleted = true;
+              state.destroyRequested = false;
+              try {
+                await lease.release({ destroy });
+              } catch (cause) {
+                cleanupFailure ??= cause;
+              }
+              if (idleDeletionFailure !== undefined) {
+                // A current credential client can complete deletion after an idle client fails.
+                if (!state.destruction) throw idleDeletionFailure;
+                await state.destruction;
+              }
+              if (cleanupFailure !== undefined) throw cleanupFailure;
+              return;
+            }
+            await lease.release({ destroy });
+          });
+        },
+      };
     } finally {
+      this.activeAcquisitions.delete(acquisition);
+      finish();
       const remaining = (this.acquisitions.get(key) ?? 1) - 1;
       if (remaining === 0) this.acquisitions.delete(key);
       else this.acquisitions.set(key, remaining);
     }
+  }
+
+  private identityKey(key: string): string {
+    return key.startsWith("railway:") ? botWorkspaceIdentity(key) : key;
+  }
+
+  private railwayIdentity(identity: string): RailwayIdentityState {
+    let state = this.railwayIdentities.get(identity);
+    if (!state) {
+      state = { leases: 0, destroyRequested: false, deleted: false, keys: new Set() };
+      this.railwayIdentities.set(identity, state);
+    }
+    return state;
+  }
+
+  private withIdentityCoordination<A>(
+    key: string,
+    identity: string,
+    operation: () => Promise<A>,
+  ): Promise<A> {
+    return key.startsWith("railway:") ? this.withIdentityLock(identity, operation) : operation();
+  }
+
+  private async withIdentityLock<A>(identity: string, operation: () => Promise<A>): Promise<A> {
+    const state = this.railwayIdentity(identity);
+    const previous = state.lock;
+    let unlock!: () => void;
+    const lock = new Promise<void>((resolve) => (unlock = resolve));
+    state.lock = lock;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      unlock();
+      if (state.lock === lock) delete state.lock;
+    }
+  }
+
+  private withIdentityDestroy(identity: string, workspace: AkeruBotWorkspace): AkeruBotWorkspace {
+    return {
+      ...workspace,
+      destroy: () => {
+        const state = this.railwayIdentity(identity);
+        const existing = state.destruction;
+        if (existing) return existing;
+        const destruction = workspace.destroy().catch((error: unknown) => {
+          if (state.destruction === destruction) delete state.destruction;
+          throw error;
+        });
+        state.destruction = destruction;
+        return destruction;
+      },
+    };
   }
 
   private async acquireOnce(
@@ -298,6 +462,12 @@ export class BotWorkspacePool {
   async destroyAll(): Promise<void> {
     const { scope } = await this.state;
     this.destroyingAll = true;
+    await Promise.all(this.activeAcquisitions);
+    await Promise.all(
+      [...this.railwayIdentities.values()].flatMap((identity) =>
+        identity.lock ? [identity.lock] : [],
+      ),
+    );
     await Promise.all(this.closing.values());
     await this.run(Scope.close(scope, Exit.void));
     const sleepers = [...this.sleepers.values()];

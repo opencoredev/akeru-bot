@@ -35,6 +35,7 @@ describe("botSandbox", () => {
       "daytona",
       "vercel",
       "upstash",
+      "ascii",
       "railway",
       "tenki",
     ]);
