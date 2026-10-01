@@ -571,8 +571,10 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       // Retry once after 1s on transient failures (e.g. SQLite "database is locked")
       const needsModelsRetry =
         Predicate.isTagged(modelsResult, "Failure") || modelsResult.value.code !== 0;
+
       const needsAgentsRetry =
         Predicate.isTagged(agentsResult, "Failure") || agentsResult.value.code !== 0;
+
       const needsSkillsRetry =
         Predicate.isTagged(skillsResult, "Failure") || skillsResult.value.code !== 0;
 

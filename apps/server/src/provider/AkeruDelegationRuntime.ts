@@ -61,6 +61,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     options.dispatch(command).then(() => undefined);
 
   const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
+
   const { sendToUser, deliver, postGroupResult } = createAkeruDelegationDelivery(
     options,
     now,
