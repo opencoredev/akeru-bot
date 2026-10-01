@@ -46,6 +46,7 @@ export function buildChatPaletteActions({
   readonly openRename: () => void;
 }): ChatPaletteAction[] {
   const list: ChatPaletteAction[] = [];
+
   if (newChat?.canStart) {
     list.push({
       id: "new",
@@ -57,6 +58,7 @@ export function buildChatPaletteActions({
       },
     });
   }
+
   if (!threadRef || !state) return list;
   list.push({
     id: "rename",
@@ -64,6 +66,7 @@ export function buildChatPaletteActions({
     searchTerms: ["rename", "title"],
     run: openRename,
   });
+
   if (state.supports.titleRegeneration && !state.isRegeneratingTitle) {
     list.push({
       id: "regenerate-title",
@@ -74,6 +77,7 @@ export function buildChatPaletteActions({
       },
     });
   }
+
   if (state.supports.pinning) {
     list.push(
       state.isPinned
@@ -95,6 +99,7 @@ export function buildChatPaletteActions({
           },
     );
   }
+
   if (state.canMarkUnread) {
     list.push({
       id: "mark-unread",
@@ -103,6 +108,7 @@ export function buildChatPaletteActions({
       run: () => actions.markUnread(threadRef),
     });
   }
+
   if (state.supports.settlement) {
     if (state.isSettled) {
       list.push({
@@ -125,6 +131,7 @@ export function buildChatPaletteActions({
       });
     }
   }
+
   if (state.supports.snooze) {
     if (state.isSnoozed) {
       list.push({
@@ -148,12 +155,14 @@ export function buildChatPaletteActions({
             const current = resolveSnoozePresets(new Date()).find(
               (candidate) => candidate.id === preset.id,
             );
+
             if (current) await actions.snooze(threadRef, current.snoozedUntil);
           },
         });
       }
     }
   }
+
   if (state.canArchive) {
     list.push({
       id: "archive",
@@ -164,6 +173,7 @@ export function buildChatPaletteActions({
       },
     });
   }
+
   list.push({
     id: "delete",
     title: t("Delete chat"),
@@ -172,5 +182,6 @@ export function buildChatPaletteActions({
       await actions.delete(threadRef);
     },
   });
+
   return list;
 }

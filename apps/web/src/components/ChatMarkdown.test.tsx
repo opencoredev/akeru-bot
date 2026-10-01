@@ -44,6 +44,7 @@ describe("ChatMarkdown streaming renderers", () => {
       new URL("./markdown/MarkdownRendererContext.ts", import.meta.url),
       "utf8",
     );
+
     expect(contextSource).toContain("const ChatMarkdownRendererContext");
     expect(source).toContain("const CHAT_MARKDOWN_COMPONENTS: Components");
     expect(source).toContain("components={CHAT_MARKDOWN_COMPONENTS}");
@@ -54,6 +55,7 @@ describe("ChatMarkdown streaming renderers", () => {
 
   it("still renders streamed fences and details after extra trailing text", () => {
     const fence = ["```text", "First code block", "```", "", "Streaming reply"].join("\n");
+
     const html = renderToStaticMarkup(
       <ChatMarkdown cwd="/tmp/project" text={`${fence} 9`} isStreaming />,
     );
@@ -200,6 +202,7 @@ describe("ChatMarkdown Windows file links", () => {
     "does not disambiguate the same file in links and inline code with parseRawHtml=%s",
     (parseRawHtml) => {
       const path = String.raw`C:\Users\shawn\project\src\main.ts`;
+
       const html = renderToStaticMarkup(
         <ChatMarkdown
           cwd="C:/Users/shawn/project"
@@ -256,6 +259,7 @@ describe("ChatMarkdown bot chat forms", () => {
 
   const TABLE = ["| File | State |", "| --- | --- |", "| src/output.ts | Ready |"].join("\n");
   const CHECKLIST = ["- [x] Render table", "- [ ] Review diff", "- [ ] Ship"].join("\n");
+
   const DIFF = [
     "```diff",
     "diff --git a/src/app.ts b/src/app.ts",
@@ -267,6 +271,7 @@ describe("ChatMarkdown bot chat forms", () => {
     "+run(2);",
     "```",
   ].join("\n");
+
   const ALL_FORMS = [
     "Summary with a [docs link](https://example.com/docs) and [Voice settings](grokbot://app/v1/settings?id=voice).",
     "",
@@ -306,6 +311,7 @@ describe("ChatMarkdown bot chat forms", () => {
     const html = render(
       ["- [x] Outer one", "  - [x] Inner one", "  - [ ] Inner two", "- [ ] Outer two"].join("\n"),
     );
+
     expect(html.match(/data-task-progress=/g)).toHaveLength(1);
     expect(html).toContain('data-task-progress="1/2"');
   });
@@ -344,6 +350,7 @@ describe("ChatMarkdown bot chat forms", () => {
         "```",
       ].join("\n"),
     );
+
     expect(html).toContain('data-language="patch"');
     expect(html).toContain("2 files");
     expect(html).toContain('aria-label="2 additions, 2 deletions"');
@@ -404,6 +411,7 @@ describe("ChatMarkdown bot chat forms", () => {
 
   it("never renders half a table while streaming", () => {
     const [header, delimiter] = TABLE.split("\n");
+
     for (const partial of [
       `Intro\n\n${header?.slice(0, 8)}`,
       `Intro\n\n${header}\n`,
@@ -414,6 +422,7 @@ describe("ChatMarkdown bot chat forms", () => {
       expect(html, partial).not.toContain("<table");
       expect(html, partial).toContain("Intro");
     }
+
     const withRowInFlight = render(`${header}\n${delimiter}\n| src/output.ts | Rea`, true);
     expect(withRowInFlight).toContain("<table");
     expect(withRowInFlight).not.toContain("src/output.ts");
@@ -425,6 +434,7 @@ describe("ChatMarkdown bot chat forms", () => {
       expect(html, partial).not.toContain("data-language");
       expect(html, partial).not.toMatch(/>[^<]*`/);
     }
+
     expect(render("Intro\n```diff\n+run(2);", true)).toContain('data-diff-line="add"');
   });
 
@@ -435,18 +445,22 @@ describe("ChatMarkdown bot chat forms", () => {
       // No bracket in rendered text; class names may contain brackets.
       expect(html, partial).not.toMatch(/>[^<]*\[/);
     }
+
     expect(render("Almost done\n-", true)).not.toContain("<h2");
   });
 
   it("keeps already streamed diff lines unchanged as the fence grows", () => {
     const settled = render(DIFF);
     const lines = DIFF.split("\n");
+
     for (let count = 2; count < lines.length - 1; count += 1) {
       const streamed = render(`${lines.slice(0, count).join("\n")}\n`, true);
       const kinds = [...streamed.matchAll(/data-diff-line="(\w+)"/g)].map((match) => match[1]);
+
       const settledKinds = [...settled.matchAll(/data-diff-line="(\w+)"/g)].map(
         (match) => match[1],
       );
+
       expect(kinds).toEqual(settledKinds.slice(0, kinds.length));
       expect(kinds).toHaveLength(count - 1);
     }

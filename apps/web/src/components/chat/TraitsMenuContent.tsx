@@ -26,6 +26,7 @@ import {
 
 function DefaultBadge() {
   const { t } = useI18n();
+
   return (
     <Badge
       variant="outline"
@@ -62,16 +63,21 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 }: TraitsMenuContentProps & TraitsPersistence) {
   const { t } = useI18n();
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
+
   const updateModelOptions = useCallback(
     (nextOptions: ProviderOptions | undefined) => {
       if ("onModelOptionsChange" in persistence) {
         persistence.onModelOptionsChange(nextOptions);
+
         return;
       }
+
       const threadTarget = persistence.threadRef ?? persistence.draftId;
+
       if (!threadTarget) {
         return;
       }
+
       setProviderModelOptions(threadTarget, provider, nextOptions, {
         ...(instanceId ? { instanceId } : {}),
         model,
@@ -80,6 +86,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     },
     [instanceId, model, persistence, provider, setProviderModelOptions],
   );
+
   const {
     descriptors,
     selectDescriptors,
@@ -96,6 +103,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     modelOptions,
     allowPromptInjectedEffort,
   });
+
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
@@ -105,19 +113,25 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     value: string,
   ) => {
     if (!value) return;
+
     if (descriptor.promptInjectedValues?.includes(value)) {
       const nextPrompt =
         prompt.trim().length === 0
           ? ULTRATHINK_PROMPT_PREFIX
           : applyClaudePromptEffortPrefix(prompt, "ultrathink");
+
       onPromptChange(nextPrompt);
+
       return;
     }
+
     if (ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id) return;
+
     if (ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id) {
       const stripped = prompt.replace(/^Ultrathink:\s*/i, "");
       onPromptChange(stripped);
     }
+
     updateDescriptors(replaceDescriptorCurrentValue(descriptors, descriptor.id, value));
   };
 

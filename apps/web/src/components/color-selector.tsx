@@ -72,6 +72,7 @@ export function ColorSelector({
       {name && <input type="hidden" name={name} value={selectedColor} />}
       {colors.map((color) => {
         const colorValue = getColorValue(color);
+
         return (
           <div
             key={color}

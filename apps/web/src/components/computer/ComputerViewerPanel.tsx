@@ -22,13 +22,17 @@ export function computerViewerKeyAction(
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "v") {
     return null;
   }
+
   return computerKeyAction(event);
 }
+
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 
 const MOVE_INTERVAL_MS = 100;
+
 const MAX_SCROLL = 2000;
+
 const MAX_TYPED_TEXT = 4096;
 
 export interface ComputerViewerPanelProps {
@@ -46,13 +50,17 @@ export interface ComputerViewerPanelProps {
 
 function pointerButton(button: number): "left" | "middle" | "right" | null {
   if (button === 0) return "left";
+
   if (button === 1) return "middle";
+
   if (button === 2) return "right";
+
   return null;
 }
 
 function OwnerBadge({ botName, view }: Pick<ComputerViewerPanelProps, "botName" | "view">) {
   const { t } = useI18n();
+
   const label = (() => {
     switch (view.owner) {
       case "bot":
@@ -65,6 +73,7 @@ function OwnerBadge({ botName, view }: Pick<ComputerViewerPanelProps, "botName" 
         return t("No one is in control");
     }
   })();
+
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium"
@@ -87,6 +96,7 @@ function OwnerBadge({ botName, view }: Pick<ComputerViewerPanelProps, "botName" 
 
 function NoticeMessage({ notice }: { readonly notice: ComputerViewerNotice }) {
   const { t } = useI18n();
+
   switch (notice) {
     case "expired":
       return t("Your minute of control ran out, so the computer stopped. Resume it to continue.");
@@ -113,6 +123,7 @@ export function CapabilityMessage({
   readonly capability: ComputerCapabilityExplanation;
 }) {
   const { t } = useI18n();
+
   switch (capability) {
     case "local":
       return t(
@@ -158,6 +169,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
     const button = pointerButton(event.button);
     const target = point(event);
     event.currentTarget.focus();
+
     if (button === null || target === null) return;
     event.preventDefault();
     props.onInput({ _tag: "click", x: target.x, y: target.y, button });
@@ -166,6 +178,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
   const onPointerMove = (event: PointerEvent<HTMLElement>) => {
     if (!view.canSendInput || event.timeStamp - lastMoveRef.current < MOVE_INTERVAL_MS) return;
     const target = point(event);
+
     if (target === null) return;
     lastMoveRef.current = event.timeStamp;
     props.onInput({ _tag: "move", x: target.x, y: target.y });
@@ -183,6 +196,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!view.canSendInput || event.nativeEvent.isComposing) return;
     const action = computerViewerKeyAction(event);
+
     if (action === null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -288,6 +302,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
           onPaste={(event) => {
             if (!view.canSendInput) return;
             const text = event.clipboardData.getData("text/plain").slice(0, MAX_TYPED_TEXT);
+
             if (text.length === 0) return;
             event.preventDefault();
             props.onInput({ _tag: "type", text });

@@ -50,6 +50,7 @@ export function buildFirstSendBootstrap<CreateThread>(input: {
   if (!input.isLocalDraftThread && input.baseBranchForWorktree === null) {
     return undefined;
   }
+
   return {
     ...(input.isLocalDraftThread ? { createThread: input.createThread } : {}),
     ...(input.baseBranchForWorktree !== null
@@ -85,12 +86,15 @@ export function resolveComposerBranchForSend(input: {
   if (input.explicitBranch) {
     return input.explicitBranch;
   }
+
   if (input.effectiveEnvMode !== "worktree" || input.activeWorktreePath) {
     return null;
   }
+
   if (input.refsLoadPending) {
     return null;
   }
+
   return input.defaultBranchName ?? input.currentGitBranch;
 }
 

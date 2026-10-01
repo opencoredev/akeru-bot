@@ -20,6 +20,7 @@ export function Pie({ variant = "gradient" }: PieProps) {
 
   useEffect(() => {
     registerVariant("*", variant);
+
     return () => unregisterVariant("*");
   }, [variant, registerVariant, unregisterVariant]);
 

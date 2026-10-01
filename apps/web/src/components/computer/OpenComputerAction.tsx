@@ -16,7 +16,9 @@ export function OpenComputerAction({
   readonly bot: Pick<Bot, "name" | "sandbox" | "engine">;
 }) {
   const { t } = useI18n();
+
   if (threadRef === null) return null;
+
   return (
     <Button
       size="xs"

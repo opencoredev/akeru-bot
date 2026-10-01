@@ -155,6 +155,7 @@ describe("startNewThreadForProject", () => {
     expect(
       startNewThreadForProject(projectRef, (nextProjectRef) => {
         calls.push(nextProjectRef);
+
         return Promise.resolve();
       }),
     ).toBe(true);
@@ -167,6 +168,7 @@ describe("startNewThreadForProject", () => {
     expect(
       startNewThreadForProject(null, () => {
         called = true;
+
         return Promise.resolve();
       }),
     ).toBe(false);
@@ -221,6 +223,7 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
     const localDispatch = createLocalDispatchSnapshot(
       makeThread({ latestTurn: completedTurn, session: readySession }),
     );
+
     const newerTurn = {
       ...completedTurn,
       turnId: TurnId.make("turn-2"),
@@ -247,6 +250,7 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
     const localDispatch = createLocalDispatchSnapshot(
       makeThread({ latestTurn: completedTurn, session: readySession }),
     );
+
     const runningTurn = {
       ...completedTurn,
       turnId: TurnId.make("turn-2"),
@@ -296,11 +300,13 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
       state: "running" as const,
       completedAt: null,
     };
+
     const runningSession = {
       ...readySession,
       status: "running" as const,
       activeTurnId: runningTurn.turnId,
     };
+
     const localDispatch = createLocalDispatchSnapshot(
       makeThread({
         latestTurn: runningTurn,
@@ -335,6 +341,7 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
 
   it("acknowledges pending user interaction and errors immediately", () => {
     const localDispatch = createLocalDispatchSnapshot(makeThread());
+
     const common = {
       localDispatch,
       phase: "ready" as const,

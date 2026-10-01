@@ -34,6 +34,7 @@ export function Legend({
         const seed = chart.seedOf(name);
         const emphasis = chart.selectedDataKey ?? chart.focusDataKey;
         const dimmed = emphasis !== null && emphasis !== name;
+
         return (
           <button
             key={name}

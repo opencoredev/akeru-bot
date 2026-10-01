@@ -9,6 +9,7 @@ import { revealInFileExplorerLabel } from "./fileExplorerLabel";
 import { startBrowserRecording, stopBrowserRecording } from "~/browser/browserRecording";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+
 export function usePreviewCapture({
   recordingRuntimeTabId,
   runtimeTabId,
@@ -24,6 +25,7 @@ export function usePreviewCapture({
     (record: boolean) => {
       if (!previewBridge || !runtimeTabId || !tabId) return;
       const bridge = previewBridge;
+
       if (recordingRuntimeTabId) {
         void stopBrowserRecording(recordingRuntimeTabId).then(
           (artifact) => {
@@ -42,6 +44,7 @@ export function usePreviewCapture({
                     actionProps: revealAction,
                   }),
                 );
+
                 return;
               }
 
@@ -72,6 +75,7 @@ export function usePreviewCapture({
               children: revealInFileExplorerLabel(navigator.platform),
               onClick: () => void bridge.revealArtifact(artifact.path),
             };
+
             const updateRecordingToast = () => {
               toastManager.update(
                 toastId,
@@ -114,8 +118,10 @@ export function usePreviewCapture({
             });
           },
         );
+
         return;
       }
+
       if (record) {
         void startBrowserRecording(runtimeTabId, threadRef, tabId).catch((error) => {
           toastManager.add({
@@ -124,14 +130,17 @@ export function usePreviewCapture({
             description: error instanceof Error ? error.message : "An error occurred.",
           });
         });
+
         return;
       }
+
       void bridge.captureScreenshot(runtimeTabId).then(
         (artifact) => {
           const revealAction = {
             children: revealInFileExplorerLabel(navigator.platform),
             onClick: () => void bridge.revealArtifact(artifact.path),
           };
+
           let pathCopied = false;
           let imageCopied = false;
           let toastId: ReturnType<typeof toastManager.add>;
@@ -179,6 +188,7 @@ export function usePreviewCapture({
                 "Unable to copy screenshot path",
                 "Clipboard API unavailable.",
               );
+
               return;
             }
 

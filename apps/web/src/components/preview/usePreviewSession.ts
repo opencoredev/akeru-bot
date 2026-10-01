@@ -24,6 +24,7 @@ class PreviewSessionThreadKeyParseError extends Schema.TaggedErrorClass<PreviewS
 
 const previewSessionSyncAtom = Atom.family((threadKey: string) => {
   const threadRef = parseScopedThreadKey(threadKey);
+
   if (threadRef === null) {
     throw new PreviewSessionThreadKeyParseError({ threadKey });
   }
@@ -32,6 +33,7 @@ const previewSessionSyncAtom = Atom.family((threadKey: string) => {
     environmentId: threadRef.environmentId,
     input: { threadId: threadRef.threadId },
   });
+
   const eventsAtom = previewEnvironment.events({
     environmentId: threadRef.environmentId,
     input: { threadId: threadRef.threadId },
@@ -49,10 +51,13 @@ const previewSessionSyncAtom = Atom.family((threadKey: string) => {
     const applyLatestEvent = (result: Atom.Type<typeof eventsAtom>) => {
       if (!AsyncResult.isSuccess(result) || result.value.threadId !== threadRef.threadId) return;
       const currentEpoch = readThreadPreviewState(threadRef).serverEpoch;
+
       if (currentEpoch !== null && currentEpoch !== result.value.serverEpoch) {
         get.refresh(sessionsAtom);
+
         return;
       }
+
       applyPreviewServerEvent(threadRef, result.value);
     };
 
@@ -73,6 +78,7 @@ const previewSessionSyncAtom = Atom.family((threadKey: string) => {
       // snapshot visible until an authoritative refresh arrives instead of
       // reconciling against a stale empty result when the panel first mounts.
       get.refresh(sessionsAtom);
+
       if (eventsVersion === 0) applyLatestEvent(initialEvent);
     });
   }).pipe(Atom.setIdleTTL(1_000), Atom.withLabel(`preview:session-sync:${threadKey}`));

@@ -8,6 +8,7 @@ import { PairingPanel } from "./PairingPanel";
 import { PairingTokenForm } from "./PairingRouteSurface";
 
 const zhCNCatalog = await catalogRegistry["zh-CN"]!();
+
 const environment = { name: "Leo's workstation", address: "ms-a2.tail.ts.net:3773" };
 
 function renderInChinese(children: ReactNode) {
@@ -23,6 +24,7 @@ describe("pairing in Simplified Chinese", () => {
     const html = renderInChinese(
       <PairingPanel environment={environment} status={{ kind: "ready" }} />,
     );
+
     for (const text of [
       "配对此浏览器",
       "配对后，此浏览器可以",
@@ -32,6 +34,7 @@ describe("pairing in Simplified Chinese", () => {
     ]) {
       expect(html).toContain(text);
     }
+
     expect(html).toContain("Leo&#x27;s workstation");
     expect(html).not.toContain("Pairing lets this browser");
   });
@@ -40,6 +43,7 @@ describe("pairing in Simplified Chinese", () => {
     const html = renderInChinese(
       <PairingPanel environment={environment} status={{ kind: "rejected" }} />,
     );
+
     expect(html).toContain("此链接已失效");
     expect(html).toContain("获取新链接");
     expect(html).toContain("在服务器上运行 <code");
@@ -51,6 +55,7 @@ describe("pairing in Simplified Chinese", () => {
     const html = renderInChinese(
       <PairingPanel environment={environment} status={{ kind: "paired" }} />,
     );
+
     expect(html).toContain("已配对");
     expect(html).toContain("此浏览器现在可以使用 Leo&#x27;s workstation。");
   });
@@ -68,6 +73,7 @@ describe("pairing in Simplified Chinese", () => {
         tokenLabel="配对令牌"
       />,
     );
+
     expect(html).toContain('placeholder="粘贴令牌"');
     expect(html).toContain("重新加载页面");
     expect(html).not.toContain("Reload page");

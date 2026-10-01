@@ -25,6 +25,7 @@ export function createLocalDispatchSnapshot(
   const latestTurn = activeThread?.latestTurn ?? null;
   const session = activeThread?.session ?? null;
   const latestUserMessage = activeThread?.messages.findLast((message) => message.role === "user");
+
   return {
     startedAt: new Date().toISOString(),
     preparingWorktree: Boolean(options?.preparingWorktree),
@@ -52,17 +53,21 @@ export function hasServerAcknowledgedLocalDispatch(input: {
   if (!input.localDispatch) {
     return false;
   }
+
   if (input.hasPendingApproval || input.hasPendingUserInput || Boolean(input.threadError)) {
     return true;
   }
+
   if (input.phase === "connecting") {
     return false;
   }
 
   const latestTurn = input.latestTurn ?? null;
   const session = input.session ?? null;
+
   const latestUserMessageChanged =
     input.localDispatch.latestUserMessageId !== input.latestUserMessageId;
+
   const latestTurnChanged =
     input.localDispatch.latestTurnTurnId !== (latestTurn?.turnId ?? null) ||
     input.localDispatch.latestTurnRequestedAt !== (latestTurn?.requestedAt ?? null) ||
@@ -77,12 +82,15 @@ export function hasServerAcknowledgedLocalDispatch(input: {
     if (latestUserMessageChanged) {
       return true;
     }
+
     if (!latestTurnChanged) {
       return false;
     }
+
     if (latestTurn?.startedAt === null || latestTurn === null) {
       return false;
     }
+
     if (
       session?.activeTurnId !== null &&
       session?.activeTurnId !== undefined &&
@@ -90,6 +98,7 @@ export function hasServerAcknowledgedLocalDispatch(input: {
     ) {
       return false;
     }
+
     return true;
   }
 

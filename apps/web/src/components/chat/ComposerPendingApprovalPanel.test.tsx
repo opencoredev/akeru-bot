@@ -7,6 +7,7 @@ import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 describe("ComposerPendingApprovalPanel", () => {
   it("shows the complete command without a duplicate disclosure", () => {
     const detail = `bun run release -- ${"x".repeat(500)}\nsecond line`;
+
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
         approval={{
@@ -122,6 +123,7 @@ describe("ComposerPendingApprovalPanel", () => {
   it("limits long app names so the complete approval message stays readable", () => {
     const appName = "A".repeat(200);
     const detail = "Allow ChatGPT to access the selected application?";
+
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
         approval={{

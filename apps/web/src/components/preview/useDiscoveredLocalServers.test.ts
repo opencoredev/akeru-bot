@@ -22,6 +22,7 @@ describe("mergeServers", () => {
       scanner: [scannerServer({})],
       configuredUrls: [],
     });
+
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       host: "localhost",
@@ -37,6 +38,7 @@ describe("mergeServers", () => {
       scanner: [scannerServer({ port: 5173, processName: "node", pid: 9999 })],
       configuredUrls: ["http://localhost:5173"],
     });
+
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       port: 5173,
@@ -51,6 +53,7 @@ describe("mergeServers", () => {
       scanner: [],
       configuredUrls: ["http://localhost:5173"],
     });
+
     expect(result).toHaveLength(0);
   });
 
@@ -59,6 +62,7 @@ describe("mergeServers", () => {
       scanner: [scannerServer({})],
       configuredUrls: ["https://example.com", "ws://localhost:5173"],
     });
+
     expect(result).toHaveLength(1);
     expect(result[0]?.source).toBe("scanner");
   });
@@ -68,6 +72,7 @@ describe("mergeServers", () => {
       scanner: [scannerServer({ port: 8080 }), scannerServer({ port: 3000 })],
       configuredUrls: ["http://localhost:8080"],
     });
+
     expect(result.map((s) => `${s.source}:${s.port}`)).toEqual(["configured:8080", "scanner:3000"]);
   });
 
@@ -76,6 +81,7 @@ describe("mergeServers", () => {
       scanner: [scannerServer({ host: "Localhost", port: 5173 })],
       configuredUrls: ["http://localhost:5173"],
     });
+
     expect(result).toHaveLength(1);
     expect(result[0]?.source).toBe("configured");
   });
@@ -89,6 +95,7 @@ describe("mergeServers", () => {
         ],
         configuredUrls: [`http://${host}:5173/dashboard?mode=test#results`],
       });
+
       expect(result).toHaveLength(1);
       expect(result[0]?.source).toBe("configured");
       expect(result[0]?.requestedUrl).toBe("http://localhost:5173/dashboard?mode=test#results");
@@ -105,6 +112,7 @@ describe("mergeServers", () => {
       ],
       configuredUrls: ["https://localhost:5173/dashboard?mode=test#results"],
     });
+
     expect(result[0]?.url).toBe("https://env-42.example.dev:5173/");
     expect(result[0]?.requestedUrl).toBe("http://localhost:5173/dashboard?mode=test#results");
   });
@@ -140,6 +148,7 @@ describe("mergeServers", () => {
       ],
       configuredUrls: [],
     });
+
     expect(result[0]?.url).toBe("https://env-42.example.dev:5173/");
     expect(result[0]?.requestedUrl).toBe("http://localhost:5173/");
   });

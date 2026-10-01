@@ -18,10 +18,13 @@ export function PreviewRecentUrlCard({ threadRef, entry, onOpen, onRemove }: Pro
   const parsed = new URL(entry.url);
   const path = parsed.pathname === "/" ? "" : parsed.pathname;
   const label = `${parsed.host}${path}${parsed.search}${parsed.hash}`;
+
   const visitedAt = isValidHistoryTimestamp(entry.lastVisitedAt)
     ? formatRelativeTimeLabel(new Date(entry.lastVisitedAt).toISOString())
     : "";
+
   useNowMinute();
+
   return (
     <div className="group relative flex w-full items-center">
       <button

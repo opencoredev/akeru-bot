@@ -29,6 +29,7 @@ export function makeWorkspaceFileDropHandlers(host: WorkspaceFileDropHost) {
     onDragEnter(event: WorkspaceFileDragEvent) {
       if (!isFileDrag(event)) return;
       event.preventDefault();
+
       if (movedWithinDropTarget(event)) return;
       host.setDragActive(true);
     },
@@ -41,6 +42,7 @@ export function makeWorkspaceFileDropHandlers(host: WorkspaceFileDropHost) {
     onDragLeave(event: WorkspaceFileDragEvent) {
       if (!isFileDrag(event)) return;
       event.preventDefault();
+
       if (movedWithinDropTarget(event)) return;
       host.setDragActive(false);
     },

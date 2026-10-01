@@ -1,6 +1,7 @@
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId, TurnId } from "@akeru/contracts";
 
 import type { Thread } from "../types";
+
 export const environmentId = EnvironmentId.make("environment-local");
 
 export const projectId = ProjectId.make("project-1");

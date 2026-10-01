@@ -14,6 +14,7 @@ import { environmentId, now, projectId, threadId } from "./chatView.test-support
 describe("shouldReleaseTimelineAnchorForToolActivity", () => {
   const activeTurnId = TurnId.make("active-turn");
   const anchorMessageId = MessageId.make("anchored-message");
+
   const activeToolEntry = {
     id: "tool-entry",
     kind: "work" as const,

@@ -46,6 +46,7 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
     const consume = (result: AutomationStreamResult<E>) => {
       if (!AsyncResult.isSuccess(result)) return;
       const event = result.value;
+
       if (event.type === "connected") {
         activeConnectionId = event.connectionId;
         connectionExplicitlyAnnounced = true;
@@ -55,13 +56,16 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
         if (connectionExplicitlyAnnounced) return;
         activeConnectionId = event.connectionId;
       }
+
       if (reportedConnectionId !== event.connectionId) {
         reportedConnectionId = event.connectionId;
         get.set(options.connectionAtom, event.connectionId);
       }
+
       if (event.type === "connected") {
         return;
       }
+
       const request = event.request;
       void get
         .once(options.requestHandlerAtom)
@@ -96,14 +100,17 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
       disposed = true;
     });
     const initialRequest = get.once(options.requestsAtom);
+
     if (AsyncResult.isSuccess(initialRequest)) {
       activeConnectionId = initialRequest.value.connectionId;
       connectionExplicitlyAnnounced = initialRequest.value.type === "connected";
+
       if (initialRequest.value.type === "connected") {
         reportedConnectionId = initialRequest.value.connectionId;
         get.set(options.connectionAtom, initialRequest.value.connectionId);
       }
     }
+
     get.subscribe(options.requestsAtom, (result) => {
       requestsVersion += 1;
       consume(result);
@@ -113,6 +120,7 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
         AsyncResult.isSuccess(initialRequest) &&
         initialRequest.value.connectionId === activeConnectionId &&
         initialRequest.value.connectionId !== reportedConnectionId;
+
       if (!disposed && (requestsVersion === 0 || initialConnectionWasSkipped)) {
         consume(initialRequest);
       }

@@ -18,6 +18,7 @@ export function useMarkChatVisited(threadRef: ScopedThreadRef | null): void {
   const threadKey = threadRef ? scopedThreadKey(threadRef) : null;
   useEffect(() => {
     if (!threadKey) return;
+
     return watchChatVisits({
       page: document,
       window,

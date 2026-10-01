@@ -30,6 +30,7 @@ export function SettingsLinkChip({
 }) {
   const { t } = useI18n();
   const tooltip = t("Open Settings > {destination}", { destination: t(destination.label) });
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -45,6 +46,7 @@ export function SettingsLinkChip({
             onClick={(event: MouseEvent<HTMLAnchorElement>) => {
               event.preventDefault();
               event.stopPropagation();
+
               if (destination.section === "plugins") openPlugins();
               else openSettings(destination.section, destination.targetId, environmentId);
             }}

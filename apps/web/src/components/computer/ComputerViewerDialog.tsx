@@ -17,14 +17,17 @@ function ComputerViewerSurface({ target }: { readonly target: ComputerViewerTarg
   const { t } = useI18n();
   const { controller, state, view } = useComputerViewer(target.threadRef, true);
   const engine = useBotEngineAvailability(target.engine);
+
   const driverKind =
     engine.instanceEntries.find((entry) => entry.instanceId === engine.selection?.instanceId)
       ?.driverKind ?? null;
+
   const capability = explainComputerCapability({
     sandbox: target.sandbox,
     provider: driverKind,
     state: state.server,
   });
+
   return (
     <>
       <DialogHeader>
@@ -60,8 +63,10 @@ export function ComputerViewerDialog() {
   useEffect(() => {
     if (target === null) {
       openedAtRef.current = null;
+
       return;
     }
+
     if (openedAtRef.current === null) openedAtRef.current = pathname;
     else if (openedAtRef.current !== pathname) closeComputerViewer();
   }, [pathname, target]);

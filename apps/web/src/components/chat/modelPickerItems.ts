@@ -21,16 +21,20 @@ export function flattenModelPickerItems(
   blockReasonByInstance: ReadonlyMap<ProviderInstanceId, string | null>,
 ) {
   const out: ModelPickerItem[] = [];
+
   for (const [instanceId, models] of modelOptionsByInstance) {
     const entry = entryByInstanceId.get(instanceId);
+
     if (!entry) {
       // Instance disappeared between renders (configuration change). Skip
       // its models — stale options shouldn't appear in the picker.
       continue;
     }
+
     if (!blockReasonByInstance.has(instanceId)) {
       continue;
     }
+
     for (const model of models) {
       out.push({
         slug: model.slug,
@@ -46,5 +50,6 @@ export function flattenModelPickerItems(
       });
     }
   }
+
   return out;
 }

@@ -27,6 +27,7 @@ export const TraitsPicker = memo(function TraitsPicker({
 }: TraitsMenuContentProps & TraitsPersistence) {
   const { t } = useI18n();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
@@ -36,6 +37,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       modelOptions,
       allowPromptInjectedEffort,
     });
+
   if (
     !shouldRenderTraitsControls({
       provider,
@@ -56,6 +58,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     ultrathinkPromptControlled,
     t,
   });
+
   const fastModeIcon = showFastModeIcon ? (
     <>
       <ComposerControlIcon
@@ -121,5 +124,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     </Menu>
   );
 });
+
 export { TraitsMenuContent, type TraitsMenuContentProps } from "./TraitsMenuContent";
+
 export { buildTraitsTriggerDisplay, shouldRenderTraitsControls } from "./traitsPicker.logic";

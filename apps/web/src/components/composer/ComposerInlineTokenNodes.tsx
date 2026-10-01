@@ -45,6 +45,7 @@ export const ComposerTerminalContextActionsContext = createContext<{
 
 function ComposerMentionDecorator(props: { path: string }) {
   const theme = resolvedThemeFromDocument();
+
   const chip = (
     <span
       className={FILE_TAG_CHIP_CLASS_NAME}
@@ -98,6 +99,7 @@ export class ComposerMentionNode extends DecoratorNode<React.ReactElement> {
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
     dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
+
     return dom;
   }
 
@@ -160,6 +162,7 @@ export class ComposerTerminalContextNode extends DecoratorNode<React.ReactElemen
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
     dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
+
     return dom;
   }
 

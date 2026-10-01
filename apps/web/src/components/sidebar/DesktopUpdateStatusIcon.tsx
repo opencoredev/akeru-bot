@@ -4,6 +4,7 @@ import type { AnimationEventHandler } from "react";
 import { cn } from "../../lib/utils";
 
 const DOWNLOAD_PROGRESS_RADIUS = 8.25;
+
 const DOWNLOAD_PROGRESS_CIRCUMFERENCE = 2 * Math.PI * DOWNLOAD_PROGRESS_RADIUS;
 
 export type DesktopUpdateStatusIconState =
@@ -15,6 +16,7 @@ export type DesktopUpdateStatusIconState =
 
 function normalizeDesktopUpdateDownloadPercent(percent: number | null): number {
   if (percent === null || !Number.isFinite(percent)) return 0;
+
   return Math.min(100, Math.max(0, percent));
 }
 
@@ -104,9 +106,11 @@ export function DesktopUpdateStatusIcon({
   readonly status: DesktopUpdateStatusIconState;
 }) {
   if (status === "available") return <DesktopUpdateAvailableIcon />;
+
   if (status === "downloading") {
     return <DesktopUpdateDownloadingIcon percent={downloadPercent ?? null} />;
   }
+
   if (status === "downloaded") return <DesktopUpdateDownloadedIcon />;
 
   return (

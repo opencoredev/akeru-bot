@@ -37,6 +37,7 @@ describe("ComposerBannerStack", () => {
     const neutralBehind = renderToStaticMarkup(
       <ComposerBannerStack items={[banner("front", "default"), banner("stacked", "default")]} />,
     );
+
     expect(neutralBehind).toContain("chat-composer-banner-stack-cap");
     expect(neutralBehind).toContain("border-[var(--chat-composer-attached-outline)]");
     expect(neutralBehind).not.toContain("border-border");
@@ -45,6 +46,7 @@ describe("ComposerBannerStack", () => {
     const warningBehind = renderToStaticMarkup(
       <ComposerBannerStack items={[banner("front", "default"), banner("stacked", "warning")]} />,
     );
+
     expect(warningBehind).toContain("border-warning/24");
   });
 
@@ -61,6 +63,7 @@ describe("ComposerBannerStack", () => {
       const stack = renderToStaticMarkup(
         <ComposerBannerStack items={[banner(variant, variant)]} />,
       );
+
       expect(stack).toContain('data-variant="default"');
       expect(stack).not.toContain(`border-${variant}/32`);
       expect(stack).not.toContain(`bg-${variant}/4`);

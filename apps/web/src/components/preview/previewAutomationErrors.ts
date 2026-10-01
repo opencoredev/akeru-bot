@@ -148,6 +148,7 @@ const targetNotEditableDiagnostics = (
   ) {
     return null;
   }
+
   const selectorKind =
     "selectorKind" in cause &&
     (cause.selectorKind === "focused-element" ||
@@ -155,6 +156,7 @@ const targetNotEditableDiagnostics = (
       cause.selectorKind === "selector")
       ? cause.selectorKind
       : undefined;
+
   const selectorLength =
     "selectorLength" in cause &&
     typeof cause.selectorLength === "number" &&
@@ -162,6 +164,7 @@ const targetNotEditableDiagnostics = (
     cause.selectorLength >= 0
       ? cause.selectorLength
       : undefined;
+
   return {
     ...(selectorKind === undefined ? {} : { selectorKind }),
     ...(selectorLength === undefined ? {} : { selectorLength }),
@@ -184,6 +187,7 @@ export class PreviewAutomationOperationError extends Schema.TaggedErrorClass<Pre
   ): PreviewAutomationHostError {
     if (isPreviewAutomationHostError(input.cause)) return input.cause;
     const diagnostics = targetNotEditableDiagnostics(input.cause);
+
     return diagnostics
       ? new PreviewAutomationTargetNotEditableHostError({
           requestId: input.requestId,
@@ -214,6 +218,7 @@ export const PreviewAutomationHostError = Schema.Union([
   PreviewAutomationTargetNotEditableHostError,
   PreviewAutomationOperationError,
 ]);
+
 export type PreviewAutomationHostError = typeof PreviewAutomationHostError.Type;
 
 export const isPreviewAutomationHostError = Schema.is(PreviewAutomationHostError);
@@ -227,6 +232,7 @@ export function serializePreviewAutomationHostError(
         key !== "_tag" && key !== "cause" && key !== "name" && key !== "message" && key !== "stack",
     ),
   );
+
   return {
     _tag: error.responseTag,
     message: error.message,

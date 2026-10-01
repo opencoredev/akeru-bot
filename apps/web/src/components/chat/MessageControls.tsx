@@ -10,6 +10,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export const MESSAGE_REACTION_OPTIONS = ["👍", "👎", "❤️", "😂", "🎉", "😮"] as const;
+
 export type MessageReactionOption = (typeof MESSAGE_REACTION_OPTIONS)[number];
 
 export interface MessageReplyTarget {
@@ -31,16 +32,19 @@ export function selectedReactionForPerson(
 ): MessageReactionOption | null {
   if (!personId) return null;
   const emoji = reactions?.find((reaction) => reaction.personId === personId)?.emoji;
+
   return MESSAGE_REACTION_OPTIONS.find((option) => option === emoji) ?? null;
 }
 
 export function buildReplyPrompt(reply: MessageReplyTarget | null, prompt: string): string {
   if (!reply) return prompt;
+
   const quoted = reply.text
     .trim()
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
+
   return `> Replying to ${reply.label}\n${quoted}\n\n${prompt}`.trimEnd();
 }
 
@@ -51,6 +55,7 @@ export interface ParsedReplyPrompt {
 }
 
 const REPLY_HEADER_PATTERN = /^> Replying to (\S.*)$/;
+
 const QUOTED_LINE_PATTERN = /^>(?: (.*))?$/;
 
 /**
@@ -63,16 +68,21 @@ const QUOTED_LINE_PATTERN = /^>(?: (.*))?$/;
 export function parseReplyPrompt(text: string): ParsedReplyPrompt | null {
   const lines = text.split("\n");
   const label = REPLY_HEADER_PATTERN.exec(lines[0] ?? "")?.[1]?.trim();
+
   if (!label) return null;
 
   const quotedLines: string[] = [];
   let index = 1;
+
   for (; index < lines.length; index += 1) {
     const match = QUOTED_LINE_PATTERN.exec(lines[index] ?? "");
+
     if (!match) break;
     quotedLines.push(match[1] ?? "");
   }
+
   if (quotedLines.length === 0) return null;
+
   if (index < lines.length && lines[index] !== "") return null;
 
   return {
@@ -88,10 +98,13 @@ export function findReplySourceMessageId(
   replyText: string,
 ): string | null {
   const reply = parseReplyPrompt(replyText);
+
   if (!reply) return null;
+
   const matches = messages
     .slice(0, replyIndex)
     .filter((message) => message.text.trim() === reply.quotedText);
+
   return matches.length === 1 ? matches[0]!.id : null;
 }
 
@@ -106,6 +119,7 @@ export function MessageControls(props: {
   readonly readAloud?: ReplyPlaybackControlsProps;
 }) {
   const { t } = useI18n();
+
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: "message",
     timeout: 1200,
@@ -117,6 +131,7 @@ export function MessageControls(props: {
       });
     },
   });
+
   const chooseReaction = (next: MessageReactionOption) => {
     const value = props.selectedReaction === next ? null : next;
     props.onReactionChange?.(value);

@@ -17,6 +17,7 @@ const CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME = cn(
 
 export function ChatMarkdownImageFallback(props: { readonly alt: string }) {
   const { t } = useI18n();
+
   return (
     <span className="my-1 inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
       <TriangleAlertIcon aria-hidden className="size-3.5 shrink-0" />
@@ -34,16 +35,19 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
   readonly alt: string;
 }) {
   const { t } = useI18n();
+
   const assetUrl = useAssetUrlState(props.threadRef.environmentId, {
     _tag: "workspace-file",
     threadId: props.threadRef.threadId,
     path: props.path,
   });
+
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   if (assetUrl._tag === "Failure" || (assetUrl._tag === "Success" && failedUrl === assetUrl.url)) {
     return <ChatMarkdownImageFallback alt={props.alt} />;
   }
+
   if (assetUrl._tag !== "Success") {
     return (
       <span
@@ -53,7 +57,9 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
       />
     );
   }
+
   const knownSize = assetUrl.imageDimensions;
+
   const sizeStyle = knownSize
     ? {
         width: knownSize.width,
@@ -62,6 +68,7 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
         maxWidth: `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
       }
     : undefined;
+
   return (
     <img
       src={assetUrl.url}

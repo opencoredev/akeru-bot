@@ -61,7 +61,9 @@ export function getDescriptorStringValue(
   if (!descriptor) {
     return null;
   }
+
   const value = getProviderOptionCurrentValue(descriptor);
+
   return typeof value === "string" ? value : null;
 }
 
@@ -74,24 +76,32 @@ function getSelectedTraits(
   allowPromptInjectedEffort: boolean,
 ) {
   const caps = getProviderModelCapabilities(models, model, provider);
+
   const descriptors = getProviderOptionDescriptors({
     caps,
     selections: modelOptions,
   });
+
   const selectDescriptors = descriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "select" }> =>
       descriptor.type === "select",
   );
+
   const booleanDescriptors = descriptors.filter(
     (descriptor): descriptor is Extract<ProviderOptionDescriptor, { type: "boolean" }> =>
       descriptor.type === "boolean",
   );
+
   const primarySelectDescriptor = selectDescriptors[0] ?? null;
+
   const contextWindowDescriptor =
     selectDescriptors.find((descriptor) => descriptor.id === "contextWindow") ?? null;
+
   const agentDescriptor = selectDescriptors.find((descriptor) => descriptor.id === "agent") ?? null;
+
   const fastModeDescriptor =
     booleanDescriptors.find((descriptor) => descriptor.id === "fastMode") ?? null;
+
   const thinkingDescriptor =
     booleanDescriptors.find((descriptor) => descriptor.id === "thinking") ?? null;
 
@@ -104,14 +114,18 @@ function getSelectedTraits(
   // Check if "ultrathink" appears in the body text (not just our prefix)
   const ultrathinkInBodyText =
     ultrathinkPromptControlled && isClaudeUltrathinkPrompt(prompt.replace(/^Ultrathink:\s*/i, ""));
+
   const effort =
     (ultrathinkPromptControlled
       ? "ultrathink"
       : getDescriptorStringValue(primarySelectDescriptor)) ?? null;
+
   const thinkingEnabled =
     typeof thinkingDescriptor?.currentValue === "boolean" ? thinkingDescriptor.currentValue : null;
+
   const contextWindow = getDescriptorStringValue(contextWindowDescriptor);
   const selectedAgent = getDescriptorStringValue(agentDescriptor);
+
   const selectedAgentLabel = agentDescriptor
     ? getProviderOptionCurrentLabel(agentDescriptor)
     : null;
@@ -200,12 +214,14 @@ export function buildTraitsTriggerDisplay(input: {
   let fastModeFallbackLabel: string | null = null;
   let fastModeEnabled = false;
   const labels: Array<string> = [];
+
   for (const descriptor of input.descriptors) {
     if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
       fastModeEnabled = descriptor.currentValue === true;
       fastModeFallbackLabel = fastModeEnabled ? t("Fast") : t("Normal");
       continue;
     }
+
     if (
       input.provider === "codex" &&
       descriptor.id === "serviceTier" &&
@@ -213,6 +229,7 @@ export function buildTraitsTriggerDisplay(input: {
     ) {
       const currentValue = getProviderOptionCurrentValue(descriptor);
       const fastTier = descriptor.options.find(({ label }) => label === "Fast");
+
       if (fastTier && (currentValue === "default" || currentValue === fastTier.id)) {
         fastModeEnabled = currentValue === fastTier.id;
         fastModeFallbackLabel =
@@ -221,6 +238,7 @@ export function buildTraitsTriggerDisplay(input: {
         continue;
       }
     }
+
     const label =
       input.ultrathinkPromptControlled && descriptor.id === input.primarySelectDescriptorId
         ? "Ultrathink"
@@ -229,6 +247,7 @@ export function buildTraitsTriggerDisplay(input: {
             ? t("{label} On", { label: descriptor.label })
             : t("{label} Off", { label: descriptor.label })
           : getProviderOptionCurrentLabel(descriptor);
+
     if (typeof label === "string" && label.length > 0) {
       labels.push(label);
     }
@@ -240,5 +259,6 @@ export function buildTraitsTriggerDisplay(input: {
   if (labels.length === 0 && fastModeFallbackLabel !== null) {
     return { label: fastModeFallbackLabel, showFastModeIcon: false };
   }
+
   return { label: labels.join(" · "), showFastModeIcon: fastModeEnabled };
 }

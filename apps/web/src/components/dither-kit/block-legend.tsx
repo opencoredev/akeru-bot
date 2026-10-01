@@ -41,6 +41,7 @@ export function BlockLegend({
       {Object.entries(config).map(([name, entry]) => {
         const seed = seedOfColor(entry.color);
         const value = values?.[name];
+
         return (
           <li
             key={name}

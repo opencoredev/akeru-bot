@@ -20,6 +20,7 @@ function rehypeNormalizeWindowsImageSrc() {
   return (tree: MarkdownHtmlAstNode) => {
     const visit = (node: MarkdownHtmlAstNode) => {
       const src = node.properties?.src;
+
       if (
         node.type === "element" &&
         node.tagName === "img" &&
@@ -31,6 +32,7 @@ function rehypeNormalizeWindowsImageSrc() {
           src: `file:///${src.replaceAll("\\", "/")}`,
         };
       }
+
       node.children?.forEach(visit);
     };
 
@@ -109,6 +111,7 @@ function remarkTagMathNodes() {
         node.type = "code";
         node.lang = "math";
       }
+
       node.children?.forEach(visit);
     };
 
@@ -128,6 +131,7 @@ function remarkPreserveCodeMeta() {
           },
         };
       }
+
       node.children?.forEach(visit);
     };
 
@@ -150,6 +154,7 @@ function remarkNormalizeLinksAndTagInlineCode() {
       ) {
         node.url = `file:///${node.url.replaceAll("\\", "/")}`;
       }
+
       if (node.type === "inlineCode" && !insideLink) {
         node.data = {
           ...node.data,
@@ -159,6 +164,7 @@ function remarkNormalizeLinksAndTagInlineCode() {
           },
         };
       }
+
       const childInsideLink = insideLink || node.type === "link" || node.type === "linkReference";
       node.children?.forEach((child) => visit(child, childInsideLink));
     };

@@ -6,8 +6,11 @@ import { cn } from "~/lib/utils";
 
 export function providerInstanceInitials(label: string): string {
   const words = label.replace(/[_-]+/g, " ").split(/\s+/u).filter(Boolean);
+
   if (words.length === 0) return "";
+
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+
   return words
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? "")
@@ -28,9 +31,11 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
 }) {
   const Icon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
   const indicatorBackground = props.indicatorBackground ?? "var(--card)";
+
   const accentStyle = props.accentColor
     ? ({ "--provider-accent": props.accentColor } as CSSProperties)
     : undefined;
+
   const badgeContent = props.badgeContent ?? "initials";
 
   return (

@@ -7,12 +7,15 @@ export function reconcileRetainedMountedThreadIds(input: {
   retainInactiveActiveThread?: boolean;
 }): string[] {
   const openThreadIdSet = new Set(input.openThreadIds);
+
   const hiddenThreadIds = input.currentThreadIds.filter(
     (threadId) =>
       (threadId !== input.activeThreadId || input.retainInactiveActiveThread === true) &&
       openThreadIdSet.has(threadId),
   );
+
   const maxHiddenThreadCount = Math.max(0, input.maxHiddenThreadCount);
+
   const nextThreadIds =
     hiddenThreadIds.length > maxHiddenThreadCount
       ? hiddenThreadIds.slice(-maxHiddenThreadCount)
@@ -36,6 +39,7 @@ export function branchMismatchKey(
   if (!threadId || !mismatch) {
     return null;
   }
+
   return `${threadId}:${mismatch.threadBranch}:${mismatch.currentBranch}`;
 }
 
@@ -54,6 +58,7 @@ export function shouldShowBranchMismatchBanner(input: {
   if (!input.hasMismatch || input.isDismissed) {
     return false;
   }
+
   return input.composerHasContent || input.wasShownForCurrentMismatch;
 }
 

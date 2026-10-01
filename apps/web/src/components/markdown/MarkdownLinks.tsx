@@ -14,6 +14,7 @@ import { WINDOWS_DRIVE_PATH_REGEX } from "./markdownPaths";
 export function normalizeMarkdownLinkHrefKey(href: string): string {
   const normalizedHref = normalizeMarkdownLinkDestination(href);
   const rewrittenHref = rewriteMarkdownFileUriHref(normalizedHref) ?? normalizedHref;
+
   return WINDOWS_DRIVE_PATH_REGEX.test(rewrittenHref)
     ? rewrittenHref.replaceAll("\\", "/")
     : rewrittenHref;
@@ -27,6 +28,7 @@ const failedFaviconHosts = new Set<string>();
 const MarkdownLinkFavicon = memo(function MarkdownLinkFavicon({ host }: { host: string }) {
   const [failedHost, setFailedHost] = useState<string | null>(null);
   const faviconUrl = faviconUrlForOrigin(`https://${host}`);
+
   return (
     <span
       className="ms-[0.25em] me-[0.2em] inline-flex size-[14px] [vertical-align:-0.125em]"
@@ -53,7 +55,9 @@ const MarkdownLinkFavicon = memo(function MarkdownLinkFavicon({ host }: { host: 
 
 function leadingExternalLinkTextLength(text: string): number {
   const protocol = /^(?:https?:\/\/)/i.exec(text)?.[0];
+
   if (protocol) return protocol.length;
+
   return Math.min(text.length, 1);
 }
 
@@ -70,6 +74,7 @@ export function plainHastText(node: unknown): string | null {
   if (!node || typeof node !== "object" || !("children" in node) || !Array.isArray(node.children)) {
     return null;
   }
+
   const parts = node.children.map((child) => {
     if (
       child &&
@@ -81,8 +86,10 @@ export function plainHastText(node: unknown): string | null {
     ) {
       return child.value;
     }
+
     return null;
   });
+
   return parts.every((part) => part !== null) ? parts.join("") : null;
 }
 
@@ -93,6 +100,7 @@ export function plainHastText(node: unknown): string | null {
  */
 export function hastHasText(node: unknown): boolean {
   if (!node || typeof node !== "object") return false;
+
   if (
     "type" in node &&
     node.type === "text" &&
@@ -102,6 +110,7 @@ export function hastHasText(node: unknown): boolean {
   ) {
     return true;
   }
+
   return "children" in node && Array.isArray(node.children) && node.children.some(hastHasText);
 }
 
@@ -109,6 +118,7 @@ const SANITIZED_FRAGMENT_PREFIX = "user-content-";
 
 function decodeMarkdownFragmentId(href: string): string {
   const encodedId = href.slice(1);
+
   try {
     return decodeURIComponent(encodedId);
   } catch {
@@ -118,21 +128,27 @@ function decodeMarkdownFragmentId(href: string): string {
 
 function normalizeSanitizedFragmentId(id: string): string {
   let normalizedId = id;
+
   while (normalizedId.startsWith(SANITIZED_FRAGMENT_PREFIX)) {
     normalizedId = normalizedId.slice(SANITIZED_FRAGMENT_PREFIX.length);
   }
+
   return normalizedId;
 }
 
 function findMarkdownFragmentTarget(anchor: HTMLAnchorElement, href: string): HTMLElement | null {
   const decodedId = decodeMarkdownFragmentId(href);
   const normalizedId = normalizeSanitizedFragmentId(decodedId);
+
   const matchesFragment = (element: HTMLElement) =>
     element.id === decodedId || normalizeSanitizedFragmentId(element.id) === normalizedId;
+
   const markdownRoot = anchor.closest<HTMLElement>(".chat-markdown");
+
   if (markdownRoot) {
     const localTargets = Array.from(markdownRoot.querySelectorAll<HTMLElement>("[id]"));
     const localTarget = localTargets.find(matchesFragment);
+
     if (localTarget) return localTarget;
   }
 
@@ -159,6 +175,7 @@ export function handleMarkdownFragmentClick(
   }
 
   const target = findMarkdownFragmentTarget(event.currentTarget, href);
+
   if (!target) return;
 
   event.preventDefault();
@@ -179,6 +196,7 @@ export function MarkdownExternalLinkContent({
 }) {
   if (plainText) {
     const leadingLength = leadingExternalLinkTextLength(plainText);
+
     return (
       <>
         <span className="whitespace-nowrap">
@@ -195,6 +213,7 @@ export function MarkdownExternalLinkContent({
 
   if (typeof firstChild === "string" && firstChild.length > 0) {
     const leadingLength = leadingExternalLinkTextLength(firstChild);
+
     return (
       <>
         <span className="whitespace-nowrap">

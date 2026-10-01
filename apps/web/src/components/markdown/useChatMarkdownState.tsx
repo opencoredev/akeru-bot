@@ -75,12 +75,15 @@ const INLINE_CODE_SPAN_PATTERN = /`([^`\n]+)`/g;
 function extractInlineCodeSpans(text: string): string[] {
   const spans: string[] = [];
   const segments = text.split(FENCED_CODE_SEGMENT_PATTERN);
+
   for (let index = 0; index < segments.length; index += 2) {
     for (const match of (segments[index] ?? "").matchAll(INLINE_CODE_SPAN_PATTERN)) {
       const span = match[1]?.trim();
+
       if (span) spans.push(span);
     }
   }
+
   return spans;
 }
 
@@ -94,15 +97,19 @@ export function useChatMarkdownState({
   skills = EMPTY_MARKDOWN_SKILLS,
 }: ChatMarkdownProps) {
   const { resolvedTheme } = useTheme();
+
   const createAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
   });
+
   const searchProjectEntries = useAtomQueryRunner(projectEnvironment.searchEntries, {
     reportFailure: false,
   });
+
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
+
   const environmentId = threadRef?.environmentId ?? explicitEnvironmentId ?? null;
   const shellAccess = useLocalShellAccess(environmentId);
   const canUseShellActions = canUseMarkdownFileShellActions(environmentId, shellAccess);
@@ -112,9 +119,11 @@ export function useChatMarkdownState({
   const [preferredEditor] = usePreferredEditor(availableEditors);
   const preferredEditorMenuLabel = openInEditorMenuLabel(preferredEditor);
   const openInPreferredEditor = useOpenInPreferredEditor(environmentId, availableEditors);
+
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
+
   const revealInFileManagerLabel =
     environmentId !== null &&
     serverConfig?.shellRevealInFileManager === true &&
@@ -123,6 +132,7 @@ export function useChatMarkdownState({
         ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
         : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
       : undefined;
+
   const revealFileInFileManager = useCallback(
     (filePath: string) => {
       if (environmentId === null) {
@@ -132,6 +142,7 @@ export function useChatMarkdownState({
           ),
         );
       }
+
       return openInEditor({
         environmentId,
         input: { cwd: filePath, editor: "file-manager", reveal: true },
@@ -139,56 +150,74 @@ export function useChatMarkdownState({
     },
     [environmentId, openInEditor],
   );
+
   const diffThemeName = resolveDiffThemeName(resolvedTheme);
+
   const markdownFileLinkMetaByHref = useMemo(() => {
     const metaByHref = new Map<
       string,
       NonNullable<ReturnType<typeof resolveMarkdownFileLinkMeta>>
     >();
+
     for (const href of extractMarkdownLinkHrefs(text)) {
       const normalizedHref = normalizeMarkdownLinkHrefKey(href);
+
       if (metaByHref.has(normalizedHref)) continue;
       const meta = resolveMarkdownFileLinkMeta(normalizedHref, cwd);
+
       if (meta) {
         metaByHref.set(normalizedHref, meta);
       }
     }
+
     return metaByHref;
   }, [cwd, text]);
+
   const inlineCodeFileLinkMetaByText = useMemo(() => {
     const metaByText = new Map<string, MarkdownFileLinkMeta>();
+
     for (const span of extractInlineCodeSpans(text)) {
       if (metaByText.has(span)) continue;
       const meta = resolveInlineCodeFileLinkMeta(span, cwd);
+
       if (meta) {
         metaByText.set(span, meta);
       }
     }
+
     return metaByText;
   }, [cwd, text]);
+
   const fileLinkParentSuffixByPath = useMemo(() => {
     const filePaths = [
       ...[...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath),
       ...[...inlineCodeFileLinkMetaByText.values()].map((meta) => meta.filePath),
     ];
+
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
+
   const markdownUrlTransform = useCallback((href: string) => {
     // Keep in-app links intact so the renderer can show a chip or swallow them.
     if (isAppDeepLink(href)) return href;
+
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
+
   // Re-emit highlighted content as markdown so copying out of the rendered
   // view keeps links, emphasis, lists, and code fences intact.
   const handleCopy = useCallback((event: ReactClipboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
+
     if (!selection || selection.isCollapsed || !event.clipboardData) return;
     const payload = chatMarkdownClipboardPayload(selection);
+
     if (!payload) return;
     event.preventDefault();
     event.clipboardData.setData("text/plain", payload.text);
     event.clipboardData.setData("text/html", payload.html);
   }, []);
+
   const openExternalLinkInPreview = useCallback(
     (url: string) => {
       if (!threadRef) {
@@ -202,13 +231,16 @@ export function useChatMarkdownState({
           ),
         );
       }
+
       return openUrlInPreview({ threadRef, url, openPreview }).then((result) => {
         if (result._tag === "Success") recordVisitForThread(threadRef, url);
+
         return result;
       });
     },
     [openPreview, threadRef],
   );
+
   const openMarkdownFileInPreview = useCallback(
     (path: string) => {
       if (!threadRef || preparedConnection._tag === "None") {
@@ -222,6 +254,7 @@ export function useChatMarkdownState({
           ),
         );
       }
+
       return openFileInPreview({
         threadRef,
         filePath: path,
@@ -232,11 +265,13 @@ export function useChatMarkdownState({
     },
     [createAssetUrl, openPreview, preparedConnection, threadRef],
   );
+
   const findWorkspaceBasenameMatch = useCallback(
     async (workspaceRelativePath: string) => {
       if (!cwd || environmentId === null || !needsWorkspaceBasenameLookup(workspaceRelativePath)) {
         return null;
       }
+
       const result = await searchProjectEntries({
         environmentId,
         input: {
@@ -246,48 +281,62 @@ export function useChatMarkdownState({
           kind: "file",
         },
       });
+
       return result._tag === "Success"
         ? pickWorkspaceBasenameMatch(workspaceRelativePath, result.value.entries)
         : null;
     },
     [cwd, environmentId, searchProjectEntries],
   );
+
   // A bare filename resolves to the workspace root, which is rarely where the
   // file is, so ask the index before opening it in the editor.
   const openMarkdownFileInEditor = useCallback(
     async (fileLinkMeta: MarkdownFileLinkMeta) => {
       const workspaceRelativePath = fileLinkMeta.workspaceRelativePath;
+
       const match = workspaceRelativePath
         ? await findWorkspaceBasenameMatch(workspaceRelativePath)
         : null;
+
       if (!match || !cwd) return openInPreferredEditor(fileLinkMeta.targetPath);
+
       const position = fileLinkMeta.line
         ? `:${fileLinkMeta.line}${fileLinkMeta.column ? `:${fileLinkMeta.column}` : ""}`
         : "";
+
       return openInPreferredEditor(`${resolvePathLinkTarget(match, cwd)}${position}`);
     },
     [cwd, findWorkspaceBasenameMatch, openInPreferredEditor],
   );
+
   const revealMarkdownFileInFileManager = useCallback(
     async (fileLinkMeta: MarkdownFileLinkMeta) => {
       const workspaceRelativePath = fileLinkMeta.workspaceRelativePath;
+
       const match = workspaceRelativePath
         ? await findWorkspaceBasenameMatch(workspaceRelativePath)
         : null;
+
       const filePath = match && cwd ? resolvePathLinkTarget(match, cwd) : fileLinkMeta.filePath;
+
       return revealFileInFileManager(filePath);
     },
     [cwd, findWorkspaceBasenameMatch, revealFileInFileManager],
   );
+
   const fileLinkChip = useCallback(
     (fileLinkMeta: MarkdownFileLinkMeta, copyMarkdown: string, className?: string) => {
       const parentSuffix = fileLinkParentSuffixByPath.get(
         fileLinkMeta.filePath.replaceAll("\\", "/"),
       );
+
       const labelParts = [fileLinkMeta.basename];
+
       if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
         labelParts.push(parentSuffix);
       }
+
       if (fileLinkMeta.line) {
         labelParts.push(
           `L${fileLinkMeta.line}${fileLinkMeta.column ? `:C${fileLinkMeta.column}` : ""}`,
@@ -374,5 +423,7 @@ export function useChatMarkdownState({
     markdownUrlTransform,
   };
 }
+
 export { reportMarkdownActionFailure } from "./markdownActionFailure";
+
 export { WINDOWS_DRIVE_PATH_REGEX } from "./markdownPaths";

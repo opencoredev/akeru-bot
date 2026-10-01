@@ -69,12 +69,14 @@ describe("resolveWorktreeSendGate", () => {
 
 describe("first-send turn payload", () => {
   const modelSelection = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" };
+
   const message = {
     messageId: MessageId.make("message-1"),
     role: "user" as const,
     text: "Ship it",
     attachments: [],
   };
+
   const baseTurnInput = {
     threadId,
     message,
@@ -83,6 +85,7 @@ describe("first-send turn payload", () => {
     interactionMode: "default" as const,
     createdAt: now,
   };
+
   const makeCreateThread = (branch: string | null) => ({
     projectId,
     title: "New thread",
@@ -93,6 +96,7 @@ describe("first-send turn payload", () => {
     worktreePath: null,
     createdAt: now,
   });
+
   const sendScenario = (input: {
     effectiveEnvMode: "local" | "worktree";
     explicitBranch?: string | null;
@@ -112,6 +116,7 @@ describe("first-send turn payload", () => {
       currentGitBranch: input.currentGitBranch ?? null,
       refsLoadPending: input.refsLoadPending ?? false,
     });
+
     const gate = resolveWorktreeSendGate({
       needsWorktreeBaseBranch:
         (input.isFirstTurnSend ?? true) &&
@@ -120,12 +125,14 @@ describe("first-send turn payload", () => {
       refsLoadPending: input.refsLoadPending ?? false,
       resolvedBranch,
     });
+
     const baseBranchForWorktree =
       (input.isFirstTurnSend ?? true) &&
       input.effectiveEnvMode === "worktree" &&
       !(input.activeWorktreePath ?? null)
         ? resolvedBranch
         : null;
+
     const bootstrap = buildFirstSendBootstrap({
       isLocalDraftThread: input.isLocalDraftThread ?? true,
       baseBranchForWorktree,
@@ -134,10 +141,12 @@ describe("first-send turn payload", () => {
       worktreeBranch: "t3/tmp-branch",
       startFromOrigin: input.startFromOrigin ?? false,
     });
+
     const turnInput = buildFirstSendTurnInput({
       ...baseTurnInput,
       ...(bootstrap ? { bootstrap } : {}),
     });
+
     return { resolvedBranch, gate, turnInput };
   };
 
@@ -157,6 +166,7 @@ describe("first-send turn payload", () => {
       currentGitBranch: "feature/current",
       startFromOrigin: true,
     });
+
     expect(resolvedBranch).toBe("origin/main");
     expect(gate).toEqual({ state: "ready" });
     expect(turnInput).toEqual({
@@ -180,6 +190,7 @@ describe("first-send turn payload", () => {
       explicitBranch: "feature/picked",
       defaultBranchName: "origin/main",
     });
+
     expect(resolvedBranch).toBe("feature/picked");
     expect(turnInput).toEqual({
       ...baseTurnInput,
@@ -200,6 +211,7 @@ describe("first-send turn payload", () => {
       effectiveEnvMode: "worktree",
       currentGitBranch: "feature/current",
     });
+
     expect(resolvedBranch).toBe("feature/current");
     expect(turnInput).toEqual({
       ...baseTurnInput,
@@ -221,6 +233,7 @@ describe("first-send turn payload", () => {
       isLocalDraftThread: false,
       isFirstTurnSend: false,
     });
+
     expect(gate).toEqual({ state: "ready" });
     expect(turnInput).toEqual(baseTurnInput);
   });
@@ -232,6 +245,7 @@ describe("first-send turn payload", () => {
       isLocalDraftThread: false,
       defaultBranchName: "origin/main",
     });
+
     expect(resolvedBranch).toBeNull();
     expect(gate).toEqual({ state: "ready" });
     expect(turnInput).toEqual(baseTurnInput);
@@ -243,6 +257,7 @@ describe("first-send turn payload", () => {
       defaultBranchName: "origin/main",
       startFromOrigin: true,
     });
+
     expect(turnInput).toEqual({
       ...baseTurnInput,
       bootstrap: {
@@ -277,14 +292,17 @@ describe("first-send turn payload", () => {
     const appendOptimisticMessage = vi.fn();
     const dispatchTurn = vi.fn();
     const setThreadError = vi.fn();
+
     const send = vi.fn(() => {
       clearPrompt();
       clearAttachments();
       clearContexts();
       appendOptimisticMessage();
       dispatchTurn();
+
       return "turn-started";
     });
+
     return {
       clearPrompt,
       clearAttachments,
@@ -303,6 +321,7 @@ describe("first-send turn payload", () => {
       defaultBranchName: null,
       currentGitBranch: null,
     });
+
     expect(resolvedBranch).toBeNull();
     expect(gate).toEqual({
       state: "loading",
@@ -310,6 +329,7 @@ describe("first-send turn payload", () => {
     });
 
     const continuation = makeBoundaryContinuationSpies();
+
     const outcome = await crossWorktreeSendBoundary({
       gate,
       requiresWorktreeCreation: true,
@@ -317,6 +337,7 @@ describe("first-send turn payload", () => {
       setThreadError: continuation.setThreadError,
       send: continuation.send,
     });
+
     expect(outcome).toEqual({ outcome: "blocked-loading" });
     expect(continuation.send).not.toHaveBeenCalled();
     expect(continuation.clearPrompt).not.toHaveBeenCalled();
@@ -333,6 +354,7 @@ describe("first-send turn payload", () => {
       defaultBranchName: null,
       currentGitBranch: null,
     });
+
     expect(gate).toEqual({
       state: "missing-base-branch",
       errorMessage:
@@ -340,6 +362,7 @@ describe("first-send turn payload", () => {
     });
 
     const continuation = makeBoundaryContinuationSpies();
+
     const outcome = await crossWorktreeSendBoundary({
       gate,
       requiresWorktreeCreation: true,
@@ -347,6 +370,7 @@ describe("first-send turn payload", () => {
       setThreadError: continuation.setThreadError,
       send: continuation.send,
     });
+
     expect(outcome).toEqual({ outcome: "blocked-missing-base-branch" });
     expect(continuation.setThreadError).toHaveBeenCalledExactlyOnceWith(
       threadId,
@@ -365,9 +389,11 @@ describe("first-send turn payload", () => {
       effectiveEnvMode: "worktree",
       defaultBranchName: "origin/main",
     });
+
     expect(gate).toEqual({ state: "ready" });
 
     const continuation = makeBoundaryContinuationSpies();
+
     const outcome = await crossWorktreeSendBoundary({
       gate,
       requiresWorktreeCreation: true,
@@ -375,6 +401,7 @@ describe("first-send turn payload", () => {
       setThreadError: continuation.setThreadError,
       send: continuation.send,
     });
+
     expect(outcome).toEqual({ outcome: "sent", result: "turn-started" });
     expect(continuation.send).toHaveBeenCalledTimes(1);
     expect(continuation.dispatchTurn).toHaveBeenCalledTimes(1);
@@ -393,6 +420,7 @@ describe("buildFirstSendBootstrap", () => {
     worktreePath: null,
     createdAt: now,
   };
+
   const base = {
     isLocalDraftThread: true,
     baseBranchForWorktree: null,

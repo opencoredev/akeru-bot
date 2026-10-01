@@ -26,18 +26,24 @@ export function computeBands(
     const bands: Record<string, [number, number][]> = {};
     let max = 0;
     let min = 0;
+
     for (const key of keys) {
       bands[key] = data.map((row) => {
         const v = num(row[key]);
+
         if (v > max) max = v;
+
         if (v < min) min = v;
+
         return [0, v];
       });
     }
+
     // Only fall back to a unit span when there's no range at all (empty /
     // all-zero) — a purely negative series keeps max = 0 so the baseline
     // stays pinned to the top of the plot.
     const flat = max === 0 && min === 0;
+
     return { bands, max: flat ? 1 : max, min };
   }
 
@@ -52,11 +58,14 @@ export function computeBands(
   series.forEach((layer) => {
     bands[layer.key] = layer.map((point) => {
       if (point[1] > max) max = point[1];
+
       if (point[0] < min) min = point[0];
+
       return [point[0], point[1]];
     });
   });
   const flat = max === 0 && min === 0;
+
   return { bands, max: flat ? 1 : max, min };
 }
 
@@ -80,6 +89,7 @@ export function buildBandScale(length: number, plotWidth: number) {
 export function indexAtBand(px: number, length: number, plotWidth: number) {
   if (length <= 0 || plotWidth <= 0) return 0;
   const t = Math.max(0, Math.min(0.999, px / plotWidth));
+
   return Math.min(length - 1, Math.floor(t * length));
 }
 
@@ -91,6 +101,7 @@ export function indexAtBand(px: number, length: number, plotWidth: number) {
 export function buildYScale(min: number, max: number, plotHeight: number) {
   const lo = Math.min(0, min);
   const hi = Math.max(0, max);
+
   // Guard a degenerate (zero-width) domain so `nice()` and the range map stay
   // finite even when every value is exactly zero.
   return scaleLinear()
@@ -103,5 +114,6 @@ export function buildYScale(min: number, max: number, plotHeight: number) {
 export function nearestIndex(px: number, length: number, plotWidth: number) {
   if (length <= 1 || plotWidth <= 0) return 0;
   const t = Math.max(0, Math.min(1, px / plotWidth));
+
   return Math.round(t * (length - 1));
 }

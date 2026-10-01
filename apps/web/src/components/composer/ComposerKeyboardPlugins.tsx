@@ -88,14 +88,17 @@ export function ComposerCommandKeyPlugin(props: {
 
       if (key === "Enter" && (event.isComposing || event.keyCode === 229)) {
         event.stopPropagation();
+
         return true;
       }
 
       const handled = props.onCommandKeyDown(key, event);
+
       if (handled) {
         event.preventDefault();
         event.stopPropagation();
       }
+
       return handled;
     };
 
@@ -104,16 +107,19 @@ export function ComposerCommandKeyPlugin(props: {
       (event) => handleCommand("ArrowDown", event),
       COMMAND_PRIORITY_HIGH,
     );
+
     const unregisterArrowUp = editor.registerCommand(
       KEY_ARROW_UP_COMMAND,
       (event) => handleCommand("ArrowUp", event),
       COMMAND_PRIORITY_HIGH,
     );
+
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       (event) => handleCommand("Enter", event),
       COMMAND_PRIORITY_HIGH,
     );
+
     const unregisterTab = editor.registerCommand(
       KEY_TAB_COMMAND,
       (event) => handleCommand("Tab", event),
@@ -141,15 +147,20 @@ export function ComposerInlineTokenArrowPlugin() {
         let nextOffset: number | null = null;
         editor.getEditorState().read(() => {
           const selection = $getSelection();
+
           if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
           const currentOffset = $readSelectionOffsetFromEditorState(0);
+
           if (currentOffset <= 0) return;
           const promptValue = $getRoot().getTextContent();
+
           if (!isCollapsedCursorAdjacentToInlineToken(promptValue, currentOffset, "left")) {
             return;
           }
+
           nextOffset = currentOffset - 1;
         });
+
         if (nextOffset === null) return false;
         const selectionOffset = nextOffset;
         event?.preventDefault();
@@ -157,26 +168,33 @@ export function ComposerInlineTokenArrowPlugin() {
         editor.update(() => {
           $setSelectionAtComposerOffset(selectionOffset);
         });
+
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
+
     const unregisterRight = editor.registerCommand(
       KEY_ARROW_RIGHT_COMMAND,
       (event) => {
         let nextOffset: number | null = null;
         editor.getEditorState().read(() => {
           const selection = $getSelection();
+
           if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
           const currentOffset = $readSelectionOffsetFromEditorState(0);
           const composerLength = $getComposerRootLength();
+
           if (currentOffset >= composerLength) return;
           const promptValue = $getRoot().getTextContent();
+
           if (!isCollapsedCursorAdjacentToInlineToken(promptValue, currentOffset, "right")) {
             return;
           }
+
           nextOffset = currentOffset + 1;
         });
+
         if (nextOffset === null) return false;
         const selectionOffset = nextOffset;
         event?.preventDefault();
@@ -184,10 +202,12 @@ export function ComposerInlineTokenArrowPlugin() {
         editor.update(() => {
           $setSelectionAtComposerOffset(selectionOffset);
         });
+
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
+
     return () => {
       unregisterLeft();
       unregisterRight();
@@ -207,9 +227,11 @@ export function ComposerHomeEndKeyPlugin() {
         if (!isMacPlatform(navigator.platform)) {
           return false;
         }
+
         if (event.key !== "Home" && event.key !== "End") {
           return false;
         }
+
         if (event.altKey || event.metaKey || event.ctrlKey || event.isComposing) {
           return false;
         }
@@ -217,9 +239,11 @@ export function ComposerHomeEndKeyPlugin() {
         const rootElement = editor.getRootElement();
         const selection = window.getSelection();
         const anchorNode = selection?.anchorNode;
+
         if (!rootElement || !selection || !anchorNode || !rootElement.contains(anchorNode)) {
           return false;
         }
+
         if (selection.rangeCount === 0 || typeof selection.modify !== "function") {
           return false;
         }
@@ -235,6 +259,7 @@ export function ComposerHomeEndKeyPlugin() {
         editor.update(() => {
           $setSelection($createRangeSelectionFromDom(selection, editor));
         });
+
         return true;
       },
       COMMAND_PRIORITY_HIGH,
@@ -252,13 +277,17 @@ export function ComposerInlineTokenSelectionNormalizePlugin() {
       let afterOffset: number | null = null;
       editorState.read(() => {
         const selection = $getSelection();
+
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
         const anchorNode = selection.anchor.getNode();
+
         if (!isComposerInlineTokenNode(anchorNode)) return;
+
         if (selection.anchor.offset === 0) return;
         const beforeOffset = getAbsoluteOffsetForPoint(anchorNode, 0);
         afterOffset = beforeOffset + 1;
       });
+
       if (afterOffset !== null) {
         queueMicrotask(() => {
           editor.update(() => {
@@ -281,27 +310,34 @@ export function ComposerInlineTokenBackspacePlugin() {
       KEY_BACKSPACE_COMMAND,
       (event) => {
         const selection = $getSelection();
+
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
           return false;
         }
 
         const anchorNode = selection.anchor.getNode();
         const selectionOffset = $readSelectionOffsetFromEditorState(0);
+
         const removeInlineTokenNode = (candidate: unknown): boolean => {
           if (!isComposerInlineTokenNode(candidate)) {
             return false;
           }
+
           const tokenStart = getAbsoluteOffsetForPoint(candidate, 0);
           candidate.remove();
+
           if (candidate instanceof ComposerTerminalContextNode) {
             onRemoveTerminalContext(candidate.__context.id);
             $setSelectionAtComposerOffset(selectionOffset);
           } else {
             $setSelectionAtComposerOffset(tokenStart);
           }
+
           event?.preventDefault();
+
           return true;
         };
+
         if (removeInlineTokenNode(anchorNode)) {
           return true;
         }
@@ -310,21 +346,27 @@ export function ComposerInlineTokenBackspacePlugin() {
           if (selection.anchor.offset > 0) {
             return false;
           }
+
           if (removeInlineTokenNode(anchorNode.getPreviousSibling())) {
             return true;
           }
+
           const parent = anchorNode.getParent();
+
           if ($isElementNode(parent)) {
             const index = anchorNode.getIndexWithinParent();
+
             if (index > 0 && removeInlineTokenNode(parent.getChildAtIndex(index - 1))) {
               return true;
             }
           }
+
           return false;
         }
 
         if ($isElementNode(anchorNode)) {
           const childIndex = selection.anchor.offset - 1;
+
           if (childIndex >= 0 && removeInlineTokenNode(anchorNode.getChildAtIndex(childIndex))) {
             return true;
           }
@@ -361,9 +403,11 @@ export function ComposerChipSelectionPlugin() {
           editor.getElementByKey(key)?.removeAttribute("data-composer-chip-selected");
         }
       }
+
       for (const key of nextKeys) {
         editor.getElementByKey(key)?.setAttribute("data-composer-chip-selected", "true");
       }
+
       selectedKeys = nextKeys;
     };
 
@@ -371,6 +415,7 @@ export function ComposerChipSelectionPlugin() {
       const nextKeys = new Set<string>();
       editor.getEditorState().read(() => {
         const selection = $getSelection();
+
         if ($isRangeSelection(selection) && !selection.isCollapsed()) {
           for (const node of selection.getNodes()) {
             if (node instanceof DecoratorNode) {
@@ -379,30 +424,36 @@ export function ComposerChipSelectionPlugin() {
           }
         }
       });
+
       return nextKeys;
     };
 
     const unregisterUpdate = editor.registerUpdateListener(() => {
       applyKeys(hasFocus ? readSelectedKeys() : new Set());
     });
+
     const unregisterFocus = editor.registerCommand(
       FOCUS_COMMAND,
       () => {
         hasFocus = true;
         applyKeys(readSelectedKeys());
+
         return false;
       },
       COMMAND_PRIORITY_LOW,
     );
+
     const unregisterBlur = editor.registerCommand(
       BLUR_COMMAND,
       () => {
         hasFocus = false;
         applyKeys(new Set());
+
         return false;
       },
       COMMAND_PRIORITY_LOW,
     );
+
     return () => {
       unregisterUpdate();
       unregisterFocus();
@@ -435,11 +486,13 @@ export function ComposerSurroundSelectionPlugin(props: {
   const [editor] = useLexicalComposerContext();
   const terminalContextsRef = useRef(props.terminalContexts);
   const skillMetadataRef = useRef(skillMetadataByName(props.skills));
+
   const pendingSurroundSelectionRef = useRef<{
     value: string;
     expandedStart: number;
     expandedEnd: number;
   } | null>(null);
+
   const pendingDeadKeySelectionRef = useRef<{
     value: string;
     expandedStart: number;
@@ -457,8 +510,10 @@ export function ComposerSurroundSelectionPlugin(props: {
   const applySurroundInsertion = useEffectEvent((inputData: string): boolean => {
     const surroundCloseSymbol = SURROUND_SYMBOLS_MAP.get(inputData);
     const pendingSurroundSelection = pendingSurroundSelectionRef.current;
+
     if (!surroundCloseSymbol) {
       pendingSurroundSelectionRef.current = null;
+
       return false;
     }
 
@@ -468,20 +523,27 @@ export function ComposerSurroundSelectionPlugin(props: {
         pendingSurroundSelection ??
         (() => {
           const selection = $getSelection();
+
           if (!$isRangeSelection(selection) || selection.isCollapsed()) {
             return null;
           }
+
           if ($selectionTouchesInlineToken(selection)) {
             return null;
           }
+
           const range = getSelectionRangeForExpandedComposerOffsets(selection);
+
           if (!range || range.start === range.end) {
             return null;
           }
+
           const value = $getRoot().getTextContent();
+
           if (selectionTouchesMentionBoundary(value, range.start, range.end)) {
             return null;
           }
+
           return {
             value,
             expandedStart: range.start,
@@ -497,12 +559,15 @@ export function ComposerSurroundSelectionPlugin(props: {
         selectionSnapshot.expandedStart,
         selectionSnapshot.expandedEnd,
       );
+
       const nextValue = `${selectionSnapshot.value.slice(0, selectionSnapshot.expandedStart)}${inputData}${selectedText}${surroundCloseSymbol}${selectionSnapshot.value.slice(selectionSnapshot.expandedEnd)}`;
       $setComposerEditorPrompt(nextValue, terminalContextsRef.current, skillMetadataRef.current);
+
       const selectionStart = collapseExpandedComposerCursor(
         nextValue,
         selectionSnapshot.expandedStart,
       );
+
       $setSelectionRangeAtComposerOffsets(
         selectionStart + inputData.length,
         selectionStart + inputData.length + selectedText.length,
@@ -520,44 +585,58 @@ export function ComposerSurroundSelectionPlugin(props: {
         if (event.key === "Dead" || event.key === " " || event.code === "Space") {
           return;
         }
+
         pendingDeadKeySelectionRef.current = null;
       }
 
       if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey) {
         pendingSurroundSelectionRef.current = null;
         pendingDeadKeySelectionRef.current = null;
+
         return;
       }
 
       editor.getEditorState().read(() => {
         const selection = $getSelection();
+
         if (!$isRangeSelection(selection) || selection.isCollapsed()) {
           pendingSurroundSelectionRef.current = null;
           pendingDeadKeySelectionRef.current = null;
+
           return;
         }
+
         if ($selectionTouchesInlineToken(selection)) {
           pendingSurroundSelectionRef.current = null;
           pendingDeadKeySelectionRef.current = null;
+
           return;
         }
+
         const range = getSelectionRangeForExpandedComposerOffsets(selection);
+
         if (!range || range.start === range.end) {
           pendingSurroundSelectionRef.current = null;
           pendingDeadKeySelectionRef.current = null;
+
           return;
         }
+
         const value = $getRoot().getTextContent();
+
         if (selectionTouchesMentionBoundary(value, range.start, range.end)) {
           pendingSurroundSelectionRef.current = null;
           pendingDeadKeySelectionRef.current = null;
+
           return;
         }
+
         const snapshot = {
           value,
           expandedStart: range.start,
           expandedEnd: range.end,
         };
+
         pendingSurroundSelectionRef.current = snapshot;
         pendingDeadKeySelectionRef.current = null;
       });
@@ -571,6 +650,7 @@ export function ComposerSurroundSelectionPlugin(props: {
         pendingSurroundSelectionRef.current
       ) {
         pendingDeadKeySelectionRef.current = pendingSurroundSelectionRef.current;
+
         return;
       }
 
@@ -584,13 +664,18 @@ export function ComposerSurroundSelectionPlugin(props: {
 
       if (typeof event.data !== "string") {
         pendingSurroundSelectionRef.current = null;
+
         return;
       }
+
       const inputData = event.inputType === "insertText" ? event.data : null;
+
       if (!inputData || inputData.length !== 1) {
         pendingSurroundSelectionRef.current = null;
+
         return;
       }
+
       if (!applySurroundInsertion(inputData)) {
         return;
       }
@@ -605,23 +690,28 @@ export function ComposerSurroundSelectionPlugin(props: {
         editor.update(
           () => {
             const pendingDeadKeySelection = pendingDeadKeySelectionRef.current;
+
             if (!pendingDeadKeySelection) {
               return;
             }
 
             const currentValue = $getRoot().getTextContent();
             const backtickCloseSymbol = BACKTICK_SURROUND_CLOSE_SYMBOL;
+
             if (backtickCloseSymbol === null) {
               pendingDeadKeySelectionRef.current = null;
+
               return;
             }
 
             const expectedResolvedValue = `${pendingDeadKeySelection.value.slice(0, pendingDeadKeySelection.expandedStart)}\`${pendingDeadKeySelection.value.slice(pendingDeadKeySelection.expandedEnd)}`;
+
             if (currentValue !== expectedResolvedValue) {
               if (options?.finalAttempt) {
                 pendingSurroundSelectionRef.current = null;
                 pendingDeadKeySelectionRef.current = null;
               }
+
               return;
             }
 
@@ -629,17 +719,22 @@ export function ComposerSurroundSelectionPlugin(props: {
               pendingDeadKeySelection.expandedStart,
               pendingDeadKeySelection.expandedEnd,
             );
+
             const replacementStart = collapseExpandedComposerCursor(
               currentValue,
               pendingDeadKeySelection.expandedStart,
             );
+
             $setSelectionRangeAtComposerOffsets(replacementStart, replacementStart + 1);
             const replacementSelection = $getSelection();
+
             if (!$isRangeSelection(replacementSelection)) {
               pendingSurroundSelectionRef.current = null;
               pendingDeadKeySelectionRef.current = null;
+
               return;
             }
+
             replacementSelection.insertText(`\`${selectedText}${backtickCloseSymbol}`);
             $setSelectionRangeAtComposerOffsets(
               replacementStart + 1,
@@ -655,6 +750,7 @@ export function ComposerSurroundSelectionPlugin(props: {
 
     const onInput = (event: Event) => {
       const inputEvent = event as InputEvent;
+
       if (
         inputEvent.inputType === "insertText" ||
         inputEvent.inputType === "insertCompositionText"
@@ -668,6 +764,7 @@ export function ComposerSurroundSelectionPlugin(props: {
     };
 
     let activeRootElement: HTMLElement | null = null;
+
     const unregisterRootListener = editor.registerRootListener((rootElement, prevRootElement) => {
       prevRootElement?.removeEventListener("keydown", onKeyDown);
       prevRootElement?.removeEventListener("beforeinput", onBeforeInput, true);
@@ -687,6 +784,7 @@ export function ComposerSurroundSelectionPlugin(props: {
         activeRootElement.removeEventListener("input", onInput);
         activeRootElement.removeEventListener("compositionend", onCompositionEnd);
       }
+
       unregisterRootListener();
     };
   }, [editor]);

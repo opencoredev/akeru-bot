@@ -43,6 +43,7 @@ const highlightedCodeCache = new LRUCache<string>(
 export function extractFenceLanguage(className: string | undefined): string {
   const match = className?.match(CODE_FENCE_LANGUAGE_REGEX);
   const raw = match?.[1] ?? "text";
+
   // Shiki doesn't bundle a gitignore grammar; ini is a close match (#685)
   return raw === "gitignore" ? "ini" : raw;
 }
@@ -56,7 +57,9 @@ export function extractFenceTitle(meta: string | undefined): string | null {
   if (!meta) return null;
   const attrMatch = FENCE_TITLE_ATTR_REGEX.exec(meta);
   const attrTitle = attrMatch?.[1] ?? attrMatch?.[2] ?? attrMatch?.[3];
+
   if (attrTitle) return attrTitle;
+
   return meta.split(/\s+/).find((candidate) => FENCE_FILENAME_TOKEN_REGEX.test(candidate)) ?? null;
 }
 
@@ -73,8 +76,10 @@ export function extractPreCodeMeta(node: unknown): string | undefined {
         }
       | undefined
   )?.children;
+
   const codeNode = children?.find((child) => child?.type === "element" && child.tagName === "code");
   const meta = codeNode?.properties?.dataCodeMeta ?? codeNode?.data?.meta;
+
   return typeof meta === "string" && meta.trim().length > 0 ? meta.trim() : undefined;
 }
 
@@ -82,11 +87,13 @@ export function extractCodeBlock(
   children: ReactNode,
 ): { className: string | undefined; code: string } | null {
   const childNodes = Children.toArray(children);
+
   if (childNodes.length !== 1) {
     return null;
   }
 
   const onlyChild = childNodes[0];
+
   if (
     !isValidElement<{ className?: string; children?: ReactNode; node?: { tagName?: string } }>(
       onlyChild,
@@ -94,6 +101,7 @@ export function extractCodeBlock(
   ) {
     return null;
   }
+
   // With a custom `code` component the child's type is that component, not
   // the "code" tag — the hast node react-markdown attaches still names it.
   if (onlyChild.type !== "code" && onlyChild.props.node?.tagName !== "code") {
@@ -132,6 +140,7 @@ export function MarkdownMathExpression({
     throwOnError: false,
     trust: false,
   });
+
   return (
     <span
       className={displayMode ? "chat-markdown-math-block" : "chat-markdown-math-inline"}
@@ -165,10 +174,12 @@ export function MarkdownMermaidDiagram({
           theme: theme === "dark" ? "dark" : "default",
         });
         const result = await mermaid.render(`mermaid-${reactId.replaceAll(":", "")}`, code);
+
         if (active) setSvg(result.svg);
       })
       .catch((cause: unknown) => {
         reportMarkdownActionFailure({ operation: "render-mermaid", language: "mermaid" }, cause);
+
         if (active) setFailed(true);
       });
 
@@ -214,6 +225,7 @@ function MarkdownCodeBlockTitleContent({
   theme: "light" | "dark";
 }) {
   const { t } = useI18n();
+
   if (fenceTitle) {
     return (
       <>
@@ -224,9 +236,11 @@ function MarkdownCodeBlockTitleContent({
   }
 
   const fileName = syntheticFileNameForLanguageId(language);
+
   if (!hasSpecificPierreIconForFileName(fileName)) {
     return <span className="truncate">{language}</span>;
   }
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -271,12 +285,14 @@ export function MarkdownCodeBlock({
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
       return;
     }
+
     void navigator.clipboard
       .writeText(code)
       .then(() => {
         if (copiedTimerRef.current != null) {
           clearTimeout(copiedTimerRef.current);
         }
+
         setCopied(true);
         copiedTimerRef.current = setTimeout(() => {
           setCopied(false);
@@ -369,7 +385,9 @@ export function MarkdownCodeBlock({
 
 function diffBlockTitle(fenceTitle: string | null, files: ReadonlyArray<string>): string | null {
   if (fenceTitle) return fenceTitle;
+
   if (files.length === 1) return files[0] ?? null;
+
   return null;
 }
 
@@ -392,6 +410,7 @@ export function MarkdownDiffBlock({
   const diff = useMemo(() => parseMarkdownDiff(code), [code]);
   const title = diffBlockTitle(fenceTitle, diff.files);
   const fileCount = diff.files.length > 1 ? `${diff.files.length} files` : null;
+
   return (
     <MarkdownCodeBlock
       code={code}
@@ -480,6 +499,7 @@ function UncachedShikiCodeBlock({
   isStreaming,
 }: UncachedShikiCodeBlockProps) {
   const highlighter = use(getSyntaxHighlighterPromise(language));
+
   const highlightedHtml = useMemo(() => {
     try {
       return highlighter.codeToHtml(code, { lang: language, theme: themeName });
@@ -489,6 +509,7 @@ function UncachedShikiCodeBlock({
         `Code highlighting failed for language "${language}", falling back to plain text.`,
         error instanceof Error ? error.message : error,
       );
+
       // If highlighting fails for this language, render as plain text
       return highlighter.codeToHtml(code, { lang: "text", theme: themeName });
     }

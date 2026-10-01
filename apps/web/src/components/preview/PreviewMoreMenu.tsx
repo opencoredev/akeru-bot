@@ -70,12 +70,14 @@ export function PreviewMoreMenu({
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
+
   const callTab = (op: (tabId: string) => Promise<void>) => () => {
     if (!tabId) return;
     void op(tabId).catch(() => undefined);
   };
 
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
+
   return (
     <Menu>
       <Tooltip>

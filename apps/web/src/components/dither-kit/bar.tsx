@@ -35,10 +35,12 @@ export function Bar({
 
   useEffect(() => {
     registerSeries({ dataKey, kind: "bar", variant, strokeVariant });
+
     return () => unregisterSeries(dataKey);
   }, [dataKey, variant, strokeVariant, registerSeries, unregisterSeries]);
 
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band) return null;
 
   const seed = ctx.seedOf(dataKey);
@@ -54,6 +56,7 @@ export function Bar({
           const slot = ctx.barSlot(i, si, n);
           const top = ctx.y(b[1]);
           const base = ctx.y(b[0]);
+
           return (
             // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
             <rect

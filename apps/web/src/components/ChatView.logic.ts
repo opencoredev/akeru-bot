@@ -56,6 +56,7 @@ export function shouldReleaseTimelineAnchorForToolActivity(input: {
     }
 
     const entry = timelineEntry.entry;
+
     return (
       entry.tone === "tool" ||
       entry.itemType !== undefined ||
@@ -75,6 +76,7 @@ export function resolveDraftHeroState(input: {
   if (input.backgroundSubmissionPending) {
     return true;
   }
+
   return (
     input.isLocalDraftThread &&
     !input.hasTimelineEntries &&
@@ -91,11 +93,13 @@ export function resolveDraftPromotionNavigationTarget(input: {
   if (input.backgroundSubmissionPending) {
     return null;
   }
+
   return input.serverThreadStarted ? input.serverThreadRef : null;
 }
 
 export function scheduleEnvironmentReconnectWarning(showWarning: () => void): () => void {
   const timeoutId = globalThis.setTimeout(showWarning, ENVIRONMENT_RECONNECT_WARNING_GRACE_MS);
+
   return () => globalThis.clearTimeout(timeoutId);
 }
 
@@ -127,16 +131,20 @@ export function resolveThreadMetadataUpdateForNextTurn(input: {
   worktreePath?: null;
 } | null {
   const nextModelSelection = input.nextModelSelection;
+
   const modelSelectionChanged =
     nextModelSelection !== undefined &&
     (nextModelSelection.model !== input.currentModelSelection.model ||
       nextModelSelection.instanceId !== input.currentModelSelection.instanceId ||
       JSON.stringify(nextModelSelection.options ?? null) !==
         JSON.stringify(input.currentModelSelection.options ?? null));
+
   const branchChanged = input.nextBranch !== undefined && input.nextBranch !== input.currentBranch;
+
   if (!modelSelectionChanged && !branchChanged) {
     return null;
   }
+
   return {
     ...(modelSelectionChanged ? { modelSelection: nextModelSelection } : {}),
     ...(branchChanged ? { branch: input.nextBranch, worktreePath: null } : {}),
@@ -208,6 +216,7 @@ export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "sessi
   turnId?: TurnId;
 } {
   const runningTurnId = thread.session?.status === "running" ? thread.session.activeTurnId : null;
+
   return {
     threadId: thread.id,
     ...(runningTurnId !== null ? { turnId: runningTurnId } : {}),
@@ -218,6 +227,7 @@ export function revokeBlobPreviewUrl(previewUrl: string | undefined): void {
   if (!previewUrl || typeof URL === "undefined" || !previewUrl.startsWith("blob:")) {
     return;
   }
+
   URL.revokeObjectURL(previewUrl);
 }
 
@@ -225,10 +235,12 @@ export function revokeUserMessagePreviewUrls(message: ChatMessage): void {
   if (message.role !== "user" || !message.attachments) {
     return;
   }
+
   for (const attachment of message.attachments) {
     if (attachment.type !== "image") {
       continue;
     }
+
     revokeBlobPreviewUrl(attachment.previewUrl);
   }
 }
@@ -237,12 +249,16 @@ export function collectUserMessageBlobPreviewUrls(message: ChatMessage): string[
   if (message.role !== "user" || !message.attachments) {
     return [];
   }
+
   const previewUrls: string[] = [];
+
   for (const attachment of message.attachments) {
     if (attachment.type !== "image") continue;
+
     if (!attachment.previewUrl || !attachment.previewUrl.startsWith("blob:")) continue;
     previewUrls.push(attachment.previewUrl);
   }
+
   return previewUrls;
 }
 
@@ -252,8 +268,10 @@ export function readFileAsDataUrl(file: File): Promise<string> {
     reader.addEventListener("load", () => {
       if (typeof reader.result === "string") {
         resolve(reader.result);
+
         return;
       }
+
       reject(new Error("Could not read image data."));
     });
     reader.addEventListener("error", () => {
@@ -294,9 +312,11 @@ export function resolveWorktreeSendGate(input: {
   if (!input.needsWorktreeBaseBranch || input.resolvedBranch !== null) {
     return { state: "ready" };
   }
+
   if (input.refsLoadPending) {
     return { state: "loading", sendDisabledReason: WORKTREE_BRANCHES_LOADING_REASON };
   }
+
   return { state: "missing-base-branch", errorMessage: WORKTREE_BASE_BRANCH_MISSING_ERROR };
 }
 
@@ -319,10 +339,13 @@ export async function crossWorktreeSendBoundary<Result>(input: {
   if (input.requiresWorktreeCreation && input.gate.state === "loading") {
     return { outcome: "blocked-loading" };
   }
+
   if (input.requiresWorktreeCreation && input.gate.state === "missing-base-branch") {
     input.setThreadError(input.threadId, input.gate.errorMessage);
+
     return { outcome: "blocked-missing-base-branch" };
   }
+
   return { outcome: "sent", result: await input.send() };
 }
 
@@ -332,6 +355,7 @@ export function cloneComposerImageForRetry(
   if (typeof URL === "undefined" || !image.previewUrl.startsWith("blob:")) {
     return image;
   }
+
   try {
     return {
       ...image,
@@ -360,9 +384,12 @@ export function deriveComposerSendState(options: {
 } {
   const trimmedPrompt = stripInlineTerminalContextPlaceholders(options.prompt).trim();
   const sendableTerminalContexts = filterTerminalContextsWithText(options.terminalContexts);
+
   const expiredTerminalContextCount =
     options.terminalContexts.length - sendableTerminalContexts.length;
+
   const elementContextCount = options.elementContextCount ?? 0;
+
   return {
     trimmedPrompt,
     sendableTerminalContexts,
@@ -401,18 +428,23 @@ export function deriveLockedProvider(input: {
   if (!threadHasStarted(input.thread)) {
     return null;
   }
+
   const sessionProvider = input.thread?.session?.providerName ?? null;
+
   if (sessionProvider && isProviderDriverKind(sessionProvider)) {
     return sessionProvider;
   }
+
   const narrowedThreadProvider =
     input.threadProvider && isProviderDriverKind(input.threadProvider)
       ? input.threadProvider
       : null;
+
   const narrowedSelectedProvider =
     input.selectedProvider && isProviderDriverKind(input.selectedProvider)
       ? input.selectedProvider
       : null;
+
   return narrowedThreadProvider ?? narrowedSelectedProvider ?? null;
 }
 
@@ -426,28 +458,34 @@ export function getStartedThreadModelChangeBlockReason(input: {
   if (!input.hasStartedSession) {
     return null;
   }
+
   const currentModelSelection = {
     ...input.currentModelSelection,
     instanceId: input.currentProviderInstanceId ?? input.currentModelSelection.instanceId,
   };
+
   if (
     currentModelSelection.instanceId === input.nextModelSelection.instanceId &&
     currentModelSelection.model === input.nextModelSelection.model
   ) {
     return null;
   }
+
   const currentProvider = input.providers.find(
     (snapshot) => snapshot.instanceId === currentModelSelection.instanceId,
   );
+
   const nextProvider = input.providers.find(
     (snapshot) => snapshot.instanceId === input.nextModelSelection.instanceId,
   );
+
   if (
     currentProvider?.requiresNewThreadForModelChange !== true &&
     nextProvider?.requiresNewThreadForModelChange !== true
   ) {
     return null;
   }
+
   return {
     title: "Start a new chat to change models",
     description: "This provider does not allow switching models after a conversation has started.",
@@ -469,14 +507,18 @@ export async function waitForStartedServerThread(
   return await new Promise<boolean>((resolve) => {
     let settled = false;
     let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+
     const finish = (result: boolean) => {
       if (settled) {
         return;
       }
+
       settled = true;
+
       if (timeoutId !== null) {
         globalThis.clearTimeout(timeoutId);
       }
+
       unsubscribe();
       resolve(result);
     };
@@ -485,11 +527,13 @@ export async function waitForStartedServerThread(
       if (!threadHasStarted(thread)) {
         return;
       }
+
       finish(true);
     });
 
     if (threadHasStarted(getThread())) {
       finish(true);
+
       return;
     }
 
@@ -498,17 +542,20 @@ export async function waitForStartedServerThread(
     }, timeoutMs);
   });
 }
+
 export {
   buildFirstSendBootstrap,
   buildFirstSendTurnInput,
   resolveBackgroundDraftWorkspaceOptions,
   resolveComposerBranchForSend,
 } from "./chat/firstSend.logic";
+
 export {
   createLocalDispatchSnapshot,
   hasServerAcknowledgedLocalDispatch,
   type LocalDispatchSnapshot,
 } from "./chat/localDispatch.logic";
+
 export {
   branchMismatchKey,
   dismissBranchMismatchForSession,

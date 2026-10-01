@@ -14,6 +14,7 @@ import {
 import { rgb } from "./palette";
 
 type Star = { key: string; xi: number; depth: number; phase: number };
+
 type Surface = { top: number[]; floor: number[] };
 
 type LoopArgs = {
@@ -45,6 +46,7 @@ function startCartesianLoop({
   invalidate,
 }: LoopArgs): (() => void) | undefined {
   const c = canvas.getContext("2d");
+
   if (!c || cols <= 0 || rows <= 0) return undefined;
   canvas.width = cols;
   canvas.height = rows;
@@ -53,10 +55,12 @@ function startCartesianLoop({
   off.width = cols;
   off.height = rows;
   const octx = off.getContext("2d");
+
   if (!octx) return undefined;
 
   // Bloom layer: a blurred, additive copy of the crisp canvas.
   const bloomCtx = bloomCanvas?.getContext("2d") ?? null;
+
   if (bloomCanvas) {
     bloomCanvas.width = cols;
     bloomCanvas.height = rows;
@@ -76,16 +80,20 @@ function startCartesianLoop({
     const revealCols = Math.ceil(reveal * cols);
     s.configKeys.forEach((key, si) => {
       const cur = current[key];
+
       if (!cur) return;
       const seed = s.seedOf(key);
       const variant = s.seriesSpecs[key]?.variant ?? "gradient";
+
       const isLine =
         (s.seriesSpecs[key]?.kind ?? (s.chartType === "line" ? "line" : "area")) === "line";
+
       const emphasis = s.selectedDataKey ?? s.focusDataKey;
       const dim = emphasis !== null && emphasis !== key ? 0.3 : 1;
       // Overlapping (non-stacked) layers thin out front-to-back so they
       // read as distinct layers instead of a muddy blend.
       const sparse = stacked ? 0 : si * 0.14;
+
       for (let x = 0; x < cols; x++) {
         if (x > revealCols) break;
         // For a value that dips below the zero baseline the value line ends up
@@ -119,17 +127,21 @@ function startCartesianLoop({
   const draw = (now: number) => {
     raf = animate ? requestAnimationFrame(draw) : 0;
     const s = state.current;
+
     if (!s.ready) return;
     const tgt = targets.current;
+
     if (s.revision !== lastRevision) {
       lastRevision = s.revision;
       animStart = 0; // re-play the entrance on data change / replay
       lastProg = -1;
       entranceReported = false;
     }
+
     if (!animStart) animStart = now;
     const prog = animate ? Math.min(1, (now - animStart) / duration) : 1;
     const progChanged = prog !== lastProg;
+
     // Tell the context the reveal is done so DOM markers fade in in sync.
     if (prog >= 1 && !entranceReported) {
       entranceReported = true;
@@ -137,18 +149,23 @@ function startCartesianLoop({
     }
 
     let moving = false;
+
     for (const key of s.configKeys) {
       const t = tgt[key];
+
       if (!t) continue;
       const cur = current[key];
+
       if (!cur || cur.top.length !== cols) {
         current[key] = { top: t.top.slice(), floor: t.floor.slice() };
         needsFill = true;
         continue;
       }
+
       for (let x = 0; x < cols; x++) {
         const dt = t.top[x] - cur.top[x];
         const df = t.floor[x] - cur.floor[x];
+
         if (Math.abs(dt) > 0.01 || Math.abs(df) > 0.01) {
           cur.top[x] += dt * EASE;
           cur.floor[x] += df * EASE;
@@ -159,14 +176,17 @@ function startCartesianLoop({
         }
       }
     }
+
     for (const key of Object.keys(current)) {
       if (!tgt[key]) {
         delete current[key];
         needsFill = true;
       }
     }
+
     if (moving) needsFill = true;
     const emphasisNow = s.selectedDataKey ?? s.focusDataKey;
+
     if (emphasisNow !== lastSelected) {
       lastSelected = emphasisNow;
       needsFill = true;
@@ -174,6 +194,7 @@ function startCartesianLoop({
 
     const itTarget = s.isMouseInChart || s.hovered ? 1 : 0;
     let settling = false;
+
     if (Math.abs(intensity - itTarget) > 0.001) {
       intensity += (itTarget - intensity) * (animate ? 0.16 : 1);
       settling = true;
@@ -184,24 +205,30 @@ function startCartesianLoop({
     // is the fallback shown when nothing is hovered.
     const marker = s.hoverIndex != null ? s.hoverIndex : s.markerIndex;
     const winkDue = animate && now - last >= 100;
+
     // Repaint when a tweak-driven paint input changes (variant, stacking) so
     // the panel updates the fill live — without resetting the entrance reveal.
     const paintSig = `${s.stackType}|${s.configKeys
       .map((k) => s.seriesSpecs[k]?.variant ?? "")
       .join(",")}`;
+
     const sigChanged = paintSig !== lastPaintSig;
+
     if (sigChanged) {
       lastPaintSig = paintSig;
       needsFill = true;
     }
+
     if (
       !(needsFill || moving || settling || winkDue || marker != null || progChanged || sigChanged)
     )
       return;
+
     if (progChanged) {
       lastProg = prog;
       needsFill = true;
     }
+
     if (winkDue) {
       last = now;
       tick += 1;
@@ -216,6 +243,7 @@ function startCartesianLoop({
       paintFill(intensity, reveal);
       needsFill = false;
     }
+
     c.clearRect(0, 0, cols, rows);
     c.drawImage(off, 0, 0);
 
@@ -223,15 +251,18 @@ function startCartesianLoop({
       marker != null && s.dataLength > 1
         ? Math.round((marker / (s.dataLength - 1)) * (cols - 1))
         : -1;
+
     if (mx >= 0 && mx <= revealCols) {
       for (const key of s.configKeys) {
         const cur = current[key];
+
         if (!cur) continue;
         const seed = s.seedOf(key);
         const my = Math.round(cur.top[mx] ?? 0);
         // Full-height column + a chunky marker block at the point — the
         // series colour at higher opacity, so it reads on either theme.
         c.fillStyle = rgb(seed.fill, 1, 0.55);
+
         for (let y = my; y < rows; y++) c.fillRect(mx, y, 1, 1);
         c.fillStyle = rgb(seed.fill);
         c.fillRect(mx - 1, my - 1, 3, 3);
@@ -240,14 +271,17 @@ function startCartesianLoop({
 
     for (const star of stars.current) {
       const cur = current[star.key];
+
       if (!cur) continue;
       const sx = Math.round((star.xi / Math.max(s.dataLength - 1, 1)) * (cols - 1));
+
       if (sx > revealCols) continue; // behind the reveal front
       const top = cur.top[sx] ?? 0;
       const floor = cur.floor[sx] ?? rows - 1;
       const sy = Math.round(top + star.depth * (floor - top));
       const tw = animate ? (Math.sin((tick + star.phase) * 0.35) + 1) / 2 : 0.85;
       const lift = tw * (0.7 + 0.3 * intensity);
+
       if (lift < 0.55 || sy < 0 || sy >= rows) continue;
       // Sparkles glint in the series colour via opacity (the `lift` wink)
       // rather than a lighter shade — so they never read as stray white
@@ -255,6 +289,7 @@ function startCartesianLoop({
       const starColor = s.seedOf(star.key).fill;
       c.fillStyle = rgb(starColor, 1, lift);
       c.fillRect(sx, sy, 1, 1);
+
       // At the peak of a wink the star flares into a 4-point glint.
       if (tw > 0.9) {
         c.fillStyle = rgb(starColor, 1, lift * 0.6 * (tw - 0.9) * 10);
@@ -264,6 +299,7 @@ function startCartesianLoop({
         c.fillRect(sx, sy + 1, 1, 1);
       }
     }
+
     if (bloomCtx && s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered)) {
       bloomCtx.clearRect(0, 0, cols, rows);
       bloomCtx.drawImage(canvas, 0, 0);
@@ -272,9 +308,12 @@ function startCartesianLoop({
 
   invalidate.current = () => {
     needsFill = true;
+
     if (!raf) raf = requestAnimationFrame(draw);
   };
+
   invalidate.current();
+
   return () => {
     cancelAnimationFrame(raf);
     invalidate.current = null;
@@ -303,20 +342,26 @@ export function CartesianCanvas() {
   // Pinned to the exact ctx fields it reads, plus the backing geometry.
   const targets = useMemo(() => {
     const out: Record<string, Surface> = {};
+
     if (!ready) return out;
     const h = height || 1;
     const glow = Math.max(6, Math.round(rows * 0.16));
     const defaultKind = chartType === "line" ? "line" : "area";
+
     for (const key of configKeys) {
       const band = bands[key];
+
       if (!band) continue;
       const line = (seriesSpecs[key]?.kind ?? defaultKind) === "line";
       const top = band.map((b) => (y(b[1]) / h) * (rows - 1));
+
       const floor = band.map((b, i) =>
         line ? Math.min(rows - 1, top[i] + glow) : (y(b[0]) / h) * (rows - 1),
       );
+
       out[key] = { top: resample(top, cols), floor: resample(floor, cols) };
     }
+
     return out;
   }, [ready, chartType, configKeys, bands, seriesSpecs, y, height, rows, cols]);
 
@@ -336,6 +381,7 @@ export function CartesianCanvas() {
         });
       }
     });
+
     return out;
   }, [configKeys, dataLength, cols]);
 
@@ -375,7 +421,9 @@ export function CartesianCanvas() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+
     if (!canvas) return;
+
     return startCartesianLoop({
       canvas,
       bloomCanvas: bloomRef.current,
@@ -390,6 +438,7 @@ export function CartesianCanvas() {
 
   const bloomActive = ctx.bloomOnHover ? ctx.isMouseInChart || ctx.hovered : true;
   const bloom = bloomLayerStyle(ctx.bloom, bloomActive);
+
   const pos = {
     left: ctx.margins.left,
     top: ctx.margins.top,

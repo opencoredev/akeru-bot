@@ -48,6 +48,7 @@ describe("filterCommandPaletteGroups", () => {
       label: "Actions",
       items: [action("later", ["open", "theme"]), action("first", ["theme", "open"])],
     };
+
     const groups = filterCommandPaletteGroups({ groups: [group], query: "theme" });
     expect(groups[0]?.items.map((item) => item.value)).toEqual(["first", "later"]);
   });
@@ -61,19 +62,24 @@ describe("filterCommandPaletteGroups", () => {
 describe("roadmap palette commands", () => {
   it("keeps stable ids for the language command and matches translated labels", async () => {
     const openSettings = vi.fn();
+
     const action = buildLanguageCommandPaletteAction({
       translate: () => "Changer la langue",
       openSettings,
       icon: null,
     });
+
     expect(action.value).toBe("action:language");
+
     for (const query of ["language", "locale", "langue", "> langue", "简体中文"]) {
       const groups = filterCommandPaletteGroups({
         groups: [{ value: "actions", label: "Actions", items: [action] }],
         query,
       });
+
       expect(groups[0]?.items[0]?.value).toBe("action:language");
     }
+
     await action.run();
     expect(openSettings).toHaveBeenCalledExactlyOnceWith("general", "language");
   });
@@ -82,12 +88,14 @@ describe("roadmap palette commands", () => {
     const openModelPicker = vi.fn();
     const scheduleAfterClose = vi.fn((open: () => void) => open());
     const release = registerComposerModelPicker({ openModelPicker });
+
     const action = buildModelPickerCommandPaletteAction({
       composerHandle: activeComposerModelPicker(),
       scheduleAfterClose,
       title: "Change model",
       icon: null,
     });
+
     expect(action.disabled).toBe(false);
     await action.run();
     expect(openModelPicker).toHaveBeenCalledOnce();
@@ -124,6 +132,7 @@ describe("chat actions in the command palette", () => {
 
   it("turns chat actions into searchable palette rows that run the action", async () => {
     const run = vi.fn();
+
     const [item] = buildChatCommandPaletteItems({
       actions: [
         {
@@ -143,10 +152,12 @@ describe("chat actions in the command palette", () => {
       shortcutCommand: "thread.settle",
       searchTerms: ["Settle chat", "chat", "settle", "done"],
     });
+
     const filtered = filterCommandPaletteGroups({
       groups: [{ value: "chat", label: "This chat", items: item ? [item] : [] }],
       query: "done",
     });
+
     expect(filtered[0]?.items.map((entry) => entry.value)).toEqual(["chat:settle"]);
     await item?.run();
     expect(run).toHaveBeenCalledTimes(1);
@@ -166,6 +177,7 @@ describe("chat actions in the command palette", () => {
       ],
       icon: null,
     });
+
     expect(snooze?.description).toBe("1:00 PM");
     expect(pin).not.toHaveProperty("description");
   });
@@ -213,6 +225,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
     unavailableIn: null,
     ...extra,
   });
+
   const chats = [
     chat("trip-old", "Old trip notes", "2026-08-01T00:00:00.000Z"),
     chat("trip", "Trip plan", "2026-08-03T00:00:00.000Z"),
@@ -224,6 +237,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
       unavailableIn: "Home server",
     }),
   ];
+
   const build = (
     query: string,
     matches: Parameters<typeof buildChatSearchCommandPaletteItems>[0]["matches"] = [],
@@ -259,6 +273,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
       { environmentId: "env-a", threadId: "budget", snippet: "second hit" },
       { environmentId: "env-a", threadId: "unknown", snippet: "not a listed chat" },
     ]);
+
     expect(items.map((item) => item.value)).toEqual([
       "chat-search:env-a:trip",
       "chat-search:env-a:trip-old",
@@ -270,9 +285,11 @@ describe("buildChatSearchCommandPaletteItems", () => {
 
   it("matches a placeholder-titled chat only by message and shows it as untitled", () => {
     expect(build("new chat")).toEqual([]);
+
     const [item] = build("hello", [
       { environmentId: "env-a", threadId: "draft", snippet: "hello there" },
     ]);
+
     expect(item?.title).toBe("Untitled chat");
   });
 
@@ -296,10 +313,12 @@ describe("buildChatSearchCommandPaletteItems", () => {
         unavailableIn: "Home server",
       }),
     );
+
     const local = [
       chat("local-title", "Plan local", "2026-08-01T00:00:00.000Z"),
       chat("local-message", "Budget", "2026-08-01T00:00:00.000Z"),
     ];
+
     const items = buildChatSearchCommandPaletteItems({
       query: "plan",
       chats: [...remote, ...local],
@@ -309,6 +328,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
       icon: null,
       openChat: async () => undefined,
     });
+
     expect(items).toHaveLength(8);
     expect(items.slice(0, 2).map((item) => [item.value, item.disabled])).toEqual([
       ["chat-search:env-a:local-title", undefined],
@@ -321,6 +341,7 @@ describe("buildChatSearchCommandPaletteItems", () => {
     const many = Array.from({ length: 12 }, (_, index) =>
       chat(`c${index}`, `Chat ${index}`, "2026-08-01T00:00:00.000Z"),
     );
+
     expect(
       buildChatSearchCommandPaletteItems({
         query: "chat",

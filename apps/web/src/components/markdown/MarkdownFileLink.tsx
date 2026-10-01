@@ -42,6 +42,7 @@ const MARKDOWN_FILE_LINK_CLASS_NAME = `${MARKDOWN_FILE_CHIP_CLASS_NAME} cursor-p
 function pathParentSegments(path: string): string[] {
   const normalized = path.replaceAll("\\", "/");
   const segments = normalized.split("/").filter((segment) => segment.length > 0);
+
   return segments.slice(0, -1);
 }
 
@@ -49,10 +50,12 @@ export function buildFileLinkParentSuffixByPath(
   filePaths: ReadonlyArray<string>,
 ): Map<string, string> {
   const groups = new Map<string, Set<string>>();
+
   for (const filePath of filePaths) {
     const normalizedPath = filePath.replaceAll("\\", "/");
     const pathSegments = normalizedPath.split("/").filter((segment) => segment.length > 0);
     const basename = pathSegments[pathSegments.length - 1];
+
     if (!basename) continue;
     const group = groups.get(basename) ?? new Set<string>();
     group.add(normalizedPath);
@@ -60,35 +63,44 @@ export function buildFileLinkParentSuffixByPath(
   }
 
   const suffixByPath = new Map<string, string>();
+
   for (const group of groups.values()) {
     const uniquePaths = [...group];
+
     if (uniquePaths.length < 2) continue;
 
     const parentSegmentsByPath = new Map(
       uniquePaths.map((filePath) => [filePath, pathParentSegments(filePath)]),
     );
+
     const minUniqueDepthByPath = new Map<string, number>();
 
     for (const filePath of uniquePaths) {
       const segments = parentSegmentsByPath.get(filePath) ?? [];
       let resolvedDepth = segments.length;
+
       for (let depth = 1; depth <= segments.length; depth += 1) {
         const candidate = segments.slice(-depth).join("/");
+
         const collision = uniquePaths.some((otherPath) => {
           if (otherPath === filePath) return false;
           const otherSegments = parentSegmentsByPath.get(otherPath) ?? [];
+
           return otherSegments.slice(-depth).join("/") === candidate;
         });
+
         if (!collision) {
           resolvedDepth = depth;
           break;
         }
       }
+
       minUniqueDepthByPath.set(filePath, resolvedDepth);
     }
 
     for (const filePath of uniquePaths) {
       const segments = parentSegmentsByPath.get(filePath) ?? [];
+
       if (segments.length === 0) continue;
       const minUniqueDepth = minUniqueDepthByPath.get(filePath) ?? 1;
       const suffixDepth = Math.min(segments.length, Math.max(minUniqueDepth, 2));
@@ -115,16 +127,20 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   className,
 }: MarkdownFileLinkProps) {
   const { t } = useI18n();
+
   const handleOpenInEditor = useCallback(() => {
     if (!onOpen) {
       return;
     }
+
     void (async () => {
       try {
         const result = await onOpen(targetPath);
+
         if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
           return;
         }
+
         reportMarkdownActionFailure(
           { operation: "open-file-in-editor", target: targetPath },
           result.cause,
@@ -157,12 +173,15 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     if (!onOpenInBrowser) {
       return;
     }
+
     void (async () => {
       try {
         const result = await onOpenInBrowser();
+
         if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
           return;
         }
+
         reportMarkdownActionFailure(
           { operation: "open-file-in-browser", target: targetPath },
           result.cause,
@@ -195,12 +214,15 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     if (!onReveal) {
       return;
     }
+
     void (async () => {
       try {
         const result = await onReveal();
+
         if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
           return;
         }
+
         reportMarkdownActionFailure(
           { operation: "reveal-file-in-file-manager", target: targetPath },
           result.cause,
@@ -235,6 +257,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         copyTarget === "Relative path"
           ? t("Failed to copy relative path")
           : t("Failed to copy full path");
+
       if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
         toastManager.add(
           stackedThreadToast({
@@ -243,6 +266,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             description: t("Clipboard API unavailable."),
           }),
         );
+
         return;
       }
 
@@ -276,6 +300,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   const showFileContextMenu = useCallback(
     async (position: { x: number; y: number }) => {
       const api = readLocalApi();
+
       if (!api) return;
 
       try {
@@ -294,20 +319,28 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
 
         if (clicked === "open") {
           handleOpenInEditor();
+
           return;
         }
+
         if (clicked === "open-in-browser") {
           handleOpenInBrowser();
+
           return;
         }
+
         if (clicked === "reveal") {
           handleRevealInFileManager();
+
           return;
         }
+
         if (clicked === "copy-relative") {
           handleCopy(displayPath, "Relative path");
+
           return;
         }
+
         if (clicked === "copy-full") {
           handleCopy(targetPath, "Full path");
         }
@@ -338,13 +371,16 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+
       const position =
         event.clientX === 0 && event.clientY === 0
           ? (() => {
               const bounds = event.currentTarget.getBoundingClientRect();
+
               return { x: bounds.left, y: bounds.bottom };
             })()
           : { x: event.clientX, y: event.clientY };
+
       void showFileContextMenu(position);
     },
     [showFileContextMenu],
@@ -353,6 +389,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   const canOpenInEditor = onOpen !== undefined;
   const canOpenInBrowser = onOpenInBrowser !== undefined;
   const hasPrimaryAction = hasMarkdownFilePrimaryAction({ canOpenInEditor, canOpenInBrowser });
+
   const useBrowserPrimaryAction = shouldUseMarkdownFileBrowserPrimaryAction({
     iconPath,
     canOpenInEditor,
@@ -375,14 +412,19 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+
                 if (useBrowserPrimaryAction && !shouldOpenMarkdownFileLinkInEditor(event)) {
                   handleOpenInBrowser();
+
                   return;
                 }
+
                 if (onOpen) {
                   handleOpenInEditor();
+
                   return;
                 }
+
                 handleOpenInBrowser();
               }}
               onContextMenu={handleContextMenu}

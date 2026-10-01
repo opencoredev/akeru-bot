@@ -26,6 +26,7 @@ import {
 
 export function clampExpandedCursor(value: string, cursor: number): number {
   if (!Number.isFinite(cursor)) return value.length;
+
   return Math.max(0, Math.min(value.length, Math.floor(cursor)));
 }
 
@@ -58,8 +59,10 @@ function findSelectionPointForInlineToken(
   remainingRef: { value: number },
 ): { key: string; offset: number; type: "element" } | null {
   const parent = node.getParent();
+
   if (!parent || !$isElementNode(parent)) return null;
   const index = node.getIndexWithinParent();
+
   if (remainingRef.value === 0) {
     return {
       key: parent.getKey(),
@@ -67,6 +70,7 @@ function findSelectionPointForInlineToken(
       type: "element",
     };
   }
+
   if (remainingRef.value === getComposerInlineTokenTextLength(node)) {
     return {
       key: parent.getKey(),
@@ -74,7 +78,9 @@ function findSelectionPointForInlineToken(
       type: "element",
     };
   }
+
   remainingRef.value -= getComposerInlineTokenTextLength(node);
+
   return null;
 }
 
@@ -82,15 +88,19 @@ function getComposerNodeTextLength(node: LexicalNode): number {
   if (isComposerInlineTokenNode(node)) {
     return getComposerInlineTokenTextLength(node);
   }
+
   if ($isTextNode(node)) {
     return node.getTextContentSize();
   }
+
   if ($isLineBreakNode(node)) {
     return 1;
   }
+
   if ($isElementNode(node)) {
     return node.getChildren().reduce((total, child) => total + getComposerNodeTextLength(child), 0);
   }
+
   return 0;
 }
 
@@ -98,17 +108,21 @@ function getComposerNodeExpandedTextLength(node: LexicalNode): number {
   if (isComposerInlineTokenNode(node)) {
     return getComposerInlineTokenExpandedTextLength(node);
   }
+
   if ($isTextNode(node)) {
     return node.getTextContentSize();
   }
+
   if ($isLineBreakNode(node)) {
     return 1;
   }
+
   if ($isElementNode(node)) {
     return node
       .getChildren()
       .reduce((total, child) => total + getComposerNodeExpandedTextLength(child), 0);
   }
+
   return 0;
 }
 
@@ -118,22 +132,28 @@ export function getAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: number
 
   while (current) {
     const nextParent = current.getParent() as LexicalNode | null;
+
     if (!nextParent || !$isElementNode(nextParent)) {
       break;
     }
+
     const siblings = nextParent.getChildren();
     const index = current.getIndexWithinParent();
+
     for (let i = 0; i < index; i += 1) {
       const sibling = siblings[i];
+
       if (!sibling) continue;
       offset += getComposerNodeTextLength(sibling);
     }
+
     current = nextParent;
   }
 
   if ($isTextNode(node)) {
     return offset + Math.min(pointOffset, node.getTextContentSize());
   }
+
   if (isComposerInlineTokenNode(node)) {
     return getAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
@@ -145,11 +165,14 @@ export function getAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: number
   if ($isElementNode(node)) {
     const children = node.getChildren();
     const clampedOffset = Math.max(0, Math.min(pointOffset, children.length));
+
     for (let i = 0; i < clampedOffset; i += 1) {
       const child = children[i];
+
       if (!child) continue;
       offset += getComposerNodeTextLength(child);
     }
+
     return offset;
   }
 
@@ -162,22 +185,28 @@ export function getExpandedAbsoluteOffsetForPoint(node: LexicalNode, pointOffset
 
   while (current) {
     const nextParent = current.getParent() as LexicalNode | null;
+
     if (!nextParent || !$isElementNode(nextParent)) {
       break;
     }
+
     const siblings = nextParent.getChildren();
     const index = current.getIndexWithinParent();
+
     for (let i = 0; i < index; i += 1) {
       const sibling = siblings[i];
+
       if (!sibling) continue;
       offset += getComposerNodeExpandedTextLength(sibling);
     }
+
     current = nextParent;
   }
 
   if ($isTextNode(node)) {
     return offset + Math.min(pointOffset, node.getTextContentSize());
   }
+
   if (isComposerInlineTokenNode(node)) {
     return getExpandedAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
@@ -189,11 +218,14 @@ export function getExpandedAbsoluteOffsetForPoint(node: LexicalNode, pointOffset
   if ($isElementNode(node)) {
     const children = node.getChildren();
     const clampedOffset = Math.max(0, Math.min(pointOffset, children.length));
+
     for (let i = 0; i < clampedOffset; i += 1) {
       const child = children[i];
+
       if (!child) continue;
       offset += getComposerNodeExpandedTextLength(child);
     }
+
     return offset;
   }
 
@@ -210,6 +242,7 @@ function findSelectionPointAtOffset(
 
   if ($isTextNode(node)) {
     const size = node.getTextContentSize();
+
     if (remainingRef.value <= size) {
       return {
         key: node.getKey(),
@@ -217,14 +250,18 @@ function findSelectionPointAtOffset(
         type: "text",
       };
     }
+
     remainingRef.value -= size;
+
     return null;
   }
 
   if ($isLineBreakNode(node)) {
     const parent = node.getParent();
+
     if (!parent) return null;
     const index = node.getIndexWithinParent();
+
     if (remainingRef.value === 0) {
       return {
         key: parent.getKey(),
@@ -232,6 +269,7 @@ function findSelectionPointAtOffset(
         type: "element",
       };
     }
+
     if (remainingRef.value === 1) {
       return {
         key: parent.getKey(),
@@ -239,18 +277,23 @@ function findSelectionPointAtOffset(
         type: "element",
       };
     }
+
     remainingRef.value -= 1;
+
     return null;
   }
 
   if ($isElementNode(node)) {
     const children = node.getChildren();
+
     for (const child of children) {
       const point = findSelectionPointAtOffset(child, remainingRef);
+
       if (point) {
         return point;
       }
     }
+
     if (remainingRef.value === 0) {
       return {
         key: node.getKey(),
@@ -266,6 +309,7 @@ function findSelectionPointAtOffset(
 export function $getComposerRootLength(): number {
   const root = $getRoot();
   const children = root.getChildren();
+
   return children.reduce((sum, child) => sum + getComposerNodeTextLength(child), 0);
 }
 
@@ -274,11 +318,13 @@ export function $setSelectionAtComposerOffset(nextOffset: number): void {
   const composerLength = $getComposerRootLength();
   const boundedOffset = Math.max(0, Math.min(nextOffset, composerLength));
   const remainingRef = { value: boundedOffset };
+
   const point = findSelectionPointAtOffset(root, remainingRef) ?? {
     key: root.getKey(),
     offset: root.getChildren().length,
     type: "element" as const,
   };
+
   const selection = $createRangeSelection();
   selection.anchor.set(point.key, point.offset, point.type);
   selection.focus.set(point.key, point.offset, point.type);
@@ -292,16 +338,19 @@ export function $setSelectionRangeAtComposerOffsets(startOffset: number, endOffs
   const boundedEnd = Math.max(0, Math.min(endOffset, composerLength));
   const anchorRemainingRef = { value: boundedStart };
   const focusRemainingRef = { value: boundedEnd };
+
   const anchorPoint = findSelectionPointAtOffset(root, anchorRemainingRef) ?? {
     key: root.getKey(),
     offset: root.getChildren().length,
     type: "element" as const,
   };
+
   const focusPoint = findSelectionPointAtOffset(root, focusRemainingRef) ?? {
     key: root.getKey(),
     offset: root.getChildren().length,
     type: "element" as const,
   };
+
   const selection = $createRangeSelection();
   selection.anchor.set(anchorPoint.key, anchorPoint.offset, anchorPoint.type);
   selection.focus.set(focusPoint.key, focusPoint.offset, focusPoint.type);
@@ -317,10 +366,12 @@ export function getSelectionRangeForExpandedComposerOffsets(
   if (!$isRangeSelection(selection)) {
     return null;
   }
+
   const anchorNode = selection.anchor.getNode();
   const focusNode = selection.focus.getNode();
   const anchorOffset = getExpandedAbsoluteOffsetForPoint(anchorNode, selection.anchor.offset);
   const focusOffset = getExpandedAbsoluteOffsetForPoint(focusNode, selection.focus.offset);
+
   return {
     start: Math.min(anchorOffset, focusOffset),
     end: Math.max(anchorOffset, focusOffset),
@@ -331,38 +382,48 @@ export function $selectionTouchesInlineToken(selection: ReturnType<typeof $getSe
   if (!$isRangeSelection(selection)) {
     return false;
   }
+
   return selection.getNodes().some((node) => isComposerInlineTokenNode(node));
 }
 
 export function $readSelectionOffsetFromEditorState(fallback: number): number {
   const selection = $getSelection();
+
   if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
     return fallback;
   }
+
   const anchorNode = selection.anchor.getNode();
   const offset = getAbsoluteOffsetForPoint(anchorNode, selection.anchor.offset);
   const composerLength = $getComposerRootLength();
+
   return Math.max(0, Math.min(offset, composerLength));
 }
 
 export function $readExpandedSelectionOffsetFromEditorState(fallback: number): number {
   const selection = $getSelection();
+
   if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
     return fallback;
   }
+
   const anchorNode = selection.anchor.getNode();
   const offset = getExpandedAbsoluteOffsetForPoint(anchorNode, selection.anchor.offset);
   const expandedLength = $getRoot().getTextContent().length;
+
   return Math.max(0, Math.min(offset, expandedLength));
 }
 
 function $appendTextWithLineBreaks(parent: ElementNode, text: string): void {
   const lines = text.split("\n");
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
+
     if (line.length > 0) {
       parent.append($createTextNode(line));
     }
+
     if (index < lines.length - 1) {
       parent.append($createLineBreakNode());
     }
@@ -380,21 +441,26 @@ export function $setComposerEditorPrompt(
   root.append(paragraph);
 
   const segments = splitPromptIntoComposerSegments(prompt, terminalContexts);
+
   for (const segment of segments) {
     if (segment.type === "mention") {
       paragraph.append($createComposerMentionNode(segment.path));
       continue;
     }
+
     if (segment.type === "skill") {
       paragraph.append($createComposerSkillNode(segment.name, skillMetadata.get(segment.name)));
       continue;
     }
+
     if (segment.type === "terminal-context") {
       if (segment.context) {
         paragraph.append($createComposerTerminalContextNode(segment.context));
       }
+
       continue;
     }
+
     $appendTextWithLineBreaks(paragraph, segment.text);
   }
 }
@@ -403,8 +469,10 @@ export function collectTerminalContextIds(node: LexicalNode): string[] {
   if (node instanceof ComposerTerminalContextNode) {
     return [node.__context.id];
   }
+
   if ($isElementNode(node)) {
     return node.getChildren().flatMap((child) => collectTerminalContextIds(child));
   }
+
   return [];
 }

@@ -4,12 +4,16 @@ import { type MarkdownHtmlAstNode } from "./markdownPlugins";
 
 export function findTaskListMarkerOffset(markdown: string, listItemStart: number): number | null {
   const firstLineEnd = markdown.indexOf("\n", listItemStart);
+
   const firstLine = markdown.slice(
     listItemStart,
     firstLineEnd === -1 ? markdown.length : firstLineEnd,
   );
+
   const match = firstLine.match(/^(?:\s*(?:[-+*]|\d+[.)])\s+)(\[[ xX]\])/);
+
   if (!match?.[1]) return null;
+
   return listItemStart + firstLine.indexOf(match[1]);
 }
 
@@ -30,25 +34,32 @@ export function orderedListGutterStyle(
   const firstNumber = Number.isNaN(parsedStart) ? 1 : parsedStart;
   const lastNumber = firstNumber + Math.max(itemCount - 1, 0);
   const markerWidth = Math.max(String(firstNumber).length, String(lastNumber).length);
+
   if (markerWidth <= 2) return undefined;
+
   return { "--list-gutter": `${markerWidth + 1}ch` };
 }
 
 function isTaskListItem(node: MarkdownHtmlAstNode): boolean {
   const className = node.properties?.className;
+
   return Array.isArray(className) && className.includes("task-list-item");
 }
 
 function findTaskCheckbox(node: MarkdownHtmlAstNode): MarkdownHtmlAstNode | null {
   for (const child of node.children ?? []) {
     if (child.type !== "element") continue;
+
     if (child.tagName === "input" && child.properties?.type === "checkbox") return child;
+
     // Loose lists wrap the checkbox in a paragraph.
     if (child.tagName === "p") {
       const nested = findTaskCheckbox(child);
+
       if (nested) return nested;
     }
   }
+
   return null;
 }
 
@@ -58,13 +69,17 @@ export function taskListProgress(
 ): { readonly done: number; readonly total: number } | null {
   let done = 0;
   let total = 0;
+
   for (const child of node?.children ?? []) {
     if (child.type !== "element" || child.tagName !== "li" || !isTaskListItem(child)) continue;
     const checkbox = findTaskCheckbox(child);
+
     if (!checkbox) continue;
     total += 1;
+
     if (checkbox.properties?.checked === true) done += 1;
   }
+
   return total >= 2 ? { done, total } : null;
 }
 
@@ -73,6 +88,7 @@ const MarkdownListNestingContext = React.createContext(false);
 
 function MarkdownTaskListProgress({ done, total }: { done: number; total: number }) {
   const { t } = useI18n();
+
   return (
     <div className="chat-markdown-task-progress" data-task-progress={`${done}/${total}`}>
       <span
@@ -103,7 +119,9 @@ export function MarkdownList({
   const nested = use(MarkdownListNestingContext);
   const progress = nested ? null : taskListProgress(node);
   const list = <MarkdownListNestingContext value>{children}</MarkdownListNestingContext>;
+
   if (!progress) return list;
+
   return (
     <>
       <MarkdownTaskListProgress done={progress.done} total={progress.total} />

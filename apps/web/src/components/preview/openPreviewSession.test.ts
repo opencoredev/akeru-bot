@@ -39,6 +39,7 @@ describe("openPreviewSession", () => {
       tabId: "tab-blank",
       navStatus: { _tag: "Idle" },
     };
+
     const open = vi.fn(async (_input: PreviewOpenInput) => AsyncResult.success(idleSnapshot));
 
     await openPreviewSession({

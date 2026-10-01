@@ -33,10 +33,12 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
 
   function toggleExpanded() {
     const table = tableRef.current;
+
     if (!table) return;
 
     if (!expanded) {
       const rows = [...table.rows];
+
       const columnWidths = rows.reduce<number[]>((widths, row) => {
         [...row.cells].forEach((cell, columnIndex) => {
           widths[columnIndex] = Math.max(
@@ -44,6 +46,7 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
             cell.getBoundingClientRect().width,
           );
         });
+
         return widths;
       }, []);
 
@@ -57,19 +60,23 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
 
   const handleCopy = useCallback((format: "markdown" | "csv") => {
     const table = containerRef.current?.querySelector("table");
+
     if (!table || typeof navigator === "undefined" || navigator.clipboard == null) {
       return;
     }
+
     const text =
       format === "markdown"
         ? serializeTableElementToMarkdown(table)
         : serializeTableElementToCsv(table);
+
     void navigator.clipboard
       .writeText(text)
       .then(() => {
         if (copiedTimerRef.current != null) {
           clearTimeout(copiedTimerRef.current);
         }
+
         setCopied(true);
         copiedTimerRef.current = setTimeout(() => {
           setCopied(false);
@@ -164,14 +171,18 @@ export function MarkdownDetails({
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(open);
   const childNodes = Children.toArray(children);
+
   const summaryIndex = childNodes.findIndex(
     (child) => isValidElement(child) && child.type === "summary",
   );
+
   const summaryNode = summaryIndex >= 0 ? childNodes[summaryIndex] : null;
+
   const summary =
     isValidElement<{ children?: ReactNode }>(summaryNode) && summaryNode.props.children
       ? summaryNode.props.children
       : t("Details");
+
   const content = childNodes.filter((_, index) => index !== summaryIndex);
 
   return (

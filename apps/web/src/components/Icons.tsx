@@ -14,6 +14,7 @@ export {
   GithubCopilotIcon,
   PiAgentIcon,
 } from "./icons/AgentCatalogIcons";
+
 export {
   DiscordIcon,
   IMessageIcon,
@@ -21,6 +22,7 @@ export {
   TelegramIcon,
   WhatsAppIcon,
 } from "./icons/ChannelIcons";
+
 export {
   AzureDevOpsIcon,
   BitbucketIcon,

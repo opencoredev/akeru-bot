@@ -39,6 +39,7 @@ export function resolveChatMenuState(input: {
 }): ChatMenuState {
   const { shell, supports, now } = input;
   const isSnoozed = supports.snooze && effectiveSnoozed(shell, { now });
+
   return {
     isPinned: shell.pinnedAt != null,
     isSettled: supports.settlement && effectiveSettled(shell, { now }),
@@ -68,9 +69,12 @@ export function hasUnseenCompletion(
 ): boolean {
   if (!completedAt || !lastVisitedAt) return false;
   const completedMs = Date.parse(completedAt);
+
   if (Number.isNaN(completedMs)) return false;
   const visitedMs = Date.parse(lastVisitedAt);
+
   if (Number.isNaN(visitedMs)) return true;
+
   return completedMs > visitedMs;
 }
 
@@ -102,6 +106,7 @@ export function watchChatVisits(input: {
   readonly markVisited: (visitedAt: string) => void;
 }): () => void {
   const { page, window, completedAt, now, markVisited } = input;
+
   const markIfSeen = () => {
     if (page.visibilityState !== "visible" || !page.hasFocus()) return;
     const nowMs = now().getTime();
@@ -110,9 +115,11 @@ export function watchChatVisits(input: {
       new Date(Number.isNaN(completedMs) ? nowMs : Math.max(nowMs, completedMs)).toISOString(),
     );
   };
+
   markIfSeen();
   page.addEventListener("visibilitychange", markIfSeen);
   window.addEventListener("focus", markIfSeen);
+
   return () => {
     page.removeEventListener("visibilitychange", markIfSeen);
     window.removeEventListener("focus", markIfSeen);

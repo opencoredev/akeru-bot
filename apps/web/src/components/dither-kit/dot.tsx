@@ -29,6 +29,7 @@ export function Dot({ variant = "border", r = 2 }: { variant?: DotVariant; r?: n
   const ctx = useChart();
   const { dataKey, seed } = useSeries("Dot");
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band) return null;
   const paint = dotPaint(variant, seed);
 
@@ -65,8 +66,10 @@ export function ActiveDot({
   const ctx = useChart();
   const { dataKey, seed } = useSeries("ActiveDot");
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band || ctx.hoverIndex == null || !ctx.entranceDone) return null;
   const b = band[ctx.hoverIndex];
+
   if (!b) return null;
   const paint = dotPaint(variant, seed);
   const cx = ctx.xCenter(ctx.hoverIndex);

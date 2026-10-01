@@ -22,17 +22,22 @@ export const waitForDesktopOverlay = async (
   timeoutMs: number,
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() <= deadline) {
     const state = assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, {
       operation,
       requestId,
     });
+
     if (state.desktopByTabId[tabId] && previewBridge && isPreviewWebviewRendering(runtimeTabId)) {
       const status = await previewBridge.automation.status(runtimeTabId);
+
       if (status.available) return;
     }
+
     await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
   }
+
   throw new PreviewAutomationOverlayTimeoutError({
     requestId,
     environmentId: threadRef.environmentId,
@@ -52,6 +57,7 @@ const findPreviewWebview = (tabId: string): ExecutablePreviewWebview | null =>
 
 export const isPreviewWebviewRendering = (runtimeTabId: string): boolean => {
   const wrapper = findPreviewWebview(runtimeTabId)?.closest<HTMLElement>("[data-preview-viewport]");
+
   return wrapper?.getAttribute("data-preview-rendering") === "active";
 };
 
@@ -61,8 +67,10 @@ const readWebviewViewport = async (
   const value = await webview.executeJavaScript(
     "({ width: window.innerWidth, height: window.innerHeight })",
   );
+
   if (typeof value !== "object" || value === null) return null;
   const { width, height } = value as { readonly width?: unknown; readonly height?: unknown };
+
   return typeof width === "number" &&
     Number.isInteger(width) &&
     width > 0 &&
@@ -77,7 +85,9 @@ export const readRenderedViewport = async (
   runtimeTabId: string,
 ): Promise<PreviewRenderedViewportSize | null> => {
   const webview = findPreviewWebview(runtimeTabId);
+
   if (!webview) return null;
+
   return await readWebviewViewport(webview);
 };
 
@@ -86,6 +96,7 @@ const readDeclaredViewport = (
 ): PreviewRenderedViewportSize | null => {
   const width = Number(webview?.getAttribute("data-preview-css-width"));
   const height = Number(webview?.getAttribute("data-preview-css-height"));
+
   return Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0
     ? { width, height }
     : null;
@@ -105,13 +116,16 @@ export const waitForRenderedViewport = async (
   },
 ): Promise<PreviewRenderedViewportSize> => {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() <= deadline) {
     assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, context);
+
     try {
       const webview = findPreviewWebview(runtimeTabId);
       const appliedSettingKey = webview?.getAttribute("data-preview-viewport-key") ?? null;
       const declaredViewport = readDeclaredViewport(webview);
       const renderedViewport = webview ? await readWebviewViewport(webview) : null;
+
       if (
         renderedViewport &&
         isPreviewViewportReady({
@@ -127,8 +141,10 @@ export const waitForRenderedViewport = async (
       // Registration and navigation can transiently replace the guest while
       // React applies the server snapshot. Retry until the operation deadline.
     }
+
     await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
   }
+
   throw new PreviewAutomationViewportTimeoutError({
     ...context,
     tabId,

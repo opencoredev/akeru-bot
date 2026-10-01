@@ -87,9 +87,11 @@ export function ChatActionsMenu({
   const nowMinute = useNowMinute();
   const now = `${nowMinute}:00.000Z`;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+
   const lastVisitedAt = useUiStateStore((state) =>
     threadRef ? state.threadLastVisitedAtById[scopedThreadKey(threadRef)] : undefined,
   );
+
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
 
@@ -151,6 +153,7 @@ export function ChatActionsMenu({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       // Shortcut recording and open dialogs keep their keystrokes; chat actions
       // only answer keys pressed in the chat itself.
       if (
@@ -159,24 +162,32 @@ export function ChatActionsMenu({
       ) {
         return;
       }
+
       const command = resolveShortcutCommand(event, keybindings, {
         context: { modelPickerOpen: isModelPickerOpen() },
       });
+
       if (command === "chat.new") {
         const control = shortcutTargets.current.newChat;
+
         if (!control) return;
         event.preventDefault();
         event.stopPropagation();
+
         if (control.canStart) void control.start();
+
         return;
       }
+
       if (command === "thread.settle") {
         event.preventDefault();
         event.stopPropagation();
         shortcutTargets.current.settle();
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keybindings]);
 
@@ -184,6 +195,7 @@ export function ChatActionsMenu({
   if (!threadRef || !shell || !state) return null;
 
   const snoozePresets = resolveSnoozePresets(new Date());
+
   const snoozedUntilLabel = state.snoozedUntil
     ? formatDate(new Date(state.snoozedUntil), {
         weekday: "short",
@@ -340,8 +352,10 @@ export function ChatActionsMenu({
             onSubmit={(event) => {
               event.preventDefault();
               const title = draftTitle.trim();
+
               if (!title) return;
               setRenaming(false);
+
               if (title !== shell.title) void actions.rename(threadRef, title);
             }}
           >
@@ -371,5 +385,7 @@ export function ChatActionsMenu({
     </>
   );
 }
+
 export { buildChatPaletteActions } from "./chatPaletteActions";
+
 export { useMarkChatVisited } from "./useMarkChatVisited";

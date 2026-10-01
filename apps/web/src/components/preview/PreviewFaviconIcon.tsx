@@ -19,6 +19,7 @@ export function FaviconImage(props: {
   className?: string | undefined;
 }) {
   const sources = props.sources.filter((source): source is string => Boolean(source));
+
   return (
     <FaviconImageAttempt
       key={sources.join("\0")}
@@ -36,7 +37,9 @@ function FaviconImageAttempt(props: {
 }) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const source = selectFaviconSource(props.sources, failed);
+
   if (!source) return props.fallback;
+
   return (
     <img
       src={source}
@@ -56,6 +59,7 @@ export function PreviewFaviconIcon(props: {
 }) {
   const source = useFaviconForThreadUrl(props.threadRef, props.url);
   const fallback = <BrowserMockup className={cn("size-7 shrink-0", props.className)} />;
+
   return (
     <FaviconImage
       sources={[source]}

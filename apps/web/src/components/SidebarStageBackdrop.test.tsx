@@ -37,6 +37,7 @@ describe("SidebarStageBackdrop", () => {
         <StageBackdropArt variant="dev" />
       </>,
     );
+
     const ids = Array.from(markup.matchAll(/\sid="([^"]+)"/g), (match) => match[1]);
 
     expect(ids.length).toBeGreaterThan(0);

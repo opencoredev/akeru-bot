@@ -65,9 +65,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
 
   useLayoutEffect(() => {
     if (!props.activeItemId || !listRef.current) return;
+
     const el = listRef.current.querySelector<HTMLElement>(
       `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
     );
+
     el?.scrollIntoView({ block: "nearest" });
   }, [props.activeItemId]);
 
@@ -133,6 +135,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
 }) {
   const skillSourceKind =
     props.item.type === "skill" ? resolveProviderSkillSourceKind(props.item.skill) : null;
+
   const isSlashSkill =
     props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
 

@@ -116,14 +116,17 @@ const GITHUB_ALERT_PRESENTATIONS: Record<
 const CHAT_MARKDOWN_COMPONENTS: Components = {
   p: function MarkdownParagraph({ node: _node, children, ...props }) {
     const { skills } = use(ChatMarkdownRendererContext);
+
     return <p {...props}>{renderSkillInlineMarkdownChildren(children, skills)}</p>;
   },
   blockquote: function MarkdownBlockquote({ node: _node, children, ...props }) {
     const alert =
       GITHUB_ALERT_PRESENTATIONS[String((props as Record<string, unknown>)["data-alert"] ?? "")];
+
     if (!alert) {
       return <blockquote {...props}>{children}</blockquote>;
     }
+
     // Not a <blockquote>: the stylesheet mutes those, and an alert's body is ordinary
     // text under a colored title — which is how the host renders it.
     return (
@@ -147,7 +150,9 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
     const itemCount =
       node?.children?.filter((child) => child.type === "element" && child.tagName === "li")
         .length ?? 0;
+
     const gutterStyle = orderedListGutterStyle(itemCount, start);
+
     return (
       <MarkdownList node={node}>
         <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
@@ -157,8 +162,10 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   li: function MarkdownListItem({ node, children, ...props }) {
     const { text, skills } = use(ChatMarkdownRendererContext);
     const listItemStart = node?.position?.start.offset;
+
     const markerOffset =
       typeof listItemStart === "number" ? findTaskListMarkerOffset(text, listItemStart) : null;
+
     return (
       <li {...props} data-task-marker-offset={markerOffset ?? undefined}>
         {renderSkillInlineMarkdownChildren(children, skills)}
@@ -168,6 +175,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   input: function MarkdownInput({ node: _node, type, checked, disabled: _disabled, ...props }) {
     const { onTaskListChange } = use(ChatMarkdownRendererContext);
     const { t } = useI18n();
+
     if (type !== "checkbox" || !onTaskListChange) {
       return (
         <input
@@ -179,6 +187,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         />
       );
     }
+
     return (
       <input
         {...props}
@@ -188,6 +197,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         checked={checked}
         onChange={(event) => {
           const markerOffset = Number(event.currentTarget.closest("li")?.dataset.taskMarkerOffset);
+
           if (!Number.isSafeInteger(markerOffset)) return;
           onTaskListChange({ markerOffset, checked: event.currentTarget.checked });
         }}
@@ -203,8 +213,10 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       openExternalLinkInPreview,
       fileLinkChip,
     } = use(ChatMarkdownRendererContext);
+
     const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
     const settingsDestination = parseSettingsDeepLink(normalizedHref);
+
     if (settingsDestination) {
       return (
         <SettingsLinkChip
@@ -217,17 +229,21 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         </SettingsLinkChip>
       );
     }
+
     // A malformed in-app link must never reach the OS or a browser tab.
     if (isAppDeepLink(normalizedHref)) return <>{children}</>;
+
     const fileLinkMeta = normalizedHref
       ? (markdownFileLinkMetaByHref.get(normalizedHref) ??
         resolveMarkdownFileLinkMeta(normalizedHref, cwd))
       : null;
+
     if (!fileLinkMeta) {
       const faviconHost = resolveExternalWebLinkHost(href);
       const isSameDocumentLink = href?.startsWith("#") ?? false;
       const onClick = props.onClick;
       const canOpenInPreview = Boolean(threadRef) && isPreviewSupportedInRuntime();
+
       const link = (
         <a
           {...props}
@@ -236,6 +252,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           rel={isSameDocumentLink ? undefined : "noopener noreferrer"}
           onClick={(event) => {
             onClick?.(event);
+
             if (isSameDocumentLink && href) {
               handleMarkdownFragmentClick(event, href);
             }
@@ -245,6 +262,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
             event.preventDefault();
             event.stopPropagation();
             const api = readLocalApi();
+
             if (!api) return;
             void showExternalLinkContextMenu({
               href,
@@ -253,6 +271,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
               showContextMenu: (items, position) => api.contextMenu.show(items, position),
               openInPreview: async (target) => {
                 const result = await openExternalLinkInPreview(target);
+
                 if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
                   reportMarkdownActionFailure(
                     { operation: "open-link-in-preview", target },
@@ -277,9 +296,11 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           )}
         </a>
       );
+
       if (!faviconHost || !href) {
         return link;
       }
+
       return (
         <Tooltip>
           <TooltipTrigger render={link} />
@@ -302,18 +323,23 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   code: function MarkdownCode({ node, children, className, ...props }) {
     const { cwd, inlineCodeFileLinkMetaByText, fileLinkChip } = use(ChatMarkdownRendererContext);
     const mathExpression = node?.properties?.dataMathExpression;
+
     if (typeof mathExpression === "string") {
       return <MarkdownMathExpression expression={mathExpression} displayMode={false} />;
     }
+
     if (node?.properties?.dataInlineCode != null) {
       const codeText = nodeToPlainText(children);
+
       const fileLinkMeta =
         inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
         resolveInlineCodeFileLinkMeta(codeText, cwd);
+
       if (fileLinkMeta) {
         return fileLinkChip(fileLinkMeta, `\`${codeText}\``);
       }
     }
+
     return (
       <code {...props} className={className}>
         {children}
@@ -325,6 +351,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
     const srcString = typeof src === "string" ? normalizeMarkdownLinkDestination(src) : "";
     const altText = alt ?? "";
     const imageSource = classifyMarkdownImageSource(srcString, cwd);
+
     if (imageSource._tag === "Direct") {
       return (
         <img
@@ -336,11 +363,13 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         />
       );
     }
+
     if (imageSource._tag === "WorkspaceFile" && threadRef) {
       return (
         <ChatMarkdownWorkspaceImage threadRef={threadRef} path={imageSource.path} alt={altText} />
       );
     }
+
     return <ChatMarkdownImageFallback alt={altText} />;
   },
   table: function MarkdownTableRenderer({ node: _node, ...props }) {
@@ -352,18 +381,23 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   pre: function MarkdownPre({ node, children, ...props }) {
     const { resolvedTheme, diffThemeName, isStreaming } = use(ChatMarkdownRendererContext);
     const codeBlock = extractCodeBlock(children);
+
     if (!codeBlock) {
       return <pre {...props}>{children}</pre>;
     }
 
     const language = extractFenceLanguage(codeBlock.className);
+
     if (language.toLowerCase() === "math") {
       return <MarkdownMathExpression expression={codeBlock.code} displayMode />;
     }
+
     if (language.toLowerCase() === "mermaid") {
       return <MarkdownMermaidDiagram code={codeBlock.code} theme={resolvedTheme} />;
     }
+
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+
     if (MARKDOWN_DIFF_LANGUAGES.has(language.toLowerCase())) {
       return (
         <MarkdownDiffBlock
@@ -374,6 +408,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
         />
       );
     }
+
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}
@@ -406,6 +441,7 @@ function ChatMarkdown({
   // Streaming frames drop unstable trailing tokens; the result is always a
   // prefix of the text, so task marker offsets stay valid.
   const renderedText = props.isStreaming ? stabilizeStreamingMarkdown(text) : text;
+
   const { componentState, handleCopy, markdownUrlTransform } = useChatMarkdownState({
     text: renderedText,
     ...props,
@@ -442,10 +478,12 @@ function ChatMarkdown({
 export default memo(ChatMarkdown);
 
 export { orderedListGutterStyle, taskListProgress } from "./markdown/MarkdownLists";
+
 export {
   canUseMarkdownFileShellActions,
   EMPTY_MARKDOWN_SKILLS,
   hasMarkdownFilePrimaryAction,
   shouldUseMarkdownFileBrowserPrimaryAction,
 } from "./markdown/markdownFileActions";
+
 export { nodeToPlainText } from "./markdown/markdownText";

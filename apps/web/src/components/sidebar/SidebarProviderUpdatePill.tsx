@@ -50,6 +50,7 @@ export function SidebarProviderUpdatePill() {
   const [dismissAfterExitKey, setDismissAfterExitKey] = useState<string | null>(null);
   const [visibleAfterIso, setVisibleAfterIso] = useState<string | undefined>();
   const effectiveVisibleAfterIso = visibleAfterIso ?? latestProviderCheckedAt(providers);
+
   const view = getProviderUpdateSidebarPillView(providers, {
     ...(effectiveVisibleAfterIso !== undefined
       ? { visibleAfterIso: effectiveVisibleAfterIso }
@@ -66,9 +67,11 @@ export function SidebarProviderUpdatePill() {
   const openProviderSettings = useCallback(() => {
     openSettings("providers");
   }, []);
+
   const displayedView = renderedView ?? view;
   const dismissAfterVisibleMs = displayedView?.dismissAfterVisibleMs;
   const viewKey = displayedView?.key ?? null;
+
   const showDismissProgress =
     dismissAfterVisibleMs !== undefined &&
     displayedView?.tone !== "loading" &&
@@ -79,6 +82,7 @@ export function SidebarProviderUpdatePill() {
       if (exitingKey === key) {
         return;
       }
+
       setPendingView(nextView);
       setExitingKey(key);
       setDismissAfterExitKey(dismissKey ?? null);
@@ -90,18 +94,24 @@ export function SidebarProviderUpdatePill() {
     if (exitingKey !== null) {
       return;
     }
+
     if (!renderedView) {
       if (view) {
         setRenderedView(view);
       }
+
       return;
     }
+
     if (!view) {
       startExit(renderedView.key, null);
+
       return;
     }
+
     if (view.key !== renderedView.key) {
       startExit(renderedView.key, view);
+
       return;
     }
   }, [exitingKey, renderedView, startExit, view]);
@@ -110,9 +120,11 @@ export function SidebarProviderUpdatePill() {
     if (!dismissAfterVisibleMs || !viewKey) {
       return;
     }
+
     if (exitingKey === viewKey) {
       return;
     }
+
     const timeoutId = window.setTimeout(() => {
       startExit(viewKey, null, viewKey);
     }, dismissAfterVisibleMs);
@@ -137,12 +149,15 @@ export function SidebarProviderUpdatePill() {
         if (event.target !== event.currentTarget) {
           return;
         }
+
         if (!displayedView || exitingKey !== displayedView.key) {
           return;
         }
+
         if (dismissAfterExitKey === displayedView.key) {
           setDismissedKeys((previous) => new Set(previous).add(displayedView.key));
         }
+
         setRenderedView(pendingView);
         setPendingView(null);
         setExitingKey(null);

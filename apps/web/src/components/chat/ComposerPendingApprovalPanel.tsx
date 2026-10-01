@@ -43,6 +43,7 @@ interface RoutineProposalDetails {
 
 function stringField(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
+
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
@@ -58,18 +59,23 @@ function capitalize(value: string) {
 
 function routineInstructions(instructions: string | null, schedule: unknown): string | null {
   if (!instructions) return null;
+
   if (!schedule || typeof schedule !== "object") return instructions;
   const kind = (schedule as Record<string, unknown>).kind;
   const comma = instructions.indexOf(",");
+
   if (comma < 0) return instructions;
   const lead = instructions.slice(0, comma).trim();
   const task = instructions.slice(comma + 1).trim();
+
   if (!task) return instructions;
+
   const duplicatesSchedule =
     (kind === "daily" && /^(?:every day|every morning|daily)\b/i.test(lead)) ||
     (kind === "weekdays" && /^(?:every weekday|on weekdays|weekdays)\b/i.test(lead)) ||
     (kind === "weekly" &&
       /^every (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(lead));
+
   return duplicatesSchedule ? capitalize(task) : instructions;
 }
 
@@ -120,15 +126,22 @@ function routineScheduleText(schedule: unknown, t: Translate, locale: string): s
   if (!schedule || typeof schedule !== "object") return null;
   const record = schedule as Record<string, unknown>;
   const time = stringField(record, "time");
+
   if (!time) return null;
+
   if (record.kind === "daily") return t("Every day at {time}", { time });
+
   if (record.kind === "weekdays") return t("Weekdays at {time}", { time });
+
   if (record.kind === "weekly") {
     const days = stringList(record.weekdays).map((day) => weekdayLabel(day, t));
+
     if (days.length === 0) return null;
     const dayList = new Intl.ListFormat(locale, { type: "conjunction" }).format(days);
+
     return t("Every {days} at {time}", { days: dayList, time });
   }
+
   return null;
 }
 
@@ -139,6 +152,7 @@ export function routineProposalDetails(
 ): RoutineProposalDetails | null {
   if (!args || typeof args !== "object") return null;
   const record = args as Record<string, unknown>;
+
   const details = {
     name: stringField(record, "name"),
     instructions: routineInstructions(stringField(record, "instructions"), record.schedule),
@@ -146,6 +160,7 @@ export function routineProposalDetails(
     timezone: stringField(record, "timezone"),
     uses: [...stringList(record.skillNames), ...stringList(record.connectorNames)],
   };
+
   return details.name || details.instructions || details.schedule ? details : null;
 }
 
@@ -164,6 +179,7 @@ function RoutineProposal({
 }) {
   const { t, locale } = useI18n();
   const details = routineProposalDetails(args, t, locale);
+
   return (
     <div
       aria-label={label}
@@ -236,6 +252,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   const { t, plural } = useI18n();
   const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
   const isRoutine = approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
+
   const fallbackLabel = isRoutine
     ? t("Routine approval")
     : isProductFeedback
@@ -247,6 +264,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           : approval.requestKind === "file-read"
             ? t("File read approval")
             : t("File change approval");
+
   const detailAriaLabel = isRoutine
     ? t("Routine details")
     : isProductFeedback
@@ -258,6 +276,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           : approval.requestKind === "file-read"
             ? t("File to read")
             : t("File change");
+
   const argsCommand =
     approval.requestKind === "command" &&
     approval.args &&
@@ -266,10 +285,12 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
     typeof approval.args.command === "string"
       ? approval.args.command
       : null;
+
   const command =
     approval.requestKind === "command"
       ? (argsCommand ?? (approval.detail?.trim() ? approval.detail : fallbackLabel))
       : null;
+
   const detail = command ?? approval.detail ?? fallbackLabel;
   const details = command ? describeCommandApproval(command, approval.args) : null;
   const firstLine = detail.split("\n", 1)[0] ?? detail;

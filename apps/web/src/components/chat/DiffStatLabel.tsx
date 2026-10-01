@@ -7,15 +7,21 @@ export function hasNonZeroStat(stat: { additions: number; deletions: number }): 
 
 function formatCompactDiffCount(value: number): string {
   if (value < 1000) return String(value);
+
   if (value < 1_000_000) {
     const k = value / 1000;
+
     return `${k < 10 ? k.toFixed(1).replace(/\.0$/, "") : Math.round(k)}k`;
   }
+
   if (value < 1_000_000_000) {
     const m = value / 1_000_000;
+
     return `${m < 10 ? m.toFixed(1).replace(/\.0$/, "") : Math.round(m)}m`;
   }
+
   const b = value / 1_000_000_000;
+
   return `${b < 10 ? b.toFixed(1).replace(/\.0$/, "") : Math.round(b)}b`;
 }
 
@@ -27,6 +33,7 @@ export const DiffStatLabel = memo(function DiffStatLabel(props: {
   layout?: "aligned" | "inline";
 }) {
   const { additions, deletions, className, showParentheses = false, layout = "aligned" } = props;
+
   return (
     <>
       {showParentheses && <span className="text-muted-foreground/70">(</span>}

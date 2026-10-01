@@ -9,9 +9,11 @@ const testState = vi.hoisted(() => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+
 vi.mock("../assets/assetUrls", () => ({
   useAssetUrlState: (_environmentId: unknown, resource: unknown) => {
     testState.resources.push(resource);
+
     return testState.assetState === "loading"
       ? { _tag: "Loading" }
       : {
@@ -21,20 +23,27 @@ vi.mock("../assets/assetUrls", () => ({
         };
   },
 }));
+
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
+
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
+
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../state/session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/session")>()),
   usePreparedConnection: () => ({ _tag: "Loading" }),
 }));
+
 vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
+
 vi.mock("../localShellAccess", () => ({
   useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
+
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
@@ -66,6 +75,7 @@ describe("ChatMarkdown workspace images", () => {
 
   it("loads every Windows workspace path form through a signed asset URL", () => {
     const imagePath = "C:/Users/shawn/project/.t3/workspace-image.svg";
+
     const html = render(
       [
         "![relative](.t3/workspace-image.svg)",

@@ -93,9 +93,11 @@ describe("ThreadErrorBanner", () => {
     );
 
     expect(markup).toContain("Send feedback");
+
     const draft = threadErrorFeedbackDraft(
       "Provider crashed on request req-123 at file:///home/leo/private.ts:1 with account passphrase winter-heron",
     );
+
     expect(draft).toContain("The bot couldn’t finish that request");
     expect(draft).not.toContain("req-123");
     expect(draft).not.toContain("/home/leo");
@@ -107,6 +109,7 @@ describe("ThreadErrorBanner", () => {
       const markup = renderToStaticMarkup(
         <ThreadErrorBanner error={error} threadKey={`env:thread-${error}`} />,
       );
+
       expect(markup).not.toContain("Send feedback");
     }
   });
@@ -137,6 +140,7 @@ describe("ThreadErrorBanner", () => {
     const markup = renderToStaticMarkup(
       <ThreadErrorBanner error={error} threadKey="env:thread-disabled-provider" />,
     );
+
     expect(markup).toContain("Codex is turned off");
     expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
     expect(markup).not.toContain("Send feedback");
