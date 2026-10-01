@@ -24,8 +24,8 @@ describe("ComposerBannerStack", () => {
       /<div data-composer-banner-stack-expanded-items="true" class="([^"]+)">/,
     );
 
-    expect(expandedItems?.[1]).toContain("grid-rows-[0fr]");
-    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-[1fr]");
+    expect(expandedItems?.[1]).toContain("grid-rows-collapsed");
+    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-expanded");
     expect(expandedItems?.[1]).toContain("z-20");
     expect(expandedItems?.[1]).not.toContain("absolute");
     expect(markup.indexOf("front warning")).toBeLessThan(markup.indexOf("stacked warning"));

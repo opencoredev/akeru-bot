@@ -100,8 +100,8 @@ describe("ChatMarkdown workspace images", () => {
       },
     ]);
     expect(html.match(/https:\/\/signed\.test\/workspace-image\.svg/g)).toHaveLength(4);
-    expect(html.match(/max-w-\[min\(100%,30rem\)\]/g)).toHaveLength(4);
-    expect(html.match(/max-h-\[30rem\]/g)).toHaveLength(4);
+    expect(html.match(/max-w-min-full-30rem/g)).toHaveLength(4);
+    expect(html.match(/max-h-120/g)).toHaveLength(4);
     expect(html).not.toContain("Image unavailable");
   });
 
@@ -159,8 +159,8 @@ describe("ChatMarkdown workspace images", () => {
 
     expect(testState.resources).toEqual([]);
     expect(html).toContain('src="https://example.com/image.png"');
-    expect(html).toContain("max-w-[min(100%,30rem)]");
-    expect(html).toContain("max-h-[30rem]");
+    expect(html).toContain("max-w-min-full-30rem");
+    expect(html).toContain("max-h-120");
     expect(html).not.toContain("Image unavailable");
   });
 });
