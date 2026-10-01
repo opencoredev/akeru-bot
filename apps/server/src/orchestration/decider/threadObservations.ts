@@ -85,12 +85,10 @@ export const decideThreadObservations = Effect.fn("decideThreadObservations")(fu
           sessionComingAlive ||
           threadHasQueuedTurnStart(thread, command.createdAt)
         ) {
-          return yield* Effect.fail(
-            new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `thread ${command.threadId} was re-engaged after settle; skipping session stop`,
-            }),
-          );
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `thread ${command.threadId} was re-engaged after settle; skipping session stop`,
+          });
         }
       }
 

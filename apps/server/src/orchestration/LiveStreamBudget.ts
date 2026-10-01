@@ -192,18 +192,20 @@ export const liveStreamBudget = Effect.fn("makeLiveStreamBudget")(function* (lim
           Effect.forkScoped,
         );
 
-        return Effect.gen(function* () {
-          // RpcServer requests the next batch only after the client ACKs this
-          // one. Removing items from a queue alone does not mean delivery ended.
-          release(inFlight);
-          inFlight = [];
-          yield* check;
-          const items = yield* Effect.raceFirst(source.pull, Deferred.await(failed));
-          inFlight = items;
-          yield* check;
+        return yield* Effect.succeed(
+          Effect.gen(function* () {
+            // RpcServer requests the next batch only after the client ACKs this
+            // one. Removing items from a queue alone does not mean delivery ended.
+            release(inFlight);
+            inFlight = [];
+            yield* check;
+            const items = yield* Effect.raceFirst(source.pull, Deferred.await(failed));
+            inFlight = items;
+            yield* check;
 
-          return Arr.map(items, (item) => item.value);
-        });
+            return Arr.map(items, (item) => item.value);
+          }),
+        );
       }),
     );
 

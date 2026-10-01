@@ -2,7 +2,7 @@ import * as Match from "effect/Match";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { type McpServer, ProviderInstanceId } from "@akeru/contracts";
+import { ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import {
   BotId,
@@ -286,8 +286,7 @@ export function createProviderCommandHarness() {
       Layer.provideMerge(
         Layer.mock(ComposioService, {
           resolveRuntimeMcpServer:
-            input?.composioResolveRuntimeMcpServer ??
-            (() => Effect.succeed<McpServer | undefined>(undefined)),
+            input?.composioResolveRuntimeMcpServer ?? (() => Effect.as(Effect.void, undefined)),
         }),
       ),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),

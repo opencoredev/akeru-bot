@@ -128,12 +128,10 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         });
 
         if (selectedBotId === null) {
-          return yield* Effect.fail(
-            new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `Group '${group.id}' has no boss bot that can respond.`,
-            }),
-          );
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${group.id}' has no boss bot that can respond.`,
+          });
         }
 
         respondingBot = yield* requireActiveGroupMember({
@@ -150,12 +148,10 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         );
 
         if (command.senderPersonId === undefined) {
-          return yield* Effect.fail(
-            new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `A person member must send turns to group '${group.id}'.`,
-            }),
-          );
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `A person member must send turns to group '${group.id}'.`,
+          });
         }
 
         if (!senderIsMember) {
@@ -179,21 +175,17 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
               },
             };
           } else {
-            return yield* Effect.fail(
-              new OrchestrationCommandInvariantError({
-                commandType: command.type,
-                detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
-              }),
-            );
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
+            });
           }
         }
       } else if (command.respondingBotId !== undefined) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot mentions can only route turns on a group-owned thread.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot mentions can only route turns on a group-owned thread.`,
+        });
       }
 
       // Finished child work this bot has not seen yet rides into this turn as

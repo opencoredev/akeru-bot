@@ -1,4 +1,4 @@
-import { ComposioOperationError, type McpServer, ProviderInstanceId } from "@akeru/contracts";
+import { ComposioOperationError, ProviderInstanceId } from "@akeru/contracts";
 import { CommandId, DEFAULT_PROVIDER_INTERACTION_MODE, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -110,7 +110,7 @@ describe("ProviderCommandReactor", () => {
                 message: "Composio could not prepare connected tools.",
               }),
             )
-          : Effect.succeed<McpServer | undefined>(undefined),
+          : Effect.as(Effect.void, undefined),
     });
 
     const now = "2026-01-01T00:00:00.000Z";
@@ -198,7 +198,7 @@ describe("ProviderCommandReactor", () => {
                 message: "Composio could not prepare connected tools.",
               }),
             )
-          : Effect.succeed<McpServer | undefined>(undefined),
+          : Effect.as(Effect.void, undefined),
       interruptTurnEffect: () =>
         Effect.fail(providerFailure("thread.turn.interrupt", "Interrupt failed.")),
       stopSessionEffect: () =>
@@ -329,7 +329,7 @@ describe("ProviderCommandReactor", () => {
                 message: "Composio could not prepare connected tools.",
               }),
             )
-          : Effect.succeed<McpServer | undefined>(undefined),
+          : Effect.as(Effect.void, undefined),
       interruptTurnRemovesSession: true,
     });
 
