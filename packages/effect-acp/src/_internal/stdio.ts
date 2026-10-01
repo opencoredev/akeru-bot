@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import * as Predicate from "effect/Predicate";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
@@ -11,7 +12,7 @@ import * as AcpError from "../errors.ts";
 
 const encoder = new TextEncoder();
 
-export const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Stdio.make({
     args: Effect.succeed([]),
     stdin: handle.stdout,
@@ -50,7 +51,7 @@ type ChildProcessTerminationHandle = Pick<
   "exitCode" | "pid"
 >;
 
-export const makeTerminationError = (
+export const terminationErrorFromHandle = (
   handle: ChildProcessTerminationHandle,
 ): Effect.Effect<AcpError.AcpError> =>
   Effect.match(handle.exitCode, {
@@ -62,3 +63,8 @@ export const makeTerminationError = (
       }),
     onSuccess: (code) => new AcpError.AcpProcessExitedError({ code, pid: handle.pid }),
   });
+
+export { makeChildStdio };
+
+export const childStdioLayer = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  Layer.succeed(Stdio.Stdio, makeChildStdio(handle));

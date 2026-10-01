@@ -4,12 +4,12 @@ import * as PlatformError from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as AcpError from "../errors.ts";
-import { makeTerminationError } from "./stdio.ts";
+import { terminationErrorFromHandle } from "./stdio.ts";
 
 describe("ACP child process termination", () => {
   it.effect("retains the process identifier with the exit code", () =>
     Effect.gen(function* () {
-      const error = yield* makeTerminationError({
+      const error = yield* terminationErrorFromHandle({
         pid: ChildProcessSpawner.ProcessId(41),
         exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(7)),
       });
@@ -32,7 +32,7 @@ describe("ACP child process termination", () => {
         cause: rootCause,
       });
 
-      const error = yield* makeTerminationError({
+      const error = yield* terminationErrorFromHandle({
         pid: ChildProcessSpawner.ProcessId(42),
         exitCode: Effect.fail(cause),
       });
