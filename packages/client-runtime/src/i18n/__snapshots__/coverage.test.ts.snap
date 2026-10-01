@@ -131,7 +131,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "BOT_SANDBOX_BROWSER_SHARING_LABELS.separate)}",
     ],
     "apps/web/src/components/settings/GeneralSettingsPanel.tsx": [
-      "actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",",
+      "recordLookup(actionLabel, action) ??",
       "TIMESTAMP_FORMAT_LABELS[settings.timestampFormat])}</SelectValue>",
       "TIMESTAMP_FORMAT_LABELS.locale)}",
       "TIMESTAMP_FORMAT_LABELS["12-hour"])}",

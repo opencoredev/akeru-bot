@@ -9,7 +9,15 @@ import { requestKindFromRequestType } from "./pendingRequests.ts";
 // Tool data is an opaque provider object; each presentation field is decoded separately.
 const RuntimeRecord = Schema.declare(Predicate.isObject);
 
-type RuntimeRecord = typeof RuntimeRecord.Type;
+// The activity payload contract is unknown. Web passes decoded JSON and mobile passes any
+// object, so the readers accept both and decode each field they use.
+type WorkLogPayload = {
+  readonly data?: unknown;
+  readonly detail?: unknown;
+  readonly itemType?: unknown;
+  readonly requestKind?: unknown;
+  readonly requestType?: unknown;
+};
 
 const decodeRuntimeRecord = Schema.decodeUnknownOption(RuntimeRecord);
 
@@ -213,7 +221,7 @@ type ExtractToolCommandResult = {
   rawCommand: string | null;
 };
 
-export function extractToolCommand(payload: RuntimeRecord | null): ExtractToolCommandResult {
+export function extractToolCommand(payload: WorkLogPayload | null): ExtractToolCommandResult {
   const data = asRecord(payload?.data);
   const item = asRecord(data?.item);
   const itemResult = asRecord(item?.result);
@@ -275,7 +283,7 @@ export function stripTrailingExitCode(value: string): StripTrailingExitCodeResul
   };
 }
 
-export function extractWorkLogItemType(payload: RuntimeRecord | null) {
+export function extractWorkLogItemType(payload: WorkLogPayload | null) {
   if (Predicate.isString(payload?.itemType) && isToolLifecycleItemType(payload.itemType)) {
     return payload.itemType;
   }
@@ -283,7 +291,7 @@ export function extractWorkLogItemType(payload: RuntimeRecord | null) {
   return undefined;
 }
 
-export function extractWorkLogRequestKind(payload: RuntimeRecord | null) {
+export function extractWorkLogRequestKind(payload: WorkLogPayload | null) {
   if (
     payload?.requestKind === "command" ||
     payload?.requestKind === "file-read" ||
@@ -369,7 +377,7 @@ function collectChangedFiles(
   }
 }
 
-export function extractChangedFiles(payload: RuntimeRecord | null): string[] {
+export function extractChangedFiles(payload: WorkLogPayload | null): string[] {
   const changedFiles: string[] = [];
   const seen = new Set<string>();
   collectChangedFiles(payload?.data, changedFiles, seen, 0);
