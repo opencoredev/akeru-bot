@@ -278,10 +278,15 @@ function SidebarInput({ className, ...props }: React.ComponentProps<typeof Input
   );
 }
 
-function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
+/** `dragRegion` lets the header drag the Electron window. */
+function SidebarHeader({
+  className,
+  dragRegion = false,
+  ...props
+}: React.ComponentProps<"div"> & { dragRegion?: boolean }) {
   return (
     <div
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2", dragRegion && "drag-region", className)}
       data-sidebar="header"
       data-slot="sidebar-header"
       {...props}
@@ -314,9 +319,12 @@ function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof S
 function SidebarContent({
   className,
   fixedHeader,
+  scrollAnchoring = true,
   ...props
 }: React.ComponentProps<"div"> & {
   fixedHeader?: React.ReactNode;
+  /** Set false when rows reorder in place, so the browser does not shift the scroll position. */
+  scrollAnchoring?: boolean;
 }) {
   return (
     <>
@@ -325,6 +333,7 @@ function SidebarContent({
         <div
           className={cn(
             "flex w-full min-w-0 flex-col gap-2 group-data-[collapsible=icon]:overflow-hidden",
+            !scrollAnchoring && "overflow-anchor-none",
             className,
           )}
           data-sidebar="content"

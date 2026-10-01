@@ -219,7 +219,8 @@ export function MessageControls(props: {
               being reacted to. Picking the selected emoji again removes the reaction. */}
           <MenuPopup
             align={props.align === "end" ? "end" : "start"}
-            className="min-w-0 p-1.5"
+            presentation="padded"
+            className="min-w-0"
             side="top"
             sideOffset={8}
           >

@@ -81,10 +81,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 
   return (
     <SidebarHeader
-      className={cn(
-        "@container/sidebar-header relative h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
-        isElectron && "drag-region",
-      )}
+      dragRegion={isElectron}
+      className="@container/sidebar-header relative h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2"
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
@@ -475,7 +473,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       {/* A labeled column, not a row of glyphs: each destination gets a
           full-width row with a comfortable hit target. The icon rail collapses
           it back to centered icons. */}
-      <SidebarMenu className="flex-col flex-nowrap gap-0.5 overflow-visible">
+      <SidebarMenu density="tight" className="flex-col flex-nowrap overflow-visible">
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Analytics01Icon} />}

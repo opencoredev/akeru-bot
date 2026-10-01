@@ -91,7 +91,9 @@ export const ModelListRow = memo(function ModelListRow(props: {
 
       <div className="flex shrink-0 items-center gap-1.5">
         {props.jumpLabel ? (
-          <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-10px">{props.jumpLabel}</Kbd>
+          <Kbd variant="jump" className="h-4 min-w-0">
+            {props.jumpLabel}
+          </Kbd>
         ) : null}
         <Tooltip>
           <TooltipTrigger

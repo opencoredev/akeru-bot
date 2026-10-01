@@ -268,8 +268,9 @@ function Scroll({ className, ...props }: ComponentProps<typeof ScrollArea>) {
   return (
     <ScrollArea
       scrollFade
+      variant="square"
       className={cn(
-        "h-auto max-h-(--spacing-min-24rem-40dvh) rounded-none [&>[data-slot=scroll-area-viewport][data-has-overflow-y]]:pe-2",
+        "h-auto max-h-(--spacing-min-24rem-40dvh) [&>[data-slot=scroll-area-viewport][data-has-overflow-y]]:pe-2",
         className,
       )}
       {...props}

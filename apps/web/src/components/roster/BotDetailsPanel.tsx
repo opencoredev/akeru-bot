@@ -352,7 +352,8 @@ export function BotDetailsPanel({
       </div>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetPopup
-          className="w-(--spacing-min-92vw-24rem) pb-safe pt-safe p-0"
+          flush
+          className="w-(--spacing-min-92vw-24rem)"
           showCloseButton={false}
           side="right"
         >

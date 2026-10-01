@@ -245,7 +245,8 @@ export function PluginDetailsContent({
                   </div>
                   <AppIcon
                     icon={ArrowUpRight01Icon}
-                    className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                    tone="muted-hover"
+                    className="size-4 shrink-0"
                   />
                 </button>
               ))}

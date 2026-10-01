@@ -65,8 +65,11 @@ function SheetPopup({
   forceBackdrop = false,
   side = "right",
   variant = "default",
+  flush = false,
   ...props
 }: SheetPrimitive.Popup.Props & {
+  /** Drops the popup padding so a full-height panel can own its own insets. */
+  flush?: boolean;
   showCloseButton?: boolean;
   keepMounted?: boolean;
   /** Render the backdrop even when Base UI treats this sheet as nested in another dialog. */
@@ -91,6 +94,7 @@ function SheetPopup({
               "col-start-2 w-[calc(100%-(--spacing(12)))] max-w-md border-s data-ending-style:translate-x-8 data-starting-style:translate-x-8",
             variant === "inset" &&
               "before:hidden sm:rounded-2xl sm:border sm:before:rounded-[calc(var(--radius-2xl)-1px)] sm:**:data-[slot=sheet-footer]:rounded-b-[calc(var(--radius-2xl)-1px)]",
+            flush && "pb-safe pt-safe p-0",
             className,
           )}
           data-slot="sheet-popup"

@@ -78,10 +78,19 @@ export function SidebarGroupContent({ className, ...props }: React.ComponentProp
   );
 }
 
-export function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
+/** `density="tight"` halves the gap between rows. */
+export function SidebarMenu({
+  className,
+  density,
+  ...props
+}: React.ComponentProps<"ul"> & { density?: "tight" }) {
   return (
     <ul
-      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+      className={cn(
+        "flex w-full min-w-0 flex-col gap-1",
+        density === "tight" && "gap-0.5",
+        className,
+      )}
       data-sidebar="menu"
       data-slot="sidebar-menu"
       {...props}

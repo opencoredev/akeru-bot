@@ -140,7 +140,7 @@ export function RoutineFormDialog({
       }}
     >
       <DialogPopup className="max-h-(--spacing-min-42rem-90dvh) max-w-lg flex-col overflow-hidden">
-        <DialogHeader className="border-b px-6 py-5">
+        <DialogHeader variant="divided" className="px-6 py-5">
           <DialogTitle>{t(title)}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4 px-6 py-5">

@@ -108,7 +108,8 @@ export function MarkdownTable({ children, ...props }: React.ComponentProps<"tabl
         chainVerticalScroll
         scrollFade
         hideScrollbars
-        className="w-full max-w-full rounded-none"
+        variant="square"
+        className="w-full max-w-full"
       >
         <table ref={tableRef} {...props}>
           {children}
@@ -189,12 +190,14 @@ export function MarkdownDetails({
     <Collapsible
       defaultOpen={open}
       onOpenChange={setIsOpen}
-      className="chat-markdown-details my-2 border-y border-border/60"
+      presentation="markdown-details"
+      className="my-2"
       data-markdown-details=""
       data-markdown-details-open={isOpen ? "true" : "false"}
     >
       <CollapsibleTrigger
-        className="flex w-full items-center gap-2 py-2 text-left text-sm font-medium text-foreground data-panel-open:[&_svg]:rotate-90"
+        presentation="markdown-summary"
+        className="flex w-full items-center text-left data-panel-open:[&_svg]:rotate-90"
         data-markdown-details-summary=""
       >
         <ChevronRightIcon

@@ -226,7 +226,7 @@ export function PairingPanel({
           <ul className="mt-3 space-y-2.5">
             {pairingGrants(t).map((grant) => (
               <li key={grant.label} className="flex items-center gap-3 text-sm">
-                <AppIcon icon={grant.icon} className="size-4 shrink-0 text-muted-foreground" />
+                <AppIcon icon={grant.icon} tone="muted" className="size-4 shrink-0" />
                 <span>{grant.label}</span>
               </li>
             ))}

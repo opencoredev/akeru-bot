@@ -31,7 +31,12 @@ function ScrollArea({
   chainVerticalScroll = false,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  variant?: "diagnostics" | "diagnostics-process" | "telemetry-process" | "provider-email";
+  variant?:
+    | "square"
+    | "diagnostics"
+    | "diagnostics-process"
+    | "telemetry-process"
+    | "provider-email";
   scrollFade?: boolean;
   scrollbarGutter?: boolean;
   hideScrollbars?: boolean;
@@ -41,7 +46,7 @@ function ScrollArea({
     <ScrollAreaPrimitive.Root
       className={cn(
         "relative size-full min-h-0 overflow-hidden rounded-[inherit]",
-        variant === "diagnostics" && "rounded-none",
+        (variant === "square" || variant === "diagnostics") && "rounded-none",
         variant === "diagnostics-process" && "rounded-none border-t border-border/60",
         variant === "telemetry-process" && "border-t border-border/60",
         variant === "provider-email" && "h-8 min-w-0 flex-1 rounded-none",

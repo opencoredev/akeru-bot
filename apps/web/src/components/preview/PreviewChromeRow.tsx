@@ -168,11 +168,7 @@ export function PreviewChromeRow({
                 <InputGroupInput
                   ref={inputRef}
                   value={inputFocused ? draft : url}
-                  className={cn(
-                    onOpenInBrowser &&
-                      !inputFocused &&
-                      "group-hover/address:pe-7 transition-padding",
-                  )}
+                  reserveRevealSpace={Boolean(onOpenInBrowser) && !inputFocused}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => {
                     setDraft(url);
@@ -203,7 +199,8 @@ export function PreviewChromeRow({
           {onOpenInBrowser && !inputFocused ? (
             <InputGroupAddon
               align="inline-end"
-              className="pointer-events-none absolute inset-y-0 right-0 opacity-0 transition-opacity group-hover/address:pointer-events-auto group-hover/address:opacity-100"
+              reveal="address"
+              className="pointer-events-none absolute inset-y-0 right-0 group-hover/address:pointer-events-auto"
             >
               <Tooltip>
                 <TooltipTrigger

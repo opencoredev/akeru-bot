@@ -55,9 +55,12 @@ function CommandDialogPopup({
   className,
   children,
   onBackdropPointerDown,
+  variant,
   ...props
 }: CommandDialogPrimitive.Popup.Props & {
   onBackdropPointerDown?: React.PointerEventHandler<HTMLDivElement>;
+  /** "palette" drops the popup padding so the list runs edge to edge. */
+  variant?: "palette";
 }) {
   return (
     <CommandDialogPortal>
@@ -71,6 +74,7 @@ function CommandDialogPopup({
             // treatment: a translucent palette makes the message underneath
             // read as part of the result list.
             "pointer-events-auto max-h-105 max-w-xl bg-popover text-foreground",
+            variant === "palette" && "p-0",
             className,
           )}
           data-slot="command-dialog-popup"
@@ -167,10 +171,15 @@ function CommandGroup({ className, ...props }: React.ComponentProps<typeof Autoc
 
 function CommandGroupLabel({
   className,
+  variant,
   ...props
-}: React.ComponentProps<typeof AutocompleteGroupLabel>) {
+}: React.ComponentProps<typeof AutocompleteGroupLabel> & { variant?: "palette" }) {
   return (
-    <AutocompleteGroupLabel className={className} data-slot="command-group-label" {...props} />
+    <AutocompleteGroupLabel
+      className={variant === "palette" ? cn("ps-2.25", className) : className}
+      data-slot="command-group-label"
+      {...props}
+    />
   );
 }
 

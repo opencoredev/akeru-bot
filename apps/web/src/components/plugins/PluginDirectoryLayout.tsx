@@ -42,7 +42,8 @@ export function PluginSearchField({
     <div className="relative">
       <AppIcon
         icon={Search01Icon}
-        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        tone="muted"
+        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2"
       />
       <input
         aria-label={t("Search plugins")}
@@ -206,7 +207,7 @@ export function PluginsPageHeader({ children }: { readonly children?: ReactNode 
     <WorkspacePageHeader electron={isElectron}>
       {children ?? (
         <div className="flex min-w-0 items-center gap-2">
-          <AppIcon icon={PuzzleIcon} className="size-4 shrink-0 text-muted-foreground" />
+          <AppIcon icon={PuzzleIcon} tone="muted" className="size-4 shrink-0" />
           <h1 className="truncate text-sm font-medium text-foreground">{t("Plugins")}</h1>
         </div>
       )}
@@ -243,7 +244,8 @@ export function PluginDirectoryLayout({
         </DialogHeader>
         <DialogPanel
           variant="directory"
-          className={cn(PLUGIN_DIRECTORY_PANEL_CLASS_NAME, returning && "motion-page-back")}
+          pageBack={returning}
+          className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}
         >
           {children}
         </DialogPanel>

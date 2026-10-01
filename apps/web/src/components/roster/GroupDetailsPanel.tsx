@@ -136,7 +136,8 @@ export function GroupDetailsPanel(props: {
       </div>
       <Sheet open={mobileOpen} onOpenChange={(open) => setMobileOpen(open)}>
         <SheetPopup
-          className="w-(--spacing-min-92vw-24rem) pb-safe pt-safe p-0"
+          flush
+          className="w-(--spacing-min-92vw-24rem)"
           showCloseButton={false}
           side="right"
         >

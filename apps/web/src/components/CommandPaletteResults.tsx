@@ -32,7 +32,7 @@ export function CommandPaletteResults(props: CommandPaletteResultsProps) {
     <CommandList>
       {props.groups.map((group) => (
         <CommandGroup items={group.items} key={group.value}>
-          <CommandGroupLabel className="ps-2.25">{group.label}</CommandGroupLabel>
+          <CommandGroupLabel variant="palette">{group.label}</CommandGroupLabel>
           <CommandCollection>
             {(item: CommandPaletteActionItem) =>
               item.disabled ? (

@@ -366,7 +366,7 @@ export function ChannelSetupDialog({
     >
       <DialogPopup className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2.5">
+          <DialogTitle withIcon>
             <meta.icon className="size-5 shrink-0" aria-hidden />
             {replacing
               ? t("Update {name} credentials", { name: meta.label })
