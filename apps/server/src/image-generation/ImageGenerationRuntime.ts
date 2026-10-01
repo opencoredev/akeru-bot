@@ -1,23 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off
-/**
- * Runs one image tool call for a chat.
- *
- * Every provider reaches this through the same entry: MCP-driven providers
- * (Claude, Grok, OpenCode) through the `generate_image` MCP tool, and the
- * Mastra controller (Codex, Kimi) through `runImageGenerationTool`, which
- * backs the `GenerateImage` catalog tool. The runtime resolves the calling
- * bot, routes the
- * request with `routeImageRequest`, saves each image as a local chat
- * attachment, posts the attachments into the chat as an assistant message,
- * and records usage against the calling bot.
- *
- * Prompts and image bytes stay inside this module and the provider request.
- * The tool result, events, logs, and usage rows only carry metadata.
- */
+
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-
+import { readImageFile } from "./ImageFile.ts";
 import {
   AkeruUsageReservationId,
   type BotId,
@@ -40,7 +26,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-
 import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
@@ -241,7 +226,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
       const loaded: ImageAdapterInputImage[] = [];
       for (const attachment of selected) {
         const path = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment });
-        const bytes = path ? yield* Effect.sync(() => readImageFile(path)) : null;
+        const bytes = path ? yield* Effect.tryPromise(() => readImageFile(path)) : null;
         if (!bytes) {
           return { ok: false as const, message: "An input image is no longer available." };
         }
@@ -465,17 +450,6 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
 
   return ImageGenerationRuntime.of({ generate, cancelThread });
 });
-
-function readImageFile(path: string): Uint8Array | null {
-  try {
-    const bytes = NodeFS.readFileSync(path);
-    return bytes.byteLength > 0 && bytes.byteLength <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
-      ? new Uint8Array(bytes)
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 let activeImageGenerationRuntime: ImageGenerationRuntimeShape | undefined;
 
