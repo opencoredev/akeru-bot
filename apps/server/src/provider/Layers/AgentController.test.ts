@@ -6729,10 +6729,11 @@ describe("AgentControllerLive", () => {
       mastra.finishSend();
       yield* Effect.promise(() => mastra.waitForSendMessageCount(2));
       mastra.finishSend();
-      expect(mastra.sendMessage.mock.calls.map(([message]) => message.content)).toEqual([
-        expect.stringContaining("First"),
-        "Third",
-      ]);
+      expect(mastra.sendMessage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ content: expect.stringContaining("First") }),
+      );
+      expect(mastra.sendMessage).toHaveBeenNthCalledWith(2, { content: "Third" });
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 

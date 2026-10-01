@@ -18,6 +18,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { ServerConfig } from "../config.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationEngineLive } from "../orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "../orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "../orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -61,6 +62,7 @@ const engineLayer = (dbPath: string) =>
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provide(ServerSettingsService.layerTest()),
   );
 
 /** One server process: the real engine, routine repository, and routine adapter. */

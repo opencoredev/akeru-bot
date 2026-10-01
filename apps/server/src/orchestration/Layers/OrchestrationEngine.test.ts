@@ -1,5 +1,6 @@
 import {
   CheckpointRef,
+  BotId,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   MessageId,
@@ -43,6 +44,7 @@ import {
 } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ServerConfig } from "../../config.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { finishMaintenance, tryBeginMaintenance } from "../../remote/updateGate.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
@@ -68,13 +70,16 @@ async function createOrchestrationSystem() {
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provide(SqlitePersistenceMemory),
     Layer.provideMerge(ServerConfigLayer),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
     Layer.provideMerge(NodeServices.layer),
   );
   const runtime = ManagedRuntime.make(orchestrationLayer);
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+  const settings = await runtime.runPromise(Effect.service(ServerSettingsService));
   const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
   return {
     engine,
+    settings,
     readModel: () => runtime.runPromise(snapshotQuery.getSnapshot()),
     run: <A, E>(effect: Effect.Effect<A, E>) => runtime.runPromise(effect),
     dispose: () => runtime.dispose(),
@@ -97,6 +102,56 @@ const hasMetricSnapshot = (
   );
 
 describe("OrchestrationEngine", () => {
+  it("uses the current sandbox default when deleting inherited bots", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine, settings } = system;
+    const createdAt = now();
+    const createBot = (id: string, sandbox: "local" | null) =>
+      engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make(`cmd-create-${id}`),
+        botId: BotId.make(id),
+        name: id,
+        title: "Agent",
+        avatar: { kind: "dither", seed: id },
+        engine: null,
+        sandbox,
+        runtimeMode: "approval-required",
+        usageCap: null,
+        groupId: null,
+        createdAt,
+      });
+    await system.run(createBot("bot-inherited-local", null));
+    await system.run(createBot("bot-inherited-railway", null));
+    await system.run(createBot("bot-explicit-local", "local"));
+
+    await system.run(
+      engine.dispatch({
+        type: "bot.delete",
+        commandId: CommandId.make("cmd-delete-inherited-local"),
+        botId: BotId.make("bot-inherited-local"),
+      }),
+    );
+    await system.run(settings.updateSettings({ sandbox: { defaultProvider: "railway" } }));
+    await expect(
+      system.run(
+        engine.dispatch({
+          type: "bot.delete",
+          commandId: CommandId.make("cmd-delete-inherited-railway"),
+          botId: BotId.make("bot-inherited-railway"),
+        }),
+      ),
+    ).rejects.toThrow("This bot uses Railway");
+    await system.run(
+      engine.dispatch({
+        type: "bot.delete",
+        commandId: CommandId.make("cmd-delete-explicit-local"),
+        botId: BotId.make("bot-explicit-local"),
+      }),
+    );
+    await system.dispose();
+  });
+
   it("bootstraps command handling from persisted projections without reading the full snapshot", async () => {
     let nextSequence = 8;
     const eventStore: OrchestrationEventStoreShape = {
@@ -241,6 +296,7 @@ describe("OrchestrationEngine", () => {
       Layer.provide(OrchestrationCommandReceiptRepositoryLive),
       Layer.provide(SqlitePersistenceMemory),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provide(ServerSettingsService.layerTest()),
     );
 
     const runtime = ManagedRuntime.make(layer);
@@ -427,6 +483,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
         Layer.provide(NodeServices.layer),
+        Layer.provide(ServerSettingsService.layerTest()),
       );
 
       yield* Effect.gen(function* () {
@@ -1050,6 +1107,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(SqlitePersistenceMemory),
         Layer.provideMerge(ServerConfigLayer),
         Layer.provideMerge(NodeServices.layer),
+        Layer.provide(ServerSettingsService.layerTest()),
       ),
     );
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
@@ -1158,6 +1216,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
         Layer.provide(NodeServices.layer),
+        Layer.provide(ServerSettingsService.layerTest()),
       ),
     );
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
@@ -1314,6 +1373,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
         Layer.provide(NodeServices.layer),
+        Layer.provide(ServerSettingsService.layerTest()),
       ),
     );
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));

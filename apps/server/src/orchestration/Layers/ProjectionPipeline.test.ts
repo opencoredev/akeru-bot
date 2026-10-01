@@ -28,6 +28,7 @@ import {
 } from "../../persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import {
   ORCHESTRATION_PROJECTOR_NAMES,
@@ -3187,6 +3188,7 @@ const engineLayer = it.layer(
       }),
     ),
     Layer.provideMerge(NodeServices.layer),
+    Layer.provide(ServerSettingsService.layerTest()),
   ),
 );
 

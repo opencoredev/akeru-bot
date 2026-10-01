@@ -26,6 +26,7 @@ import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
@@ -45,6 +46,7 @@ const TestLayer = OrchestrationEngineLive.pipe(
     }),
   ),
   Layer.provideMerge(NodeServices.layer),
+  Layer.provide(ServerSettingsService.layerTest()),
 );
 
 it.layer(TestLayer)("bot persistence", (it) => {

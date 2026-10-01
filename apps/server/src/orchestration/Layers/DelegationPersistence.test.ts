@@ -26,6 +26,7 @@ import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import {
   ORCHESTRATION_PROJECTOR_NAMES,
@@ -81,6 +82,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provide(ServerSettingsService.layerTest()),
   );
 
 it.effect("rebuilds the full delegation record after a restart", () =>

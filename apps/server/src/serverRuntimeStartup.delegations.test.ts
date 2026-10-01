@@ -16,6 +16,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { ServerConfig } from "./config.ts";
+import { ServerSettingsService } from "./serverSettings.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -50,6 +51,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provide(ServerSettingsService.layerTest()),
   );
 
 const baseDelegation = (id: string, parentBotId: BotId = PARENT_BOT_ID): AkeruDelegationRecord => ({

@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import { describe, expect } from "vite-plus/test";
 
 import { ServerConfig } from "../config.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationEngineLive } from "../orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "../orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "../orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -53,6 +54,7 @@ function makeLayer(dbPath: string) {
     Layer.provide(makeSqlitePersistenceLive(dbPath)),
     Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "akeru-inbound-restart-" })),
     Layer.provideMerge(NodeServices.layer),
+    Layer.provide(ServerSettingsService.layerTest()),
   );
 }
 
