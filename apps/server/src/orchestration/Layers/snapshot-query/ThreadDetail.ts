@@ -32,11 +32,11 @@ import {
   mapSessionRow,
   decodeThread,
 } from "../ProjectionSnapshotRows.ts";
-import type { makeThreadHistoryRows } from "./ThreadHistoryRows.ts";
-import type { makeThreadRows } from "./ThreadRows.ts";
-import type { makeLookups } from "./Lookups.ts";
+import type { createThreadHistoryRows } from "./ThreadHistoryRows.ts";
+import type { createThreadRows } from "./ThreadRows.ts";
+import type { createLookups } from "./Lookups.ts";
 
-export function makeThreadDetail({
+export function createThreadDetail({
   listThreadActivityIdsByThread,
   listThreadActivityIdsByThreadWindow,
   listPinnedThreadActivityIdsByThread,
@@ -58,9 +58,9 @@ export function makeThreadDetail({
   getThreadEventWatermarkRow,
 }: Pick<
   ProjectionSnapshotDependencies &
-    ReturnType<typeof makeThreadHistoryRows> &
-    ReturnType<typeof makeThreadRows> &
-    ReturnType<typeof makeLookups>,
+    ReturnType<typeof createThreadHistoryRows> &
+    ReturnType<typeof createThreadRows> &
+    ReturnType<typeof createLookups>,
   | "listThreadActivityIdsByThread"
   | "listThreadActivityIdsByThreadWindow"
   | "listPinnedThreadActivityIdsByThread"

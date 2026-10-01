@@ -1,7 +1,7 @@
 import { ThreadId } from "@akeru/contracts";
-import * as Result from "effect/Result";
+
 import * as Schema from "effect/Schema";
-import * as Struct from "effect/Struct";
+
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import {
   type ProjectionSnapshotDependencies,
@@ -17,7 +17,7 @@ import {
   ProjectionThreadMessageDbRowSchema,
 } from "../ProjectionSnapshotRows.ts";
 
-export function makeThreadHistoryRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
+export function createThreadHistoryRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
   const listThreadActivityRowsByThread = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadActivityDbRowSchema,

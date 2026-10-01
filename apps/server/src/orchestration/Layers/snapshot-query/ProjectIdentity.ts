@@ -5,7 +5,7 @@ import {
   ProjectionProjectDbRowSchema,
 } from "../ProjectionSnapshotRows.ts";
 
-export function makeProjectIdentity({
+export function createProjectIdentity({
   repositoryIdentityResolver,
 }: Pick<ProjectionSnapshotDependencies, "repositoryIdentityResolver">) {
   const repositoryIdentityResolutionConcurrency = 4;

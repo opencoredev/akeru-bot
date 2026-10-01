@@ -29,10 +29,10 @@ import {
   decodeReadModel,
   mapProposedPlanRow,
 } from "../ProjectionSnapshotRows.ts";
-import type { makeEnvironmentRows } from "./EnvironmentRows.ts";
-import type { makeProjectIdentity } from "./ProjectIdentity.ts";
+import type { createEnvironmentRows } from "./EnvironmentRows.ts";
+import type { createProjectIdentity } from "./ProjectIdentity.ts";
 
-export function makeReadModels({
+export function createReadModels({
   sql,
   listProjectRows,
   listBotRows,
@@ -51,8 +51,8 @@ export function makeReadModels({
   resolveRepositoryIdentitiesForProjects,
 }: Pick<
   ProjectionSnapshotDependencies &
-    ReturnType<typeof makeEnvironmentRows> &
-    ReturnType<typeof makeProjectIdentity>,
+    ReturnType<typeof createEnvironmentRows> &
+    ReturnType<typeof createProjectIdentity>,
   | "sql"
   | "listProjectRows"
   | "listBotRows"

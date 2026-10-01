@@ -1,7 +1,7 @@
 import { BotId, GroupId, IsoDateTime, MessageId, TurnId, ThreadId } from "@akeru/contracts";
-import * as Result from "effect/Result";
+
 import * as Schema from "effect/Schema";
-import * as Struct from "effect/Struct";
+
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import { ProjectionPendingTurnStart } from "../../../persistence/Services/ProjectionTurns.ts";
 import { SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD } from "../../ShellDelegations.ts";
@@ -22,7 +22,7 @@ import {
   ProjectionStateDbRowSchema,
 } from "../ProjectionSnapshotRows.ts";
 
-export function makeEnvironmentRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
+export function createEnvironmentRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
   const listProjectRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionProjectDbRowSchema,

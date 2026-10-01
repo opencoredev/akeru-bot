@@ -14,15 +14,15 @@ import {
   ProjectionSnapshotQuery,
   type ProjectionSnapshotQueryShape,
 } from "../Services/ProjectionSnapshotQuery.ts";
-import { makeEnvironmentRows } from "./snapshot-query/EnvironmentRows.ts";
-import { makeThreadRows } from "./snapshot-query/ThreadRows.ts";
-import { makeThreadHistoryRows } from "./snapshot-query/ThreadHistoryRows.ts";
-import { makeProjectIdentity } from "./snapshot-query/ProjectIdentity.ts";
-import { makeReadModels } from "./snapshot-query/ReadModels.ts";
-import { makeShellSnapshots } from "./snapshot-query/ShellSnapshots.ts";
-import { makeLookups } from "./snapshot-query/Lookups.ts";
-import { makeThreadDetail } from "./snapshot-query/ThreadDetail.ts";
-import { makeCommandContext } from "./snapshot-query/CommandContext.ts";
+import { createEnvironmentRows } from "./snapshot-query/EnvironmentRows.ts";
+import { createThreadRows } from "./snapshot-query/ThreadRows.ts";
+import { createThreadHistoryRows } from "./snapshot-query/ThreadHistoryRows.ts";
+import { createProjectIdentity } from "./snapshot-query/ProjectIdentity.ts";
+import { createReadModels } from "./snapshot-query/ReadModels.ts";
+import { createShellSnapshots } from "./snapshot-query/ShellSnapshots.ts";
+import { createLookups } from "./snapshot-query/Lookups.ts";
+import { createThreadDetail } from "./snapshot-query/ThreadDetail.ts";
+import { createCommandContext } from "./snapshot-query/CommandContext.ts";
 
 const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const projectionMcpServerRepository = yield* ProjectionMcpServerRepository;
@@ -58,7 +58,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listActiveLatestTurnRows,
     listArchivedLatestTurnRows,
     listProjectionStateRows,
-  } = makeEnvironmentRows({ sql });
+  } = createEnvironmentRows({ sql });
   const {
     readProjectionCounts,
     readEventReplayStats,
@@ -78,7 +78,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listCheckpointRowsByThread,
     getFullThreadDiffContextRow,
     getLatestUserCommandMessage,
-  } = makeThreadRows({ sql });
+  } = createThreadRows({ sql });
   const {
     listThreadActivityRowsByThread,
     listThreadActivityIdsByThread,
@@ -87,15 +87,15 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getThreadEventWatermarkRow,
     listTurnWindowRows,
     listThreadMessageRowsByThreadWindow,
-    pinnedThreadActivityIdsCte,
     listPinnedThreadActivityRowsByThread,
     listPinnedThreadActivityIdsByThread,
     listThreadActivityRowsByThreadWindow,
     listThreadActivityIdsByThreadWindow,
-  } = makeThreadHistoryRows({ sql });
-  const { repositoryIdentityResolutionConcurrency, resolveRepositoryIdentitiesForProjects } =
-    makeProjectIdentity({ repositoryIdentityResolver });
-  const { getSnapshot, getCommandReadModel } = makeReadModels({
+  } = createThreadHistoryRows({ sql });
+  const { resolveRepositoryIdentitiesForProjects } = createProjectIdentity({
+    repositoryIdentityResolver,
+  });
+  const { getSnapshot, getCommandReadModel } = createReadModels({
     sql,
     listProjectRows,
     listBotRows,
@@ -113,7 +113,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listProjectionStateRows,
     resolveRepositoryIdentitiesForProjects,
   });
-  const { getShellSnapshot, getArchivedShellSnapshot } = makeShellSnapshots({
+  const { getShellSnapshot, getArchivedShellSnapshot } = createShellSnapshots({
     sql,
     listProjectRows,
     listBotRows,
@@ -152,7 +152,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getTurnStartMessage,
     listPendingTurnStarts,
     hasTurnStartFailure,
-  } = makeLookups({
+  } = createLookups({
     listProjectionStateRows,
     readProjectionCounts,
     readEventReplayStats,
@@ -179,14 +179,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listPendingTurnStartRows,
     getTurnStartFailureRow,
   });
-  const {
-    listProjectedThreadActivities,
-    getThreadDetailByIdBounded,
-    getThreadDetailById,
-    THREAD_DETAIL_MAX_RAW_TURNS_PER_PAGE,
-    ANCHOR_UNBOUNDED,
-    getThreadDetailSnapshot,
-  } = makeThreadDetail({
+  const { getThreadDetailById, getThreadDetailSnapshot } = createThreadDetail({
     listThreadActivityIdsByThread,
     listThreadActivityIdsByThreadWindow,
     listPinnedThreadActivityIdsByThread,
@@ -207,7 +200,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listTurnWindowRows,
     getThreadEventWatermarkRow,
   });
-  const { getThreadCommandContext, getCommandMessage } = makeCommandContext({
+  const { getThreadCommandContext, getCommandMessage } = createCommandContext({
     sql,
     getLatestUserCommandMessage,
     listPinnedThreadActivityRowsByThread,

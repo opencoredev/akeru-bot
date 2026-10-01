@@ -27,10 +27,10 @@ import {
   mapBotRow,
   mapGroupRow,
 } from "../ProjectionSnapshotRows.ts";
-import type { makeEnvironmentRows } from "./EnvironmentRows.ts";
-import type { makeThreadRows } from "./ThreadRows.ts";
+import type { createEnvironmentRows } from "./EnvironmentRows.ts";
+import type { createThreadRows } from "./ThreadRows.ts";
 
-export function makeLookups({
+export function createLookups({
   listProjectionStateRows,
   readProjectionCounts,
   readEventReplayStats,
@@ -58,8 +58,8 @@ export function makeLookups({
   getTurnStartFailureRow,
 }: Pick<
   ProjectionSnapshotDependencies &
-    ReturnType<typeof makeEnvironmentRows> &
-    ReturnType<typeof makeThreadRows>,
+    ReturnType<typeof createEnvironmentRows> &
+    ReturnType<typeof createThreadRows>,
   | "listProjectionStateRows"
   | "readProjectionCounts"
   | "readEventReplayStats"

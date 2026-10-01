@@ -7,18 +7,18 @@ import {
   toPersistenceSqlOrDecodeError,
   mapThreadActivityRow,
 } from "../ProjectionSnapshotRows.ts";
-import type { makeThreadRows } from "./ThreadRows.ts";
-import type { makeThreadHistoryRows } from "./ThreadHistoryRows.ts";
+import type { createThreadRows } from "./ThreadRows.ts";
+import type { createThreadHistoryRows } from "./ThreadHistoryRows.ts";
 
-export function makeCommandContext({
+export function createCommandContext({
   sql,
   getLatestUserCommandMessage,
   listPinnedThreadActivityRowsByThread,
   commandMessageRepository,
 }: Pick<
   ProjectionSnapshotDependencies &
-    ReturnType<typeof makeThreadRows> &
-    ReturnType<typeof makeThreadHistoryRows>,
+    ReturnType<typeof createThreadRows> &
+    ReturnType<typeof createThreadHistoryRows>,
   | "sql"
   | "getLatestUserCommandMessage"
   | "listPinnedThreadActivityRowsByThread"

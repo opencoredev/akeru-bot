@@ -1,8 +1,8 @@
 import { MessageId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
-import * as Result from "effect/Result";
+
 import * as Schema from "effect/Schema";
-import * as Struct from "effect/Struct";
+
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import {
   type ProjectionSnapshotDependencies,
@@ -31,7 +31,7 @@ import {
   ProjectionFullThreadDiffContextRowSchema,
 } from "../ProjectionSnapshotRows.ts";
 
-export function makeThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
+export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
   const readProjectionCounts = SqlSchema.findOne({
     Request: Schema.Void,
     Result: ProjectionCountsRowSchema,
