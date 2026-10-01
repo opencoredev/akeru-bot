@@ -131,9 +131,10 @@ describe("BotThreadLanding message formatting", () => {
 
   it("renders routine receipts as readable actions with an explicit failed tone", () => {
     const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
-    const start = source.indexOf("function RoutineReceiptRow");
-    const end = source.indexOf("const NO_ENVIRONMENT", start);
-    const receiptRow = source.slice(start, end);
+    const receiptRow = NodeFS.readFileSync(
+      new URL("./RoutineReceiptRow.tsx", import.meta.url),
+      "utf8",
+    );
 
     expect(receiptRow).toContain('const Row = opensRoutines ? "button" : "div"');
     expect(receiptRow).toContain("onClick={opensRoutines ? onOpenRoutines : undefined}");
