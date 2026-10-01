@@ -31,16 +31,19 @@ class TestNode {
   appendChild(child: TestNode) {
     child.parentNode = this;
     this.childNodes.push(child);
+
     return child;
   }
   insertBefore(child: TestNode, before: TestNode) {
     child.parentNode = this;
     this.childNodes.splice(this.childNodes.indexOf(before), 0, child);
+
     return child;
   }
   removeChild(child: TestNode) {
     this.childNodes.splice(this.childNodes.indexOf(child), 1);
     child.parentNode = null;
+
     return child;
   }
   createElement(name: string) {
@@ -52,6 +55,7 @@ class TestNode {
   createTextNode(text: string) {
     const node = new TestNode("#text", this, 3);
     node.textContent = text;
+
     return node;
   }
   addEventListener() {}
@@ -81,17 +85,20 @@ export function createChannelSetupActions(mocks: {
       button?.onClick?.();
     });
   }
+
   async function fill(label: string, value: string) {
     const input = mocks.inputs.get(label);
     expect(input).toBeDefined();
     await act(() => input?.onChange({ currentTarget: { value } }));
   }
+
   async function completeSetup() {
     await click("Continue");
     await fill("Telegram Bot token", "test-token");
     await click("Continue");
     await fill("Connection name", "Test line");
   }
+
   return { click, fill, completeSetup };
 }
 

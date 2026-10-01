@@ -65,25 +65,31 @@ export function BotSettingsForm({
   const environmentId = usePrimaryEnvironmentId();
   const mcpServers = useAtomValue(environmentMcpServersAtom(environmentId ?? NO_ENVIRONMENT));
   const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
+
   const imageSettings = useEnvironmentSettings(
     environmentId ?? NO_ENVIRONMENT,
     (settings) => settings.imageGeneration,
   );
+
   const imageProviders = useEnvironmentQuery(
     environmentId ? serverEnvironment.imageProviders({ environmentId, input: {} }) : null,
   );
+
   const imageProviderLabel = (provider: ImageProviderId) =>
     botImageProviderOptionLabel(
       provider,
       imageSettings,
       imageProviders.data?.providers.find((status) => status.provider === provider),
     );
+
   const threadRef = useBotThreadRef(bot.id);
+
   const accessQuery = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const draft = useBotProfileDraft(bot, onSave);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -93,12 +99,16 @@ export function BotSettingsForm({
 
   const shouldBlockNavigation = useCallback(async () => {
     if (deletedRef.current || !draft.dirty) return false;
+
     const confirmation = requestConfirmDialog(t("Discard unsaved bot settings?"), {
       variant: "destructive",
     });
+
     if (!confirmation) return true;
+
     return !(await confirmation);
   }, [draft.dirty, t]);
+
   useBlocker({
     shouldBlockFn: shouldBlockNavigation,
     enableBeforeUnload: () => draft.dirty,
@@ -108,30 +118,37 @@ export function BotSettingsForm({
   const assignedChannels = (bot.channelBindings ?? []).filter(
     (binding) => binding.connectionId || binding.projectId || binding.status !== "disconnected",
   );
+
   const connectedChannelCount = assignedChannels.filter(
     (binding) => binding.status === "connected",
   ).length;
 
   const onDeleteBot = useCallback(() => {
     if (!environmentId) return;
+
     const confirmation = requestConfirmDialog(
       t("Delete {name}? Its chats stay in your history. This cannot be undone.", {
         name: bot.name,
       }),
       { variant: "destructive" },
     );
+
     if (!confirmation) return;
     setDeleting(true);
     void confirmation.then(async (confirmed) => {
       if (!confirmed) {
         setDeleting(false);
+
         return;
       }
+
       const result = await deleteBot({
         environmentId,
         input: { botId: BotId.make(bot.id) },
       });
+
       setDeleting(false);
+
       if (result._tag === "Failure") {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
@@ -139,8 +156,10 @@ export function BotSettingsForm({
           title: t("Could not delete {name}", { name: bot.name }),
           description: error instanceof Error ? error.message : t("The command failed."),
         });
+
         return;
       }
+
       deletedRef.current = true;
       onDeleted();
     });
@@ -242,6 +261,7 @@ export function BotSettingsForm({
                 value={draft.sandbox}
                 onValueChange={(value) => {
                   if (value === null) return;
+
                   if (
                     value !== "default" &&
                     !BOT_SANDBOX_OPTIONS.some((option) => option.value === value)

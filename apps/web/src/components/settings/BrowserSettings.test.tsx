@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const browser = vi.hoisted(() => ({ enabled: false, browserbaseApiKeyRedacted: false }));
+
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: () => ({ browserProvider: browser }),
   useUpdatePrimarySettings: () => vi.fn(),

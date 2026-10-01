@@ -22,20 +22,25 @@ export function useBotComposerKeyboard(input: {
 
   useEffect(() => {
     if (readOnly) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcutCommand = resolveShortcutCommand(event, keybindings, {
         context: {
           modelPickerOpen: false,
         },
       });
+
       if (shortcutCommand === "composer.stash") {
         event.preventDefault();
         event.stopPropagation();
+
         if (!event.repeat && !isCommandPaletteOpen()) void stashCurrentPrompt();
+
         return;
       }
 
       const target = event.target;
+
       const editableTarget =
         target instanceof Element &&
         target.closest(
@@ -62,6 +67,7 @@ export function useBotComposerKeyboard(input: {
     };
 
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, promptInputRef, readOnly, stashCurrentPrompt]);
 }

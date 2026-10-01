@@ -26,12 +26,15 @@ export function RosterArchivedSection({ bots }: { bots: readonly Bot[] }) {
   const handleRestoreBot = async (bot: Bot) => {
     if (environmentId === null) {
       toastManager.add({ type: "error", title: t("Connect an environment first") });
+
       return;
     }
+
     const result = await restoreBotCommand({
       environmentId,
       input: { botId: BotId.make(bot.id) },
     });
+
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
@@ -42,6 +45,7 @@ export function RosterArchivedSection({ bots }: { bots: readonly Bot[] }) {
   };
 
   if (archivedBots.length === 0) return null;
+
   return (
     <SidebarGroup
       data-testid="roster-archived"

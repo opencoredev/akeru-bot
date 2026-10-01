@@ -35,6 +35,7 @@ describe("subscription providers", () => {
         onCancel={() => undefined}
       />,
     );
+
     expect(markup).toContain('type="password"');
     expect(markup).toContain('autoComplete="off"');
     expect(markup).toContain("Base URL (optional)");
@@ -66,6 +67,7 @@ describe("subscription providers", () => {
         onTest={() => undefined}
       />,
     );
+
     expect(markup).toContain("Check key");
     expect(markup).toContain("Connected account");
     expect(markup).toContain("dev@example.com");
@@ -91,6 +93,7 @@ describe("subscription providers", () => {
         onTest={() => undefined}
       />,
     );
+
     expect(markup).toContain("disabled");
     expect(markup).toContain("Connect");
     expect(markup).toContain("Add key");
@@ -112,6 +115,7 @@ describe("subscription providers", () => {
         onCancel={() => undefined}
       />,
     );
+
     expect(markup).not.toContain("Base URL");
     expect(markup).toContain("Grok uses its default endpoint.");
     expect(markup).toContain('type="password"');
@@ -130,6 +134,7 @@ describe("subscription providers", () => {
         onCancel={() => undefined}
       />,
     );
+
     expect(markup).toContain("Saving…");
     expect(markup).toMatch(/type="submit"[^>]*disabled/);
     expect(markup).toMatch(/type="button"[^>]*disabled/);
@@ -148,6 +153,7 @@ describe("subscription providers", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     const markup = renderToStaticMarkup(
       <ProviderAccountRows
         definition={SUBSCRIPTION_PROVIDERS[0]!}
@@ -177,6 +183,7 @@ describe("subscription providers", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     const markup = renderToStaticMarkup(
       <ProviderAccountRows
         definition={SUBSCRIPTION_PROVIDERS[0]!}

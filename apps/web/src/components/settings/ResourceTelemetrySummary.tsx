@@ -34,6 +34,7 @@ export function SourceStatusBadge({
     | undefined;
 }) {
   const tone = presentation?.tone ?? sourceStatusTone(status);
+
   return (
     <Badge size="telemetry-health" variant={SOURCE_STATUS_VARIANTS[tone]}>
       <span
@@ -52,13 +53,17 @@ export function SourceStatusBadge({
 
 export function LastSampleLabel({ sampledAt }: { sampledAt: DateTime.Utc | null }) {
   useRelativeTimeTick();
+
   if (!sampledAt) {
     return <span className="text-[11px] text-muted-foreground/55">Waiting for sample</span>;
   }
+
   const relative = formatRelativeTime(DateTime.formatIso(sampledAt));
+
   if (!relative) {
     return <span className="text-[11px] text-muted-foreground/55">Waiting for sample</span>;
   }
+
   return (
     <span className="text-[11px] text-muted-foreground/60">
       Updated <span className="font-mono tabular-nums">{relative.value}</span>
@@ -157,6 +162,7 @@ export function HealthSource({
   const expectedInBrowser =
     health.status === "unavailable" &&
     Option.exists(health.lastError, (error) => error.includes("'web' mode"));
+
   return (
     <div className="flex items-start justify-between gap-4 border-t border-border/50 py-3 first:border-t-0">
       <div className="min-w-0">

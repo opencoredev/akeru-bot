@@ -57,5 +57,6 @@ export function providersWithUsage(
       .filter((entry) => entry.totalTokens > 0 || entry.costUsd > 0)
       .map((entry) => entry.provider),
   );
+
   return PROVIDER_ORDER.filter((provider) => active.has(provider));
 }

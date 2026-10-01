@@ -22,6 +22,7 @@ import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { SubscriptionProviderDefinition } from "./subscriptionProviders";
+
 type Translate = ReturnType<typeof useI18n>["t"];
 
 export interface ActiveLogin {
@@ -33,6 +34,7 @@ export interface ActiveLogin {
 function commandError(result: AtomCommandResult<unknown, unknown>, t: Translate): string {
   if (result._tag !== "Failure") return t("The request failed.");
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : t("The request failed.");
 }
 
@@ -43,6 +45,7 @@ export function useSubscriptionStatuses(environmentId: EnvironmentId | null) {
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const statusByProvider = useMemo(
     () =>
       new Map<SubscriptionProviderId, SubscriptionProviderStatus>(
@@ -50,6 +53,7 @@ export function useSubscriptionStatuses(environmentId: EnvironmentId | null) {
       ),
     [statusQuery.data],
   );
+
   return { statusQuery, statusByProvider };
 }
 
@@ -60,21 +64,27 @@ export function useSubscriptionAccounts(
 ) {
   const { t } = useI18n();
   const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
+
   const startAuth = useAtomCommand(serverEnvironment.startSubscriptionAuth, {
     reportFailure: false,
   });
+
   const pollAuth = useAtomCommand(serverEnvironment.pollSubscriptionAuth, {
     reportFailure: false,
   });
+
   const completeAuth = useAtomCommand(serverEnvironment.completeSubscriptionAuth, {
     reportFailure: false,
   });
+
   const cancelAuth = useAtomCommand(serverEnvironment.cancelSubscriptionAuth, {
     reportFailure: false,
   });
+
   const logoutAuth = useAtomCommand(serverEnvironment.logoutSubscriptionAuth, {
     reportFailure: false,
   });
+
   const testAuth = useAtomCommand(serverEnvironment.testSubscriptionAuth, {
     reportFailure: false,
   });
@@ -94,12 +104,15 @@ export function useSubscriptionAccounts(
         setBusyProvider(null);
         setPastedCode("");
         statusQuery.refresh();
+
         return true;
       }
+
       if (progress.status === "failed") {
         setActiveLogin((current) => (current ? { ...current, error: progress.error } : current));
         setBusyProvider(null);
       }
+
       return false;
     },
     [statusQuery],
@@ -110,28 +123,36 @@ export function useSubscriptionAccounts(
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     const poll = async () => {
       const result = await pollAuth({
         environmentId,
         input: { loginId: activeLogin.flow.loginId },
       });
+
       if (cancelled || isAtomCommandInterrupted(result)) return;
+
       if (result._tag === "Failure") {
         setActiveLogin((current) =>
           current ? { ...current, error: commandError(result, t) } : current,
         );
         setBusyProvider(null);
+
         return;
       }
+
       if (settleLogin(result.value)) return;
+
       if (result.value.status === "pending") {
         timer = setTimeout(poll, Math.max(1000, result.value.nextPollMs));
       }
     };
 
     timer = setTimeout(poll, 1000);
+
     return () => {
       cancelled = true;
+
       if (timer) clearTimeout(timer);
     };
   }, [activeLogin, environmentId, pollAuth, settleLogin]);
@@ -163,8 +184,10 @@ export function useSubscriptionAccounts(
     if (environmentId === null || !keyProvider || completing) return;
     const validationError = apiKeyValidationError(pastedCode, baseUrl);
     setError(validationError);
+
     if (validationError) return;
     setCompleting(true);
+
     const started = await startAuth({
       environmentId,
       input: {
@@ -172,16 +195,22 @@ export function useSubscriptionAccounts(
         ...(instanceId ? { instanceId } : {}),
       },
     });
+
     if (started._tag !== "Success") {
       setCompleting(false);
+
       if (started._tag === "Failure") setError(commandError(started, t));
+
       return;
     }
+
     const result = await completeAuth({
       environmentId,
       input: { loginId: started.value.loginId, code: pastedCode.trim() },
     });
+
     setCompleting(false);
+
     if (result._tag === "Success" && result.value.status === "connected") {
       setKeyProvider(null);
       setPastedCode("");
@@ -201,23 +230,31 @@ export function useSubscriptionAccounts(
 
   const connect = async (definition: SubscriptionProviderDefinition) => {
     if (environmentId === null) return;
+
     if (definition.id === "opencode-go") {
       openApiKey(definition);
+
       return;
     }
+
     setError(null);
     setPastedCode("");
     setBusyProvider(definition.id);
+
     const result = await startAuth({
       environmentId,
       input: { provider: definition.id, ...(instanceId ? { instanceId } : {}) },
     });
+
     if (isAtomCommandInterrupted(result)) return;
+
     if (result._tag === "Failure") {
       setError(commandError(result, t));
       setBusyProvider(null);
+
       return;
     }
+
     setActiveLogin({ flow: result.value, providerLabel: definition.label, error: null });
     window.open(result.value.url, "_blank", "noopener,noreferrer");
   };
@@ -225,18 +262,24 @@ export function useSubscriptionAccounts(
   const complete = async () => {
     if (environmentId === null || !activeLogin) return;
     setCompleting(true);
+
     const result = await completeAuth({
       environmentId,
       input: { loginId: activeLogin.flow.loginId, code: pastedCode },
     });
+
     setCompleting(false);
+
     if (isAtomCommandInterrupted(result)) return;
+
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
         current ? { ...current, error: commandError(result, t) } : current,
       );
+
       return;
     }
+
     settleLogin(result.value);
   };
 
@@ -245,8 +288,10 @@ export function useSubscriptionAccounts(
     setActiveLogin(null);
     setBusyProvider(null);
     setPastedCode("");
+
     if (environmentId === null || !login) return;
     const result = await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
+
     if (result._tag === "Failure") setError(commandError(result, t));
   };
 
@@ -254,11 +299,14 @@ export function useSubscriptionAccounts(
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
+
     const result = await logoutAuth({
       environmentId,
       input: { provider, ...(instanceId ? { instanceId } : {}) },
     });
+
     setBusyProvider(null);
+
     if (result._tag === "Success") statusQuery.refresh();
     else if (result._tag === "Failure") setError(commandError(result, t));
   };
@@ -267,16 +315,21 @@ export function useSubscriptionAccounts(
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
+
     const result = await testAuth({
       environmentId,
       input: { provider, ...(instanceId ? { instanceId } : {}) },
     });
+
     setBusyProvider(null);
+
     if (result._tag === "Success") {
       statusQuery.refresh();
+
       const status = (instanceId ? result.value.accounts : result.value.providers).find(
         (entry) => entry.provider === provider && (!instanceId || entry.instanceId === instanceId),
       );
+
       if (status?.oauthCheck?.status === "failed" || status?.healthTest?.status === "failed") {
         setError(
           status.lastFailedRequest?.message ??

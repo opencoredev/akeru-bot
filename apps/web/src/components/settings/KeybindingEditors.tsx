@@ -111,13 +111,17 @@ export function ShortcutRecorder({
   const captureKeybinding = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab") return;
     event.preventDefault();
+
     if (event.key === "Escape") {
       restoreFocusRef.current = true;
       onChange(resetKey);
       onRecordingChange(false);
+
       return;
     }
+
     const next = keybindingFromKeyboardEvent(event.nativeEvent, navigator.platform);
+
     if (!next) return;
     restoreFocusRef.current = true;
     onChange(next);
@@ -263,12 +267,15 @@ export function NewKeybindingCard({
   const [draft, setDraft] = useReducer(keybindingRowDraftReducer, EMPTY_KEYBINDING_DRAFT);
   const { keyDraft, whenDraft, isRecording, isWhenDraftValid } = draft;
   const whenDraftExpression = whenAstToExpression(whenDraft);
+
   const conflictLabels = keybindingConflictLabels(allRows, {
     rowId: "new",
     key: keyDraft,
     when: whenDraftExpression,
   });
+
   const commandTitle = commandDraft ? commandLabel(commandDraft) : t("new shortcut");
+
   const optionGroups = KEYBINDING_GROUPS.map((group) => ({
     ...group,
     commands: commandOptions.filter((command) => keybindingGroupForCommand(command) === group.id),
@@ -294,6 +301,7 @@ export function NewKeybindingCard({
           value={commandDraft}
           onValueChange={(value) => {
             const command = commandOptions.find((command) => command === value);
+
             if (command) setCommandDraft(command);
           }}
         >

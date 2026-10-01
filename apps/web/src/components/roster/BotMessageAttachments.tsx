@@ -37,6 +37,7 @@ export function BotMessageAttachments({
   readonly environmentId: EnvironmentId;
 }) {
   const { t } = useI18n();
+
   const resources = useMemo(
     () =>
       attachments.map((attachment) => ({
@@ -45,9 +46,11 @@ export function BotMessageAttachments({
       })),
     [attachments],
   );
+
   const urls = useAssetUrls(environmentId, resources);
   const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [preview, setPreview] = useState<ExpandedImagePreview | null>(null);
+
   if (attachments.length === 0) return null;
 
   return (
@@ -55,8 +58,10 @@ export function BotMessageAttachments({
       <div className="grid max-w-105 grid-cols-1 gap-2 sm:grid-cols-2">
         {attachments.map((attachment, index) => {
           const url = urls[index];
+
           const canPreview =
             attachment.type === "image" && url !== null && !failedIds.has(attachment.id);
+
           if (attachment.type === "file") {
             return (
               <a
@@ -71,6 +76,7 @@ export function BotMessageAttachments({
               </a>
             );
           }
+
           return (
             <div
               key={attachment.id}

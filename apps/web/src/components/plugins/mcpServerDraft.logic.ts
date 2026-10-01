@@ -44,14 +44,18 @@ export function validateMcpServerDraft(
   t: Translate = englishTranslator.translate,
 ): string | null {
   if (!draft.name.trim()) return t("Name is required.");
+
   if (draft.transport === "stdio") {
     return draft.command.trim() ? null : t("Command is required.");
   }
+
   try {
     const url = new URL(draft.url.trim());
+
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return t("URL must start with http:// or https://.");
     }
+
     return url.username || url.password ? t("Store credentials outside the server URL.") : null;
   } catch {
     return t("Enter a valid HTTP or HTTPS URL.");

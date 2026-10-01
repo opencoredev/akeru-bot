@@ -60,6 +60,7 @@ export function ImportPreview({
 }) {
   const { t } = useI18n();
   const unsupported = preview.unsupported.filter((item) => item.count > 0);
+
   return (
     <div className="space-y-5">
       {preview.projectFolders.length > 0 ? (
@@ -159,6 +160,8 @@ export function importResultDescription(
     ...(result.failed > 0 ? [t("{count} failed.", { count: result.failed })] : []),
     ...(result.partial > 0 ? [t("{count} partly restored.", { count: result.partial })] : []),
   ];
+
   const firstFailure = result.failures[0];
+
   return `${counts.join(" ")}${firstFailure ? ` ${firstFailure.title}: ${firstFailure.message}` : ""}`;
 }

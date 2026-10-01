@@ -10,13 +10,16 @@ export interface RosterLastMessage {
 }
 
 type MarkdownNode = ReturnType<typeof fromMarkdown> | MarkdownNodeChild;
+
 type MarkdownNodeChild = ReturnType<typeof fromMarkdown>["children"][number];
 
 const markdownPreviewOptions = {
   extensions: [gfm()],
   mdastExtensions: [gfmFromMarkdown()],
 };
+
 const markdownPreviewCache = new Map<string, string>();
+
 const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
 
 /**
@@ -30,6 +33,7 @@ const MARKDOWN_PREVIEW_CACHE_LIMIT = 500;
  */
 export function flattenMarkdownPreview(markdown: string): string {
   const cached = markdownPreviewCache.get(markdown);
+
   if (cached !== undefined) return cached;
   // A row shows one line, so parse whole blocks from the top only until the
   // flattened text is long enough. Parsing costs several milliseconds per long
@@ -46,28 +50,39 @@ export function flattenMarkdownPreview(markdown: string): string {
   const withDefinitions = definitions ? `\n\n${definitions}` : "";
   let flattened = "";
   let offset = 0;
+
   while (offset < source.length && flattened.length < MARKDOWN_PREVIEW_TEXT_TARGET) {
     const end = markdownPreviewChunkEnd(source, offset, complete);
+
     if (end === null) break;
     const chunk = flattenMarkdownText(source.slice(offset, end) + withDefinitions);
+
     if (chunk.length > 0) flattened = flattened.length > 0 ? `${flattened} ${chunk}` : chunk;
     offset = end;
   }
+
   if (flattened.length === 0 && !complete) {
     flattened = stripMarkdownRoughly(
       markdown.slice(offset, offset + MARKDOWN_PREVIEW_ROUGH_LIMIT).trimStart(),
     );
   }
+
   if (markdownPreviewCache.size >= MARKDOWN_PREVIEW_CACHE_LIMIT) markdownPreviewCache.clear();
   markdownPreviewCache.set(markdown, flattened);
+
   return flattened;
 }
 
 const MARKDOWN_PREVIEW_TEXT_TARGET = 280;
+
 const MARKDOWN_PREVIEW_CHUNK_TARGET = 600;
+
 const MARKDOWN_PREVIEW_PARSE_LIMIT = 20_000;
+
 const MARKDOWN_PREVIEW_ROUGH_LIMIT = 2_000;
+
 const MARKDOWN_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
 const MARKDOWN_REFERENCE_DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*\S.*$/gm;
 
 /**
@@ -84,11 +99,13 @@ function markdownPreviewChunkEnd(
   let fence: string | null = null;
   let lastBoundary: number | null = null;
   let lineStart = offset;
+
   while (lineStart < markdown.length) {
     const newline = markdown.indexOf("\n", lineStart);
     const lineEnd = newline === -1 ? markdown.length : newline + 1;
     const line = markdown.slice(lineStart, lineEnd);
     const marker = MARKDOWN_FENCE.exec(line)?.[1];
+
     if (fence === null) {
       if (marker !== undefined) fence = marker;
       else if (newline !== -1 && line.trim().length === 0) {
@@ -103,8 +120,10 @@ function markdownPreviewChunkEnd(
     ) {
       fence = null;
     }
+
     lineStart = lineEnd;
   }
+
   return complete ? markdown.length : lastBoundary;
 }
 
@@ -120,34 +139,43 @@ function stripMarkdownRoughly(markdown: string): string {
       .replace(/\[([^\]]*)\](?:\([^)]*\)?|\[[^\]]*\]?)/g, "$1")
       .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}[.)])[ \t]+/gm, "")
       .replace(/~~|\*+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "");
+
   let result = "";
   let offset = 0;
+
   while (offset < markdown.length) {
     const opening = unescapedIndexOf(markdown, "`", offset);
     // An image that starts before the next code span is dropped whole, so a
     // backtick inside its label cannot split it and leak the description.
     const image = unescapedIndexOf(markdown, "![", offset);
+
     if (image >= 0 && (opening < 0 || image < opening)) {
       result += `${stripProse(markdown.slice(offset, image))} `;
       const end = roughImageEnd(markdown, image);
+
       if (end === null) break;
       offset = end;
       continue;
     }
+
     if (opening < 0) {
       result += stripProse(markdown.slice(offset));
       break;
     }
+
     const delimiter = /^`+/.exec(markdown.slice(opening))![0];
     const closing = markdown.indexOf(delimiter, opening + delimiter.length);
+
     if (closing < 0) {
       result += stripProse(markdown.slice(offset).replace(/`+/g, ""));
       break;
     }
+
     result += stripProse(markdown.slice(offset, opening));
     result += markdown.slice(opening + delimiter.length, closing);
     offset = closing + delimiter.length;
   }
+
   return result.replace(/\s+/g, " ").trim();
 }
 
@@ -160,11 +188,14 @@ function stripMarkdownRoughly(markdown: string): string {
 function withoutImagesRoughly(markdown: string): string {
   let result = "";
   let offset = 0;
+
   for (;;) {
     const start = markdown.indexOf("![", offset);
+
     if (start === -1) return result + markdown.slice(offset);
     result += `${markdown.slice(offset, start)} `;
     const end = roughImageEnd(markdown, start);
+
     if (end === null) return result;
     offset = end;
   }
@@ -177,9 +208,12 @@ function withoutImagesRoughly(markdown: string): string {
  */
 function roughImageEnd(markdown: string, start: number): number | null {
   const labelEnd = balancedGroupEnd(markdown, start + 1, "[", "]");
+
   if (labelEnd === null) return null;
   const next = markdown[labelEnd];
+
   if (next !== "(" && next !== "[") return labelEnd;
+
   return balancedGroupEnd(markdown, labelEnd, next, next === "(" ? ")" : "]");
 }
 
@@ -191,27 +225,34 @@ function unescapedIndexOf(text: string, needle: string, from: number): number {
     index = text.indexOf(needle, index + 1)
   ) {
     let backslashes = 0;
+
     while (text[index - 1 - backslashes] === "\\") backslashes += 1;
+
     if (backslashes % 2 === 0) return index;
   }
+
   return -1;
 }
 
 /** Index just past the close matching the `open` at `start`, or null. */
 function balancedGroupEnd(text: string, start: number, open: string, close: string): number | null {
   let depth = 0;
+
   for (let index = start; index < text.length; index += 1) {
     const char = text[index];
+
     if (char === "\\") index += 1;
     else if (char === open) depth += 1;
     else if (char === close && --depth === 0) return index + 1;
   }
+
   return null;
 }
 
 function flattenMarkdownText(markdown: string): string {
   const parts: string[] = [];
   collectPreviewText(fromMarkdown(markdown, markdownPreviewOptions), parts);
+
   return parts.join("").replace(/\s+/g, " ").trim();
 }
 
@@ -237,6 +278,7 @@ function collectPreviewText(node: MarkdownNode, parts: string[]): void {
         for (const child of node.children) collectPreviewText(child, parts);
       }
   }
+
   // Block boundaries become spaces so adjacent paragraphs or list items never
   // glue their words together.
   if (node.type !== "text" && !isPhrasingNode(node)) parts.push(" ");
@@ -252,6 +294,7 @@ function visibleHtmlText(html: string): string {
     .replace(/<\/?(?:br|p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|pre|hr)\b[^>]*>/gi, " ")
     .replace(/<[^>]*>/g, "")
     .replace(/\s+/g, " ");
+
   return text.includes("&") ? decodeHtmlEntities(text) : text;
 }
 
@@ -267,6 +310,7 @@ function decodeHtmlEntities(text: string): string {
   // Keep the edge spaces that separate this HTML from neighbouring text.
   const lead = text.startsWith(" ") ? " " : "";
   const trail = text.endsWith(" ") ? " " : "";
+
   return `${lead}${parts.join("").trim()}${trail}`;
 }
 
@@ -298,15 +342,19 @@ export function resolveLatestRosterMessage(
   threadId?: string | null,
 ): RosterLastMessage | null {
   let latest: RosterLastMessage | null = null;
+
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
+
     if (!message || message.parentThreadId != null || message.role === "system") continue;
     const text = flattenMarkdownPreview(message.text);
+
     if (text.length > 0) {
       latest = { text, at: message.createdAt };
       break;
     }
   }
+
   // A fallback that flattens to nothing (an image-only attachment, say) must
   // not beat an older visible answer on timestamp alone.
   // The fallback is kept per bot, so one sent to another chat does not
@@ -314,11 +362,16 @@ export function resolveLatestRosterMessage(
   // archived or deleted) no fallback describes anything current.
   const sameChatFallback =
     fallback && threadId !== null && (fallback.threadId ?? threadId) === threadId ? fallback : null;
+
   const flatFallback = sameChatFallback
     ? { ...sameChatFallback, text: flattenMarkdownPreview(sameChatFallback.text) }
     : null;
+
   const usableFallback = flatFallback && flatFallback.text.length > 0 ? flatFallback : null;
+
   if (!latest) return usableFallback;
+
   if (!usableFallback) return latest;
+
   return latest.at >= usableFallback.at ? latest : usableFallback;
 }

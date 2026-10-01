@@ -23,6 +23,7 @@ export function createBotTurnSubmissionQueue() {
         () => undefined,
         () => undefined,
       );
+
       return result;
     },
   };
@@ -34,10 +35,13 @@ export async function joinOrStartThreadCreate<T>(input: {
   start: () => Promise<T | null>;
 }): Promise<T | null> {
   const existing = input.getRetained();
+
   if (existing) return existing;
   const pending = (input.inFlight.current ??= input.start());
+
   try {
     const created = await pending;
+
     return input.getRetained() ?? created;
   } finally {
     if (input.inFlight.current === pending) input.inFlight.current = null;
@@ -165,12 +169,15 @@ export function findLatestBotThreadTarget(
   threads: readonly BotChatCandidate[],
 ): { environmentId: string; threadId: string } | null {
   let latest: BotChatCandidate | undefined;
+
   for (const thread of threads) {
     if (!isActiveBotChat(botId, environmentId, thread)) continue;
+
     if (latest === undefined || compareNewestFirst(thread, latest) < 0) {
       latest = thread;
     }
   }
+
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
 
@@ -208,6 +215,7 @@ export function pickBotChatTarget(
   ) {
     return { environmentId: remembered.environmentId, threadId: remembered.threadId };
   }
+
   return latest ?? remembered;
 }
 
@@ -230,10 +238,13 @@ export function resolveBotThreadTarget(
       : threads.find(
           (thread) => thread.id === openThreadId && isActiveBotChat(botId, environmentId, thread),
         );
+
   if (opened) return { environmentId: opened.environmentId, threadId: opened.id };
   const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
+
   const remembered =
     parsed?.kind === "thread" && parsed.environmentId === environmentId ? parsed : null;
+
   return pickBotChatTarget(
     botId,
     environmentId,
@@ -290,6 +301,7 @@ export function findLatestGroupThreadTarget(
   threads: readonly GroupThreadShell[],
 ): { environmentId: string; threadId: string } | null {
   let latest: GroupThreadShell | undefined;
+
   for (const thread of threads) {
     if (
       thread.environmentId === environmentId &&
@@ -300,6 +312,7 @@ export function findLatestGroupThreadTarget(
       latest = thread;
     }
   }
+
   return latest ? { environmentId: latest.environmentId, threadId: latest.id } : null;
 }
 
@@ -314,11 +327,14 @@ export function findLatestGroupThreadIds(
   threads: readonly GroupThreadShell[],
 ): ReadonlyMap<string, string> {
   const latest = new Map<string, GroupThreadShell>();
+
   for (const thread of threads) {
     if (thread.groupId == null || !isActiveGroupChat(thread)) continue;
     const key = latestGroupThreadKey(thread.environmentId, thread.groupId);
+
     if (isNewerThread(thread, latest.get(key))) latest.set(key, thread);
   }
+
   return new Map(Array.from(latest, ([key, thread]) => [key, thread.id] as const));
 }
 
@@ -334,16 +350,21 @@ export function findUnhandledMcpAuthorization(
     if (activity.kind !== "mcp.oauth.authorization-required" || handledIds.has(activity.id)) {
       continue;
     }
+
     if (!activity.payload || typeof activity.payload !== "object") continue;
     const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
+
     if (typeof authorizationUrl !== "string") continue;
+
     try {
       const url = new URL(authorizationUrl);
+
       if (url.protocol === "https:") return { activityId: activity.id, url: url.href };
     } catch {
       // Ignore malformed server data.
     }
   }
+
   return null;
 }
 
@@ -370,6 +391,7 @@ export function preferRetainedChatTarget(
   }[],
 ): { environmentId: string; threadId: string } | null {
   const pending = retained.linked ? null : retained.threadRef;
+
   if (
     pending &&
     shells.some(
@@ -382,6 +404,7 @@ export function preferRetainedChatTarget(
   ) {
     return { environmentId: pending.environmentId, threadId: pending.threadId };
   }
+
   return target;
 }
 
@@ -396,6 +419,7 @@ export function shouldTitlePlaceholderChat(
   titledChatId: string | null = null,
 ): boolean {
   if (titledChatId === threadId) return false;
+
   return shellTitle === undefined
     ? createdPlaceholderId === threadId
     : shellTitle === PLACEHOLDER_THREAD_TITLE;
@@ -414,6 +438,7 @@ export function nextRetainedChat(
 ): RetainedChat {
   if (linkedThreadRef) {
     if (current.linked && current.threadRef === linkedThreadRef) return current;
+
     // A just-created chat stays the target while the list still shows the
     // previous chat, so a send in between cannot land in the old one. Opening
     // another chat on purpose releases it, so sends follow the opened chat.
@@ -426,10 +451,13 @@ export function nextRetainedChat(
     ) {
       return current;
     }
+
     return { ownerId: current.ownerId, threadRef: linkedThreadRef, linked: true };
   }
+
   if (current.linked && bootstrapped) {
     return { ownerId: current.ownerId, threadRef: null, linked: false };
   }
+
   return current;
 }

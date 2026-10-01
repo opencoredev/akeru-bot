@@ -78,25 +78,31 @@ export function ThemeEditorPanel({
   const [name, setName] = useState("");
   const [activeAppearance, setActiveAppearance] = useState<ThemeAppearance>(initialAppearance);
   const [isAdvanced, setIsAdvanced] = useState(false);
+
   const [colorsByAppearance, setColorsByAppearance] = useState<ThemeEditorColorsByAppearance>(() =>
     getThemeEditorColorsByAppearance(),
   );
+
   const [simpleColorsDirtyByAppearance, setSimpleColorsDirtyByAppearance] = useState<
     Record<ThemeAppearance, boolean>
   >({ light: false, dark: false });
+
   const [error, setError] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [roleQuery, setRoleQuery] = useState("");
+
   const { panelRef, position, size, dragHandlers, resizeHandlers } = useThemeEditorGeometry({
     open,
     isMinimized,
   });
+
   // Picking a role only advanced mode can edit switches to advanced mode with
   // an unfiltered list, so the picked field is on screen.
   const revealAdvancedRole = useCallback(() => {
     setIsAdvanced(true);
     setRoleQuery("");
   }, []);
+
   const {
     isInspecting,
     setIsInspecting,
@@ -127,15 +133,19 @@ export function ThemeEditorPanel({
       // away instead of a rebuild from the defaults.
       const sourceTheme = editingTheme ?? seedTheme ?? null;
       const nextColors = getThemeEditorColorsByAppearance();
+
       const nextAppearance = sourceTheme
         ? getThemeColorsForMode(sourceTheme, initialAppearance)
           ? initialAppearance
           : sourceTheme.appearance
         : initialAppearance;
+
       if (sourceTheme) {
         nextColors[sourceTheme.appearance] = { ...sourceTheme.colors };
+
         for (const appearance of ["light", "dark"] as const) {
           const variantColors = sourceTheme.variants?.[appearance];
+
           if (variantColors) nextColors[appearance] = { ...variantColors };
         }
       }
@@ -154,6 +164,7 @@ export function ThemeEditorPanel({
       setError(null);
       setIsDraftSeeded(true);
     }
+
     if (!open && isDraftSeeded) setIsDraftSeeded(false);
     previousOpenRef.current = open;
   }, [
@@ -174,6 +185,7 @@ export function ThemeEditorPanel({
   // original id, so its label is the only name a user can see and retype.
   const nameTargetId = themeIdFromName(name);
   const normalizedName = name.trim().toLowerCase();
+
   const mergeTarget =
     normalizedName === ""
       ? null
@@ -182,6 +194,7 @@ export function ThemeEditorPanel({
             theme.id !== editingTheme?.id &&
             (theme.id === nameTargetId || theme.label.trim().toLowerCase() === normalizedName),
         ) ?? null);
+
   const takenAppearances = mergeTarget ? getThemeModes(mergeTarget) : [];
   const editableAppearances = editingTheme ? getThemeModes(editingTheme) : null;
 
@@ -192,9 +205,11 @@ export function ThemeEditorPanel({
     if (editableAppearances && !editableAppearances.includes(appearance)) {
       return `“${editingTheme?.label}” has no ${appearance} palette. Create a theme with the same name to add one.`;
     }
+
     if (!isEditing && takenAppearances.includes(appearance)) {
       return `“${mergeTarget?.label}” already has a ${appearance} palette.`;
     }
+
     return null;
   };
 
@@ -206,12 +221,15 @@ export function ThemeEditorPanel({
   const takenAppearancesKey = takenAppearances.join(",");
   useEffect(() => {
     if (isEditing || mergeTargetId === null) return;
+
     const taken = takenAppearancesKey
       .split(",")
       .filter((value): value is ThemeAppearance => value === "light" || value === "dark");
+
     if (taken.length !== 1) return;
     setActiveAppearance((current) => {
       if (!taken.includes(current)) return current;
+
       return taken[0] === "light" ? "dark" : "light";
     });
   }, [isEditing, mergeTargetId, takenAppearancesKey]);
@@ -226,6 +244,7 @@ export function ThemeEditorPanel({
 
   useEffect(() => {
     if (!open) return;
+
     return () => {
       restoreTheme();
     };
@@ -235,6 +254,7 @@ export function ThemeEditorPanel({
     (role: ThemeColorRole, value: string) => {
       setColorsByAppearance((current) => {
         const nextColors = { ...current[activeAppearance], [role]: value };
+
         const shouldManageColors =
           !isAdvanced && THEME_EDITOR_SIMPLE_ROLES.includes(role) && isThemeEditorColor(value);
 
@@ -247,6 +267,7 @@ export function ThemeEditorPanel({
               : nextColors,
         };
       });
+
       if (!isAdvanced && THEME_EDITOR_SIMPLE_ROLES.includes(role) && isThemeEditorColor(value)) {
         setSimpleColorsDirtyByAppearance((current) => ({
           ...current,
@@ -260,7 +281,9 @@ export function ThemeEditorPanel({
   const handleAdvancedChange = useCallback(
     (checked: boolean) => {
       setIsAdvanced(checked);
+
       if (checked) return;
+
       if (selectedRole && !THEME_EDITOR_SIMPLE_ROLES.includes(selectedRole)) {
         setSelectedRole(null);
       }
@@ -271,16 +294,21 @@ export function ThemeEditorPanel({
         editingTheme && getThemeModes(editingTheme).length > 1
           ? ["light", "dark"]
           : [activeAppearance];
+
       setSimpleColorsDirtyByAppearance((current) => {
         const next = { ...current };
+
         for (const appearance of managedAppearances) next[appearance] = true;
+
         return next;
       });
       setColorsByAppearance((current) => {
         const next = { ...current };
+
         for (const appearance of managedAppearances) {
           next[appearance] = getManagedEditorColors(appearance, current[appearance]);
         }
+
         return next;
       });
     },
@@ -290,6 +318,7 @@ export function ThemeEditorPanel({
   const handleSubmit = () => {
     if (!name.trim()) {
       setError("Name your theme first.");
+
       return;
     }
 
@@ -310,6 +339,7 @@ export function ThemeEditorPanel({
       let savedTheme: ThemeDefinition;
       let mergedAppearance: ThemeAppearance | null = null;
       let retiredTheme: ThemeDefinition | null = null;
+
       if (editingTheme && mergeTarget) {
         // Renamed onto another installed theme: this theme's palettes fold
         // into it and the edited entry retires, so both cards become one.
@@ -317,10 +347,13 @@ export function ThemeEditorPanel({
         // overwritten.
         const editedModes = getThemeModes(editingTheme);
         const collision = editedModes.find((mode) => takenAppearances.includes(mode));
+
         if (collision) {
           setError(`“${mergeTarget.label}” already has a ${collision} palette. Pick another name.`);
+
           return;
         }
+
         mergedAppearance = editedModes[0] ?? null;
         savedTheme = updateCustomTheme({
           ...parseThemeFile({
@@ -338,6 +371,7 @@ export function ThemeEditorPanel({
           ...(mergeTarget.collection ? { collection: mergeTarget.collection } : {}),
         });
         retiredTheme = editingTheme;
+
         try {
           removeCustomTheme(editingTheme.id);
         } catch (cause) {
@@ -349,6 +383,7 @@ export function ThemeEditorPanel({
           } catch {
             // Storage is failing wholesale; the rethrow below reports it.
           }
+
           throw cause;
         }
       } else if (editingTheme) {
@@ -373,8 +408,10 @@ export function ThemeEditorPanel({
           setError(
             `“${mergeTarget.label}” already has light and dark palettes. Pick another name.`,
           );
+
           return;
         }
+
         // The new palette joins the existing theme as its other mode; its
         // stored palettes are untouched. The guided (managed) flag only
         // survives when every palette in the theme came from the guided
@@ -406,6 +443,7 @@ export function ThemeEditorPanel({
           }),
         );
       }
+
       if (
         !onSaved(savedTheme, {
           created: editingTheme === null && mergedAppearance === null,
@@ -424,14 +462,18 @@ export function ThemeEditorPanel({
           // Put the pre-merge definitions back for the same reason.
           try {
             updateCustomTheme(mergeTarget);
+
             if (retiredTheme) installCustomTheme(retiredTheme);
           } catch {
             // Storage is failing wholesale; the error below covers it.
           }
         }
+
         setError("Theme saved, but it could not be made active. Try again.");
+
         return;
       }
+
       onOpenChange(false);
     } catch (cause) {
       setError(
@@ -496,8 +538,10 @@ export function ThemeEditorPanel({
                 onClick={() => {
                   if (isInspecting) {
                     clearInspectorSelection();
+
                     return;
                   }
+
                   setIsInspecting(true);
                 }}
               >

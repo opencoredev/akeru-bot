@@ -31,6 +31,7 @@ export function selfHostedIMessageConnectInput(
   phone: string,
 ) {
   const trimmedPhone = phone.trim();
+
   return {
     botId,
     targetProjectId,

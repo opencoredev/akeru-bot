@@ -40,22 +40,28 @@ export function PortabilitySettings() {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const primaryEnvironment = usePrimaryEnvironment();
+
   const projectPickerTarget = portabilityProjectPickerTarget(
     primaryEnvironment?.entry.target ?? null,
   );
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectFoldersRef = useRef<PortabilityProjectFolderMap>({});
   const importSessionIdRef = useRef(0);
   const previewRequestIdRef = useRef(0);
+
   const exportArchive = useAtomCommand(portabilityEnvironment.exportArchive, {
     reportFailure: false,
   });
+
   const previewImport = useAtomCommand(portabilityEnvironment.previewImport, {
     reportFailure: false,
   });
+
   const applyImport = useAtomCommand(portabilityEnvironment.applyImport, {
     reportFailure: false,
   });
+
   const [pending, setPending] = useState<"export" | "preview" | "apply" | null>(null);
   const [importState, setImportState] = useState<ImportPreviewState | null>(null);
   const [applyResult, setApplyResult] = useState<PortabilityApplyImportResult | null>(null);
@@ -65,10 +71,13 @@ export function PortabilitySettings() {
     setPending("export");
     const result = await exportArchive({ environmentId, input: {} });
     setPending(null);
+
     if (result._tag === "Failure") {
       reportFailure(t("Could not export archive"), result, t);
+
       return;
     }
+
     downloadArchive(result.value.filename, result.value.contents);
     toastManager.add({ type: "success", title: t("Archive exported") });
   };
@@ -77,27 +86,35 @@ export function PortabilitySettings() {
     if (environmentId === null) return;
     setApplyResult(null);
     const fileError = portabilityArchiveFileError(file.size);
+
     if (fileError) {
       toastManager.add({
         type: "error",
         title: t("Could not read archive"),
         description: fileError,
       });
+
       return;
     }
+
     importSessionIdRef.current += 1;
     const requestId = ++previewRequestIdRef.current;
     projectFoldersRef.current = {};
     setPending("preview");
+
     try {
       const contents = await file.text();
       const result = await previewImport({ environmentId, input: { contents } });
+
       if (requestId !== previewRequestIdRef.current) return;
       setPending(null);
+
       if (result._tag === "Failure") {
         reportFailure(t("Could not preview archive"), result, t);
+
         return;
       }
+
       setImportState({ contents, filename: file.name, preview: result.value, projectFolders: {} });
     } catch (error) {
       if (requestId !== previewRequestIdRef.current) return;
@@ -113,11 +130,13 @@ export function PortabilitySettings() {
   const handleProjectFolder = async (projectId: ProjectId, destination: string) => {
     if (environmentId === null || importState === null) return;
     const reviewedProjectFolders = projectFoldersRef.current;
+
     const projectFolders = updatePortabilityProjectFolderMap(
       projectFoldersRef.current,
       projectId,
       destination,
     );
+
     projectFoldersRef.current = projectFolders;
     const requestId = ++previewRequestIdRef.current;
     const contents = importState.contents;
@@ -125,12 +144,15 @@ export function PortabilitySettings() {
       current?.contents === contents ? { ...current, projectFolders } : current,
     );
     setPending("preview");
+
     const result = await previewImport({
       environmentId,
       input: { contents, projectFolders },
     });
+
     if (requestId !== previewRequestIdRef.current) return;
     setPending(null);
+
     if (result._tag === "Failure") {
       projectFoldersRef.current = reviewedProjectFolders;
       setImportState((current) =>
@@ -139,8 +161,10 @@ export function PortabilitySettings() {
           : current,
       );
       reportFailure(t("Could not use project folder"), result, t);
+
       return;
     }
+
     setImportState((current) =>
       current?.contents === contents && current.projectFolders === projectFolders
         ? { ...current, preview: result.value }
@@ -151,16 +175,20 @@ export function PortabilitySettings() {
   const handleProjectFolderPick = async (projectId: ProjectId, destination: string | null) => {
     if (environmentId === null || importState === null) return;
     const importSessionId = importSessionIdRef.current;
+
     if (!window.desktopBridge || projectPickerTarget === undefined) {
       toastManager.add({
         type: "error",
         title: t("Folder picker unavailable"),
         description: t("Enter an absolute folder path, or open Akeru Bot on desktop."),
       });
+
       return;
     }
+
     try {
       const wslConfiguration = await window.desktopBridge.getWslState().catch(() => null);
+
       const targetEnvironmentId = resolveProjectPickerTarget({
         browseEnvironmentId: environmentId,
         primaryEnvironmentId: environmentId,
@@ -168,10 +196,12 @@ export function PortabilitySettings() {
         desktopInstanceId: projectPickerTarget,
         wslConfiguration,
       });
+
       const picked = await readLocalApi()?.dialogs.pickFolder({
         ...(destination ? { initialPath: destination } : {}),
         ...(targetEnvironmentId ? { targetEnvironmentId } : {}),
       });
+
       if (picked && importSessionId === importSessionIdRef.current) {
         await handleProjectFolder(projectId, picked);
       }
@@ -189,6 +219,7 @@ export function PortabilitySettings() {
   const handleApply = async () => {
     if (environmentId === null || importState === null) return;
     setPending("apply");
+
     const result = await applyImport({
       environmentId,
       input: {
@@ -198,18 +229,24 @@ export function PortabilitySettings() {
         expectedStateChecksum: importState.preview.stateChecksum,
       },
     });
+
     setPending(null);
+
     if (result._tag === "Failure") {
       reportFailure(t("Could not import archive"), result, t);
+
       return;
     }
+
     const hasFailures = result.value.failed > 0 || result.value.partial > 0;
+
     if (hasFailures) setApplyResult(result.value);
     else {
       importSessionIdRef.current += 1;
       projectFoldersRef.current = {};
       setImportState(null);
     }
+
     toastManager.add({
       type: hasFailures ? "error" : "success",
       title: hasFailures ? t("Archive partly restored") : t("Archive restored"),
@@ -251,6 +288,7 @@ export function PortabilitySettings() {
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = "";
+
                 if (file) void handleFile(file);
               }}
             />

@@ -16,12 +16,15 @@ export const RESOURCE_HISTORY_WINDOWS = [
 export function formatCpuTime(seconds: number): string {
   if (seconds < 60) return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`;
   const minutes = seconds / 60;
+
   if (minutes < 60) return `${minutes.toFixed(minutes >= 10 ? 1 : 2)}m`;
+
   return `${(minutes / 60).toFixed(2)}h`;
 }
 
 export function formatShortProcessName(command: string): string {
   const name = formatProcessName(command);
+
   return name.length > 42 ? `${name.slice(0, 39)}...` : name;
 }
 
@@ -83,6 +86,7 @@ export function ProcessResourceHistoryChart({
         {buckets.map((bucket) => {
           const peakHeight = Math.max(2, (bucket.maxCpuPercent / maxCpuPercent) * 100);
           const averageHeight = Math.max(2, (bucket.avgCpuPercent / maxCpuPercent) * 100);
+
           return (
             <Tooltip key={DateTime.formatIso(bucket.startedAt)}>
               <TooltipTrigger
@@ -156,6 +160,7 @@ export function ProcessResourceHistoryTable({
 }) {
   const shallowestChildDepth = processes.reduce<number | null>((minDepth, process) => {
     if (process.isServerRoot) return minDepth;
+
     return minDepth === null ? process.depth : Math.min(minDepth, process.depth);
   }, null);
 

@@ -17,8 +17,11 @@ export function getThemeRoleLabel(role: ThemeColorRole): string {
     updateForeground: "Update text",
     updateSurface: "Update background",
   };
+
   const label = labels[role];
+
   if (label) return label;
+
   return role.replace(/([A-Z])/g, " $1").replace(/^./, (character) => character.toUpperCase());
 }
 
@@ -40,6 +43,7 @@ export function clampThemeColor(value: number, min = 0, max = 1) {
 export function themePickerAlphaSuffix(value: string): string {
   const normalized = themeColorToHex(value) ?? "";
   const alpha = normalized.length === 9 ? normalized.slice(7) : "";
+
   return alpha === "ff" ? "" : alpha;
 }
 
@@ -58,6 +62,7 @@ export function themeHexToHsv(hex: string): ThemeColorHsv {
   const delta = max - min;
 
   let hue = 0;
+
   if (delta !== 0) {
     if (max === red) {
       hue = ((green - blue) / delta) % 6;
@@ -66,7 +71,9 @@ export function themeHexToHsv(hex: string): ThemeColorHsv {
     } else {
       hue = (red - green) / delta + 4;
     }
+
     hue *= 60;
+
     if (hue < 0) hue += 360;
   }
 
@@ -82,6 +89,7 @@ export function themeHsvToHex(hue: number, saturation: number, value: number) {
   const chroma = value * saturation;
   const x = chroma * (1 - Math.abs(((normalizedHue / 60) % 2) - 1));
   const match = value - chroma;
+
   const [red, green, blue] =
     normalizedHue < 60
       ? [chroma, x, 0]
@@ -106,6 +114,7 @@ export function themeHsvToHex(hue: number, saturation: number, value: number) {
 
 export function themeHexToRgb(hex: string) {
   const numeric = Number.parseInt(normalizeThemePickerColor(hex).slice(1), 16);
+
   return [numeric >> 16, (numeric >> 8) & 255, numeric & 255] as const;
 }
 
@@ -114,10 +123,12 @@ export function themeRgbToHex(value: string): string | null {
     .trim()
     .replace(/^rgb\(\s*/i, "")
     .replace(/\s*\)$/, "");
+
   const channels = normalized
     .split(/[,\s]+/)
     .filter(Boolean)
     .map(Number);
+
   if (
     channels.length !== 3 ||
     channels.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)

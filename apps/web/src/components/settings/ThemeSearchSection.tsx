@@ -38,25 +38,31 @@ const DOWNLOAD_FORMAT = new Intl.NumberFormat(undefined, {
   notation: "compact",
   maximumFractionDigits: 1,
 });
+
 const SUGGESTED_SEARCHES = ["Dracula", "Catppuccin", "Nord", "Tokyo Night"];
+
 const SORT_OPTIONS: ReadonlyArray<{ value: OpenVsxThemeSort; label: string }> = [
   { value: "downloadCount", label: "Most downloaded" },
   { value: "rating", label: "Best rated" },
   { value: "timestamp", label: "Newest" },
   { value: "relevance", label: "Most relevant" },
 ];
+
 const SEARCH_DEBOUNCE_MS = 350;
 
 function SourceLinkIcon({ url }: { url: string }) {
   try {
     const host = new URL(url).hostname.toLowerCase();
+
     if (host === "github.com" || host.endsWith(".github.com"))
       return <GitHubIcon className="size-3.5" />;
+
     if (host === "gitlab.com" || host.endsWith(".gitlab.com"))
       return <GitLabIcon className="size-3.5" monochrome />;
   } catch {
     // Fall through to the generic external-link icon.
   }
+
   return <ExternalLinkIcon className="size-3.5" />;
 }
 
@@ -108,6 +114,7 @@ export function ThemeSearchSection({
   useEffect(() => {
     requestRef.current?.abort();
     requestRef.current = null;
+
     if (open) {
       lastSearchKeyRef.current = null;
       prevSearchKeyRef.current = null;
@@ -119,6 +126,7 @@ export function ThemeSearchSection({
       setInstallingId(null);
       setPendingUpdate(null);
     }
+
     return () => {
       requestRef.current?.abort();
       requestRef.current = null;
@@ -128,17 +136,20 @@ export function ThemeSearchSection({
   const runSearch = useCallback(
     async (searchText: string, nextSort = sortBy) => {
       const trimmed = searchText.trim();
+
       if (!trimmed) return;
       requestRef.current?.abort();
       const controller = new AbortController();
       requestRef.current = controller;
       setError(null);
       setIsSearching(true);
+
       try {
         const nextResults = await searchOpenVsxThemes(trimmed, {
           signal: controller.signal,
           sortBy: nextSort,
         });
+
         if (!controller.signal.aborted) {
           setResults(nextResults);
           lastSearchKeyRef.current = `${trimmed}\u0000${nextSort}`;
@@ -150,6 +161,7 @@ export function ThemeSearchSection({
           setError(cause instanceof Error ? cause.message : "Open VSX search failed.");
         }
       }
+
       if (requestRef.current === controller) {
         requestRef.current = null;
         setIsSearching(false);
@@ -175,7 +187,9 @@ export function ThemeSearchSection({
     const searchKey = `${debouncedQuery}\u0000${sortBy}`;
     const keyChanged = prevSearchKeyRef.current !== searchKey;
     prevSearchKeyRef.current = searchKey;
+
     if (installingId !== null) return;
+
     if (!debouncedQuery) {
       lastSearchKeyRef.current = null;
       requestRef.current?.abort();
@@ -183,8 +197,10 @@ export function ThemeSearchSection({
       setResults(null);
       setError(null);
       setIsSearching(false);
+
       return;
     }
+
     if (debouncedQuery !== query.trim()) {
       // The debounced value still trails the input (dialog reopened with the
       // box reset, or the user is mid-keystroke). Searching it would hit Open
@@ -192,6 +208,7 @@ export function ThemeSearchSection({
       // catch up to the current input instead.
       return;
     }
+
     if (lastSearchKeyRef.current === searchKey) {
       // The results already match this query. A request for a newer key may
       // still be in flight (typed and then undone); abort it so it cannot
@@ -200,9 +217,12 @@ export function ThemeSearchSection({
       requestRef.current?.abort();
       requestRef.current = null;
       setIsSearching(false);
+
       if (keyChanged) setError(null);
+
       return;
     }
+
     void runSearch(debouncedQuery);
     // `installingId` and `sortBy` are deliberately not dependencies: the
     // guards above read the current values from the fresh render closure. An
@@ -215,6 +235,7 @@ export function ThemeSearchSection({
 
   const handleSortChange = useCallback((value: OpenVsxThemeSort | null) => {
     const nextSort = SORT_OPTIONS.find((option) => option.value === value)?.value;
+
     if (!nextSort) return;
     setSortBy(nextSort);
   }, []);
@@ -223,15 +244,20 @@ export function ThemeSearchSection({
     async (extension: OpenVsxThemeExtension, allowUpdate: boolean) => {
       setError(null);
       let installedCollection: ReadonlyArray<ThemeDefinition>;
+
       try {
         installedCollection = getStoredCustomThemeCollection(extension.collectionId);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Installed themes could not be read.");
+
         return;
       }
+
       const updated = installedCollection.length > 0;
+
       if (updated && !allowUpdate) {
         setPendingUpdate(extension);
+
         return;
       }
 
@@ -240,12 +266,15 @@ export function ThemeSearchSection({
       requestRef.current = controller;
       setIsSearching(false);
       setInstallingId(extension.id);
+
       try {
         const themes = await importOpenVsxThemeExtension(extension, controller.signal);
+
         if (!controller.signal.aborted) {
           const imported = replaceCustomThemeCollection(extension.collectionId, themes, {
             expectedCollection: installedCollection,
           });
+
           onInstalled(imported, { updated });
         }
       } catch (cause) {
@@ -253,6 +282,7 @@ export function ThemeSearchSection({
           setError(cause instanceof Error ? cause.message : "That theme could not be added.");
         }
       }
+
       if (requestRef.current === controller) {
         requestRef.current = null;
         setInstallingId(null);
@@ -281,6 +311,7 @@ export function ThemeSearchSection({
           onChange={(event) => setQuery(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+
             if (event.key === "Enter" && !isSearching && installingId === null)
               void runSearch(query.trim());
           }}
@@ -372,11 +403,14 @@ export function ThemeSearchSection({
           <div className="grid gap-2 sm:grid-cols-2">
             {results.map((extension) => {
               const isInstalling = installingId === extension.id;
+
               const isInstalled = getCustomThemes().some(
                 (theme) => theme.collection?.id === extension.collectionId,
               );
+
               const action = isInstalled ? "Update" : "Install";
               const progressAction = isInstalled ? "Updating" : "Installing";
+
               return (
                 <article
                   className="group flex min-w-0 flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-3 transition-colors hover:bg-accent/20"
@@ -452,6 +486,7 @@ export function ThemeSearchSection({
               onClick={() => {
                 const extension = pendingUpdate;
                 setPendingUpdate(null);
+
                 if (extension) void handleInstall(extension, true);
               }}
             >

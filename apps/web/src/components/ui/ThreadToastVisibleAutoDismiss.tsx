@@ -11,6 +11,7 @@ export function useActiveThreadRefFromRoute(): ScopedThreadRef | null {
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
   });
+
   const activeDraftSession = useComposerDraftStore((store) =>
     routeTarget?.kind === "draft" ? store.getDraftSession(routeTarget.draftId) : null,
   );
@@ -19,12 +20,14 @@ export function useActiveThreadRefFromRoute(): ScopedThreadRef | null {
     if (routeTarget?.kind === "server") {
       return routeTarget.threadRef;
     }
+
     if (routeTarget?.kind === "draft" && activeDraftSession) {
       return {
         environmentId: activeDraftSession.environmentId,
         threadId: activeDraftSession.threadId,
       };
     }
+
     return null;
   }, [activeDraftSession, routeTarget]);
 }
@@ -38,6 +41,7 @@ export function ThreadToastVisibleAutoDismiss({
 }) {
   useEffect(() => {
     if (!dismissAfterVisibleMs || dismissAfterVisibleMs <= 0) return;
+
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
     let remainingMs = threadToastVisibleTimeoutRemainingMs.get(toastId) ?? dismissAfterVisibleMs;
@@ -68,10 +72,13 @@ export function ThreadToastVisibleAutoDismiss({
 
     const start = () => {
       if (closed || startedAtMs !== null) return;
+
       if (remainingMs <= 0) {
         closeToast();
+
         return;
       }
+
       startedAtMs = Date.now();
       clearTimer();
       timeoutId = window.setTimeout(() => {
@@ -83,10 +90,13 @@ export function ThreadToastVisibleAutoDismiss({
 
     const syncTimer = () => {
       const shouldRun = document.visibilityState === "visible" && document.hasFocus();
+
       if (shouldRun) {
         start();
+
         return;
       }
+
       pause();
     };
 

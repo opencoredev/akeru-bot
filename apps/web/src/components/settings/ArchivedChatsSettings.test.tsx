@@ -38,21 +38,26 @@ function textOf(node: ReactNode): string {
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "bots" ? mocks.bots : []),
 }));
+
 vi.mock("../../state/bots", () => ({
   environmentBotsAtom: () => "bots",
   environmentGroupsAtom: () => "groups",
 }));
+
 vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => mocks.archive,
 }));
+
 vi.mock("../../hooks/useChatActions", () => ({
   useChatActions: () => ({ unarchive: mocks.unarchive, delete: mocks.delete }),
 }));
+
 vi.mock("../../settingsDialogStore", () => ({
   useSettingsEnvironmentId: () => "env-1",
   useSettingsDialogStore: () => null,
   clearSettingsTarget: vi.fn(),
 }));
+
 vi.mock("./settingsLayout", () => ({
   SettingsPageContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SettingsSection: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -69,9 +74,11 @@ vi.mock("./settingsLayout", () => ({
     </div>
   ),
 }));
+
 vi.mock("../ui/button", () => ({
   Button: (props: ButtonProps & { children: ReactNode }) => {
     mocks.buttons.set(props["aria-label"] ?? textOf(props.children), props);
+
     return null;
   },
 }));
@@ -82,6 +89,7 @@ const environmentId = EnvironmentId.make("env-1");
 
 function render(): string {
   mocks.buttons.clear();
+
   return renderToStaticMarkup(<ArchivedChatsSettingsPanel />);
 }
 

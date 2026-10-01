@@ -6,8 +6,10 @@ import { searchableSetting } from "./settingsSearch";
 
 export function LanguageSetting() {
   const { t, preference, setPreference, catalogFailed, retryCatalog } = useI18n();
+
   const selectedLabel =
     availableLanguages.find((language) => language.id === preference)?.label ?? t("System default");
+
   return (
     <SettingsRow
       {...searchableSetting("language", t)}

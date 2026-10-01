@@ -45,9 +45,11 @@ export function useBotComposerDraft(input: {
   // Bumped whenever the draft is sent, stashed, or swapped, so a late transcript is dropped.
   const [dictationGeneration, setDictationGeneration] = useState(0);
   const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
+
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
   const [expandedAttachmentId, setExpandedAttachmentId] = useState<string | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
   const [stashPulse, setStashPulse] = useState({ key: 0, active: false });
@@ -60,6 +62,7 @@ export function useBotComposerDraft(input: {
   const stashEntryToQueue = usePromptStashStore((state) => state.stashEntry);
   const takeStashEntry = usePromptStashStore((state) => state.takeEntry);
   const finalizeStashEntryImages = usePromptStashStore((state) => state.finalizeEntryImages);
+
   const releaseAttachments = useCallback((items: readonly BotPromptAttachment[]) => {
     const unreleased = items.filter((attachment) => {
       if (
@@ -68,16 +71,21 @@ export function useBotComposerDraft(input: {
       ) {
         return false;
       }
+
       releasedPreviewUrlsRef.current.add(attachment.previewUrl);
+
       return true;
     });
+
     releaseBotPromptAttachments(unreleased);
   }, []);
+
   const persistDraft = useCallback(
     (next: string) => {
       revisionRef.current += 1;
       setDraft(next);
       setIsStashMenuOpen(false);
+
       if (draftKey) writeBotDraft(draftKey, next);
     },
     [draftKey],
@@ -93,6 +101,7 @@ export function useBotComposerDraft(input: {
       if (stashPulseTimeoutRef.current !== null) {
         window.clearTimeout(stashPulseTimeoutRef.current);
       }
+
       releaseAttachments(attachmentsRef.current);
       attachmentsRef.current = [];
     },
@@ -106,8 +115,10 @@ export function useBotComposerDraft(input: {
     attachmentsRef.current = updated;
     setAttachments(updated);
   };
+
   const removeAttachment = (attachmentId: string) => {
     const removed = attachmentsRef.current.find((attachment) => attachment.id === attachmentId);
+
     if (!removed) return;
     revisionRef.current += 1;
     const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
@@ -117,17 +128,23 @@ export function useBotComposerDraft(input: {
       if (!current.has(attachmentId)) return current;
       const next = new Set(current);
       next.delete(attachmentId);
+
       return next;
     });
+
     if (expandedAttachmentId === attachmentId) {
       setExpandedAttachmentId(null);
     }
+
     releaseAttachments([removed]);
   };
+
   const markAttachmentPreviewFailed = (attachmentId: string) => {
     setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+
     if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
   };
+
   const expandedPreview =
     expandedAttachmentId === null
       ? null
@@ -137,6 +154,7 @@ export function useBotComposerDraft(input: {
     if (stashPulseTimeoutRef.current !== null) {
       window.clearTimeout(stashPulseTimeoutRef.current);
     }
+
     setStashPulse((current) => ({ key: current.key + 1, active: true }));
     stashPulseTimeoutRef.current = window.setTimeout(() => {
       setStashPulse((current) => ({ ...current, active: false }));
@@ -147,23 +165,29 @@ export function useBotComposerDraft(input: {
   const restoreStashEntry = useCallback(
     (candidate: PromptStashEntry) => {
       const { entry, durable } = takeStashEntry(candidate.id);
+
       if (!entry) return;
       persistDraft(restoreBotStashPrompt(draft, entry.prompt));
 
       const hydrated = hydrateImagesFromPersisted(entry.attachments).map((image) => image.file);
       const currentAttachments = attachmentsRef.current;
+
       const existingKeys = new Set(
         currentAttachments.map(
           (attachment) =>
             `${attachment.file.type}\0${attachment.file.size}\0${attachment.file.name}`,
         ),
       );
+
       const unique = hydrated.filter((file) => {
         const key = `${file.type}\0${file.size}\0${file.name}`;
+
         if (existingKeys.has(key)) return false;
         existingKeys.add(key);
+
         return true;
       });
+
       const capacity = Math.max(0, PROVIDER_SEND_TURN_MAX_ATTACHMENTS - currentAttachments.length);
       const restoredFiles = unique.slice(0, capacity);
       const restoredAttachments = createBotPromptAttachments(restoredFiles);
@@ -178,6 +202,7 @@ export function useBotComposerDraft(input: {
         (entry.pendingImageCount ?? 0) +
         (entry.attachments.length - hydrated.length) +
         (unique.length - restoredFiles.length);
+
       if (missingImageCount > 0) {
         toastManager.add({
           type: "warning",
@@ -188,6 +213,7 @@ export function useBotComposerDraft(input: {
           }),
         });
       }
+
       if (!durable) {
         toastManager.add({
           type: "warning",
@@ -195,6 +221,7 @@ export function useBotComposerDraft(input: {
           description: t("Browser storage rejected the update."),
         });
       }
+
       window.requestAnimationFrame(() => promptInputRef.current?.focus());
     },
     [draft, persistDraft, plural, promptInputRef, t, takeStashEntry],
@@ -203,6 +230,7 @@ export function useBotComposerDraft(input: {
   const deleteStashEntry = useCallback(
     (entry: PromptStashEntry) => {
       const { durable } = takeStashEntry(entry.id);
+
       if (!durable) {
         toastManager.add({
           type: "warning",
@@ -218,17 +246,22 @@ export function useBotComposerDraft(input: {
     const prompt = draft.trim();
     const stashedAttachments = [...attachmentsRef.current];
     const stashedFiles = stashedAttachments.map((attachment) => attachment.file);
+
     if (prompt.length === 0 && stashedFiles.length === 0) {
       setIsStashMenuOpen((open) => !open);
+
       return;
     }
+
     const snapshotKey = `${draftKey ?? ""}\0${prompt}\0${stashedFiles
       .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
       .join("\0")}`;
+
     if (stashInFlightRef.current.has(snapshotKey)) return;
     stashInFlightRef.current.add(snapshotKey);
 
     const entryId = randomUUID();
+
     try {
       const { evicted, written, durable } = stashEntryToQueue({
         id: entryId,
@@ -239,32 +272,39 @@ export function useBotComposerDraft(input: {
         unreadableImageNames: [],
         pendingImageCount: stashedFiles.length,
       });
+
       if (!written) {
         toastManager.add({
           type: "error",
           title: t("Could not stash this prompt"),
           description: t("Browser storage rejected the write, so the message was left in place."),
         });
+
         return;
       }
 
       persistDraft("");
       setDictationGeneration((generation) => generation + 1);
       const stashedIds = new Set(stashedAttachments.map((attachment) => attachment.id));
+
       const remaining = attachmentsRef.current.filter(
         (attachment) => !stashedIds.has(attachment.id),
       );
+
       attachmentsRef.current = remaining;
       setAttachments(remaining);
       setFailedAttachmentIds(
         (current) => new Set([...current].filter((id) => !stashedIds.has(id))),
       );
+
       if (expandedAttachmentId && stashedIds.has(expandedAttachmentId)) {
         setExpandedAttachmentId(null);
       }
+
       releaseAttachments(stashedAttachments);
       setIsStashMenuOpen(false);
       pulseStashBadge();
+
       if (!durable) {
         toastManager.add({
           type: "warning",
@@ -272,6 +312,7 @@ export function useBotComposerDraft(input: {
           description: t("Browser storage is unavailable, so the stash is kept for this session."),
         });
       }
+
       if (evicted) {
         toastManager.add({
           type: "warning",
@@ -286,14 +327,17 @@ export function useBotComposerDraft(input: {
       const persistedImages: PersistedComposerImageAttachment[] = [];
       const droppedImageNames: string[] = [];
       const unreadableImageNames: string[] = [];
+
       for (const file of stashedFiles) {
         const result = await compressImageForStash(file);
+
         if (!result.ok) {
           (result.reason === "too-large" ? droppedImageNames : unreadableImageNames).push(
             file.name,
           );
           continue;
         }
+
         persistedImages.push({
           id: randomUUID(),
           name: file.name,
@@ -302,12 +346,15 @@ export function useBotComposerDraft(input: {
           dataUrl: result.image.dataUrl,
         });
       }
+
       const { kept, droppedNames } = partitionStashAttachments(persistedImages);
+
       const { attached, durable: imagesDurable } = finalizeStashEntryImages(entryId, {
         attachments: kept,
         droppedImageNames: [...droppedImageNames, ...droppedNames],
         unreadableImageNames,
       });
+
       if (attached && !imagesDurable && durable && stashedFiles.length > 0) {
         toastManager.add({
           type: "warning",
@@ -354,12 +401,15 @@ export function useBotComposerDraft(input: {
     const prompt = draft.trim();
     const submittedAttachments = [...attachmentsRef.current];
     const submittedMention = resolveBotMention(prompt, submission.mentionBots);
+
     if (!canSubmitBotPrompt(submission.disabled, prompt, submittedAttachments.length)) return;
+
     if (submittedMention.kind === "ambiguous") return;
     const submittedFailedIds = new Set(failedAttachmentIds);
     persistDraft("");
     setDictationGeneration((generation) => generation + 1);
     submission.onCleared();
+
     if (draftKey) clearBotDraft(draftKey);
     attachmentsRef.current = [];
     setAttachments([]);
@@ -377,14 +427,19 @@ export function useBotComposerDraft(input: {
           if (sent) {
             releaseAttachments(submittedAttachments);
             setIsStashMenuOpen(false);
+
             return;
           }
+
           if (!isBotPromptSubmissionCurrent(submissionRevision, revisionRef.current)) {
             releaseAttachments(submittedAttachments);
+
             return;
           }
+
           revisionRef.current += 1;
           setDraft(prompt);
+
           if (draftKey) writeBotDraft(draftKey, prompt);
           attachmentsRef.current = submittedAttachments;
           setAttachments(submittedAttachments);

@@ -19,7 +19,9 @@ export const VoiceCallContext = createContext<VoiceCallContextValue | null>(null
 
 export function useVoiceCall() {
   const value = useContext(VoiceCallContext);
+
   if (!value) throw new Error("Voice call controls must be inside VoiceCallProvider.");
+
   return value;
 }
 

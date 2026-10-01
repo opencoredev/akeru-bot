@@ -33,6 +33,7 @@ function commandError(
   t: OnboardingTranslate,
 ): string {
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : t("The request failed.");
 }
 
@@ -57,18 +58,23 @@ export function SubscriptionStep({
   const statusQuery = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const startAuth = useAtomCommand(serverEnvironment.startSubscriptionAuth, {
     reportFailure: false,
   });
+
   const pollAuth = useAtomCommand(serverEnvironment.pollSubscriptionAuth, {
     reportFailure: false,
   });
+
   const completeAuth = useAtomCommand(serverEnvironment.completeSubscriptionAuth, {
     reportFailure: false,
   });
+
   const cancelAuth = useAtomCommand(serverEnvironment.cancelSubscriptionAuth, {
     reportFailure: false,
   });
+
   const { t } = useI18n();
   const [activeLogin, setActiveLogin] = useState<ActiveLogin | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +87,7 @@ export function SubscriptionStep({
     () => new Map(statusQuery.data?.providers.map((status) => [status.provider, status]) ?? []),
     [statusQuery.data],
   );
+
   const selected = SUBSCRIPTION_PROVIDERS.find((item) => item.id === draft.providerId)!;
   const connected = captureMode || statusByProvider.get(draft.providerId)?.connected === true;
 
@@ -90,12 +97,15 @@ export function SubscriptionStep({
         setActiveLogin(null);
         setBusy(false);
         statusQuery.refresh();
+
         return true;
       }
+
       if (progress.status === "failed") {
         setActiveLogin((current) => (current ? { ...current, error: progress.error } : current));
         setBusy(false);
       }
+
       return false;
     },
     [statusQuery],
@@ -105,27 +115,36 @@ export function SubscriptionStep({
     if (!activeLogin || activeLogin.flow.completion !== "poll") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     const poll = async () => {
       const result = await pollAuth({
         environmentId,
         input: { loginId: activeLogin.flow.loginId },
       });
+
       if (cancelled || isAtomCommandInterrupted(result)) return;
+
       if (result._tag === "Failure") {
         setActiveLogin((current) =>
           current ? { ...current, error: commandError(result, t) } : current,
         );
         setBusy(false);
+
         return;
       }
+
       if (settle(result.value)) return;
+
       if (result.value.status === "pending") {
         timer = setTimeout(poll, Math.max(1_000, result.value.nextPollMs));
       }
     };
+
     timer = setTimeout(poll, 1_000);
+
     return () => {
       cancelled = true;
+
       if (timer) clearTimeout(timer);
     };
   }, [activeLogin, environmentId, pollAuth, settle, t]);
@@ -141,21 +160,28 @@ export function SubscriptionStep({
     if (busy) return;
     const validation = apiKeyValidationError(code, baseUrl);
     setError(validation);
+
     if (validation) return;
     setBusy(true);
+
     const started = await startAuth({
       environmentId,
       input: apiKeyStartInput(draft.providerId, baseUrl),
     });
+
     if (started._tag !== "Success") {
       setBusy(false);
+
       if (started._tag === "Failure") setError(commandError(started, t));
+
       return;
     }
+
     const result = await completeAuth({
       environmentId,
       input: { loginId: started.value.loginId, code: code.trim() },
     });
+
     if (result._tag === "Success" && result.value.status === "connected") {
       setCode("");
       setBaseUrl("");
@@ -163,8 +189,10 @@ export function SubscriptionStep({
       setBusy(false);
       statusQuery.refresh();
       onContinue();
+
       return;
     }
+
     if (result._tag === "Failure") setError(commandError(result, t));
     else if (result._tag === "Success") {
       setError(
@@ -173,6 +201,7 @@ export function SubscriptionStep({
           : t("The key was not saved. Try again."),
       );
     }
+
     await cancelAuth({ environmentId, input: { loginId: started.value.loginId } });
     setBusy(false);
   };
@@ -180,28 +209,38 @@ export function SubscriptionStep({
   const connect = async () => {
     if (draft.providerId === "opencode-go" && !captureMode) {
       openKey();
+
       return;
     }
+
     if (captureMode) {
       onContinue();
+
       return;
     }
+
     setError(null);
     setCode("");
     setBusy(true);
+
     const result = await startAuth({
       environmentId,
       input: { provider: draft.providerId },
     });
+
     if (isAtomCommandInterrupted(result)) {
       setBusy(false);
+
       return;
     }
+
     if (result._tag === "Failure") {
       setError(commandError(result, t));
       setBusy(false);
+
       return;
     }
+
     setBusy(false);
     setActiveLogin({ flow: result.value, error: null });
     window.open(result.value.url, "_blank", "noopener,noreferrer");
@@ -210,21 +249,27 @@ export function SubscriptionStep({
   const complete = async () => {
     if (!activeLogin) return;
     setBusy(true);
+
     const result = await completeAuth({
       environmentId,
       input: { loginId: activeLogin.flow.loginId, code },
     });
+
     if (isAtomCommandInterrupted(result)) {
       setBusy(false);
+
       return;
     }
+
     if (result._tag === "Failure") {
       setActiveLogin((current) =>
         current ? { ...current, error: commandError(result, t) } : current,
       );
       setBusy(false);
+
       return;
     }
+
     settle(result.value);
   };
 
@@ -233,6 +278,7 @@ export function SubscriptionStep({
     setActiveLogin(null);
     setBusy(false);
     setCode("");
+
     if (login) {
       await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
     }
@@ -330,9 +376,11 @@ export function SubscriptionStep({
         {SUBSCRIPTION_PROVIDERS.map((definition) => {
           const active = definition.id === draft.providerId;
           const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
+
           const providerConnected = captureMode
             ? active
             : statusByProvider.get(definition.id)?.connected === true;
+
           return (
             <button
               key={definition.id}

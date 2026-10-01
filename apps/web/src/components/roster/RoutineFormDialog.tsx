@@ -113,11 +113,13 @@ export function RoutineFormDialog({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState(false);
+
   const save = async () => {
     if (!onSubmit || savingRef.current) return;
     savingRef.current = true;
     setSaveError(false);
     setSaving(true);
+
     try {
       await onSubmit(draft);
       onClose();

@@ -29,9 +29,11 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 export function InboxSection() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
+
   const inboxQuery = useEnvironmentQuery(
     environmentId === null ? null : botInboxEnvironment.list({ environmentId, input: {} }),
   );
+
   const resolveIncident = useAtomCommand(botInboxEnvironment.resolve);
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
   const openItems = selectOpenBotInboxItems(inboxQuery.data ?? []);
@@ -58,6 +60,7 @@ export function InboxSection() {
       ) : (
         openItems.map((item) => {
           const approval = item.memoryApproval;
+
           return (
             <InboxIncidentRow
               key={item.id}
@@ -71,6 +74,7 @@ export function InboxSection() {
                         environmentId,
                         input: { id: item.id },
                       });
+
                       return result._tag === "Failure"
                         ? formatEnvironmentQueryError(result.cause)
                         : null;
@@ -87,13 +91,16 @@ export function InboxSection() {
                           mutation: memoryApprovalMutation(approval, intent),
                         },
                       });
+
                       if (result._tag === "Failure") {
                         return t(
                           describeDurableFactFailure(squashAtomCommandFailure(result)).message,
                         );
                       }
+
                       // The server closes the inbox item when it records the decision.
                       inboxQuery.refresh();
+
                       return null;
                     }
               }
@@ -121,27 +128,34 @@ export function InboxIncidentRow({
   const copy = botInboxItemCopy(item, t);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+
   const openRepair = () => {
     if (action === "plugins") {
       openPlugins();
+
       return;
     }
+
     if (action === "providers") openSettings("providers", null, environmentId);
   };
+
   const handleResolve = async () => {
     if (onResolve === null || isResolving) return;
     setIsResolving(true);
     setResolveError(null);
+
     try {
       setResolveError(await onResolve());
     } finally {
       setIsResolving(false);
     }
   };
+
   const handleDecideMemory = async (intent: MemoryApprovalIntent) => {
     if (onDecideMemory === null || isResolving) return;
     setIsResolving(true);
     setResolveError(null);
+
     try {
       setResolveError(await onDecideMemory(intent));
     } finally {

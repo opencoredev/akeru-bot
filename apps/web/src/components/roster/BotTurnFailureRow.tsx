@@ -14,6 +14,7 @@ export function BotTurnFailureRow({
   readonly title: string;
 }) {
   const { t } = useI18n();
+
   return (
     <p
       className="mx-auto flex w-full max-w-3xl items-start gap-2 px-2 py-2 text-xs text-muted-foreground"

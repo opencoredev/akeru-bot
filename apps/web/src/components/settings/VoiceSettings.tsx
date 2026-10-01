@@ -20,11 +20,14 @@ export function VoiceSettingsSection() {
   const updateSettings = useUpdatePrimarySettings();
   const replyPlayback = useOptionalReplyPlayback();
   const environmentId = usePrimaryEnvironment()?.environmentId ?? null;
+
   const providersQuery = useEnvironmentQuery(
     environmentId ? serverEnvironment.voiceProviders({ environmentId, input: {} }) : null,
   );
+
   // Bumped when a key is saved so the voice list reloads for the new account.
   const [keyRevision, setKeyRevision] = useState(0);
+
   const connected = useMemo(
     () =>
       providersQuery.data
@@ -32,6 +35,7 @@ export function VoiceSettingsSection() {
         : null,
     [providersQuery.data],
   );
+
   // The server keeps each saved key's last Test verdict, so every client agrees.
   const serverRejected = useMemo(
     () =>

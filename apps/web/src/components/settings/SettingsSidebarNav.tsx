@@ -22,10 +22,12 @@ function useSettingsNavigation() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+
   const go = (to: string) => {
     if (isMobile) setOpenMobile(false);
     void navigate({ to });
   };
+
   return { pathname, go };
 }
 
@@ -36,6 +38,7 @@ function useSettingsNavigation() {
 export function SettingsPanelNav() {
   const { t } = useI18n();
   const { pathname, go } = useSettingsNavigation();
+
   return (
     <nav aria-label={t("Settings sections")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       {SETTINGS_NAV_GROUPS.map((group) => (
@@ -47,6 +50,7 @@ export function SettingsPanelNav() {
             {group.items.map((item) => {
               const to = `/settings/${item.section}`;
               const active = pathname === to || pathname.startsWith(`${to}/`);
+
               return (
                 <li key={item.section} className="list-none">
                   <button
@@ -94,6 +98,7 @@ export function SettingsSidebarNav() {
               {group.items.map((item) => {
                 const to = `/settings/${item.section}`;
                 const active = pathname === to || pathname.startsWith(`${to}/`);
+
                 return (
                   <SidebarMenuItem key={item.section}>
                     <SidebarMenuButton

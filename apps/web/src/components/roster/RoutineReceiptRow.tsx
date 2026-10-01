@@ -14,15 +14,18 @@ export function RoutineReceiptRow({
   readonly onOpenRoutines?: () => void;
 }) {
   const { t, formatDate } = useI18n();
+
   const Icon =
     receipt.tone === "error"
       ? CircleAlertIcon
       : receipt.tone === "success"
         ? CircleCheckIcon
         : Clock3Icon;
+
   const error = receipt.tone === "error";
   const opensRoutines = !receipt.archived && !!onOpenRoutines;
   const Row = opensRoutines ? "button" : "div";
+
   return (
     <Row
       {...(opensRoutines

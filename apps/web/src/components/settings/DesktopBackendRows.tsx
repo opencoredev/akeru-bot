@@ -40,6 +40,7 @@ export function SavedBackendListRow({
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
   const isConnecting = connectionState === "connecting" || connectionState === "reconnecting";
+
   const stateDotClassName =
     connectionState === "connected"
       ? "bg-success"
@@ -48,8 +49,10 @@ export function SavedBackendListRow({
         : connectionState === "error"
           ? "bg-destructive"
           : "bg-muted-foreground/40";
+
   const statusTooltip = translateConnectionStatus(t, environment.connection);
   const errorTraceId = environment.connection.traceId;
+
   const { copyToClipboard: copyTraceIdToClipboard } = useCopyToClipboard<{ traceId: string }>({
     target: "trace ID",
     onCopy: ({ traceId }) => {
@@ -69,22 +72,27 @@ export function SavedBackendListRow({
       );
     },
   });
+
   const copyTraceId = useCallback(
     (traceId: string) => {
       copyTraceIdToClipboard(traceId, { traceId });
     },
     [copyTraceIdToClipboard],
   );
+
   const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
+
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
+
   const sshTarget =
     environment.entry.target._tag === "SshConnectionTarget" &&
     Option.isSome(environment.entry.profile) &&
     environment.entry.profile.value._tag === "SshConnectionProfile"
       ? environment.entry.profile.value.target
       : null;
+
   const metadataBits = [sshTarget ? `SSH ${formatDesktopSshTarget(sshTarget)}` : null].filter(
     (value): value is string => value !== null,
   );

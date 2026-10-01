@@ -75,6 +75,7 @@ function payloadRecord(activity: OrchestrationThreadActivity): Record<string, un
 
 function toolCallId(activity: OrchestrationThreadActivity): string {
   const id = payloadRecord(activity)?.toolCallId;
+
   return typeof id === "string" ? id : activity.id;
 }
 
@@ -88,17 +89,22 @@ const TASK_LIST_TOOLS = new Set(["task_write", "task_update", "TodoWrite"]);
 
 function memoryLabel(activity: OrchestrationThreadActivity): string {
   const count = asRecord(payloadRecord(activity)?.data)?.memoryOperationCount;
+
   return typeof count === "number" && count > 0 ? "Saving to memory" : "Reading memory";
 }
 
 /** Maps a `tool.started` activity to the label shown while that tool runs. */
 export function botToolActivityLabel(activity: OrchestrationThreadActivity): string {
   const name = toolName(activity);
+
   if (name === "memory") return memoryLabel(activity);
+
   if (name.startsWith("preview_")) return "Using the browser";
   const known = TOOL_LABELS[name];
+
   if (known) return known;
   const itemType = payloadRecord(activity)?.itemType;
+
   return (typeof itemType === "string" ? ITEM_TYPE_LABELS[itemType] : undefined) ?? "Using a tool";
 }
 
@@ -113,12 +119,15 @@ export function deriveBotActivity(
 ): BotActivity {
   if (latestTurn?.state !== "running") return { label: "Starting" };
   const turnActivities = activities.filter((activity) => activity.turnId === latestTurn.turnId);
+
   if (derivePendingUserInputs(turnActivities).length > 0) {
     return { label: "Waiting for your answer" };
   }
+
   if (derivePendingApprovals(turnActivities).length > 0) return { label: "Waiting for approval" };
 
   const openTools = new Map<string, OrchestrationThreadActivity>();
+
   for (const activity of turnActivities) {
     if (activity.kind === "tool.started" && !TASK_LIST_TOOLS.has(toolName(activity))) {
       openTools.set(toolCallId(activity), activity);
@@ -126,6 +135,8 @@ export function deriveBotActivity(
       openTools.delete(toolCallId(activity));
     }
   }
+
   const openTool = [...openTools.values()].at(-1);
+
   return { label: openTool ? botToolActivityLabel(openTool) : "Working" };
 }

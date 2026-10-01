@@ -29,6 +29,7 @@ const TIME_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle
 
 function formatTime(value: string, formatDate: ReturnType<typeof useI18n>["formatDate"]) {
   const date = new Date(value);
+
   return Number.isNaN(date.getTime()) ? value : formatDate(date, TIME_FORMAT);
 }
 
@@ -50,6 +51,7 @@ export function DurableScopePicker({
   readonly onChange: (scope: DurableMemoryExportScope) => void;
 }) {
   const { t } = useI18n();
+
   return (
     <div role="group" aria-label={t(label)} className="flex flex-wrap gap-1">
       {options.map((option) => (
@@ -124,11 +126,13 @@ export function DurableFactList({
 }) {
   const i18n = useI18n();
   const { t } = i18n;
+
   if (facts.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">{t("No durable facts in this scope yet.")}</p>
     );
   }
+
   return (
     <ul className="space-y-2" data-testid="durable-facts">
       {facts.map((fact) => {
@@ -136,9 +140,12 @@ export function DurableFactList({
         const actions = durableFactActions(fact, policy);
         // An open draft or confirmation closes if the policy stops allowing its action.
         const isEditing = editing?.rootId === fact.rootId && actions.includes("edit");
+
         const confirmingDelete =
           confirmingDeleteRootId === fact.rootId && actions.includes("delete");
+
         const sourceLabel = durableFactSourceLabel(fact, { currentThreadId, threadTitles }, i18n);
+
         return (
           <li
             key={fact.rootId}
@@ -349,6 +356,7 @@ export function DurableImportReview({
   readonly onCancel: () => void;
 }) {
   const { t, plural } = useI18n();
+
   return (
     <div className="space-y-3 text-sm" data-testid="durable-import-review">
       {groups.length === 0 ? (

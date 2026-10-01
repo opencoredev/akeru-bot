@@ -20,6 +20,7 @@ export {
   desktopOnboardingGoalPlan,
   type GoalPlan,
 } from "./goalClassification.logic";
+
 export {
   DESKTOP_ONBOARDING_GOAL_EXAMPLES,
   DESKTOP_ONBOARDING_GOAL_THINKING_BEATS,
@@ -56,10 +57,13 @@ const LEGACY_FOLLOW_UP_LABELS: readonly string[] = [
 export function normalizeDesktopOnboardingGoal(goal: string): string {
   const lines = goal.split("\n");
   const kept = [lines[0] ?? ""];
+
   for (const line of lines.slice(1)) {
     const legacy = LEGACY_FOLLOW_UP_LABELS.some((label) => line.startsWith(`${label}: `));
+
     if (!legacy) kept.push(line);
   }
+
   return kept.join("\n").trim();
 }
 
@@ -79,6 +83,7 @@ export function desktopOnboardingBotBrief(goal: string): {
   const description = condense(goal);
   const plan = desktopOnboardingGoalPlan(description);
   const steps = plan.steps.map((step) => `- ${step}`).join("\n");
+
   return {
     description,
     prompt: `I want help with this:\n\n${description}\n\nStart here:\n${steps}\n\nAsk me for anything you need as it comes up.`,
@@ -92,8 +97,10 @@ export function desktopOnboardingGoalThinkingMs(reducedMotion: boolean): number 
 /** Which line the beat is on. Holds the last one rather than blanking out. */
 export function desktopOnboardingGoalThinkingStatus(elapsedMs: number): string {
   let status = DESKTOP_ONBOARDING_GOAL_THINKING_BEATS[0]?.status ?? "";
+
   for (const beat of DESKTOP_ONBOARDING_GOAL_THINKING_BEATS) {
     if (elapsedMs >= beat.atMs) status = beat.status;
   }
+
   return status;
 }

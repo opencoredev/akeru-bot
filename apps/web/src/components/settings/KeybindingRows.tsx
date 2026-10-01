@@ -29,6 +29,7 @@ import {
 
 export function SourceBadge({ source }: { source: KeybindingRow["source"] }) {
   const { t } = useI18n();
+
   if (source === "Default") {
     return (
       <Badge variant="keybinding-default" size="sm">
@@ -36,6 +37,7 @@ export function SourceBadge({ source }: { source: KeybindingRow["source"] }) {
       </Badge>
     );
   }
+
   return (
     <Badge variant="keybinding-custom" size="sm">
       {t("Custom")}
@@ -75,6 +77,7 @@ export function KeybindingListRow({
   const isDirty = keyDraft !== row.key || whenDraftExpression !== row.when;
   const canReset = row.source === "Custom" && row.defaultKey !== null;
   const canRemove = row.source !== "Default";
+
   const conflictLabels = keybindingConflictLabels(allRows, {
     rowId: row.id,
     key: keyDraft,
@@ -216,6 +219,7 @@ export function KeybindingSeriesItem({
   const customized = series.rows.filter((row) => row.source === "Custom").length;
   const conflictLabels = [...new Set(series.rows.flatMap((row) => row.conflicts))].toSorted();
   const firstRow = series.rows[0];
+
   const condition =
     series.when && firstRow ? describeWhenExpression(firstRow.binding.whenAst) : null;
 

@@ -30,18 +30,25 @@ export type KeybindingCommandOption = KeybindingCommand;
 
 export function shortcutToKeybindingInput(shortcut: KeybindingShortcut): string {
   const parts: string[] = [];
+
   if (shortcut.modKey) parts.push("mod");
+
   if (shortcut.metaKey) parts.push("meta");
+
   if (shortcut.ctrlKey) parts.push("ctrl");
+
   if (shortcut.altKey) parts.push("alt");
+
   if (shortcut.shiftKey) parts.push("shift");
   parts.push(shortcut.key === " " ? "space" : shortcut.key === "escape" ? "esc" : shortcut.key);
+
   return parts.join("+");
 }
 
 function sourceForBinding(binding: ResolvedKeybindingRule): KeybindingSource {
   const bindingKey = shortcutToKeybindingInput(binding.shortcut);
   const bindingWhen = whenAstToExpression(binding.whenAst);
+
   const isDefault = DEFAULT_RESOLVED_KEYBINDINGS.some(
     (entry) =>
       entry.command === binding.command &&
@@ -87,9 +94,11 @@ interface ConflictProbe {
 // reusing mod+1 while it is open). The reverse leaves the scoped one dead.
 function bindingsConflict(left: ConflictProbe, right: ConflictProbe): boolean {
   if (left.when === right.when) return true;
+
   if (left.when.length > 0 && right.when.length > 0) return false;
   const scoped = left.when.length > 0 ? left : right;
   const unscoped = scoped === left ? right : left;
+
   return unscoped.order > scoped.order;
 }
 
@@ -109,6 +118,7 @@ export function keybindingConflictLabels(
   if (input.key.trim().length === 0) return [];
   const probe = { when: input.when, order: input.order ?? Number.POSITIVE_INFINITY };
   const conflicts: Array<string> = [];
+
   for (const candidate of rows) {
     if (
       candidate.id !== input.rowId &&
@@ -118,6 +128,7 @@ export function keybindingConflictLabels(
       conflicts.push(commandLabel(candidate.command));
     }
   }
+
   return [...new Set(conflicts)].toSorted();
 }
 
@@ -126,11 +137,13 @@ export function buildKeybindingRows(
   query: string,
 ): ReadonlyArray<KeybindingRow> {
   const normalizedQuery = query.trim().toLowerCase();
+
   const rows = keybindings.flatMap((binding, index) => {
     if (isRetiredCommand(binding.command)) return [];
     const defaultBinding = defaultBindingForBinding(binding);
     const key = shortcutToKeybindingInput(binding.shortcut);
     const when = whenAstToExpression(binding.whenAst);
+
     return {
       id: `${keybindingRowId(binding.command, key, when)}\u0000${index}`,
       command: binding.command,
@@ -152,6 +165,7 @@ export function buildKeybindingRows(
       when: row.when,
       order: row.order,
     });
+
     return conflicts.length > 0
       ? Object.assign({}, row, { conflicts: [...new Set(conflicts)].toSorted() })
       : row;
@@ -159,7 +173,9 @@ export function buildKeybindingRows(
 
   rowsWithConflicts.sort((left, right) => {
     const commandCompare = left.command.localeCompare(right.command);
+
     if (commandCompare !== 0) return commandCompare;
+
     return left.key.localeCompare(right.key);
   });
 
@@ -220,7 +236,9 @@ const SERIES_COMMAND_PATTERN = /^(thread\.jump|modelPicker\.jump)\.(\d+)$/;
 
 function seriesParts(command: KeybindingCommand): { id: string; index: number } | null {
   const match = SERIES_COMMAND_PATTERN.exec(String(command));
+
   if (!match?.[1] || !match[2]) return null;
+
   return { id: match[1], index: Number(match[2]) };
 }
 
@@ -242,6 +260,7 @@ const RETIRED_COMMANDS = new Set([
 
 export function isRetiredCommand(command: KeybindingCommand): boolean {
   const raw = String(command);
+
   return (
     RETIRED_COMMANDS.has(raw) || RETIRED_COMMAND_PREFIXES.some((prefix) => raw.startsWith(prefix))
   );
@@ -249,6 +268,7 @@ export function isRetiredCommand(command: KeybindingCommand): boolean {
 
 export function keybindingGroupForCommand(command: KeybindingCommand): KeybindingGroupId {
   const series = seriesParts(command);
+
   return COMMAND_META_BY_ID.get(series?.id ?? String(command))?.group ?? "general";
 }
 
@@ -259,7 +279,9 @@ export function keybindingGroupTitle(groupId: KeybindingGroupId): string {
 function commandOrder(command: KeybindingCommand): number {
   const series = seriesParts(command);
   const meta = COMMAND_META_BY_ID.get(series?.id ?? String(command));
+
   if (!meta) return Number.MAX_SAFE_INTEGER;
+
   return meta.order + (series ? series.index / 100 : 0);
 }
 
@@ -285,10 +307,13 @@ export interface KeybindingSummary {
 export function summarizeKeybindings(rows: ReadonlyArray<KeybindingRow>): KeybindingSummary {
   let customized = 0;
   let conflicts = 0;
+
   for (const row of rows) {
     if (row.source === "Custom") customized += 1;
+
     if (row.conflicts.length > 0) conflicts += 1;
   }
+
   return { total: rows.length, customized, conflicts };
 }
 
@@ -323,13 +348,16 @@ function buildSeries(id: string, rows: ReadonlyArray<KeybindingRow>): Keybinding
   const when = rows.every((row) => row.when === firstWhen) ? firstWhen : null;
 
   let rangeKey: string | null = null;
+
   if (firstRow && when !== null) {
     const prefix = firstRow.key.slice(0, firstRow.key.lastIndexOf("+") + 1);
+
     const followsPattern =
       prefix.length > 0 &&
       new Set(indices).size === rows.length &&
       max - min + 1 === rows.length &&
       rows.every((row, index) => row.key === `${prefix}${indices[index]}`);
+
     if (followsPattern) rangeKey = `${prefix}${min}–${max}`;
   }
 
@@ -351,6 +379,7 @@ export function buildKeybindingGroups(
   filter: KeybindingFilter = "all",
 ): ReadonlyArray<KeybindingGroupView> {
   const byGroup = new Map<KeybindingGroupId, KeybindingRow[]>();
+
   for (const row of rows) {
     if (!matchesKeybindingFilter(row, filter)) continue;
     const groupId = keybindingGroupForCommand(row.command);
@@ -360,20 +389,27 @@ export function buildKeybindingGroups(
   }
 
   const groups: KeybindingGroupView[] = [];
+
   for (const group of KEYBINDING_GROUPS) {
     const groupRows = byGroup.get(group.id);
+
     if (!groupRows || groupRows.length === 0) continue;
     groupRows.sort((left, right) => {
       const orderCompare = commandOrder(left.command) - commandOrder(right.command);
+
       if (orderCompare !== 0) return orderCompare;
       const labelCompare = commandLabel(left.command).localeCompare(commandLabel(right.command));
+
       if (labelCompare !== 0) return labelCompare;
+
       return left.key.localeCompare(right.key);
     });
 
     const seriesRows = new Map<string, KeybindingRow[]>();
+
     for (const row of groupRows) {
       const series = seriesParts(row.command);
+
       if (!series) continue;
       const members = seriesRows.get(series.id) ?? [];
       members.push(row);
@@ -382,13 +418,16 @@ export function buildKeybindingGroups(
 
     const items: KeybindingListItem[] = [];
     const emittedSeries = new Set<string>();
+
     for (const row of groupRows) {
       const series = seriesParts(row.command);
       const members = series ? seriesRows.get(series.id) : undefined;
+
       if (!series || !members || members.length < 2) {
         items.push({ type: "row", row });
         continue;
       }
+
       if (emittedSeries.has(series.id)) continue;
       emittedSeries.add(series.id);
       items.push({ type: "series", series: buildSeries(series.id, members) });
@@ -396,6 +435,7 @@ export function buildKeybindingGroups(
 
     groups.push({ id: group.id, title: group.title, items, rowCount: groupRows.length });
   }
+
   return groups;
 }
 
@@ -444,11 +484,14 @@ const KEY_LABELS: Readonly<Record<string, string>> = {
  */
 export function keybindingDisplayParts(value: string, platform: string): ReadonlyArray<string> {
   const trimmed = value.trim().toLowerCase();
+
   if (trimmed.length === 0) return [];
   const endsWithPlusKey = trimmed.endsWith("+") && trimmed.length > 1;
+
   const tokens = (endsWithPlusKey ? trimmed.slice(0, -1) : trimmed)
     .split("+")
     .filter((token) => token.length > 0);
+
   if (endsWithPlusKey) tokens.push("+");
 
   const isMac = isMacPlatform(platform);
@@ -484,9 +527,11 @@ export function buildKeybindingCommandOptions(
     ...DEFAULT_RESOLVED_KEYBINDINGS.map((binding) => binding.command),
     ...UNBOUND_COMMANDS,
   ]);
+
   for (const binding of keybindings) {
     if (!isRetiredCommand(binding.command)) commands.add(binding.command);
   }
+
   return [...commands].toSorted((left, right) =>
     commandLabel(left).localeCompare(commandLabel(right)),
   );
@@ -495,27 +540,35 @@ export function buildKeybindingCommandOptions(
 export function commandLabel(command: KeybindingCommand): string {
   const raw = String(command);
   const series = seriesParts(command);
+
   if (series) {
     const title = COMMAND_META_BY_ID.get(series.id)?.title;
+
     if (title) return `${title} ${series.index}`;
   }
+
   const title = COMMAND_META_BY_ID.get(raw)?.title;
+
   if (title) return title;
+
   return raw.split(".").map(titleCaseCommandSegment).join(": ");
 }
 
 function titleCaseCommandSegment(segment: string): string {
   const words: Array<string> = [];
+
   for (const part of segment.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[-_\s]+/)) {
     if (part.length > 0) {
       words.push(part.slice(0, 1).toUpperCase() + part.slice(1));
     }
   }
+
   return words.join(" ");
 }
 
 export function normalizeShortcutKeyToken(key: string): string | null {
   const normalized = key.toLowerCase();
+
   if (
     normalized === "meta" ||
     normalized === "control" ||
@@ -526,21 +579,33 @@ export function normalizeShortcutKeyToken(key: string): string | null {
   ) {
     return null;
   }
+
   if (normalized === " ") return "space";
+
   if (normalized === "escape") return "esc";
+
   if (normalized === "arrowup") return "arrowup";
+
   if (normalized === "arrowdown") return "arrowdown";
+
   if (normalized === "arrowleft") return "arrowleft";
+
   if (normalized === "arrowright") return "arrowright";
+
   if (normalized.length === 1) return normalized;
+
   if (/^f\d{1,2}$/.test(normalized)) return normalized;
+
   if (normalized === "enter" || normalized === "tab" || normalized === "backspace") {
     return normalized;
   }
+
   if (normalized === "delete" || normalized === "home" || normalized === "end") {
     return normalized;
   }
+
   if (normalized === "pageup" || normalized === "pagedown") return normalized;
+
   return null;
 }
 
@@ -549,24 +614,34 @@ export function keybindingFromKeyboardEvent(
   platform: string,
 ): string | null {
   const keyToken = normalizeShortcutKeyToken(event.key);
+
   if (!keyToken) return null;
 
   const parts: string[] = [];
+
   if (isMacPlatform(platform)) {
     if (event.metaKey) parts.push("mod");
+
     if (event.ctrlKey) parts.push("ctrl");
   } else {
     if (event.ctrlKey) parts.push("mod");
+
     if (event.metaKey) parts.push("meta");
   }
+
   if (event.altKey) parts.push("alt");
+
   if (event.shiftKey) parts.push("shift");
+
   if (parts.length === 0) {
     return null;
   }
+
   parts.push(keyToken);
+
   return parts.join("+");
 }
+
 export {
   DEFAULT_WHEN_VARIABLE,
   whenAstToExpression,
@@ -576,4 +651,5 @@ export {
   unknownWhenVariables,
   buildWhenVariableOptions,
 } from "./KeybindingWhen.logic";
+
 export type { WhenVariableOption } from "./KeybindingWhen.logic";

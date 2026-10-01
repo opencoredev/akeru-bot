@@ -73,6 +73,7 @@ export function NewBotDialog({
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
+
             if (submitting || trimmedName.length === 0) return;
             onCreate({ name: trimmedName, avatar });
           }}
@@ -149,6 +150,7 @@ export function NewBotDialog({
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                   {BLOB_SHAPES.map((shape) => {
                     const selected = avatar.kind === "blob" && blobAvatar.shape === shape;
+
                     return (
                       <Button
                         key={shape}

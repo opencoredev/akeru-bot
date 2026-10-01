@@ -20,20 +20,24 @@ export const DESKTOP_ONBOARDING_CELEBRATION_PIECES = 16;
 
 function hashSeed(seed: string): number {
   let hash = 0x811c9dc5;
+
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= seed.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
+
   return hash >>> 0;
 }
 
 /** mulberry32: small, deterministic, and good enough to scatter confetti. */
 function seededRandom(state: number): () => number {
   let value = state;
+
   return () => {
     value = (value + 0x6d2b79f5) >>> 0;
     let next = Math.imul(value ^ (value >>> 15), 1 | value);
     next = (next + Math.imul(next ^ (next >>> 7), 61 | next)) ^ next;
+
     return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
   };
 }
@@ -52,8 +56,10 @@ export function desktopOnboardingCelebrationPieces(
   const others = BLOB_COLORS.filter((color) => color !== "#FFFFFF" && color !== tint);
   const palette = tint ? [tint, tint, ...others.slice(0, 3)] : others.slice(0, 4);
   const random = seededRandom(hashSeed(seed));
+
   return Array.from({ length: Math.max(0, count) }, (_, id) => {
     const spread = (random() - 0.5) * 2;
+
     return {
       id,
       color: palette[Math.floor(random() * palette.length)] ?? palette[0] ?? "#7A8699",
@@ -126,12 +132,14 @@ export function desktopOnboardingHandoffStages(
   reducedMotion: boolean,
 ): readonly DesktopOnboardingHandoffStage[] {
   if (!reducedMotion) return DESKTOP_ONBOARDING_HANDOFF_STAGES;
+
   return DESKTOP_ONBOARDING_HANDOFF_STAGES.map((stage) => ({ ...stage, atMs: 0 }));
 }
 
 /** How long the opaque part of the handoff takes, before readiness is waited on. */
 export function desktopOnboardingHandoffDurationMs(reducedMotion: boolean): number {
   const stages = desktopOnboardingHandoffStages(reducedMotion);
+
   return stages.at(-1)?.atMs ?? 0;
 }
 
@@ -152,10 +160,13 @@ export function desktopOnboardingDestinationReady(input: {
   if (!input.threadLinked || !input.turnStarted) return false;
   const submitted = input.submittedMessage.trim();
   const userMessages = input.messages.filter((message) => message.role === "user");
+
   if (userMessages.length === 0) return false;
+
   // An attachment-only first message has no text to match, so the presence of
   // the user turn is all there is to wait for.
   if (submitted.length === 0) return true;
+
   return userMessages.some((message) => message.text.trim() === submitted);
 }
 
@@ -170,6 +181,7 @@ export function canStartDesktopOnboardingReveal(input: {
   readonly timedOut: boolean;
 }): boolean {
   if (input.phase !== "opening") return false;
+
   return input.destinationReady || input.timedOut;
 }
 
@@ -183,8 +195,11 @@ export function desktopOnboardingHandoffStatus(
   t: OnboardingTranslate = englishOnboardingTranslate,
 ): string {
   const name = botName.trim() || t("your bot");
+
   if (phase === "sending") return t("Message sent");
+
   if (phase === "waking") return t("Waking {name} up", { name });
+
   return t("Opening your workspace");
 }
 
@@ -199,6 +214,7 @@ export function desktopOnboardingHandoffStatuses(
   const statuses = DESKTOP_ONBOARDING_HANDOFF_PHASES.map((phase) =>
     desktopOnboardingHandoffStatus(phase, botName, t),
   );
+
   return [...new Set(statuses)];
 }
 

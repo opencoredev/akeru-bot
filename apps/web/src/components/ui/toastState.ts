@@ -40,8 +40,11 @@ export type ThreadToastData = {
 };
 
 export const toastManager = Toast.createToastManager<ThreadToastData>();
+
 export const anchoredToastManager = Toast.createToastManager<ThreadToastData>();
+
 export type ToastId = ReturnType<typeof toastManager.add>;
+
 export const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
 
 export function handleToastDismissClick(

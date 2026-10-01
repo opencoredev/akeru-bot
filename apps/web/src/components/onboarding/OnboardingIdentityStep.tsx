@@ -28,6 +28,7 @@ export function IdentityStep({
   readonly onContinue: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">

@@ -58,6 +58,7 @@ export function ThemeImportDialog({
     // Reset on close too: a dialog dismissed mid-drag would otherwise reopen
     // still wearing the drop highlight.
     setIsDropTarget(false);
+
     if (!open) return;
     setJson("");
     setFileName(null);
@@ -70,15 +71,19 @@ export function ThemeImportDialog({
     // Check the size first: reading a large file is what locks the UI, so it
     // never gets read at all.
     const oversized = describeOversizedThemeFile(file.size);
+
     if (oversized) {
       setError(oversized);
+
       return;
     }
 
     const requestId = ++importRequestRef.current;
     setIsReading(true);
+
     try {
       const fileText = await file.text();
+
       if (requestId !== importRequestRef.current) return;
       setJson(fileText);
       setFileName(file.name);
@@ -100,13 +105,16 @@ export function ThemeImportDialog({
       setIsReading(true);
       const failures: string[] = [];
       const parsed: Array<{ theme: ThemeDefinition; sourceName: string }> = [];
+
       try {
         for (const file of files) {
           const oversized = describeOversizedThemeFile(file.size);
+
           if (oversized) {
             failures.push(`${file.name}: too large`);
             continue;
           }
+
           try {
             const value: unknown = JSON.parse(await file.text());
             parsed.push({
@@ -119,14 +127,17 @@ export function ThemeImportDialog({
             );
           }
         }
+
         if (requestId !== importRequestRef.current) return;
         const installed: ThemeDefinition[] = [];
         const conflicting: ThemeDefinition[] = [];
+
         for (const theme of pairVsCodeThemes(resolveThemeLabelCollisions(parsed))) {
           if (getCustomThemes().some((existing) => existing.id === theme.id)) {
             conflicting.push(theme);
             continue;
           }
+
           try {
             installed.push(installCustomTheme(theme));
           } catch (cause) {
@@ -135,7 +146,9 @@ export function ThemeImportDialog({
             );
           }
         }
+
         if (installed.length > 0) onImportedMany(installed, { updated: false });
+
         if (failures.length > 0) {
           setError(failures.join(" — "));
         } else if (conflicting.length > 0) {
@@ -153,6 +166,7 @@ export function ThemeImportDialog({
   const readThemeFiles = useCallback(
     (files: ReadonlyArray<ImportableThemeFile>) => {
       if (files.length === 0) return;
+
       if (files.length === 1) void readThemeFile(files[0]!);
       else void readThemeBatch(files);
     },
@@ -164,6 +178,7 @@ export function ThemeImportDialog({
   // the fallback everywhere else.
   const openFilePicker = useCallback(() => {
     const bridge = window.desktopBridge;
+
     if (bridge?.pickThemeFiles) {
       void bridge.pickThemeFiles().then((picked) => {
         if (!picked || picked.length === 0) return;
@@ -175,8 +190,10 @@ export function ThemeImportDialog({
           })),
         );
       });
+
       return;
     }
+
     fileInputRef.current?.click();
   }, [readThemeFiles]);
 
@@ -213,8 +230,10 @@ export function ThemeImportDialog({
         ...(theme.variants ? { variants: theme.variants } : {}),
         ...(theme.managed ? { managed: true } : {}),
       });
+
       if (!getCustomThemes().some((existing) => existing.id === candidate.id)) return candidate;
     }
+
     for (let copy = 1; copy < 100; copy += 1) {
       const candidate = parseThemeFile({
         version: THEME_FILE_VERSION,
@@ -224,9 +243,12 @@ export function ThemeImportDialog({
         ...(theme.variants ? { variants: theme.variants } : {}),
         ...(theme.managed ? { managed: true } : {}),
       });
+
       if (getCustomThemes().some((existing) => existing.id === candidate.id)) continue;
+
       return candidate;
     }
+
     throw new Error(`Too many copies of "${theme.label}".`);
   };
 
@@ -235,19 +257,23 @@ export function ThemeImportDialog({
       if (!conflicts) return;
       const resolved: ThemeDefinition[] = [];
       const failures: string[] = [];
+
       const preferredName =
         conflicts.length === 1 && fileName
           ? humanizeThemeName(fileName.replace(/\.[^.]+$/, ""))
           : null;
+
       for (const theme of conflicts) {
         try {
           const existingTheme =
             mode === "update"
               ? getCustomThemes().find((candidate) => candidate.id === theme.id)
               : undefined;
+
           const themeToUpdate = existingTheme?.collection
             ? { ...theme, collection: existingTheme.collection }
             : theme;
+
           resolved.push(
             mode === "update"
               ? updateCustomTheme(themeToUpdate)
@@ -257,8 +283,10 @@ export function ThemeImportDialog({
           failures.push(`${theme.label}: ${cause instanceof Error ? cause.message : "failed"}`);
         }
       }
+
       if (resolved.length > 0) onImportedMany(resolved, { updated: mode === "update" });
       setConflicts(null);
+
       if (failures.length > 0) setError(failures.join(" — "));
       else onOpenChange(false);
     },
@@ -268,23 +296,31 @@ export function ThemeImportDialog({
   const handleSubmit = useCallback(() => {
     // Pasted text bypasses the file guard, so the same limit applies here.
     const oversized = describeOversizedThemeFile(json.length);
+
     if (oversized) {
       setError(oversized);
+
       return;
     }
+
     try {
       const parsed: unknown = JSON.parse(json);
+
       // VS Code themes are converted on the way in; anything else has to be
       // one of our own files.
       const theme = isVsCodeThemeFile(parsed)
         ? parseVsCodeThemeFile(parsed)
         : parseThemeFile(parsed);
+
       if (getCustomThemes().some((existing) => existing.id === theme.id)) {
         setError(null);
         setConflicts([theme]);
+
         return;
       }
+
       const installedTheme = installCustomTheme(theme);
+
       if (!onImported(installedTheme)) {
         // Roll the install back so a retry can run it again instead of
         // failing on the already-taken theme id.
@@ -293,9 +329,12 @@ export function ThemeImportDialog({
         } catch {
           // Storage is failing wholesale; the error below covers it.
         }
+
         setError("Theme added, but it could not be selected. Try again.");
+
         return;
       }
+
       onOpenChange(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That theme file is invalid.");
@@ -344,11 +383,13 @@ export function ThemeImportDialog({
               onDragLeave: (event: DragEvent<HTMLDivElement>) => {
                 // Ignore moves between children of the drop zone.
                 const nextTarget = event.relatedTarget;
+
                 if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
                 setIsDropTarget(false);
               },
               onDrop: handleDrop,
             };
+
             const fileInput = (
               <input
                 ref={fileInputRef}
@@ -359,12 +400,14 @@ export function ThemeImportDialog({
                 type="file"
               />
             );
+
             const chooseButton = (label = "Choose files") => (
               <Button disabled={isReading} size="sm" variant="outline" onClick={openFilePicker}>
                 <DownloadIcon />
                 {isReading ? "Reading…" : label}
               </Button>
             );
+
             const editorSection = () => (
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between gap-3">
@@ -375,6 +418,7 @@ export function ThemeImportDialog({
                 <ThemeJsonEditor id="theme-json-editor" onChange={setJson} value={json} />
               </div>
             );
+
             if (conflicts) {
               return (
                 <div className="space-y-3">
@@ -401,6 +445,7 @@ export function ThemeImportDialog({
                 </div>
               );
             }
+
             return (
               <div className="space-y-4">
                 <div

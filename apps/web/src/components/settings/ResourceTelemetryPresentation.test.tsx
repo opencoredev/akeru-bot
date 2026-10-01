@@ -73,6 +73,7 @@ describe("resource telemetry presentation", () => {
     expect(sourceStatusTone("degraded")).toBe("warning");
     expect(sourceStatusTone("unavailable")).toBe("danger");
     const healthy = renderToStaticMarkup(<SourceStatusBadge label="Native" status="healthy" />);
+
     const desktop = renderToStaticMarkup(
       <SourceStatusBadge
         label=""
@@ -80,6 +81,7 @@ describe("resource telemetry presentation", () => {
         presentation={{ label: "Desktop only", tone: "neutral" }}
       />,
     );
+
     expect(healthy).toContain("Native healthy");
     expect(healthy).toContain("border-success/25");
     expect(desktop).toContain("Desktop only");

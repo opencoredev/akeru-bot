@@ -65,6 +65,7 @@ export function useBotPromptMentionScope(input: {
   const threadId = input.threadRef?.threadId ?? null;
   const projectId = input.projectId ?? null;
   const cwd = input.cwd ?? null;
+
   return useMemo(
     () => (environmentId ? { environmentId, threadId, projectId, cwd } : null),
     [cwd, environmentId, projectId, threadId],
@@ -72,6 +73,7 @@ export function useBotPromptMentionScope(input: {
 }
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
+
 const NO_ENVIRONMENTS: ReadonlyArray<EnvironmentId> = [];
 
 export function botPromptMentionOptionId(listboxId: string, index: number): string {
@@ -102,25 +104,31 @@ export function BotPromptMentionMenu({
   onActiveOptionChange: (optionId: string | null) => void;
 }) {
   const { t } = useI18n();
+
   const mentionKindDescription: Record<Exclude<BotPromptMentionItem["kind"], "path">, string> = {
     browser: t("Preview browser"),
     bot: t("Bot"),
     thread: t("Chat"),
   };
+
   const browserAccess = useEnvironmentSettings(
     scope?.environmentId ?? NO_ENVIRONMENT,
     (settings) => settings.enableAgentBrowserAccess,
   );
+
   const shells = useThreadShells();
   const threadQuery = botPromptThreadQuery(trigger.query);
   const search = useThreadSearch(scope ? [scope.environmentId] : NO_ENVIRONMENTS, threadQuery);
+
   const threads = useMemo(() => {
     if (!scope) return [];
+
     const matchedIds = new Set(
       search.matches
         .filter((match) => match.environmentId === scope.environmentId)
         .map((match) => match.threadId as string),
     );
+
     return rankComposerThreadMentions(
       shells.filter((shell) => shell.environmentId === scope.environmentId),
       {
@@ -131,13 +139,16 @@ export function BotPromptMentionMenu({
       },
     );
   }, [scope, search.matches, shells, threadQuery]);
+
   // `@chat:` names a chat outright; any other query may also be a workspace path.
   const searchesPaths = scope !== null && !isBotPromptThreadQuery(trigger.query);
+
   const pathSearch = useComposerPathSearch({
     environmentId: scope?.environmentId ?? null,
     cwd: searchesPaths ? scope.cwd : null,
     query: searchesPaths ? trigger.query : null,
   });
+
   const items = buildBotPromptMentionItems({
     query: trigger.query,
     browserAvailable: scope !== null && browserAccess,
@@ -146,9 +157,12 @@ export function BotPromptMentionMenu({
     threads,
     paths: pathSearch.entries,
   });
+
   const [active, setActive] = useState({ query: trigger.query, index: 0 });
+
   const activeIndex =
     active.query === trigger.query ? Math.min(active.index, Math.max(0, items.length - 1)) : 0;
+
   const activeOptionId = items.length > 0 ? botPromptMentionOptionId(listboxId, activeIndex) : null;
 
   useEffect(() => {
@@ -161,24 +175,33 @@ export function BotPromptMentionMenu({
     () => ({
       handleKeyDown: (event) => {
         if (event.nativeEvent.isComposing) return false;
+
         if (event.key === "Escape") {
           onClose();
+
           return true;
         }
+
         if (items.length === 0) return false;
+
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           const step = event.key === "ArrowDown" ? 1 : -1;
           setActive({
             query: trigger.query,
             index: (activeIndex + step + items.length) % items.length,
           });
+
           return true;
         }
+
         if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
           const item = items[activeIndex];
+
           if (item) onSelect(item);
+
           return true;
         }
+
         return false;
       },
     }),
@@ -186,6 +209,7 @@ export function BotPromptMentionMenu({
   );
 
   if (items.length === 0) return null;
+
   return (
     <div
       id={listboxId}
@@ -203,6 +227,7 @@ export function BotPromptMentionMenu({
               : item.kind === "path"
                 ? FileIcon
                 : MessageSquareIcon;
+
         return (
           <div
             key={item.key}
@@ -259,15 +284,19 @@ export function BotPromptMentionChips({
 }) {
   const { t } = useI18n();
   const shells = useThreadShells();
+
   const chips = useMemo(() => {
     const titles = new Map(shells.map((shell) => [shell.id as string, shell.title]));
+
     return botPromptMentionChips(
       draft,
       (threadId) => titles.get(threadId) ?? t("Unknown chat"),
       (botId) => bots.find((bot) => bot.id === botId)?.name ?? t("Unknown bot"),
     ).map((chip) => (chip.kind === "browser" ? { ...chip, label: t("Browser") } : chip));
   }, [bots, draft, shells, t]);
+
   if (chips.length === 0) return null;
+
   return (
     <ul
       aria-label={t("Mentions")}
@@ -281,6 +310,7 @@ export function BotPromptMentionChips({
             : chip.kind === "bot"
               ? AtSignIcon
               : MessageSquareIcon;
+
         return (
           <li key={chip.key} className={COMPOSER_INLINE_CHIP_CLASS_NAME}>
             <Icon aria-hidden="true" className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />

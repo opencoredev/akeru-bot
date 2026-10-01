@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 
 export function ThreadRuntimeWarningBanner({ warning }: { readonly warning: string | null }) {
   if (!warning) return null;
+
   return (
     <div
       aria-live="polite"

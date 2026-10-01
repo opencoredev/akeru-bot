@@ -23,11 +23,13 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
 
 function alertChildSlot(child: React.ReactElement): string | undefined {
   const propsSlot = (child.props as Record<string, string | undefined>)["data-slot"];
+
   if (propsSlot) {
     return propsSlot;
   }
 
   const type = child.type as { displayName?: string; name?: string };
+
   switch (type.displayName ?? type.name) {
     case "AlertAction":
       return "alert-action";
@@ -57,9 +59,12 @@ function Alert({
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) {
       content.push(child);
+
       return;
     }
+
     const slot = alertChildSlot(child);
+
     if (slot === "alert-action") {
       action.push(child);
     } else if (slot === "alert-title" || slot === "alert-description") {
@@ -134,7 +139,9 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 AlertTitle.displayName = "AlertTitle";
+
 AlertDescription.displayName = "AlertDescription";
+
 AlertAction.displayName = "AlertAction";
 
 export { Alert, AlertTitle, AlertDescription, AlertAction };

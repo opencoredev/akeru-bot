@@ -41,7 +41,9 @@ export function resolveDesktopOnboardingEngine(
       candidate.installed &&
       candidate.availability !== "unavailable",
   );
+
   const model = provider?.models.find((candidate) => candidate.isDefault) ?? provider?.models[0];
+
   return provider && model ? { provider: provider.instanceId, model: model.slug } : null;
 }
 
@@ -51,6 +53,7 @@ export function resolveDesktopOnboardingCreationReadiness(
 ): DesktopOnboardingCreationReadiness {
   if (providers === null) return { status: "loading" };
   const engine = resolveDesktopOnboardingEngine(providerId, providers);
+
   return engine ? { status: "ready", engine } : { status: "unavailable" };
 }
 

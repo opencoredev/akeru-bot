@@ -10,6 +10,7 @@ export type Translate = ReturnType<typeof useI18n>["t"];
 /** Renders a keybinding string as one key cap per modifier and key. */
 export function KeyCaps({ value, className }: { value: string; className?: string }) {
   const parts = keybindingDisplayParts(value, navigator.platform);
+
   return (
     <KbdGroup className={cn("gap-0.5", className)}>
       {parts.map((part) => (
@@ -33,7 +34,9 @@ export function UnknownWhenVariableWarning({
   focusable?: boolean;
 }) {
   const { t } = useI18n();
+
   if (identifiers.length === 0) return null;
+
   const label =
     identifiers.length === 1
       ? t("Unknown condition: {name}", { name: identifiers[0] ?? "" })
@@ -63,6 +66,7 @@ export function UnknownWhenVariableWarning({
 
 export function conflictDescription(labels: ReadonlyArray<string>, t: Translate): string {
   const listed = labels.slice(0, 3).join(", ");
+
   return labels.length > 3
     ? t("Same keys as {labels}, and more.", { labels: listed })
     : t("Same keys as {labels}.", { labels: listed });
@@ -70,6 +74,7 @@ export function conflictDescription(labels: ReadonlyArray<string>, t: Translate)
 
 export function KeybindingConflictWarning({ labels }: { labels: ReadonlyArray<string> }) {
   const { t } = useI18n();
+
   if (labels.length === 0) return null;
   const description = conflictDescription(labels, t);
 

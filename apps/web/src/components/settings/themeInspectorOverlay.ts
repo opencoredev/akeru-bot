@@ -3,10 +3,15 @@
 // created on demand and removed by the clear functions.
 
 export const THEME_INSPECTOR_MATCH_ATTRIBUTE = "data-theme-inspector-match";
+
 export const THEME_SPOTLIGHT_ID = "theme-inspector-spotlight";
+
 const THEME_SPOTLIGHT_MASK_ID = "theme-inspector-spotlight-mask";
+
 const THEME_SPOTLIGHT_GLOW_ID = "theme-inspector-spotlight-glow";
+
 export const THEME_HOVER_ID = "theme-inspector-hover";
+
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 type SpotlightRectangle = {
@@ -40,6 +45,7 @@ function svgElement<Name extends keyof SVGElementTagNameMap>(
 
 function spotlightRect(element: Element): SpotlightRectangle | null {
   const bounds = element.getBoundingClientRect();
+
   if (
     bounds.width <= 0 ||
     bounds.height <= 0 ||
@@ -56,8 +62,10 @@ function spotlightRect(element: Element): SpotlightRectangle | null {
   // rectangle to the viewport would draw a fake glow edge along the crop.
   const x = bounds.left - padding;
   const y = bounds.top - padding;
+
   const elementRadius =
     Number.parseFloat(window.getComputedStyle(element).borderTopLeftRadius) || 0;
+
   return {
     x,
     y,
@@ -73,12 +81,15 @@ export function showThemeInspectorHover(
   label: string,
 ): void {
   const rectangle = spotlightRect(inspection.element);
+
   if (!rectangle) {
     clearThemeInspectorHover();
+
     return;
   }
 
   let hover = document.getElementById(THEME_HOVER_ID);
+
   if (!hover) {
     hover = document.createElement("div");
     hover.id = THEME_HOVER_ID;
@@ -96,6 +107,7 @@ export function showThemeInspectorHover(
   hover.style.borderRadius = `${rectangle.radius}px`;
   hover.dataset.placement = rectangle.y < 32 ? "below" : "above";
   const tokenLabel = hover.querySelector<HTMLElement>("[data-theme-inspector-hover-label]");
+
   if (tokenLabel) tokenLabel.textContent = label;
 }
 
@@ -106,31 +118,39 @@ function spotlightRectElement(rectangle: SpotlightRectangle): SVGRectElement {
   element.setAttribute("width", String(rectangle.width));
   element.setAttribute("height", String(rectangle.height));
   element.setAttribute("rx", String(rectangle.radius));
+
   return element;
 }
 
 function existingSpotlight(): SVGSVGElement | null {
   const element = document.getElementById(THEME_SPOTLIGHT_ID);
+
   return element instanceof SVGSVGElement ? element : null;
 }
 
 export function renderThemeInspectorSpotlight(elements: ReadonlyArray<Element>): void {
   const rectangles = new Map<string, SpotlightRectangle>();
+
   for (const element of elements) {
     const rectangle = spotlightRect(element);
+
     if (!rectangle) continue;
+
     const key = [rectangle.x, rectangle.y, rectangle.width, rectangle.height]
       .map((value) => Math.round(value))
       .join(":");
+
     rectangles.set(key, rectangle);
   }
 
   if (rectangles.size === 0) {
     document.getElementById(THEME_SPOTLIGHT_ID)?.remove();
+
     return;
   }
 
   let spotlight = existingSpotlight();
+
   if (!spotlight) {
     spotlight = svgElement("svg");
     spotlight.id = THEME_SPOTLIGHT_ID;
@@ -138,6 +158,7 @@ export function renderThemeInspectorSpotlight(elements: ReadonlyArray<Element>):
     spotlight.setAttribute("focusable", "false");
     document.body.append(spotlight);
   }
+
   spotlight.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
 
   const definitions = svgElement("defs");
@@ -169,6 +190,7 @@ export function renderThemeInspectorSpotlight(elements: ReadonlyArray<Element>):
   definitions.append(mask, glowFilter);
 
   const glowGroup = svgElement("g");
+
   for (const rectangle of rectangles.values()) {
     const hole = spotlightRectElement(rectangle);
     hole.setAttribute("fill", "black");

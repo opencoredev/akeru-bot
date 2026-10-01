@@ -26,6 +26,7 @@ const RUN_STATUS_DOT = {
 /** How one run reads at a glance: its chip wording, its badge colour, and its history dot. */
 export function runStatusPresentation(status: RoutineAdapterRunStatus) {
   const tone = runStatusTone(status);
+
   return { ...tone, dot: RUN_STATUS_DOT[tone.variant] };
 }
 
@@ -39,7 +40,9 @@ export function RunTime({
 }) {
   const i18n = useI18n();
   const absolute = absoluteRunTime(value, i18n);
+
   if (!absolute) return null;
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -54,6 +57,7 @@ export function RunTime({
 function RunLine({ run }: { readonly run: RoutineAdapterRun }) {
   const i18n = useI18n();
   const presentation = runStatusPresentation(run.status);
+
   return (
     <li className="flex items-baseline gap-2 text-xs">
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${presentation.dot}`} />
@@ -70,6 +74,7 @@ function RunLine({ run }: { readonly run: RoutineAdapterRun }) {
 export function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun[] }) {
   const { plural } = useI18n();
   const [expanded, setExpanded] = useState(false);
+
   if (runs.length === 0) return null;
 
   return (
@@ -101,12 +106,15 @@ export function RunHistory({ runs }: { readonly runs: readonly RoutineAdapterRun
 export function NextRunLine({ routine }: { readonly routine: RoutineAdapterItem }) {
   const { t } = useI18n();
   const stateNote = routineStateNote(routine);
+
   if (stateNote) {
     return <p className="text-xs text-muted-foreground">{t(stateNote)}</p>;
   }
+
   if (!routine.nextRunAt) {
     return <p className="text-xs text-muted-foreground">{t("No next run scheduled.")}</p>;
   }
+
   return (
     <p className="text-xs text-muted-foreground">
       {t("Next run")} <RunTime value={routine.nextRunAt} className="text-foreground" />

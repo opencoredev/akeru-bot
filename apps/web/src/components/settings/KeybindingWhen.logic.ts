@@ -23,6 +23,7 @@ const KNOWN_WHEN_VARIABLES = new Set(DEFAULT_WHEN_VARIABLES);
 
 export function whenAstToExpression(node: KeybindingWhenNode | undefined): string {
   if (!node) return "";
+
   switch (node.type) {
     case "identifier":
       return node.name;
@@ -37,6 +38,7 @@ export function whenAstToExpression(node: KeybindingWhenNode | undefined): strin
 
 function wrapWhenExpression(node: KeybindingWhenNode): string {
   if (node.type === "identifier" || node.type === "not") return whenAstToExpression(node);
+
   return `(${whenAstToExpression(node)})`;
 }
 
@@ -44,9 +46,11 @@ export function parseWhenExpressionDraft(
   expression: string,
 ): { ok: true; value: KeybindingWhenNode | undefined } | { ok: false; message: string } {
   const trimmed = expression.trim();
+
   if (trimmed.length === 0) return { ok: true, value: undefined };
 
   const ast = parseKeybindingWhenExpression(trimmed);
+
   if (!ast) {
     return {
       ok: false,
@@ -68,16 +72,22 @@ const WHEN_VARIABLE_PHRASES: Readonly<Record<string, string>> = {
  */
 export function describeWhenExpression(node: KeybindingWhenNode | undefined): string | null {
   if (!node) return null;
+
   if (node.type === "identifier") {
     if (node.name === "true") return "Always";
+
     if (node.name === "false") return "Never";
     const phrase = WHEN_VARIABLE_PHRASES[node.name];
+
     return phrase ? `When ${phrase}` : `When ${node.name}`;
   }
+
   if (node.type === "not" && node.node.type === "identifier") {
     const phrase = WHEN_VARIABLE_PHRASES[node.node.name];
+
     return phrase ? `Unless ${phrase}` : `Unless ${node.node.name}`;
   }
+
   return whenAstToExpression(node);
 }
 
@@ -86,17 +96,21 @@ function collectWhenIdentifiersFromNode(
   identifiers: Set<string>,
 ): void {
   if (!node) return;
+
   switch (node.type) {
     case "identifier":
       identifiers.add(node.name);
+
       return;
     case "not":
       collectWhenIdentifiersFromNode(node.node, identifiers);
+
       return;
     case "and":
     case "or":
       collectWhenIdentifiersFromNode(node.left, identifiers);
       collectWhenIdentifiersFromNode(node.right, identifiers);
+
       return;
   }
 }
@@ -108,6 +122,7 @@ export function isKnownWhenVariable(identifier: string): boolean {
 export function unknownWhenVariables(node: KeybindingWhenNode | undefined): ReadonlyArray<string> {
   const identifiers = new Set<string>();
   collectWhenIdentifiersFromNode(node, identifiers);
+
   return [...identifiers].filter((identifier) => !isKnownWhenVariable(identifier)).toSorted();
 }
 
@@ -115,12 +130,14 @@ export function buildWhenVariableOptions(): ReadonlyArray<WhenVariableOption> {
   return [...KNOWN_WHEN_VARIABLES].toSorted((left, right) => {
     const leftCoreIndex = CORE_WHEN_VARIABLES.findIndex((identifier) => identifier === left);
     const rightCoreIndex = CORE_WHEN_VARIABLES.findIndex((identifier) => identifier === right);
+
     if (leftCoreIndex !== -1 || rightCoreIndex !== -1) {
       return (
         (leftCoreIndex === -1 ? Number.MAX_SAFE_INTEGER : leftCoreIndex) -
         (rightCoreIndex === -1 ? Number.MAX_SAFE_INTEGER : rightCoreIndex)
       );
     }
+
     return left.localeCompare(right);
   });
 }

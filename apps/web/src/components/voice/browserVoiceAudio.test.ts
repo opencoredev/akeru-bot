@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { captureVoiceUtterance, playVoiceAudio } from "./browserVoiceAudio";
 
 let level = 0;
+
 let failAnalyserSetup = false;
+
 let latestRecorder: TestRecorder;
+
 const closeContext = vi.fn(async () => {});
+
 const disconnectSource = vi.fn();
+
 class TestRecorder {
   static isTypeSupported(type: string) {
     return type.startsWith("audio/webm");
@@ -29,7 +34,9 @@ class TestRecorder {
     this.onstop?.();
   }
 }
+
 const track = { enabled: false };
+
 const microphone = { getAudioTracks: () => [track] } as unknown as MediaStream;
 
 beforeEach(() => {
@@ -47,6 +54,7 @@ beforeEach(() => {
       }
       createAnalyser() {
         if (failAnalyserSetup) throw new Error("Could not analyze microphone audio.");
+
         return {
           fftSize: 2048,
           getFloatTimeDomainData(samples: Float32Array) {
@@ -59,6 +67,7 @@ beforeEach(() => {
     },
   );
 });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -126,19 +135,24 @@ describe("browser voice playback", () => {
       pause = vi.fn();
       removeAttribute = vi.fn();
     }
+
     const speaker = new Speaker();
     const revoke = vi.spyOn(URL, "revokeObjectURL");
     const controller = new AbortController();
+
     const playing = playVoiceAudio(
       speaker as unknown as HTMLAudioElement,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       controller.signal,
     );
+
     const settled =
       completion === "abort"
         ? expect(playing).rejects.toMatchObject({ name: "AbortError" })
         : expect(playing).resolves.toBeUndefined();
+
     expect(speaker.pause).not.toHaveBeenCalled();
+
     if (completion === "abort") controller.abort();
     else speaker.dispatchEvent(new Event("ended"));
     await settled;
@@ -149,6 +163,7 @@ describe("browser voice playback", () => {
 
   it("ignores a previous play rejection after a new clip starts", async () => {
     let rejectFirst!: (error: Error) => void;
+
     class Speaker extends EventTarget {
       src = "";
       pause = vi.fn();
@@ -158,20 +173,25 @@ describe("browser voice playback", () => {
         .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)))
         .mockResolvedValue(undefined);
     }
+
     const speaker = new Speaker();
     const firstController = new AbortController();
+
     const first = playVoiceAudio(
       speaker as unknown as HTMLAudioElement,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       firstController.signal,
     );
+
     firstController.abort();
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
+
     const second = playVoiceAudio(
       speaker as unknown as HTMLAudioElement,
       { audioBase64: "Yg==", mimeType: "audio/mpeg" },
       new AbortController().signal,
     );
+
     const activeSource = speaker.src;
     rejectFirst(new Error("First clip was interrupted"));
     await Promise.resolve();

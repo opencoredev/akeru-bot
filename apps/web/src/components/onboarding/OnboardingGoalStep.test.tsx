@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({ reducedMotion: false }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     // The step's only effect clears the pending beat on unmount, which a
@@ -26,6 +27,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -34,6 +36,7 @@ vi.mock("react/compiler-runtime", async () => {
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
@@ -58,46 +61,63 @@ function visitElements(node: unknown, visitor: (element: Element) => boolean): E
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = visitElements(child, visitor);
+
       if (found) return found;
     }
+
     return null;
   }
+
   if (!isValidElement(node)) return null;
   const element = node as Element;
+
   if (visitor(element)) return element;
   const type = element.type as { name?: string };
+
   if (typeof type === "function" && LOCAL_COMPONENTS.has(type.name ?? "")) {
     const found = visitElements(
       (type as unknown as (props: unknown) => unknown)(element.props),
       visitor,
     );
+
     if (found) return found;
   }
+
   for (const value of Object.values(element.props as Record<string, unknown>)) {
     const found = visitElements(value, visitor);
+
     if (found) return found;
   }
+
   return null;
 }
 
 /** Flattens the visible text under a node, so assertions read what a user would. */
 function textOf(node: unknown): string {
   if (typeof node === "string") return node;
+
   if (typeof node === "number") return String(node);
+
   if (Array.isArray(node)) return node.map(textOf).join("");
+
   if (isValidElement(node)) return textOf((node as Element).props.children);
+
   return "";
 }
 
 let draft: DesktopOnboardingDraft;
+
 const onChange = vi.fn((next: DesktopOnboardingDraft) => {
   draft = next;
 });
+
 const onBack = vi.fn();
+
 const onContinue = vi.fn();
 
 function render(): Element {
   hooks.beginRender();
+
   return OnboardingGoalStep({ draft, onChange, onBack, onContinue }) as Element;
 }
 
@@ -109,7 +129,9 @@ function button(tree: Element, label: string): Element {
       typeof element.props.onClick === "function" &&
       (element.props["aria-label"] === label || textOf(element.props.children).trim() === label),
   );
+
   expect(found, `no "${label}" control`).not.toBeNull();
+
   return found as Element;
 }
 
@@ -119,6 +141,7 @@ function press(tree: Element, label: string): void {
 
 function heading(tree: Element): string {
   const found = visitElements(tree, (element) => element.props.id === "onboarding-goal-heading");
+
   return textOf(found?.props.children);
 }
 
@@ -142,6 +165,7 @@ function statusText(tree: Element): string {
     tree,
     (element) => element.props.role === "status" && element.props["aria-live"] === "polite",
   );
+
   return textOf(found?.props.children);
 }
 
@@ -153,9 +177,12 @@ function byTestId(tree: Element, testId: string): Element | null {
 function planSteps(tree: Element): readonly string[] {
   const list = byTestId(tree, "onboarding-goal-plan-steps");
   const children = list?.props.children;
+
   if (!Array.isArray(children)) return [];
+
   return children.map((child) => {
     const parts = isValidElement(child) ? (child as Element).props.children : null;
+
     return textOf(Array.isArray(parts) ? parts.at(-1) : child).trim();
   });
 }

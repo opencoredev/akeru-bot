@@ -71,6 +71,7 @@ import {
 } from "./rosterCommands.logic";
 
 export { focusTargetAfterRosterArchive, runCreateBotOnce } from "./rosterCommands.logic";
+
 export { RosterPanelHeader } from "./RosterHeaders";
 
 /** Stable row actions, so memoized rows skip re-rendering when the sidebar does. */
@@ -87,14 +88,18 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
   const navigate = useNavigate();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const environmentId = usePrimaryEnvironmentId();
+
   const createBotCommand = useAtomCommand(botEnvironment.create, {
     reportFailure: false,
   });
+
   const createGroupCommand = useAtomCommand(botEnvironment.groups.create, {
     reportFailure: false,
   });
+
   const archiveBotCommand = useAtomCommand(botEnvironment.archive, { reportFailure: false });
   const pathname = useLocation({ select: (location) => location.pathname });
+
   const { bots, groups, lastMessageByBotId, selectedBotId, pinnedItems, unassignedItems } =
     useRosterStore(
       useShallow((state) => ({
@@ -106,13 +111,16 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         unassignedItems: state.unassignedItems,
       })),
     );
+
   const rosterEnvironmentId = useRosterStore((state) => state.environmentId);
   const rosterListState = resolveRosterListState(environmentId, rosterEnvironmentId, bots);
   const rosterLoadState = useRosterLoadState();
   const [query, setQuery] = useState("");
+
   const activeBotThreadRef = useBotThreadRef(
     pathname.startsWith("/bots/") ? (selectedBotId ?? "") : "",
   );
+
   const previewOpen = useRightPanelStore((state) =>
     activeBotThreadRef
       ? selectActiveRightPanel(state.byThreadKey, activeBotThreadRef) === "preview"
@@ -123,46 +131,61 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     () => filterRosterBots(bots, query).filter((bot) => bot.archivedAt === null),
     [bots, query],
   );
+
   const visibleGroups = useMemo(
     () => filterRosterGroups(groups, bots, query),
     [bots, groups, query],
   );
+
   const groupRouteActive = pathname.startsWith("/groups/");
   const botRouteActive = pathname.startsWith("/bots/");
   const searching = query.trim().length > 0;
+
   const pinnedKeys = useMemo(
     () => new Set(pinnedItems.map((item) => rosterItemKey(item))),
     [pinnedItems],
   );
+
   const liveItem = useCallback(
     (item: RosterItemRef) => {
       if (item.kind === "bot") return visibleBots.some((bot) => bot.id === item.id);
+
       return visibleGroups.some((group) => group.id === item.id);
     },
     [visibleBots, visibleGroups],
   );
+
   const visiblePinnedItems = useMemo(() => pinnedItems.filter(liveItem), [liveItem, pinnedItems]);
+
   const visibleUnassignedItems = useMemo(() => {
     const remaining = (item: RosterItemRef) =>
       liveItem(item) && !pinnedKeys.has(rosterItemKey(item));
+
     if (unassignedItems.length > 0) {
       const ordered = unassignedItems.filter(remaining);
       const seen = new Set(ordered.map(rosterItemKey));
+
       for (const group of visibleGroups) {
         const item = { kind: "group" as const, id: group.id };
+
         if (remaining(item) && !seen.has(rosterItemKey(item))) ordered.push(item);
       }
+
       for (const bot of visibleBots) {
         const item = { kind: "bot" as const, id: bot.id };
+
         if (remaining(item) && !seen.has(rosterItemKey(item))) ordered.push(item);
       }
+
       return ordered;
     }
+
     return [
       ...visibleGroups.map((group) => ({ kind: "group" as const, id: group.id })),
       ...visibleBots.map((bot) => ({ kind: "bot" as const, id: bot.id })),
     ].filter(remaining);
   }, [liveItem, pinnedKeys, unassignedItems, visibleBots, visibleGroups]);
+
   const rosterListItems = useMemo(
     () =>
       buildRosterListItems({
@@ -172,6 +195,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       }),
     [visiblePinnedItems, visibleUnassignedItems],
   );
+
   const {
     dragState,
     dragTargetZone,
@@ -182,6 +206,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     sortingStrategy,
     dndContextProps,
   } = useRosterDragController({ rosterListItems, visiblePinnedItems });
+
   // Remember the chat route the selected bot lands on, so re-selecting the
   // bot returns to its conversation. The first run after a selection change
   // is skipped: the route still belongs to the previously selected bot.
@@ -191,8 +216,11 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     const selectionChanged = lastSelectedBotIdRef.current !== selectedBotId;
     const selectionCameFromClick = pendingClickedBotIdRef.current === selectedBotId;
     lastSelectedBotIdRef.current = selectedBotId;
+
     if (selectionCameFromClick) pendingClickedBotIdRef.current = null;
+
     if ((selectionChanged && selectionCameFromClick) || selectedBotId === null) return;
+
     if (!isRecordableChatPath(pathname)) return;
     useRosterStore.getState().recordChatPath(selectedBotId, pathname);
   }, [pathname, selectedBotId]);
@@ -218,9 +246,11 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     () => orderRosterBotsForShortcuts(bots, pinnedItems, []),
     [bots, pinnedItems],
   );
+
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
           previewFocus: isPreviewFocused(),
@@ -228,6 +258,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           modelPickerOpen: isModelPickerOpen(),
         },
       });
+
       const bot =
         resolveRosterShortcutBot(command ?? "", shortcutBots) ??
         resolveAdjacentRosterBot(
@@ -235,6 +266,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           shortcutBots,
           botRouteActive ? useRosterStore.getState().selectedBotId : null,
         );
+
       if (!bot) return;
 
       event.preventDefault();
@@ -245,6 +277,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
     };
 
     window.addEventListener("keydown", onWindowKeyDown);
+
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [botRouteActive, keybindings, navigate, previewOpen, shortcutBots]);
 
@@ -268,14 +301,17 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
 
   const focusRosterRow = useCallback((rowKey: string | null) => {
     const list = rosterListRef.current;
+
     for (const row of rowKey === null
       ? []
       : (list?.querySelectorAll<HTMLElement>("[data-roster-row]") ?? [])) {
       if (row.dataset.rosterRow === rowKey) {
         row.focus();
+
         return;
       }
     }
+
     // Nothing survived in the list, or the last bot took the list with it.
     (list ?? rosterSearchRef.current)?.focus();
   }, []);
@@ -285,15 +321,19 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       // Nothing was archived, so the dialog restores focus to the row menu itself.
       setArchivingBot(null);
       toastManager.add({ type: "error", title: t("Connect an environment first") });
+
       return;
     }
+
     const botKey = rosterItemKey({ kind: "bot", id: bot.id });
     archivedFocusTarget.current = focusTargetAfterRosterArchive(rosterRowKeys, botKey);
     setArchivingBot(null);
+
     const result = await archiveBotCommand({
       environmentId,
       input: { botId: BotId.make(bot.id) },
     });
+
     if (result._tag === "Failure") {
       // The row stayed, so focus goes back to it rather than to its replacement.
       archivedFocusTarget.current = undefined;
@@ -304,8 +344,10 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         title: t("Could not archive {name}", { name: bot.name }),
         description: commandFailureMessage(result, t),
       });
+
       return;
     }
+
     setPendingArchivedBotId(bot.id);
   };
 
@@ -317,11 +359,13 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
   // another bot while the archive was in flight.
   useEffect(() => {
     if (pendingArchivedBotId === null) return;
+
     if (bots.some((bot) => bot.id === pendingArchivedBotId && bot.archivedAt === null)) return;
     const focusTarget = archivedFocusTarget.current ?? null;
     archivedFocusTarget.current = undefined;
     setPendingArchivedBotId(null);
     focusRosterRow(focusTarget);
+
     if (useRosterStore.getState().selectedBotId === pendingArchivedBotId) {
       void navigate({ to: "/", replace: true });
     }
@@ -332,6 +376,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
   const creatingBotRef = useRef(false);
   const handleNewBot = () => setNewBotOpen(true);
   const handleNewGroup = () => setNewGroupOpen(true);
+
   const handleCreateBot = ({ name, avatar }: { name: string; avatar: BotAvatar }) =>
     runCreateBotOnce(creatingBotRef, async () => {
       if (environmentId === null) {
@@ -339,11 +384,15 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           type: "error",
           title: t("Connect an environment first"),
         });
+
         return;
       }
+
       setCreatingBot(true);
+
       try {
         const botId = BotId.make(`bot-${randomUUID()}`);
+
         const result = await createBotCommand({
           environmentId,
           input: {
@@ -360,10 +409,13 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
             groupId: null,
           },
         });
+
         if (result._tag === "Failure") {
           toastManager.add({ type: "error", title: t("Could not create bot") });
+
           return;
         }
+
         setNewBotOpen(false);
         setPendingCreatedBotId(botId);
       } finally {
@@ -377,9 +429,12 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         type: "error",
         title: t("Connect an environment first"),
       });
+
       return;
     }
+
     const groupId = GroupId.make(`group-${randomUUID()}`);
+
     const result = await createGroupCommand({
       environmentId,
       input: {
@@ -389,10 +444,13 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         specialistBotIds: input.specialistBotIds.map((botId) => BotId.make(botId)),
       },
     });
+
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: t("Could not create group") });
+
       return;
     }
+
     setNewGroupOpen(false);
     void navigate({ to: "/groups/$groupId", params: { groupId } });
   };
@@ -407,6 +465,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
   useEffect(() => {
     if (pendingCreatedBotId === null) return;
     const bot = bots.find((candidate) => candidate.id === pendingCreatedBotId);
+
     if (!bot) return;
     const store = useRosterStore.getState();
     store.selectBot(bot.id);
@@ -492,17 +551,22 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                     {rosterListItems.map((item) => {
                       if (item.kind === "entry") {
                         const pinned = pinnedKeys.has(rosterItemKey(item.item));
+
                         const zoneOrder = rosterItemsForZone(item.zone, {
                           pinnedItems: visiblePinnedItems,
                           sections: [],
                           unassignedItems: visibleUnassignedItems,
                         });
+
                         const zoneIndex = zoneOrder.findIndex((candidate) =>
                           rosterItemsEqual(candidate, item.item),
                         );
+
                         const canMoveUp = !searching && zoneIndex > 0;
+
                         const canMoveDown =
                           !searching && zoneIndex >= 0 && zoneIndex < zoneOrder.length - 1;
+
                         return (
                           <SortableRosterRow
                             key={rosterListItemId(item)}
@@ -515,7 +579,9 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                                     const bot = bots.find(
                                       (candidate) => candidate.id === item.item.id,
                                     );
+
                                     if (!bot) return null;
+
                                     return (
                                       <BotRosterRow
                                         bot={bot}
@@ -538,7 +604,9 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                                     const group = groups.find(
                                       (candidate) => candidate.id === item.item.id,
                                     );
+
                                     if (!group) return null;
+
                                     return (
                                       <GroupRosterRow
                                         group={group}
@@ -558,8 +626,10 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
                           </SortableRosterRow>
                         );
                       }
+
                       const from = dragState?.from ?? null;
                       const dragging = from !== null;
+
                       switch (item.marker) {
                         case "pinned-header":
                           return (

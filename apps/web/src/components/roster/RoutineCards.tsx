@@ -39,6 +39,7 @@ export function RoutineCard({
   const status = routineStatus(routine);
   const latest = routine.latestRun;
   const dormant = routine.paused || !routine.enabled;
+
   // A routine only offers the switch it is actually missing: a paused one resumes,
   // a turned-off one turns on, and a never-approved one is approved from its detail.
   const reverse = routine.paused

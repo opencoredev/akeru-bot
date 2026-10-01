@@ -39,6 +39,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     clearThemeHalves,
     themeHalves,
   } = useTheme();
+
   const { t, translate } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
@@ -47,6 +48,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
   const changedSettingLabels = useMemo(
@@ -141,6 +143,7 @@ export function useSettingsRestore(onRestored?: () => void) {
   const restoreDefaults = useCallback(async () => {
     if (changedSettingLabels.length === 0) return;
     const api = readLocalApi();
+
     const confirmed = await (api ?? ensureLocalApi()).dialogs.confirm(
       [
         t("Restore default settings?"),
@@ -150,6 +153,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ].join("\n"),
       { variant: "destructive" },
     );
+
     if (!confirmed) return;
 
     // Only touch the theme keys that are actually dirty, so a theme-storage
@@ -158,11 +162,13 @@ export function useSettingsRestore(onRestored?: () => void) {
     // tab, an OS flip) while it was open, and rollback must restore the live
     // values rather than the ones captured at render time.
     let previousTheme = theme;
+
     try {
       previousTheme = readThemePreference();
     } catch {
       // Storage is unreadable; the render-time value is the best rollback.
     }
+
     // The mix may have changed while the confirmation dialog was open; both
     // the dirty check and the rollback must see the live value.
     const liveHalves = readThemeHalves();
@@ -171,6 +177,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     // Same for the appearance mode: trusting the render-time value would skip
     // the reset and report success while a non-system mode stayed in storage.
     const needsFollowSystemReset = readAppearanceModePreference(previousTheme) !== "system";
+
     const notifyThemeRestoreFailure = () => {
       toastManager.add(
         stackedThreadToast({
@@ -180,29 +187,40 @@ export function useSettingsRestore(onRestored?: () => void) {
         }),
       );
     };
+
     // Rollback restores the base preference first (which clears any mix) and
     // then re-applies the captured mix on top, so no failure path can leave
     // the pair of keys half-restored.
     const previousHalves = liveHalves;
+
     const rollbackThemeState = () => {
       if (needsThemeReset) setTheme(previousTheme);
+
       if (previousHalves?.light) setThemeHalf("light", previousHalves.light);
+
       if (previousHalves?.dark) setThemeHalf("dark", previousHalves.dark);
     };
+
     if (needsThemeReset && !setTheme("system")) {
       notifyThemeRestoreFailure();
+
       return;
     }
+
     if (needsMixReset && !clearThemeHalves()) {
       rollbackThemeState();
       notifyThemeRestoreFailure();
+
       return;
     }
+
     if (needsFollowSystemReset && !setFollowSystem(true)) {
       rollbackThemeState();
       notifyThemeRestoreFailure();
+
       return;
     }
+
     updateSettings({
       appearanceContrast: DEFAULT_UNIFIED_SETTINGS.appearanceContrast,
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,

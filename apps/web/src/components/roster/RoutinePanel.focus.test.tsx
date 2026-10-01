@@ -41,6 +41,7 @@ describe("RoutinePanel focus targets", () => {
     const markup = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[routine]} />,
     );
+
     expect(markup).toContain('data-routine-row="routine-1"');
   });
 
@@ -55,6 +56,7 @@ describe("RoutinePanel focus targets", () => {
         onDeleteRequest={() => undefined}
       />,
     );
+
     expect(markup).toContain("data-routine-back");
   });
 

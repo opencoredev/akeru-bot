@@ -25,8 +25,11 @@ export function reduceConversationFollowState(
   event: ConversationFollowEvent,
 ): ConversationFollowState {
   if (event.type === "user-navigation") return { followingEnd: false };
+
   if (event.type === "scroll-to-end") return { followingEnd: true };
+
   if (event.isAtEnd) return { followingEnd: true };
+
   return event.movedAway ? { followingEnd: false } : state;
 }
 

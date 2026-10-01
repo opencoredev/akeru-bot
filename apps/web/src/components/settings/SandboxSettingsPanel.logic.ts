@@ -86,8 +86,10 @@ export function isSandboxProviderConnected(
   provider: CloudSandboxProvider,
 ): boolean {
   const environment = settings.providers[provider].environment;
+
   return sandboxProviderDefinition(provider).fields.every((field) => {
     const variable = environment.find((candidate) => candidate.name === field.name);
+
     return Boolean(variable && (variable.value.trim().length > 0 || variable.valueRedacted));
   });
 }
@@ -120,9 +122,11 @@ export function canSaveSandboxProviderConnection(input: {
   readonly draft: Readonly<Record<string, string>>;
 }): boolean {
   const existing = input.settings.providers[input.provider].environment;
+
   return sandboxProviderDefinition(input.provider).fields.every((field) => {
     if ((input.draft[field.name] ?? "").trim().length > 0) return true;
     const variable = existing.find((candidate) => candidate.name === field.name);
+
     return field.secret && variable?.valueRedacted === true;
   });
 }
@@ -133,10 +137,13 @@ export function saveSandboxProviderConnection(input: {
   readonly draft: Readonly<Record<string, string>>;
 }): SandboxSettings {
   const currentEnvironment = input.settings.providers[input.provider].environment;
+
   const environment = sandboxProviderDefinition(input.provider).fields.map((field) => {
     const value = (input.draft[field.name] ?? "").trim();
     const current = currentEnvironment.find((variable) => variable.name === field.name);
+
     if (field.secret && value.length === 0 && current?.valueRedacted) return current;
+
     return {
       name: field.name,
       value,

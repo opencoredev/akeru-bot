@@ -25,18 +25,23 @@ function expand(node: unknown): unknown {
       ? node.map(expand)
       : node;
   }
+
   if (!isValidElement<Record<string, unknown>>(node)) return node;
+
   if (node.type === BotIdentityFields) {
     // SAFETY: the element was created from BotIdentityFields, so its props match.
     return expand(BotIdentityFields(node.props as Parameters<typeof BotIdentityFields>[0]));
   }
+
   if (node.type === BotEngineFields) {
     // SAFETY: the element was created from BotEngineFields, so its props match.
     return expand(BotEngineFields(node.props as Parameters<typeof BotEngineFields>[0]));
   }
+
   const props = Object.fromEntries(
     Object.entries(node.props).map(([key, value]) => [key, expand(value)]),
   );
+
   return cloneElement(node, props);
 }
 

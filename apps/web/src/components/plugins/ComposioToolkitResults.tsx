@@ -21,11 +21,14 @@ export function ComposioToolkitResults({
   readonly onConnect: (toolkit: ComposioToolkit) => void;
 }) {
   const { t, plural } = useI18n();
+
   if (toolkits.length === 0) return null;
+
   return (
     <DirectorySection count={toolkits.length} label={t("From Composio")}>
       {toolkits.map((toolkit) => {
         const connected = connectedToolkitIds.has(toolkit.slug);
+
         return (
           <DirectoryCard
             key={toolkit.slug}

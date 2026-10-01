@@ -12,15 +12,19 @@ export function isStaleProcessSignalMessage(message: string | undefined): boolea
 
 export function formatProcessName(command: string): string {
   const firstToken = command.trim().split(/\s+/)[0];
+
   if (!firstToken) return command;
   const normalized = firstToken.replace(/^['"]|['"]$/g, "");
   const segments = normalized.split(/[\\/]/).filter(Boolean);
+
   return segments.at(-1) ?? normalized;
 }
 
 export function formatProcessType(process: ServerProcessDiagnosticsEntry): string {
   if (process.depth > 0) return "Subprocess";
+
   if (/\b(codex|claude|opencode|cursor)\b/i.test(process.command)) return "Agent";
+
   return "Process";
 }
 
@@ -131,6 +135,7 @@ export function ProcessDiagnosticsTable({
   emptyLabel?: string;
 }) {
   const [collapsedPids, setCollapsedPids] = useState<ReadonlySet<number>>(() => new Set());
+
   const visibleProcesses = useMemo(() => {
     const visible: ServerProcessDiagnosticsEntry[] = [];
     let hiddenChildDepth: number | null = null;
@@ -142,6 +147,7 @@ export function ProcessDiagnosticsTable({
       }
 
       visible.push(process);
+
       if (collapsedPids.has(process.pid)) {
         hiddenChildDepth = process.depth;
       }
@@ -153,11 +159,13 @@ export function ProcessDiagnosticsTable({
   const toggleProcess = useCallback((pid: number) => {
     setCollapsedPids((previous) => {
       const next = new Set(previous);
+
       if (next.has(pid)) {
         next.delete(pid);
       } else {
         next.add(pid);
       }
+
       return next;
     });
   }, []);

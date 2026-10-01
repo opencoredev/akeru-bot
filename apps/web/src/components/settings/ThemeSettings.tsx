@@ -90,10 +90,12 @@ export function ThemeLibrary({
   setThemeHalf: (appearance: ThemeAppearance, themeId: string | null) => boolean;
 }) {
   const openThemeEditor = useThemeEditorStore((store) => store.openThemeEditor);
+
   const [themeRemovalTarget, setThemeRemovalTarget] = useState<{
     theme: ThemeDefinition;
     collectionThemes: ReadonlyArray<ThemeDefinition>;
   } | null>(null);
+
   // Keep the target after closing so the dialog text remains populated during
   // its exit animation. The next trash action replaces it before reopening.
   const [isThemeRemovalOpen, setIsThemeRemovalOpen] = useState(false);
@@ -102,6 +104,7 @@ export function ThemeLibrary({
   const removeDialogTheme = themeRemovalTarget?.theme;
   const removeDialogCollectionThemes = themeRemovalTarget?.collectionThemes ?? [];
   const canRemoveCollection = removeDialogCollectionThemes.length > 1;
+
   const removeDialogCollectionLabel =
     removeDialogTheme?.collection?.label ?? removeDialogTheme?.label;
 
@@ -128,7 +131,9 @@ export function ThemeLibrary({
   const persistTheme = useCallback(
     (nextTheme: string) => {
       const didSave = setTheme(nextTheme);
+
       if (!didSave) notifyThemeSaveFailure();
+
       return didSave;
     },
     [notifyThemeSaveFailure, setTheme],
@@ -146,30 +151,39 @@ export function ThemeLibrary({
   const handleConfirmRemoveTheme = useCallback(() => {
     if (!themeRemovalTarget) return;
     const removedIds = new Set(themeIdsToRemove);
+
     if (removedIds.size === 0) return;
     const removesBase = removedIds.has(getThemeDefinition(theme)?.id ?? "");
+
     // Keep the themes installed if we cannot move the selection off one of
     // them; the dialog stays open so the user can retry or cancel.
     if (removesBase && !persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) {
       return;
     }
+
     for (const appearance of ["light", "dark"] as const) {
       const half = themeHalves?.[appearance];
+
       if (half === undefined) continue;
       // Writing a base preference clears the whole mix, so halves that name
       // a surviving theme are written back; removed halves fall back to base.
       const next = half && removedIds.has(half) ? null : removesBase ? half : undefined;
+
       if (next !== undefined && !setThemeHalf(appearance, next)) {
         notifyThemeRemovalFailure();
+
         return;
       }
     }
+
     try {
       removeCustomThemes([...removedIds]);
     } catch {
       notifyThemeRemovalFailure();
+
       return;
     }
+
     setIsThemeRemovalOpen(false);
   }, [
     appearanceMode,
@@ -192,20 +206,25 @@ export function ThemeLibrary({
   const assignHalf = useCallback(
     (appearance: ThemeAppearance, cardId: string | null) => {
       const otherAppearance = appearance === "light" ? "dark" : "light";
+
       // Picking the default over a themed base cannot be stored as a half:
       // the base would still own that appearance. Convert the base into an
       // explicit half on the other side so this side falls back to default.
       if (cardId === null && baseCardId !== null) {
         const otherOwner = themeHalves?.[otherAppearance] ?? baseCardId;
+
         if (!persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) return;
+
         if (!setThemeHalf(otherAppearance, otherOwner)) {
           // Best-effort rollback: restore the whole-theme selection rather
           // than leaving the user with no theme at all.
           setTheme(theme);
           notifyThemeSaveFailure();
         }
+
         return;
       }
+
       if (!setThemeHalf(appearance, cardId)) {
         notifyThemeSaveFailure();
       }
@@ -230,11 +249,13 @@ export function ThemeLibrary({
   const cardDefById = (id: string | null): ThemeCardDefinition => {
     if (id === null) return STANDARD_THEME_CARDS[0]!;
     const definition = getThemeDefinition(id);
+
     return definition ? getThemeCardDefinition(definition) : STANDARD_THEME_CARDS[0]!;
   };
 
   const pickColors = (id: string | null, appearance: ThemeAppearance) => {
     const card = cardDefById(id);
+
     return previewColorsOf(card, appearance) ?? card.previews[0]!.colors;
   };
 
@@ -253,8 +274,11 @@ export function ThemeLibrary({
   // shows Akeru Bot selected instead of nothing.
   const pickedModesFor = (cardId: string | null): ThemeMode[] => {
     const rings: ThemeMode[] = [];
+
     if (lightOwner === cardId) rings.push("light");
+
     if (darkOwner === cardId) rings.push("dark");
+
     return rings;
   };
 
@@ -286,6 +310,7 @@ export function ThemeLibrary({
     <div aria-label="Appearance mode" className="grid w-full grid-cols-3 gap-3" role="group">
       {(["system", "light", "dark"] as const).map((mode) => {
         const isActive = appearanceMode === mode;
+
         return (
           <button
             aria-label={mode === "system" ? "Follow the system appearance" : `Use ${mode} mode`}
@@ -344,6 +369,7 @@ export function ThemeLibrary({
         ))}
         {MAINTAINER_THEMES.map((maintainerTheme) => {
           const card = getThemeCardDefinition(maintainerTheme);
+
           return (
             <ThemeLibraryCard
               activeModes={pickedModesFor(maintainerTheme.id)}
@@ -389,6 +415,7 @@ export function ThemeLibrary({
             onRemove={(customTheme) => handleRemoveTheme(customTheme, themes)}
             onUse={(customTheme) => {
               const modes = getThemeModes(customTheme);
+
               if (modes.length === 1) assignHalf(modes[0]!, customTheme.id);
               else persistTheme(customTheme.id);
             }}
@@ -454,6 +481,7 @@ export function ThemeLibrary({
           // Same rule as clicking the card: a one-appearance theme takes its
           // side of the mix instead of becoming the base for both.
           const modes = getThemeModes(importedTheme);
+
           if (modes.length === 1) {
             assignHalf(modes[0]!, importedTheme.id);
             toastManager.add(
@@ -463,8 +491,10 @@ export function ThemeLibrary({
                 description: `It’s now your ${modes[0]!} theme.`,
               }),
             );
+
             return true;
           }
+
           if (!persistTheme(importedTheme.id)) return false;
           toastManager.add(
             stackedThreadToast({
@@ -473,6 +503,7 @@ export function ThemeLibrary({
               description: "It’s now active.",
             }),
           );
+
           return true;
         }}
         onOpenChange={onImportOpenChange}
@@ -498,6 +529,7 @@ export function ThemeLibrary({
                 const checked = themeIdsToRemoveSet.has(customTheme.id);
                 const card = getThemeCardDefinition(customTheme);
                 const checkboxId = `remove-theme-${customTheme.id}`;
+
                 return (
                   <label
                     className="group relative flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-border/70 bg-muted/25 p-3 has-checked:border-ring has-checked:bg-accent/20 hover:bg-muted/40"

@@ -30,18 +30,22 @@ const TOAST_ICONS = {
 
 /** Visually shorten long error bodies; clipboard copy still uses the full `description` string. */
 const ERROR_DESCRIPTION_CLAMP_MIN_CHARS = 180;
+
 function errorDescriptionClampClass(type: unknown, description: unknown): string | undefined {
   if (type !== "error" || typeof description !== "string") {
     return undefined;
   }
+
   if (description.length < ERROR_DESCRIPTION_CLAMP_MIN_CHARS) {
     return undefined;
   }
+
   return "line-clamp-4";
 }
 
 /** Dismiss-only: circular control overlapping the card corner (iOS notification–style). */
 export const toastCornerDismissClass = "absolute z-20 -top-1.5 -right-1.5";
+
 export const toastCornerOrbClass = cn(
   "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-popover text-muted-foreground shadow-sm outline-none",
   "transition-[color,background-color,box-shadow] hover:bg-popover hover:text-foreground",
@@ -122,10 +126,12 @@ function ToastDescriptionAndExpandable({
   const labels = toastData?.expandableLabels ?? {};
   const descriptionTrigger = toastData?.expandableDescriptionTrigger ?? false;
   const { t } = useI18n();
+
   const descriptionClassName = cn(
     "min-w-0 select-text wrap-break-word text-muted-foreground",
     errorDescriptionClampClass(toastType, toastDescription),
   );
+
   const [open, setOpen] = useState(false);
 
   if (!expandableContent) {
@@ -145,6 +151,7 @@ function ToastDescriptionAndExpandable({
   const collapseLabel = labels.collapse ?? t("Hide details");
 
   const toggle = () => setOpen((v) => !v);
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -222,24 +229,32 @@ export function deriveToastBodyDescriptor(toast: {
   readonly data?: ThreadToastData | undefined;
 }): ToastBodyDescriptor {
   const Icon = toast.type ? TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS] : null;
+
   const stackedActionLayout =
     hasVisibleToastAction(toast.actionProps) && toast.data?.actionLayout === "stacked-end";
+
   const actionVariant: NonNullable<ThreadToastData["actionVariant"]> =
     toast.data?.actionVariant ?? "default";
+
   const secondaryActionVariant: NonNullable<ThreadToastData["secondaryActionVariant"]> =
     toast.data?.secondaryActionVariant ?? "outline";
+
   const copyErrorText =
     toast.type === "error" && typeof toast.description === "string" && !toast.data?.hideCopyButton
       ? toast.description
       : null;
+
   const hasAdditionalActions = (toast.data?.additionalActions?.length ?? 0) > 0;
   const hasSecondaryAction = toast.data?.secondaryActionProps !== undefined;
+
   const hasTrailingControls =
     copyErrorText !== null ||
     hasVisibleToastAction(toast.actionProps) ||
     hasAdditionalActions ||
     hasSecondaryAction;
+
   const inlineContentEndPad = hasTrailingControls ? "pr-6" : "pr-10";
+
   return {
     Icon,
     stackedActionLayout,
@@ -273,6 +288,7 @@ export function ToastBodyContent({
   const additionalActions = toastData?.additionalActions ?? [];
   const secondaryActionProps = toastData?.secondaryActionProps;
   const leadingIcon = toastData?.leadingIcon;
+
   const { className: secondaryActionClassName, ...secondaryActionRest } =
     secondaryActionProps ?? {};
 

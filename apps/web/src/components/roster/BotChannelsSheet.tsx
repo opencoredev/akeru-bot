@@ -81,42 +81,56 @@ export function BotChannelsSheet({
   const snapshot = useAtomValue(environmentSnapshotAtom(targetEnvironmentId));
   const connections = usePrimarySettings((settings) => settings.channelConnections);
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
+
   const disconnect = useAtomCommand(botEnvironment.channels.disconnect, {
     reportFailure: false,
   });
+
   const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
+
   const reconnect = useAtomCommand(botEnvironment.channels.reconnect, {
     reportFailure: false,
   });
+
   const changeProject = useAtomCommand(botEnvironment.channels.changeProject, {
     reportFailure: false,
   });
+
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pickedProjects, setPickedProjects] = useState<Record<string, ProjectId>>({});
   const liveProjects = snapshot?.projects ?? [];
   const projectHint = snapshot ? defaultProjectIdForBot(snapshot, BotId.make(bot.id)) : null;
+
   const channelState = (connection: ChannelConnectionProfile) => {
     const owner = assignedBotForConnection(connection.id, bots);
+
     const binding = owner?.channelBindings?.find(
       (candidate) => candidate.connectionId === connection.id,
     );
+
     const ownedByCurrentBot = owner?.id === bot.id;
+
     const needsProject =
       ownedByCurrentBot && binding ? channelBindingNeedsProject(binding, liveProjects) : false;
+
     const projectId = channelPickerProjectId({
       selected: pickedProjects[connection.id],
       binding: ownedByCurrentBot ? binding : undefined,
       hint: projectHint,
       liveProjects,
     });
+
     const canMove =
       ownedByCurrentBot &&
       binding !== undefined &&
       canChangeChannelProject(binding, projectId, liveProjects);
+
     const repairAction =
       ownedByCurrentBot && binding ? channelRepairAction(binding, liveProjects) : "none";
+
     return { owner, binding, ownedByCurrentBot, needsProject, projectId, canMove, repairAction };
   };
+
   const access = resolveChannelSettingsAccess({
     isPending: session.isPending,
     session: session.data,
@@ -132,6 +146,7 @@ export function BotChannelsSheet({
     setBusyId(connection.id);
     const result = await command();
     setBusyId(null);
+
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
@@ -149,6 +164,7 @@ export function BotChannelsSheet({
 
   const moveToProject = (connection: ChannelConnectionProfile) => {
     const { projectId, canMove } = channelState(connection);
+
     if (!environmentId || !canMove || projectId === null) return;
     void run(connection, () =>
       changeProject({
@@ -160,6 +176,7 @@ export function BotChannelsSheet({
 
   const connect = (connection: ChannelConnectionProfile) => {
     const { owner, projectId } = channelState(connection);
+
     if (!environmentId || owner || projectId === null) return;
     void run(connection, () =>
       attach({
@@ -182,11 +199,14 @@ export function BotChannelsSheet({
   const unassign = async (connection: ChannelConnectionProfile) => {
     if (!environmentId) return;
     setBusyId(connection.id);
+
     const result = await detach({
       environmentId,
       input: { botId: BotId.make(bot.id), provider: connection.provider },
     });
+
     setBusyId(null);
+
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: t("Could not unassign channel") });
     }
@@ -254,6 +274,7 @@ export function BotChannelsSheet({
               canMove,
               repairAction,
             } = channelState(connection);
+
             return (
               <div key={connection.id} className="flex flex-col gap-3 rounded-lg border p-3">
                 <div className="min-w-0 space-y-1">
@@ -346,9 +367,11 @@ export function BotChannelsSheet({
                       managementUrl={connection.managementUrl}
                       onRepair={(action) => {
                         if (action === "choose-project") return moveToProject(connection);
+
                         // Replacing credentials needs the full setup form in Settings.
                         if (action === "update-credentials")
                           return openChannelSettings(connection.provider);
+
                         if (!environmentId) return;
                         // A disconnected channel starts in the project the picker shows.
                         const target = channelReconnectProject(binding, projectId, liveProjects);

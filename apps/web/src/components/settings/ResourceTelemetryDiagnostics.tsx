@@ -59,18 +59,24 @@ import { SettingsSection } from "./settingsLayout";
 
 export function ResourceTelemetryDiagnostics() {
   const [windowMs, setWindowMs] = useState(15 * 60_000);
+
   const selectedWindow =
     HISTORY_WINDOWS.find((option) => option.windowMs === windowMs) ?? HISTORY_WINDOWS[1];
+
   const telemetry = useResourceTelemetry();
   const retryTelemetry = telemetry.retry;
+
   const history = useResourceTelemetryHistory({
     windowMs: selectedWindow.windowMs,
     bucketMs: selectedWindow.bucketMs,
   });
+
   const primaryEnvironment = usePrimaryEnvironment();
+
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
     reportFailure: false,
   });
+
   const [signalingKeys, setSignalingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const signalingKeysRef = useRef<ReadonlySet<string>>(new Set());
   signalingKeysRef.current = signalingKeys;
@@ -83,10 +89,12 @@ export function ResourceTelemetryDiagnostics() {
   const signalProcess = useCallback(
     async (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
       const identityKey = processIdentityKey(process);
+
       if (signalingKeysRef.current.has(identityKey)) return;
       const nextSignalingKeys = new Set(signalingKeysRef.current).add(identityKey);
       signalingKeysRef.current = nextSignalingKeys;
       setSignalingKeys(nextSignalingKeys);
+
       const clearSignaling = () => {
         const next = new Set(signalingKeysRef.current);
         next.delete(identityKey);
@@ -96,6 +104,7 @@ export function ResourceTelemetryDiagnostics() {
 
       if (signal === "SIGKILL") {
         let confirmed = false;
+
         try {
           confirmed = await ensureLocalApi().dialogs.confirm(
             `Send SIGKILL to process ${process.identity.pid}? This cannot be handled by the process.`,
@@ -108,18 +117,25 @@ export function ResourceTelemetryDiagnostics() {
             title: "Could not confirm signal",
             description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
           });
+
           return;
         }
+
         if (!confirmed) {
           clearSignaling();
+
           return;
         }
       }
+
       const environmentId = primaryEnvironmentIdRef.current;
+
       if (environmentId === undefined) {
         clearSignaling();
+
         return;
       }
+
       void signalServerProcess({
         environmentId,
         input: {
@@ -133,6 +149,7 @@ export function ResourceTelemetryDiagnostics() {
             if (isAtomCommandInterrupted(result)) return;
             throw squashAtomCommandFailure(result);
           }
+
           if (result.value.signaled) return;
           toastManager.add({
             type: "error",
@@ -174,10 +191,12 @@ export function ResourceTelemetryDiagnostics() {
   }, [retryTelemetry]);
 
   const speedLimit = snapshot ? Option.getOrNull(snapshot.speedLimitPercent) : null;
+
   const collectorNeedsRetry = shouldShowResourceMonitorRetry({
     nativeStatus: snapshot?.health.native.status ?? null,
     error: telemetry.error,
   });
+
   const hasHostPowerSignal =
     snapshot !== null &&
     (snapshot.power.onBattery !== "unknown" ||

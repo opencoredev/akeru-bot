@@ -57,23 +57,29 @@ export function DesktopOnboarding({
   const serverBots = useAtomValue(environmentBotsAtom(atomKey));
   const attemptedHandoffRef = useRef<string | null>(null);
   const [draft] = useState(readDraft);
+
   const [completed] = useState(
     () => window.localStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY) === "1",
   );
+
   const [finished, setFinished] = useState(false);
   const initialDraftRef = useRef<DesktopOnboardingDraft | null>(draft);
   const [captureMode] = useState(readCaptureMode);
+
   if (rosterLoaded && initialDraftRef.current) {
     const currentDraft = initialDraftRef.current;
+
     const recoveredDraft = recoverMissingDesktopOnboardingBot(
       currentDraft,
       serverBots.map((bot) => bot.id),
     );
+
     if (recoveredDraft !== currentDraft) {
       initialDraftRef.current = recoveredDraft;
       writeDraft(recoveredDraft);
     }
   }
+
   const shouldStart =
     !finished &&
     environmentId !== null &&
@@ -98,11 +104,13 @@ export function DesktopOnboarding({
   // here with setup already complete. Finish the trip to that chat once.
   useEffect(() => {
     if (!environmentId || !rosterLoaded) return;
+
     const handoff = readDesktopOnboardingHandoffForEnvironment(
       window.localStorage,
       environmentId,
       serverBots.map((bot) => bot.id),
     );
+
     if (
       !handoff ||
       handoff.environmentId !== environmentId ||
@@ -110,17 +118,21 @@ export function DesktopOnboarding({
     )
       return;
     const handoffBot = serverBots.find((bot) => bot.id === handoff.botId);
+
     if (handoffBot?.archivedAt) {
       clearDesktopOnboardingHandoff(window.localStorage);
       toastManager.add({
         type: "error",
         title: "Your new bot was archived before its chat opened. Create or select another bot.",
       });
+
       return;
     }
+
     if (!handoffBot) {
       return;
     }
+
     const botId = handoff.botId;
     attemptedHandoffRef.current = botId;
     useRosterStore.getState().selectBot(botId);

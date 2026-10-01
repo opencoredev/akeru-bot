@@ -15,6 +15,7 @@ describe("rebaseUneditedValue", () => {
     const current = ["calendar", "github"];
     const previous = ["github", "calendar"];
     const next = ["github"];
+
     const equal = (left: string[], right: string[]) =>
       [...left].sort().join() === [...right].sort().join();
 

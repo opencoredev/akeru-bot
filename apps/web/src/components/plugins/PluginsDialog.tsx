@@ -80,7 +80,9 @@ export {
   PLUGIN_PAGE_COLUMN_CLASS_NAME,
   PluginsPageHeader,
 } from "./PluginDirectoryLayout";
+
 export { PLUGIN_DIRECTORY_FILTERS } from "./pluginDirectoryCatalog";
+
 export {
   EMPTY_MCP_SERVER_DRAFT,
   type McpServerDraft,
@@ -100,6 +102,7 @@ export function resolvePluginDialogServers(
   readonly removedBuiltinServers: readonly McpServer[];
 } {
   const catalogServerIds = new Set(catalog.map(pluginMcpServerId));
+
   return {
     installedPlugins: catalog.filter((plugin) => findPluginServer(plugin, servers)),
     customServers: servers.filter((server) => !isBuiltinMcpServer(server)),
@@ -117,7 +120,9 @@ export function pluginBrokeredBlockerNotice(
   t: Translate = englishTranslator.translate,
 ) {
   const blocker = pluginBlocker(plugin);
+
   if (plugin.connection.type !== "brokered" || blocker === null) return null;
+
   return {
     type: "warning" as const,
     title: t("{name} is not available yet", { name: plugin.title }),
@@ -131,6 +136,7 @@ export function pluginRecoveryNotice(
   t: Translate = englishTranslator.translate,
 ) {
   if (recoveryFailures.length === 0) return null;
+
   return {
     type: "warning" as const,
     title: t("{name} connected with a session issue", { name: pluginTitle }),
@@ -153,17 +159,21 @@ function PluginsDialogForEnvironment({
   const requestedQuery = usePluginsDialogStore((state) => state.requestedQuery);
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
+
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
   const enableServer = useAtomCommand(mcpServerEnvironment.enable, { reportFailure: false });
   const disableServer = useAtomCommand(mcpServerEnvironment.disable, { reportFailure: false });
+
   const authenticateServer = useAtomCommand(serverEnvironment.authenticateMcpServer, {
     reportFailure: false,
   });
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PluginFilter>("All");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDirectoryDefinition | null>(null);
@@ -172,15 +182,19 @@ function PluginsDialogForEnvironment({
   const [draft, setDraft] = useState(EMPTY_MCP_SERVER_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
+
   const { customServers, installedPlugins, removedBuiltinServers } =
     resolvePluginDialogServers(servers);
+
   const sections = buildPluginSections({
     plugins: LISTED_PLUGIN_CATALOG,
     query,
     filter,
     installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
   });
+
   const validationError = validateMcpServerDraft(draft, t);
+
   const selectedPluginServer = selectedPlugin
     ? findPluginServer(selectedPlugin, servers)
     : undefined;
@@ -188,6 +202,7 @@ function PluginsDialogForEnvironment({
   useEffect(() => {
     if (requestedQuery !== null) setQuery(requestedQuery);
   }, [requestedQuery]);
+
   const selectedPluginAccess: ProviderAccessStatus | undefined = selectedPlugin
     ? subscriptionAuth.data?.access.find((status) => status.pluginId === selectedPlugin.id)
     : undefined;
@@ -203,6 +218,7 @@ function PluginsDialogForEnvironment({
       title,
       description: error instanceof Error ? error.message : t("The command failed."),
     });
+
     return true;
   };
 
@@ -228,29 +244,38 @@ function PluginsDialogForEnvironment({
     // the named blocker instead of a dead click.
     if (enabled) {
       const notice = pluginBrokeredBlockerNotice(plugin, t);
+
       if (notice) {
         toastManager.add(notice);
+
         return;
       }
     }
+
     if (!enabled) {
       const mcpServerId = pluginMcpServerId(plugin);
       setPendingServerId(mcpServerId);
       const result = await disableServer({ environmentId, input: { mcpServerId } });
       setPendingServerId(null);
       reportFailure(t("Could not disable {name}", { name: plugin.title }), result);
+
       return;
     }
+
     if (!isInstallablePlugin(plugin)) return;
 
     const plan = planPluginToggle(plugin, servers, true);
+
     if (plan.action === "disable") return;
     setPendingServerId(plan.mcpServerId);
+
     const commandSucceeded = (title: string, result: Awaited<ReturnType<typeof createServer>>) => {
       if (result._tag === "Success") return true;
       reportFailure(title, result);
+
       return false;
     };
+
     const shouldAuthenticate =
       plugin.authentication === "oauth" || plugin.authentication === "optional-oauth";
 
@@ -285,15 +310,19 @@ function PluginsDialogForEnvironment({
                   mcpServerId,
                   onAuthorizationUrl,
                 });
+
                 if (result._tag === "Success") {
                   const notice = pluginRecoveryNotice(
                     plugin.title,
                     result.value.recoveryFailures,
                     t,
                   );
+
                   if (notice) toastManager.add(notice);
+
                   return true;
                 }
+
                 if (!isAtomCommandInterrupted(result)) {
                   const error = squashAtomCommandFailure(result);
                   toastManager.add({
@@ -303,15 +332,18 @@ function PluginsDialogForEnvironment({
                       error instanceof Error ? error.message : t("Authentication failed."),
                   });
                 }
+
                 return false;
               },
             }
           : {}),
         openAuthorizationUrl: async (url) => {
           const authorizationUrl = new URL(url);
+
           if (authorizationUrl.protocol !== "https:") {
             throw new Error("The authorization URL must use HTTPS.");
           }
+
           await ensureLocalApi().shell.openExternal(authorizationUrl.toString());
         },
       });
@@ -323,10 +355,12 @@ function PluginsDialogForEnvironment({
 
   const toggleCustom = async (server: McpServer, enabled: boolean) => {
     setPendingServerId(server.id);
+
     const result = await (enabled ? enableServer : disableServer)({
       environmentId,
       input: { mcpServerId: server.id },
     });
+
     setPendingServerId(null);
     reportFailure(
       enabled ? t("Could not enable MCP server") : t("Could not disable MCP server"),
@@ -336,8 +370,10 @@ function PluginsDialogForEnvironment({
 
   const saveEditor = async () => {
     setSubmitAttempted(true);
+
     if (!editorTarget || validationError) return;
     const mcpServerId = editorTarget.server?.id ?? McpServerId.make(randomUUID());
+
     const configuration =
       draft.transport === "stdio"
         ? {
@@ -350,11 +386,15 @@ function PluginsDialogForEnvironment({
               .filter(Boolean),
           }
         : { name: draft.name.trim(), transport: "url" as const, url: draft.url.trim() };
+
     setPendingServerId(mcpServerId);
+
     const result = editorTarget.server
       ? await updateServer({ environmentId, input: { mcpServerId, ...configuration } })
       : await createServer({ environmentId, input: { mcpServerId, ...configuration } });
+
     setPendingServerId(null);
+
     if (
       !reportFailure(
         editorTarget.server ? t("Could not update MCP server") : t("Could not add MCP server"),
@@ -386,6 +426,7 @@ function PluginsDialogForEnvironment({
         variant: "destructive",
       },
     );
+
     if (!confirmed) return;
     setPendingServerId(server.id);
     const result = await deleteServer({ environmentId, input: { mcpServerId: server.id } });
@@ -409,9 +450,12 @@ function PluginsDialogForEnvironment({
             onRemove={() => {
               if (selectedPlugin.connection.type === "brokered") {
                 void togglePlugin(selectedPlugin, false);
+
                 return;
               }
+
               const server = findPluginServer(selectedPlugin, servers);
+
               if (server) void removeServer(server);
             }}
             onViewDocumentation={() =>
@@ -577,6 +621,7 @@ export function PluginsDialog() {
   const { t } = useI18n();
   const open = usePluginsDialogStore((state) => state.open);
   const environmentId = usePrimaryEnvironmentId();
+
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closePlugins()}>
       <DialogPopup bottomStickOnMobile={false} className={PLUGIN_DIALOG_CLASS_NAME}>
@@ -596,6 +641,7 @@ export function PluginsDialog() {
 export function PluginsPage() {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">

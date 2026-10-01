@@ -58,6 +58,7 @@ describe("GroupDetailsPanel", () => {
       new URL("../../routes/_chat.groups.$groupId.tsx", import.meta.url),
       "utf8",
     );
+
     expect(source).toContain("<GroupThreadLanding");
     expect(source).toContain("<GroupDetailsPanel");
     expect(source).toContain("onDeleted=");

@@ -21,7 +21,9 @@ export function botComposerState(input: {
   readonly canSubmit: boolean;
 }): BotComposerState {
   if (input.disabled) return "stopped";
+
   if (input.busy) return "sending";
+
   return input.canSubmit ? "ready" : "empty";
 }
 
@@ -92,6 +94,7 @@ export function botMentionHint(
 
 export function restoreBotStashPrompt(currentPrompt: string, stashedPrompt: string): string {
   if (stashedPrompt.length === 0) return currentPrompt;
+
   return currentPrompt.trim().length > 0
     ? `${currentPrompt.trimEnd()}\n\n${stashedPrompt}`
     : stashedPrompt;
@@ -108,5 +111,6 @@ export function botPromptCommandMenuTrigger(input: {
   readonly commandCatalog: ComposerProviderCatalog | null | undefined;
 }) {
   if (input.readOnly || input.commandCatalog === undefined || input.caret === null) return null;
+
   return botPromptCommandTrigger(input.draft, input.caret);
 }

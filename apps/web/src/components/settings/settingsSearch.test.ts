@@ -54,6 +54,7 @@ describe("searchSettings", () => {
         }),
       );
     }
+
     expect(
       searchSettings("langue", undefined, (title) => (title === "Language" ? "Langue" : title)),
     ).toEqual([expect.objectContaining({ id: "language", to: "/settings/general" })]);
@@ -144,6 +145,7 @@ describe("searchSettings", () => {
 
   it("drops coding-agent leftovers from the index", () => {
     const ids: ReadonlyArray<string> = SETTINGS_SEARCH_ITEMS.map((item) => item.id);
+
     for (const id of [
       "hide-whitespace-changes",
       "skills-in-slash-menu",

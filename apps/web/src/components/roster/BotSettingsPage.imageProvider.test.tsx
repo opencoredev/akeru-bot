@@ -29,6 +29,7 @@ const state = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -41,6 +42,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -61,17 +63,23 @@ vi.mock("../../state/server", () => ({
     subscriptionAuth: () => Symbol("subscriptionAuth"),
   },
 }));
+
 vi.mock("../../state/mcpServers", () => ({ environmentMcpServersAtom: () => atoms.mcpServers }));
+
 vi.mock("../../state/bots", () => ({ botEnvironment: { update: atoms.update } }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: symbol) => (atom === atoms.update ? state.updateBot : vi.fn()),
 }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: null, error: null, isPending: true, refresh: vi.fn() }),
 }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
   useEnvironmentSettings: (
@@ -83,14 +91,19 @@ vi.mock("../../hooks/useSettings", () => ({
       imageGeneration: state.imageGeneration ?? DEFAULT_UNIFIED_SETTINGS.imageGeneration,
     }),
 }));
+
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (store: { bots: Bot[] }) => unknown) => selector({ bots: state.bots }),
 }));
+
 vi.mock("./useBotThreadRef", () => ({ useBotThreadRef: () => null }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
+
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
@@ -98,6 +111,7 @@ import { BotSettingsPage } from "./BotSettingsPage";
 import { expandBotSettingsSections } from "./BotSettingsPage.test-support";
 
 const environmentId = EnvironmentId.make("environment-1");
+
 const codexId = ProviderInstanceId.make("codex");
 
 function codexProvider(): ServerProvider {
@@ -150,12 +164,15 @@ type Tree = ReactElement<Record<string, unknown>>;
 function renderForm(): Tree {
   hooks.beginRender();
   const page = BotSettingsPage({ botId: "bot-1" }) as Tree;
+
   const formElement = visitElements(
     page,
     (element) => typeof element.props.onSave === "function" && "bot" in element.props,
   );
+
   expect(formElement).not.toBeNull();
   const Form = formElement!.type as (props: Record<string, unknown>) => Tree;
+
   return expandBotSettingsSections(Form(formElement!.props));
 }
 
@@ -169,7 +186,9 @@ function imageSelect(tree: Tree) {
         (child) => child.props["aria-label"] === "Image provider",
       ) !== null,
   );
+
   expect(select).not.toBeNull();
+
   return select!.props as {
     readonly value: string;
     readonly onValueChange: (value: string) => void;
@@ -179,10 +198,13 @@ function imageSelect(tree: Tree) {
 
 function textOf(node: unknown): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
+
   if (Array.isArray(node)) return node.map(textOf).join("");
+
   if (node && typeof node === "object" && "props" in node) {
     return textOf((node as Tree).props.children);
   }
+
   return "";
 }
 
@@ -191,6 +213,7 @@ function selectedLabel(tree: Tree): string {
     imageSelect(tree).children,
     (element) => element.props["aria-label"] === "Image provider",
   );
+
   return textOf(trigger?.props.children);
 }
 
@@ -199,7 +222,9 @@ function saveButton(tree: Tree) {
     tree,
     (element) => element.props.onClick !== undefined && textOf(element.props.children) === "Save",
   );
+
   expect(button).not.toBeNull();
+
   return button!.props as { readonly disabled: boolean; readonly onClick: () => void };
 }
 
@@ -209,7 +234,9 @@ function modelPicker(tree: Tree) {
     (element) =>
       typeof element.props.onChange === "function" && "activeInstanceId" in element.props,
   );
+
   expect(picker).not.toBeNull();
+
   return picker!.props as {
     readonly activeInstanceId: string;
     readonly model: string;
@@ -266,6 +293,7 @@ describe("bot settings image provider", () => {
     state.bots = [makeBot({ sandbox: null })];
     let tree = renderForm();
     expect(saveButton(tree).disabled).toBe(true);
+
     const select = visitElements(
       tree,
       (element) =>
@@ -275,6 +303,7 @@ describe("bot settings image provider", () => {
           (child) => child.props["aria-label"] === "Sandbox provider",
         ) !== null,
     );
+
     expect(select?.props.value).toBe("default");
     (select!.props.onValueChange as (value: string) => void)("local");
     tree = renderForm();
@@ -299,6 +328,7 @@ describe("bot settings image provider", () => {
   it("can restore the default sandbox from an explicit choice", async () => {
     state.bots = [makeBot({ sandbox: "railway" })];
     const tree = renderForm();
+
     const select = visitElements(
       tree,
       (element) =>
@@ -308,6 +338,7 @@ describe("bot settings image provider", () => {
           (child) => child.props["aria-label"] === "Sandbox provider",
         ) !== null,
     );
+
     (select!.props.onValueChange as (value: string) => void)("default");
     saveButton(renderForm()).onClick();
     await flushPromises();
@@ -320,9 +351,11 @@ describe("bot settings image provider", () => {
 
     let tree = renderForm();
     expect(modelPicker(tree).activeInstanceId).toBe(missingId);
+
     const notice = visitElements(tree, (element) =>
       Boolean(element.props.presentation && typeof element.props.presentation === "object"),
     );
+
     expect(notice?.props.presentation).toMatchObject({ reason: "missing-provider" });
 
     imageSelect(tree).onValueChange("grok");

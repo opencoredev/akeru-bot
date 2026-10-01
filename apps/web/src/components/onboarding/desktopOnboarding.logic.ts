@@ -5,6 +5,7 @@ import {
 } from "./desktopOnboardingDraft";
 
 export { englishOnboardingTranslate, type OnboardingTranslate } from "./onboardingTranslate";
+
 export {
   clearDesktopOnboardingHandoff,
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
@@ -25,12 +26,14 @@ export {
   readDesktopOnboardingHandoffForEnvironment,
   writeDesktopOnboardingDraft,
 } from "./desktopOnboardingDraft";
+
 export {
   type DesktopOnboardingCreationReadiness,
   desktopOnboardingModelSelection,
   resolveDesktopOnboardingCreationReadiness,
   resolveDesktopOnboardingEngine,
 } from "./desktopOnboardingEngine";
+
 export {
   canStartDesktopOnboardingReveal,
   DESKTOP_ONBOARDING_CELEBRATION_PIECES,
@@ -56,7 +59,9 @@ export {
  */
 export function resolveDesktopOnboardingFocusLabel(goal: string): string | null {
   const summary = goal.trim().replace(/\s+/g, " ");
+
   if (summary.length === 0) return null;
+
   return summary.length > 48 ? `${summary.slice(0, 47).trimEnd()}…` : summary;
 }
 
@@ -69,6 +74,7 @@ export function shouldShowDesktopOnboarding(input: {
   readonly started: boolean;
 }): boolean {
   if (!input.desktop || !input.rosterLoaded) return false;
+
   return input.started || input.draft !== null || (!input.completed && input.serverBotCount === 0);
 }
 
@@ -79,6 +85,7 @@ export function recoverMissingDesktopOnboardingBot(
   if (draft.step !== "message" || draft.botId === null || serverBotIds.includes(draft.botId)) {
     return draft;
   }
+
   return { ...draft, step: "identity", botId: null };
 }
 
@@ -87,11 +94,13 @@ export function recoverDisappearedDesktopOnboardingBot(
   readyBotId: string | null,
 ): DesktopOnboardingDraft {
   if (draft.step !== "message" || draft.botId === null || draft.botId !== readyBotId) return draft;
+
   return { ...draft, step: "identity", botId: null };
 }
 
 export function stepNumber(step: DesktopOnboardingStep): number {
   const index = DESKTOP_ONBOARDING_STEPS.findIndex((candidate) => candidate.id === step);
+
   return index === -1 ? DESKTOP_ONBOARDING_STEPS.length : index + 1;
 }
 
@@ -106,6 +115,7 @@ export interface DesktopOnboardingProgress {
 export function desktopOnboardingProgress(step: DesktopOnboardingStep): DesktopOnboardingProgress {
   const total = DESKTOP_ONBOARDING_STEPS.length;
   const number = stepNumber(step);
+
   return {
     number,
     total,

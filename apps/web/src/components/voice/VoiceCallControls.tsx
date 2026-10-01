@@ -29,6 +29,7 @@ export function BotVoiceCallButtonView({
   if (!globallyEnabled || !bot.voiceEnabled) return null;
   const label = active ? `Return to call with ${bot.name}` : `Call ${bot.name}`;
   const description = disabled && disabledReason ? `${label}. ${disabledReason}` : label;
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -62,6 +63,7 @@ export function BotVoiceCallButton({
   const engine = useBotEngineAvailability(bot.engine);
   const active = activeCall?.botId === bot.id;
   const blocked = engine.blocked && !active;
+
   return (
     <BotVoiceCallButtonView
       bot={bot}
@@ -80,22 +82,26 @@ export function SelectedBotVoiceCallButton() {
       ? null
       : (state.bots.find((candidate) => candidate.id === state.selectedBotId) ?? null),
   );
+
   return bot ? <BotVoiceCallButton bot={bot} /> : null;
 }
 
 export function VoiceCallBar() {
   const { activeCall, hangup, reconnecting, returnToCall, startingBotId } = useVoiceCall();
+
   const startingBotName = useRosterStore((state) =>
     startingBotId === null
       ? null
       : (state.bots.find((candidate) => candidate.id === startingBotId)?.name ?? "Bot"),
   );
+
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!activeCall) return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+
     return () => window.clearInterval(timer);
   }, [activeCall]);
 
@@ -104,6 +110,7 @@ export function VoiceCallBar() {
       <VoiceCallStartingBarView botName={startingBotName} onCancel={hangup} />
     ) : null;
   }
+
   return (
     <VoiceCallBarView
       activeCall={activeCall}

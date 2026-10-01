@@ -21,9 +21,11 @@ export function groupMemberRemovalHint(
       ? t("A group needs at least two bots. Add another bot before you remove one.")
       : t("A group needs at least two bots. Create a new bot in the roster before you remove one.");
   }
+
   if (input.bossName !== null) {
     return t("To remove {name}, make another bot the boss first.", { name: input.bossName });
   }
+
   return null;
 }
 

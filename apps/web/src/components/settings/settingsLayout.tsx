@@ -24,6 +24,7 @@ interface SettingsSearchTargetContextValue {
 }
 
 const noop = () => undefined;
+
 const SettingsSearchTargetContext = createContext<SettingsSearchTargetContextValue>({
   targetId: null,
   onTargetHandled: noop,
@@ -39,11 +40,13 @@ export function SettingsSearchTargetProvider({
   children: ReactNode;
 }) {
   const value = useMemo(() => ({ targetId, onTargetHandled }), [onTargetHandled, targetId]);
+
   return <SettingsSearchTargetContext value={value}>{children}</SettingsSearchTargetContext>;
 }
 
 function scrollAndFocusSettingsTarget(target: HTMLElement): void {
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const scrollTarget =
     target.tagName === "SECTION" && target.firstElementChild
       ? (target.firstElementChild as HTMLElement)
@@ -55,6 +58,7 @@ function scrollAndFocusSettingsTarget(target: HTMLElement): void {
   });
   target.focus({ preventScroll: true });
   target.classList.remove("settings-search-target-pulse");
+
   if (prefersReducedMotion) return;
   void target.offsetWidth;
   target.classList.add("settings-search-target-pulse");
@@ -73,6 +77,7 @@ export function useSettingsSearchTargetId(): string | null {
 function useSettingsSearchTarget<T extends HTMLElement>(id: string | undefined) {
   const { targetId, onTargetHandled } = useContext(SettingsSearchTargetContext);
   const isSearchTarget = id !== undefined && id === targetId;
+
   const targetRef = useCallback(
     (target: T | null) => {
       if (target && isSearchTarget) {
@@ -110,8 +115,10 @@ export function useRelativeTimeTick(intervalMs = 1_000) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), intervalMs);
+
     return () => clearInterval(id);
   }, [intervalMs]);
+
   return nowMs;
 }
 
@@ -234,6 +241,7 @@ export function SettingResetButton({
   onClick: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -271,8 +279,10 @@ export function SettingsPageContainer({
   const dialogTargetId = useSettingsDialogStore((state) => state.targetId);
   const hashTargetId = hash.replace(/^#/, "") || null;
   const targetId = dialogTargetId ?? hashTargetId;
+
   const clearTargetHash = useCallback(() => {
     clearSettingsTarget();
+
     if (hashTargetId)
       void navigate({ hash: "", replace: true, resetScroll: false, hashScrollIntoView: false });
   }, [hashTargetId, navigate]);
@@ -293,7 +303,9 @@ export function SettingsPageContainer({
 
 export function scrollToSettingsTarget(targetId: string): boolean {
   const target = document.getElementById(targetId);
+
   if (!target) return false;
   scrollAndFocusSettingsTarget(target);
+
   return true;
 }

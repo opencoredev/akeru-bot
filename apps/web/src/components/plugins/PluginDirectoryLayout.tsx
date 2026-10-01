@@ -14,10 +14,13 @@ import { PLUGIN_DIRECTORY_FILTERS } from "./pluginDirectoryCatalog";
 import type { PluginFilter } from "./pluginPresentation";
 
 const ALL_CATEGORIES_VALUE = "all-categories";
+
 const PRIMARY_FILTERS = ["All", "Featured", "Installed"] as const satisfies readonly PluginFilter[];
 
 export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0";
+
 export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8";
+
 export const PLUGIN_PAGE_COLUMN_CLASS_NAME =
   "mx-auto flex w-full max-w-6xl flex-col px-4 pt-0 pb-16 sm:px-10 sm:pt-1";
 
@@ -34,6 +37,7 @@ export function PluginSearchField({
   readonly onQueryChange: (query: string) => void;
 }) {
   const { t } = useI18n();
+
   return (
     <div className="relative">
       <AppIcon
@@ -82,27 +86,36 @@ function useSegmentPill(active: string | null) {
   useLayoutEffect(() => {
     const bar = barRef.current;
     const pill = pillRef.current;
+
     if (!bar || !pill) return;
+
     const place = (instant: boolean) => {
       const target = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
+
       if (!target) {
         pill.style.opacity = "0";
         shownRef.current = false;
+
         return;
       }
+
       if (instant || !shownRef.current) pill.style.transition = "none";
       pill.style.translate = `${target.offsetLeft}px 0`;
       pill.style.width = `${target.offsetWidth}px`;
       pill.style.opacity = "1";
+
       if (pill.style.transition === "none") {
         void pill.offsetWidth;
         pill.style.transition = "";
       }
+
       shownRef.current = true;
     };
+
     place(false);
     const observer = new ResizeObserver(() => place(true));
     observer.observe(bar);
+
     return () => observer.disconnect();
   }, [active]);
 
@@ -124,6 +137,7 @@ export function PluginFilterBar({
   const categories = PLUGIN_DIRECTORY_FILTERS.filter((item) => !isPrimaryFilter(item));
   const category = isPrimaryFilter(filter) ? null : filter;
   const { barRef, pillRef } = useSegmentPill(category ? null : filter);
+
   return (
     <div
       aria-label={t("Plugin sections and categories")}
@@ -186,6 +200,7 @@ export function PluginFilterBar({
 /** Standalone page header shared by the directory and plugin details. */
 export function PluginsPageHeader({ children }: { readonly children?: ReactNode }) {
   const { t } = useI18n();
+
   return (
     <WorkspacePageHeader electron={isElectron}>
       {children ?? (
@@ -214,6 +229,7 @@ export function PluginDirectoryLayout({
   readonly children: ReactNode;
 }) {
   const { t } = useI18n();
+
   if (!standalone) {
     return (
       <>
@@ -233,6 +249,7 @@ export function PluginDirectoryLayout({
       </>
     );
   }
+
   return (
     <>
       <PluginsPageHeader>

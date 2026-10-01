@@ -35,14 +35,17 @@ export function ProviderAccountSection({
   const { t } = useI18n();
   const accounts = useSubscriptionAccounts(environmentId, instanceId);
   const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
+
   const status = instanceId
     ? accounts.statusQuery.data?.accounts.find(
         (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
       )
     : accounts.statusByProvider.get(definition.id);
+
   const loadError = status ? null : accounts.statusQuery.error;
 
   let body: ReactNode;
+
   if (environmentId === null) {
     body = (
       <SettingsMessageRow>

@@ -40,6 +40,7 @@ describe("desktop onboarding handoff", () => {
     const burst = desktopOnboardingCelebrationPieces("bot-1", "not-a-color", 4);
 
     expect(burst).toHaveLength(4);
+
     for (const piece of burst) expect(piece.color).toMatch(/^#[\dA-F]{6}$/i);
     expect(desktopOnboardingCelebrationPieces("bot-1", "#8B6FC9", 0)).toEqual([]);
   });
@@ -58,12 +59,14 @@ describe("desktop onboarding handoff", () => {
       "done",
     ]);
     expect(stages[0]?.atMs).toBe(0);
+
     for (const [index, stage] of stages.entries()) {
       if (index === 0) continue;
       // Each beat has to land after the one before it, or the workspace opens
       // before the user has been told anything.
       expect(stage.atMs).toBeGreaterThan(stages[index - 1]!.atMs);
     }
+
     // Long enough to read as beats, short enough never to gate the chat.
     const total = desktopOnboardingHandoffDurationMs(false);
     expect(total).toBeGreaterThanOrEqual(1_000);
@@ -111,9 +114,11 @@ describe("desktop onboarding handoff", () => {
     const statuses = desktopOnboardingHandoffStatuses("Wander");
 
     expect(statuses).toEqual(["Message sent", "Waking Wander up", "Opening your workspace"]);
+
     for (const phase of DESKTOP_ONBOARDING_HANDOFF_PHASES) {
       expect(statuses).toContain(desktopOnboardingHandoffStatus(phase, "Wander"));
     }
+
     expect(desktopOnboardingHandoffStatuses("Verylongbotnamehere")[1]).toBe(
       "Waking Verylongbotnamehere up",
     );
@@ -179,6 +184,7 @@ describe("desktop onboarding handoff", () => {
         canStartDesktopOnboardingReveal({ phase, destinationReady: true, timedOut: true }),
       ).toBe(false);
     }
+
     expect(
       canStartDesktopOnboardingReveal({ phase: null, destinationReady: true, timedOut: false }),
     ).toBe(false);

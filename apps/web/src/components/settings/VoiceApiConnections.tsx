@@ -25,6 +25,7 @@ import {
 export function commandError(result: AtomCommandResult<unknown, unknown>): string {
   if (result._tag !== "Failure") return "The request failed.";
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : "The request failed.";
 }
 
@@ -47,18 +48,22 @@ export function VoiceApiConnectionsSection({
 }) {
   const { t } = useI18n();
   const connect = useAtomCommand(serverEnvironment.connectVoiceProvider, { reportFailure: false });
+
   const disconnect = useAtomCommand(serverEnvironment.disconnectVoiceProvider, {
     reportFailure: false,
   });
+
   const test = useAtomCommand(serverEnvironment.testVoiceProvider, { reportFailure: false });
   const [busy, setBusy] = useState<{ provider: VoiceApiProvider; action: string } | null>(null);
   const [messages, setMessages] = useState<Partial<Record<VoiceApiProvider, ProviderMessage>>>({});
+
   // This client's latest verdicts, shown until the next provider status arrives.
   // Servers that do not report a verdict keep using them.
   const [local, setLocal] = useState<{
     readonly basis: Partial<Record<VoiceApiProvider, boolean>>;
     readonly rejected: Partial<Record<VoiceApiProvider, boolean>>;
   }>({ basis: serverRejected, rejected: {} });
+
   const rejectedFor = (provider: VoiceApiProvider) =>
     (local.basis === serverRejected ? local.rejected[provider] : undefined) ??
     serverRejected[provider] ??
@@ -96,6 +101,7 @@ export function VoiceApiConnectionsSection({
           },
     }));
     onChanged();
+
     return ok;
   };
 
@@ -126,7 +132,9 @@ export function VoiceApiConnectionsSection({
               () => connect({ environmentId, input: { provider, apiKey } }),
               "Key saved. Run Test to check it with the provider.",
             );
+
             if (saved) onKeySaved();
+
             return saved;
           }}
           onTest={() =>
@@ -139,11 +147,13 @@ export function VoiceApiConnectionsSection({
           }
           onDisconnect={async () => {
             const label = VOICE_API_PROVIDER_LABELS[provider];
+
             const confirmed =
               (await requestConfirmDialog(
                 `Remove the ${label} key from this environment? Voice settings that use ${label} stop working until you connect it again.`,
                 { variant: "destructive" },
               )) ?? false;
+
             if (!confirmed) return;
             await run(
               provider,
@@ -186,12 +196,15 @@ export function VoiceApiProviderRow({
   const [editing, setEditing] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const showInput = connected === false || editing;
+
   const spinner = (action: string) =>
     busyAction === action ? <LoaderIcon className="size-3 animate-spin" /> : null;
 
   const submit = async () => {
     const trimmed = apiKey.trim();
+
     if (!trimmed) return;
+
     if (await onConnect(trimmed)) {
       setApiKey("");
       setEditing(false);

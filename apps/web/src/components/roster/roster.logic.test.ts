@@ -198,6 +198,7 @@ describe("buildRosterStrip", () => {
       ],
       { busy: { text: "hi", at: "2026-08-27T10:00:00.000Z" } },
     );
+
     expect(strip.map((entry) => entry.id)).toEqual(["pinned", "quiet", "busy"]);
   });
 });
@@ -207,6 +208,7 @@ describe("buildRosterTiles", () => {
     const bots = Array.from({ length: 7 }, (_, index) =>
       bot({ id: `bot-${index}`, name: `Bot ${index}`, pinned: true }),
     );
+
     const messages = Object.fromEntries(
       bots.map((entry, index) => [
         entry.id,
@@ -290,6 +292,7 @@ describe("roster bot shortcuts", () => {
 
 describe("filterRosterGroups", () => {
   const bots = [bot({ id: "boss", name: "Akeru" }), bot({ id: "specialist", name: "Mori" })];
+
   const groups: Group[] = [
     {
       id: "launch",

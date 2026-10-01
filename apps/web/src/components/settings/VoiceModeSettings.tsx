@@ -73,6 +73,7 @@ export function VoiceModeRows({
             value={voice.provider}
             onValueChange={(value) => {
               const provider = VOICE_MODES.find((mode) => mode === value);
+
               if (provider) onChange({ voice: { provider } });
             }}
             disabled={!voice.enabled}
@@ -199,6 +200,7 @@ function RealtimeVoiceSelect({
       value={value}
       onValueChange={(next) => {
         const selected = CHATGPT_REALTIME_VOICES.find((candidate) => candidate === next);
+
         if (selected) onChange(selected);
       }}
       disabled={disabled}
@@ -235,6 +237,7 @@ function ProviderSelect<P extends VoiceApiProvider>({
       value={value}
       onValueChange={(next) => {
         const selected = providers.find((provider) => provider === next);
+
         if (selected) onChange(selected);
       }}
       disabled={disabled}
@@ -277,12 +280,16 @@ function SynthesisVoicePicker({
   const load = async (cursor: string | undefined) => {
     setLoading(true);
     setError(null);
+
     const result = await listVoices({
       environmentId,
       input: cursor === undefined ? { provider } : { provider, cursor },
     });
+
     setLoading(false);
+
     if (result._tag === "Failure") return setError(commandError(result));
+
     if (result._tag !== "Success") return;
     setVoices((current) => (cursor === undefined ? [] : current).concat(result.value.voices));
     setNextCursor(result.value.nextCursor);
@@ -301,10 +308,12 @@ function SynthesisVoicePicker({
       </span>
     );
   }
+
   const options =
     value && !voices.some((voice) => voice.id === value)
       ? [{ id: value, name: value }, ...voices]
       : voices;
+
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-1.5">

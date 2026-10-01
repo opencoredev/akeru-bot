@@ -93,6 +93,7 @@ export function DelegationDetail({
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
   const presentation = presentDelegation(delegation);
+
   const childThreadRef = useMemo(
     () =>
       environmentId && presentation.childThreadId
@@ -100,6 +101,7 @@ export function DelegationDetail({
         : null,
     [environmentId, presentation.childThreadId],
   );
+
   const messages = useThreadMessages(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
   const childName = activeChildBot?.name ?? t("Unknown bot");

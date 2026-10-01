@@ -15,7 +15,9 @@ export function botPromptCommandTrigger(
   caret: number,
 ): BotPromptCommandTrigger | null {
   const trigger = detectComposerTrigger(draft, caret);
+
   if (trigger?.kind !== "skill" && trigger?.kind !== "slash-command") return null;
+
   return {
     kind: trigger.kind,
     query: trigger.query,
@@ -35,5 +37,6 @@ export function applyBotPromptCommand(
 ): { readonly text: string; readonly caret: number } {
   const before = draft.slice(0, trigger.rangeStart);
   const after = draft.slice(trigger.rangeEnd).replace(/^[ \t]/, "");
+
   return { text: `${before}${inserted}${after}`, caret: before.length + inserted.length };
 }

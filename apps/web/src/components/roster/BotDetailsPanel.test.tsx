@@ -67,6 +67,7 @@ describe("BotDetailsPanel", () => {
         routinePanelRef={createRef<HTMLDivElement>()}
       />,
     );
+
     expect(markup).toContain("claude-fable-5");
     expect(markup).not.toContain("Unavailable");
   });
@@ -109,11 +110,13 @@ describe("BotDetailsPanel", () => {
       new URL("./BotDetailsPanel.tsx", import.meta.url),
       "utf8",
     );
+
     // The settings page renders its model controls through BotEngineFields.
     const settingsSource = NodeFS.readFileSync(
       new URL("./BotEngineFields.tsx", import.meta.url),
       "utf8",
     );
+
     const composerSource = NodeFS.readFileSync(
       new URL("./BotPromptComposer.tsx", import.meta.url),
       "utf8",
@@ -142,6 +145,7 @@ describe("BotDetailsPanel", () => {
       new URL("../../routes/_chat.bots.$botId.tsx", import.meta.url),
       "utf8",
     );
+
     expect(source).toContain("<BotDetailsPanel");
     expect(source).toContain("threadRef={threadRef}");
     expect(source).toContain("onOpenSettings={() =>");

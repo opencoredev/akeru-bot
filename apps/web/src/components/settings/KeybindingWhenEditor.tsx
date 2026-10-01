@@ -24,6 +24,7 @@ export function flattenWhenChildren(
   operator: BooleanOperator,
 ): KeybindingWhenNode[] {
   if (node.type !== operator) return [node];
+
   return [
     ...flattenWhenChildren(node.left, operator),
     ...flattenWhenChildren(node.right, operator),
@@ -35,7 +36,9 @@ export function buildWhenExpressionGroup(
   operator: BooleanOperator,
 ): KeybindingWhenNode | undefined {
   const first = children[0];
+
   if (!first) return undefined;
+
   return children.slice(1).reduce<KeybindingWhenNode>(
     (left, right) => ({
       type: operator,
@@ -50,9 +53,11 @@ export function conditionParts(
   node: KeybindingWhenNode,
 ): { identifier: string; negated: boolean } | null {
   if (node.type === "identifier") return { identifier: node.name, negated: false };
+
   if (node.type === "not" && node.node.type === "identifier") {
     return { identifier: node.node.name, negated: true };
   }
+
   return null;
 }
 
@@ -61,8 +66,10 @@ export function setConditionIdentifier(
   identifier: string,
 ): KeybindingWhenNode {
   const parts = conditionParts(node);
+
   if (!parts) return node;
   const next: KeybindingWhenNode = { type: "identifier", name: identifier };
+
   return parts.negated ? { type: "not", node: next } : next;
 }
 
@@ -71,8 +78,10 @@ export function setConditionNegated(
   negated: boolean,
 ): KeybindingWhenNode {
   const parts = conditionParts(node);
+
   if (!parts) return negated ? { type: "not", node } : node;
   const identifier: KeybindingWhenNode = { type: "identifier", name: parts.identifier };
+
   return negated ? { type: "not", node: identifier } : identifier;
 }
 
@@ -101,6 +110,7 @@ export function WhenVariableSelect({
 }) {
   const { t } = useI18n();
   const selected = variables.find((option) => option === value);
+
   const options =
     selected || variables.some((option) => option === value) ? variables : [value, ...variables];
 
@@ -237,36 +247,48 @@ export function WhenExpressionNodeEditor({
   const operator: BooleanOperator = node.type === "or" ? "or" : "and";
   const children = flattenWhenChildren(node, operator);
   const childKeyCounts = new Map<string, number>();
+
   const childEntries = children.map((child) => {
     const baseKey = `${child.type}-${whenAstToExpression(child)}`;
     const count = childKeyCounts.get(baseKey) ?? 0;
     childKeyCounts.set(baseKey, count + 1);
+
     return { child, key: count === 0 ? baseKey : `${baseKey}-${count}` };
   });
 
   const updateChild = (target: KeybindingWhenNode, next: KeybindingWhenNode) => {
     let didUpdate = false;
+
     const nextChildren = children.map((child) => {
       if (!didUpdate && child === target) {
         didUpdate = true;
+
         return next;
       }
+
       return child;
     });
+
     const nextNode = buildWhenExpressionGroup(nextChildren, operator);
+
     if (nextNode) onChange(nextNode);
   };
 
   const removeChild = (target: KeybindingWhenNode) => {
     let didRemove = false;
+
     const nextChildren = children.filter((child) => {
       if (!didRemove && child === target) {
         didRemove = true;
+
         return false;
       }
+
       return true;
     });
+
     const nextNode = buildWhenExpressionGroup(nextChildren, operator);
+
     if (nextNode) {
       onChange(nextNode);
     } else {
@@ -277,22 +299,27 @@ export function WhenExpressionNodeEditor({
   const setOperator = (nextOperator: BooleanOperator) => {
     if (nextOperator === operator) return;
     const nextNode = buildWhenExpressionGroup(children, nextOperator);
+
     if (nextNode) onChange(nextNode);
   };
 
   const addCondition = () => {
     const nextNode = buildWhenExpressionGroup([...children, defaultWhenCondition()], operator);
+
     if (nextNode) onChange(nextNode);
   };
 
   const addGroup = () => {
     const nestedOperator: BooleanOperator = operator === "and" ? "or" : "and";
+
     const group: KeybindingWhenNode = {
       type: nestedOperator,
       left: defaultWhenCondition(),
       right: { type: "not", node: defaultWhenCondition() },
     };
+
     const nextNode = buildWhenExpressionGroup([...children, group], operator);
+
     if (nextNode) onChange(nextNode);
   };
 
@@ -401,6 +428,7 @@ export function WhenExpressionBuilder({
     setExpressionDraft(nextExpression);
     const nextResult = parseWhenExpressionDraft(nextExpression);
     onValidityChange?.(nextResult.ok);
+
     if (nextResult.ok) {
       onChange(nextResult.value);
     }
@@ -415,17 +443,22 @@ export function WhenExpressionBuilder({
   const addRootCondition = () => {
     if (!value) {
       updateExpressionValue(defaultWhenCondition());
+
       return;
     }
+
     updateExpressionValue({ type: "and", left: value, right: defaultWhenCondition() });
   };
 
   const addRootGroup = () => {
     const group = defaultWhenGroup("or");
+
     if (!value) {
       updateExpressionValue(group);
+
       return;
     }
+
     updateExpressionValue({ type: "and", left: value, right: group });
   };
 

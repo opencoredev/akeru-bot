@@ -49,6 +49,7 @@ function commandValue<A>(result: AtomCommandResult<A, unknown>, fallback: string
 /** Adapts the environment's voice RPCs and the bot's chat turn to the shared composed loop. */
 export function composedVoiceAdapters(deps: ComposedVoiceCallDependencies): ComposedVoiceAdapters {
   const newOperationId = deps.newOperationId ?? (() => `voice-${randomUUID()}`);
+
   return {
     capture: deps.capture,
     play: deps.play,
@@ -82,17 +83,22 @@ export function composedVoiceAdapters(deps: ComposedVoiceCallDependencies): Comp
     sendAndWait: async (text, signal) => {
       const messageId = await deps.sendMessage(text);
       signal.throwIfAborted();
+
       if (messageId === null) {
         throw new Error("The chat did not accept the message. Continue in chat.");
       }
+
       let observedTurnId: OrchestrationLatestTurn["turnId"] | null = null;
+
       return waitForVoiceReply(
         signal,
         () => {
           const turn = deps.readTurn();
+
           if (turn.latestTurn?.requestMessageId === messageId) {
             observedTurnId = turn.latestTurn.turnId;
           }
+
           return correlatedVoiceReply(messageId, turn.latestTurn, turn.messages, observedTurnId);
         },
         deps.subscribeTurn,

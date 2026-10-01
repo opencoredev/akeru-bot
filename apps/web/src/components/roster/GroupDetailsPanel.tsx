@@ -35,22 +35,27 @@ export function GroupDetailsPanel(props: {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
       ) {
         return;
       }
+
       if (resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle") return;
       event.preventDefault();
       event.stopPropagation();
+
       if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
         setMobileOpen((open) => !open);
       } else {
         setDesktopOpen((open) => !open);
       }
     };
+
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, setDesktopOpen]);
 

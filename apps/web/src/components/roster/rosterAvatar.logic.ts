@@ -52,8 +52,11 @@ export const BLOB_COLORS: readonly string[] = [
 ];
 
 export const DEFAULT_BLOB_SHAPE: BotBlobShape = "circle";
+
 export const DEFAULT_BLOB_COLOR = "#8E8E93";
+
 const DARK_EYES = "#161616";
+
 const LIGHT_EYES = "#FFFFFF";
 
 /** The muted presets bots were saved with before the palette went vivid. */
@@ -73,6 +76,7 @@ const LEGACY_BLOB_COLORS: Record<string, string> = {
 export function resolveBlobColor(value: unknown) {
   if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
   const color = value.toUpperCase();
+
   return LEGACY_BLOB_COLORS[color] ?? color;
 }
 
@@ -87,6 +91,7 @@ function relativeLuminance(hexColor: string) {
   const [red, green, blue] = channels.map((channel) =>
     channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
   ) as [number, number, number];
+
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
@@ -97,15 +102,20 @@ function relativeLuminance(hexColor: string) {
  */
 export function resolveBlobEyes(color: string): { kind: "cutout" } | { kind: "ink"; ink: string } {
   const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+
   if (luminance === null) return { kind: "cutout" };
+
   if (luminance > 0.6) return { kind: "ink", ink: DARK_EYES };
+
   if (luminance < 0.02) return { kind: "ink", ink: LIGHT_EYES };
+
   return { kind: "cutout" };
 }
 
 /** A faint edge for light bodies that would otherwise fade into a light surface. */
 export function resolveBlobOutline(color: string) {
   const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+
   return luminance !== null && luminance > 0.7 ? "rgba(0, 0, 0, 0.14)" : null;
 }
 
@@ -130,6 +140,7 @@ export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
 } {
   if (avatar?.kind === "dither") {
     const hash = Math.abs(hashSeed(avatar.seed));
+
     return {
       shape: BLOB_SHAPES[hash % BLOB_SHAPES.length] ?? DEFAULT_BLOB_SHAPE,
       color:
@@ -137,9 +148,11 @@ export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
         DEFAULT_BLOB_COLOR,
     };
   }
+
   if (avatar?.kind !== "blob") {
     return { shape: DEFAULT_BLOB_SHAPE, color: DEFAULT_BLOB_COLOR };
   }
+
   // Unknown names (including the retired creature set) fall back to the
   // default circle rather than an empty slot.
   return {
@@ -154,6 +167,7 @@ export function randomBotAvatar(
 ): Extract<BotAvatar, { kind: "blob" }> {
   const shape = BLOB_SHAPES[Math.floor(random() * BLOB_SHAPES.length)] ?? DEFAULT_BLOB_SHAPE;
   const color = BLOB_COLORS[Math.floor(random() * BLOB_COLORS.length)] ?? DEFAULT_BLOB_COLOR;
+
   return { kind: "blob", shape, color };
 }
 
@@ -167,6 +181,8 @@ export function botAvatarSeed(seed: string): number {
 
 function hashSeed(seed: string) {
   let hash = 0;
+
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+
   return hash;
 }

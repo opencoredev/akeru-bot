@@ -5,6 +5,7 @@ import { formatBotStepEngine, type BotStepMeterData } from "./botStepMeter.logic
 
 export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | undefined }) {
   const { t } = useI18n();
+
   if (!meter) return null;
 
   // Unknown usage is left out rather than shown as a placeholder.

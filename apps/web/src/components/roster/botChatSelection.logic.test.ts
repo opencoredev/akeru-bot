@@ -16,6 +16,7 @@ describe("bot chat resolution with child work", () => {
     updatedAt,
     archivedAt: null,
   });
+
   const direct = {
     environmentId: "env-a",
     id: "thread-ren",
@@ -24,6 +25,7 @@ describe("bot chat resolution with child work", () => {
     updatedAt: "2026-08-27T00:00:00.000Z",
     archivedAt: null,
   };
+
   // Mirrors the roster hooks: the shell list leaves out child work, and the
   // resolved target's own shell (which does include child work) decides.
   const resolveChat = (
@@ -32,8 +34,10 @@ describe("bot chat resolution with child work", () => {
   ) => {
     const listed = allThreads.filter((thread) => thread.parentThreadId == null);
     const target = resolveBotThreadTarget("bot-ren", "env-a", listed, rememberedPath);
+
     if (!target) return null;
     const shell = allThreads.find((thread) => thread.id === target.threadId) ?? null;
+
     return isBotOwnChatShell("bot-ren", shell) ? target.threadId : null;
   };
 
@@ -42,6 +46,7 @@ describe("bot chat resolution with child work", () => {
       child("child-1", "2026-08-28T00:00:00.000Z"),
       child("child-2", "2026-08-29T00:00:00.000Z"),
     ];
+
     expect(resolveChat(threads)).toBeNull();
     expect(resolveChat(threads, "/env-a/child-2")).toBeNull();
   });
@@ -74,6 +79,7 @@ describe("picked bot chat", () => {
     updatedAt,
     archivedAt,
   });
+
   // Chat A replied after the user picked chat B, so A is the latest.
   const shells = [
     shell("thread-b", "2026-09-01T00:00:00.000Z"),
@@ -92,6 +98,7 @@ describe("picked bot chat", () => {
 
   it("gives the side panel the same chat as the conversation", () => {
     const remembered = { environmentId: "env-a", threadId: "thread-b" };
+
     // The side panel resolves from the latest id and the remembered chat's own shell.
     const panel = pickBotChatTarget(
       "bot-ren",
@@ -100,6 +107,7 @@ describe("picked bot chat", () => {
       remembered,
       shells[0],
     );
+
     expect(panel).toEqual(resolveBotThreadTarget("bot-ren", "env-a", shells, "/env-a/thread-b"));
     expect(panel).toEqual(remembered);
   });

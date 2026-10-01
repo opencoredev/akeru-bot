@@ -11,7 +11,9 @@ import { type ServerProviderModel } from "@akeru/contracts";
 export function readConfigStringArray(config: unknown, key: string): ReadonlyArray<string> {
   if (config === null || typeof config !== "object") return [];
   const value = (config as Record<string, unknown>)[key];
+
   if (!Array.isArray(value)) return [];
+
   return value.filter((entry): entry is string => typeof entry === "string");
 }
 
@@ -30,7 +32,9 @@ export function nextConfigBlobWithValue(
 ): Record<string, unknown> {
   const base: Record<string, unknown> =
     config !== null && typeof config === "object" ? { ...(config as Record<string, unknown>) } : {};
+
   base[key] = value;
+
   return base;
 }
 
@@ -43,7 +47,9 @@ export function deriveProviderModelsForDisplay(input: {
       model.isCustom ? Result.succeed([model.slug, model] as const) : Result.failVoid,
     ),
   );
+
   const serverModels = input.liveModels?.filter((model) => !model.isCustom) ?? [];
+
   const customModels = input.customModels.map(
     (slug) =>
       liveCustomModelsBySlug.get(slug) ?? {
@@ -53,5 +59,6 @@ export function deriveProviderModelsForDisplay(input: {
         capabilities: null,
       },
   );
+
   return [...serverModels, ...customModels];
 }

@@ -56,10 +56,12 @@ export function SortableRosterRow(props: {
     disabled: { draggable: props.disabled },
     animateLayoutChanges: animateRosterLayoutChanges,
   });
+
   const bag = useMemo(
     () => ({ listeners, setNodeRef, transform, transition, isDragging }),
     [listeners, setNodeRef, transform, transition, isDragging],
   );
+
   return props.children(bag);
 }
 
@@ -90,6 +92,7 @@ export function SortableRosterMarker(props: {
     disabled: { draggable: props.draggable !== true },
     animateLayoutChanges: animateRosterLayoutChanges,
   });
+
   return (
     <li
       ref={setNodeRef}
@@ -200,40 +203,50 @@ export function useRosterDragController({
 }) {
   const zoneByEntryId = useMemo(() => {
     const map = new Map<string, RosterZone>();
+
     for (const item of rosterListItems) {
       if (item.kind === "entry") map.set(rosterListItemId(item), item.zone);
     }
+
     return map;
   }, [rosterListItems]);
+
   const [dragState, setDragState] = useState<{
     readonly activeId: string;
     readonly from: RosterZone;
     readonly targetZone: RosterZone | null;
     readonly activationY: number | null;
   } | null>(null);
+
   const listMotionRef = useRef<ReturnType<typeof createRosterListMotion> | null>(null);
   const rosterListRef = useRef<HTMLUListElement | null>(null);
   const dragLabelOffsetRef = useRef(0);
   const dragSensorRef = useRef<RosterPointerSensor | null>(null);
+
   const attachListMotionRef = useCallback((node: HTMLUListElement | null) => {
     rosterListRef.current = node;
     listMotionRef.current?.dispose();
     listMotionRef.current = node === null ? null : createRosterListMotion(node);
     listMotionRef.current?.update(false);
   }, []);
+
   const finishRosterDrag = useCallback((started: boolean) => {
     dragSensorRef.current = null;
+
     if (started) {
       listMotionRef.current?.release();
       setDragState(null);
     }
   }, []);
+
   const attachDragSensor = useCallback((sensor: RosterPointerSensor) => {
     dragSensorRef.current = sensor;
   }, []);
+
   const cancelRosterDrag = useCallback(() => {
     dragSensorRef.current?.cancel();
   }, []);
+
   const dndSensors = useSensors(
     useSensor(RosterPointerSensor, {
       distance: 6,
@@ -241,24 +254,29 @@ export function useRosterDragController({
       onFinish: finishRosterDrag,
     }),
   );
+
   const restrictBelowPins = useCallback(
     (args: Parameters<typeof restrictBelowRosterLabel>[0]) =>
       restrictBelowRosterLabel(args, dragLabelOffsetRef.current),
     [],
   );
+
   const restrictRosterAxis = useCallback(
     (args: Parameters<typeof restrictRosterDragAxis>[0]) =>
       restrictRosterDragAxis(args, zoneByEntryId.get(String(args.active?.id)) ?? null),
     [zoneByEntryId],
   );
+
   const handleRosterDragStart = useCallback(
     (event: DragStartEvent) => {
       const activeId = String(event.active.id);
       const from = zoneByEntryId.get(activeId);
+
       if (from === undefined) return;
       listMotionRef.current?.suspend();
       const list = rosterListRef.current;
       const header = list?.querySelector<HTMLElement>('[data-testid="roster-pinned-header"]');
+
       if (list && header) {
         const listRect = list.getBoundingClientRect();
         const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
@@ -267,6 +285,7 @@ export function useRosterDragController({
       } else {
         dragLabelOffsetRef.current = 0;
       }
+
       setDragState({
         activeId,
         from,
@@ -277,12 +296,15 @@ export function useRosterDragController({
     },
     [zoneByEntryId],
   );
+
   const handleRosterDragOver = useCallback(
     (event: DragOverEvent) => {
       const activeId = String(event.active.id);
+
       const target = event.over
         ? resolveRosterDropTarget(rosterListItems, activeId, String(event.over.id), null)
         : null;
+
       setDragState((current) =>
         current === null || current.activeId !== activeId
           ? current
@@ -291,13 +313,16 @@ export function useRosterDragController({
     },
     [rosterListItems],
   );
+
   const handleRosterDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : null;
+
       if (overId === null) return;
       const from = zoneByEntryId.get(activeId);
       const target = resolveRosterDropTarget(rosterListItems, activeId, overId, null);
+
       if (from === undefined || target === null) return;
       useRosterStore.getState().applyRosterDrop(
         planRosterDrop({
@@ -310,6 +335,7 @@ export function useRosterDragController({
     },
     [rosterListItems, visiblePinnedItems, zoneByEntryId],
   );
+
   useEffect(() => {
     if (
       dragState !== null &&
@@ -319,6 +345,7 @@ export function useRosterDragController({
     }
   }, [cancelRosterDrag, dragState, rosterListItems]);
   const listMotionPaused = dragState !== null;
+
   const rosterListOrderKey = useMemo(
     () =>
       rosterListItems
@@ -330,11 +357,13 @@ export function useRosterDragController({
         .join("\0"),
     [rosterListItems],
   );
+
   useLayoutEffect(() => {
     void rosterListOrderKey;
     listMotionRef.current?.update(!listMotionPaused && rosterListItems.length > 0);
   }, [listMotionPaused, rosterListItems.length, rosterListOrderKey]);
   const sortableIds = useMemo(() => rosterListItems.map(rosterListItemId), [rosterListItems]);
+
   const rosterSortingStrategy = useMemo(
     () =>
       createRosterSortingStrategy({
@@ -343,11 +372,13 @@ export function useRosterDragController({
       }),
     [rosterListItems],
   );
+
   const dndCollisionDetection = useMemo(
     () =>
       createRosterCollisionDetection(
         (id) => {
           if (dragState === null) return true;
+
           return resolveRosterDropTarget(rosterListItems, dragState.activeId, id, null) !== null;
         },
         {
@@ -357,11 +388,14 @@ export function useRosterDragController({
       ),
     [dragState, rosterListItems],
   );
+
   const dragTargetZone = dragState?.targetZone ?? null;
+
   const modifiers = useMemo(
     () => [restrictRosterAxis, restrictBelowPins, restrictToFirstScrollableAncestor],
     [restrictBelowPins, restrictRosterAxis],
   );
+
   return {
     dragState,
     dragTargetZone,

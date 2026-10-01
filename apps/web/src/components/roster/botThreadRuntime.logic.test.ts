@@ -49,6 +49,7 @@ describe.each([
       { ...thread("z-remote", "2026-08-29T00:00:00.000Z"), environmentId: "env-b" },
       { ...thread("z-other", "2026-08-29T00:00:00.000Z"), [ownerKey]: "other" },
     ];
+
     for (const input of [candidates, candidates.toReversed()]) {
       const original = [...input];
       expect(findLatest("owner", "env-a", Object.freeze(input))).toEqual({
@@ -57,6 +58,7 @@ describe.each([
       });
       expect(input).toEqual(original);
     }
+
     expect(
       findLatest("owner", "env-a", [{ ...thread("no-deletion-field"), deletedAt: undefined }]),
     ).toEqual({ environmentId: "env-a", threadId: "no-deletion-field" });
@@ -66,6 +68,7 @@ describe.each([
     const composed = thread("é");
     const decomposed = thread("e\u0301");
     expect(composed.id.localeCompare(decomposed.id)).toBe(0);
+
     for (const candidates of [
       [composed, decomposed],
       [decomposed, composed],
@@ -78,9 +81,11 @@ describe.each([
     const candidates = Array.from({ length: 1_024 }, (_, index) =>
       thread(`thread-${String((index * 317) % 1_024).padStart(4, "0")}`),
     );
+
     const compare = vi.spyOn(String.prototype, "localeCompare");
     let oldComparisons = 0;
     let newComparisons = 0;
+
     try {
       const oldLatest = candidates
         .filter(
@@ -94,6 +99,7 @@ describe.each([
           (left, right) =>
             right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id),
         )[0];
+
       oldComparisons = compare.mock.calls.length;
       compare.mockClear();
       const latest = findLatest("owner", "env-a", candidates);
@@ -104,6 +110,7 @@ describe.each([
     } finally {
       compare.mockRestore();
     }
+
     console.info(`Latest ${ownerKey}: locale comparisons ${oldComparisons} -> ${newComparisons}`);
   });
 });
@@ -122,6 +129,7 @@ describe("bot thread runtime", () => {
         payload: { authorizationUrl: "https://hoplite.example/authorize" },
       },
     ];
+
     expect(findUnhandledMcpAuthorization(activities, new Set())).toEqual({
       activityId: "oauth",
       url: "https://hoplite.example/authorize",
@@ -132,6 +140,7 @@ describe("bot thread runtime", () => {
     const queue = createBotTurnSubmissionQueue();
     const order: string[] = [];
     let releaseFirst: (() => void) | undefined;
+
     const firstBlocked = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
@@ -140,14 +149,19 @@ describe("bot thread runtime", () => {
       order.push("first:start");
       await firstBlocked;
       order.push("first:end");
+
       return true;
     });
+
     const second = queue.enqueue(async () => {
       order.push("second");
+
       return true;
     });
+
     const third = queue.enqueue(async () => {
       order.push("third");
+
       return true;
     });
 
@@ -160,9 +174,11 @@ describe("bot thread runtime", () => {
 
   it("continues queued submissions after one fails", async () => {
     const queue = createBotTurnSubmissionQueue();
+
     const failed = queue.enqueue(async () => {
       throw new Error("dispatch failed");
     });
+
     const followUp = queue.enqueue(async () => "sent");
 
     await expect(failed).rejects.toThrow("dispatch failed");
@@ -173,12 +189,15 @@ describe("bot thread runtime", () => {
     let retained: { threadId: string } | null = null;
     const inFlight = { current: null as Promise<{ threadId: string } | null> | null };
     let starts = 0;
+
     const start = async () => {
       starts += 1;
       await Promise.resolve();
       retained = { threadId: "thread-akeru" };
+
       return retained;
     };
+
     const join = () => joinOrStartThreadCreate({ getRetained: () => retained, inFlight, start });
 
     const [first, second] = await Promise.all([join(), join()]);
@@ -336,6 +355,7 @@ describe("bot thread runtime", () => {
       archivedAt: null as string | null,
       ...extra,
     });
+
     const threads = [
       shell("product-old", "group-product", "2026-08-26T00:00:00.000Z"),
       shell("product-new", "group-product", "2026-08-27T00:00:00.000Z"),
@@ -351,12 +371,14 @@ describe("bot thread runtime", () => {
       shell("design", "group-design", "2026-08-20T00:00:00.000Z"),
       shell("bot-chat", null, "2026-08-31T00:00:00.000Z"),
     ];
+
     const latest = findLatestGroupThreadIds(threads);
     expect(Object.fromEntries(latest)).toEqual({
       [latestGroupThreadKey("env-a", "group-product")]: "product-new",
       [latestGroupThreadKey("env-b", "group-product")]: "product-remote",
       [latestGroupThreadKey("env-a", "group-design")]: "design",
     });
+
     for (const [environmentId, groupId] of [
       ["env-a", "group-product"],
       ["env-b", "group-product"],

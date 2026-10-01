@@ -23,15 +23,18 @@ type PickerTab = "bot" | "upload";
 // Uploads become small square data URLs so an oversized photo can neither
 // bloat the persisted roster nor blow the localStorage quota.
 const AVATAR_UPLOAD_SIZE = 128;
+
 const AVATAR_UPLOAD_MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 async function downscaleAvatarImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
+
   try {
     const canvas = document.createElement("canvas");
     canvas.width = AVATAR_UPLOAD_SIZE;
     canvas.height = AVATAR_UPLOAD_SIZE;
     const context = canvas.getContext("2d");
+
     if (context === null) throw new Error("Canvas 2D is unavailable.");
     const side = Math.min(bitmap.width, bitmap.height);
     context.drawImage(
@@ -45,6 +48,7 @@ async function downscaleAvatarImage(file: File): Promise<string> {
       AVATAR_UPLOAD_SIZE,
       AVATAR_UPLOAD_SIZE,
     );
+
     return canvas.toDataURL("image/jpeg", 0.85);
   } finally {
     bitmap.close();
@@ -90,10 +94,13 @@ export function AvatarPickerDialog({
     // decode. Save stays disabled until the latest selection finishes.
     setUpload(null);
     setFailure(null);
+
     if (file.size > AVATAR_UPLOAD_MAX_FILE_BYTES) {
       setFailure("too-large");
+
       return;
     }
+
     void downscaleAvatarImage(file).then(
       (rendering) => {
         if (sequence === uploadSequence.current) setUpload(rendering);
@@ -111,10 +118,13 @@ export function AvatarPickerDialog({
     setSaving(true);
     const saved = await saveBotAvatar(bot.id, draftAvatar);
     setSaving(false);
+
     if (!saved) {
       setFailure("save");
+
       return;
     }
+
     onOpenChange(false);
   };
 
@@ -132,6 +142,7 @@ export function AvatarPickerDialog({
             value={[tab]}
             onValueChange={(next) => {
               const value = next[0];
+
               if (value === "bot" || value === "upload") {
                 setFailure(null);
                 setTab(value);

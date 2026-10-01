@@ -7,6 +7,7 @@ import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -18,6 +19,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -25,13 +27,16 @@ const i18nLocale = vi.hoisted(() => ({ current: "en" as "en" | "zh-CN" }));
 
 vi.mock("../../i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
+
   const translators = {
     en: createTranslator("en"),
     "zh-CN": createTranslator("zh-CN", await catalogRegistry["zh-CN"]!()),
   };
+
   return {
     useI18n: () => {
       const translator = translators[i18nLocale.current];
+
       return { ...translator, t: translator.translate };
     },
   };
@@ -44,6 +49,7 @@ function renderSetting(
   onChange: (value: "separate" | "shared") => void,
 ) {
   hooks.beginRender();
+
   return BotSandboxBrowserSharingSettings({ value, onChange }) as ReactElement<
     Record<string, unknown>
   >;
@@ -54,7 +60,9 @@ function findElement(
   predicate: (props: Record<string, unknown>) => boolean,
 ) {
   const element = visitElements(tree, ({ props }) => predicate(props));
+
   if (!element) throw new Error("Expected setting element was not rendered.");
+
   return element;
 }
 

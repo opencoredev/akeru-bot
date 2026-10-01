@@ -24,9 +24,12 @@ import { ONBOARDING_HEADING_CLASS } from "./onboardingStyles";
 const GOAL_HEADING_ID = "onboarding-goal-heading";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
+
 /** --think-swap and --think-distance, the same beat a working status uses. */
 const SWAP_DURATION = 0.2;
+
 const SWAP_DISTANCE = 10;
+
 /** Plan steps arrive in the order they will happen, a beat apart. */
 const STEP_STAGGER = 0.06;
 
@@ -53,12 +56,15 @@ function goalExampleLabel(topic: GoalTopicId, t: OnboardingTranslate): string {
 /** The thinking beats are English in the logic; this shows each one translated. */
 function thinkingStatusLabel(status: string, t: OnboardingTranslate): string {
   if (status === "Reading what you wrote") return t("Reading what you wrote");
+
   if (status === "Working out where to start") return t("Working out where to start");
+
   return status;
 }
 
 function GoalExamples({ onPick }: { readonly onPick: (goal: string) => void }) {
   const { t } = useI18n();
+
   return (
     <div className="flex flex-wrap gap-1.5" data-testid="onboarding-goal-examples">
       {DESKTOP_ONBOARDING_GOAL_EXAMPLES.map((example) => (
@@ -82,6 +88,7 @@ function GoalExamples({ onPick }: { readonly onPick: (goal: string) => void }) {
  */
 function GoalThinking({ answer, status }: { readonly answer: string; readonly status: string }) {
   const { t } = useI18n();
+
   return (
     <div className="space-y-4" data-testid="onboarding-goal-thinking">
       <p className="text-xs font-medium text-muted-foreground">{t("Your goal")}</p>
@@ -196,9 +203,11 @@ export function OnboardingGoalStep({
   const { t } = useI18n();
   const [goal, setGoal] = useState(draft.goal);
   const [phase, setPhase] = useState<GoalPhase>(draft.goalPhase);
+
   const [thinkingStatus, setThinkingStatus] = useState(
     () => DESKTOP_ONBOARDING_GOAL_THINKING_BEATS[0]?.status ?? "",
   );
+
   const draftRef = useRef(draft);
   const thinkingTimers = useRef<number[]>([]);
 
@@ -233,19 +242,24 @@ export function OnboardingGoalStep({
   const workOutPlan = useCallback(() => {
     onChange({ ...draftRef.current, goalPhase: "plan" });
     const hold = desktopOnboardingGoalThinkingMs(reducedMotion);
+
     if (hold === 0) {
       setPhase("plan");
+
       return;
     }
+
     clearThinking();
     setThinkingStatus(desktopOnboardingGoalThinkingStatus(0));
     setPhase("thinking");
+
     for (const beat of DESKTOP_ONBOARDING_GOAL_THINKING_BEATS) {
       if (beat.atMs === 0) continue;
       thinkingTimers.current.push(
         window.setTimeout(() => setThinkingStatus(beat.status), beat.atMs),
       );
     }
+
     thinkingTimers.current.push(
       window.setTimeout(() => {
         clearThinking();
@@ -263,8 +277,10 @@ export function OnboardingGoalStep({
   const goBack = useCallback(() => {
     if (phase === "plan") {
       editGoal();
+
       return;
     }
+
     onBack();
   }, [editGoal, onBack, phase]);
 

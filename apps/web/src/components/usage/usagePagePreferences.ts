@@ -7,9 +7,11 @@ const UsagePagePreferencesSchema = Schema.Struct({
   metric: Schema.Literals(["cost", "tokens", "limits"]),
   windowDays: Schema.Literals([1, 7, 30, 90]),
 });
+
 export type UsagePagePreferences = typeof UsagePagePreferencesSchema.Type;
 
 const STORAGE_KEY = "akeru:usage-page-preferences:v1";
+
 const DEFAULT_PREFERENCES: UsagePagePreferences = { metric: "limits", windowDays: 30 };
 
 export function readUsagePagePreferences(): UsagePagePreferences {
@@ -17,6 +19,7 @@ export function readUsagePagePreferences(): UsagePagePreferences {
     return getLocalStorageItem(STORAGE_KEY, UsagePagePreferencesSchema) ?? DEFAULT_PREFERENCES;
   } catch (error) {
     console.error("Could not read Usage page preferences.", error);
+
     return DEFAULT_PREFERENCES;
   }
 }
@@ -32,6 +35,7 @@ export function saveUsagePagePreferences(preferences: UsagePagePreferences): voi
 }
 
 export type UsageMetric = UsageChartMetric | "limits";
+
 export const METRIC_OPTIONS = [
   { value: "cost", label: "Cost" },
   { value: "tokens", label: "Tokens" },

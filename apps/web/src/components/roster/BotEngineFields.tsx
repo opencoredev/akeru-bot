@@ -21,6 +21,7 @@ export function BotEngineFields({
   readonly environmentId: EnvironmentId | null;
 }) {
   const { t } = useI18n();
+
   return (
     <SettingsSection id="model" title={t("Model & usage")}>
       <SettingsRow

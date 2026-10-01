@@ -57,7 +57,9 @@ function ThemeEditorAppearanceButton({
       {appearance === "light" ? "Light" : "Dark"}
     </Button>
   );
+
   if (lockReason === null) return button;
+
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
@@ -196,6 +198,7 @@ export function ThemeEditorColorFields({
   }
 
   const groups = filterThemeEditorRoleGroups(roleQuery);
+
   return (
     <div className="space-y-5">
       {groups.map((group) => (

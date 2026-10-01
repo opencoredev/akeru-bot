@@ -84,10 +84,12 @@ vi.mock("../../state/session", () => ({
 
 vi.mock("../ui/select", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ui/select")>();
+
   return {
     ...actual,
     Select: (props: Parameters<typeof actual.Select>[0]) => {
       fixtures.selects.push(props as (typeof fixtures.selects)[number]);
+
       return <actual.Select {...props} />;
     },
   };
@@ -95,6 +97,7 @@ vi.mock("../ui/select", async (importOriginal) => {
 
 vi.mock("../ui/button", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ui/button")>();
+
   return {
     ...actual,
     Button: (props: Parameters<typeof actual.Button>[0]) => {
@@ -102,6 +105,7 @@ vi.mock("../ui/button", async (importOriginal) => {
         const onClick = props.onClick;
         fixtures.buttons.set(props.children, () => onClick({} as never));
       }
+
       return <actual.Button {...props} />;
     },
   };
@@ -125,7 +129,9 @@ vi.mock("../ui/menu", () => ({
     render?: ReactElement<{ children?: ReactNode }>;
   }) => {
     if (onClick) fixtures.buttons.set(children, onClick);
+
     if (render) return cloneElement(render, {}, children);
+
     return (
       <button type="button" disabled={disabled}>
         {children}
@@ -243,6 +249,7 @@ describe("channel health and repair", () => {
     expect(button(html, repair)).not.toMatch(/\sdisabled(=|\s|>)/);
     const repairs = ["Connect", "Reconnect", "Update credentials", "Reconnect in this project"];
     expect(repairs.filter((label) => button(html, label))).toEqual([repair]);
+
     if (category) {
       expect(html).toContain(channelFailureReason(category, "imessage"));
       expect(html).not.toContain("Fixed server copy.");
@@ -263,8 +270,10 @@ describe("channel health and repair", () => {
   it("opens the credential replacement for the assigned bot and project", () => {
     fixtures.bots = [boundBot("failed", "Fixed server copy.", "credentials")];
     const replace = vi.fn();
+
     function Row() {
       const settings = useChannelSettings("environment-1" as never);
+
       return (
         <ChannelConnectionRow
           connection={fixtureConnection as unknown as ChannelConnectionProfile}
@@ -273,6 +282,7 @@ describe("channel health and repair", () => {
         />
       );
     }
+
     renderToStaticMarkup(<Row />);
     fixtures.buttons.get("Update credentials")?.();
     expect(replace).toHaveBeenCalledWith({
@@ -312,6 +322,7 @@ describe("channel health and repair", () => {
     expect(html).toContain(">Assigned to Akeru<");
     expect(html).not.toContain('role="status"');
     expect(button(html, "Disconnect")).toBeDefined();
+
     for (const label of ["Connect", "Reconnect", "Update credentials", "Check the channel"]) {
       expect(button(html, label)).toBeUndefined();
     }
@@ -354,9 +365,11 @@ describe("failed channel attempts", () => {
           }
         : { _tag: "Success" },
     );
+
     const toasted = new Promise<void>((resolve) => {
       fixtures.toast.mockImplementationOnce(() => resolve());
     });
+
     renderPage();
     fixtures.selects[0]!.onValueChange?.("bot-other");
     await toasted;
@@ -385,9 +398,11 @@ describe("failed channel attempts", () => {
           ? { _tag: "Failure", cause: Cause.fail({ message: "Rejected." }) }
           : { _tag: "Success" },
       );
+
     const toasted = new Promise<void>((resolve) => {
       fixtures.toast.mockImplementationOnce(() => resolve());
     });
+
     renderPage();
     fixtures.selects[0]!.onValueChange?.("bot-other");
     await toasted;

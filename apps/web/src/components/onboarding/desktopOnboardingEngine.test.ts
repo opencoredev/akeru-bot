@@ -87,6 +87,7 @@ describe("desktop onboarding engine", () => {
     ["opencode-go", "opencodeGo"],
   ] as const)("restores and resolves the %s subscription", (providerId, driver) => {
     const draft = { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId };
+
     const provider = {
       instanceId: `${driver}-custom`,
       driver,

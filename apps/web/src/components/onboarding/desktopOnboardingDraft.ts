@@ -5,7 +5,9 @@ import { BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
 import { normalizeDesktopOnboardingGoal } from "./goalPlan.logic";
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
+
 export const DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY = "akeru:desktop-onboarding-completed:v1";
+
 export function markDesktopOnboardingCompleted(
   storage: Pick<Storage, "removeItem" | "setItem">,
 ): void {
@@ -19,7 +21,9 @@ export function markDesktopOnboardingCompleted(
  * reopens setup (and resends) nor loses the chat the user was being taken to.
  */
 export const DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v2";
+
 export const DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v1";
+
 export function markDesktopOnboardingHandoffStarted(
   storage: Pick<Storage, "removeItem" | "setItem">,
   environmentId: string,
@@ -41,9 +45,12 @@ export function readDesktopOnboardingHandoff(
   storage: Pick<Storage, "getItem">,
 ): { readonly environmentId: string; readonly botId: string } | null {
   const value = storage.getItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY);
+
   if (!value) return null;
+
   try {
     const handoff: unknown = JSON.parse(value);
+
     if (
       typeof handoff === "object" &&
       handoff !== null &&
@@ -59,6 +66,7 @@ export function readDesktopOnboardingHandoff(
   } catch {
     return null;
   }
+
   return null;
 }
 
@@ -69,16 +77,21 @@ export function readDesktopOnboardingHandoffForEnvironment(
   botIds: ReadonlyArray<string>,
 ): { readonly environmentId: string; readonly botId: string } | null {
   const current = readDesktopOnboardingHandoff(storage);
+
   if (current) return current;
   const legacyBotId = storage.getItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY)?.trim();
+
   if (!legacyBotId) {
     storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
+
     return null;
   }
+
   if (!botIds.includes(legacyBotId)) return null;
   const handoff = { environmentId, botId: legacyBotId };
   storage.setItem(DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY, JSON.stringify(handoff));
   storage.removeItem(DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY);
+
   return handoff;
 }
 
@@ -176,18 +189,22 @@ function storedGoal(parsed: Record<string, unknown>): string {
   if (typeof parsed.goal === "string" && parsed.goal.trim().length > 0) return parsed.goal;
   const custom = typeof parsed.customUseCase === "string" ? parsed.customUseCase : "";
   const useCaseId = typeof parsed.useCaseId === "string" ? parsed.useCaseId : null;
+
   if (useCaseId !== null && useCaseId !== "custom") return legacyUseCaseGoals[useCaseId] ?? custom;
+
   return custom;
 }
 
 export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboardingDraft | null {
   if (value === null) return null;
+
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     const avatar = parsed.avatar as Record<string, unknown> | undefined;
     const step = parsed.step === "use-case" ? "goal" : parsed.step;
     const legacy = parsed.step === "use-case" || "useCaseId" in parsed || "customUseCase" in parsed;
     const goal = legacy ? normalizeDesktopOnboardingGoal(storedGoal(parsed)) : storedGoal(parsed);
+
     if (
       !isStep(step) ||
       !isProviderId(parsed.providerId) ||
@@ -202,6 +219,7 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
     ) {
       return null;
     }
+
     return {
       step,
       providerId: parsed.providerId,

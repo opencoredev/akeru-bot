@@ -39,17 +39,21 @@ export type ThemeVariantNavigation = {
  */
 function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVariantNavigation }) {
   const [radialModeOpen, setRadialModeOpen] = useState<ThemeAppearance | null>(null);
+
   const radialModeGroups = (["light", "dark"] as const).map((mode) => {
     const options = variantNavigation.options.flatMap((option) => {
       const preview = option.preview;
+
       return preview.mode === mode ? [{ option, preview }] : [];
     });
+
     return {
       mode,
       options,
       selected: options.find(({ option }) => option.activeModes.includes(mode)) ?? options[0],
     };
   });
+
   return (
     <div
       aria-label="Light and dark theme variants"
@@ -57,6 +61,7 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
       role="group"
       onBlurCapture={(event) => {
         const nextTarget = event.relatedTarget;
+
         if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
           setRadialModeOpen(null);
         }
@@ -74,6 +79,7 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
         const isOpen = radialModeOpen === mode;
         const isActive = selected.option.activeModes.includes(mode);
         const modeLabel = mode === "light" ? "Light" : "Dark";
+
         return (
           <div className="contents" key={mode}>
             <ThemeVariantTooltip label={`${modeLabel}: ${selected.option.label}`}>
@@ -133,6 +139,7 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
                   const childOffsetX = rootOffsetX + progress * 68;
                   const childOffsetY = Math.abs(progress) * 10;
                   const optionIsActive = option.activeModes.includes(mode);
+
                   // Options fan out from the root ball along a shallow arc and
                   // stagger in; closed, they collapse back behind it.
                   /* oxlint-disable shadcn/no-inline-styles -- fan-out arc geometry and stagger are computed per option */
@@ -140,6 +147,7 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
                     transform: `translate(calc(-50% + ${isOpen ? childOffsetX : rootOffsetX}px), ${isOpen ? childOffsetY : 28}px) scale(${isOpen ? 1 : 0.55})`,
                     transitionDelay: isOpen ? `${optionIndex * 35}ms` : "0ms",
                   };
+
                   /* oxlint-enable shadcn/no-inline-styles */
                   return (
                     <ThemeVariantTooltip
@@ -204,6 +212,7 @@ export function ThemeLibraryCard({
   // A one-appearance theme can only take its own side of the mix, so the card
   // tooltip promises exactly what clicking it does.
   const cardModes = theme.previews.map((preview) => preview.mode);
+
   return (
     // The card surface stays a plain div (buttons cannot nest inside a button
     // role); the title button and mode circles carry the accessible actions,
@@ -376,8 +385,10 @@ export function CustomThemeCollectionCard({
 }) {
   const [variantIndex, setVariantIndex] = useState(() => {
     const activeIndex = themes.findIndex((theme) => activeModesFor(theme.id).length > 0);
+
     return activeIndex < 0 ? 0 : activeIndex;
   });
+
   const safeIndex = Math.min(variantIndex, themes.length - 1);
   const theme = themes[safeIndex];
 
@@ -390,12 +401,16 @@ export function CustomThemeCollectionCard({
   const variantLabels = collectionVariantLabels(themes);
   const defaultLightTheme = themes.find((candidate) => getThemeModes(candidate).includes("light"));
   const defaultDarkTheme = themes.find((candidate) => getThemeModes(candidate).includes("dark"));
+
   const selectCollectionDefaults = () => {
     if (themes.length === 1) {
       onUse(theme);
+
       return;
     }
+
     if (defaultLightTheme) onUseMode(defaultLightTheme, "light");
+
     if (defaultDarkTheme) onUseMode(defaultDarkTheme, "dark");
     setVariantIndex(0);
   };
@@ -425,6 +440,7 @@ export function CustomThemeCollectionCard({
               ),
               onSelectAndUse: (themeIndex, mode) => {
                 const selectedTheme = themes[themeIndex];
+
                 if (!selectedTheme) return;
                 setVariantIndex(themeIndex);
                 onUseMode(selectedTheme, mode);

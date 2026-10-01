@@ -110,6 +110,7 @@ function ConnectedBotBrowserPreview({
   const nativeSupported = isPreviewSupportedInRuntime();
   const frame = tabId ? (previewState.framesByTabId[tabId] ?? null) : null;
   const failed = snapshot?.navStatus._tag === "LoadFailed";
+
   const status = resolveBotBrowserPreviewStatus({
     supported: true,
     hasThread: true,
@@ -118,6 +119,7 @@ function ConnectedBotBrowserPreview({
     loading: desktopOverlay?.loading ?? snapshot?.navStatus._tag === "Loading",
     failed,
   });
+
   const runtimeTabId =
     !nativeSupported || tabId === null
       ? null
@@ -127,11 +129,14 @@ function ConnectedBotBrowserPreview({
   // menus — keep priority.
   useEffect(() => {
     if (!expanded) return;
+
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== "Escape") return;
       onExpandedChange(false);
     };
+
     document.addEventListener("keydown", onKey);
+
     return () => document.removeEventListener("keydown", onKey);
   }, [expanded, onExpandedChange]);
 
@@ -148,6 +153,7 @@ function ConnectedBotBrowserPreview({
     } else if (!expanded && wasExpanded.current) {
       collapsedRef.current?.querySelector<HTMLElement>("[data-browser-expand]")?.focus();
     }
+
     wasExpanded.current = expanded;
   }, [expanded]);
 
@@ -320,6 +326,7 @@ function RemoteFrame({
   readonly frame: PreviewFrame;
 }) {
   const { t } = useI18n();
+
   return (
     <img
       alt={t("{name} browser", { name: botName })}
@@ -337,6 +344,7 @@ function RemoteFrame({
  */
 function ScreenStatus({ status }: { readonly status: BotBrowserPreviewStatus }) {
   const { t } = useI18n();
+
   if (status === "ready") return null;
 
   if (status === "loading") {

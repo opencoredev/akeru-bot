@@ -57,6 +57,7 @@ vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" 
 vi.mock("./ChannelProjectSelect", () => ({
   ChannelProjectSelect: (props: NonNullable<typeof mocks.projectSelect>) => {
     mocks.projectSelect = props;
+
     return null;
   },
 }));
@@ -85,6 +86,7 @@ vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
     if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+
     return null;
   },
 }));
@@ -95,6 +97,7 @@ vi.mock("../ui/input", () => ({
     onChange: (event: { currentTarget: { value: string } }) => void;
   }) => {
     mocks.inputs.set(props["aria-label"], props);
+
     return null;
   },
 }));
@@ -106,6 +109,7 @@ vi.mock("../ui/dialog", () => ({
     onOpenChange: (open: boolean) => void;
   }) => {
     mocks.changeOpen = props.onOpenChange;
+
     return props.open ? props.children : null;
   },
   DialogPopup: ({ children }: { children: ReactNode }) => children,
@@ -130,6 +134,7 @@ const onSaved = vi.fn();
 const onOpenChange = vi.fn();
 
 const props = createChannelSetupProps(onSaved, onOpenChange);
+
 const { click, fill, completeSetup } = createChannelSetupActions(mocks);
 
 beforeEach(async () => {

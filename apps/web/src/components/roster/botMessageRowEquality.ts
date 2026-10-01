@@ -43,14 +43,18 @@ export interface AssistantMessageRowProps {
 
 function shallowEqual<T extends object>(a: T | null | undefined, b: T | null | undefined) {
   if (a === b) return true;
+
   if (!a || !b) return false;
   const keys = Object.keys(a) as (keyof T)[];
+
   return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
 }
 
 function stepMetersEqual(a: BotStepMeterData | undefined, b: BotStepMeterData | undefined) {
   if (a === b) return true;
+
   if (!a || !b) return false;
+
   return (
     a.tokens === b.tokens &&
     a.costUsd === b.costUsd &&
@@ -64,7 +68,9 @@ function pluginResultsEqual(
   b: ReadonlyArray<PluginResultEntry> | undefined,
 ) {
   if (a === b) return true;
+
   if (!a || !b || a.length !== b.length) return false;
+
   return a.every((entry, index) => entry.id === b[index]?.id && entry.result === b[index]?.result);
 }
 
@@ -73,7 +79,9 @@ export function assistantRowPropsEqual(
   next: AssistantMessageRowProps,
 ) {
   const keys = Object.keys(next) as (keyof AssistantMessageRowProps)[];
+
   if (keys.length !== Object.keys(previous).length) return false;
+
   return keys.every((key) => {
     switch (key) {
       case "stepMeter":

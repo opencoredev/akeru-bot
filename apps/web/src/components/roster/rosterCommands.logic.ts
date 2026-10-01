@@ -7,6 +7,7 @@ export function commandFailureMessage(
   t: ReturnType<typeof useI18n>["t"],
 ): string {
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : t("The environment rejected the change.");
 }
 
@@ -21,7 +22,9 @@ export function focusTargetAfterRosterArchive(
   archivedKey: string,
 ): string | null {
   const index = rowKeys.indexOf(archivedKey);
+
   if (index === -1) return rowKeys[0] ?? null;
+
   return rowKeys[index + 1] ?? rowKeys[index - 1] ?? null;
 }
 
@@ -38,6 +41,7 @@ export async function runCreateBotOnce(
 ): Promise<void> {
   if (inFlight.current) return;
   inFlight.current = true;
+
   try {
     await create();
   } finally {

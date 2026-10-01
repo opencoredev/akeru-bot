@@ -55,7 +55,9 @@ export function buildChannelConnectionSaveInput(input: {
 }) {
   const { connectionId, name, provider, mode, values } = input;
   const value = (key: string) => (values[key] ?? "").trim();
+
   if (provider === "telegram") return { connectionId, name, provider, token: value("token") };
+
   if (provider === "whatsapp") {
     return {
       connectionId,
@@ -67,6 +69,7 @@ export function buildChannelConnectionSaveInput(input: {
       verifyToken: value("verifyToken"),
     };
   }
+
   if (provider === "slack") {
     return {
       connectionId,
@@ -76,6 +79,7 @@ export function buildChannelConnectionSaveInput(input: {
       appToken: value("appToken"),
     };
   }
+
   if (provider === "discord") {
     return {
       connectionId,
@@ -86,6 +90,7 @@ export function buildChannelConnectionSaveInput(input: {
       botToken: value("botToken"),
     };
   }
+
   return mode === "hosted"
     ? {
         connectionId,

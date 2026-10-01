@@ -32,7 +32,9 @@ interface PluginDetailsContentProps {
 
 function transportLabel(plugin: PluginDirectoryDefinition): string {
   if (plugin.kind === "mcp-url") return "Remote URL";
+
   if (plugin.kind === "mcp-stdio") return "Local command";
+
   return "Unavailable";
 }
 
@@ -51,6 +53,7 @@ export function PluginDetailsContent({
   const action = pluginPrimaryAction(plugin, server, accessStatus);
   const blocker = pluginBlocker(plugin);
   const brokerName = pluginBrokerName(plugin);
+
   const connectionDetails = brokerName
     ? [
         ["Provider", brokerName],
@@ -72,6 +75,7 @@ export function PluginDetailsContent({
         ["Platforms", plugin.platforms.join(", ")],
         ["License", plugin.license],
       ];
+
   return (
     <DialogPanel className="px-6 pt-6! pb-6 sm:px-8">
       <div className="mx-auto max-w-3xl space-y-6">

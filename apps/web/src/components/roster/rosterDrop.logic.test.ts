@@ -59,6 +59,7 @@ describe("roster drag drop planning", () => {
       rosterMarkerId("pinned-header"),
       "news",
     );
+
     expect(target?.zone).toBe("pinned");
     expect(target?.order).toEqual([mori, akeru]);
     expect(
@@ -78,6 +79,7 @@ describe("roster drag drop planning", () => {
       rosterMarkerId("unassigned-placeholder"),
       "news",
     );
+
     expect(unpin?.zone).toBe("unassigned");
     expect(
       planRosterDrop({
@@ -101,13 +103,16 @@ describe("roster drag drop planning", () => {
       sections: [{ id: "news", name: "News", items: [crew], collapsed: false }],
       unassignedItems: [],
     });
+
     expect(rosterZoneHasVisibleEntries(onlyCrew, { sectionId: "news" }, crew)).toBe(false);
+
     const target = resolveRosterDropTarget(
       onlyCrew,
       rosterEntryId(crew),
       rosterMarkerId({ kind: "section-placeholder", sectionId: "news" }),
       "news",
     );
+
     expect(target?.zone).toEqual({ sectionId: "news" });
     expect(target?.order).toEqual([crew]);
   });
@@ -129,6 +134,7 @@ describe("roster drag drop planning", () => {
       rosterEntryId(akeru),
       "news",
     );
+
     expect(
       planRosterDrop({
         activeId: rosterEntryId(akeru),
@@ -156,6 +162,7 @@ describe("roster drag drop planning", () => {
       sections: [{ id: "news", items: [mori] }],
       unassignedItems: [crew],
     };
+
     expect(rosterItemsForZone("pinned", layout)).toEqual([akeru]);
     expect(rosterItemsForZone("unassigned", layout)).toEqual([crew]);
     expect(rosterItemsForZone({ sectionId: "news" }, layout)).toEqual([mori]);

@@ -28,24 +28,31 @@ export function GroupEditor({
   readonly onDeleted: () => void;
 }) {
   const { t, plural } = useI18n();
+
   const renameGroup = useAtomCommand(botEnvironment.groups.rename, {
     reportFailure: false,
   });
+
   const deleteGroup = useAtomCommand(botEnvironment.groups.delete, {
     reportFailure: false,
   });
+
   const assignMember = useAtomCommand(botEnvironment.groups.assignMember, {
     reportFailure: false,
   });
+
   const unassignMember = useAtomCommand(botEnvironment.groups.unassignMember, {
     reportFailure: false,
   });
+
   const setBoss = useAtomCommand(botEnvironment.groups.setBoss, {
     reportFailure: false,
   });
+
   const unassignPerson = useAtomCommand(botEnvironment.groups.unassignPerson, {
     reportFailure: false,
   });
+
   const leaveGroup = useAtomCommand(botEnvironment.groups.leave, { reportFailure: false });
   const currentPersonId = useAtomValue(environmentPeopleAtom(environmentId)).current?.id;
   const [name, setName] = useState(group.name);
@@ -57,6 +64,7 @@ export function GroupEditor({
   const availableBots = activeBots.filter((bot) => !groupContainsBot(group, bot.id));
   const removalHintId = useId();
   const addHintId = useId();
+
   const removalHint = groupMemberRemovalHint(
     {
       memberCount: members.length,
@@ -75,10 +83,13 @@ export function GroupEditor({
     setBusy(true);
     const result = await action();
     setBusy(false);
+
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: failure });
+
       return false;
     }
+
     return true;
   };
 
@@ -164,10 +175,12 @@ export function GroupEditor({
               const role = group.members.find(
                 (member) => isGroupBotMember(member) && member.botId === bot.id,
               );
+
               const blockedByRule = isGroupMemberRemovalBlocked({
                 memberCount: members.length,
                 isBoss: role?.kind === "bot" && role.role === "boss",
               });
+
               return (
                 <div key={bot.id} className="flex min-h-9 items-center gap-2 rounded-md px-1">
                   <span className="min-w-0 flex-1 truncate text-sm">{bot.name}</span>
@@ -266,6 +279,7 @@ export function GroupEditor({
             <div className="space-y-1 rounded-lg border p-2">
               {people.map((person) => {
                 const current = person.personId === currentPersonId;
+
                 return (
                   <div
                     key={person.personId}
@@ -325,7 +339,9 @@ export function GroupEditor({
             t('Delete "{name}"? Its bots stay in your roster.', { name: group.name }),
             { variant: "destructive", confirmLabel: t("Delete group") },
           );
+
           if (!confirmed) return;
+
           const success = await run(
             () =>
               deleteGroup({
@@ -334,6 +350,7 @@ export function GroupEditor({
               }),
             t("Could not delete group"),
           );
+
           if (success) onDeleted();
         }}
       >

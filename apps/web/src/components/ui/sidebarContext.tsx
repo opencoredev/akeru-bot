@@ -4,10 +4,15 @@ import { useIsMobile } from "~/hooks/useMediaQuery";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
+
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+
 export const SIDEBAR_WIDTH = "16rem";
+
 export const SIDEBAR_WIDTH_MOBILE = "calc(100vw - var(--spacing(3)))";
+
 export const SIDEBAR_WIDTH_ICON = "3rem";
+
 export const SIDEBAR_RESIZE_DEFAULT_MIN_WIDTH = 16 * 16;
 
 type SidebarContextProps = {
@@ -56,10 +61,12 @@ export type SidebarInstanceContextProps = {
 };
 
 export const SidebarContext = React.createContext<SidebarContextProps | null>(null);
+
 export const SidebarInstanceContext = React.createContext<SidebarInstanceContextProps | null>(null);
 
 export function useSidebar() {
   const context = React.use(SidebarContext);
+
   if (!context) {
     throw new Error("useSidebar must be used within a SidebarProvider.");
   }
@@ -69,6 +76,7 @@ export function useSidebar() {
 
 export function useSidebarVisibility() {
   const { isMobile, open, openMobile } = useSidebar();
+
   return isMobile ? openMobile : open;
 }
 
@@ -92,9 +100,11 @@ export function SidebarProvider({
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen);
   const open = openProp ?? _open;
+
   const setOpen = React.useCallback(
     async (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
+
       if (setOpenProp) {
         setOpenProp(openState);
       } else {

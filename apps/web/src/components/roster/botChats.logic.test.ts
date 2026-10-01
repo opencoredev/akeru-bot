@@ -31,6 +31,7 @@ describe("buildBotChatRows", () => {
       ],
       currentThreadId: null,
     });
+
     expect(rows.map((row) => row.title)).toEqual([null, null, "Trip plan"]);
   });
 

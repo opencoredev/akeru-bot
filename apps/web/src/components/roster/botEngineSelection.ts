@@ -32,6 +32,7 @@ export function botEngineTakesDelegatedWork(
 ): boolean {
   if (engine === null) return true;
   const entry = instanceEntries.find((candidate) => candidate.instanceId === engine.provider);
+
   return entry === undefined || driverSupportsDelegation(entry.driverKind);
 }
 
@@ -74,26 +75,32 @@ export function resolveStickyBotEngine(input: {
 }): ModelSelection | null {
   if (input.engine) {
     const instanceId = ProviderInstanceId.make(input.engine.provider);
+
     const options =
       input.engine.options ??
       (input.defaultSelection.instanceId === instanceId &&
       input.defaultSelection.model === input.engine.model
         ? input.defaultSelection.options
         : undefined);
+
     return {
       instanceId,
       model: input.engine.model,
       ...(options ? { options } : {}),
     };
   }
+
   const entry = resolveSelectableProviderInstanceEntry(
     input.instanceEntries,
     ProviderInstanceId.make(input.defaultSelection.instanceId),
   );
+
   if (!entry) return null;
+
   const model =
     resolveAppModelSelectionForInstance(entry.instanceId, input.settings, input.providers, null) ??
     input.defaultSelection.model;
+
   return {
     instanceId: entry.instanceId,
     model,
@@ -125,9 +132,12 @@ export function botEngineUnavailability(
       action: "providers" as const,
     };
   }
+
   const entry = instanceEntries.find((candidate) => candidate.instanceId === selection.instanceId);
+
   const modelName =
     entry?.models.find((candidate) => candidate.slug === selection.model)?.name ?? selection.model;
+
   return providerInstanceUnavailability(entry, {
     model: selection.model,
     modelName,
@@ -146,6 +156,7 @@ export function botEngineFailureContext(
   unavailability: ServerProviderUnavailability | null | undefined,
 ) {
   const entry = instanceEntries.find((candidate) => candidate.instanceId === selection?.instanceId);
+
   return {
     unavailability: unavailability ?? null,
     providerName:
@@ -166,7 +177,9 @@ export function botEngineCatalog(
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
 ): ComposerProviderCatalog | null {
   const entry = instanceEntries.find((candidate) => candidate.instanceId === selection?.instanceId);
+
   if (!entry) return null;
+
   return {
     provider: entry.driverKind,
     skills: entry.snapshot.skills,

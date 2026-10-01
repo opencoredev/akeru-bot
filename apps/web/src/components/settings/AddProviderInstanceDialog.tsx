@@ -64,13 +64,18 @@ function slugifyLabel(value: string): string {
 
 function deriveInstanceId(driver: ProviderDriverKind, label: string): string {
   const slug = slugifyLabel(label);
+
   return slug ? `${driver}_${slug}` : "";
 }
 
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+
 const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
+
 const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
+
 interface ComingSoonDriverOption {
   readonly value: ProviderDriverKind;
   readonly label: string;
@@ -107,11 +112,15 @@ const COMING_SOON_DRIVER_OPTIONS: readonly ComingSoonDriverOption[] = [
  */
 function validateInstanceId(id: string, existing: ReadonlySet<string>): string | null {
   if (id.length === 0) return "Instance ID is required.";
+
   if (id.length > 64) return "Instance ID must be 64 characters or fewer.";
+
   if (!INSTANCE_ID_PATTERN.test(id)) {
     return "Instance ID must start with a letter and use only letters, digits, '-', or '_'.";
   }
+
   if (existing.has(id)) return `An instance named '${id}' already exists.`;
+
   return null;
 }
 
@@ -135,9 +144,11 @@ export function AddProviderInstanceDialog({
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
 
   const [wizardStep, setWizardStep] = useState(0);
+
   const [driver, setDriver] = useState<ProviderDriverKind>(
     initialDriver && DRIVER_OPTION_BY_VALUE[initialDriver] ? initialDriver : DEFAULT_DRIVER_KIND,
   );
+
   const [label, setLabel] = useState("");
   const [accentColor, setAccentColor] = useState<string>("");
   const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
@@ -155,24 +166,29 @@ export function AddProviderInstanceDialog({
 
   const driverOption = DRIVER_OPTION_BY_VALUE[driver] ?? DEFAULT_DRIVER_OPTION;
   const instanceId = instanceIdOverride ?? deriveInstanceId(driver, label);
+
   const driverSettingsFields = useMemo(
     () => deriveProviderSettingsFields(driverOption),
     [driverOption],
   );
+
   const instanceIdError = validateInstanceId(instanceId, existingIds);
   const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
   const previewLabel = label.trim() || `${driverOption.label} Workspace`;
   const wizardStepSummaries = [driverOption.label, previewLabel, null] as const;
 
   const configDraft = configByDriver[driver] ?? EMPTY_CONFIG_DRAFT;
+
   const setConfigDraft = (config: Record<string, unknown> | undefined) => {
     setConfigByDriver((existing) => {
       const next = { ...existing };
+
       if (config === undefined || Object.keys(config).length === 0) {
         delete next[driver];
       } else {
         next[driver] = config;
       }
+
       return next;
     });
   };
@@ -181,6 +197,7 @@ export function AddProviderInstanceDialog({
     if (navigation.kind === "blocked") {
       setHasAttemptedSubmit(true);
     }
+
     setWizardStep(navigation.step);
   };
 
@@ -194,6 +211,7 @@ export function AddProviderInstanceDialog({
 
   const handleSave = () => {
     setHasAttemptedSubmit(true);
+
     if (instanceIdError !== null) return;
 
     const config = configByDriver[driver] ?? {};
@@ -207,15 +225,18 @@ export function AddProviderInstanceDialog({
       ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
     };
+
     // `ProviderInstanceId.make` revalidates the slug; we've already checked
     // it via `validateInstanceId`, but going through the brand constructor
     // keeps the type boundary honest and guards against any future drift in
     // the slug rules.
     const brandedId = ProviderInstanceId.make(instanceId);
+
     const nextMap = {
       ...settings.providerInstances,
       [brandedId]: nextInstance,
     };
+
     try {
       updateSettings({ providerInstances: nextMap });
       toastManager.add({
@@ -268,6 +289,7 @@ export function AddProviderInstanceDialog({
                 >
                   {DRIVER_OPTIONS.map((option) => {
                     const IconComponent = option.icon;
+
                     return (
                       <RadioPrimitive.Root
                         key={option.value}
@@ -294,6 +316,7 @@ export function AddProviderInstanceDialog({
                   })}
                   {COMING_SOON_DRIVER_OPTIONS.map((option) => {
                     const IconComponent = option.icon;
+
                     return (
                       <RadioPrimitive.Root
                         key={option.value}
@@ -365,6 +388,7 @@ export function AddProviderInstanceDialog({
                   <div className="flex flex-wrap gap-1.5">
                     {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
                       const selected = accentColor.toLowerCase() === swatch;
+
                       return (
                         <button
                           key={swatch}
@@ -427,8 +451,10 @@ export function AddProviderInstanceDialog({
               onClick={() => {
                 if (wizardStep === 0) {
                   onOpenChange(false);
+
                   return;
                 }
+
                 setWizardStep((step) => Math.max(0, step - 1));
               }}
             >

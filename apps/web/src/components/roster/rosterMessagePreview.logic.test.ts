@@ -62,6 +62,7 @@ describe("resolveLatestRosterMessage", () => {
     const answer = messages([
       { role: "assistant", text: "Yesterday", at: "2026-08-20T10:00:00.000Z" },
     ]);
+
     const fallback = { text: "Today", at: "2026-08-20T12:00:00.000Z", threadId: "chat-b" };
     expect(resolveLatestRosterMessage(fallback, answer, "chat-a")).toEqual({
       text: "Yesterday",
@@ -230,14 +231,18 @@ describe("flattenMarkdownPreview", () => {
 
   it("drops nested and escaped image alt text in the rough preview", () => {
     const tail = "z".repeat(20_000);
+
     const nested = flattenMarkdownPreview(
       `Intro ![public [x] SECRET](chart.png) then answer${tail}`,
     );
+
     expect(nested).toMatch(/^Intro then answerz/);
     expect(nested).not.toContain("SECRET");
+
     const escaped = flattenMarkdownPreview(
       `Intro ![public \\] SECRET](chart.png) then answer${tail}`,
     );
+
     expect(escaped).toMatch(/^Intro then answerz/);
     expect(escaped).not.toContain("SECRET");
     // With no balanced close in the window, the rest of the window goes.
@@ -247,14 +252,18 @@ describe("flattenMarkdownPreview", () => {
 
   it("drops an image whose label holds backticks, and treats escaped backticks as prose", () => {
     const tail = "z".repeat(20_000);
+
     const ticked = flattenMarkdownPreview(
       `Intro ![alt \`code\` SECRET](chart.png) then answer${tail}`,
     );
+
     expect(ticked).toMatch(/^Intro then answerz/);
     expect(ticked).not.toContain("SECRET");
+
     const escaped = flattenMarkdownPreview(
       `Intro \\\` ![SECRET](chart.png) \\\` then answer${tail}`,
     );
+
     expect(escaped).not.toContain("SECRET");
   });
 

@@ -30,6 +30,7 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
   const canGoBack = useCanGoBack();
   const environmentId = usePrimaryEnvironmentId();
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
+
   const bot = useRosterStore((state) =>
     state.bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null),
   );
@@ -37,40 +38,53 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
   const navigateBackWithinApp = useCallback(() => {
     if (canGoBack) {
       window.history.back();
+
       return;
     }
+
     void navigate({ to: "/" });
   }, [canGoBack, navigate]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+
       if (event.key !== "Escape") return;
       const activeElement = document.activeElement;
+
       // Let a focused field take Escape first; a second press leaves the page.
       if (activeElement instanceof HTMLElement && activeElement !== document.body) {
         activeElement.blur();
+
         return;
       }
+
       event.preventDefault();
       navigateBackWithinApp();
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigateBackWithinApp]);
 
   const onSaveBot = useCallback(
     async (input: BotProfileUpdate) => {
       if (!environmentId || !bot) return false;
+
       const result = await updateBot({
         environmentId,
         input: { botId: BotId.make(bot.id), ...input },
       });
+
       if (result._tag === "Failure") {
         toastManager.add({ type: "error", title: t("Could not save bot settings") });
+
         return false;
       }
+
       toastManager.add({ type: "success", title: t("Bot settings saved") });
+
       return true;
     },
     [bot, environmentId, t, updateBot],

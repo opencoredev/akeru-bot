@@ -17,13 +17,16 @@ function stubFileReader(outcome: ReaderOutcome) {
         if ("error" in outcome) {
           this.error = outcome.error;
           this.dispatchEvent(new Event("error"));
+
           return;
         }
+
         this.result = outcome.result;
         this.dispatchEvent(new Event("load"));
       });
     }
   }
+
   vi.stubGlobal("FileReader", StubFileReader);
 }
 

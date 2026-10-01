@@ -132,6 +132,7 @@ export function BotPromptComposer({
   const { t } = useI18n();
   const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+
   // A bot chat keys its draft by bot id; group and onboarding composers namespace
   // theirs, so a key that names a live bot is the one composer that speaks for it.
   const composerBotId = useRosterStore((state) =>
@@ -140,7 +141,9 @@ export function BotPromptComposer({
       ? draftKey
       : null,
   );
+
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
+
   const {
     draft,
     persistDraft,
@@ -161,6 +164,7 @@ export function BotPromptComposer({
     stashCurrentPrompt,
     submitDraft,
   } = useBotComposerDraft({ draftKey, promptInputRef });
+
   const mentionHintId = useId();
   const draftMention = resolveBotMention(draft, mentionBots);
   const mentionHint = botMentionHint(draftMention, t);
@@ -178,20 +182,27 @@ export function BotPromptComposer({
   const [activeMentionOptionId, setActiveMentionOptionId] = useState<string | null>(null);
 
   const hasMentionChips = mentionScope !== null && draftHasMentionChips(draft);
+
   const expanded =
     attachments.length > 0 || replyPreview != null || hasMentionChips || isBotPromptExpanded(draft);
+
   const mentionsEnabled = !readOnly && (mentionScope !== null || mentionBots.length > 0);
+
   const candidateMentionTrigger =
     mentionsEnabled && caret !== null ? botPromptMentionTrigger(draft, caret) : null;
+
   const mentionTrigger =
     candidateMentionTrigger && candidateMentionTrigger.rangeStart !== dismissedMentionStart
       ? candidateMentionTrigger
       : null;
+
   const selectMention = useCallback(
     (item: BotPromptMentionItem) => {
       const input = promptInputRef.current;
+
       if (!input || input.selectionStart === null) return;
       const trigger = botPromptMentionTrigger(input.value, input.selectionStart);
+
       if (!trigger) return;
       const next = applyBotPromptMention(input.value, trigger, item);
       persistDraft(next.text);
@@ -203,21 +214,26 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
+
   const candidateCommandTrigger = botPromptCommandMenuTrigger({
     draft,
     caret,
     readOnly,
     commandCatalog,
   });
+
   const commandTrigger =
     candidateCommandTrigger && candidateCommandTrigger.rangeStart !== dismissedCommandStart
       ? candidateCommandTrigger
       : null;
+
   const selectCommand = useCallback(
     (inserted: string) => {
       const input = promptInputRef.current;
+
       if (!input || input.selectionStart === null) return;
       const trigger = botPromptCommandTrigger(input.value, input.selectionStart);
+
       if (!trigger) return;
       const next = applyBotPromptCommand(input.value, trigger, inserted);
       persistDraft(next.text);
@@ -229,22 +245,29 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
+
   const closeCommandMenu = useCallback(() => {
     const input = promptInputRef.current;
+
     const trigger =
       input && input.selectionStart !== null
         ? botPromptCommandTrigger(input.value, input.selectionStart)
         : null;
+
     setDismissedCommandStart(trigger?.rangeStart ?? null);
   }, []);
+
   const closeMentionMenu = useCallback(() => {
     const input = promptInputRef.current;
+
     const trigger =
       input && input.selectionStart !== null
         ? botPromptMentionTrigger(input.value, input.selectionStart)
         : null;
+
     setDismissedMentionStart(trigger?.rangeStart ?? null);
   }, []);
+
   const canSubmit = canSubmitBotPrompt(disabled, draft, attachments.length);
   const composerState = botComposerState({ disabled, busy, canSubmit });
   // Only stands in for the arrow when there is nothing to send, so a follow-up stays sendable.
@@ -265,6 +288,7 @@ export function BotPromptComposer({
       const input = promptInputRef.current;
       const text = input?.value ?? draft;
       const start = input?.selectionStart ?? text.length;
+
       return { text, selection: { start, end: input?.selectionEnd ?? start } };
     },
     applyDraft: (next) => {
@@ -272,12 +296,14 @@ export function BotPromptComposer({
       // Restore the caret after React commits the merged value.
       window.requestAnimationFrame(() => {
         const input = promptInputRef.current;
+
         if (!input || input.value !== next.text) return;
         input.focus();
         input.setSelectionRange(next.selection.start, next.selection.end);
       });
     },
   });
+
   useEffect(() => {
     if (dictation.status !== "failed" || !dictation.errorMessage) return;
     toastManager.add({
@@ -286,6 +312,7 @@ export function BotPromptComposer({
       description: dictation.errorMessage,
     });
   }, [dictation.errorMessage, dictation.status, t]);
+
   const showDictation =
     !readOnly &&
     !showBusyMeter &&
@@ -460,9 +487,11 @@ export function BotPromptComposer({
                 const { selectionStart, value } = event.currentTarget;
                 persistDraft(value);
                 setCaret(selectionStart);
+
                 if (botPromptMentionTrigger(value, selectionStart) === null) {
                   setDismissedMentionStart(null);
                 }
+
                 if (botPromptCommandTrigger(value, selectionStart) === null) {
                   setDismissedCommandStart(null);
                 }
@@ -476,8 +505,10 @@ export function BotPromptComposer({
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
+
                   return;
                 }
+
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
                   event.currentTarget.form?.requestSubmit();
@@ -535,6 +566,7 @@ export function BotPromptComposer({
                       </MenuItem>
                       {mentionBots.map((bot) => {
                         const mention = botPromptMention(bot, mentionBots);
+
                         return (
                           <MenuItem
                             key={bot.id}

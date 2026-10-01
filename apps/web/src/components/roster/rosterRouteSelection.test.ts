@@ -103,6 +103,7 @@ describe("resolveRosterListState", () => {
 
   it("shows the load status, never a blank pane, before the roster arrives", () => {
     const sidebar = NodeFS.readFileSync(new URL("./BotRosterSidebar.tsx", import.meta.url), "utf8");
+
     const index = NodeFS.readFileSync(
       new URL("../../routes/_chat.index.tsx", import.meta.url),
       "utf8",

@@ -37,6 +37,7 @@ import { connectionSettingsViews } from "./ConnectionSettingsViews";
 
 export function ConnectionsSettings() {
   const settings = useDesktopBackendSettings();
+
   const {
     t,
     desktopBridge,
@@ -82,6 +83,7 @@ export function ConnectionsSettings() {
     handleConfirmEnableWsl,
     handleConfirmWslChange,
   } = settings;
+
   const {
     renderConnectionModeCard,
     renderRemoteModeBody,
@@ -235,6 +237,7 @@ export function ConnectionsSettings() {
             open={isWslConfirmDialogOpen}
             onOpenChange={(open) => {
               if (isUpdatingWslBackend) return;
+
               if (!open) setPendingWslChange(null);
             }}
           >
@@ -381,6 +384,7 @@ export function ConnectionsSettings() {
             open={pendingTailscaleServeEndpoint !== null}
             onOpenChange={(open) => {
               if (isUpdatingTailscaleServe) return;
+
               if (!open) setPendingTailscaleServeEndpoint(null);
             }}
           >
@@ -468,6 +472,7 @@ export function ConnectionsSettings() {
             open={addBackendDialogOpen}
             onOpenChange={(open) => {
               setAddBackendDialogOpen(open);
+
               if (!open) {
                 setSavedBackendError(null);
               }

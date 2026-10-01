@@ -28,15 +28,19 @@ export function resolveBotFileAttachment(
   file: Pick<File, "name" | "size" | "type">,
 ): BotFileAttachmentKind | null {
   const declaredMimeType = file.type.trim().toLowerCase();
+
   if (isProviderSendTurnSupportedImageMimeType(declaredMimeType)) {
     return file.size > 0 && file.size <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
       ? { type: "image", mimeType: declaredMimeType }
       : null;
   }
+
   const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
+
   const mimeType = isProviderSendTurnSupportedFileMimeType(declaredMimeType)
     ? declaredMimeType
     : FILE_MIME_BY_EXTENSION[extension];
+
   return mimeType && file.size > 0 && file.size <= PROVIDER_SEND_TURN_MAX_FILE_BYTES
     ? { type: "file", mimeType: mimeType as UploadChatFileAttachment["mimeType"] }
     : null;

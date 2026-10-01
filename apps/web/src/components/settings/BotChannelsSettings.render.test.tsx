@@ -75,10 +75,12 @@ vi.mock("../../state/session", () => ({
 
 vi.mock("../ui/select", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ui/select")>();
+
   return {
     ...actual,
     Select: (props: Parameters<typeof actual.Select>[0]) => {
       fixtures.selects.push(props as (typeof fixtures.selects)[number]);
+
       return <actual.Select {...props} />;
     },
   };
@@ -86,6 +88,7 @@ vi.mock("../ui/select", async (importOriginal) => {
 
 vi.mock("../ui/button", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ui/button")>();
+
   return {
     ...actual,
     Button: (props: Parameters<typeof actual.Button>[0]) => {
@@ -93,6 +96,7 @@ vi.mock("../ui/button", async (importOriginal) => {
         const onClick = props.onClick;
         fixtures.buttons.set(props.children, () => onClick({} as never));
       }
+
       return <actual.Button {...props} />;
     },
   };
@@ -116,7 +120,9 @@ vi.mock("../ui/menu", () => ({
     render?: ReactElement<{ children?: ReactNode }>;
   }) => {
     if (onClick) fixtures.buttons.set(children, onClick);
+
     if (render) return cloneElement(render, {}, children);
+
     return (
       <button type="button" disabled={disabled}>
         {children}
@@ -300,6 +306,7 @@ describe("channel project selection", () => {
   it("assigns a connection to a bot whose own channel was detached", async () => {
     const { connectionId: _detached, ...detachedBinding } =
       boundBot("disconnected").channelBindings[0]!;
+
     fixtures.bots = [
       { id: "bot-other", name: "Mira", archivedAt: null, channelBindings: [] },
       { ...boundBot("disconnected"), channelBindings: [detachedBinding] },

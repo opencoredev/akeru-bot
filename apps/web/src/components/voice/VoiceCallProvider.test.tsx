@@ -36,28 +36,36 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: (
     selector?: (settings: { voice: { enabled: boolean; provider: string } }) => unknown,
   ) => {
     const settings = { voice: { enabled: true, provider: mocks.voiceProvider } };
+
     return selector ? selector(settings) : settings;
   },
 }));
+
 vi.mock("../../modelSelection", () => ({
   resolveAppModelSelectionState: () => ({ instanceId: "codex", model: "gpt-5.6" }),
 }));
+
 vi.mock("../../providerInstances", () => ({
   applyProviderInstanceSettings: (entries: unknown) => entries,
   deriveProviderInstanceEntries: () => [],
   sortProviderInstanceEntries: (entries: unknown) => entries,
 }));
+
 vi.mock("../../state/entities", () => ({ useProjects: () => [mocks.activeProject] }));
+
 vi.mock("../../state/environments", () => ({
   useEnvironmentConnectionState: () => ({ data: null }),
   usePrimaryEnvironmentId: () => "env-1",
 }));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: {},
   serverEnvironment: {
@@ -65,13 +73,16 @@ vi.mock("../../state/server", () => ({
     hangupVoiceCall: mocks.hangupAtom,
   },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: unknown) =>
     atom === mocks.startAtom ? mocks.startVoiceCall : mocks.hangupVoiceCall,
 }));
+
 vi.mock("../roster/botEngineSelection", () => ({
   resolveStickyBotEngine: () => ({ instanceId: "codex", model: "gpt-5.6" }),
 }));
+
 vi.mock("../roster/useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     appendTranscript: mocks.appendTranscript,
@@ -85,19 +96,24 @@ vi.mock("../roster/useBotThreadRuntime", () => ({
     sending: false,
   }),
 }));
+
 vi.mock("../roster/rosterStore", () => {
   const state = { bots: [mocks.bot], selectedBotId: mocks.bot.id, selectBot: mocks.selectBot };
+
   return {
     useRosterStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
       getState: () => state,
     }),
   };
 });
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+
 vi.mock("./browserVoiceAudio", () => ({
   // A silent microphone: capture waits until the call scope is cancelled.
   captureVoiceUtterance: (_microphone: unknown, signal: AbortSignal) => {
     mocks.captureSignals.push(signal);
+
     return new Promise((_, reject) =>
       signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
     );
@@ -145,16 +161,21 @@ class TestPeer {
 
 function renderControls(): VoiceControls {
   let controls: VoiceControls | null = null;
+
   function Probe() {
     controls = useVoiceCall();
+
     return null;
   }
+
   renderToStaticMarkup(
     <VoiceCallProvider>
       <Probe />
     </VoiceCallProvider>,
   );
+
   if (controls === null) throw new Error("Voice controls did not mount.");
+
   return controls;
 }
 
@@ -169,6 +190,7 @@ describe("voice call provider", () => {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   };
+
   const microphone = {
     getTracks: () => [track],
     getAudioTracks: () => [track],
@@ -207,9 +229,11 @@ describe("voice call provider", () => {
 
   it("refuses a second start while the first call is pending and lets hangup cancel it", async () => {
     let resolveMicrophone!: (value: typeof microphone) => void;
+
     const pendingMicrophone = new Promise<typeof microphone>((resolve) => {
       resolveMicrophone = resolve;
     });
+
     vi.stubGlobal("navigator", {
       mediaDevices: { getUserMedia: vi.fn(() => pendingMicrophone) },
     });
@@ -289,6 +313,7 @@ describe("voice call provider", () => {
     const controls = renderControls();
     controls.startOrReturn(mocks.bot as never);
     await flushVoiceStart();
+
     const event = new MessageEvent("message", {
       data: JSON.stringify({
         type: "response.function_call_arguments.done",
@@ -298,6 +323,7 @@ describe("voice call provider", () => {
         arguments: JSON.stringify({ message: "Run tests" }),
       }),
     });
+
     latestPeer?.events.onmessage?.(event);
     latestPeer?.events.onmessage?.(event);
     await Promise.resolve();
@@ -314,6 +340,7 @@ describe("voice call provider", () => {
     const controls = renderControls();
     controls.startOrReturn(mocks.bot as never);
     await flushVoiceStart();
+
     const replayed = new MessageEvent("message", {
       data: JSON.stringify({
         event_id: "event-1",
@@ -321,6 +348,7 @@ describe("voice call provider", () => {
         transcript: "Hello",
       }),
     });
+
     latestPeer?.events.onmessage?.(replayed);
     latestPeer?.events.onmessage?.(replayed);
     expect(mocks.appendTranscript).toHaveBeenCalledOnce();

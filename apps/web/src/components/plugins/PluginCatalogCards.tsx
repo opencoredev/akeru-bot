@@ -14,9 +14,12 @@ import {
 
 export const LOGO_TILE_CLASS_NAME =
   "flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-muted/70 p-2 ring-1 ring-border/50 ring-inset";
+
 export const ROW_CLASS_NAME =
   "group flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/50";
+
 const ACTION_CLASS_NAME = "min-w-18 shrink-0";
+
 export const LOGO_SIZE_CLASS_NAME = "size-11 rounded-xl";
 
 export function PluginLogoImage({
@@ -68,6 +71,7 @@ export function RowText({
   readonly description: string;
 }) {
   const metaText = (meta ?? []).filter(Boolean).join(" · ");
+
   return (
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-baseline gap-2">
@@ -151,6 +155,7 @@ export function DirectoryCard({
   readonly action: ReactNode;
 }) {
   const statusText = status.filter(Boolean).join(" · ");
+
   return (
     <article className={CARD_CLASS_NAME} {...id}>
       {onOpen ? (
@@ -204,10 +209,13 @@ export function PluginCard({
   const action = pluginPrimaryAction(plugin, server, accessStatus);
   const actionLabel = pluginLabel(action.label, t);
   const brokerName = pluginBrokerName(plugin);
+
   const awaitingVendor =
     plugin.connection.type === "approval-pending" ||
     plugin.connection.type === "verification-pending";
+
   const connected = server?.enabled === true && action.enable === false;
+
   return (
     <DirectoryCard
       id={{ "data-plugin-id": plugin.id }}

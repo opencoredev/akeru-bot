@@ -20,7 +20,9 @@ export function RemovedBuiltinServers({
   readonly onDelete: (server: McpServer) => void;
 }) {
   const { t } = useI18n();
+
   if (servers.length === 0) return null;
+
   return (
     <DirectorySection
       count={servers.length}
@@ -77,6 +79,7 @@ export function CustomMcpServers({
   onDelete,
 }: CustomMcpServersProps) {
   const { t } = useI18n();
+
   return (
     <DirectorySection
       count={servers.length}
@@ -97,6 +100,7 @@ export function CustomMcpServers({
       ) : null}
       {servers.map((server) => {
         const pending = pendingServerId === server.id;
+
         return (
           <div className={ROW_CLASS_NAME} key={server.id}>
             <McpLogo />

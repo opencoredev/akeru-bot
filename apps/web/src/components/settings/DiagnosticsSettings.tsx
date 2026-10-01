@@ -107,21 +107,27 @@ export function DiagnosticsSettingsPanel() {
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
   const primaryEnvironment = usePrimaryEnvironment();
   const environmentId = primaryEnvironment?.environmentId ?? null;
+
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
     reportFailure: false,
   });
+
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
+
   const [resourceWindowMs, setResourceWindowMs] = useState(15 * 60_000);
+
   const selectedResourceWindow =
     RESOURCE_HISTORY_WINDOWS.find((option) => option.windowMs === resourceWindowMs) ??
     RESOURCE_HISTORY_WINDOWS[1];
+
   const { data, error, isPending, refresh } = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.traceDiagnostics({ environmentId, input: {} }),
   );
+
   const {
     data: processData,
     error: processError,
@@ -132,6 +138,7 @@ export function DiagnosticsSettingsPanel() {
       ? null
       : serverEnvironment.processDiagnostics({ environmentId, input: {} }),
   );
+
   const {
     data: resourceData,
     error: resourceError,
@@ -148,6 +155,7 @@ export function DiagnosticsSettingsPanel() {
           },
         }),
   );
+
   const [isOpeningLogsDirectory, setIsOpeningLogsDirectory] = useState(false);
   const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<string | null>(null);
   const [signalingPid, setSignalingPid] = useState<number | null>(null);
@@ -159,15 +167,20 @@ export function DiagnosticsSettingsPanel() {
 
   const openLogsDirectory = useCallback(() => {
     const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
+
     if (!logsDirectoryPath) return;
 
     const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
+
     if (!editor) {
       setOpenLogsDirectoryError("No available editors found.");
+
       return;
     }
+
     if (environmentId === null) {
       setOpenLogsDirectoryError("No environment is selected.");
+
       return;
     }
 
@@ -181,7 +194,9 @@ export function DiagnosticsSettingsPanel() {
           editor,
         },
       });
+
       setIsOpeningLogsDirectory(false);
+
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         setOpenLogsDirectoryError(
@@ -193,17 +208,21 @@ export function DiagnosticsSettingsPanel() {
 
   const isInitialLoading = isPending && data === null;
   const isProcessInitialLoading = isProcessPending && processData === null;
+
   const signalProcess = useCallback(
     async (pid: number, signal: ServerProcessSignal) => {
       if (signalingPidRef.current !== null) return;
       signalingPidRef.current = pid;
       setSignalingPid(pid);
+
       const clearSignaling = () => {
         signalingPidRef.current = null;
         setSignalingPid(null);
       };
+
       if (signal === "SIGKILL") {
         let confirmed = false;
+
         try {
           confirmed = await ensureLocalApi().dialogs.confirm(
             `Send SIGKILL to process ${pid}? This cannot be handled by the process.`,
@@ -216,21 +235,30 @@ export function DiagnosticsSettingsPanel() {
             title: "Could not confirm signal",
             description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
           });
+
           return;
         }
+
         if (!confirmed) {
           clearSignaling();
+
           return;
         }
       }
+
       const currentEnvironmentId = environmentIdRef.current;
+
       if (currentEnvironmentId === null) {
         clearSignaling();
+
         return;
       }
+
       const process = processDataRef.current?.processes.find((entry) => entry.pid === pid);
+
       if (process === undefined) {
         clearSignaling();
+
         return;
       }
 
@@ -239,6 +267,7 @@ export function DiagnosticsSettingsPanel() {
           environmentId: currentEnvironmentId,
           input: { pid, startTimeMs: process.startTimeMs, signal },
         });
+
         if (result._tag === "Failure") {
           if (!isAtomCommandInterrupted(result)) {
             const error = squashAtomCommandFailure(result);
@@ -248,11 +277,14 @@ export function DiagnosticsSettingsPanel() {
               description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
             });
           }
+
           return;
         }
+
         if (!result.value.signaled) {
           const message = Option.getOrUndefined(result.value.message);
           refreshProcesses();
+
           if (isStaleProcessSignalMessage(message)) {
             toastManager.add({
               type: "info",
@@ -260,6 +292,7 @@ export function DiagnosticsSettingsPanel() {
               description:
                 "The process is not a child of the Akeru Bot server. It might already have exited.",
             });
+
             return;
           }
 
@@ -268,8 +301,10 @@ export function DiagnosticsSettingsPanel() {
             title: `Could not send ${signal}`,
             description: message ?? `Failed to send ${signal}.`,
           });
+
           return;
         }
+
         refreshProcesses();
       } finally {
         clearSignaling();
@@ -281,6 +316,7 @@ export function DiagnosticsSettingsPanel() {
   const processDiagnosticsError = processData ? Option.getOrNull(processData.error) : null;
   const processResourceError = resourceData ? Option.getOrNull(resourceData.error) : null;
   const traceDiagnosticsError = data ? Option.getOrNull(data.error) : null;
+
   const traceDiagnosticsPartialFailure = data
     ? Option.getOrElse(data.partialFailure, () => false)
     : false;

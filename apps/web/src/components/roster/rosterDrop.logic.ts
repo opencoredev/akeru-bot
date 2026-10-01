@@ -1,5 +1,7 @@
 const BOT_DRAG_PREFIX = "bot:";
+
 const GROUP_DROP_PREFIX = "group:";
+
 const ROSTER_MARKER_PREFIX = "roster-marker-";
 
 export type RosterItemRef = { kind: "bot"; id: string } | { kind: "group"; id: string };
@@ -20,11 +22,14 @@ export function moveRosterItemInOrder(
 ): RosterItemRef[] | null {
   const index = order.findIndex((candidate) => rosterItemsEqual(candidate, item));
   const destination = index + delta;
+
   if (index < 0 || destination < 0 || destination >= order.length) return null;
   const next = [...order];
   const [moved] = next.splice(index, 1);
+
   if (!moved) return null;
   next.splice(destination, 0, moved);
+
   return next;
 }
 
@@ -50,9 +55,12 @@ export function rosterEntryId(item: RosterItemRef): string {
 
 export function parseRosterEntryId(id: string): RosterItemRef | null {
   const botId = parseRosterBotDragId(id);
+
   if (botId) return { kind: "bot", id: botId };
   const groupId = parseRosterGroupDropId(id);
+
   if (groupId) return { kind: "group", id: groupId };
+
   return null;
 }
 
@@ -63,6 +71,7 @@ export function rosterSectionItems(section: {
   readonly items?: readonly RosterItemRef[] | undefined;
 }): RosterItemRef[] {
   if (section.items && section.items.length > 0) return [...section.items];
+
   return [
     ...(section.groupIds ?? []).map((id) => ({ kind: "group" as const, id })),
     ...section.botIds.map((id) => ({ kind: "bot" as const, id })),
@@ -90,7 +99,9 @@ export function rosterItemsForZone(
   },
 ): readonly RosterItemRef[] {
   if (zone === "pinned") return layout.pinnedItems;
+
   if (zone === "unassigned") return layout.unassignedItems;
+
   return layout.sections.find((section) => section.id === zone.sectionId)?.items ?? [];
 }
 
@@ -100,6 +111,7 @@ export function rosterZoneId(zone: RosterZone): string {
 
 export function rosterZonesEqual(left: RosterZone, right: RosterZone): boolean {
   if (left === "pinned" || left === "unassigned") return left === right;
+
   return typeof right === "object" && left.sectionId === right.sectionId;
 }
 
@@ -113,11 +125,13 @@ export type RosterListMarker =
 
 export function rosterMarkerId(marker: RosterListMarker): string {
   if (typeof marker === "string") return `${ROSTER_MARKER_PREFIX}${marker}`;
+
   return `${ROSTER_MARKER_PREFIX}${marker.kind}-${marker.sectionId}`;
 }
 
 export function parseRosterSectionHeaderId(id: string): string | null {
   const prefix = `${ROSTER_MARKER_PREFIX}section-header-`;
+
   return id.startsWith(prefix) ? id.slice(prefix.length) || null : null;
 }
 
@@ -142,33 +156,43 @@ export function buildRosterListItems(input: {
   readonly unassignedItems: readonly RosterItemRef[];
 }): RosterListItem[] {
   const items: RosterListItem[] = [{ kind: "marker", marker: "pinned-header" }];
+
   for (const item of input.pinnedItems) {
     items.push({ kind: "entry", item, zone: "pinned" });
   }
+
   items.push({ kind: "marker", marker: "pinned-divider" });
+
   for (const section of input.sections) {
     const zone = { sectionId: section.id };
     items.push({ kind: "marker", marker: { kind: "section-header", sectionId: section.id } });
     items.push({ kind: "marker", marker: { kind: "section-placeholder", sectionId: section.id } });
+
     if (!section.collapsed) {
       for (const item of section.items) {
         items.push({ kind: "entry", item, zone });
       }
     }
   }
+
   items.push({ kind: "marker", marker: "unassigned-header" });
   items.push({ kind: "marker", marker: "unassigned-placeholder" });
+
   for (const item of input.unassignedItems) {
     items.push({ kind: "entry", item, zone: "unassigned" });
   }
+
   return items;
 }
 
 function markerZone(marker: RosterListMarker, firstSectionId: string | null): RosterZone | null {
   if (marker === "pinned-header") return "pinned";
+
   if (marker === "pinned-divider")
     return firstSectionId ? { sectionId: firstSectionId } : "unassigned";
+
   if (marker === "unassigned-header" || marker === "unassigned-placeholder") return "unassigned";
+
   return { sectionId: marker.sectionId };
 }
 
@@ -178,19 +202,26 @@ function zoneAtRosterSlot(
   firstSectionId: string | null,
 ): RosterZone {
   let zone: RosterZone = "pinned";
+
   for (let i = 0; i < index && i < items.length; i += 1) {
     const item = items[i]!;
+
     if (item.kind !== "marker") continue;
     const next = markerZone(item.marker, firstSectionId);
+
     if (next) zone = next;
+
     if (typeof item.marker !== "string" && item.marker.kind === "section-header") {
       zone = { sectionId: item.marker.sectionId };
     }
+
     if (item.marker === "unassigned-header") zone = "unassigned";
+
     if (item.marker === "pinned-divider") {
       zone = firstSectionId ? { sectionId: firstSectionId } : "unassigned";
     }
   }
+
   return zone;
 }
 
@@ -201,11 +232,15 @@ function zoneForOverItem(
   firstSectionId: string | null,
 ): RosterZone {
   if (over.kind === "entry") return over.zone;
+
   if (over.marker === "pinned-header") return "pinned";
+
   if (over.marker === "unassigned-header" || over.marker === "unassigned-placeholder") {
     return "unassigned";
   }
+
   if (typeof over.marker !== "string") return { sectionId: over.marker.sectionId };
+
   return zoneAtRosterSlot(moved, overIndex, firstSectionId);
 }
 
@@ -230,10 +265,12 @@ export function resolveRosterDropTarget(
   const overIndex = items.findIndex((item) => rosterListItemId(item) === overId);
   const active = activeIndex === -1 ? undefined : items[activeIndex];
   const over = overIndex === -1 ? undefined : items[overIndex];
+
   if (!active || !over || active.kind !== "entry") return null;
   const moved = items.filter((_, index) => index !== activeIndex);
   moved.splice(overIndex, 0, active);
   const zone = zoneForOverItem(over, moved, overIndex, firstSectionId);
+
   return {
     zone,
     order: collectZoneOrder(
@@ -274,16 +311,21 @@ export function planRosterDrop(input: {
   readonly pinnedOrder: readonly RosterItemRef[];
 }): RosterDropPlan {
   const item = parseRosterEntryId(input.activeId);
+
   if (!item) return { kind: "none" };
+
   if (input.target.zone === "pinned") {
     if (input.from === "pinned" && sameOrder(input.target.order, input.pinnedOrder)) {
       return { kind: "none" };
     }
+
     if (input.from === "pinned") {
       return { kind: "reorder-pinned", order: input.target.order };
     }
+
     return { kind: "pin", item, order: input.target.order };
   }
+
   return {
     kind: "move",
     item,
@@ -299,9 +341,11 @@ export function planRosterSectionDrop(input: {
   readonly overId: string;
 }): RosterDropPlan {
   const fromIndex = input.sectionIds.indexOf(input.activeSectionId);
+
   if (fromIndex === -1) return { kind: "none" };
   const overSectionId = parseRosterSectionHeaderId(input.overId);
   let toIndex: number;
+
   if (overSectionId) {
     toIndex = input.sectionIds.indexOf(overSectionId);
   } else if (input.overId === rosterMarkerId("unassigned-header")) {
@@ -309,7 +353,9 @@ export function planRosterSectionDrop(input: {
   } else {
     return { kind: "none" };
   }
+
   if (toIndex === -1 || toIndex === fromIndex) return { kind: "none" };
+
   return { kind: "reorder-section", fromIndex, toIndex };
 }
 

@@ -22,7 +22,9 @@ import { RoutineFormDialog, blankDraft, editDraft } from "./RoutineFormDialog";
 import { RoutineCard, RoutineDetail, type RoutineActionProps } from "./RoutineCards";
 
 export { RoutineDetail } from "./RoutineCards";
+
 export { routineFormClosesOnOpenChange, showsWorkspacePicker } from "./RoutineFormDialog";
+
 export { runStatusPresentation } from "./RoutineRunHistory";
 
 export interface RoutinePanelProps extends RoutineActionProps {
@@ -63,7 +65,9 @@ export function focusTargetAfterRoutineDelete(
   deletedId: string,
 ): string | null {
   const index = routineIds.indexOf(deletedId);
+
   if (index === -1) return routineIds[0] ?? null;
+
   return routineIds[index + 1] ?? routineIds[index - 1] ?? null;
 }
 
@@ -98,6 +102,7 @@ export function RoutinePanel({
     if (listRequest === 0) return;
     setOpenRoutineId((current) => {
       if (current !== null) listRequested.current = true;
+
       return null;
     });
   }, [listRequest]);
@@ -128,12 +133,16 @@ export function RoutinePanel({
         : deletedFocusTarget.current === undefined
           ? previousOpenId.current
           : deletedFocusTarget.current;
+
       listRequested.current = false;
+
       const rows =
         target === null
           ? []
           : (listRef.current?.querySelectorAll<HTMLElement>("[data-routine-row]") ?? []);
+
       let restored = false;
+
       for (const row of rows) {
         if (row.dataset.routineRow === target) {
           row.focus();
@@ -141,8 +150,10 @@ export function RoutinePanel({
           break;
         }
       }
+
       if (!restored) headingRef.current?.focus();
     }
+
     previousOpenId.current = openRoutineId;
   }, [openRoutineId]);
 

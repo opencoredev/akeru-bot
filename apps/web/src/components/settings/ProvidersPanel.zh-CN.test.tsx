@@ -18,6 +18,7 @@ describe("provider account rows in Simplified Chinese", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     const html = renderToStaticMarkup(
       <LanguageProvider testCatalog={{ locale: "zh-CN", catalog: zhCNCatalog }}>
         <ProviderAccountRows
@@ -31,12 +32,15 @@ describe("provider account rows in Simplified Chinese", () => {
         />
       </LanguageProvider>,
     );
+
     for (const label of ["已连接的账户", "订阅", "检查", "从此环境中移除已保存的凭据。"]) {
       expect(html).toContain(label);
     }
+
     for (const label of ["Connected account", "Subscription", "Remove the saved credentials"]) {
       expect(html).not.toContain(label);
     }
+
     expect(html).toContain("person@example.com");
   });
 });

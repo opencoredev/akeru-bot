@@ -24,12 +24,17 @@ import { buildPluginSections } from "./pluginPresentation";
 import { planPluginToggle, pluginMcpServerId } from "./pluginRegistry";
 
 const catalog = loadDirectoryCatalog();
+
 const listedCatalog = catalog.filter(isListedIntegration);
+
 const firecrawlEntry = catalog.find((plugin) => plugin.id === "firecrawl");
+
 const executor = catalog.find((plugin) => plugin.id === "executor");
+
 if (!firecrawlEntry || firecrawlEntry.kind !== "mcp-url" || !executor) {
   throw new TypeError("Required plugins are missing from the directory.");
 }
+
 // Firecrawl stays verification-pending until its lifecycle is verified; the
 // dialog tests model the recovered installable shape for installed-server flows.
 const firecrawl = {
@@ -37,7 +42,9 @@ const firecrawl = {
   connection: { type: "ready" as const },
   catalogStatus: "available" as const,
 };
+
 const { kind: _kind, transport: _transport, url: _url, ...pendingBase } = firecrawl;
+
 const pendingPlugin = {
   ...pendingBase,
   id: "pending-vendor",
@@ -51,6 +58,7 @@ const pendingPlugin = {
   },
   catalogStatus: "approval-pending",
 } satisfies PluginDirectoryDefinition;
+
 const apiKeyPlugin = {
   ...firecrawl,
   id: "key-vendor",
@@ -71,6 +79,7 @@ const rawServer: McpServer = {
   createdAt: "2026-08-27T00:00:00.000Z",
   updatedAt: "2026-08-27T00:00:00.000Z",
 };
+
 const firecrawlServer: McpServer = {
   ...rawServer,
   id: pluginMcpServerId(firecrawl),
@@ -78,6 +87,7 @@ const firecrawlServer: McpServer = {
   transport: "url",
   url: firecrawl.url,
 };
+
 const removedBuiltinServer: McpServer = {
   ...rawServer,
   id: McpServerId.make("builtin-removed-vendor"),
@@ -105,9 +115,11 @@ describe("Plugins dialog content", () => {
     const brokered = catalog.find(
       (plugin) => plugin.connection.type === "brokered" && plugin.connection.pendingBlocker,
     );
+
     if (!brokered || brokered.connection.type !== "brokered") {
       throw new TypeError("The directory must keep a pending brokered plugin.");
     }
+
     expect(pluginBrokeredBlockerNotice(brokered)).toEqual({
       type: "warning",
       title: `${brokered.title} is not available yet`,
@@ -147,6 +159,7 @@ describe("Plugins dialog content", () => {
         onOpen={noop}
       />,
     );
+
     expect(markup).toContain("Disable Firecrawl");
     expect(markup).toContain("Connect Executor");
     expect(markup).toContain("Connect Pending Vendor");
@@ -156,6 +169,7 @@ describe("Plugins dialog content", () => {
     expect(markup).toContain('title="The vendor must approve Akeru as an OAuth client."');
     expect(markup).not.toContain(">The vendor must approve Akeru as an OAuth client.<");
     expect(markup).not.toContain(">Added<");
+
     for (const plugin of catalog) {
       expect(markup).toContain(plugin.logo.src.replaceAll("'", "&#x27;"));
       expect(markup).toContain(`data-plugin-id="${plugin.id}"`);
@@ -173,13 +187,17 @@ describe("Plugins dialog content", () => {
         onOpen={noop}
       />,
     );
+
     const populated = PLUGIN_CATEGORIES.filter((category) =>
       catalog.some((plugin) => !plugin.featured && plugin.category === category),
     );
+
     expect(markup).toContain('aria-label="Featured"');
+
     for (const category of populated) {
       expect(markup).toContain(`aria-label="${category}"`);
     }
+
     expect(markup).not.toContain('aria-label="All"');
     expect(markup).not.toMatch(/Akeru (?:has|must|needs)/);
   });
@@ -198,6 +216,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain("By Useful Software Co.");
     expect(markup).toContain("Authentication");
     expect(markup).toContain("OAuth");
@@ -245,6 +264,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain("Recovered");
     expect(markup).toContain("Reconnect");
     expect(markup).not.toContain("token");
@@ -277,6 +297,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain('aria-label="Reconnect Firecrawl"');
     expect(markup).not.toContain('aria-label="Disable Firecrawl"');
   });
@@ -295,6 +316,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain('aria-label="Connect Pending Vendor"');
     expect(markup).toContain("disabled");
     expect(markup).toContain("Approval pending");
@@ -303,6 +325,7 @@ describe("Plugins dialog content", () => {
 
   it("keeps disable available after an installed plugin becomes pending", () => {
     const pendingServer = { ...firecrawlServer, id: pluginMcpServerId(pendingPlugin) };
+
     const markup = renderToStaticMarkup(
       <PluginDetailsContent
         plugin={pendingPlugin}
@@ -316,6 +339,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain('aria-label="Disable Pending Vendor"');
     expect(planPluginToggle(firecrawl, [firecrawlServer], false)).toEqual({
       action: "disable",
@@ -337,6 +361,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain('aria-label="Add key Key Vendor"');
     expect(markup).toContain("key-vendor-api-key");
   });
@@ -355,6 +380,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain('aria-label="Remove Firecrawl"');
     expect(markup).toContain('aria-label="Disable Firecrawl"');
   });
@@ -373,6 +399,7 @@ describe("Plugins dialog content", () => {
         onOpenSkill={noop}
       />,
     );
+
     expect(markup).toContain("Active bots");
     expect(markup).toContain("Research, Writer");
     expect(markup).toContain("Routines");
@@ -390,6 +417,7 @@ describe("Plugins dialog content", () => {
         onDelete={noop}
       />,
     );
+
     expect(markup).toContain("Raw filesystem");
     expect(markup).toContain("Disable Raw filesystem");
     expect(markup).toContain("Edit Raw filesystem");
@@ -417,6 +445,7 @@ describe("Plugins dialog content", () => {
         onDelete={noop}
       />,
     );
+
     expect(markup).toContain("Custom MCP servers");
     expect(markup).toContain("Add server");
   });
@@ -428,6 +457,7 @@ describe("Plugins dialog content", () => {
     expect(resolved.removedBuiltinServers.map((server) => server.id)).toEqual([
       "builtin-removed-vendor",
     ]);
+
     const markup = renderToStaticMarkup(
       <RemovedBuiltinServers
         servers={resolved.removedBuiltinServers}
@@ -435,6 +465,7 @@ describe("Plugins dialog content", () => {
         onDelete={noop}
       />,
     );
+
     expect(markup).toContain("Removed plugins");
     expect(markup).toContain("No longer in the directory");
     expect(markup).toContain('aria-label="Remove Removed Vendor"');

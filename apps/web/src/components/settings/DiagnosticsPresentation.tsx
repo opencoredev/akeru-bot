@@ -16,6 +16,7 @@ export function formatCount(value: number): string {
 
 export function formatDuration(value: number): string {
   if (value < 1_000) return `${Math.round(value)} ms`;
+
   return `${(value / 1_000).toFixed(value >= 10_000 ? 1 : 2)} s`;
 }
 
@@ -24,15 +25,18 @@ export function formatBytes(value: number): string {
   const units = ["KB", "MB", "GB"] as const;
   let unitIndex = -1;
   let next = value;
+
   do {
     next /= 1024;
     unitIndex += 1;
   } while (next >= 1024 && unitIndex < units.length - 1);
+
   return `${next.toFixed(next >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
 export function formatRelative(value: DateTime.Utc | null): string {
   if (!value) return "No trace records";
+
   return formatRelativeTimeLabel(DateTime.formatIso(value));
 }
 
@@ -42,6 +46,7 @@ export function formatRelativeNoWrap(value: DateTime.Utc | null): string {
 
 export function shortenTraceId(traceId: string): string {
   if (traceId.length <= 32) return traceId;
+
   return `${traceId.slice(0, 18)}...${traceId.slice(-10)}`;
 }
 

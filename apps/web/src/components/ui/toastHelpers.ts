@@ -39,6 +39,7 @@ export function stackedThreadToast(
     ...(data !== undefined ? data : {}),
     actionLayout: "stacked-end",
   };
+
   if (actionVariant !== undefined) {
     mergedData.actionVariant = actionVariant;
   }
@@ -52,12 +53,15 @@ export function stackedThreadToast(
   if (description !== undefined) {
     payload.description = description;
   }
+
   if (timeout !== undefined) {
     payload.timeout = timeout;
   }
+
   if (priority !== undefined) {
     payload.priority = priority;
   }
+
   if (actionProps !== undefined) {
     payload.actionProps = actionProps;
   }

@@ -34,7 +34,9 @@ function snapshot(
 }
 
 const mori = { id: "bot-mori", name: "Mori" } as OrchestrationBot;
+
 const akeru = { id: "bot-akeru", name: "Akeru" } as OrchestrationBot;
+
 const crew = { id: "group-crew", name: "Crew" } as OrchestrationGroup;
 
 describe("buildArchivedChatSections", () => {
@@ -83,6 +85,7 @@ describe("buildArchivedChatSections", () => {
       ...thread("restored", "2026-09-20T00:00:00.000Z", { botId: "bot-mori" }),
       archivedAt: null,
     };
+
     const sections = buildArchivedChatSections({
       environmentId,
       snapshot: snapshot([

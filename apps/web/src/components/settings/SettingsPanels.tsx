@@ -74,23 +74,29 @@ export function AppearanceSettingsPanel() {
     theme,
     themeHalves,
   } = useTheme();
+
   const { t } = useI18n();
   const customThemes = useCustomThemes();
   const [isImportThemeOpen, setIsImportThemeOpen] = useState(false);
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const environmentStageLabel = useEnvironmentStageLabel();
+
   const showEnvironmentIdentification =
     resolveEnvironmentIdentificationPillLabel(environmentStageLabel) !== null;
+
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
+
   const glassOpacitySliderStyle = {
     "--settings-slider-progress": `${glassOpacityRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - glassOpacityRatio}rem`,
   } as CSSProperties;
+
   const appearanceContrastRatio =
     (settings.appearanceContrast - MIN_APPEARANCE_CONTRAST) /
     (MAX_APPEARANCE_CONTRAST - MIN_APPEARANCE_CONTRAST);
+
   const appearanceContrastSliderStyle = {
     "--settings-slider-progress": `${appearanceContrastRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - appearanceContrastRatio}rem`,
@@ -145,6 +151,7 @@ export function AppearanceSettingsPanel() {
                 min={MIN_APPEARANCE_CONTRAST}
                 onChange={(event) => {
                   const appearanceContrast = Number(event.currentTarget.value);
+
                   if (
                     Number.isInteger(appearanceContrast) &&
                     appearanceContrast >= MIN_APPEARANCE_CONTRAST &&
@@ -193,6 +200,7 @@ export function AppearanceSettingsPanel() {
                 min={MIN_GLASS_OPACITY}
                 onChange={(event) => {
                   const glassOpacity = Number(event.currentTarget.value);
+
                   if (
                     Number.isInteger(glassOpacity) &&
                     glassOpacity >= MIN_GLASS_OPACITY &&
@@ -268,6 +276,7 @@ export function AdvancedSettingsSections() {
   const updateSettings = useUpdatePrimarySettings();
   const [backgroundActivityDialogOpen, setBackgroundActivityDialogOpen] = useState(false);
   const observability = useAtomValue(primaryServerObservabilityAtom);
+
   const diagnosticsDescription = formatDiagnosticsDescription(
     {
       localTracingEnabled: observability?.localTracingEnabled ?? false,
@@ -278,9 +287,11 @@ export function AdvancedSettingsSections() {
     },
     t,
   );
+
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
   const activeBackgroundActivityProfile = resolvedBackgroundActivity.profile;
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
+
   const backgroundActivityDescription =
     backgroundActivityProfileOption === "advanced"
       ? t(
@@ -288,6 +299,7 @@ export function AdvancedSettingsSections() {
           { profile: t(BACKGROUND_ACTIVITY_PROFILE_LABELS[activeBackgroundActivityProfile]) },
         )
       : t(BACKGROUND_ACTIVITY_PROFILE_DESCRIPTIONS[resolvedBackgroundActivity.profile]);
+
   const canResetBackgroundActivity = !Equal.equals(
     settings.backgroundActivity,
     DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
@@ -324,8 +336,10 @@ export function AdvancedSettingsSections() {
                 onValueChange={(value) => {
                   if (value === "advanced") {
                     setBackgroundActivityDialogOpen(true);
+
                     return;
                   }
+
                   if (
                     value === "balanced" ||
                     value === "performance" ||
@@ -407,15 +421,19 @@ export function AdvancedSettingsSections() {
               key={settings.productFeedbackEndpoint}
               onBlur={(event) => {
                 const decoded = decodeProductFeedbackEndpoint(event.currentTarget.value);
+
                 if (Exit.isFailure(decoded)) {
                   event.currentTarget.value = settings.productFeedbackEndpoint;
                   toastManager.add({
                     type: "error",
                     title: t("Use HTTPS or loopback HTTP."),
                   });
+
                   return;
                 }
+
                 const productFeedbackEndpoint = decoded.value;
+
                 if (
                   productFeedbackEndpoint &&
                   productFeedbackEndpoint !== settings.productFeedbackEndpoint

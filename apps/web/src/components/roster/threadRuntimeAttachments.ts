@@ -3,6 +3,7 @@ import { resolveBotFileAttachment } from "./botFileAttachment";
 /** The chat title a send proposes: the prompt, else the first file's name, capped at 80. */
 export function threadTitle(prompt: string, files: readonly File[]): string {
   const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
+
   return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
 }
 
@@ -32,7 +33,9 @@ export function readThreadTurnAttachments(files: readonly File[]) {
   return Promise.all(
     files.map(async (file) => {
       const attachment = resolveBotFileAttachment(file);
+
       if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
+
       return {
         ...attachment,
         name: file.name,

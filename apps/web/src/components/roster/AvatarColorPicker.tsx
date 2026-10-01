@@ -26,6 +26,7 @@ function ColorThumb({ color, left, top }: { color: string; left: string; top: st
 
 function pointerFraction(event: PointerEvent<HTMLDivElement>) {
   const bounds = event.currentTarget.getBoundingClientRect();
+
   return {
     x: clampColorFraction((event.clientX - bounds.left) / bounds.width),
     y: clampColorFraction((event.clientY - bounds.top) / bounds.height),
@@ -45,6 +46,7 @@ function ColorPickerPanel({
 
   useEffect(() => {
     const next = hexToHsv(value);
+
     if (!next) return;
     setHsv((current) => (next.s === 0 || next.v === 0 ? { ...next, h: current.h } : next));
     setDraft(null);
@@ -58,6 +60,7 @@ function ColorPickerPanel({
 
   const commitHex = (candidate: string) => {
     const next = hexToHsv(candidate);
+
     if (next) commitHsv(next);
     else setDraft(null);
   };
@@ -76,6 +79,7 @@ function ColorPickerPanel({
   const handleFieldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 0.1 : 0.02;
     const next = { ...hsv };
+
     if (event.key === "ArrowLeft") next.s = clampColorFraction(hsv.s - step);
     else if (event.key === "ArrowRight") next.s = clampColorFraction(hsv.s + step);
     else if (event.key === "ArrowUp") next.v = clampColorFraction(hsv.v + step);
@@ -87,6 +91,7 @@ function ColorPickerPanel({
 
   const handleHueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+
     if (direction === 0) return;
     event.preventDefault();
     const step = event.shiftKey ? 30 : 4;

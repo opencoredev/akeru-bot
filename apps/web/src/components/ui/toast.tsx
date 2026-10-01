@@ -58,13 +58,16 @@ function Toasts({ position }: { position: ToastPosition }) {
   const activeThreadRef = useActiveThreadRefFromRoute();
   const { t } = useI18n();
   const isTop = position.startsWith("top");
+
   const visibleToasts = toasts.filter((toast) =>
     shouldRenderThreadScopedToast(toast.data, activeThreadRef),
   );
+
   const visibleToastLayout = buildVisibleToastLayout(visibleToasts);
 
   useEffect(() => {
     const activeToastIds = new Set(toasts.map((toast) => toast.id));
+
     for (const toastId of threadToastVisibleTimeoutRemainingMs.keys()) {
       if (!activeToastIds.has(toastId)) {
         threadToastVisibleTimeoutRemainingMs.delete(toastId);
@@ -99,6 +102,7 @@ function Toasts({ position }: { position: ToastPosition }) {
             visibleIndex,
             visibleToastLayout.items.length,
           );
+
           const bodyDescriptor = deriveToastBodyDescriptor(toast);
           const { stackedActionLayout, inlineContentEndPad } = bodyDescriptor;
 
@@ -220,6 +224,7 @@ function Toasts({ position }: { position: ToastPosition }) {
 }
 
 export { hiddenToastActionProps, stackedThreadToast } from "./toastHelpers";
+
 export type { StackedThreadToastOptions } from "./toastHelpers";
 
 export {

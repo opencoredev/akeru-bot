@@ -44,6 +44,7 @@ export function ThemeColorPickerPanel({
       setHexDraft(normalizedValue);
       setRgbDraft(themeRgbValue(normalizedValue));
     }
+
     // Keep the current hue/saturation when the incoming value is just our own
     // change echoed back; hex → HSV is lossy for greys, white, and black.
     setHsv((current) =>
@@ -60,6 +61,7 @@ export function ThemeColorPickerPanel({
   onChangeRef.current = onChange;
   const pendingCommitRef = useRef<string | null>(null);
   const commitFrameRef = useRef<number | null>(null);
+
   // The final drag frame must not be lost when the popover closes or the
   // pointer lifts before the animation frame fires.
   const flushPendingCommit = useCallback(() => {
@@ -67,17 +69,22 @@ export function ThemeColorPickerPanel({
       cancelAnimationFrame(commitFrameRef.current);
       commitFrameRef.current = null;
     }
+
     const pending = pendingCommitRef.current;
     pendingCommitRef.current = null;
+
     if (pending !== null) onChangeRef.current(pending);
   }, []);
+
   useEffect(() => () => flushPendingCommit(), [flushPendingCommit]);
+
   const scheduleCommit = useCallback((color: string) => {
     pendingCommitRef.current = color;
     commitFrameRef.current ??= requestAnimationFrame(() => {
       commitFrameRef.current = null;
       const pending = pendingCommitRef.current;
       pendingCommitRef.current = null;
+
       if (pending !== null) onChangeRef.current(pending);
     });
   }, []);
@@ -115,6 +122,7 @@ export function ThemeColorPickerPanel({
   const handleHueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 10 : 1;
     const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
+
     if (!["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp"].includes(event.key)) return;
     event.preventDefault();
     commitHsv({ ...hsv, h: (hsv.h + direction * step + 360) % 360 });
@@ -125,9 +133,13 @@ export function ThemeColorPickerPanel({
     event.preventDefault();
     const step = event.shiftKey ? 0.1 : 0.02;
     const nextHsv = { ...hsv };
+
     if (event.key === "ArrowLeft") nextHsv.s = clampThemeColor(hsv.s - step);
+
     if (event.key === "ArrowRight") nextHsv.s = clampThemeColor(hsv.s + step);
+
     if (event.key === "ArrowUp") nextHsv.v = clampThemeColor(hsv.v + step);
+
     if (event.key === "ArrowDown") nextHsv.v = clampThemeColor(hsv.v - step);
     commitHsv(nextHsv);
   };
@@ -151,20 +163,24 @@ export function ThemeColorPickerPanel({
   const thumbTransition = isDragging
     ? undefined
     : "left 80ms linear, top 80ms linear, background-color 80ms linear";
+
   // The plane and thumbs paint the picked color and sit where it lies on the
   // HSV axes, so their styles are runtime values rather than app chrome.
   /* oxlint-disable shadcn/no-inline-styles -- picked color and HSV thumb geometry */
   const pureHue = `hsl(${hsv.h} 100% 50%)`;
+
   const planeStyle: CSSProperties = {
     backgroundColor: pureHue,
     backgroundImage:
       "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
   };
+
   const planeThumbStyle: CSSProperties = {
     left: `calc(${hsv.s} * (100% - 0.75rem) + 0.375rem)`,
     top: `calc(${1 - hsv.v} * (100% - 0.75rem) + 0.375rem)`,
     transition: thumbTransition,
   };
+
   const hueThumbStyle: CSSProperties = {
     left: `calc(${hsv.h / 360} * (100% - 1rem) + 0.5rem)`,
     // The ball shows the pure hue so it stays visually anchored to the track;
@@ -176,6 +192,7 @@ export function ThemeColorPickerPanel({
 
   const handleHexChange = (nextValue: string) => {
     setHexDraft(nextValue);
+
     if (!/^#[0-9a-f]{6}$/i.test(nextValue)) return;
     const nextHsv = themeHexToHsv(nextValue);
     setHsv(nextHsv);
@@ -186,6 +203,7 @@ export function ThemeColorPickerPanel({
   const handleRgbChange = (nextValue: string) => {
     setRgbDraft(nextValue);
     const nextColor = themeRgbToHex(nextValue);
+
     if (!nextColor) return;
     setHsv(themeHexToHsv(nextColor));
     setHexDraft(nextColor);

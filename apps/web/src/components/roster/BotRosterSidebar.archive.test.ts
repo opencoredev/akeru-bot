@@ -29,10 +29,13 @@ describe("runCreateBotOnce", () => {
   function pendingCreate() {
     const releases: Array<() => void> = [];
     let calls = 0;
+
     const create = () => {
       calls += 1;
+
       return new Promise<void>((resolve) => releases.push(resolve));
     };
+
     return {
       create,
       get calls() {
@@ -78,8 +81,10 @@ describe("runCreateBotOnce", () => {
   it("reopens the latch when the create throws", async () => {
     const inFlight = { current: false };
     let calls = 0;
+
     const create = () => {
       calls += 1;
+
       return Promise.reject(new Error("environment rejected the change"));
     };
 

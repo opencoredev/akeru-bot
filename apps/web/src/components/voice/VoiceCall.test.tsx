@@ -183,6 +183,7 @@ describe("voice call UI", () => {
         onClick={() => {}}
       />,
     );
+
     expect(enabled).toContain('aria-label="Call Akeru"');
 
     expect(
@@ -209,12 +210,14 @@ describe("voice call UI", () => {
 
   it("continues when ICE gathering does not report completion", async () => {
     vi.useFakeTimers();
+
     try {
       const peer = {
         iceGatheringState: "gathering",
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       } as unknown as RTCPeerConnection;
+
       const gathered = waitForIceGathering(peer, 100);
       vi.advanceTimersByTime(100);
       await gathered;
@@ -241,11 +244,14 @@ describe("voice call UI", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     };
+
     const onLost = vi.fn();
+
     const stop = listenForMicrophoneLoss(
       { getAudioTracks: () => [track as unknown as MediaStreamTrack] },
       onLost,
     );
+
     expect(track.addEventListener).toHaveBeenCalledWith("ended", onLost);
     stop();
     expect(track.removeEventListener).toHaveBeenCalledWith("ended", onLost);
@@ -289,6 +295,7 @@ describe("voice call UI", () => {
 
   it("ends the recovery window unless the peer reaches connected", () => {
     vi.useFakeTimers();
+
     try {
       let state: RTCPeerConnectionState = "disconnected";
       const results: boolean[] = [];
@@ -320,11 +327,13 @@ describe("voice call UI", () => {
       botName: "Akeru",
       startedAt: "2026-08-27T00:00:00.000Z",
     };
+
     expect(reduceVoiceCallUiState(active, { type: "hung-up" })).toBeNull();
   });
 
   it("keeps return and hangup controls visible in the active-call bar", () => {
     const startedAt = "2026-08-27T00:00:00.000Z";
+
     const html = renderToStaticMarkup(
       <VoiceCallBarView
         activeCall={{
@@ -340,6 +349,7 @@ describe("voice call UI", () => {
         onHangup={() => {}}
       />,
     );
+
     expect(html).toContain('aria-label="Return to call with Akeru"');
     expect(html).toContain('aria-label="Hang up"');
     expect(html).toContain("Reconnecting");
@@ -350,6 +360,7 @@ describe("voice call UI", () => {
     const html = renderToStaticMarkup(
       <VoiceCallStartingBarView botName="Akeru" onCancel={() => {}} />,
     );
+
     expect(html).toContain("Calling Akeru");
     expect(html).toContain('aria-label="Cancel call to Akeru"');
   });

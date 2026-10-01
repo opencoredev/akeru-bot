@@ -49,6 +49,7 @@ function hexToHsv(hex: string) {
   const delta = max - min;
 
   let hue = 0;
+
   if (delta !== 0) {
     if (max === red) {
       hue = ((green - blue) / delta) % 6;
@@ -57,7 +58,9 @@ function hexToHsv(hex: string) {
     } else {
       hue = (red - green) / delta + 4;
     }
+
     hue *= 60;
+
     if (hue < 0) hue += 360;
   }
 
@@ -72,6 +75,7 @@ function hsvToHex(hue: number, saturation: number, value: number) {
   const chroma = value * saturation;
   const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
   const match = value - chroma;
+
   const [red, green, blue] =
     hue < 60
       ? [chroma, x, 0]
@@ -102,6 +106,7 @@ function ProviderCustomColorPanel(props: {
   const initialHsv = useMemo(() => hexToHsv(props.value), [props.value]);
   const [hsv, setHsv] = useState(initialHsv);
   const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
+
   /* oxlint-disable shadcn/no-inline-styles -- HSV plane painted for the current hue */
   const planeStyle: CSSProperties = {
     backgroundColor: `hsl(${hsv.h} 100% 50%)`,
@@ -182,6 +187,7 @@ function ProviderCustomColorPanel(props: {
           value={currentColor}
           onChange={(event) => {
             const nextColor = event.currentTarget.value;
+
             if (!/^#[\da-f]{6}$/i.test(nextColor)) return;
             setHsv(hexToHsv(nextColor));
             props.onCommit(nextColor);
@@ -202,6 +208,7 @@ function ProviderCustomColorPicker(props: {
   readonly onCommit: (value: string) => void;
 }) {
   const normalized = normalizeProviderAccentColor(props.value) ?? FALLBACK_ACCENT_COLOR;
+
   // The trigger wears the user's custom accent; selected adds a ring in that color.
   /* oxlint-disable shadcn/no-inline-styles -- user-chosen accent color */
   const triggerStyle: CSSProperties = {
@@ -269,7 +276,9 @@ export function ProviderAccentColorPicker(props: {
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       const pendingCommit = pendingCommitRef.current;
+
       if (pendingCommit !== null) {
         onCommitRef.current(pendingCommit);
       }
@@ -283,22 +292,28 @@ export function ProviderAccentColorPicker(props: {
 
       if (commitDelayMs <= 0) {
         pendingCommitRef.current = null;
+
         if (commitTimeoutRef.current !== null) {
           clearTimeout(commitTimeoutRef.current);
           commitTimeoutRef.current = null;
         }
+
         onCommit(normalizedValue);
+
         return;
       }
 
       pendingCommitRef.current = normalizedValue;
+
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       commitTimeoutRef.current = setTimeout(() => {
         commitTimeoutRef.current = null;
         const pendingCommit = pendingCommitRef.current;
         pendingCommitRef.current = null;
+
         if (pendingCommit !== null) {
           onCommitRef.current(pendingCommit);
         }
@@ -308,10 +323,12 @@ export function ProviderAccentColorPicker(props: {
   );
 
   const normalized = normalizeProviderAccentColor(optimisticValue);
+
   const selectedValue =
     normalized && PROVIDER_ACCENT_SWATCHES.some((swatch) => swatch === normalized)
       ? normalized
       : "";
+
   const customSelected = Boolean(normalized && selectedValue === "");
 
   return (

@@ -39,6 +39,7 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
       detail: "Waiting for the server to report installation and authentication details.",
     };
   }
+
   if (!provider.enabled) {
     return {
       headline: "Disabled",
@@ -47,25 +48,30 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
         "This provider is installed but disabled for new sessions in Akeru Bot.",
     };
   }
+
   if (!provider.installed) {
     return {
       headline: "Not found",
       detail: provider.message ?? "CLI not detected on PATH.",
     };
   }
+
   if (provider.auth.status === "authenticated") {
     const authLabel = provider.auth.label ?? provider.auth.type;
+
     return {
       headline: authLabel ? `Authenticated · ${authLabel}` : "Authenticated",
       detail: provider.message ?? null,
     };
   }
+
   if (provider.auth.status === "unauthenticated") {
     return {
       headline: "Not authenticated",
       detail: provider.message ?? null,
     };
   }
+
   if (provider.status === "warning") {
     return {
       headline: "Needs attention",
@@ -73,12 +79,14 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
         provider.message ?? "The provider is installed, but the server could not fully verify it.",
     };
   }
+
   if (provider.status === "error") {
     return {
       headline: "Unavailable",
       detail: provider.message ?? "The provider failed its startup checks.",
     };
   }
+
   return {
     headline: "Available",
     detail: provider.message ?? "Installed and ready, but authentication could not be verified.",
@@ -92,6 +100,7 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
  */
 export function getProviderVersionLabel(version: string | null | undefined) {
   if (!version) return null;
+
   return version.startsWith("v") ? version : `v${version}`;
 }
 
@@ -150,12 +159,16 @@ export function accountConnectionState(
       ? { tone: "pending", label: "Checking", detail: null }
       : { tone: "neutral", label: "Not connected", detail: null };
   }
+
   if (!status.connected) return { tone: "neutral", label: "Not connected", detail: null };
+
   // The server checks a new login on its own; say so rather than claiming it is ready.
   if (status.healthChecking === true) {
     return { tone: "pending", label: "Checking access", detail: null };
   }
+
   const problem = status.health ? ACCOUNT_PROBLEM_LABELS[status.health] : undefined;
+
   if (problem) {
     return {
       tone: "attention",
@@ -163,6 +176,7 @@ export function accountConnectionState(
       detail: problem,
     };
   }
+
   return { tone: "positive", label: "Connected", detail: null };
 }
 
@@ -171,18 +185,24 @@ export function runtimeConnectionState(
   provider: ServerProvider | undefined,
 ): ProviderConnectionState {
   if (!provider) return { tone: "pending", label: "Checking", detail: null };
+
   if (!provider.enabled) return { tone: "neutral", label: "Disabled", detail: null };
+
   if (!provider.installed) {
     return { tone: "neutral", label: "Not installed", detail: provider.message ?? null };
   }
+
   if (provider.auth.status === "authenticated") {
     return { tone: "positive", label: "Connected", detail: null };
   }
+
   if (provider.status === "error" || provider.status === "warning") {
     return { tone: "attention", label: "Needs attention", detail: provider.message ?? null };
   }
+
   if (provider.auth.status === "unauthenticated") {
     return { tone: "neutral", label: "Not connected", detail: provider.message ?? null };
   }
+
   return { tone: "positive", label: "Available", detail: null };
 }

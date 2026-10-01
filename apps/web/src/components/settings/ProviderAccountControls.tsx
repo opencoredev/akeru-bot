@@ -20,10 +20,14 @@ function disconnectDescription(
   locale: string,
 ): string {
   const bots = status?.dependentBots.map((bot) => bot.name) ?? [];
+
   if (bots.length === 0) return t("Remove the saved credentials from this environment.");
+
   const shown =
     bots.length > 3 ? [...bots.slice(0, 3), t("{count} more", { count: bots.length - 3 })] : bots;
+
   const names = new Intl.ListFormat(locale, { type: "conjunction" }).format(shown);
+
   return bots.length === 1
     ? t("{names} uses this account.", { names })
     : t("{names} use this account.", { names });
@@ -31,6 +35,7 @@ function disconnectDescription(
 
 function BusyIcon({ busy, idle }: { readonly busy: boolean; readonly idle?: ReactNode }) {
   if (busy) return <LoaderIcon className="size-3.5 animate-spin" />;
+
   return idle ?? null;
 }
 
@@ -202,6 +207,7 @@ export function ProviderApiKeyForm({
   readonly onCancel: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <form
       className="space-y-3 px-3 pb-3 sm:px-4"
@@ -276,6 +282,7 @@ export function ActiveLoginPanel({
   const { t } = useI18n();
   const { flow } = login;
   const isApiKey = flow.provider === "opencode-go";
+
   return (
     <div data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">
       <p className="text-[13px] leading-[1.45] text-muted-foreground">

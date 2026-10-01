@@ -27,6 +27,7 @@ const state = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -39,6 +40,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -59,17 +61,23 @@ vi.mock("../../state/server", () => ({
     subscriptionAuth: () => Symbol("subscriptionAuth"),
   },
 }));
+
 vi.mock("../../state/mcpServers", () => ({ environmentMcpServersAtom: () => atoms.mcpServers }));
+
 vi.mock("../../state/bots", () => ({ botEnvironment: { update: atoms.update } }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: symbol) => (atom === atoms.update ? state.updateBot : vi.fn()),
 }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: null, error: null, isPending: true, refresh: vi.fn() }),
 }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
   useEnvironmentSettings: (
@@ -77,14 +85,19 @@ vi.mock("../../hooks/useSettings", () => ({
     selector: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => unknown,
   ) => selector(DEFAULT_UNIFIED_SETTINGS),
 }));
+
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (store: { bots: Bot[] }) => unknown) => selector({ bots: state.bots }),
 }));
+
 vi.mock("./useBotThreadRef", () => ({ useBotThreadRef: () => null }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
+
 vi.mock("../../i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+
   return { useI18n: () => translator };
 });
 
@@ -143,21 +156,27 @@ type Tree = ReactElement<Record<string, unknown>>;
 function renderForm(): Tree {
   hooks.beginRender();
   const page = BotSettingsPage({ botId: "bot-1" }) as Tree;
+
   const formElement = visitElements(
     page,
     (element) => typeof element.props.onSave === "function" && "bot" in element.props,
   );
+
   expect(formElement).not.toBeNull();
   const Form = formElement!.type as (props: Record<string, unknown>) => Tree;
+
   return expandBotSettingsSections(Form(formElement!.props));
 }
 
 function textOf(node: unknown): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
+
   if (Array.isArray(node)) return node.map(textOf).join("");
+
   if (node && typeof node === "object" && "props" in node) {
     return textOf((node as Tree).props.children);
   }
+
   return "";
 }
 
@@ -180,6 +199,7 @@ describe("bot settings in Simplified Chinese", () => {
       if ("id" in element.props && typeof element.props.title === "string") {
         titles.push(element.props.title);
       }
+
       return false;
     });
     expect(titles).toEqual(expect.arrayContaining(["身份", "行为", "模型与用量", "工作区"]));

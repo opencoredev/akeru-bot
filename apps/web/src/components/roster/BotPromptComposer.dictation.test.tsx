@@ -6,6 +6,7 @@ import { visitElements } from "../../test/reactElementTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
 type Session = ReturnType<typeof import("@akeru/client-runtime/dictation").createDictationSession>;
+
 type DictationInput = {
   readonly getDraft: () => Omit<DictationDraft, "identity">;
   readonly applyDraft: (draft: DictationDraft) => void;
@@ -20,11 +21,14 @@ const fake = vi.hoisted(() => ({
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -35,20 +39,29 @@ vi.mock("react", async (importOriginal) => {
     useState: reactHookHarness.useState,
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("motion/react", () => ({
   AnimatePresence: () => null,
   motion: { div: () => null },
   useReducedMotion: () => true,
 }));
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("../../state/server", () => ({ primaryServerKeybindingsAtom: Symbol("keybindings") }));
+
 vi.mock("./BotPromptCommandMenu", () => ({ BotPromptCommandMenu: () => null }));
+
 vi.mock("../../composerDraftStore", () => ({ hydrateImagesFromPersisted: () => [] }));
+
 vi.mock("../../lib/imageCompression", () => ({ compressImageForStash: vi.fn() }));
+
 vi.mock("../../promptStashStore", () => ({
   MAX_STASH_ENTRIES: 10,
   partitionStashAttachments: vi.fn(),
@@ -60,21 +73,28 @@ vi.mock("../../promptStashStore", () => ({
       finalizeEntryImages: vi.fn(),
     }),
 }));
+
 vi.mock("./rosterStore", () => ({
   useRosterStore: (selector: (store: { bots: [] }) => unknown) => selector({ bots: [] }),
 }));
+
 vi.mock("./BotComposerModelControl", () => ({ BotComposerModelControl: () => null }));
+
 vi.mock("./BotPromptMentions", () => ({
   BotPromptMentionChips: () => null,
   BotPromptMentionMenu: () => null,
   draftHasMentionChips: () => false,
 }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
+
 // The real session runs behind the environment binding: capture succeeds, transcription fails.
 vi.mock("../../lib/useEnvironmentComposerDictation", async () => {
   const { createDictationSession, dictationControlStatus } =
     await import("@akeru/client-runtime/dictation");
+
   const identity = { environmentId: "environment", threadId: "Scout", draftId: "Scout" };
+
   return {
     useEnvironmentComposerDictation: (input: DictationInput & { generation: number }) => {
       fake.input = input;
@@ -94,6 +114,7 @@ vi.mock("../../lib/useEnvironmentComposerDictation", async () => {
         cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
       });
       const session = fake.session;
+
       return {
         status: dictationControlStatus(session.status),
         unavailableReason: null,
@@ -118,8 +139,10 @@ function render() {
   const slot = visitElements(tree, (element) => element.type === DictationControls);
   // Render the send-slot controls in the same pass so their hooks keep stable slots.
   const controls = slot ? DictationControls(slot.props as unknown as DictationControlsProps) : null;
+
   const find = (label: string) =>
     visitElements([tree, controls], (element) => element.props["aria-label"] === label);
+
   return {
     textarea: visitElements(tree, (element) => element.type === "textarea") as Element,
     fileInput: visitElements(tree, (element) => element.props.type === "file") as Element,

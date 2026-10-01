@@ -40,6 +40,7 @@ export function BotPersonalityToneField({
         >
           {BOT_PERSONALITY_TONE_OPTIONS.map((option) => {
             const active = option.value === selected.value;
+
             return (
               <button
                 key={option.value}

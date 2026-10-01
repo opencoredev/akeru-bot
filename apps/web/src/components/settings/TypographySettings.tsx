@@ -42,6 +42,7 @@ import { useI18n } from "../../i18n";
 function useFontDefaultFamilies() {
   const { t } = useI18n();
   const settings = usePrimarySettings();
+
   // An unset preference shows the font it resolves to on this machine; the
   // default stacks are the platform's own faces, so the name is probed, not
   // hardcoded.
@@ -52,6 +53,7 @@ function useFontDefaultFamilies() {
     }),
     [t],
   );
+
   return {
     sans: defaults.sans,
     code: defaults.code,
@@ -65,6 +67,7 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
+
   return (
     <FontFamilySettingsRow
       {...searchableSetting("interface-font", t)}
@@ -97,6 +100,7 @@ function PromptFontRow() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
+
   return (
     <FontFamilySettingsRow
       {...searchableSetting("prompt-font", t)}
@@ -137,6 +141,7 @@ function CodeFontRow({
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
+
   return (
     <FontFamilySettingsRow
       {...searchableSetting("code-font", t)}
@@ -171,6 +176,7 @@ function TerminalFontRow() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const defaults = useFontDefaultFamilies();
+
   return (
     <FontFamilySettingsRow
       {...searchableSetting("terminal-font", t)}
@@ -212,7 +218,9 @@ function FontSmoothingRow() {
   const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+
   if (!isMacPlatform(navigator.platform)) return null;
+
   return (
     <SettingsRow
       {...searchableSetting("font-smoothing", t)}
@@ -244,6 +252,7 @@ function WordWrapRow() {
   const { t } = useI18n();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+
   return (
     <SettingsRow
       {...searchableSetting("word-wrap", t)}
@@ -289,6 +298,7 @@ function FontSettingsGroup() {
 function SimpleFontRows() {
   const { t } = useI18n();
   const settings = usePrimarySettings();
+
   return (
     <>
       <InterfaceFontRow preview={<PromptFontPreview />} />
@@ -336,11 +346,13 @@ const ADVANCED_TYPOGRAPHY_TARGET_IDS: ReadonlySet<string> = new Set([
  */
 export function TypographySection() {
   const { t } = useI18n();
+
   const [advanced, setAdvanced] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
     false,
     Schema.Boolean,
   );
+
   const searchTargetId = useSettingsSearchTargetId();
   // Flip Advanced on once per search jump so the hidden target can mount and
   // scroll; tracking the handled id lets the user turn it back off without
@@ -348,10 +360,12 @@ export function TypographySection() {
   const lastExpandedTargetRef = useRef<string | null>(null);
   useEffect(() => {
     if (searchTargetId === null || !ADVANCED_TYPOGRAPHY_TARGET_IDS.has(searchTargetId)) return;
+
     if (lastExpandedTargetRef.current === searchTargetId) return;
     lastExpandedTargetRef.current = searchTargetId;
     setAdvanced(true);
   }, [searchTargetId, setAdvanced]);
+
   return (
     <SettingsSection
       title={t("Typography")}
@@ -415,62 +429,76 @@ function FontFamilySettingsRow({
   const [draftSettled, setDraftSettled] = useState(true);
   const commitTimerRef = useRef<number | null>(null);
   const lastValueRef = useRef(value);
+
   if (lastValueRef.current !== value) {
     // The committed value changed externally (hydration, reset, picker
     // selection); adopt it and drop any pending commit of a stale draft.
     lastValueRef.current = value;
+
     if (commitTimerRef.current !== null) {
       window.clearTimeout(commitTimerRef.current);
       commitTimerRef.current = null;
     }
+
     setDraft(value);
     setDraftSettled(true);
   }
+
   useEffect(
     () => () => {
       if (commitTimerRef.current !== null) window.clearTimeout(commitTimerRef.current);
     },
     [],
   );
+
   const acceptsFamily = (candidate: string) =>
     isFontFamilyAvailable(candidate) && (!requireMonospace || isMonospaceFamily(candidate));
+
   const commitDraft = (next: string) => {
     setDraftSettled(true);
+
     // A rejected name stays in the field, flagged: the terminal would silently
     // fall back to its default, so the row must not claim it took the value.
     if (next.trim().length === 0 || acceptsFamily(next)) {
       onValueChange(next);
     }
   };
+
   const flushDraft = () => {
     if (commitTimerRef.current === null) return;
     window.clearTimeout(commitTimerRef.current);
     commitTimerRef.current = null;
     commitDraft(draft);
   };
+
   const draftTrimmed = draft.trim();
   // Flag an unknown name only once typing pauses, and never for an empty
   // field - that is the starting state, not a rejected entry.
   const draftPending = draftSettled && draftTrimmed.length > 0 && draftTrimmed !== trimmed;
+
   const resetToDefault = () => {
     if (commitTimerRef.current !== null) {
       window.clearTimeout(commitTimerRef.current);
       commitTimerRef.current = null;
     }
+
     setDraft(defaultValue);
     setDraftSettled(true);
     onReset();
   };
+
   const resetAction =
     value !== defaultValue || size.value !== size.defaultValue ? (
       <SettingResetButton label={title.toLowerCase()} onClick={resetToDefault} />
     ) : null;
+
   const fontEnumeration = useFontEnumeration();
   // Everyone starts on the plain input; focusing it is the user gesture that
   // runs font discovery. Where the engine can enumerate, the control then
   // upgrades to the picker - popped open when the swap happens under focus,
   // so the interaction continues without a second click.
   const inputFocusedRef = useRef(false);
+
   const familyControl =
     fontEnumeration.status === "granted" ? (
       <FontFamilyPicker
@@ -501,9 +529,11 @@ function FontFamilySettingsRow({
           const next = event.currentTarget.value;
           setDraft(next);
           setDraftSettled(false);
+
           if (commitTimerRef.current !== null) {
             window.clearTimeout(commitTimerRef.current);
           }
+
           commitTimerRef.current = window.setTimeout(() => {
             commitTimerRef.current = null;
             commitDraft(next);
@@ -511,15 +541,18 @@ function FontFamilySettingsRow({
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") flushDraft();
+
           if (event.key === "Escape") {
             // Discard uncommitted typing without closing the settings page,
             // which is what an unhandled Escape does.
             event.preventDefault();
             event.stopPropagation();
+
             if (commitTimerRef.current !== null) {
               window.clearTimeout(commitTimerRef.current);
               commitTimerRef.current = null;
             }
+
             setDraft(value);
             setDraftSettled(true);
           }
@@ -529,6 +562,7 @@ function FontFamilySettingsRow({
         value={draft}
       />
     );
+
   const control = (
     <div className="flex w-full items-center gap-2 sm:w-auto">
       <div className="min-w-0 flex-1 sm:w-44 sm:flex-none">{familyControl}</div>
@@ -537,6 +571,7 @@ function FontFamilySettingsRow({
         onValueChange={(next) => {
           if (typeof next !== "string") return;
           const parsed = Number(next);
+
           if (Number.isInteger(parsed) && parsed >= size.min && parsed <= size.max) {
             size.onChange(parsed);
           }
@@ -557,6 +592,7 @@ function FontFamilySettingsRow({
       </Select>
     </div>
   );
+
   return (
     <SettingsRow
       {...(id !== undefined ? { id } : {})}

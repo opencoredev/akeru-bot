@@ -6,24 +6,31 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const fixtures = vi.hoisted(() => {
   const keybindings: ResolvedKeybindingsConfig = [];
+
   return { keybindings };
 });
 
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "keybindings" ? fixtures.keybindings : null),
 }));
+
 vi.mock("../../state/server", () => ({
   primaryServerKeybindingsAtom: "keybindings",
   primaryServerKeybindingsConfigPathAtom: "configPath",
   primaryServerAvailableEditorsAtom: "editors",
   serverEnvironment: {},
 }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironment: () => ({ environmentId: "environment-1" }),
 }));
+
 vi.mock("../../editorPreferences", () => ({ useOpenInPreferredEditor: () => vi.fn() }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../../env", () => ({ isElectron: true }));
+
 vi.mock("./settingsLayout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./settingsLayout")>()),
   SettingsPageContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -47,6 +54,7 @@ describe("KeybindingsSettingsPanel", () => {
     for (const title of ["General", "Chats", "Composer &amp; models", "Layout"]) {
       expect(html).toContain(`aria-label="${title}"`);
     }
+
     expect(html).not.toContain('aria-label="Browser preview"');
     expect(html).not.toContain("the terminal is focused");
     expect(html).toContain("Jump to chat 1–9");

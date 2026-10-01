@@ -14,12 +14,16 @@ import {
 
 /** Slide-in for the sent bubble: --duration-fast on --ease-smooth-out. */
 const LAUNCH_DURATION = 0.25;
+
 const SMOOTH_OUT = [0.22, 1, 0.36, 1] as const;
 
 /** Status swap: --think-swap, --think-gap, --think-distance, --think-blur. */
 const SWAP_DURATION = 0.15;
+
 const SWAP_GAP = 0.05;
+
 const SWAP_DISTANCE = 8;
+
 const SWAP_BLUR = "blur(2px)";
 
 /**
@@ -40,6 +44,7 @@ function HandoffStatus({
   const reducedMotion = useReducedMotion();
   const { t } = useI18n();
   const status = desktopOnboardingHandoffStatus(phase, botName, t);
+
   const widest = useMemo(
     () =>
       desktopOnboardingHandoffStatuses(botName, t).reduce(

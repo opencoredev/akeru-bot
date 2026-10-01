@@ -24,7 +24,9 @@ export {
   randomBotAvatar,
   botAvatarSeed,
 } from "./rosterAvatar.logic";
+
 export { type RosterLastMessage, resolveLatestRosterMessage } from "./rosterMessagePreview.logic";
+
 export {
   type RosterItemRef,
   rosterItemKey,
@@ -56,7 +58,9 @@ export type RosterPresence = "idle" | "working" | "needs-you";
 /** Only live bot states get a light; row selection already marks the active bot. */
 export function resolveRosterIndicator(presence: RosterPresence): "needs-you" | "working" | null {
   if (presence === "working") return "working";
+
   if (presence === "needs-you") return "needs-you";
+
   return null;
 }
 
@@ -74,9 +78,13 @@ type PresenceShell = Pick<
  */
 export function resolveBotPresence(shell: PresenceShell | null): RosterPresence {
   if (shell === null) return "idle";
+
   if (shell.hasPendingApprovals || shell.hasPendingUserInput) return "needs-you";
+
   if (shell.session?.status === "running" && shell.session.activeTurnId != null) return "working";
+
   if (shell.backgroundLiveness === "working") return "working";
+
   return "idle";
 }
 
@@ -90,6 +98,7 @@ export function resolveRosterBotId(
   ) {
     return selectedBotId;
   }
+
   return bots.find((bot) => bot.archivedAt === null)?.id ?? null;
 }
 
@@ -104,7 +113,9 @@ function lastMessageSortValue(
   lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
 ): number | null {
   const at = lastMessageByBotId[bot.id]?.at;
+
   if (at === undefined) return null;
+
   return parseTimestampDate(at)?.getTime() ?? null;
 }
 
@@ -115,9 +126,13 @@ export function compareRosterBots(
 ): number {
   const aAt = lastMessageSortValue(a, lastMessageByBotId);
   const bAt = lastMessageSortValue(b, lastMessageByBotId);
+
   if (aAt !== null && bAt !== null && aAt !== bAt) return bAt - aAt;
+
   if (aAt !== null && bAt === null) return -1;
+
   if (aAt === null && bAt !== null) return 1;
+
   return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
@@ -134,6 +149,7 @@ export function buildRosterSections(input: RosterSectionsInput): RosterSection[]
   const visibleBots = bots.filter((bot) => bot.archivedAt === null);
   const pinned = visibleBots.filter((bot) => bot.pinned);
   const unpinned = visibleBots.filter((bot) => !bot.pinned);
+
   return [
     ...(pinned.length > 0 ? [{ id: "pinned", name: "Pinned", bots: pinned } as const] : []),
     ...(unpinned.length > 0 ? [{ id: "unpinned", name: "Bots", bots: unpinned } as const] : []),
@@ -147,8 +163,11 @@ export function buildRosterSections(input: RosterSectionsInput): RosterSection[]
 export function rosterZoneHeading(items: readonly RosterItemRef[]): string {
   const hasBots = items.some((item) => item.kind === "bot");
   const hasGroups = items.some((item) => item.kind === "group");
+
   if (hasGroups && hasBots) return "Bots and groups";
+
   if (hasGroups) return "Groups";
+
   return "Bots";
 }
 
@@ -166,6 +185,7 @@ export function buildRosterStrip(
   _lastMessageByBotId: Readonly<Record<string, RosterLastMessage>>,
 ): Bot[] {
   const visible = bots.filter((bot) => bot.archivedAt === null);
+
   return [...visible.filter((bot) => bot.pinned), ...visible.filter((bot) => !bot.pinned)];
 }
 
@@ -178,7 +198,9 @@ export function buildRosterTiles(
 
 export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
   const needle = query.trim().toLowerCase();
+
   if (needle.length === 0) return [...bots];
+
   return bots.filter(
     (bot) =>
       bot.name.toLowerCase().includes(needle) ||
@@ -188,6 +210,7 @@ export function filterRosterBots(bots: readonly Bot[], query: string): Bot[] {
 }
 
 type RosterShortcutItem = { kind: "bot" | "group"; id: string };
+
 type RosterShortcutSection = { botIds: readonly string[] };
 
 export function orderRosterBotsForShortcuts(
@@ -198,10 +221,13 @@ export function orderRosterBotsForShortcuts(
   const botsById = new Map(
     bots.filter((bot) => bot.archivedAt === null).map((bot) => [bot.id, bot] as const),
   );
+
   const ordered: Bot[] = [];
   const addedIds = new Set<string>();
+
   const addBot = (botId: string) => {
     const bot = botsById.get(botId);
+
     if (!bot || addedIds.has(botId)) return;
     addedIds.add(botId);
     ordered.push(bot);
@@ -210,9 +236,11 @@ export function orderRosterBotsForShortcuts(
   for (const item of pinnedItems) {
     if (item.kind === "bot") addBot(item.id);
   }
+
   for (const section of sections) {
     for (const botId of section.botIds) addBot(botId);
   }
+
   for (const bot of bots) addBot(bot.id);
 
   return ordered;
@@ -220,6 +248,7 @@ export function orderRosterBotsForShortcuts(
 
 export function resolveRosterShortcutBot(command: string, orderedBots: readonly Bot[]): Bot | null {
   const index = threadJumpIndexFromCommand(command);
+
   return index === null ? null : (orderedBots[index] ?? null);
 }
 
@@ -234,10 +263,13 @@ export function resolveAdjacentRosterBot(
   selectedBotId: string | null,
 ): Bot | null {
   const step = command === "thread.previous" ? -1 : command === "thread.next" ? 1 : 0;
+
   if (step === 0 || orderedBots.length === 0) return null;
   const index = orderedBots.findIndex((bot) => bot.id === selectedBotId);
+
   if (index === -1) return (step === 1 ? orderedBots[0] : orderedBots.at(-1)) ?? null;
   const next = orderedBots[(index + step + orderedBots.length) % orderedBots.length] ?? null;
+
   return next?.id === selectedBotId ? null : next;
 }
 
@@ -247,6 +279,7 @@ export function isCurrentGroupPerson(
   hostPersonId: string | null | undefined,
 ): boolean {
   const resolvedAuthorPersonId = authorPersonId ?? hostPersonId;
+
   return resolvedAuthorPersonId != null && resolvedAuthorPersonId === currentPersonId;
 }
 
@@ -258,6 +291,7 @@ export function groupBotMembers(group: Group, bots: ReadonlyArray<Bot>): Readonl
   const memberIds = new Set<string>(
     group.members.filter(isGroupBotMember).map((member) => member.botId),
   );
+
   return bots.filter((bot) => memberIds.has(bot.id));
 }
 
@@ -278,7 +312,9 @@ export function filterRosterGroups(
   query: string,
 ): Group[] {
   const needle = query.trim().toLowerCase();
+
   if (needle.length === 0) return [...groups];
+
   return groups.filter(
     (group) =>
       group.name.toLowerCase().includes(needle) ||
@@ -297,18 +333,23 @@ export function buildGroupedRosterSections(
 ): ReadonlyArray<RosterGroupSection> {
   const needle = query.trim().toLowerCase();
   const active = bots.filter((bot) => bot.archivedAt === null && bot.pinned === false);
+
   const assigned = groups.flatMap((group) => {
     const groupBots = active.filter((bot) => bot.groupId === group.id);
+
     const matchesQuery =
       needle.length === 0 ||
       group.name.toLowerCase().includes(needle) ||
       filterRosterBots(groupBots, query).length > 0;
+
     return groupBots.length > 0 && matchesQuery
       ? [{ id: group.id, name: group.name, bots: groupBots }]
       : [];
   });
+
   const unassigned = active.filter((bot) => bot.groupId === null);
   const visibleUnassigned = needle.length === 0 ? unassigned : filterRosterBots(unassigned, query);
+
   return [
     ...assigned,
     ...(visibleUnassigned.length > 0
@@ -318,6 +359,7 @@ export function buildGroupedRosterSections(
 }
 
 type FormatDate = (value: Date, options: Intl.DateTimeFormatOptions) => string;
+
 const browserFormatDate: FormatDate = (value, options) =>
   new Intl.DateTimeFormat(undefined, options).format(value);
 
@@ -334,6 +376,7 @@ export function formatRosterTimestamp(
   formatDate: FormatDate = browserFormatDate,
 ): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
 
   const now = new Date(nowMs);
@@ -342,8 +385,11 @@ export function formatRosterTimestamp(
   const dayDiff = Math.round((startOfToday - startOfMessageDay) / 86_400_000);
 
   if (dayDiff <= 0) return formatShortTimestamp(isoDate, timestampFormat);
+
   if (dayDiff === 1) return t("Yesterday");
+
   if (dayDiff < 7) return formatDate(date, { weekday: "short" });
+
   return date.getFullYear() === now.getFullYear()
     ? formatDate(date, { month: "numeric", day: "numeric" })
     : formatDate(date, { month: "numeric", day: "numeric", year: "numeric" });
@@ -373,8 +419,11 @@ export type RosterChatTarget = {
  */
 export function parseChatPath(pathname: string): RosterChatTarget | null {
   const segments = pathname.split("/").filter((segment) => segment.length > 0);
+
   if (segments.length !== 2) return null;
+
   if (NON_CHAT_ROUTE_PREFIXES.has(segments[0]!)) return null;
+
   return { kind: "thread", environmentId: segments[0]!, threadId: segments[1]! };
 }
 

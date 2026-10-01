@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 const VIEWPORT_MARGIN = 8;
+
 const MIN_WIDTH = 280;
+
 const MIN_HEIGHT = 220;
 
 /**
@@ -24,6 +26,7 @@ export function useThemeEditorGeometry({
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
+
   const resizeStartRef = useRef<{
     pointerX: number;
     pointerY: number;
@@ -37,6 +40,7 @@ export function useThemeEditorGeometry({
 
   useEffect(() => {
     if (!open) return;
+
     // A panel sized wider than the window can no longer be clamped back into
     // view by position alone -- its right edge (close, minimize, the grip)
     // stays off screen. So the size shrinks to fit first, then the position
@@ -54,11 +58,13 @@ export function useThemeEditorGeometry({
           MIN_HEIGHT,
           Math.min(current.height, window.innerHeight - VIEWPORT_MARGIN * 2),
         );
+
         return { width: clampedWidth, height: clampedHeight };
       });
       setPosition((current) => {
         if (!current) return current;
         const clamped = clampPanelPosition(panelRef.current, current.x, current.y, clampedWidth);
+
         // Dragging may park the panel with only its header showing, but a
         // window resize should pull the whole thing back into view when it
         // fits -- otherwise the grip ends up below the fold. Minimized, the
@@ -67,11 +73,15 @@ export function useThemeEditorGeometry({
         const height = isMinimized
           ? (panelRef.current?.offsetHeight ?? 0)
           : (clampedHeight ?? panelRef.current?.offsetHeight ?? 0);
+
         const maxY = Math.max(VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN);
+
         return { x: clamped.x, y: Math.min(clamped.y, maxY) };
       });
     };
+
     window.addEventListener("resize", clamp);
+
     return () => window.removeEventListener("resize", clamp);
   }, [isMinimized, open]);
 
@@ -79,6 +89,7 @@ export function useThemeEditorGeometry({
     // Buttons in the header keep their own behavior.
     if (event.target instanceof Element && event.target.closest("button, input, a")) return;
     const rect = panelRef.current?.getBoundingClientRect();
+
     if (!rect) return;
     dragOffsetRef.current = { dx: event.clientX - rect.x, dy: event.clientY - rect.y };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -86,6 +97,7 @@ export function useThemeEditorGeometry({
 
   const handleDragPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const offset = dragOffsetRef.current;
+
     if (!offset) return;
     setPosition(
       clampPanelPosition(panelRef.current, event.clientX - offset.dx, event.clientY - offset.dy),
@@ -98,8 +110,10 @@ export function useThemeEditorGeometry({
 
   const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = panelRef.current?.getBoundingClientRect();
+
     if (!rect) return;
     event.preventDefault();
+
     // The grip drags the bottom-right corner, so the top-left must hold
     // still; the default parking spot is anchored bottom-right and would
     // slide, so it converts to an explicit position first.
@@ -117,6 +131,7 @@ export function useThemeEditorGeometry({
 
   const handleResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = resizeStartRef.current;
+
     if (!start) return;
     // Grow only into the space right of and below the panel's own corner,
     // otherwise a panel parked away from the top-left pushes its far edges
@@ -164,6 +179,7 @@ function clampPanelPosition(
   // The caller passes a width when it has just shrunk the panel: the DOM
   // still reports the old one until React commits.
   const width = widthOverride ?? panel?.offsetWidth ?? 0;
+
   return {
     x: Math.min(
       Math.max(x, VIEWPORT_MARGIN),

@@ -48,6 +48,7 @@ export function ProviderMark({
   readonly className: string;
 }) {
   const Mark = PROVIDER_PRESENTATION[provider].mark;
+
   return <Mark className={cn("shrink-0", className)} aria-hidden />;
 }
 
@@ -76,9 +77,11 @@ export function UsageCoverageNotice({
   readonly staleEnvironments: readonly string[];
 }) {
   const failed = environments.filter((environment) => environment.error !== null);
+
   const stale = environments.filter((environment) =>
     staleEnvironments.includes(environment.environmentId),
   );
+
   if (failed.length === 0 && stale.length === 0 && duplicateSources.length === 0) {
     return null;
   }
@@ -116,6 +119,7 @@ export function UsageDeviceStrip({
   const scanning = environments.filter(
     (environment) => environment.summary === null && environment.error === null,
   );
+
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border border-border px-3 py-2 text-xs">
       {environments.map((environment) => {
@@ -130,6 +134,7 @@ export function UsageDeviceStrip({
             </span>
           );
         }
+
         if (environment.error !== null) {
           return (
             <span
@@ -141,6 +146,7 @@ export function UsageDeviceStrip({
             </span>
           );
         }
+
         return (
           <span
             key={environment.environmentId}

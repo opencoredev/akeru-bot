@@ -51,8 +51,11 @@ function isKeybindingFilter(value: unknown): value is KeybindingFilter {
 
 function emptyStateMessage(filter: KeybindingFilter, query: string, t: Translate): string {
   if (query.trim().length > 0) return t("No shortcuts match “{query}”.", { query: query.trim() });
+
   if (filter === "customized") return t("You haven't changed any shortcuts yet.");
+
   if (filter === "conflicts") return t("No shortcuts share keys. Nothing to fix.");
+
   return t("No shortcuts yet.");
 }
 
@@ -62,16 +65,20 @@ export function KeybindingsSettingsPanel() {
   const keybindingsConfigPath = useAtomValue(primaryServerKeybindingsConfigPathAtom);
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
   const primaryEnvironment = usePrimaryEnvironment();
+
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
+
   const removeKeybindingMutation = useAtomCommand(serverEnvironment.removeKeybinding, {
     reportFailure: false,
   });
+
   const openInPreferredEditor = useOpenInPreferredEditor(
     primaryEnvironment?.environmentId ?? null,
     availableEditors,
   );
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<KeybindingFilter>("all");
   const [seriesExpansion, setSeriesExpansion] = useState<Readonly<Record<string, boolean>>>({});
@@ -83,9 +90,11 @@ export function KeybindingsSettingsPanel() {
   const summary = useMemo(() => summarizeKeybindings(allRows), [allRows]);
   const commandOptions = useMemo(() => buildKeybindingCommandOptions(keybindings), [keybindings]);
   const whenVariables = useMemo(() => buildWhenVariableOptions(), []);
+
   // Once the last conflict is fixed the Conflicts option disappears, so fall back to All.
   const visibleFilter: KeybindingFilter =
     filter === "conflicts" && summary.conflicts === 0 ? "all" : filter;
+
   const groups = useMemo(() => buildKeybindingGroups(rows, visibleFilter), [rows, visibleFilter]);
   // Narrowed views open numbered series so matching steps are visible.
   const seriesExpandedByDefault = visibleFilter !== "all" || query.trim().length > 0;
@@ -93,9 +102,11 @@ export function KeybindingsSettingsPanel() {
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const isMod = event.metaKey || event.ctrlKey;
+
       if (!isMod || event.altKey || event.key.toLowerCase() !== "f") return;
 
       const target = event.target;
+
       if (
         target !== searchInputRef.current &&
         target instanceof HTMLElement &&
@@ -108,7 +119,9 @@ export function KeybindingsSettingsPanel() {
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
     };
+
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
@@ -116,9 +129,11 @@ export function KeybindingsSettingsPanel() {
     if (!keybindingsConfigPath) return;
     void (async () => {
       const result = await openInPreferredEditor(keybindingsConfigPath);
+
       if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
         return;
       }
+
       const error = squashAtomCommandFailure(result);
       toastManager.add({
         title: t("Unable to open keybindings file"),
@@ -133,22 +148,28 @@ export function KeybindingsSettingsPanel() {
     (input: ServerUpsertKeybindingInput) => {
       if (!primaryEnvironment) return;
       setSavingCommand(input.command);
+
       const payload: ServerUpsertKeybindingInput = {
         command: input.command,
         key: input.key.trim(),
         ...(input.when?.trim() ? { when: input.when.trim() } : {}),
         ...(input.replace ? { replace: input.replace } : {}),
       };
+
       void (async () => {
         const result = await upsertKeybinding({
           environmentId: primaryEnvironment.environmentId,
           input: payload,
         });
+
         setSavingCommand(null);
+
         if (result._tag === "Success") {
           setIsAddingBinding(false);
+
           return;
         }
+
         if (!isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           toastManager.add({
@@ -172,7 +193,9 @@ export function KeybindingsSettingsPanel() {
           environmentId: primaryEnvironment.environmentId,
           input: rowKeybindingTarget(row),
         });
+
         setSavingCommand(null);
+
         if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           toastManager.add({
@@ -283,17 +306,20 @@ export function KeybindingsSettingsPanel() {
                 value={[visibleFilter]}
                 onValueChange={(next) => {
                   const value = next[0];
+
                   if (isKeybindingFilter(value)) setFilter(value);
                 }}
               >
                 {(["all", "customized", "conflicts"] as const).flatMap((option) => {
                   if (option === "conflicts" && summary.conflicts === 0) return [];
+
                   const count =
                     option === "customized"
                       ? summary.customized
                       : option === "conflicts"
                         ? summary.conflicts
                         : null;
+
                   return (
                     <ToggleGroupItem key={option} value={option} size="keybinding-filter">
                       {t(FILTER_LABELS[option])}
@@ -370,6 +396,7 @@ export function KeybindingsSettingsPanel() {
                   if (item.type === "row") return renderRow(item.row);
                   const { series } = item;
                   const expanded = seriesExpansion[series.id] ?? seriesExpandedByDefault;
+
                   return (
                     <KeybindingSeriesItem
                       key={series.id}

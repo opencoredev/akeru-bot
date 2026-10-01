@@ -15,11 +15,14 @@ vi.mock("@tanstack/react-router", () => ({
     select({ pathname: "/settings/appearance", hash: "" }),
   useNavigate: () => () => undefined,
 }));
+
 // Every atom read resolves to "no server data yet".
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => undefined }));
+
 vi.mock("../../hooks/useSettings", async (importOriginal) => {
   const select = (selector?: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => unknown) =>
     selector ? selector(DEFAULT_UNIFIED_SETTINGS) : DEFAULT_UNIFIED_SETTINGS;
+
   return {
     ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
     usePrimarySettings: select,
@@ -28,15 +31,18 @@ vi.mock("../../hooks/useSettings", async (importOriginal) => {
     useUpdateEnvironmentSettings: () => () => undefined,
   };
 });
+
 vi.mock("../../settingsDialogStore", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../settingsDialogStore")>()),
   useSettingsEnvironmentId: () => environment.id,
 }));
+
 vi.mock("../../state/environments", () => ({
   useEnvironment: () => null,
   usePrimaryEnvironment: () => null,
   usePrimaryEnvironmentId: () => null,
 }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({
     data: undefined,
@@ -45,9 +51,13 @@ vi.mock("../../state/query", () => ({
     refresh: () => undefined,
   }),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => () => undefined }));
+
 vi.mock("../chat/ProviderModelPicker", () => ({ ProviderModelPicker: () => null }));
+
 vi.mock("../chat/TraitsPicker", () => ({ TraitsPicker: () => null }));
+
 // Font discovery reads a browser-only store; rows fall back to the plain family input.
 vi.mock("./FontFamilyPicker", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./FontFamilyPicker")>()),
@@ -65,6 +75,7 @@ import {
 } from "./SettingsPanels";
 
 const zhCNCatalog = await catalogRegistry["zh-CN"]!();
+
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
 
 function renderInChinese(children: ReactNode) {
@@ -81,6 +92,7 @@ function expectTranslated(
   english: ReadonlyArray<string>,
 ) {
   for (const label of chinese) expect(html).toContain(label);
+
   for (const label of english) expect(html).not.toContain(label);
 }
 

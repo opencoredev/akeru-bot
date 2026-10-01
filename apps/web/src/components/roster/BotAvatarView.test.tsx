@@ -20,6 +20,7 @@ describe("BotAvatarView", () => {
 
   it("gives every avatar its own mask", () => {
     const avatar = { kind: "blob", shape: "circle", color: "#2E8EFF" } as const;
+
     const markup = renderToStaticMarkup(
       <>
         <BotAvatarView name="A" avatar={avatar} />
@@ -45,9 +46,11 @@ describe("BotAvatarView", () => {
     const avatar = { kind: "blob", shape: "square", color: "#5B7FD4" } as const;
     const eyes = (markup: string) => [...markup.matchAll(/<rect x="-4.2"[^>]*>/g)].map((m) => m[0]);
     const idle = renderToStaticMarkup(<BotAvatarView name="Akeru" state="idle" avatar={avatar} />);
+
     const working = renderToStaticMarkup(
       <BotAvatarView name="Akeru" state="working" avatar={avatar} />,
     );
+
     const waiting = renderToStaticMarkup(
       <BotAvatarView name="Akeru" state="needs-you" avatar={avatar} />,
     );
@@ -63,6 +66,7 @@ describe("BotAvatarView", () => {
     const white = renderToStaticMarkup(
       <BotAvatarView name="Dew" avatar={{ kind: "blob", shape: "drop", color: "#FFFFFF" }} />,
     );
+
     const blue = renderToStaticMarkup(
       <BotAvatarView name="Rin" avatar={{ kind: "blob", shape: "drop", color: "#1FBFAE" }} />,
     );

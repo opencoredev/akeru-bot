@@ -32,10 +32,12 @@ type FontEnumerationState =
 let enumerationState: FontEnumerationState = supportsFontEnumeration()
   ? { status: "unknown" }
   : { status: "unavailable" };
+
 const enumerationListeners = new Set<() => void>();
 
 function subscribeToEnumeration(listener: () => void): () => void {
   enumerationListeners.add(listener);
+
   return () => enumerationListeners.delete(listener);
 }
 
@@ -54,6 +56,7 @@ export function discoverInstalledFonts(): void {
         ? { status: "granted", families: result.families }
         : { status: "unavailable" };
     enumerationLoad = null;
+
     for (const listener of enumerationListeners) listener();
   });
 }
@@ -72,6 +75,7 @@ function probeAlreadyGrantedPermission(): void {
   if (grantedProbeStarted || enumerationState.status !== "unknown") return;
   grantedProbeStarted = true;
   const permissions = typeof navigator !== "undefined" ? navigator.permissions : undefined;
+
   if (typeof permissions?.query !== "function") return;
   permissions.query({ name: "local-fonts" as PermissionName }).then(
     (status) => {
@@ -93,6 +97,7 @@ function probeAlreadyGrantedPermission(): void {
  */
 export function useFontEnumeration(): FontEnumerationState {
   useEffect(probeAlreadyGrantedPermission, []);
+
   return useSyncExternalStore(subscribeToEnumeration, readEnumerationState);
 }
 
@@ -135,23 +140,27 @@ export function FontFamilyPicker({
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
+
     if (nextOpen) setQuery("");
   };
 
   const families = useMemo(() => {
     if (enumeration.status !== "granted") return [];
+
     return requireMonospace ? enumeration.families.filter(isMonospaceFamily) : enumeration.families;
   }, [enumeration, requireMonospace]);
 
   const items = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase();
     const result: string[] = [];
+
     if (trimmedQuery.length === 0) result.push(DEFAULT_FONT_VALUE);
     result.push(
       ...families.filter(
         (family) => trimmedQuery.length === 0 || family.toLowerCase().includes(trimmedQuery),
       ),
     );
+
     return result;
   }, [query, families]);
 
@@ -165,6 +174,7 @@ export function FontFamilyPicker({
   const renderItem = (item: string, index: number) => {
     const isDefault = item === DEFAULT_FONT_VALUE;
     const family = isDefault ? defaultFamily : item;
+
     return (
       <ComboboxItem hideIndicator index={index} key={item} value={item}>
         <div className="flex w-full min-w-0 items-center justify-between gap-2">

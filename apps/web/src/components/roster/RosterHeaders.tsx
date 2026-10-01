@@ -28,6 +28,7 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
   onNewGroup: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <SidebarHeader
       className={cn(
@@ -91,6 +92,7 @@ export function RosterPanelHeader({
   onSearch: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <SidebarHeader
       className={cn(
@@ -158,6 +160,7 @@ export function RosterRailCreateMenu({
   onNewGroup: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <div className="hidden shrink-0 flex-col items-center pb-1 group-data-[collapsible=icon]:flex">
       <Menu>

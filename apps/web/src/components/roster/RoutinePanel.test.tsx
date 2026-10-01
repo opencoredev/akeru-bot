@@ -107,6 +107,7 @@ describe("RoutinePanel", () => {
       "{span} ago": "{span}前",
       Failed: "失败",
     });
+
     expect(
       routineScheduleLabel(
         { frequency: "weekly", time: "14:00", timezone: "Europe/London", weekday: 5 },
@@ -146,6 +147,7 @@ describe("RoutinePanel", () => {
       ...run,
       id: `run-${index}`,
     }));
+
     expect(boundedRunHistory(history).map((item) => item.id)).toEqual([
       "run-0",
       "run-1",
@@ -210,6 +212,7 @@ describe("RoutinePanel", () => {
     const markup = renderToStaticMarkup(
       <RoutinePanel botName="Rivet" status="ready" routines={[]} createNeedsChat />,
     );
+
     expect(markup).not.toContain("New routine");
     expect(markup).toContain(
       "Routines report to your chat with Rivet. Send Rivet a message to start the chat, then add a routine here.",
@@ -219,6 +222,7 @@ describe("RoutinePanel", () => {
     const ready = renderToStaticMarkup(
       <RoutinePanel botName="Scout" status="ready" routines={[]} onCreate={() => {}} />,
     );
+
     expect(ready).toContain("New routine");
     expect(ready).toContain("None yet. Ask Scout to create one.");
   });
@@ -227,6 +231,7 @@ describe("RoutinePanel", () => {
     const markup = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[routine]} onCreate={() => {}} />,
     );
+
     expect(markup).toContain('aria-label="New routine"');
   });
 
@@ -264,6 +269,7 @@ describe("RoutinePanel", () => {
         onSetEnabled={() => undefined}
       />,
     );
+
     expect(paused).toContain(">Paused</span>");
     expect(paused).toContain(">Resume</button>");
     expect(paused).not.toContain(">Enable</button>");
@@ -278,6 +284,7 @@ describe("RoutinePanel", () => {
         onSetEnabled={() => undefined}
       />,
     );
+
     expect(off).toContain(">Off</span>");
     expect(off).toContain(">Enable</button>");
     expect(off).toContain("Off until you turn it back on.");
@@ -291,6 +298,7 @@ describe("RoutinePanel", () => {
         onSetEnabled={() => undefined}
       />,
     );
+
     expect(draft).toContain(">Draft</span>");
     expect(draft).not.toContain(">Enable</button>");
     expect(draft).toContain("Approve its procedure to schedule it.");
@@ -349,6 +357,7 @@ describe("RoutinePanel", () => {
         projectOptions={[{ id: "project-1", name: "Akeru" }]}
       />,
     );
+
     expect(withCreate).toContain("New routine");
     expect(withCreate).toContain("None yet. Ask Akeru to create one.");
     // One muted line and a ghost row, not a centered card with a primary button.
@@ -359,6 +368,7 @@ describe("RoutinePanel", () => {
     const withoutCreate = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[]} />,
     );
+
     expect(withoutCreate).not.toContain("New routine");
     expect(withoutCreate).toContain("None yet. Ask Akeru to create one.");
   });

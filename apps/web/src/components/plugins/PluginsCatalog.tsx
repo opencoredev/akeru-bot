@@ -7,8 +7,11 @@ import { findPluginServer, pluginMcpServerId } from "./pluginRegistry";
 import type { PluginSection } from "./pluginPresentation";
 
 export { ComposioToolkitResults } from "./ComposioToolkitResults";
+
 export { CustomMcpServers, RemovedBuiltinServers } from "./CustomMcpServers";
+
 export { PluginLogoImage } from "./PluginCatalogCards";
+
 export { pluginLabel } from "./pluginLabel";
 
 interface PluginsCatalogProps {
@@ -35,6 +38,7 @@ export function PluginsCatalog({
 }: PluginsCatalogProps) {
   const { t } = useI18n();
   const resultCount = sections.reduce((count, section) => count + section.plugins.length, 0);
+
   if (resultCount === 0) {
     return (
       <div className="py-16 text-center">
@@ -49,6 +53,7 @@ export function PluginsCatalog({
       </div>
     );
   }
+
   return (
     <div className="space-y-10">
       {sections.map((section) => (
@@ -60,6 +65,7 @@ export function PluginsCatalog({
         >
           {section.plugins.map((plugin) => {
             const server = findPluginServer(plugin, servers);
+
             return (
               <PluginCard
                 key={`${section.title}:${plugin.id}`}

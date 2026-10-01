@@ -31,11 +31,13 @@ describe("button geometry tokens", () => {
 
   it("owns shared compact and micro control geometry", () => {
     const compact = renderToStaticMarkup(<Button size="compact">Condition</Button>);
+
     const microLabel = renderToStaticMarkup(
       <Button size="micro">
         <FlaskConicalIcon /> Run
       </Button>,
     );
+
     const micro = renderToStaticMarkup(
       <Button size="icon-micro" variant="ghost-muted" aria-label="Add action">
         <span>+</span>

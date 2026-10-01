@@ -182,6 +182,7 @@ export const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<ThemeEditorRoleGroup> = [
 ];
 
 const THEME_EDITOR_COLOR_FAMILIES = THEME_EDITOR_ROLE_GROUPS.flatMap((group) => group.families);
+
 const THEME_EDITOR_COLOR_FAMILY_BY_ROLE = new Map(
   THEME_EDITOR_COLOR_FAMILIES.flatMap((family) =>
     family.roles.map((role) => [role, family] as const),
@@ -217,6 +218,7 @@ export function getManagedEditorColors(
   colors: ThemeColors,
 ): ThemeColors {
   const defaults = getStandardThemeColors(appearance);
+
   // The editor keeps the user's exact picks and derives the rest through the
   // perceptual vivid engine, so a two-color theme carries its own identity.
   return createVividThemeColors(
@@ -229,6 +231,7 @@ export function getManagedEditorColors(
 /** Groups narrowed to families whose label or member role labels match the query. */
 export function filterThemeEditorRoleGroups(query: string): ReadonlyArray<ThemeEditorRoleGroup> {
   const normalizedQuery = query.trim().toLowerCase();
+
   return THEME_EDITOR_ROLE_GROUPS.flatMap((group) => {
     const families = group.families.filter(
       (family) =>
@@ -238,6 +241,7 @@ export function filterThemeEditorRoleGroups(query: string): ReadonlyArray<ThemeE
           .toLowerCase()
           .includes(normalizedQuery),
     );
+
     return families.length > 0 ? [{ ...group, families }] : [];
   });
 }

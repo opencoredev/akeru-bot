@@ -17,6 +17,7 @@ export const HISTORY_WINDOWS = [
 
 // oxlint-disable-next-line shadcn/no-raw-colors -- I/O reads retain their nominal chart-series color.
 const IO_READ_COLOR = "bg-sky-500/70";
+
 // oxlint-disable-next-line shadcn/no-raw-colors -- I/O writes retain their nominal chart-series color.
 const IO_WRITE_COLOR = "bg-amber-500/80";
 
@@ -74,16 +75,19 @@ export function ResourceHistoryChart({
             max: maxCpu,
             minimumVisiblePercent: 2,
           });
+
           const readHeight = resourceHistoryBarHeight({
             value: bucket.ioReadBytes,
             max: maxIo,
             minimumVisiblePercent: 1,
           });
+
           const writeHeight = resourceHistoryBarHeight({
             value: bucket.ioWriteBytes,
             max: maxIo,
             minimumVisiblePercent: 1,
           });
+
           return (
             <Tooltip key={DateTime.formatIso(bucket.startedAt)}>
               <TooltipTrigger

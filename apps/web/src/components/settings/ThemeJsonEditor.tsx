@@ -23,6 +23,7 @@ function escapeJsonHtml(value: string): string {
 function highlightJson(value: string): string {
   const tokenPattern =
     /"(?:\\.|[^"\\])*"|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
+
   let highlighted = "";
   let cursor = 0;
 
@@ -32,6 +33,7 @@ function highlightJson(value: string): string {
     highlighted += escapeJsonHtml(value.slice(cursor, index));
 
     let tokenClass = "text-[var(--app-theme-secondary-foreground,var(--color-amber-600))]";
+
     if (token.startsWith('"')) {
       tokenClass = /^\s*:/.test(value.slice(index + token.length))
         ? "text-[var(--app-theme-accent,var(--color-blue-600))]"
@@ -39,6 +41,7 @@ function highlightJson(value: string): string {
     } else if (token === "true" || token === "false" || token === "null") {
       tokenClass = "text-[var(--app-theme-accent-surface-foreground,var(--color-violet-600))]";
     }
+
     highlighted += `<span class="${tokenClass}">${escapeJsonHtml(token)}</span>`;
     cursor = index + token.length;
   }
@@ -58,6 +61,7 @@ export function ThemeJsonEditor({
 }) {
   const highlightRef = useRef<HTMLPreElement>(null);
   const isPlainText = value.length > MAX_HIGHLIGHTED_JSON_LENGTH;
+
   const highlightedJson = useMemo(
     () => (value.length > MAX_HIGHLIGHTED_JSON_LENGTH ? "" : highlightJson(value)),
     [value],
@@ -65,6 +69,7 @@ export function ThemeJsonEditor({
 
   const syncScroll = useCallback((event: UIEvent<HTMLTextAreaElement>) => {
     const highlightElement = highlightRef.current;
+
     if (!highlightElement) return;
     highlightElement.scrollTop = event.currentTarget.scrollTop;
     highlightElement.scrollLeft = event.currentTarget.scrollLeft;

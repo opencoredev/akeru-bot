@@ -22,6 +22,7 @@ export function ThemeWireframePane({
   clip?: "left" | "right" | undefined;
 }) {
   const line = "rgb(127 127 127 / 0.25)";
+
   return (
     <span
       className="absolute inset-0"

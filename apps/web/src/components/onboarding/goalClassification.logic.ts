@@ -15,9 +15,11 @@ function wordPattern(word: string): RegExp {
 
 function countKeywords(answer: string, keywords: readonly string[]): number {
   let matches = 0;
+
   for (const keyword of keywords) {
     if (wordPattern(keyword).test(answer)) matches += 1;
   }
+
   return matches;
 }
 
@@ -31,13 +33,16 @@ export function classifyDesktopOnboardingGoal(answer: string): GoalTopicId {
   const normalized = answer.toLowerCase();
   let best: GoalTopicId = "general";
   let bestScore = 0;
+
   for (const topic of GOAL_TOPICS) {
     const score = countKeywords(normalized, topic.keywords);
+
     if (score > bestScore) {
       best = topic.id;
       bestScore = score;
     }
   }
+
   return best;
 }
 
@@ -56,12 +61,15 @@ function mentionsIn(
   t: OnboardingTranslate,
 ): readonly string[] {
   const found: Array<{ readonly label: string; readonly at: number }> = [];
+
   for (const signal of signals) {
     const at = answer.search(wordPattern(signal.match));
     const label = signal.label(t);
+
     if (at === -1 || found.some((entry) => entry.label === label)) continue;
     found.push({ label, at });
   }
+
   return found
     .sort((left, right) => left.at - right.at)
     .slice(0, MAX_MENTIONS)
@@ -70,8 +78,11 @@ function mentionsIn(
 
 function joinMentions(mentions: readonly string[], t: OnboardingTranslate): string | null {
   const [first, second] = mentions;
+
   if (first === undefined) return null;
+
   if (second === undefined) return first;
+
   return t("{first} and {second}", { first, second });
 }
 
@@ -104,6 +115,7 @@ export function desktopOnboardingGoalPlan(
   const mentions = mentionsIn(answer, topic.signals, t);
   const focus = joinMentions(mentions, t);
   const lead = focus === null ? null : topic.lead.focused?.(t, focus);
+
   return {
     topic: id,
     steps: [lead ?? topic.lead.plain(t), ...topic.rest(t)],

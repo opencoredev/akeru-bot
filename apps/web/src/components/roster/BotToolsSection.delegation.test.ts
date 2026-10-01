@@ -8,6 +8,7 @@ vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
   createPortal: (children: unknown) => children,
 }));
+
 vi.stubGlobal("document", { body: null });
 
 const render = (canDelegate?: boolean) =>

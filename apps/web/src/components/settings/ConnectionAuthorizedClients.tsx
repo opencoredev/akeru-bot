@@ -141,10 +141,12 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   onRevoke,
 }: PairingLinkListRowProps) {
   const nowMs = useRelativeTimeTick(1_000);
+
   const expiresAtMs = useMemo(
     () => new Date(pairingLink.expiresAt).getTime(),
     [pairingLink.expiresAt],
   );
+
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
   const [isQrPanelOpen, setIsQrPanelOpen] = useState(false);
   // Ephemeral per-row choice of which endpoint the QR encodes (AdvertisedEndpoint.id);
@@ -156,10 +158,13 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     () => resolveCurrentOriginPairingUrl(pairingLink.credential),
     [pairingLink.credential],
   );
+
   const endpointPairingUrl = useMemo(() => {
     const endpoint = selectPairingEndpoint(endpoints, defaultEndpointKey);
+
     return endpoint ? resolveAdvertisedEndpointPairingUrl(endpoint, pairingLink.credential) : null;
   }, [defaultEndpointKey, endpoints, pairingLink.credential]);
+
   const endpointCopyOptions = useMemo(() => {
     const options: Array<{
       readonly id: string;
@@ -169,10 +174,12 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       readonly detail: string;
       readonly qrShareable: boolean;
     }> = [];
+
     for (const endpoint of endpoints) {
       if (endpoint.status === "unavailable") {
         continue;
       }
+
       const url = resolveAdvertisedEndpointPairingUrl(endpoint, pairingLink.credential);
       options.push({
         id: endpoint.id,
@@ -183,8 +190,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         qrShareable: isQrShareableEndpoint(endpoint),
       });
     }
+
     return options;
   }, [endpoints, pairingLink.credential]);
+
   const shareablePairingUrl =
     endpointPairingUrl ??
     (endpointUrl != null && endpointUrl !== ""
@@ -192,14 +201,17 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl);
+
   // Value of the copy attempt that last failed. The clipboard-failure reveal
   // dialog must show exactly what failed to copy, not the row's default URL.
   const [failedCopyValue, setFailedCopyValue] = useState<string | null>(null);
   const revealValue = failedCopyValue ?? shareablePairingUrl ?? pairingLink.credential;
   const isRevealValueUrl = revealValue !== pairingLink.credential;
+
   // Never render a QR for a loopback URL, even in the manual-copy fallback.
   const isRevealValueQrShareable =
     endpointCopyOptions.find((option) => option.url === revealValue)?.qrShareable ?? true;
+
   const canCopyToClipboard =
     typeof window !== "undefined" &&
     window.isSecureContext &&
@@ -252,16 +264,19 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const expiresAbsolute = formatAccessTimestamp(pairingLink.expiresAt);
 
   const primaryLabel = pairingLink.label ?? "Pairing link";
+
   const selectedQrOption = selectQrEndpointOption(
     endpointCopyOptions,
     qrEndpointId,
     defaultEndpointKey,
   );
+
   const qrPairingUrl = selectedQrOption?.url ?? shareablePairingUrl;
   // With no endpoint list the fallback is never loopback: selectPairingEndpoint
   // skips loopback and the current-origin fallback is guarded by
   // isLoopbackHostname, so only an explicit loopback selection hides the QR.
   const canRenderQrForSelection = selectedQrOption?.qrShareable ?? true;
+
   if (expiresAtMs <= nowMs) {
     return null;
   }
@@ -310,6 +325,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             open={isRevealDialogOpen}
             onOpenChange={(open) => {
               setIsRevealDialogOpen(open);
+
               if (!open) setFailedCopyValue(null);
             }}
           >
@@ -391,6 +407,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 <p className="text-[11px] text-muted-foreground/70">Reach this machine via</p>
                 {endpointCopyOptions.map((option) => {
                   const isSelected = option.id === selectedQrOption?.id;
+
                   return (
                     <button
                       key={option.id}
@@ -486,6 +503,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
   const nowMs = useRelativeTimeTick(1_000);
   const isLive = clientSession.current || clientSession.connected;
   const lastConnectedAt = clientSession.lastConnectedAt;
+
   const statusTooltip = isLive
     ? lastConnectedAt
       ? `Connected for ${formatElapsedDurationLabel(lastConnectedAt, nowMs)}`
@@ -493,6 +511,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
     : lastConnectedAt
       ? `Last connected at ${formatAccessTimestamp(lastConnectedAt)}`
       : "Not connected yet.";
+
   const deviceInfoBits = [
     clientSession.client.deviceType !== "unknown"
       ? clientSession.client.deviceType[0]?.toUpperCase() + clientSession.client.deviceType.slice(1)
@@ -501,6 +520,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
     clientSession.client.browser ?? null,
     clientSession.client.ipAddress ?? null,
   ].filter((value): value is string => value !== null);
+
   const primaryLabel =
     clientSession.client.label ??
     ([clientSession.client.os, clientSession.client.browser].filter(Boolean).join(" · ") ||
@@ -563,13 +583,16 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
 }: AuthorizedClientsHeaderActionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pairingLabel, setPairingLabel] = useState("");
+
   const [pairingScopes, setPairingScopes] = useState<ReadonlyArray<AuthEnvironmentScope>>([
     ...AuthStandardClientScopes,
   ]);
+
   const [isCreatingPairingLink, setIsCreatingPairingLink] = useState(false);
 
   const handleCreatePairingLink = useCallback(async () => {
     setIsCreatingPairingLink(true);
+
     try {
       await createServerPairingCredential({ label: pairingLabel, scopes: pairingScopes });
       setPairingLabel("");
@@ -611,6 +634,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
+
           if (!open) {
             setPairingLabel("");
             setPairingScopes([...AuthStandardClientScopes]);

@@ -149,6 +149,7 @@ describe("bot settings entry points", () => {
 
   it("does not add a permanent settings section for bots", () => {
     const settingsStore = read("../../settingsDialogStore.ts");
+
     const sections = /SETTINGS_SECTIONS = \[(?<body>[\s\S]*?)\] as const;/u.exec(settingsStore)
       ?.groups?.body;
 

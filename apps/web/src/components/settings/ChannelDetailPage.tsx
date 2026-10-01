@@ -52,9 +52,11 @@ export function ChannelDetailPage({ provider }: { readonly provider: ChannelProv
   const meta = channelProviderMeta(provider);
   const allowed = settings.access === "allowed";
   const connections = settings.connections.filter((connection) => connection.provider === provider);
+
   const state = allowed
     ? channelState(provider, settings.connections, settings.bots, settings.liveProjects, t, plural)
     : { tone: "neutral" as const, label: t("Unavailable") };
+
   const openSetup = (next: ChannelReplacement | null) => {
     setReplacing(next);
     setSetupOpen(true);
@@ -140,16 +142,19 @@ export function ChannelConnectionRow({
   const connectionBusy = settings.busyConnectionId === connection.id;
   const locked = settings.busy || connectionBusy;
   const needsProject = binding ? channelBindingNeedsProject(binding, liveProjects) : false;
+
   const projectId = channelPickerProjectId({
     selected: pickedProjectId,
     binding,
     hint: settings.projectHint(bot?.id ?? null),
     liveProjects,
   });
+
   const canMove =
     bot !== undefined &&
     binding !== undefined &&
     canChangeChannelProject(binding, projectId, liveProjects);
+
   const repairAction = bot && binding ? channelRepairAction(binding, liveProjects) : "none";
   const showProviderLink = connection.managementUrl && repairAction !== "check-delivery";
   const canDisconnect = bot !== undefined && binding?.status === "connected";
@@ -229,14 +234,19 @@ export function ChannelConnectionRow({
             value={bot?.id ?? UNASSIGNED}
             onValueChange={(next) => {
               if (!next) return;
+
               if (next === UNASSIGNED) {
                 void settings.updateAssignment(connection, next, null);
+
                 return;
               }
+
               const selectedProject = liveProjects.some((project) => project.id === pickedProjectId)
                 ? pickedProjectId
                 : null;
+
               const destinationProject = selectedProject ?? settings.projectHint(BotId.make(next));
+
               if (!destinationProject) return;
               void settings.updateAssignment(connection, next, destinationProject);
             }}
@@ -292,6 +302,7 @@ export function ChannelConnectionRow({
               } else {
                 // A disconnected channel starts in the project the picker shows.
                 const target = channelReconnectProject(binding, projectId, liveProjects);
+
                 if (target) void settings.moveToProject(connection, bot.id, target);
                 else void settings.reconnectConnection(connection, bot.id);
               }

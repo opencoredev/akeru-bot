@@ -21,6 +21,7 @@ export function BotIdentityFields({
   readonly onChangeAvatar: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <SettingsSection id="identity" title={t("Identity")}>
       <SettingsRow

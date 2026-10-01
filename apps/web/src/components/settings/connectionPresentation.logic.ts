@@ -21,14 +21,17 @@ const accessTimestampFormatter = new Intl.DateTimeFormat(undefined, {
 
 export function formatAccessTimestamp(value: string): string {
   const parsed = new Date(value);
+
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
+
   return accessTimestampFormatter.format(parsed);
 }
 
 export function formatDesktopSshTarget(target: DesktopSshEnvironmentTarget): string {
   const authority = target.username ? `${target.username}@${target.hostname}` : target.hostname;
+
   return target.port ? `${authority}:${target.port}` : authority;
 }
 
@@ -38,6 +41,7 @@ export function parseManualDesktopSshTarget(input: {
   readonly port: string;
 }): DesktopSshEnvironmentTarget {
   const rawHost = input.host.trim();
+
   if (rawHost.length === 0) {
     throw new Error("SSH host or alias is required.");
   }
@@ -47,22 +51,27 @@ export function parseManualDesktopSshTarget(input: {
   let port: number | null = null;
 
   const atIndex = hostname.lastIndexOf("@");
+
   if (atIndex > 0) {
     const inlineUsername = hostname.slice(0, atIndex).trim();
     hostname = hostname.slice(atIndex + 1).trim();
+
     if (!username && inlineUsername.length > 0) {
       username = inlineUsername;
     }
   }
 
   const bracketedHostMatch = /^\[([^\]]+)\](?::(\d+))?$/u.exec(hostname);
+
   if (bracketedHostMatch) {
     hostname = bracketedHostMatch[1]!.trim();
+
     if (bracketedHostMatch[2]) {
       port = Number.parseInt(bracketedHostMatch[2], 10);
     }
   } else {
     const colonSegments = hostname.split(":");
+
     if (colonSegments.length === 2 && /^\d+$/u.test(colonSegments[1] ?? "")) {
       hostname = colonSegments[0]!.trim();
       port = Number.parseInt(colonSegments[1]!, 10);
@@ -70,6 +79,7 @@ export function parseManualDesktopSshTarget(input: {
   }
 
   const rawPort = input.port.trim();
+
   if (rawPort.length > 0) {
     port = Number.parseInt(rawPort, 10);
   }
@@ -98,27 +108,34 @@ export function parseRemotePairingFields(input: {
   readonly pairingCode: string;
 } {
   const parsedPairingUrl = parsePairingUrlFields(input.host, window.location.origin);
+
   if (parsedPairingUrl) return parsedPairingUrl;
 
   const host = input.host.trim();
   const pairingCode = input.pairingCode.trim();
+
   if (!host) {
     throw new Error("Enter a backend host.");
   }
+
   if (!pairingCode) {
     throw new Error("Enter a pairing code.");
   }
+
   return { host, pairingCode };
 }
 
 export function formatDesktopSshConnectionError(error: unknown): string {
   const fallback = "Failed to connect SSH host.";
   const rawMessage = error instanceof Error ? error.message : fallback;
+
   const withoutIpcPrefix = rawMessage.replace(
     /^Error invoking remote method 'desktop:ensure-ssh-environment':\s*/u,
     "",
   );
+
   const withoutTaggedErrorPrefix = withoutIpcPrefix.replace(/^Ssh[A-Za-z]+Error:\s*/u, "");
+
   return withoutTaggedErrorPrefix.trim() || fallback;
 }
 
@@ -148,9 +165,11 @@ export function sortDesktopClientSessions(sessions: ReadonlyArray<ServerClientSe
     if (left.current !== right.current) {
       return left.current ? -1 : 1;
     }
+
     if (left.connected !== right.connected) {
       return left.connected ? -1 : 1;
     }
+
     return new Date(right.issuedAt).getTime() - new Date(left.issuedAt).getTime();
   });
 }
@@ -182,14 +201,17 @@ export function selectPairingEndpoint(
   defaultEndpointKey?: string | null,
 ): AdvertisedEndpoint | null {
   const availableEndpoints = endpoints.filter((endpoint) => endpoint.status !== "unavailable");
+
   if (defaultEndpointKey) {
     const selectedEndpoint = availableEndpoints.find(
       (endpoint) => endpointDefaultPreferenceKey(endpoint) === defaultEndpointKey,
     );
+
     if (selectedEndpoint) {
       return selectedEndpoint;
     }
   }
+
   return (
     availableEndpoints.find((endpoint) => endpoint.isDefault) ??
     availableEndpoints.find((endpoint) => endpoint.reachability !== "loopback") ??
@@ -206,17 +228,21 @@ export function endpointDefaultPreferenceKey(endpoint: AdvertisedEndpoint): stri
   if (endpoint.id.startsWith("desktop-loopback:")) {
     return "desktop-core:loopback:http";
   }
+
   if (endpoint.id.startsWith("desktop-lan:")) {
     return "desktop-core:lan:http";
   }
+
   if (endpoint.id.startsWith("tailscale-ip:")) {
     return "tailscale:ip:http";
   }
+
   if (isTailscaleHttpsEndpoint(endpoint)) {
     return "tailscale:magicdns:https";
   }
 
   let scheme = "unknown";
+
   try {
     scheme = new URL(endpoint.httpBaseUrl).protocol.replace(/:$/u, "");
   } catch {
@@ -235,6 +261,7 @@ export function resolveAdvertisedEndpointPairingUrl(
 
 export function resolveCurrentOriginPairingUrl(credential: string): string {
   const url = new URL("/pair", window.location.href);
+
   return setPairingTokenOnUrl(url, credential).toString();
 }
 

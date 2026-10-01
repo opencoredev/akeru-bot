@@ -45,6 +45,7 @@ function readFieldAnnotationString(
 ): string | undefined {
   const annotations = readFieldAnnotations(fieldSchema);
   const value = annotations?.[key];
+
   return typeof value === "string" ? value : undefined;
 }
 
@@ -52,6 +53,7 @@ function readProviderSettingsFormAnnotation(
   fieldSchema: ProviderClientDefinition["settingsSchema"]["fields"][string],
 ): ProviderSettingsFormAnnotation {
   const annotation = readFieldAnnotations(fieldSchema)?.providerSettingsForm;
+
   return annotation ?? {};
 }
 
@@ -66,6 +68,7 @@ function readFieldBooleanDefault(
 ): boolean | undefined {
   const decodeDefault = Schema.decodeUnknownOption(fieldSchema as Schema.Decoder<unknown>);
   const decoded = decodeDefault(undefined);
+
   return Option.isSome(decoded) && typeof decoded.value === "boolean" ? decoded.value : undefined;
 }
 
@@ -73,9 +76,11 @@ export function deriveProviderSettingsFields(
   definition: ProviderClientDefinition,
 ): ReadonlyArray<ProviderSettingsFieldModel> {
   const schemaAnnotation = readProviderSettingsFormSchemaAnnotation(definition);
+
   const orderedKeys = new Map(
     (schemaAnnotation.order ?? []).map((key, index) => [key, index] as const),
   );
+
   const orderFallbackOffset = orderedKeys.size;
 
   return Object.keys(definition.settingsSchema.fields)
@@ -89,10 +94,12 @@ export function deriveProviderSettingsFields(
     .flatMap(({ key }) => {
       const fieldSchema = definition.settingsSchema.fields[key]!;
       const formAnnotation = readProviderSettingsFormAnnotation(fieldSchema);
+
       if (formAnnotation.hidden) return [];
 
       const annotatedTitle = readFieldAnnotationString(fieldSchema, "title");
       const annotatedDescription = readFieldAnnotationString(fieldSchema, "description");
+
       return [
         {
           key,
@@ -114,6 +121,7 @@ export function deriveProviderSettingsFields(
 export function readProviderConfigString(config: unknown, key: string): string {
   if (config === null || typeof config !== "object") return "";
   const value = (config as Record<string, unknown>)[key];
+
   return typeof value === "string" ? value : "";
 }
 
@@ -124,6 +132,7 @@ export function readProviderConfigBoolean(
 ): boolean {
   if (config === null || typeof config !== "object") return defaultValue;
   const value = (config as Record<string, unknown>)[key];
+
   return typeof value === "boolean" ? value : defaultValue;
 }
 
@@ -137,20 +146,24 @@ export function nextProviderConfigWithFieldValue(
 
   if (typeof value === "boolean") {
     const emptyBooleanValue = field.defaultBooleanValue ?? false;
+
     if (field.clearWhenEmpty === "omit" && value === emptyBooleanValue) {
       delete base[field.key];
     } else {
       base[field.key] = value;
     }
+
     return Object.keys(base).length > 0 ? base : undefined;
   }
 
   const trimmed = value.trim();
+
   if (field.clearWhenEmpty === "omit" && trimmed.length === 0) {
     delete base[field.key];
   } else {
     base[field.key] = value;
   }
+
   return Object.keys(base).length > 0 ? base : undefined;
 }
 
@@ -169,6 +182,7 @@ function FieldFrame(props: {
   if (props.variant === "card") {
     return <div>{props.children}</div>;
   }
+
   return <div className="grid gap-1.5">{props.children}</div>;
 }
 
@@ -188,11 +202,14 @@ function ProviderSettingsFieldRow({
   onChange,
 }: ProviderSettingsFieldRowProps) {
   const inputId = `${idPrefix}-${field.key}`;
+
   const descriptionClassName =
     variant === "card"
       ? "mt-1 block text-xs text-muted-foreground"
       : "text-[11px] text-muted-foreground";
+
   const label = <span className="text-xs font-medium text-foreground">{field.label}</span>;
+
   const description = field.description ? (
     <span className={descriptionClassName}>{field.description}</span>
   ) : null;
@@ -239,6 +256,7 @@ function ProviderSettingsFieldRow({
   }
 
   const type = field.control === "password" ? "password" : undefined;
+
   return (
     <FieldFrame variant={variant}>
       <label htmlFor={inputId} className={cn(variant === "card" && "block")}>

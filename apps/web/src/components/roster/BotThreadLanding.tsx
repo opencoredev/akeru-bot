@@ -98,6 +98,7 @@ export function BotThreadLanding({
   const rosterLoadState = useRosterLoadState();
   const bot = routedBot.status === "available" ? routedBot.bot : undefined;
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
+
   const {
     instanceEntries,
     selection: stickyEngine,
@@ -105,38 +106,47 @@ export function BotThreadLanding({
     blocked: sendBlocked,
     catalog: engineCatalog,
   } = useBotEngineAvailability(bot?.engine ?? null);
+
   const runtime = useBotThreadRuntime(botId, stickyEngine);
   useMarkChatVisited(runtime.linkedThreadRef);
+
   const newChat = useMemo(
     () => ({ canStart: runtime.canStartNewChat, start: runtime.startNewChat }),
     [runtime.canStartNewChat, runtime.startNewChat],
   );
+
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
     projectId: runtime.defaultProject?.id,
     cwd: runtime.defaultProject?.workspaceRoot,
   });
+
   const engineNoticeId = useId();
+
   const failureContext = botEngineFailureContext(
     stickyEngine,
     instanceEntries,
     runtime.failure?.unavailability,
   );
+
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
   const enableAutoReview = useEnableBotAutoReview();
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+
   const botActivity = useMemo(
     () => deriveBotActivity(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
   );
+
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
   );
+
   const pluginResultsByTurn = useMemo(() => {
     const results = new Map<
       TurnId,
@@ -145,23 +155,29 @@ export function BotThreadLanding({
         readonly result: NonNullable<ReturnType<typeof pluginSearchResultForWorkEntry>>;
       }[]
     >();
+
     for (const entry of deriveWorkLogEntries(activities)) {
       const result = pluginSearchResultForWorkEntry(entry);
+
       if (!result || !entry.turnId) continue;
       const turnResults = results.get(entry.turnId) ?? [];
       turnResults.push({ id: entry.id, result });
       results.set(entry.turnId, turnResults);
     }
+
     return results;
   }, [activities]);
+
   const voiceCall = useVoiceCall();
   const replyPlayback = useOptionalReplyPlayback();
   const presence = useBotPresence(botId);
+
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
@@ -170,16 +186,21 @@ export function BotThreadLanding({
 
   useEffect(() => {
     if (routedBot.status === "loading") return;
+
     if (routedBot.status === "missing") {
       void navigate({ to: "/", replace: true });
+
       return;
     }
+
     useRosterStore.getState().selectBot(botId);
   }, [botId, navigate, routedBot.status]);
 
   const activeUserInput = runtime.pendingUserInputs[0] ?? null;
+
   const waitingForUserInput =
     activeUserInput !== null && !runtime.respondingRequestIds.includes(activeUserInput.requestId);
+
   const working = isBotConversationWorking({
     sending: runtime.sending,
     respondingToUserInput: runtime.respondingRequestIds.length > 0,
@@ -187,35 +208,46 @@ export function BotThreadLanding({
     turnRunning: runtime.latestTurn?.state === "running",
     waitingForUserInput,
   });
+
   const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
+
   const silentRun = runtime.latestTurn?.completedAt
     ? null
     : threadSilentRun(activities, runtime.latestTurn?.turnId);
+
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
+
   const today = useLocalDay();
   const todayLabel = t("Today");
+
   const entries = useMemo(
     () => buildBotConversationEntries(messages, today, todayLabel, locale),
     [messages, today, todayLabel, locale],
   );
+
   const { timelineItems, delegations, waitingOnChildren, olderRoutineNotes } =
     useBotLandingTimeline({ threadRef: runtime.linkedThreadRef, snapshot, entries });
+
   const arrivedMessageIds = useMessageArrivals(
     { owner: botId, thread: runtime.linkedThreadRef?.threadId ?? null },
     messages.map((message) => message.id),
   );
+
   const available = bot?.archivedAt === null;
   const [detailsPanelOpen] = useBotDetailsOpen(bot?.id ?? botId);
+
   const playbackKey = useReplyPlaybackThread({
     environmentId: available ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: available ? runtime.linkedThreadRef?.threadId : null,
     messages: available ? messages : [],
     mediaBlocked: Boolean(voiceCall.activeCall || voiceCall.startingBotId),
   });
+
   const updateReaction = useMessageReactionUpdater(runtime.linkedThreadRef);
+
   const replyTo = useCallback<MessageReplyHandler>(
     (messageId, label, text) => setReplyTarget({ messageId, label, text }),
     [],
@@ -232,6 +264,7 @@ export function BotThreadLanding({
         </SidebarInset>
       );
     }
+
     return (
       <SidebarInset
         aria-label={t("Loading bot…")}
@@ -244,27 +277,36 @@ export function BotThreadLanding({
       </SidebarInset>
     );
   }
+
   if (!bot) return null;
+
   const assistantTurnIds = new Set(
     messages.flatMap((message) =>
       message.role === "assistant" && message.turnId !== null ? [message.turnId] : [],
     ),
   );
+
   const pendingPluginResults = [...pluginResultsByTurn.entries()].filter(
     ([turnId]) => !assistantTurnIds.has(turnId),
   );
+
   const pendingApproval = approvalState.pendingApproval;
   const inboxItems = selectOpenBotInboxItems(inboxQuery.data?.inbox ?? [], new Set([bot.id]));
+
   const activeBot = (id: string) =>
     bots.find((candidate) => candidate.id === id && candidate.archivedAt === null) ?? null;
+
   const currentPersonId = snapshot?.currentPersonId;
   const reactionHandler = runtime.linkedThreadRef !== null ? updateReaction : null;
   const linkedThreadId = runtime.linkedThreadRef?.threadId;
+
   const channelApprovalFor = (messageIndex: number): ChannelApprovalTarget | null => {
     if (!environmentId || !linkedThreadId) return null;
     const message = messages[messageIndex];
+
     if (!message) return null;
     const origin = channelOriginForAssistantMessage(messages, messageIndex);
+
     if (!origin) {
       // The inbound message is on an older, unloaded page: keep the delivery label only.
       return message.channelDelivery === undefined
@@ -278,10 +320,13 @@ export function BotThreadLanding({
             canSend: false,
           };
     }
+
     const binding = connectedChannelBinding(bot.channelBindings, origin.provider);
     // Only channel admins with a live binding may trigger a send.
     const canSend = canManageChannelBindings && binding !== undefined;
+
     if (message.channelDelivery === undefined && !canSend) return null;
+
     return {
       environmentId,
       botId: BotId.make(bot.id),
@@ -358,9 +403,12 @@ export function BotThreadLanding({
                   ) : (
                     (() => {
                       const { message, separator, startsGroup } = item.message.entry;
+
                       const startsAfterReceipt =
                         timelineItems[timelineIndex - 1]?._tag === "Receipt";
+
                       const messageIndex = item.index;
+
                       return (
                         <>
                           {separator ? <ConversationSeparator label={separator} /> : null}
@@ -515,9 +563,11 @@ export function BotThreadLanding({
                       pendingApproval.requestId,
                       decision,
                     );
+
                     if (answered && decision === "acceptAlways" && bot) {
                       await enableAutoReview(bot.id);
                     }
+
                     return answered;
                   }}
                 />
@@ -545,7 +595,9 @@ export function BotThreadLanding({
             sendBlockedDescriptionId={sendBlocked ? engineNoticeId : undefined}
             onSubmit={async (prompt, files) => {
               const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
+
               if (sent) setReplyTarget(null);
+
               return sent;
             }}
           />

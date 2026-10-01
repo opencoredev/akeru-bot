@@ -34,16 +34,20 @@ export {
   type MessageReplyHandler,
   type PluginResultEntry,
 } from "./botMessageRowEquality";
+
 export { type ChannelApprovalTarget, ChannelSendApproval } from "./ChannelSendApproval";
+
 export {
   type MessageReactionHandler,
   useMessageReactionUpdater,
 } from "./useMessageReactionUpdater";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
+
 // Held open while a control's menu is, so the controls never slip out from under the pointer.
 const HOVER_CONTROLS_CLASS =
   "opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 has-[[aria-expanded=true]]:opacity-100 has-[[data-popup-open]]:opacity-100 max-md:opacity-100";
+
 // Offscreen rows skip layout and paint; the intrinsic size keeps the scrollbar steady.
 const ROW_VISIBILITY_CLASS = "[content-visibility:auto] [contain-intrinsic-size:auto_96px]";
 
@@ -54,6 +58,7 @@ function UnavailableReactionControl({
 }) {
   const { t } = useI18n();
   const unavailableReason = t("Reactions are unavailable until this chat is ready");
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -90,6 +95,7 @@ function reactionProps(
   onReactionChange: MessageReactionHandler | null,
 ) {
   if (!onReactionChange) return { controls: {}, chips: {} };
+
   return {
     controls: {
       onReactionChange: (next: MessageReactionOption | null) =>
@@ -98,6 +104,7 @@ function reactionProps(
     chips: {
       onToggle: (emoji: string) => {
         const option = reactionOptionFromEmoji(emoji);
+
         if (!option) return;
         onReactionChange(message.id, selectedReaction, selectedReaction === option ? null : option);
       },
@@ -137,9 +144,11 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   const readAloud = replyPlaybackControlProps(playback, message);
   const copyText = message.text || "Attachment";
   const label = author?.name ?? t("Unavailable bot");
+
   const markdown = (
     <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />
   );
+
   if (!author) {
     return (
       <div
@@ -164,8 +173,10 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
       </div>
     );
   }
+
   const selectedReaction = selectedReactionForPerson(message.reactions, currentPersonId);
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
+
   return (
     <div
       id={`chat-message-${message.id}`}
@@ -262,6 +273,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   const copyText = userMessageCopyText(message);
   const selectedReaction = selectedReactionForPerson(message.reactions, currentPersonId);
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
+
   return (
     <div
       id={`chat-message-${message.id}`}

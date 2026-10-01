@@ -44,7 +44,9 @@ export function useThemeEditorInspector({
     (role: ThemeColorRole, reveal = false) => {
       const visibleRole = getThemeEditorColorFamily(role)?.role ?? role;
       setSelectedRole(visibleRole);
+
       if (!THEME_EDITOR_SIMPLE_ROLES.includes(visibleRole)) onRevealAdvancedRole();
+
       if (!reveal) return;
 
       requestAnimationFrame(() => {
@@ -77,14 +79,18 @@ export function useThemeEditorInspector({
           )
         : [selectedRole]
     : [];
+
   const selectedHighlightRolesKey = selectedHighlightRoles.join(",");
 
   useEffect(() => {
     clearThemeInspectorHighlights();
+
     if (!open || selectedRole === null) {
       setUsageCount(null);
+
       return;
     }
+
     // Picking a new element needs the unobscured app, so suspend the existing
     // spotlight while the picker is armed.
     if (isInspecting) return;
@@ -101,18 +107,22 @@ export function useThemeEditorInspector({
     let refreshFrame: number | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     let lastRefreshAt = performance.now();
+
     const scheduleRefresh = () => {
       if (refreshFrame !== null || refreshTimer !== null) return;
       const wait = Math.max(0, MIN_REFRESH_INTERVAL_MS - (performance.now() - lastRefreshAt));
+
       const run = () => {
         refreshFrame = null;
         refreshTimer = null;
         lastRefreshAt = performance.now();
         refreshHighlights();
       };
+
       if (wait === 0) refreshFrame = requestAnimationFrame(run);
       else refreshTimer = setTimeout(run, wait);
     };
+
     const observer = new MutationObserver((mutations) => {
       if (
         mutations.every(
@@ -124,22 +134,30 @@ export function useThemeEditorInspector({
       ) {
         return;
       }
+
       scheduleRefresh();
     });
+
     observer.observe(document.body, { childList: true, subtree: true });
     let spotlightFrame: number | null = null;
+
     const scheduleSpotlightRefresh = () => {
       spotlightFrame ??= requestAnimationFrame(() => {
         spotlightFrame = null;
         refreshThemeInspectorSpotlight();
       });
     };
+
     window.addEventListener("resize", scheduleSpotlightRefresh);
     window.addEventListener("scroll", scheduleSpotlightRefresh, true);
+
     return () => {
       observer.disconnect();
+
       if (refreshFrame !== null) cancelAnimationFrame(refreshFrame);
+
       if (refreshTimer !== null) clearTimeout(refreshTimer);
+
       if (spotlightFrame !== null) cancelAnimationFrame(spotlightFrame);
       window.removeEventListener("resize", scheduleSpotlightRefresh);
       window.removeEventListener("scroll", scheduleSpotlightRefresh, true);
@@ -150,6 +168,7 @@ export function useThemeEditorInspector({
   useEffect(() => {
     if (!open || !isInspecting) {
       clearThemeInspectorHover();
+
       return;
     }
 
@@ -158,25 +177,31 @@ export function useThemeEditorInspector({
     let hoverInspection: ThemeElementInspection | null = null;
     let hoverTimer: number | null = null;
     let hoverFrame: number | null = null;
+
     const clearHoverTimer = () => {
       if (hoverTimer === null) return;
       window.clearTimeout(hoverTimer);
       hoverTimer = null;
     };
+
     const clearHover = () => {
       clearHoverTimer();
       hoverTarget = null;
       hoverInspection = null;
       clearThemeInspectorHover();
     };
+
     const showInspection = (inspection: ThemeElementInspection) => {
       hoverInspection = inspection;
       showThemeInspectorHover(inspection, getThemeEditorRoleLabel(inspection.role));
     };
+
     const handlePointerOver = (event: PointerEvent) => {
       const target = event.target;
+
       if (!(target instanceof Element) || target.closest("[data-theme-editor-panel]")) {
         clearHover();
+
         return;
       }
 
@@ -184,60 +209,76 @@ export function useThemeEditorInspector({
       hoverTarget = target;
       hoverInspection = null;
       const utilityInspection = inspectThemeRoleFromUtilitiesAtElement(target);
+
       if (utilityInspection) {
         showInspection(utilityInspection);
+
         return;
       }
 
       clearThemeInspectorHover();
       hoverTimer = window.setTimeout(() => {
         hoverTimer = null;
+
         if (hoverTarget !== target || !target.isConnected) return;
         const inspection = inspectThemeRoleAtElement(target);
+
         if (inspection) showInspection(inspection);
       }, 140);
     };
+
     const handlePointerOut = (event: PointerEvent) => {
       if (event.relatedTarget === null) clearHover();
     };
+
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
+
       if (!(target instanceof Element) || target.closest("[data-theme-editor-panel]")) return;
       event.preventDefault();
       event.stopPropagation();
       clearHoverTimer();
+
       const inspection =
         hoverTarget === target && hoverInspection
           ? hoverInspection
           : inspectThemeRoleAtElement(target);
+
       if (!inspection) return;
       clearHover();
       selectThemeRole(inspection.role, true);
       shouldDisarmAfterClick = true;
     };
+
     const blockInspectedClick = (event: MouseEvent) => {
       const target = event.target;
+
       if (!(target instanceof Element) || target.closest("[data-theme-editor-panel]")) return;
       event.preventDefault();
       event.stopPropagation();
+
       if (shouldDisarmAfterClick) setIsInspecting(false);
       shouldDisarmAfterClick = false;
     };
+
     const cancelInspection = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       clearHover();
       clearInspectorSelection();
     };
+
     const refreshHover = () => {
       if (!hoverInspection) return;
       hoverFrame ??= requestAnimationFrame(() => {
         hoverFrame = null;
+
         if (hoverInspection) {
           showThemeInspectorHover(hoverInspection, getThemeEditorRoleLabel(hoverInspection.role));
         }
       });
     };
+
     const clearHoverOnScroll = () => clearHover();
 
     document.addEventListener("pointerover", handlePointerOver, true);
@@ -247,6 +288,7 @@ export function useThemeEditorInspector({
     document.addEventListener("keydown", cancelInspection, true);
     window.addEventListener("resize", refreshHover);
     window.addEventListener("scroll", clearHoverOnScroll, true);
+
     return () => {
       document.removeEventListener("pointerover", handlePointerOver, true);
       document.removeEventListener("pointerout", handlePointerOut, true);
@@ -256,6 +298,7 @@ export function useThemeEditorInspector({
       window.removeEventListener("resize", refreshHover);
       window.removeEventListener("scroll", clearHoverOnScroll, true);
       clearHoverTimer();
+
       if (hoverFrame !== null) cancelAnimationFrame(hoverFrame);
       clearThemeInspectorHover();
     };

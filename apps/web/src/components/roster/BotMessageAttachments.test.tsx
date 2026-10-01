@@ -19,6 +19,7 @@ const attachments: ChatAttachment[] = [
     sizeBytes: 20,
   },
 ];
+
 const fileAttachment: ChatAttachment = {
   type: "file",
   id: "attachment-notes",

@@ -23,15 +23,19 @@ export function useThreadPendingUserInput(input: {
   readonly onFailure: (failure: BotThreadFailure) => void;
 }) {
   const { linkedThreadRef, onFailure, pendingUserInputs } = input;
+
   const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
+
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
   const singleSelectInFlightRef = useRef<string | null>(null);
+
   const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
     Record<string, PendingUserInputDraftAnswer>
   >({});
+
   const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
 
   const submitPendingUserInput = useCallback(
@@ -44,16 +48,20 @@ export function useThreadPendingUserInput(input: {
       setRespondingRequestIds((current) =>
         current.includes(requestId) ? current : [...current, requestId],
       );
+
       const result = await respondToUserInputCommand({
         environmentId: linkedThreadRef.environmentId,
         input: { threadId: linkedThreadRef.threadId, requestId, answers },
       });
+
       if (result._tag === "Failure") {
         respondingRequestIdsRef.current.delete(requestId);
         setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
         onFailure(commandFailure(result));
+
         return false;
       }
+
       return true;
     },
     [linkedThreadRef, onFailure, respondToUserInputCommand],
@@ -67,18 +75,26 @@ export function useThreadPendingUserInput(input: {
     async (pendingUserInput: PendingUserInput, prompt: string): Promise<boolean> => {
       if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
       const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
+
       if (!question || !prompt.trim()) return false;
+
       const nextAnswers = {
         ...pendingUserInputAnswers,
         [question.id]: { customAnswer: prompt.trim() },
       };
+
       setPendingUserInputAnswers(nextAnswers);
+
       if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
         setPendingUserInputQuestionIndex((index) => index + 1);
+
         return true;
       }
+
       const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
+
       if (!answers) return false;
+
       return submitPendingUserInput(pendingUserInput.requestId, answers);
     },
     [
@@ -94,9 +110,11 @@ export function useThreadPendingUserInput(input: {
     setPendingUserInputQuestionIndex(0);
     singleSelectInFlightRef.current = null;
     const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
+
     for (const requestId of respondingRequestIdsRef.current) {
       if (!pendingIds.has(requestId)) respondingRequestIdsRef.current.delete(requestId);
     }
+
     setRespondingRequestIds((current) => current.filter((requestId) => pendingIds.has(requestId)));
   }, [pendingUserInputs[0]?.requestId]);
 
@@ -104,10 +122,14 @@ export function useThreadPendingUserInput(input: {
     (questionId: string, optionLabel: string) => {
       const pending = pendingUserInputs[0];
       const question = pending?.questions.find((entry) => entry.id === questionId);
+
       if (!pending || !question) return;
+
       if (!question.multiSelect) {
         const selectionKey = `${pending.requestId}:${questionId}`;
+
         if (singleSelectInFlightRef.current === selectionKey) return;
+
         const selection = applyPendingUserInputSingleSelect(
           pending.questions,
           pendingUserInputAnswers,
@@ -115,18 +137,24 @@ export function useThreadPendingUserInput(input: {
           questionId,
           optionLabel,
         );
+
         if (!selection) return;
         singleSelectInFlightRef.current = selectionKey;
         setPendingUserInputAnswers(selection.draftAnswers);
+
         if (!selection.answers) {
           setPendingUserInputQuestionIndex(selection.questionIndex);
+
           return;
         }
+
         void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
           if (!submitted) singleSelectInFlightRef.current = null;
         });
+
         return;
       }
+
       setPendingUserInputAnswers((current) => ({
         ...current,
         [questionId]: togglePendingUserInputOptionSelection(
@@ -146,12 +174,17 @@ export function useThreadPendingUserInput(input: {
 
   const advancePendingUserInput = useCallback(async () => {
     const pending = pendingUserInputs[0];
+
     if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
+
     if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
       setPendingUserInputQuestionIndex((index) => index + 1);
+
       return;
     }
+
     const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
+
     if (!answers) return;
     await submitPendingUserInput(pending.requestId, answers);
   }, [

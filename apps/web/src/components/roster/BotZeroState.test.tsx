@@ -12,8 +12,11 @@ const testState = vi.hoisted(() => ({
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => testState.environmentId,
 }));
+
 vi.mock("../../state/bots", () => ({ botEnvironment: { create: "create-bot-atom" } }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => testState.createBot }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
 
 import { BotZeroState } from "./BotZeroState";

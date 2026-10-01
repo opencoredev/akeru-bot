@@ -40,15 +40,19 @@ export function MemoryApprovalPrompt({
   const bots = useAtomValue(environmentBotsAtom(threadRef.environmentId));
   const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id as string, bot.name])), [bots]);
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
+
   const [draft, setDraft] = useState<{
     readonly candidateId: string;
     readonly fact: string;
   } | null>(null);
+
   const [responding, setResponding] = useState(false);
+
   const [failure, setFailure] = useState<{
     readonly candidateId: string;
     readonly message: string;
   } | null>(null);
+
   if (!approval) return null;
 
   const editing = draft?.candidateId === approval.candidateId ? draft : null;
@@ -59,18 +63,22 @@ export function MemoryApprovalPrompt({
   const respond = async (intent: MemoryApprovalIntent) => {
     setResponding(true);
     setFailure(null);
+
     try {
       const result = await mutateFact({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId, mutation: memoryApprovalMutation(approval, intent) },
       });
+
       if (result._tag === "Failure") {
         setFailure({
           candidateId: approval.candidateId,
           message: t(describeDurableFactFailure(squashAtomCommandFailure(result)).message),
         });
+
         return;
       }
+
       setDraft(null);
     } finally {
       setResponding(false);

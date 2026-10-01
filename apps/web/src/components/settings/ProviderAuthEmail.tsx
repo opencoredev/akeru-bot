@@ -6,6 +6,7 @@ export function ProviderAuthEmail(props: {
   readonly separator?: boolean;
 }) {
   const trimmed = props.email?.trim();
+
   if (!trimmed) return null;
 
   return (

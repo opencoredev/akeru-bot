@@ -34,6 +34,7 @@ export function BotChatsSection({
   const environmentId = usePrimaryEnvironmentId();
   const shells = useThreadShells();
   const newChat = useActiveChatPaletteActions().find((action) => action.id === "new") ?? null;
+
   const rows = useMemo(
     () =>
       environmentId
@@ -44,6 +45,7 @@ export function BotChatsSection({
         : [],
     [botId, environmentId, shells, threadRef?.threadId],
   );
+
   if (rows.length === 0) return null;
   const now = Date.now();
 
@@ -69,6 +71,7 @@ export function BotChatsSection({
                       `/${environmentId}/${row.threadId}`,
                     );
                 }
+
                 onOpenChat?.();
               }}
             >

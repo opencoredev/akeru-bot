@@ -62,6 +62,7 @@ export function useDesktopWslCommands({
       if (!desktopBridge) return;
       setIsUpdatingWslBackend(true);
       setDesktopWslMutationError(null);
+
       try {
         await apply();
         refreshDesktopWslState();
@@ -113,8 +114,10 @@ export function useDesktopWslCommands({
   const handleSelectWslMode = useCallback(
     (value: string) => {
       if (!desktopBridge || !desktopWslState) return;
+
       const defaultDistroName =
         desktopWslState.distros.find((distro) => distro.isDefault)?.name ?? null;
+
       if (value === BACKEND_VALUE_WSL_OFF) {
         // Match the recovery row's visibility (`enabled || wslOnly`): when WSL
         // went unavailable while wsl-only was persisted, `enabled` can be false
@@ -122,38 +125,50 @@ export function useDesktopWslCommands({
         // still clear that state instead of silently no-op'ing.
         if (!desktopWslState.enabled && !desktopWslState.wslOnly) return;
         const wasWslOnly = desktopWslState.wslOnly;
+
         // Confirm when there's WSL state to lose, OR when wsl-only is
         // on (turning the only running backend off needs to switch
         // back to Windows and restart — always consequential).
         if (hasWslRegistrationToLose || wasWslOnly) {
           setPendingWslChange({ kind: "disable", wasWslOnly });
+
           return;
         }
+
         void applyWslSettingChange(() => desktopBridge.setWslBackendEnabled(false));
+
         return;
       }
+
       const nextDistro = value === BACKEND_VALUE_DEFAULT_WSL ? null : value;
       const resolvedNext = nextDistro ?? defaultDistroName;
+
       if (!desktopWslState.enabled) {
         // Was off, user picked a distro: ask whether to run both
         // backends or only WSL. We always ask here so the user picks
         // the mode upfront instead of having to discover the wsl-only
         // switch afterwards.
         setPendingWslChange({ kind: "enable", nextDistro });
+
         return;
       }
+
       // Already enabled — treat as a distro switch. Skip the change if
       // the user re-picked the row that's already selected.
       const resolvedCurrent = desktopWslState.distro ?? defaultDistroName;
+
       if (resolvedCurrent === resolvedNext) return;
+
       // Confirm when there's WSL registration to lose, OR in wsl-only mode:
       // there the primary IS the WSL backend, so a distro change relaunches
       // the app (the IPC handler does this) rather than swapping a secondary,
       // and the user should see that coming.
       if (hasWslRegistrationToLose || desktopWslState.wslOnly) {
         setPendingWslChange({ kind: "distro", nextDistro });
+
         return;
       }
+
       void applyWslSettingChange(() => desktopBridge.setWslDistro(nextDistro));
     },
     [applyWslSettingChange, desktopBridge, desktopWslState, hasWslRegistrationToLose],
@@ -195,27 +210,36 @@ export function useDesktopWslCommands({
   const handleConfirmWslChange = useCallback(() => {
     if (!desktopBridge || !pendingWslChange) return;
     const change = pendingWslChange;
+
     // The enable kind resolves through handleConfirmEnableWsl, not
     // this single Confirm path.
     if (change.kind === "enable") return;
     setPendingWslChange(null);
+
     if (change.kind === "disable") {
       void applyWslSettingChange(async () => {
         const next = await desktopBridge.setWslBackendEnabled(false);
+
         if (change.wasWslOnly) {
           // Clearing wsl-only relaunches onto the Windows backend.
           return await desktopBridge.setWslOnly(false);
         }
+
         return next;
       });
+
       return;
     }
+
     if (change.kind === "distro") {
       void applyWslSettingChange(() => desktopBridge.setWslDistro(change.nextDistro));
+
       return;
     }
+
     void applyWslSettingChange(() => desktopBridge.setWslOnly(change.nextValue));
   }, [applyWslSettingChange, desktopBridge, pendingWslChange]);
+
   return {
     loadWslState,
     handleSelectWslMode,

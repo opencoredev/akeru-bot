@@ -45,6 +45,7 @@ describe("resolveBlobColor", () => {
 describe("resolveBlobOutline", () => {
   it("outlines only bodies light enough to fade into a light surface", () => {
     expect(resolveBlobOutline("#FFFFFF")).not.toBeNull();
+
     for (const color of [...BLOB_COLORS, "#000000", "nope"]) {
       expect(resolveBlobOutline(color)).toBeNull();
     }
@@ -56,6 +57,7 @@ describe("randomBotAvatar", () => {
     for (let i = 0; i < 20; i++) {
       const avatar = randomBotAvatar(() => i / 20);
       expect(avatar.kind).toBe("blob");
+
       if (avatar.kind !== "blob") continue;
       expect(BLOB_SHAPES).toContain(avatar.shape);
       expect(BLOB_COLORS).toContain(avatar.color);
@@ -80,11 +82,13 @@ describe("resolveBlobRendering", () => {
     expect(resolveBlobRendering({ kind: "dither", seed: "bot-a" })).toEqual(first);
     expect(BLOB_SHAPES).toContain(first.shape);
     expect(BLOB_COLORS).toContain(first.color);
+
     const looks = new Set(
       ["bot-a", "bot-b", "bot-c", "bot-d", "bot-e"].map((seed) =>
         JSON.stringify(resolveBlobRendering({ kind: "dither", seed })),
       ),
     );
+
     expect(looks.size).toBeGreaterThan(1);
   });
 

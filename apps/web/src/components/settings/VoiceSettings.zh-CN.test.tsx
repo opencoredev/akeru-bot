@@ -4,10 +4,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({}) }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("~/state/environments", () => ({ usePrimaryEnvironment: () => null }));
+
 vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: vi.fn() }));
+
 vi.mock("../chat/ReplyPlaybackProvider", () => ({ useOptionalReplyPlayback: () => null }));
 
 import { LanguageProvider } from "../../i18n";
@@ -34,6 +39,7 @@ function renderRow(
       onDisconnect={() => {}}
     />
   );
+
   return renderToStaticMarkup(
     chinese ? (
       <LanguageProvider testCatalog={{ locale: "zh-CN", catalog: zhCNCatalog }}>
@@ -51,6 +57,7 @@ describe("voice API key labels", () => {
     expect(renderRow("fish", false, false)).toContain('placeholder="Fish Audio API key"');
     expect(renderRow("openai", false, true)).toContain('placeholder="OpenAI API 密钥"');
     expect(renderRow("cartesia", false, true)).toContain('aria-label="Cartesia API 密钥"');
+
     for (const provider of VOICE_API_PROVIDERS) {
       for (const chinese of [false, true]) {
         for (const connected of [false, true]) {

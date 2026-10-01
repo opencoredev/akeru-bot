@@ -35,6 +35,7 @@ export function mergeBotConversationTimeline(
       : item,
   );
 }
+
 type ReceiptTranslator = Pick<ReturnType<typeof createTranslator>, "t">;
 
 export function mergeRoutineRunHistory(
@@ -55,8 +56,10 @@ export function deriveRoutineReceipts(
 ): RoutineReceipt[] {
   const withDetail = (summary: string, detail: string | undefined) => {
     const trimmed = detail?.trim();
+
     return trimmed ? t("{summary}: {detail}", { summary, detail: trimmed }) : summary;
   };
+
   const threadRoutines = routines.filter((routine) => routine.targetThreadId === threadId);
   const byRoutineId = new Map(threadRoutines.map((routine) => [routine.id, routine]));
   const receipts: RoutineReceipt[] = [];
@@ -74,8 +77,10 @@ export function deriveRoutineReceipts(
 
   for (const run of runs) {
     const routine = byRoutineId.get(run.routineId);
+
     if (!routine) continue;
     const archived = !("deletedAt" in routine) || routine.deletedAt !== null;
+
     if (run.startedAt !== null) {
       receipts.push({
         id: `routine-run-started:${run.id}`,
@@ -85,6 +90,7 @@ export function deriveRoutineReceipts(
         ...(archived ? { archived: true } : {}),
       });
     }
+
     switch (run.status) {
       case "queued":
       case "waiting-for-approval":

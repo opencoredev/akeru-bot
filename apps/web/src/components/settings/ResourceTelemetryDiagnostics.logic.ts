@@ -9,6 +9,7 @@ export function visibleResourceTelemetryProcesses(
   collapsed: ReadonlySet<string>,
 ): ReadonlyArray<ResourceTelemetryProcess> {
   const childrenByParent = new Map<number, ResourceTelemetryProcess[]>();
+
   for (const process of processes) {
     const children = childrenByParent.get(process.ppid) ?? [];
     children.push(process);
@@ -16,19 +17,23 @@ export function visibleResourceTelemetryProcesses(
   }
 
   const hidden = new Set<string>();
+
   const hideDescendants = (pid: number): void => {
     for (const child of childrenByParent.get(pid) ?? []) {
       const key = processIdentityKey(child);
+
       if (hidden.has(key)) continue;
       hidden.add(key);
       hideDescendants(child.identity.pid);
     }
   };
+
   for (const process of processes) {
     if (collapsed.has(processIdentityKey(process))) {
       hideDescendants(process.identity.pid);
     }
   }
+
   return processes.filter((process) => !hidden.has(processIdentityKey(process)));
 }
 
@@ -50,6 +55,7 @@ export function resourceHistoryBarHeight(input: {
   readonly minimumVisiblePercent: number;
 }): number {
   if (input.value <= 0) return 0;
+
   return Math.max(input.minimumVisiblePercent, (input.value / Math.max(1, input.max)) * 100);
 }
 

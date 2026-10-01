@@ -26,6 +26,7 @@ export function useBotLandingTimeline(input: {
 }) {
   const { entries, snapshot, threadRef } = input;
   const { t } = useI18n();
+
   const routineRunHistory = useEnvironmentQuery(
     threadRef
       ? serverEnvironment.routineThreadRuns({
@@ -34,7 +35,9 @@ export function useBotLandingTimeline(input: {
         })
       : null,
   );
+
   const threadId = threadRef?.threadId ?? null;
+
   const [routineHistory, setRoutineHistory] = useState<{
     threadId: string | null;
     runs: RoutineRun[];
@@ -42,10 +45,12 @@ export function useBotLandingTimeline(input: {
     loadedCursor: RoutineRunId | null;
     nextCursor: RoutineRunId | null;
   }>({ threadId: null, runs: [], requestedCursor: null, loadedCursor: null, nextCursor: null });
+
   const currentHistory =
     routineHistory.threadId === threadId
       ? routineHistory
       : { threadId, runs: [], requestedCursor: null, loadedCursor: null, nextCursor: null };
+
   const olderRoutineRuns = useEnvironmentQuery(
     threadRef && currentHistory.requestedCursor
       ? serverEnvironment.routineThreadRuns({
@@ -57,6 +62,7 @@ export function useBotLandingTimeline(input: {
         })
       : null,
   );
+
   useEffect(() => {
     setRoutineHistory({
       threadId,
@@ -68,6 +74,7 @@ export function useBotLandingTimeline(input: {
   }, [threadId]);
   useEffect(() => {
     const page = routineRunHistory.data;
+
     if (!page || !threadId) return;
     setRoutineHistory((previous) =>
       previous.threadId === threadId
@@ -82,6 +89,7 @@ export function useBotLandingTimeline(input: {
   useEffect(() => {
     const page = olderRoutineRuns.data;
     const cursor = currentHistory.requestedCursor;
+
     if (!page || !cursor || currentHistory.loadedCursor === cursor) return;
     setRoutineHistory((previous) =>
       previous.threadId === threadId && previous.requestedCursor === cursor
@@ -99,22 +107,29 @@ export function useBotLandingTimeline(input: {
     olderRoutineRuns.data,
     threadId,
   ]);
+
   const nextRoutineCursor =
     currentHistory.loadedCursor === null
       ? (routineRunHistory.data?.nextCursor ?? null)
       : currentHistory.nextCursor;
+
   const routineRunRevision = useMemo(() => {
     const threadId = threadRef?.threadId;
+
     if (!threadId) return null;
+
     const routineIds = [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])]
       .filter((routine) => routine.targetThreadId === threadId)
       .map((routine) => routine.id)
       .toSorted();
+
     const relevantIds = new Set(routineIds);
+
     const runs = (snapshot?.routineRuns ?? [])
       .filter((run) => relevantIds.has(run.routineId))
       .map((run) => [run.id, run.updatedAt] as const)
       .toSorted(([left], [right]) => left.localeCompare(right));
+
     return JSON.stringify([routineIds, runs]);
   }, [
     threadRef?.threadId,
@@ -122,18 +137,22 @@ export function useBotLandingTimeline(input: {
     snapshot?.routineReceiptSources,
     snapshot?.routineRuns,
   ]);
+
   const observedRoutineRevision = useRef<{
     threadId: string | null;
     revision: string | null;
   }>({ threadId: null, revision: null });
+
   useEffect(() => {
     const threadId = threadRef?.threadId ?? null;
     const previous = observedRoutineRevision.current;
     observedRoutineRevision.current = { threadId, revision: routineRunRevision };
+
     if (threadId === previous.threadId && routineRunRevision !== previous.revision) {
       routineRunHistory.refresh();
     }
   }, [threadRef?.threadId, routineRunRevision, routineRunHistory.refresh]);
+
   const routineReceipts = useMemo(
     () =>
       threadRef
@@ -153,6 +172,7 @@ export function useBotLandingTimeline(input: {
       t,
     ],
   );
+
   const { delegations, waitingOnChildren } = useMemo(
     () =>
       threadRef && snapshot
@@ -160,6 +180,7 @@ export function useBotLandingTimeline(input: {
         : { delegations: [], waitingOnChildren: false },
     [threadRef, snapshot],
   );
+
   // Each message row carries the index it had in `messages`, because the merge
   // reorders it away from that position and a row must not go looking for itself.
   const timelineItems = useMemo(

@@ -5,7 +5,9 @@ import { loadDirectoryCatalog } from "../../../../../plugins";
 import { botToolStatus, buildBotToolItems, planBotToolToggle } from "./botTools.logic";
 
 const exa = loadDirectoryCatalog().find((plugin) => plugin.id === "exa");
+
 if (!exa || exa.kind !== "mcp-url") throw new TypeError("Exa URL fixture is missing.");
+
 const installedPlugin = {
   ...exa,
   catalogStatus: "available" as const,
@@ -81,6 +83,7 @@ describe("bot tool status", () => {
     dependentRoutines: [],
     ...match,
   });
+
   const item = { id: McpServerId.make("builtin-exa"), pluginId: "exa" };
 
   it("reports nothing when the environment has no health for the tool", () => {

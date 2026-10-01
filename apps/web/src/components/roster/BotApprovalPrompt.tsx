@@ -28,15 +28,18 @@ export function BotApprovalPrompt({
   readonly onRespond: (decision: ProviderApprovalDecision) => Promise<unknown>;
 }) {
   const { t } = useI18n();
+
   const isSpecialReview =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME ||
     approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+
   const oneUse =
     !isSpecialReview &&
     (approval.options?.every(
       (option) => option.decision !== "acceptForSession" && option.decision !== "acceptAlways",
     ) ??
       false);
+
   const heading =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
       ? t("Review routine")

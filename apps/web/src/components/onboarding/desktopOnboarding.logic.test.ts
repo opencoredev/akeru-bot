@@ -22,6 +22,7 @@ import {
 /** A draft as the category picker saved it: no goal field, a category id instead. */
 function legacyDraft() {
   const { goal: _goal, ...rest } = DEFAULT_DESKTOP_ONBOARDING_DRAFT;
+
   return { ...rest, step: "use-case" as const, customUseCase: "" };
 }
 
@@ -141,6 +142,7 @@ describe("desktop onboarding", () => {
 
   it("marks skipped onboarding complete and removes its draft", () => {
     const values = new Map<string, string>([["akeru:desktop-onboarding:v1", "draft"]]);
+
     const storage = {
       removeItem: (key: string) => values.delete(key),
       setItem: (key: string, value: string) => values.set(key, value),
@@ -154,6 +156,7 @@ describe("desktop onboarding", () => {
 
   it("records the handoff destination with completion and routes to it once", () => {
     const values = new Map<string, string>([["akeru:desktop-onboarding:v1", "draft"]]);
+
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
       removeItem: (key: string) => values.delete(key),
@@ -180,6 +183,7 @@ describe("desktop onboarding", () => {
     const values = new Map<string, string>([
       [DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY, "bot-ada"],
     ]);
+
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
       removeItem: (key: string) => values.delete(key),
@@ -204,11 +208,13 @@ describe("desktop onboarding", () => {
     const values = new Map<string, string>([
       [DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY, "   "],
     ]);
+
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
       removeItem: (key: string) => values.delete(key),
       setItem: (key: string, value: string) => values.set(key, value),
     };
+
     expect(
       readDesktopOnboardingHandoffForEnvironment(storage, "environment-1", ["bot-ada"]),
     ).toBeNull();
@@ -232,10 +238,12 @@ describe("desktop onboarding", () => {
     expect(parseDesktopOnboardingDraft(JSON.stringify(DEFAULT_DESKTOP_ONBOARDING_DRAFT))).toEqual(
       DEFAULT_DESKTOP_ONBOARDING_DRAFT,
     );
+
     const customColorDraft = {
       ...DEFAULT_DESKTOP_ONBOARDING_DRAFT,
       avatar: { ...DEFAULT_DESKTOP_ONBOARDING_DRAFT.avatar, color: "#123ABC" },
     };
+
     expect(parseDesktopOnboardingDraft(JSON.stringify(customColorDraft))).toEqual(customColorDraft);
     expect(
       parseDesktopOnboardingDraft(
@@ -341,6 +349,7 @@ describe("desktop onboarding", () => {
       step: "goal" as const,
       goal: "Build a dashboard\nProject: Client portal",
     };
+
     expect(parseDesktopOnboardingDraft(JSON.stringify(draft))).toEqual(draft);
     expect(parseDesktopOnboardingDraft(JSON.stringify({ ...draft, goalPhase: "plan" }))).toEqual({
       ...draft,
@@ -353,6 +362,7 @@ describe("desktop onboarding", () => {
       ...legacyDraft(),
       goal: "Write my posts\nChannels: LinkedIn and X\nCadence: Three a week",
     };
+
     expect(parseDesktopOnboardingDraft(JSON.stringify(legacy))?.goal).toBe("Write my posts");
   });
 
@@ -401,6 +411,7 @@ describe("desktop onboarding", () => {
       fraction: 1,
       label: "Step 4 of 4",
     });
+
     for (const step of DESKTOP_ONBOARDING_STEPS) {
       expect(desktopOnboardingProgress(step.id).number).toBe(stepNumber(step.id));
     }

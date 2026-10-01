@@ -60,11 +60,15 @@ import { ONBOARDING_HEADING_CLASS } from "./onboardingStyles";
 import type { OnboardingTranslate } from "./onboardingTranslate";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
+
 const LEAVE = [0.4, 0, 1, 1] as const;
+
 /** --ease-smooth-out. Carries the setup surface out over the workspace. */
 const SMOOTH_OUT = [0.22, 1, 0.36, 1] as const;
+
 /** Seconds. Has to match the wait the reveal leaves before it unmounts setup. */
 const REVEAL_DURATION = DESKTOP_ONBOARDING_REVEAL_DURATION_MS / 1000;
+
 const FOCUSABLE_SELECTOR = [
   "a[href]",
   "button:not([disabled])",
@@ -121,9 +125,11 @@ export function OnboardingSurface({
   const surfaceRef = useRef<HTMLDivElement>(null);
   const handoffTimers = useRef<number[]>([]);
   const readyBotIdRef = useRef<string | null>(null);
+
   const rosterBot = useRosterStore((state) =>
     draft.botId ? state.bots.find((bot) => bot.id === draft.botId) : undefined,
   );
+
   const providerReadiness = useMemo(
     () => resolveDesktopOnboardingCreationReadiness(draft.providerId, providers),
     [draft.providerId, providers],
@@ -141,6 +147,7 @@ export function OnboardingSurface({
 
   useEffect(() => {
     const appRoot = document.getElementById("root");
+
     if (!appRoot) return;
     const wasInert = appRoot.inert;
     const previousAriaHidden = appRoot.getAttribute("aria-hidden");
@@ -150,7 +157,9 @@ export function OnboardingSurface({
 
     const focusableElements = () => {
       const surface = surfaceRef.current;
+
       if (!surface) return [];
+
       return Array.from(surface.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
         (element) =>
           !element.matches(":disabled") &&
@@ -158,19 +167,25 @@ export function OnboardingSurface({
           element.closest('[inert],[aria-hidden="true"]') === null,
       );
     };
+
     const containFocus = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
       const surface = surfaceRef.current;
+
       if (!surface) return;
       const focusable = focusableElements();
+
       if (focusable.length === 0) {
         event.preventDefault();
         surface.focus();
+
         return;
       }
+
       const first = focusable[0];
       const last = focusable.at(-1);
       const active = document.activeElement;
+
       if (!surface.contains(active) || (event.shiftKey && active === first)) {
         event.preventDefault();
         (event.shiftKey ? last : first)?.focus();
@@ -179,10 +194,13 @@ export function OnboardingSurface({
         first?.focus();
       }
     };
+
     document.addEventListener("keydown", containFocus, true);
+
     return () => {
       document.removeEventListener("keydown", containFocus, true);
       appRoot.inert = wasInert;
+
       if (previousAriaHidden === null) appRoot.removeAttribute("aria-hidden");
       else appRoot.setAttribute("aria-hidden", previousAriaHidden);
     };
@@ -191,13 +209,18 @@ export function OnboardingSurface({
   useEffect(() => {
     if (draft.step !== "message" || draft.botId === null) {
       readyBotIdRef.current = null;
+
       return;
     }
+
     if (rosterBot) {
       readyBotIdRef.current = draft.botId;
+
       return;
     }
+
     const recoveredDraft = recoverDisappearedDesktopOnboardingBot(draft, readyBotIdRef.current);
+
     if (recoveredDraft === draft) return;
     readyBotIdRef.current = null;
     setDraft(recoveredDraft);
@@ -215,10 +238,13 @@ export function OnboardingSurface({
     setCreateError(null);
     const botId = BotId.make(`bot-${randomUUID()}`);
     const goal = desktopOnboardingBotBrief(draft.goal);
+
     if (providerReadiness.status !== "ready") {
       setCreating(false);
+
       return;
     }
+
     const result = await createBot({
       environmentId,
       input: {
@@ -235,12 +261,17 @@ export function OnboardingSurface({
         groupId: null,
       },
     });
+
     setCreating(false);
+
     if (isAtomCommandInterrupted(result)) return;
+
     if (result._tag === "Failure") {
       setCreateError(t("Could not create your bot."));
+
       return;
     }
+
     writeBotDraft(`onboarding:${botId}`, goal.prompt);
     updateDraft({ ...draft, step: "message", botId });
   };
@@ -265,28 +296,37 @@ export function OnboardingSurface({
   const finish = (firstMessage: string) => {
     setMessage(firstMessage);
     setHandoff("sending");
+
     if (draft.botId)
       markDesktopOnboardingHandoffStarted(window.localStorage, environmentId, draft.botId);
     else markDesktopOnboardingCompleted(window.localStorage);
+
     for (const stage of desktopOnboardingHandoffStages(instantHandoff)) {
       if (stage.phase === "sending") continue;
       handoffTimers.current.push(
         window.setTimeout(() => {
           if (stage.phase !== "opening" || !draft.botId) {
             setHandoff(stage.phase);
+
             return;
           }
+
           const pending = readDesktopOnboardingHandoff(window.localStorage);
+
           if (pending?.environmentId !== environmentId || pending.botId !== draft.botId) {
             onFinished();
+
             return;
           }
+
           setHandoff(stage.phase);
           useRosterStore.getState().selectBot(draft.botId);
+
           const opened = () => {
             clearDesktopOnboardingHandoff(window.localStorage);
             setRouteOpened(true);
           };
+
           void navigate({ to: "/bots/$botId", params: { botId: draft.botId }, replace: true }).then(
             opened,
             () =>
@@ -298,6 +338,7 @@ export function OnboardingSurface({
         }, stage.atMs),
       );
     }
+
     // Failure safety, never the normal path: a destination that never reports
     // itself (a stalled projection, a dropped socket) must not leave the
     // user stuck behind an overlay that will not lift.
@@ -321,6 +362,7 @@ export function OnboardingSurface({
     ) {
       return;
     }
+
     setHandoff("revealing");
     handoffTimers.current.push(
       window.setTimeout(
@@ -345,6 +387,7 @@ export function OnboardingSurface({
   // whole surface fades off it as one opaque layer. Nothing inside animates
   // out, so no piece of setup reads as leaving on its own.
   const revealing = handoff === "revealing" || handoff === "done";
+
   return createPortal(
     <motion.div
       ref={surfaceRef}
@@ -374,6 +417,7 @@ export function OnboardingSurface({
               const position = index + 1;
               const current = position === progress.number;
               const reached = position <= progress.number;
+
               return (
                 <li
                   key={definition.id}

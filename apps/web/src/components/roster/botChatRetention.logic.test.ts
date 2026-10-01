@@ -15,6 +15,7 @@ describe("preferRetainedChatTarget", () => {
     threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("new") },
     linked: false,
   };
+
   const older = { environmentId: "env-1", threadId: "old" };
   const shell = (id: string) => ({ environmentId: "env-1", id, archivedAt: null });
 
@@ -58,6 +59,7 @@ describe("opening an older bot chat", () => {
     archivedAt: null as string | null,
     ...extra,
   });
+
   const threads = [
     chat("chat-old", "2026-08-01T00:00:00.000Z"),
     chat("chat-new", "2026-08-03T00:00:00.000Z"),
@@ -125,11 +127,13 @@ describe("nextRetainedChat", () => {
 
   it("follows the linked chat once the shell list shows it", () => {
     const linked = chat("new");
+
     const next = nextRetainedChat(
       { ownerId: "bot-1", threadRef: null, linked: false },
       linked,
       true,
     );
+
     expect(next).toEqual({ ownerId: "bot-1", threadRef: linked, linked: true });
     expect(nextRetainedChat(next, linked, true)).toBe(next);
   });

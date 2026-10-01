@@ -53,6 +53,7 @@ import {
 
 export function UsagePage() {
   const [preferences, setPreferences] = useState(readUsagePagePreferences);
+
   const [windowSelection, setWindowSelection] = useState(() => ({
     days: preferences.windowDays,
     window: makeWindow(
@@ -61,6 +62,7 @@ export function UsagePage() {
       preferences.windowDays === 1 ? "hour" : "day",
     ),
   }));
+
   const metric = preferences.metric;
   const showingLimits = metric === "limits";
   const [breakdown, setBreakdown] = useState<"model" | "time">("model");
@@ -68,12 +70,14 @@ export function UsagePage() {
   const isPast24Hours = windowDays === 1;
   const { merged, environments, isPending, isPartial, refresh } = useUsage(window);
   const refreshMinutes = useClientSettings((settings) => settings.usageRefreshMinutes);
+
   const planLimits = PLAN_PROVIDER_ORDER.map((provider) =>
     merged.planLimits.find((entry) => entry.provider === provider && entry.status === "ok"),
   ).filter((entry) => entry !== undefined);
 
   useEffect(() => {
     const timer = globalThis.setInterval(refresh, Math.max(1, refreshMinutes) * 60 * 1000);
+
     return () => globalThis.clearInterval(timer);
   }, [refresh, refreshMinutes]);
 
@@ -81,6 +85,7 @@ export function UsagePage() {
     () => enumerateDays(window.sinceDay, window.untilDay),
     [window.sinceDay, window.untilDay],
   );
+
   const hours = useMemo(
     () =>
       window.sinceTime === undefined || window.untilTime === undefined
@@ -88,12 +93,14 @@ export function UsagePage() {
         : enumerateHourStarts(window.sinceTime, window.untilTime),
     [window.sinceTime, window.untilTime],
   );
+
   // Newest first: the window can run 90 periods, so the interesting end
   // belongs at the top of the table.
   const breakdownPeriods = useMemo<readonly (DailyTotals | HourlyTotals)[]>(
     () => (isPast24Hours ? merged.hourly : merged.daily).toReversed(),
     [isPast24Hours, merged.daily, merged.hourly],
   );
+
   const breakdownModels = useMemo(
     () =>
       breakdown === "model" && metric === "tokens"
@@ -103,6 +110,7 @@ export function UsagePage() {
         : merged.models,
     [breakdown, merged.models, metric],
   );
+
   const activeProviders = useMemo(() => providersWithUsage(merged.providers), [merged.providers]);
   const timeValueColumnWidth = `${60 / (activeProviders.length + 2)}%`;
 
@@ -116,17 +124,22 @@ export function UsagePage() {
       window: makeWindow(days, undefined, days === 1 ? "hour" : "day"),
     });
   };
+
   const selectMetric = (nextMetric: UsageMetric) => {
     const nextPreferences = { metric: nextMetric, windowDays };
     setPreferences(nextPreferences);
     saveUsagePagePreferences(nextPreferences);
   };
+
   const refreshWindow = () => {
     if (showingLimits) {
       refresh();
+
       return;
     }
+
     const nextWindow = makeWindow(windowDays, undefined, isPast24Hours ? "hour" : "day");
+
     if (
       nextWindow.sinceDay === window.sinceDay &&
       nextWindow.untilDay === window.untilDay &&
@@ -138,10 +151,12 @@ export function UsagePage() {
       setWindowSelection({ days: windowDays, window: nextWindow });
     }
   };
+
   const windowLabel =
     isPast24Hours && window.sinceTime !== undefined && window.untilTime !== undefined
       ? `${formatDateTimeShort(window.sinceTime, window.timeZone)} to ${formatDateTimeShort(window.untilTime, window.timeZone)}`
       : `${formatDayShort(window.sinceDay)} to ${formatDayShort(window.untilDay)}`;
+
   const topbarContent = (
     <div className="flex w-full min-w-0 items-center gap-3">
       <WorkspaceBreadcrumb ariaLabel="Usage breadcrumb" className="min-w-0">
@@ -164,6 +179,7 @@ export function UsagePage() {
           value={[metric]}
           onValueChange={(next) => {
             const value = next[0];
+
             if (isUsageMetric(value)) selectMetric(value);
           }}
         >
@@ -280,12 +296,16 @@ export function UsagePage() {
 
                     {activeProviders.map((provider) => {
                       const totals = merged.providers.find((entry) => entry.provider === provider);
+
                       const share =
                         metric === "cost" ? (totals?.costShare ?? 0) : (totals?.tokenShare ?? 0);
+
                       const providerSessions = totals?.sessions ?? 0;
+
                       const sessionLabel = `${formatCount(providerSessions)} ${
                         providerSessions === 1 ? "session" : "sessions"
                       }`;
+
                       return (
                         <div key={provider} className="flex flex-col gap-1">
                           <div className="flex items-baseline justify-between gap-4">
@@ -340,6 +360,7 @@ export function UsagePage() {
                         value={[String(windowDays)]}
                         onValueChange={(next) => {
                           const value = next[0];
+
                           if (value) selectWindow(Number(value));
                         }}
                       >
@@ -390,6 +411,7 @@ export function UsagePage() {
                       value={[breakdown]}
                       onValueChange={(next) => {
                         const value = next[0];
+
                         if (value === "model" || value === "time") setBreakdown(value);
                       }}
                     >

@@ -89,6 +89,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
     readonly icon?: ReactNode;
   }) => {
     const selected = savedBackendMode === input.mode;
+
     return (
       <button
         type="button"
@@ -284,6 +285,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
     isAdvertisedEndpointListExpanded
       ? visibleDesktopNetworkAdvertisedEndpoints.map((endpoint) => {
           const endpointKey = endpointDefaultPreferenceKey(endpoint);
+
           return (
             <AdvertisedEndpointListRow
               key={endpoint.id}
@@ -325,8 +327,10 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
           />
         );
       }
+
       return null;
     }
+
     // WSL went unavailable while the user still has the WSL backend persisted
     // (it may have been uninstalled or its distro removed). The desktop side
     // falls back to the Windows backend, but the normal distro picker needs a
@@ -336,6 +340,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
     // there's nothing to recover — keep the section hidden as before.
     if (!desktopWslState.available) {
       if (!desktopWslState.enabled && !desktopWslState.wslOnly) return null;
+
       return (
         <SettingsRow
           title="WSL backend"
@@ -357,21 +362,25 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
         />
       );
     }
+
     // Distro is null when the user wants the WSL default. Map it to the
     // real default's name so the Select highlights a real option; fall
     // back to the sentinel only when no distros are listed yet (the
     // dropdown then renders a single placeholder that matches).
     const defaultDistroName =
       desktopWslState.distros.find((distro) => distro.isDefault)?.name ?? null;
+
     const selectValue = !desktopWslState.enabled
       ? BACKEND_VALUE_WSL_OFF
       : (desktopWslState.distro ?? defaultDistroName ?? BACKEND_VALUE_DEFAULT_WSL);
+
     const selectLabel =
       selectValue === BACKEND_VALUE_WSL_OFF
         ? "Off"
         : selectValue === BACKEND_VALUE_DEFAULT_WSL
           ? "Default distro"
           : selectValue;
+
     return (
       <>
         <SettingsRow
@@ -458,8 +467,10 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
             onCheckedChange={(checked) => {
               if (checked) {
                 handleStartTailscaleServeSetup(tailscaleHttpsEndpoint);
+
                 return;
               }
+
               handleStartTailscaleServeDisable(tailscaleHttpsEndpoint);
             }}
             aria-label="Enable Tailscale HTTPS"
@@ -561,6 +572,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
       }
     />
   );
+
   return {
     renderConnectionModeCard,
     renderRemoteFields,

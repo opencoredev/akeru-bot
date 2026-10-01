@@ -34,6 +34,7 @@ export function ProcessTreeName({
   const name = formatProcessName(process);
   const hasChildren = process.childPids.length > 0;
   const ChevronIcon = collapsed ? ChevronRightIcon : ChevronDownIcon;
+
   return (
     <div
       className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
@@ -91,7 +92,9 @@ export function ProcessActions({
   if (!canSignalProcess(process)) {
     return <span className="text-[10px] text-muted-foreground/35">—</span>;
   }
+
   const isSignaling = signalingKeys.has(processIdentityKey(process));
+
   return (
     <div className="flex items-center justify-end gap-1.5">
       <button
@@ -124,19 +127,23 @@ export function ProcessTable({
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+
   const visible = useMemo(
     () => visibleResourceTelemetryProcesses(processes, collapsed),
     [collapsed, processes],
   );
+
   const toggle = useCallback((process: ResourceTelemetryProcess) => {
     const identityKey = processIdentityKey(process);
     setCollapsed((current) => {
       const next = new Set(current);
+
       if (next.has(identityKey)) {
         next.delete(identityKey);
       } else {
         next.add(identityKey);
       }
+
       return next;
     });
   }, []);

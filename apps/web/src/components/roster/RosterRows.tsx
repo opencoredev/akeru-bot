@@ -42,6 +42,7 @@ function RosterAvatar({
   dotClassName?: string;
 }) {
   const indicator = resolveRosterIndicator(presence);
+
   return (
     <span className="relative shrink-0">
       <BotAvatarView avatar={bot.avatar} name={bot.name} state={presence} className={className} />
@@ -72,15 +73,18 @@ function useLatestBotMessage(
   const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
   const messages = useThreadMessages(threadRef);
   const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
+
   const message = useMemo(
     () => resolveLatestRosterMessage(fallback, visibleMessages, threadRef?.threadId),
     [fallback, visibleMessages, threadRef?.threadId],
   );
+
   // The chat title reads as the bot's current task; the placeholder title of
   // a brand-new chat says nothing, so the chip stays hidden until a real
   // title lands.
   const shellTitle = shell?.title ?? null;
   const taskTitle = shellTitle === PLACEHOLDER_THREAD_TITLE ? null : shellTitle;
+
   return useMemo(() => ({ message, taskTitle, threadRef }), [message, taskTitle, threadRef]);
 }
 
@@ -92,6 +96,7 @@ const rosterFullTimestampFormatter = new Intl.DateTimeFormat(undefined, {
 /** Unabbreviated date for the roster row's compact timestamp tooltip. */
 function formatRosterFullTimestamp(isoDate: string): string {
   const parsed = new Date(isoDate);
+
   return Number.isNaN(parsed.getTime()) ? "" : rosterFullTimestampFormatter.format(parsed);
 }
 
@@ -99,6 +104,7 @@ function formatRosterFullTimestamp(isoDate: string): string {
 function useGroupChatRef(groupId: string): ScopedThreadRef | null {
   const environmentId = usePrimaryEnvironmentId();
   const threadId = useLatestGroupThreadId(environmentId, groupId);
+
   return useMemo(
     () => (environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null),
     [environmentId, threadId],
@@ -107,6 +113,7 @@ function useGroupChatRef(groupId: string): ScopedThreadRef | null {
 
 function UnreadDot() {
   const { t } = useI18n();
+
   return (
     <span
       role="img"
@@ -152,12 +159,15 @@ export const BotRosterRow = memo(function BotRosterRow({
   const item = useMemo(() => ({ kind: "bot" as const, id: bot.id }), [bot.id]);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const presence = useBotPresence(bot.id);
+
   const {
     message: latestMessage,
     taskTitle,
     threadRef: chatRef,
   } = useLatestBotMessage(bot.id, lastMessage);
+
   const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
+
   return (
     <li
       role="listitem"
@@ -302,6 +312,7 @@ function RailBotButton({
   // The collapsed rail marks unread replies like the expanded row does.
   const { ref: chatRef } = useBotChatTarget(bot.id, useBotThreadCandidate(bot.id));
   const unread = useBotRosterUnread(bot.id, chatRef, chatOpen);
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -348,6 +359,7 @@ function RailGroupButton({
   onSelect: (group: Group) => void;
 }) {
   const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -402,6 +414,7 @@ export const GroupRosterRow = memo(function GroupRosterRow({
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const item = useMemo(() => ({ kind: "group" as const, id: group.id }), [group.id]);
   const unread = useChatUnread(useGroupChatRef(group.id)) && !isActive;
+
   return (
     <li
       role="listitem"

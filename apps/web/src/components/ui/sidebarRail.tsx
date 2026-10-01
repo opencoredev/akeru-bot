@@ -27,6 +27,7 @@ export function SidebarRail({
   const sidebarInstance = React.use(SidebarInstanceContext);
   const railRef = React.useRef<HTMLButtonElement | null>(null);
   const suppressClickRef = React.useRef(false);
+
   const resizeStateRef = React.useRef<{
     moved: boolean;
     pointerId: number;
@@ -41,6 +42,7 @@ export function SidebarRail({
     width: number;
     wrapper: HTMLElement;
   } | null>(null);
+
   const resolvedResizable = sidebarInstance?.resizable ?? null;
   const canResize = resolvedResizable !== null && open;
   const { t } = useI18n();
@@ -50,23 +52,30 @@ export function SidebarRail({
   const stopResize = React.useCallback(
     (pointerId: number) => {
       const resizeState = resizeStateRef.current;
+
       if (!resizeState) {
         return;
       }
+
       if (resizeState.rafId !== null) {
         window.cancelAnimationFrame(resizeState.rafId);
       }
+
       resizeState.transitionTargets.forEach((element) => {
         element.style.removeProperty("transition-duration");
       });
+
       if (resolvedResizable?.storageKey && typeof window !== "undefined") {
         setLocalStorageItem(resolvedResizable.storageKey, resizeState.width, Schema.Finite);
       }
+
       resolvedResizable?.onResize?.(resizeState.width);
       resizeStateRef.current = null;
+
       if (resizeState.rail.hasPointerCapture(pointerId)) {
         resizeState.rail.releasePointerCapture(pointerId);
       }
+
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     },
@@ -76,11 +85,14 @@ export function SidebarRail({
   const handlePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       onPointerDown?.(event);
+
       if (event.defaultPrevented) return;
+
       if (!resolvedResizable || !open || event.button !== 0) return;
 
       const wrapper = event.currentTarget.closest<HTMLElement>("[data-slot='sidebar-wrapper']");
       const sidebarRoot = event.currentTarget.closest<HTMLElement>("[data-slot='sidebar']");
+
       if (!wrapper || !sidebarRoot) {
         return;
       }
@@ -88,16 +100,19 @@ export function SidebarRail({
       const sidebarContainer = sidebarRoot.querySelector<HTMLElement>(
         "[data-slot='sidebar-container']",
       );
+
       if (!sidebarContainer) {
         return;
       }
 
       const startWidth = sidebarContainer.getBoundingClientRect().width;
       const initialWidth = clampSidebarWidth(startWidth, resolvedResizable);
+
       const transitionTargets = [
         sidebarRoot.querySelector<HTMLElement>("[data-slot='sidebar-gap']"),
         sidebarRoot.querySelector<HTMLElement>("[data-slot='sidebar-container']"),
       ].filter((element): element is HTMLElement => element !== null);
+
       transitionTargets.forEach((element) => {
         element.style.setProperty("transition-duration", "0ms");
       });
@@ -129,32 +144,40 @@ export function SidebarRail({
   const handlePointerMove = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       onPointerMove?.(event);
+
       if (event.defaultPrevented) return;
       const resizeState = resizeStateRef.current;
+
       if (!resizeState || resizeState.pointerId !== event.pointerId || !resolvedResizable) return;
 
       event.preventDefault();
+
       const delta =
         resizeState.side === "right"
           ? resizeState.startX - event.clientX
           : event.clientX - resizeState.startX;
+
       if (Math.abs(delta) > 2) {
         resizeState.moved = true;
       }
+
       resizeState.pendingWidth = clampSidebarWidth(
         resizeState.startWidth + delta,
         resolvedResizable,
       );
+
       if (resizeState.rafId !== null) {
         return;
       }
 
       resizeState.rafId = window.requestAnimationFrame(() => {
         const activeResizeState = resizeStateRef.current;
+
         if (!activeResizeState || !resolvedResizable) return;
 
         activeResizeState.rafId = null;
         const nextWidth = activeResizeState.pendingWidth;
+
         const accepted =
           resolvedResizable.shouldAcceptWidth?.({
             currentWidth: activeResizeState.width,
@@ -164,6 +187,7 @@ export function SidebarRail({
             sidebarRoot: activeResizeState.sidebarRoot,
             wrapper: activeResizeState.wrapper,
           }) ?? true;
+
         if (!accepted) {
           return;
         }
@@ -178,6 +202,7 @@ export function SidebarRail({
   const endResizeInteraction = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       const resizeState = resizeStateRef.current;
+
       if (!resizeState || resizeState.pointerId !== event.pointerId) return;
 
       event.preventDefault();
@@ -190,6 +215,7 @@ export function SidebarRail({
   const handlePointerUp = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       onPointerUp?.(event);
+
       if (event.defaultPrevented) return;
       endResizeInteraction(event);
     },
@@ -199,6 +225,7 @@ export function SidebarRail({
   const handlePointerCancel = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       onPointerCancel?.(event);
+
       if (event.defaultPrevented) return;
       endResizeInteraction(event);
     },
@@ -208,16 +235,22 @@ export function SidebarRail({
   const handleClick = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       onClick?.(event);
+
       if (event.defaultPrevented) return;
+
       if (suppressClickRef.current) {
         suppressClickRef.current = false;
         event.preventDefault();
+
         return;
       }
+
       if (resolvedResizable && open) {
         event.preventDefault();
+
         return;
       }
+
       toggleSidebar();
     },
     [onClick, open, resolvedResizable, toggleSidebar],
@@ -226,17 +259,22 @@ export function SidebarRail({
   React.useLayoutEffect(() => {
     if (!resolvedResizable?.storageKey || typeof window === "undefined") return;
     const rail = railRef.current;
+
     if (!rail) return;
     const wrapper = rail.closest<HTMLElement>("[data-slot='sidebar-wrapper']");
+
     if (!wrapper) return;
 
     let storedWidth: number | null;
+
     try {
       storedWidth = getLocalStorageItem(resolvedResizable.storageKey, Schema.Finite);
     } catch (error) {
       console.error("Could not restore persisted sidebar width.", error);
+
       return;
     }
+
     if (storedWidth === null) return;
     const clampedWidth = clampSidebarWidth(storedWidth, resolvedResizable);
     // Hydrate the CSS variable before the browser paints so a restored sidebar
@@ -248,9 +286,11 @@ export function SidebarRail({
   React.useEffect(() => {
     return () => {
       const resizeState = resizeStateRef.current;
+
       if (resizeState?.rafId != null) {
         window.cancelAnimationFrame(resizeState.rafId);
       }
+
       resizeState?.transitionTargets.forEach((element) => {
         element.style.removeProperty("transition-duration");
       });

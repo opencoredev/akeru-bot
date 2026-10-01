@@ -116,6 +116,7 @@ export function useDesktopBackendSettings() {
       savedEnvironments.reduce<Record<string, EnvironmentPresentation>>(
         (accumulator, environment) => {
           const profile = environment.entry.profile;
+
           if (
             environment.entry.target._tag === "SshConnectionTarget" &&
             Option.isSome(profile) &&
@@ -123,6 +124,7 @@ export function useDesktopBackendSettings() {
           ) {
             accumulator[profile.value.target.alias] = environment;
           }
+
           return accumulator;
         },
         {},
@@ -132,8 +134,10 @@ export function useDesktopBackendSettings() {
 
   const savedDesktopSshEnvironmentKeys = useMemo(() => {
     const keys = new Set<string>();
+
     for (const environment of savedEnvironments) {
       const profile = environment.entry.profile;
+
       if (
         environment.entry.target._tag !== "SshConnectionTarget" ||
         Option.isNone(profile) ||
@@ -141,10 +145,12 @@ export function useDesktopBackendSettings() {
       ) {
         continue;
       }
+
       const target = profile.value.target;
       keys.add(target.alias);
       keys.add(formatDesktopSshTarget(target));
     }
+
     return keys;
   }, [savedEnvironments]);
 
@@ -273,6 +279,7 @@ export function useDesktopBackendSettings() {
     () =>
       discoveredSshHosts.filter((target) => {
         const address = formatDesktopSshTarget(target);
+
         return (
           !savedDesktopSshEnvironmentKeys.has(target.alias) &&
           !savedDesktopSshEnvironmentKeys.has(address)
@@ -304,7 +311,9 @@ export function useDesktopBackendSettings() {
 
   const desktopPairingLinks = useMemo(() => {
     const event = authAccessChanges.data;
+
     if (event?.type !== "snapshot") return [];
+
     return sortDesktopPairingLinks(
       event.payload.pairingLinks.map((pairingLink: AuthPairingLink) =>
         toDesktopPairingLinkRecord(pairingLink),
@@ -314,7 +323,9 @@ export function useDesktopBackendSettings() {
 
   const desktopClientSessions = useMemo(() => {
     const event = authAccessChanges.data;
+
     if (event?.type !== "snapshot") return [];
+
     return sortDesktopClientSessions(
       event.payload.clientSessions.map((clientSession: AuthClientSession) =>
         toDesktopClientSessionRecord(clientSession),
@@ -338,13 +349,17 @@ export function useDesktopBackendSettings() {
 
   const pendingTailscaleServeBaseUrl = useMemo(() => {
     if (!pendingTailscaleServeEndpoint) return null;
+
     if (!isTailscaleServePortValid) return pendingTailscaleServeEndpoint.httpBaseUrl;
+
     if (parsedTailscaleServePort === DEFAULT_TAILSCALE_SERVE_PORT) {
       return pendingTailscaleServeEndpoint.httpBaseUrl;
     }
+
     try {
       const url = new URL(pendingTailscaleServeEndpoint.httpBaseUrl);
       url.port = String(parsedTailscaleServePort);
+
       return url.toString().replace(/\/$/u, "");
     } catch {
       return pendingTailscaleServeEndpoint.httpBaseUrl;
@@ -356,6 +371,7 @@ export function useDesktopBackendSettings() {
       if (!desktopBridge) return;
       setIsUpdatingDesktopServerExposure(true);
       setDesktopServerExposureMutationError(null);
+
       try {
         await desktopBridge.setServerExposureMode(checked ? "network-accessible" : "local-only");
         refreshDesktopNetworkAccessState();
@@ -364,6 +380,7 @@ export function useDesktopBackendSettings() {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to update network exposure.";
+
         setIsDesktopServerExposureDialogOpen(false);
         setDesktopServerExposureMutationError(message);
         toastManager.add(
@@ -387,9 +404,11 @@ export function useDesktopBackendSettings() {
 
   const handleConfirmTailscaleServeSetup = useCallback(async () => {
     if (!desktopBridge) return;
+
     if (!isTailscaleServePortValid) return;
     setIsUpdatingTailscaleServe(true);
     setDesktopServerExposureMutationError(null);
+
     try {
       await desktopBridge.setTailscaleServeEnabled({
         enabled: true,
@@ -400,6 +419,7 @@ export function useDesktopBackendSettings() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to configure Tailscale HTTPS.";
+
       setDesktopServerExposureMutationError(message);
       toastManager.add(
         stackedThreadToast({
@@ -427,6 +447,7 @@ export function useDesktopBackendSettings() {
     if (!desktopBridge) return;
     setIsUpdatingTailscaleServe(true);
     setDesktopServerExposureMutationError(null);
+
     try {
       await desktopBridge.setTailscaleServeEnabled({
         enabled: false,
@@ -456,6 +477,7 @@ export function useDesktopBackendSettings() {
   const handleRevokeDesktopPairingLink = useCallback(async (id: string) => {
     setRevokingDesktopPairingLinkId(id);
     setDesktopAccessManagementMutationError(null);
+
     try {
       await revokeServerPairingLink(id);
     } catch (error) {
@@ -477,6 +499,7 @@ export function useDesktopBackendSettings() {
     async (sessionId: ServerClientSessionRecord["sessionId"]) => {
       setRevokingDesktopClientSessionId(sessionId);
       setDesktopAccessManagementMutationError(null);
+
       try {
         await revokeServerClientSession(sessionId);
       } catch (error) {
@@ -499,6 +522,7 @@ export function useDesktopBackendSettings() {
   const handleRevokeOtherDesktopClients = useCallback(async () => {
     setIsRevokingOtherDesktopClients(true);
     setDesktopAccessManagementMutationError(null);
+
     try {
       const revokedCount = await revokeOtherServerClientSessions();
       toastManager.add({
@@ -526,6 +550,7 @@ export function useDesktopBackendSettings() {
       setIsAddingSavedBackend(true);
       setSavedBackendError(null);
       let target: DesktopSshEnvironmentTarget;
+
       try {
         target = parseManualDesktopSshTarget({
           host: savedBackendSshHost,
@@ -535,15 +560,19 @@ export function useDesktopBackendSettings() {
       } catch (error) {
         setSavedBackendError(formatDesktopSshConnectionError(error));
         setIsAddingSavedBackend(false);
+
         return;
       }
 
       const result = await connectSshEnvironment({ target, label: "" });
+
       if (result._tag === "Failure") {
         if (!isAtomCommandInterrupted(result)) {
           setSavedBackendError(formatDesktopSshConnectionError(squashAtomCommandFailure(result)));
         }
+
         setIsAddingSavedBackend(false);
+
         return;
       }
 
@@ -559,12 +588,14 @@ export function useDesktopBackendSettings() {
         description: `${target.alias} is ready over an SSH-managed tunnel.`,
       });
       setIsAddingSavedBackend(false);
+
       return;
     }
 
     setIsAddingSavedBackend(true);
     setSavedBackendError(null);
     let remotePairingInput: ReturnType<typeof parseRemotePairingFields>;
+
     try {
       remotePairingInput = parseRemotePairingFields({
         host: savedBackendHost,
@@ -581,10 +612,12 @@ export function useDesktopBackendSettings() {
         }),
       );
       setIsAddingSavedBackend(false);
+
       return;
     }
 
     const result = await connectPairing(remotePairingInput);
+
     if (result._tag === "Failure") {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
@@ -598,7 +631,9 @@ export function useDesktopBackendSettings() {
           }),
         );
       }
+
       setIsAddingSavedBackend(false);
+
       return;
     }
 
@@ -629,6 +664,7 @@ export function useDesktopBackendSettings() {
     async (environmentId: EnvironmentId) => {
       setSavedBackendError(null);
       const result = await retryEnvironment(environmentId);
+
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = error instanceof Error ? error.message : "Failed to connect backend.";
@@ -651,6 +687,7 @@ export function useDesktopBackendSettings() {
       setSavedBackendError(null);
       const result = await removeEnvironment(environmentId);
       setRemovingSavedEnvironmentId(null);
+
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = error instanceof Error ? error.message : "Failed to remove backend.";
@@ -670,16 +707,20 @@ export function useDesktopBackendSettings() {
   const handleConnectSshHost = useCallback(
     async (target: DesktopSshEnvironmentTarget, label?: string) => {
       setConnectingSshHostAlias(target.alias);
+
       if (savedBackendMode === "ssh") {
         setSavedBackendError(null);
       } else {
         setSshConnectionError(null);
       }
+
       const result = await connectSshEnvironment({
         target,
         ...(label === undefined ? {} : { label }),
       });
+
       setConnectingSshHostAlias(null);
+
       if (result._tag === "Success") {
         setSavedBackendSshHost("");
         setSavedBackendSshUsername("");
@@ -692,11 +733,14 @@ export function useDesktopBackendSettings() {
             : "Environment connected",
           description: `${label?.trim() || target.alias} is ready over an SSH-managed tunnel.`,
         });
+
         return;
       }
+
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = formatDesktopSshConnectionError(error);
+
         if (savedBackendMode === "ssh") {
           setSavedBackendError(message);
         } else {
@@ -765,13 +809,17 @@ export function useDesktopBackendSettings() {
 
   const handleSavedBackendHostChange = useCallback((value: string) => {
     const parsedPairingUrl = parsePairingUrlFields(value, window.location.origin);
+
     if (parsedPairingUrl) {
       setSavedBackendHost(parsedPairingUrl.host);
       setSavedBackendPairingCode(parsedPairingUrl.pairingCode);
+
       return;
     }
+
     setSavedBackendHost(value);
   }, []);
+
   const {
     loadWslState,
     handleSelectWslMode,

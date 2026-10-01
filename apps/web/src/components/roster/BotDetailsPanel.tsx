@@ -60,6 +60,7 @@ export function BotOverview({
   const providers = useAtomValue(primaryServerProvidersAtom);
   const settings = usePrimarySettings();
   const modelLabel = resolveBotModelLabel(bot.engine, settings, providers, t);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
       <div className="flex flex-col items-center text-center">
@@ -158,19 +159,27 @@ export function BotDetailsPanel({
   useEffect(() => {
     if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
     const mobile = window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches;
+
     if (mobile && !mobileOpen) {
       setMobileOpen(true);
+
       return;
     }
+
     if (!mobile && !desktopOpen) {
       setDesktopOpen(true);
+
       return;
     }
+
     if (browserExpanded) {
       setBrowserExpanded(false);
+
       return;
     }
+
     const panel = mobile ? mobileRoutineRef.current : desktopRoutineRef.current;
+
     if (!panel || (!mobile && desktopPanel.state !== "open")) return;
     handledRoutineRequest.current = routinePanelRequest;
     panel.scrollIntoView({ block: "start" });
@@ -187,16 +196,19 @@ export function BotDetailsPanel({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
       ) {
         return;
       }
+
       if (resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle") return;
 
       event.preventDefault();
       event.stopPropagation();
+
       if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
         setMobileOpen((open) => !open);
       } else {
@@ -205,6 +217,7 @@ export function BotDetailsPanel({
     };
 
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, setDesktopOpen]);
 

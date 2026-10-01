@@ -22,17 +22,22 @@ const THEME_PREVIEW_ROLES = [
   "messageSurface",
   "messageAction",
 ] as const;
+
 type ThemePreviewRole = (typeof THEME_PREVIEW_ROLES)[number];
+
 type ThemeCardPreview = {
   mode: ThemeAppearance;
   colors: Readonly<Record<ThemePreviewRole, string>>;
 };
+
 export type ThemeCardDefinition = {
   id: string;
   label: string;
   previews: ReadonlyArray<ThemeCardPreview>;
 };
+
 export type ThemeMode = ThemeAppearance | "system";
+
 export type ThemeCardPreviewColors = ThemeCardPreview["colors"];
 
 const STANDARD_THEME_PREVIEW_COLORS: Record<
@@ -79,6 +84,7 @@ export function getThemeCardDefinition(theme: ThemeDefinition): ThemeCardDefinit
     label: theme.label,
     previews: getThemeModes(theme).map((mode) => {
       const colors = getThemeColorsForMode(theme, mode) ?? theme.colors;
+
       return {
         mode,
         colors: {
@@ -109,6 +115,7 @@ function getThemePreviewStyle(
   const modeBase = `color-mix(in oklab, ${colors.canvas} ${spec.baseWeight * 100}%, ${spec.baseTarget})`;
   const accentPosition = `${spec.accent.center[0] * 100}% ${spec.accent.center[1] * 100}%`;
   const actionPosition = `${spec.action.center[0] * 100}% ${spec.action.center[1] * 100}%`;
+
   return {
     filter: `blur(${spec.blurAt56Px}px)`,
     transform: `scale(${spec.scale})`,
@@ -175,6 +182,7 @@ export function ThemePreviewCircles({
       {previews.map((preview) => {
         const mode = preview.mode;
         const isPicked = activeModes.includes(mode);
+
         return (
           <Tooltip key={mode}>
             <TooltipTrigger

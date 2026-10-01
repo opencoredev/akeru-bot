@@ -7,6 +7,7 @@ import { environmentThreadDetails } from "../../state/threads";
 import { visibleBotChatMessages } from "./botConversationPresentation";
 
 const THREAD_PROJECTION_IDLE_TTL_MS = 5 * 60_000;
+
 const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
 
 export interface BotConversationMessageProjection {
@@ -43,11 +44,14 @@ export function createBotConversationMessageProjectionAtom(
   return Atom.make((get) => {
     const rawMessages = get(source);
     const nextMessages = visibleBotChatMessages(rawMessages);
+
     const messages = sameMessageReferences(previous.messages, nextMessages)
       ? previous.messages
       : nextMessages;
+
     const lastMessageRole = rawMessages.at(-1)?.role ?? null;
     const hasMessages = rawMessages.length > 0;
+
     const lastUserMessageAt =
       rawMessages.findLast((message) => message.role === "user")?.createdAt ?? null;
 
@@ -59,13 +63,16 @@ export function createBotConversationMessageProjectionAtom(
     ) {
       return previous;
     }
+
     previous = { messages, lastMessageRole, hasMessages, lastUserMessageAt };
+
     return previous;
   }).pipe(Atom.setIdleTTL(THREAD_PROJECTION_IDLE_TTL_MS), Atom.withLabel(label));
 }
 
 const botConversationMessageProjectionAtom = Atom.family((key: string) => {
   const ref = parseThreadKey(key);
+
   return createBotConversationMessageProjectionAtom(
     environmentThreadDetails.messagesAtom(ref),
     `web-bot-conversation-messages:${key}`,

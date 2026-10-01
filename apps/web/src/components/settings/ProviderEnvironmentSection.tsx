@@ -43,8 +43,10 @@ export function ProviderEnvironmentSection(props: {
 
   const publishRows = (nextRows: ReadonlyArray<EnvironmentDraftRow>) => {
     const published: ProviderInstanceEnvironmentVariable[] = [];
+
     for (const row of nextRows) {
       const name = row.name.trim();
+
       if (!ENVIRONMENT_VARIABLE_NAME_PATTERN.test(name)) {
         if (
           name.length > 0 ||
@@ -54,11 +56,14 @@ export function ProviderEnvironmentSection(props: {
         ) {
           return;
         }
+
         continue;
       }
+
       const { id: _id, ...rest } = row;
       published.push({ ...rest, name });
     }
+
     props.onChange(published);
   };
 
@@ -72,6 +77,7 @@ export function ProviderEnvironmentSection(props: {
           }
         : row,
     );
+
     setRows(nextRows);
     publishRows(nextRows);
   };

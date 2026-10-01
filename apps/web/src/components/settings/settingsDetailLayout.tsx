@@ -59,7 +59,9 @@ export function SettingsEntityIcon({
       />
     );
   }
+
   const IconComponent = icon;
+
   return <IconComponent aria-hidden className={cn("size-4 shrink-0", className)} />;
 }
 

@@ -11,11 +11,13 @@ export function AutomaticReadoutRow({
   readonly preference: ReplyReadoutPreference;
 }) {
   const { t } = useI18n();
+
   const state = useSyncExternalStore(
     preference.subscribe,
     preference.getSnapshot,
     preference.getSnapshot,
   );
+
   return (
     <SettingsRow
       {...searchableSetting("voice-read-aloud", t)}

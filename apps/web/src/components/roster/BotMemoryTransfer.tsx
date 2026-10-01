@@ -30,12 +30,14 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 
 const decodeArchive = Schema.decodeUnknownSync(AkeruMarkdownMemoryArchiveV3);
+
 const decodeDurableArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
 
 function download(value: unknown, fileName: string) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
   );
+
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;
@@ -74,15 +76,19 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
   const exportArchive = useAtomCommand(memoryEnvironment.exportArchive, { reportFailure: false });
   const previewImport = useAtomCommand(memoryEnvironment.previewImport, { reportFailure: false });
   const applyImport = useAtomCommand(memoryEnvironment.applyImport, { reportFailure: false });
+
   const exportDurable = useAtomCommand(memoryEnvironment.exportDurableArchive, {
     reportFailure: false,
   });
+
   const previewDurable = useAtomCommand(memoryEnvironment.previewDurableImport, {
     reportFailure: false,
   });
+
   const applyDurable = useAtomCommand(memoryEnvironment.applyDurableImport, {
     reportFailure: false,
   });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +99,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
 
   // Local facts for the archive's scope, so each conflict shows what would be replaced.
   const durableTarget = pending?.kind === "durable" ? pending.archive.target : null;
+
   const localQuery = useEnvironmentQuery(
     durableTarget && durableTarget !== "all"
       ? memoryEnvironment.listFacts({
@@ -101,8 +108,10 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
         })
       : null,
   );
+
   const durableReview = useMemo(() => {
     if (pending?.kind !== "durable") return null;
+
     return {
       groups: groupImportPreview({
         preview: pending.preview,
@@ -117,6 +126,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
     setBusy(true);
     setError(null);
     setNotice(null);
+
     try {
       await action();
     } catch (cause) {
@@ -125,9 +135,11 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
       setBusy(false);
     }
   };
+
   const exportDescription = DURABLE_MEMORY_EXPORT_SCOPES.find(
     (option) => option.scope === exportScope,
   )?.description;
+
   const startReview = (next: PendingImport | null) => {
     setChoices({});
     setPending(next);
@@ -162,6 +174,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                 environmentId: threadRef.environmentId,
                 input: { threadId: threadRef.threadId, target: "thread", complete: true },
               });
+
               if (result._tag === "Failure") throw squashAtomCommandFailure(result);
               download(result.value, `akeru-memory-${threadRef.threadId}.json`);
             })
@@ -194,6 +207,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                   environmentId: threadRef.environmentId,
                   input: { threadId: threadRef.threadId, target: exportScope, complete: true },
                 });
+
                 if (result._tag === "Failure") throw squashAtomCommandFailure(result);
                 download(
                   result.value,
@@ -227,12 +241,15 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = "";
+
           if (!file) return;
           startReview(null);
           void run(async () => {
             const raw: unknown = JSON.parse(await file.text());
+
             if (memoryArchiveSchemaVersion(raw) === 2) {
               const archive = decodeDurableArchive(raw);
+
               if (archive.target === "all") {
                 throw new Error(
                   t(
@@ -240,19 +257,25 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                   ),
                 );
               }
+
               const result = await previewDurable({
                 environmentId: threadRef.environmentId,
                 input: { threadId: threadRef.threadId, target: archive.target, archive },
               });
+
               if (result._tag === "Failure") throw squashAtomCommandFailure(result);
               startReview({ kind: "durable", archive, preview: result.value });
+
               return;
             }
+
             const archive = decodeArchive(raw);
+
             const result = await previewImport({
               environmentId: threadRef.environmentId,
               input: { threadId: threadRef.threadId, archive },
             });
+
             if (result._tag === "Failure") throw squashAtomCommandFailure(result);
             startReview({ kind: "notes", archive, preview: result.value });
           });
@@ -292,6 +315,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                       previewHash: pending.preview.previewHash,
                     },
                   });
+
                   if (result._tag === "Failure") throw squashAtomCommandFailure(result);
                   startReview(null);
                 })
@@ -316,6 +340,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
           onCancel={() => startReview(null)}
           onApply={() => {
             const resolution = durableReview.resolution;
+
             if (!resolution.ready) return;
             void run(async () => {
               const result = await applyDurable({
@@ -328,6 +353,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                   resolutions: resolution.resolutions,
                 },
               });
+
               if (result._tag === "Failure") throw squashAtomCommandFailure(result);
               startReview(null);
               setNotice(

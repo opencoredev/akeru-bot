@@ -3,6 +3,7 @@ import type { SupervisorConnectionState } from "@akeru/client-runtime/connection
 import type { ActiveVoiceCall } from "./voiceCallContext";
 
 export type VoiceCallUiState = ActiveVoiceCall | null;
+
 export type VoiceCallUiAction =
   | { readonly type: "connected"; readonly call: ActiveVoiceCall }
   | { readonly type: "hung-up" };
@@ -31,6 +32,7 @@ export function voiceStartErrorDescription(cause: unknown): string {
         return "The microphone is unavailable. Close other audio apps, then try again.";
     }
   }
+
   return cause instanceof Error ? cause.message : "Check microphone access, then try again.";
 }
 
@@ -40,6 +42,7 @@ export function listenForMicrophoneLoss(
 ): () => void {
   const tracks = microphone.getAudioTracks();
   tracks.forEach((track) => track.addEventListener("ended", onLost));
+
   return () => tracks.forEach((track) => track.removeEventListener("ended", onLost));
 }
 
@@ -49,6 +52,7 @@ export function waitForIceGathering(
   signal?: AbortSignal,
 ): Promise<void> {
   if (peer.iceGatheringState === "complete") return Promise.resolve();
+
   return new Promise((resolve) => {
     const finish = () => {
       clearTimeout(timer);
@@ -56,9 +60,11 @@ export function waitForIceGathering(
       signal?.removeEventListener("abort", finish);
       resolve();
     };
+
     const onChange = () => {
       if (peer.iceGatheringState === "complete") finish();
     };
+
     const timer = setTimeout(finish, timeoutMs);
     peer.addEventListener("icegatheringstatechange", onChange);
     signal?.addEventListener("abort", finish, { once: true });
@@ -78,8 +84,11 @@ export function voiceConnectionStateAction(
   state: RTCPeerConnectionState,
 ): "end" | "recovered" | "wait-for-recovery" | "keep-recovery-window" {
   if (state === "failed" || state === "closed") return "end";
+
   if (state === "connected") return "recovered";
+
   if (state === "disconnected") return "wait-for-recovery";
+
   return "keep-recovery-window";
 }
 

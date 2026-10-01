@@ -45,6 +45,7 @@ describe("group composer menus", () => {
       skills: [{ name: "ship", path: "/skills/ship/SKILL.md", enabled: true }],
       slashCommands: [{ name: "status" }],
     };
+
     const claude = {
       ...makeComposerTestProvider(),
       instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -61,8 +62,10 @@ describe("group composer menus", () => {
       skills: [{ name: "review", path: "/skills/review/SKILL.md", enabled: true }],
       slashCommands: [{ name: "compact" }],
     };
+
     const providers = [codex, claude];
     const instanceEntries = deriveProviderInstanceEntries(providers);
+
     const members = [
       { id: "specialist", engine: { provider: claude.instanceId, model: "claude-opus-5-5" } },
       { id: "boss", engine: { provider: codex.instanceId, model: "gpt-5-codex" } },
@@ -70,6 +73,7 @@ describe("group composer menus", () => {
 
     // Mirrors GroupThreadLanding: the boss answers first, so its engine picks the catalog.
     const boss = resolveAvailableGroupBoss(members, "boss");
+
     const selection = resolveStickyBotEngine({
       engine: boss?.engine ?? null,
       instanceEntries,
@@ -77,6 +81,7 @@ describe("group composer menus", () => {
       providers,
       defaultSelection: { instanceId: claude.instanceId, model: "claude-opus-5-5" },
     });
+
     const catalog = botEngineCatalog(selection, instanceEntries);
 
     expect(catalog?.provider).toBe("codex");
